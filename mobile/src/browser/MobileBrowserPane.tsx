@@ -1,11 +1,11 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AppState, type Image, type View } from 'react-native'
+import { AppState, type View } from 'react-native'
+import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
-import type {
-  BrowserScreencastFrame,
-  BrowserScreencastFrameMetadata
-} from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
 import {
@@ -17,7 +17,6 @@ import {
   clearCachedBrowserFramesForWorktree,
   makeBrowserFrameCacheKey,
   peekCachedBrowserFrame,
-  type FrameLayer,
   type PinchGesture
 } from './mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
@@ -31,7 +30,6 @@ import {
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 import { MobileBrowserPaneView } from './MobileBrowserPaneView'
 import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
-import { useMobileBrowserPaneLayers } from './use-mobile-browser-pane-layers'
 import { useMobileBrowserStream } from './use-mobile-browser-stream'
 import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
 
@@ -43,6 +41,7 @@ export type MobileBrowserTab = {
   browserPageId: string | null
   url: string
   loading: boolean
+  loadError?: BrowserLoadError | null
   canGoBack: boolean
   canGoForward: boolean
   isActive: boolean
@@ -76,6 +75,7 @@ export function MobileBrowserPane({
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
+  useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
@@ -88,7 +88,6 @@ export function MobileBrowserPane({
     url: tab.url
   })
   const [keyboardValue, setKeyboardValue] = useState('')
-  const [frameUri, setFrameUri] = useState<string | null>(cachedInitialFrame?.uri ?? null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
   )
@@ -98,25 +97,17 @@ export function MobileBrowserPane({
   const [pointerModifiers, setPointerModifiers] = useState<BrowserPointerModifier[]>([])
   const [zoom, setZoom] = useState<BrowserZoomState>(DEFAULT_ZOOM)
   const [layout, setLayout] = useState<BrowserTouchLayout | null>(null)
-  const [appActive, setAppActive] = useState(AppState.currentState === 'active')
+  // Why: a new id per return, so a leave and return that React batches into one render still restart the stream.
+  const [foregroundVisit, setForegroundVisit] = useState<number | null>(
+    AppState.currentState === 'active' ? 0 : null
+  )
+  const foregroundVisitCountRef = useRef(0)
   const streamGenerationRef = useRef(0)
   const layoutRef = useRef<BrowserTouchLayout | null>(null)
   const frameMetadataRef = useRef<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
   )
-  const frameUriRef = useRef<string | null>(cachedInitialFrame?.uri ?? null)
-  const frameMountedRef = useRef(cachedInitialFrame !== null)
-  const browserImageRefs = useRef<[Image | null, Image | null]>([null, null])
-  const browserLayerRefs = useRef<[View | null, View | null]>([null, null])
-  const pendingFrameLayerRef = useRef<FrameLayer | null>(null)
-  const visibleFrameLayerRef = useRef<FrameLayer>(0)
   const busyRef = useRef(false)
-  const lastAppliedFrameAtRef = useRef(0)
-  const pendingThrottledFrameRef = useRef<{
-    frame: BrowserScreencastFrame
-    cacheKey: string
-  } | null>(null)
-  const frameThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dialogRef = useRef<BrowserDialogState | null>(null)
   const lastStreamCacheKeyRef = useRef<string | null>(cacheKey)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -136,8 +127,7 @@ export function MobileBrowserPane({
 
   const setRootViewRef = useCallback(
     (node: View | null) => {
-      // Why: long-press right-click timers belong to this responder surface;
-      // clearing from ref cleanup preserves the same unmount boundary.
+      // Clear surface-owned long-press timers at ref cleanup to preserve unmount boundary.
       if (node === null) {
         clearLongPressTimer()
       }
@@ -157,11 +147,13 @@ export function MobileBrowserPane({
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      const active = nextState === 'active'
-      if (!active) {
+      if (nextState !== 'active') {
         clearCachedBrowserFramesForWorktree(worktreeId)
+        setForegroundVisit(null)
+        return
       }
-      setAppActive(active)
+      foregroundVisitCountRef.current += 1
+      setForegroundVisit(foregroundVisitCountRef.current)
     })
     return () => {
       subscription.remove()
@@ -175,15 +167,13 @@ export function MobileBrowserPane({
   if (addressSync.nextState !== addressSyncState) {
     setAddressSyncState(addressSync.nextState)
     if (addressSync.shouldSyncValue) {
-      // Why: keep browser stream/goto address updates intact, but avoid a
-      // stale post-blur paint when the tab URL is the source of truth.
+      // Preserve stream/goto updates without stale post-blur paint when tab URL is authoritative.
       setAddressValue(displayBrowserUrl(tab.url))
     }
   }
 
   useLayoutEffect(() => {
-    // Why: gesture and stream handlers need committed values before passive
-    // Effects flush, without leaking refs from an uncommitted render.
+    // Publish committed gesture/stream refs before passive effects without leaking uncommitted render values.
     frameMetadataRef.current = frameMetadata
     layoutRef.current = layout
     dialogRef.current = dialog
@@ -201,46 +191,38 @@ export function MobileBrowserPane({
 
   const binaryScreencastGranted = useBrowserBinaryScreencastGrant()
 
-  const { frameGeometry, pageParams, sendBrowserRequest } = useMobileBrowserStream({
-    appActive,
-    binaryScreencastGranted,
-    browserImageRefs,
-    browserLayerRefs,
-    browserViewMode,
-    busyRef,
-    cacheKey,
-    client,
-    frameMetadata,
-    frameMetadataRef,
-    frameMountedRef,
-    frameThrottleTimerRef,
-    frameUriRef,
-    lastAppliedFrameAtRef,
-    lastStreamCacheKeyRef,
-    lastZoomResetUrlRef,
-    layout,
-    pendingFrameLayerRef,
-    pendingThrottledFrameRef,
-    resetBrowserZoomState,
-    screencastSupported,
-    setAddressValue,
-    setBusy,
-    setDialog,
-    setError,
-    setFrameMetadata,
-    setFrameUri,
-    setZoom,
-    streamGenerationRef,
-    tab,
-    visibleFrameLayerRef,
-    worktreeId,
-    zoomRef
-  })
+  const { frameGeometry, frameLayers, pageParams, renderedFrameSource, sendBrowserRequest } =
+    useMobileBrowserStream({
+      binaryScreencastGranted,
+      browserViewMode,
+      busyRef,
+      cacheKey,
+      client,
+      frameMetadata,
+      frameMetadataRef,
+      foregroundVisit,
+      initialFrameUri: cachedInitialFrame?.uri ?? null,
+      lastStreamCacheKeyRef,
+      lastZoomResetUrlRef,
+      layout,
+      resetBrowserZoomState,
+      screencastSupported,
+      setAddressValue,
+      setBusy,
+      setDialog,
+      setError,
+      setFrameMetadata,
+      setZoom,
+      streamGenerationRef,
+      tab,
+      worktreeId,
+      zoomRef
+    })
 
   const navigateToAddress = useCallback(async () => {
     const url = normalizeBrowserUrl(addressValue)
     if (!url) {
-      setError('Enter a valid URL.')
+      setError(translate('browser.pane.invalidUrl', 'Enter a valid URL.'))
       return
     }
     const settled = await sendBrowserRequest(
@@ -280,20 +262,6 @@ export function MobileBrowserPane({
       setZoom,
       zoomRef
     })
-
-  const {
-    browserLayerRef,
-    frameLayerErrorHandler,
-    frameLayerLoadHandler,
-    frameLayerRef,
-    frameLayerStyle
-  } = useMobileBrowserPaneLayers({
-    browserImageRefs,
-    browserLayerRefs,
-    frameUriRef,
-    pendingFrameLayerRef,
-    visibleFrameLayerRef
-  })
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
   const goBack = useCallback(() => {
@@ -340,25 +308,18 @@ export function MobileBrowserPane({
     [browserViewMode, resetBrowserZoomState, tab.browserPageId, worktreeId]
   )
 
-  const renderedFrameSource =
-    frameUriRef.current || frameUri ? { uri: frameUriRef.current ?? frameUri! } : null
-
   return (
     <MobileBrowserPaneView
       addressFocused={addressFocused}
       addressValue={addressValue}
       bottomInset={bottomInset}
-      browserLayerRef={browserLayerRef}
       browserViewMode={browserViewMode}
       busy={busy}
       controlsDisabled={controlsDisabled}
       dialog={dialog}
       error={error}
       frameGeometry={frameGeometry}
-      frameLayerErrorHandler={frameLayerErrorHandler}
-      frameLayerLoadHandler={frameLayerLoadHandler}
-      frameLayerRef={frameLayerRef}
-      frameLayerStyle={frameLayerStyle}
+      frameLayers={frameLayers}
       goBack={goBack}
       goForward={goForward}
       keyboardLift={keyboardLift}

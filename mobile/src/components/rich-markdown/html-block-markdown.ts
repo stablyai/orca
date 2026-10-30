@@ -3,14 +3,7 @@ import { escapeTableCell } from './markdown-table-rows'
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { holdsUnownedList, listMarkdown } from './html-list-markdown'
 
-/**
- * A paragraph that carries a list, as the blocks it really holds: text, the list, then text.
- *
- * `insertUnorderedList` nests the `<ul>` inside the `<p>` it was given rather than replacing it —
- * measured on WebKit 26.4 and Chromium 147 both — and reading such a paragraph inline gave back its
- * own text with no marker, so a list the user typed did not survive a round trip. Structure decides
- * what a list is; the DOM is left as the engine made it.
- */
+// WebKit 26.4/Chromium 147 insertUnorderedList nests ul inside p; serialize surrounding inline runs and list as separate blocks or typed list markers vanish. Leave DOM unchanged.
 function blocksAroundLists(element: Element): string {
   const blocks: string[] = []
   let inline = ''
@@ -42,12 +35,7 @@ function blocksAroundLists(element: Element): string {
   return blocks.filter(Boolean).join('\n\n')
 }
 
-/**
- * One top-level node of the editable surface as a markdown block.
- *
- * Anything with no block of its own — a stray `div`, an element the browser inserted — serializes
- * as its inline content, so an edit never loses text to a tag this reader does not know.
- */
+// Unknown block elements serialize inline content so browser-created tags cannot lose user text.
 export function blockMarkdown(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return textContent(node).trim()

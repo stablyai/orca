@@ -7,7 +7,7 @@ import type {
   CodexUsageScope,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
-import type { CodexUsagePersistedState } from './types'
+import type { CodexLongContextTokens, CodexUsagePersistedState } from './types'
 import { estimateCostUsd } from './codex-usage-cost-estimate'
 import {
   getFilteredDaily,
@@ -47,17 +47,11 @@ export function buildSummary(
       (byModel.get(row.model ?? 'Unknown model') ?? 0) + row.totalTokens
     )
     byProject.set(row.projectLabel, (byProject.get(row.projectLabel) ?? 0) + row.totalTokens)
-    const cost = estimateCostUsd(
-      row.model,
-      row.inputTokens,
-      row.cachedInputTokens,
-      row.outputTokens
-    )
+    const cost = estimateCostUsd(row.model, row)
     if (cost !== null) {
       hasAnyBillableCost = true
       estimatedCostUsd += cost
     } else if (row.model !== null) {
-      // A named model with no pricing entry: its tokens silently leave the total.
       hasUnpricedModels = true
     }
   }
@@ -115,6 +109,8 @@ export function buildBreakdown(
   kind: CodexUsageBreakdownKind
 ): CodexUsageBreakdownRow[] {
   const rows = new Map<string, CodexUsageBreakdownRow>()
+  // Keep billing-only long-context counts out of renderer-facing rows.
+  const longContextByKey = new Map<string, CodexLongContextTokens>()
   const filteredDaily = getFilteredDaily(state, scope, range)
   if (filteredDaily.length === 0) {
     return []
@@ -145,6 +141,15 @@ export function buildBreakdown(
     existing.totalTokens += daily.totalTokens
     existing.hasInferredPricing ||= daily.hasInferredPricing
     rows.set(key, existing)
+    const longContext = longContextByKey.get(key) ?? {
+      longContextInputTokens: 0,
+      longContextCachedInputTokens: 0,
+      longContextOutputTokens: 0
+    }
+    longContext.longContextInputTokens += daily.longContextInputTokens
+    longContext.longContextCachedInputTokens += daily.longContextCachedInputTokens
+    longContext.longContextOutputTokens += daily.longContextOutputTokens
+    longContextByKey.set(key, longContext)
   }
 
   for (const session of filteredSessions) {
@@ -179,12 +184,9 @@ export function buildBreakdown(
   }
 
   for (const row of rows.values()) {
-    row.estimatedCostUsd = estimateCostUsd(
-      kind === 'model' ? row.key : null,
-      row.inputTokens,
-      row.cachedInputTokens,
-      row.outputTokens
-    )
+    const longContext = longContextByKey.get(row.key)
+    row.estimatedCostUsd =
+      kind === 'model' && longContext ? estimateCostUsd(row.key, { ...row, ...longContext }) : null
   }
 
   return [...rows.values()].sort((left, right) => right.totalTokens - left.totalTokens)

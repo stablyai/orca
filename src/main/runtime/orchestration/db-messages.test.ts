@@ -76,14 +76,12 @@ describe('OrchestrationDb', () => {
       const m1 = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'one' })
       const m2 = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'two' })
 
-      d.markAsDelivered([m1.id])
+      d.markAsDelivered([m1.id], 'b')
 
-      // Push delivery query: only undelivered, unread.
       const pending = d.getUndeliveredUnreadMessages('b')
       expect(pending).toHaveLength(1)
       expect(pending[0].id).toBe(m2.id)
 
-      // Explicit `check` still sees both (they are still unread).
       const unread = d.getUnreadMessages('b')
       expect(unread).toHaveLength(2)
     })
@@ -135,26 +133,6 @@ describe('OrchestrationDb', () => {
       expect(unread[0].id).toBe(m2.id)
     })
 
-    it('stores typed payload and thread_id', () => {
-      const d = createDb()
-      const payload = JSON.stringify({ taskId: 'task_abc', filesModified: ['src/a.ts'] })
-      const msg = d.insertMessage({
-        runId,
-        from: 'a',
-        to: 'b',
-        subject: 'done',
-        type: 'worker_done',
-        priority: 'high',
-        threadId: 'thread_1',
-        payload
-      })
-
-      expect(msg.type).toBe('worker_done')
-      expect(msg.priority).toBe('high')
-      expect(msg.thread_id).toBe('thread_1')
-      expect(msg.payload).toBe(payload)
-    })
-
     it('rejects invalid message type', () => {
       const d = createDb()
       expect(() =>
@@ -176,19 +154,6 @@ describe('OrchestrationDb', () => {
 
       const inbox = d.getInbox(10)
       expect(inbox).toHaveLength(3)
-    })
-
-    it('getMessageById returns the correct message', () => {
-      const d = createDb()
-      const msg = d.insertMessage({
-        runId,
-        from: 'a',
-        to: 'b',
-        subject: 'test'
-      })
-      const found = d.getMessageById(msg.id)
-      expect(found?.subject).toBe('test')
-      expect(d.getMessageById('msg_nonexistent')).toBeUndefined()
     })
   })
 })

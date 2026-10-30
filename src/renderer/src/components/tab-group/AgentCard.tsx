@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Maximize2, Minimize2, Plus, X } from 'lucide-react'
 import { QuickLaunchAgentMenuItems } from '../tab-bar/QuickLaunchButton'
@@ -15,6 +15,8 @@ import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { ALL_TUI_AGENTS } from '../../../../shared/tui-agent-display-names'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { registerTabGroupBody } from './tab-group-body-geometry'
+import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
 import { reportAgentCardHidden } from './agent-card-pane-visibility'
 import { tiledPaneFrameClassName, type TiledPaneFrameTone } from './tiled-pane-attention'
 
@@ -86,6 +88,20 @@ export function AgentCard({
     : translate('auto.components.tab.group.AgentCard.enlarge', 'Enlarge agent')
   const closeLabel = translate('auto.components.tab.group.AgentCard.close', 'Close agent')
   const plusLabel = translate('auto.components.tab.group.AgentCard.plus', 'Launch agent')
+
+  // Why: like TabGroupPanel's body, so fallback-positioned panes and runtime grid sizes see the card.
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    if (!body) {
+      return
+    }
+    const unregisterBody = registerTabGroupBody(cardGroupId, body)
+    const stopGridSizeReport = observeTabGroupBodyGridSize(body)
+    return () => {
+      unregisterBody()
+      stopGridSizeReport()
+    }
+  }, [cardGroupId])
 
   useEffect(() => {
     const body = bodyRef.current

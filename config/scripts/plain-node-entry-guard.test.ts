@@ -2,8 +2,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  CLI_MAIN_ENTRY_NAMES,
   createPlainNodeEntryGuardPlugin,
   GUARDED_ENTRY_NAMES
 } from '../build-plugins/plain-node-entry-guard'
@@ -96,6 +97,21 @@ describe('plain Node entry guard', () => {
     )
   })
 
+  it('rejects a daemon-graph package the relocated Windows daemon-host does not mirror', () => {
+    const plugin = createPlainNodeEntryGuardPlugin()
+
+    expect(() =>
+      runWriteBundle(plugin, createOutputDir(), 'const nacl = require(`tweetnacl`)')
+    ).toThrow('does not mirror')
+    expect(() =>
+      runWriteBundle(
+        plugin,
+        createOutputDir(),
+        'require("node:fs"); require("path"); require("@orca/process-host/spawn-observer"); require("node-pty")'
+      )
+    ).not.toThrow()
+  })
+
   it('fails the smoke when the daemon exits zero on an empty argv', async () => {
     const dir = createOutputDir()
     const plugin = createPlainNodeEntryGuardPlugin()
@@ -106,8 +122,7 @@ describe('plain Node entry guard', () => {
     await expect(runCloseBundle(plugin)).rejects.toThrow('did not reject an empty argv')
   })
 
-  // daemon-entry installs a SIGTERM handler, so the smoke deadline only holds if
-  // it escalates to SIGKILL — spawnSync's own timeout would block here forever.
+  // daemon-entry traps SIGTERM; smoke timeout must escalate to SIGKILL or spawnSync can wait forever.
   it('kills a daemon that traps SIGTERM and never exits', async () => {
     const dir = createOutputDir()
     const plugin = createPlainNodeEntryGuardPlugin({ timeoutMs: 250, killGraceMs: 250 })
@@ -122,8 +137,7 @@ describe('plain Node entry guard', () => {
   }, 10_000)
 })
 
-// Why: writeBundle skips names absent from the bundle, so a renamed rollup input
-// would silently stop guarding that entry instead of failing the build.
+// Fail if entry is renamed: writeBundle otherwise skips missing input and silently drops its guard.
 describe('guarded entry names', () => {
   function runBuildStart(plugin: Plugin, input: unknown): void {
     const hook = plugin.buildStart
@@ -153,25 +167,27 @@ describe('guarded entry names', () => {
   })
 })
 
-// Why (#11161): Electron's module is not registered on worker threads either —
-// require("electron") throws "Cannot find module 'electron'" inside a
-// main-process worker and kills it at startup. The worker entries carried only
-// hand-written "must stay electron-free" comments, and the port-scan worker sits
-// one import away from a client that deliberately does require electron.
-describe('worker thread entry guard', () => {
-  function runWorkerWriteBundle(plugin: Plugin, bundle: Rollup.OutputBundle): void {
+// Electron is unavailable in main-process workers too (#11161); transitive imports can kill startup despite entry-local electron-free comments.
+describe('CLI and worker thread entry guard', () => {
+  function runEntryWriteBundle(
+    plugin: Plugin,
+    bundle: Rollup.OutputBundle,
+    watchMode = false
+  ): void {
     const hook = plugin.writeBundle
     if (typeof hook !== 'function') {
       throw new Error('Expected writeBundle hook')
     }
     hook.call(
-      { meta: { watchMode: false } } as never,
-      { dir: createOutputDir() } as Rollup.NormalizedOutputOptions,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook reads only meta.watchMode from its context.
+      { meta: { watchMode } } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook reads only dir from the output options.
+      { dir: outputDir ?? createOutputDir() } as Rollup.NormalizedOutputOptions,
       bundle
     )
   }
 
-  function workerChunk(name: string, code: string, imports: string[] = []): Rollup.OutputChunk {
+  function entryChunk(name: string, code: string, imports: string[] = []): Rollup.OutputChunk {
     return {
       type: 'chunk',
       code,
@@ -183,34 +199,141 @@ describe('worker thread entry guard', () => {
     } as Rollup.OutputChunk
   }
 
+  function countElectronRequireScans(run: () => void): number {
+    const pattern = /require\(\s*["'`]electron(?:\/[^"'`]+)?["'`]\s*\)/
+    const originalTest = RegExp.prototype.test
+    let scans = 0
+    const spy = vi.spyOn(RegExp.prototype, 'test').mockImplementation(function (
+      this: RegExp,
+      value: string
+    ) {
+      if (this.source === pattern.source) {
+        scans += 1
+      }
+      return originalTest.call(this, value)
+    })
+    try {
+      run()
+    } finally {
+      spy.mockRestore()
+    }
+    return scans
+  }
+
+  it('scans shared code once across every guarded entry', () => {
+    const shared = entryChunk('shared', 'require("node:fs")')
+    shared.isEntry = false
+    const bundle: Rollup.OutputBundle = { [shared.fileName]: shared }
+    for (const name of GUARDED_ENTRY_NAMES) {
+      const entry = entryChunk(name, `require("./shared.js"); // ${name}`, [shared.fileName])
+      bundle[entry.fileName] = entry
+    }
+    const snapshot = structuredClone(bundle)
+
+    const scans = countElectronRequireScans(() => {
+      runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle)
+    })
+
+    expect(bundle).toEqual(snapshot)
+    expect(scans).toBe(GUARDED_ENTRY_NAMES.length + 1)
+  })
+
+  it('does not retain a successful scan across output bundles', () => {
+    const plugin = createPlainNodeEntryGuardPlugin()
+    const entry = entryChunk('stt-worker', 'require("node:fs")')
+    const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
+    const scans = countElectronRequireScans(() => {
+      runEntryWriteBundle(plugin, bundle)
+      runEntryWriteBundle(plugin, bundle)
+    })
+    expect(scans).toBe(2)
+
+    entry.code = 'require("electron/main")'
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow(
+      '[plain-node-entry-guard] "stt-worker" reaches chunk "stt-worker.js" that requires electron. '
+    )
+  })
+
+  it('still reads changed code on the same chunk within one bundle scan', () => {
+    const first = entryChunk('stt-worker', 'require("node:fs")')
+    const second = entryChunk('warp-theme-parser-worker', 'require("node:fs")')
+    const shared = entryChunk('shared', '')
+    shared.isEntry = false
+    let reads = 0
+    Object.defineProperty(shared, 'code', {
+      get: () => (++reads === 1 ? 'require("node:fs")' : 'require("electron")')
+    })
+    first.imports = [shared.fileName]
+    second.dynamicImports = [shared.fileName]
+    const bundle: Rollup.OutputBundle = {
+      [first.fileName]: first,
+      [second.fileName]: second,
+      [shared.fileName]: shared
+    }
+
+    expect(() => runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle)).toThrow(
+      '[plain-node-entry-guard] "warp-theme-parser-worker" reaches chunk "shared.js"'
+    )
+    expect(reads).toBe(2)
+  })
+
+  it('keeps watch mode free of entry scanning', () => {
+    const entry = entryChunk('stt-worker', 'require("electron")')
+    const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
+    const scans = countElectronRequireScans(() => {
+      runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle, true)
+    })
+    expect(scans).toBe(0)
+  })
+
+  it.each(CLI_MAIN_ENTRY_NAMES)('rejects direct and transitive Electron imports in %s', (name) => {
+    const plugin = createPlainNodeEntryGuardPlugin()
+    const entry = entryChunk(name, 'require("electron")')
+    const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('requires electron')
+
+    entry.code = ''
+    const shared = entryChunk('shared', 'require("electron/main")')
+    shared.isEntry = false
+    bundle[shared.fileName] = shared
+    for (const edge of ['imports', 'dynamicImports'] as const) {
+      entry[edge] = [shared.fileName]
+      expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('requires electron')
+      entry[edge] = []
+    }
+
+    shared.code = 'require("node:fs")'
+    entry.imports = [shared.fileName]
+    expect(() => runEntryWriteBundle(plugin, bundle)).not.toThrow()
+  })
+
   it('rejects an Electron require reachable from a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'port-scan-command-worker-entry.js': workerChunk(
+    const bundle: Rollup.OutputBundle = {
+      'port-scan-command-worker-entry.js': entryChunk(
         'port-scan-command-worker-entry',
         'require("electron")'
       )
-    } as Rollup.OutputBundle
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('requires electron')
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('requires electron')
   })
 
   it('names the worker-thread runtime so the failure is actionable', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'stt-worker.js': workerChunk('stt-worker', 'require("electron")')
-    } as Rollup.OutputBundle
+    const bundle: Rollup.OutputBundle = {
+      'stt-worker.js': entryChunk('stt-worker', 'require("electron")')
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('runs as a worker thread')
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('runs as a worker thread')
   })
 
-  // The real risk is transitive: a worker entry importing a shared chunk that
-  // reaches the electron-requiring client, not a direct import anyone would spot.
+  // Exercise transitive shared-chunk imports into the electron client, where direct-import checks miss startup failures.
   it('follows shared chunks out of a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'session-scanner-opencode-sqlite-worker-entry.js': workerChunk(
-        'session-scanner-opencode-sqlite-worker-entry',
+    const bundle: Rollup.OutputBundle = {
+      'foreign-sqlite-reader-entry.js': entryChunk(
+        'foreign-sqlite-reader-entry',
         'require("./chunks/shared.js")',
         ['chunks/shared.js']
       ),
@@ -223,20 +346,20 @@ describe('worker thread entry guard', () => {
         isEntry: false,
         name: 'shared'
       } as Rollup.OutputChunk
-    } as Rollup.OutputBundle
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('chunks/shared.js')
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('chunks/shared.js')
   })
 
   it('passes a clean worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'warp-theme-parser-worker.js': workerChunk(
+    const bundle: Rollup.OutputBundle = {
+      'warp-theme-parser-worker.js': entryChunk(
         'warp-theme-parser-worker',
         'require("node:worker_threads")'
       )
-    } as Rollup.OutputBundle
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).not.toThrow()
+    expect(() => runEntryWriteBundle(plugin, bundle)).not.toThrow()
   })
 })

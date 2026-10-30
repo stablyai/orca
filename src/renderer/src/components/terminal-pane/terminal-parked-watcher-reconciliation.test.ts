@@ -125,8 +125,7 @@ it('releases captured scroll-intent keys when a parked worktree is removed', () 
   expect(readTerminalScrollIntentKeyRetention().intents).toBe(0)
 })
 
-// Why: the sole-newborn parity flag is a fact about the captured PTY, so the
-// layout-fallback rescue must carry it only while the leaf still binds that PTY.
+// Carry sole-newborn facts only while the rescued leaf still binds the captured PTY.
 describe('untouchedFreshSpawn carry through the layout-fallback rescue', () => {
   const soleLeafState = {
     runtimePaneTitlesByTabId: {},
@@ -148,7 +147,8 @@ describe('untouchedFreshSpawn carry through the layout-fallback rescue', () => {
         paneId: 1,
         leafId: FIRST_LEAF_ID,
         drivesTabTitle: true,
-        untouchedFreshSpawn: true
+        untouchedFreshSpawn: true,
+        workspaceOwner: { executionHostId: 'ssh:qa', runtimeEnvironmentId: 'env-1' }
       },
       { ptyId: OLD_SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
     ])
@@ -160,6 +160,10 @@ describe('untouchedFreshSpawn carry through the layout-fallback rescue', () => {
 
     expect(panes).toHaveLength(1)
     expect(panes[0].untouchedFreshSpawn).toBe(true)
+    expect(panes[0].workspaceOwner).toEqual({
+      executionHostId: 'ssh:qa',
+      runtimeEnvironmentId: 'env-1'
+    })
   })
 
   it('drops the fact when the leaf re-minted a different PTY', () => {
@@ -169,7 +173,8 @@ describe('untouchedFreshSpawn carry through the layout-fallback rescue', () => {
         paneId: 1,
         leafId: FIRST_LEAF_ID,
         drivesTabTitle: true,
-        untouchedFreshSpawn: true
+        untouchedFreshSpawn: true,
+        workspaceOwner: { executionHostId: 'ssh:qa', runtimeEnvironmentId: 'env-1' }
       }
     ])
 
@@ -180,5 +185,6 @@ describe('untouchedFreshSpawn carry through the layout-fallback rescue', () => {
 
     expect(panes).toHaveLength(1)
     expect(panes[0].untouchedFreshSpawn).toBeUndefined()
+    expect(panes[0].workspaceOwner).toBeUndefined()
   })
 })

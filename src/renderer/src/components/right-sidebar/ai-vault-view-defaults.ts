@@ -7,8 +7,7 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-vault-session-limit'
 
-// Why: hide-empty used to default true; keep initial state, badge count, and Reset view
-// on one constant so a default flip cannot leave Reset pointing at the old value.
+// Share the default across initial state, adjustment count, and Reset view so they cannot diverge.
 export const DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS = false
 export const DEFAULT_AI_VAULT_SORT: AiVaultSort = 'updated'
 export const DEFAULT_AI_VAULT_SEARCH_SORT: AiVaultSearchSort = 'relevance'
@@ -21,8 +20,7 @@ export function countAiVaultViewAdjustments(options: {
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
 }): number {
-  // Why: count by membership, not length — an agent swap keeps the array length but
-  // still deviates from the default of every agent enabled.
+  // Agent swaps preserve length but still deviate from the all-enabled default.
   const allAgentsEnabled = AI_VAULT_AGENTS.every((agent) => options.agents.includes(agent))
   return (
     (allAgentsEnabled ? 0 : 1) +

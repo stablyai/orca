@@ -10,6 +10,7 @@ import {
   stopOrcaRuntime,
   type CliResult
 } from './computer-cli-driver'
+import { quotePowerShellLiteral } from '../../../src/shared/powershell-native-argument'
 
 const execFileAsync = promisify(execFile)
 let textEditTempDir: string | null = null
@@ -29,8 +30,7 @@ export async function ensureTextEditLaunched(): Promise<void> {
   const filePath = join(textEditTempDir, 'textedit-target.txt')
   await writeFile(filePath, 'seed', 'utf8')
   await execFileAsync('open', ['-F', '-a', 'TextEdit', '-n', filePath])
-  // Why: cold CI/user launches can register the process before System Events
-  // exposes its first window; short waits make the live computer-use proof flaky.
+  // Wait for the first System Events window; cold launch can register its process before exposing it.
   await waitForMacAppWindow('TextEdit', 15000)
 }
 
@@ -185,7 +185,7 @@ export async function ensureNotepadLaunched(): Promise<void> {
     '-NoProfile',
     '-NonInteractive',
     '-Command',
-    `Start-Process notepad.exe -ArgumentList ${powerShellSingleQuoted(filePath)}`
+    `Start-Process notepad.exe -ArgumentList ${quotePowerShellLiteral(filePath)}`
   ])
   notepadAppSelector = `pid:${await findNotepadWindowPid(filePath)}`
 }
@@ -232,7 +232,7 @@ function delay(ms: number): Promise<void> {
 async function findNotepadWindowPid(filePath: string): Promise<number> {
   const targetName = filePath.split(/[\\/]/).at(-1) ?? filePath
   const script = [
-    `$targetName = ${powerShellSingleQuoted(targetName)}`,
+    `$targetName = ${quotePowerShellLiteral(targetName)}`,
     '$deadline = (Get-Date).AddSeconds(15)',
     '$target = $null',
     'while ((Get-Date) -lt $deadline -and $null -eq $target) {',
@@ -258,10 +258,6 @@ async function findNotepadWindowPid(filePath: string): Promise<number> {
     script
   ])
   return Number.parseInt(result.stdout.trim(), 10)
-}
-
-function powerShellSingleQuoted(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
 }
 
 function escapeAppleScript(value: string): string {

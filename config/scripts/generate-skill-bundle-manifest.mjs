@@ -1,27 +1,27 @@
-import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { constants } from 'node:fs'
-import { access, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { isDeepStrictEqual } from 'node:util'
+import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 
-// Version artifacts independently to preserve the registry's schema-gated append-only guard.
-const CURRENT_MANIFEST_SCHEMA_VERSION = 2
-const SNAPSHOT_REGISTRY_SCHEMA_VERSION = 1
-const RELEASE_MAPPING_SCHEMA_VERSION = 1
+// Schema 3 removed revision/tree identity with snapshot registry; freshness compares installed bytes only.
+const CURRENT_MANIFEST_SCHEMA_VERSION = 3
 const SCRIPT_DIR = import.meta.dirname
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
 const SKILLS_ROOT = path.join(REPO_ROOT, 'skills')
 const OUTPUT_ROOT = path.join(REPO_ROOT, 'resources', 'skills')
 const CURRENT_MANIFEST_PATH = path.join(OUTPUT_ROOT, 'current-manifest.json')
-const SNAPSHOT_REGISTRY_PATH = path.join(OUTPUT_ROOT, 'snapshot-registry.json')
-const RELEASE_MAPPING_PATH = path.join(OUTPUT_ROOT, 'release-mapping.json')
-// Why: the manifest and registry are content-addressed — they describe skill
-// bytes. The mapping is provenance: which already-committed revision a tag
-// shipped. A release cut may append the second without regenerating the first.
-const CONTENT_ADDRESSED_PATHS = [CURRENT_MANIFEST_PATH, SNAPSHOT_REGISTRY_PATH]
-const ALL_ARTIFACT_PATHS = [...CONTENT_ADDRESSED_PATHS, RELEASE_MAPPING_PATH]
+// Digest ledger is add-only or older untouched SKILL.md installs become unrecognizable.
+const RELEASED_DIGESTS_PATH = path.join(OUTPUT_ROOT, 'released-digests.json')
+const BUNDLED_SOURCES_PATH = path.join(
+  REPO_ROOT,
+  'src',
+  'main',
+  'skills',
+  'bundled-skill-install',
+  'bundled-skill-sources.ts'
+)
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
@@ -29,10 +29,6 @@ function sha256(bytes) {
 
 function compareCodeUnits(left, right) {
   return left === right ? 0 : left < right ? -1 : 1
-}
-
-function gitObjectSha(kind, bytes) {
-  return createHash('sha1').update(`${kind} ${bytes.length}\0`).update(bytes).digest()
 }
 
 function normalizeText(bytes) {
@@ -74,61 +70,12 @@ function describeFile(manifestPath, bytes, executable) {
     classification: normalized === null ? 'binary' : 'text',
     exactSha256,
     textNormalizedSha256,
-    identitySha256: normalized !== null && !executable ? textNormalizedSha256 : exactSha256,
-    gitBlobSha: gitObjectSha('blob', bytes).toString('hex')
+    identitySha256: normalized !== null && !executable ? textNormalizedSha256 : exactSha256
   }
 }
 
-function gitTreeSha(entries) {
-  const root = { directories: new Map(), files: [] }
-  for (const entry of entries) {
-    const parts = entry.path.split('/')
-    const filename = parts.pop()
-    let directory = root
-    for (const part of parts) {
-      let child = directory.directories.get(part)
-      if (!child) {
-        child = { directories: new Map(), files: [] }
-        directory.directories.set(part, child)
-      }
-      directory = child
-    }
-    directory.files.push({ filename, ...entry })
-  }
-
-  function hashDirectory(directory) {
-    const children = [
-      ...[...directory.directories].map(([name, child]) => ({
-        mode: '40000',
-        name,
-        hash: hashDirectory(child)
-      })),
-      ...directory.files.map((file) => ({
-        mode: file.executable ? '100755' : '100644',
-        name: file.filename,
-        hash: Buffer.from(file.gitBlobSha, 'hex')
-      }))
-    ].sort((left, right) => {
-      const leftName = left.mode === '40000' ? `${left.name}/` : left.name
-      const rightName = right.mode === '40000' ? `${right.name}/` : right.name
-      return Buffer.from(leftName).compare(Buffer.from(rightName))
-    })
-    const body = Buffer.concat(
-      children.map(({ mode, name, hash }) =>
-        Buffer.concat([Buffer.from(`${mode} ${name}\0`, 'utf8'), hash])
-      )
-    )
-    return gitObjectSha('tree', body)
-  }
-
-  return hashDirectory(root).toString('hex')
-}
-
-// Why: kept in step with isOsMetadataSkillEntryName in src/main/skills/skill-package-identity.ts.
-// The scanner ignores these because the OS writes them into a live install; the generator
-// ignores them so a stray one in a working tree cannot be committed into the manifest as
-// content no user could ever match. Skipped rather than rejected: the file is not the
-// developer's doing, so failing the build over it would be hostile.
+// Mirror runtime OS-sidecar exclusions (skill-package-identity.ts) or manifest can describe content no live install matches.
+// Skip OS-authored noise rather than failing builds for browsing a folder.
 const OS_METADATA_FILE_NAMES = new Set(['.ds_store', 'thumbs.db', 'ehthumbs.db', 'desktop.ini'])
 
 function isOsMetadataSkillEntryName(name) {
@@ -142,16 +89,12 @@ async function collectPackageFiles(packageRoot) {
 
   async function visit(directory) {
     const entries = await readdir(directory, { withFileTypes: true })
-    // Why: build-time Node and packaged Electron may ship different ICU data;
-    // package identity order must use the same locale-independent comparison.
+    // Build Node and packaged Electron may differ in ICU; use locale-independent identity ordering.
     entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
       const absolutePath = path.join(directory, entry.name)
       const fileStat = await lstat(absolutePath)
-      // Only a plain file is OS-authored, so the type decides and not the name alone: a
-      // directory or link wearing the name would otherwise drop its subtree out of the
-      // manifest and skip the guards below. Decided before the case-fold map so two
-      // spellings of one sidecar cannot collide.
+      // Skip sidecar-named plain files only: directories/links contain real content. Check before case-fold collision map.
       if (isOsMetadataSkillEntryName(entry.name) && fileStat.isFile()) {
         continue
       }
@@ -174,8 +117,7 @@ async function collectPackageFiles(packageRoot) {
       if (!fileStat.isFile()) {
         throw new Error(`Special file is not allowed in a shipped skill: ${manifestPath}`)
       }
-      // Why: Windows observation cannot see execute bits, so an executable file in
-      // a shipped skill would misclassify every pristine Windows install as unrecognized.
+      // Windows cannot observe execute bits; shipped executables would make pristine installs appear outdated.
       if ((fileStat.mode & 0o111) !== 0) {
         throw new Error(`Executable file is not allowed in a shipped skill: ${manifestPath}`)
       }
@@ -187,92 +129,7 @@ async function collectPackageFiles(packageRoot) {
   return sortManifestFiles(files)
 }
 
-function collectGitSkillTreeEntries(treeSha) {
-  const output = execFileSync('git', ['ls-tree', '-r', '-z', treeSha])
-    .toString('utf8')
-    .split('\0')
-    .filter(Boolean)
-  const packages = new Map()
-  for (const line of output) {
-    const match = /^(\d+) (\w+) ([a-f0-9]+)\t(.+)$/.exec(line)
-    if (!match) {
-      throw new Error(`Unexpected git tree entry in ${treeSha}: ${line}`)
-    }
-    const [, mode, type, objectSha, sourcePath] = match
-    const separator = sourcePath.indexOf('/')
-    if (separator <= 0 || separator === sourcePath.length - 1) {
-      throw new Error(`Unsupported shipped skill path in ${treeSha}: ${sourcePath}`)
-    }
-    const name = sourcePath.slice(0, separator)
-    const manifestPath = sourcePath.slice(separator + 1)
-    const entries = packages.get(name) ?? []
-    entries.push({ mode, type, objectSha, manifestPath })
-    packages.set(name, entries)
-  }
-  return packages
-}
-
-function readGitBlobs(objectShas) {
-  const uniqueShas = [...new Set(objectShas)]
-  if (uniqueShas.length === 0) {
-    return new Map()
-  }
-  // Why: released history spans hundreds of tags. Batch mode avoids a Git
-  // subprocess per historical file while remaining available on Git 2.25.
-  const output = execFileSync('git', ['cat-file', '--batch'], {
-    input: `${uniqueShas.join('\n')}\n`,
-    maxBuffer: 64 * 1024 * 1024
-  })
-  const blobs = new Map()
-  let offset = 0
-  for (const requestedSha of uniqueShas) {
-    const headerEnd = output.indexOf(10, offset)
-    if (headerEnd === -1) {
-      throw new Error(`Missing git cat-file header for ${requestedSha}`)
-    }
-    const header = output.subarray(offset, headerEnd).toString('utf8')
-    const match = /^([a-f0-9]+) blob (\d+)$/.exec(header)
-    if (!match || match[1] !== requestedSha) {
-      throw new Error(`Unexpected git cat-file header for ${requestedSha}: ${header}`)
-    }
-    const size = Number(match[2])
-    const contentStart = headerEnd + 1
-    const contentEnd = contentStart + size
-    if (contentEnd >= output.length || output[contentEnd] !== 10) {
-      throw new Error(`Truncated git blob for ${requestedSha}`)
-    }
-    blobs.set(requestedSha, Buffer.from(output.subarray(contentStart, contentEnd)))
-    offset = contentEnd + 1
-  }
-  return blobs
-}
-
-function collectGitPackageFiles(treeSha, name, entries, blobs) {
-  const caseFoldedPaths = new Map()
-  const files = entries.map(({ mode, type, objectSha, manifestPath }) => {
-    if (type !== 'blob' || (mode !== '100644' && mode !== '100755')) {
-      throw new Error(`Unsupported shipped skill entry in ${treeSha}: ${name}/${manifestPath}`)
-    }
-    assertSafeRelativePath(manifestPath)
-    const foldedPath = manifestPath.toLocaleLowerCase('en-US')
-    const collision = caseFoldedPaths.get(foldedPath)
-    if (collision && collision !== manifestPath) {
-      throw new Error(`Case-colliding skill paths in ${treeSha}: ${collision} and ${manifestPath}`)
-    }
-    caseFoldedPaths.set(foldedPath, manifestPath)
-    const bytes = blobs.get(objectSha)
-    if (!bytes) {
-      throw new Error(`Missing git blob ${objectSha} for ${name}/${manifestPath}`)
-    }
-    return describeFile(manifestPath, bytes, mode === '100755')
-  })
-  // Why: git ls-tree emits git byte-order, not the canonical walk order.
-  return sortManifestFiles(files)
-}
-
-// Why: snapshot matching compares files by array index, so every producer —
-// working-tree walk, git history, and runtime observation — must emit one
-// canonical order. This mirrors the sorted depth-first filesystem walk.
+// Digest hashes array order; match runtime’s sorted depth-first filesystem walk.
 function compareManifestPaths(left, right) {
   const leftParts = left.split('/')
   const rightParts = right.split('/')
@@ -306,380 +163,214 @@ function packageDigest(files) {
   )
 }
 
-function releaseTags() {
-  return execFileSync(
-    'git',
-    ['for-each-ref', '--sort=creatordate', '--format=%(refname:short)', 'refs/tags/v*'],
-    { encoding: 'utf8' }
-  )
-    .split('\n')
-    .filter((tag) => /^v\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?$/.test(tag))
-}
-
-function skillsTreeShasAtRefs(refs) {
-  if (refs.length === 0) {
-    return []
-  }
-  const output = execFileSync('git', ['cat-file', '--batch-check=%(objectname) %(objecttype)'], {
-    input: `${refs.map((ref) => `${ref}:skills`).join('\n')}\n`,
-    encoding: 'utf8'
-  })
-  const lines = output.trimEnd().split('\n')
-  if (lines.length !== refs.length) {
-    throw new Error(`Expected ${refs.length} skills tree identities, received ${lines.length}`)
-  }
-  return lines.map((line, index) => {
-    if (line.endsWith(' missing')) {
-      return null
-    }
-    const match = /^([a-f0-9]+) tree$/.exec(line)
-    if (!match) {
-      throw new Error(`Unexpected skills tree identity at ${refs[index]}: ${line}`)
-    }
-    return match[1]
-  })
-}
-
-function buildReleasedHistory() {
-  const registry = { schemaVersion: SNAPSHOT_REGISTRY_SCHEMA_VERSION, skills: {} }
-  const mapping = { schemaVersion: RELEASE_MAPPING_SCHEMA_VERSION, releases: [] }
-  const tags = releaseTags()
-  const treeShas = skillsTreeShasAtRefs(tags)
-  const distinctTreeShas = [...new Set(treeShas.filter(Boolean))]
-  const packagesByTree = new Map(
-    distinctTreeShas.map((treeSha) => [treeSha, collectGitSkillTreeEntries(treeSha)])
-  )
-  const blobs = readGitBlobs(
-    [...packagesByTree.values()].flatMap((packages) =>
-      [...packages.values()].flatMap((entries) => entries.map((entry) => entry.objectSha))
-    )
-  )
-  let previousSkillsTreeSha = null
-  for (const [index, tag] of tags.entries()) {
-    const skillsTreeSha = treeShas[index]
-    if (!skillsTreeSha || skillsTreeSha === previousSkillsTreeSha) {
-      continue
-    }
-    previousSkillsTreeSha = skillsTreeSha
-    const revisions = {}
-    const packages = packagesByTree.get(skillsTreeSha)
-    if (!packages) {
-      throw new Error(`Missing released skill tree ${skillsTreeSha} at ${tag}`)
-    }
-    for (const name of [...packages.keys()].sort(compareCodeUnits)) {
-      const entries = packages.get(name)
-      const filesWithGitHashes = collectGitPackageFiles(skillsTreeSha, name, entries, blobs)
-      if (!filesWithGitHashes.some((file) => file.path === 'SKILL.md')) {
-        continue
-      }
-      const digest = packageDigest(filesWithGitHashes)
-      const snapshots = registry.skills[name] ?? []
-      const latest = snapshots.at(-1)
-      if (!latest || latest.packageDigest !== digest) {
-        const files = filesWithGitHashes.map(({ gitBlobSha: _gitBlobSha, ...file }) => file)
-        snapshots.push({
-          releaseRevision: (latest?.releaseRevision ?? 0) + 1,
-          packageDigest: digest,
-          gitTreeSha: gitTreeSha(filesWithGitHashes),
-          files
-        })
-        registry.skills[name] = snapshots
-      }
-      revisions[name] = snapshots.at(-1).releaseRevision
-    }
-    if (Object.keys(revisions).length > 0) {
-      mapping.releases.push({ appVersion: tag.slice(1), skills: revisions })
-    }
-  }
-  return { registry, mapping }
-}
-
-// Why: released history is authoritative committed data, advanced only at
-// release cut. Seeding generation from the committed registry + mapping makes
-// ordinary verify/regeneration a pure function of working-tree bytes, so it
-// never walks git tags — the root cause of recurring lint drift when a clone
-// holds stray, deleted, or fork tags the committed artifacts predate.
-function releasedHistoryFromCommitted(committedRegistry, committedMapping) {
-  const registry = { schemaVersion: SNAPSHOT_REGISTRY_SCHEMA_VERSION, skills: {} }
-  const releasedSnapshotCounts = {}
-  const mapping =
-    committedMapping && committedMapping.schemaVersion === RELEASE_MAPPING_SCHEMA_VERSION
-      ? structuredClone(committedMapping)
-      : { schemaVersion: RELEASE_MAPPING_SCHEMA_VERSION, releases: [] }
-  if (committedRegistry && committedRegistry.schemaVersion === SNAPSHOT_REGISTRY_SCHEMA_VERSION) {
-    const mappedCounts = releasedSnapshotCountsFromMapping(mapping)
-    for (const [name, snapshots] of Object.entries(committedRegistry.skills ?? {})) {
-      // The committed registry carries at most one unreleased tail beyond the
-      // revisions named by the mapping; drop it and recompute it from bytes.
-      const releasedCount = mappedCounts?.[name] ?? Math.max(0, snapshots.length - 1)
-      registry.skills[name] = snapshots.slice(0, releasedCount)
-      releasedSnapshotCounts[name] = releasedCount
-    }
-  }
-  return { registry, mapping, releasedSnapshotCounts }
-}
-
-// Why: disaster recovery only. Reconstruct released history from the immutable
-// release tags when the committed ledger must be rebuilt from scratch. Kept off
-// the verify/regenerate path — walking tags there is what coupled lint to the
-// executing clone's tag state and broke it on version bumps, new tags, and
-// stray/deleted local tags.
-function releasedHistoryFromTags() {
-  const { registry, mapping } = buildReleasedHistory()
-  const releasedSnapshotCounts = Object.fromEntries(
-    Object.entries(registry.skills).map(([name, snapshots]) => [name, snapshots.length])
-  )
-  return { registry, mapping, releasedSnapshotCounts }
-}
-
-// Why: release cut is the single authoritative point where working-tree bytes
-// become an immutable released revision. Append one mapping row for the version,
-// mirroring the historical dedupe where consecutive identical skill trees share
-// the earliest release's row.
-function appendReleaseRow(artifacts, version) {
-  const appVersion = version.startsWith('v') ? version.slice(1) : version
-  const currentRevisions = {}
-  for (const skill of artifacts.currentManifest.skills) {
-    currentRevisions[skill.name] = skill.releaseRevision
-  }
-  const releases = artifacts.releaseMapping.releases
-  const last = releases.at(-1)
-  if (last && isDeepStrictEqual(last.skills, currentRevisions)) {
-    return
-  }
-  // Why: a cut that pushed the version bump to main but died before pushing the
-  // tag is re-cut at the same version. If skills changed in between, appending
-  // would leave two rows claiming this version and the stale one would name
-  // revisions that tag never ships — overwrite, since the tag ships these bytes.
-  if (last?.appVersion === appVersion) {
-    releases[releases.length - 1] = { appVersion, skills: currentRevisions }
-    return
-  }
-  // Why: an earlier row means re-cutting an already-shipped version, which the
-  // cut workflow refuses upstream. Fail rather than corrupt shipped provenance.
-  if (releases.some((release) => release.appVersion === appVersion)) {
-    throw new Error(`Release mapping already has a row for ${appVersion}.`)
-  }
-  releases.push({ appVersion, skills: currentRevisions })
-}
-
-async function buildArtifacts(releasedHistory) {
-  const { registry, mapping, releasedSnapshotCounts } = releasedHistory
+async function buildCurrentManifest() {
   const skillDirectories = (await readdir(SKILLS_ROOT, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort(compareCodeUnits)
-  const currentSkills = []
+  const skills = []
   for (const name of skillDirectories) {
-    const filesWithGitHashes = await collectPackageFiles(path.join(SKILLS_ROOT, name))
-    if (!filesWithGitHashes.some((file) => file.path === 'SKILL.md')) {
+    const files = await collectPackageFiles(path.join(SKILLS_ROOT, name))
+    if (!files.some((file) => file.path === 'SKILL.md')) {
       throw new Error(`Skill package ${name} has no top-level SKILL.md`)
     }
-    const digest = packageDigest(filesWithGitHashes)
-    const snapshots = registry.skills[name] ?? []
-    const latest = snapshots.at(-1)
-    let snapshot = latest
-    if (!latest || latest.packageDigest !== digest) {
-      const files = filesWithGitHashes.map(({ gitBlobSha: _gitBlobSha, ...file }) => file)
-      snapshot = {
-        releaseRevision: (latest?.releaseRevision ?? 0) + 1,
-        packageDigest: digest,
-        gitTreeSha: gitTreeSha(filesWithGitHashes),
-        files
-      }
-      snapshots.push(snapshot)
-      registry.skills[name] = snapshots
-    }
-    currentSkills.push({
-      name,
-      sourcePath: `skills/${name}`,
-      ...snapshot
-    })
+    skills.push({ name, sourcePath: `skills/${name}`, packageDigest: packageDigest(files), files })
   }
-  return {
-    currentManifest: {
-      schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
-      skills: currentSkills
-    },
-    snapshotRegistry: registry,
-    releaseMapping: mapping,
-    releasedSnapshotCounts
-  }
-}
-
-// Why: released snapshots are the detection ground truth for existing installs,
-// so a generation-logic change must not rewrite them silently. Only the one
-// unreleased working-tree append per skill may change between runs.
-function releasedSnapshotCountsFromMapping(releaseMapping) {
-  if (!releaseMapping || releaseMapping.schemaVersion !== RELEASE_MAPPING_SCHEMA_VERSION) {
-    return null
-  }
-  const counts = {}
-  for (const release of releaseMapping.releases ?? []) {
-    for (const [name, revision] of Object.entries(release.skills ?? {})) {
-      counts[name] = Math.max(counts[name] ?? 0, revision)
-    }
-  }
-  return counts
-}
-
-function assertReleasedHistoryPreserved(committedRegistry, artifacts, committedReleaseMapping) {
-  if (!committedRegistry || committedRegistry.schemaVersion !== SNAPSHOT_REGISTRY_SCHEMA_VERSION) {
-    return
-  }
-  const committedReleasedCounts = releasedSnapshotCountsFromMapping(committedReleaseMapping)
-  for (const [name, committedSnapshots] of Object.entries(committedRegistry.skills ?? {})) {
-    const releasedCount = artifacts.releasedSnapshotCounts[name] ?? 0
-    const regenerated = artifacts.snapshotRegistry.skills[name] ?? []
-    const minimumReleasedCount =
-      committedReleasedCounts?.[name] ?? Math.max(0, committedSnapshots.length - 1)
-    if (releasedCount < minimumReleasedCount) {
-      throw new Error(
-        `Released snapshot history is incomplete for ${name}. ` +
-          'Fetch all release tags before regenerating skill artifacts.'
-      )
-    }
-    const protectedCount = committedReleasedCounts
-      ? (committedReleasedCounts[name] ?? 0)
-      : Math.min(committedSnapshots.length, releasedCount)
-    for (let index = 0; index < protectedCount; index += 1) {
-      const committed = committedSnapshots[index]
-      const rebuilt = regenerated[index]
-      if (!rebuilt || !isDeepStrictEqual(rebuilt, committed)) {
-        throw new Error(
-          `Released snapshot history changed for ${name} at revision ${committed.releaseRevision}. ` +
-            'Released snapshots are append-only; a deliberate identity migration must update this check.'
-        )
-      }
-    }
-  }
-}
-
-async function readCommittedRegistry() {
-  try {
-    return JSON.parse(await readFile(SNAPSHOT_REGISTRY_PATH, 'utf8'))
-  } catch {
-    return null
-  }
-}
-
-async function readCommittedReleaseMapping() {
-  try {
-    return JSON.parse(await readFile(RELEASE_MAPPING_PATH, 'utf8'))
-  } catch {
-    return null
-  }
+  return { schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION, skills }
 }
 
 function serialized(value) {
   return `${JSON.stringify(value, null, 2)}\n`
 }
 
-async function writeArtifacts(artifacts, paths = ALL_ARTIFACT_PATHS) {
-  const values = new Map([
-    [CURRENT_MANIFEST_PATH, artifacts.currentManifest],
-    [SNAPSHOT_REGISTRY_PATH, artifacts.snapshotRegistry],
-    [RELEASE_MAPPING_PATH, artifacts.releaseMapping]
-  ])
-  await mkdir(OUTPUT_ROOT, { recursive: true })
-  await Promise.all(paths.map((filePath) => writeFile(filePath, serialized(values.get(filePath)))))
+function textDigest(bytes) {
+  const normalized = normalizedTextOrNull(bytes)
+  return normalized === null ? null : sha256(normalized)
 }
 
-// Why: cutting a release tag adds a trailing mapping row on every checkout at
-// once, before any branch can regenerate. A trailing row whose revisions all
-// equal the current manifest is provably redundant until the next real
-// regeneration (installs of those bytes classify as current and are labeled by
-// the running build), so verify must not fail branches over it.
-function isToleratedReleaseMappingPrefix(committedText, artifacts) {
-  let committed
+function git(args, options = {}) {
+  return execFileSync('git', args, {
+    cwd: REPO_ROOT,
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    ...options
+  })
+}
+
+function tryGit(args, options) {
   try {
-    committed = JSON.parse(committedText)
+    return git(args, { encoding: 'utf8', ...options })
   } catch {
-    return false
+    return null
   }
-  const derived = artifacts.releaseMapping
-  const committedCount = Array.isArray(committed?.releases) ? committed.releases.length : -1
-  if (committedCount < 0 || committedCount >= derived.releases.length) {
-    return false
-  }
-  const prefix = {
-    schemaVersion: derived.schemaVersion,
-    releases: derived.releases.slice(0, committedCount)
-  }
-  if (committedText !== serialized(prefix)) {
-    return false
-  }
-  const currentRevisions = Object.fromEntries(
-    artifacts.currentManifest.skills.map((skill) => [skill.name, skill.releaseRevision])
-  )
-  return derived.releases
-    .slice(committedCount)
-    .every((release) => isDeepStrictEqual(release.skills, currentRevisions))
 }
 
-async function verifyArtifacts(artifacts, paths = ALL_ARTIFACT_PATHS) {
-  const expected = [
-    [CURRENT_MANIFEST_PATH, artifacts.currentManifest, null],
-    [SNAPSHOT_REGISTRY_PATH, artifacts.snapshotRegistry, null],
-    [RELEASE_MAPPING_PATH, artifacts.releaseMapping, isToleratedReleaseMappingPrefix]
-  ].filter(([filePath]) => paths.includes(filePath))
-  const stale = []
-  for (const [filePath, value, tolerated] of expected) {
-    try {
-      await access(filePath, constants.R_OK)
-      const committedText = await readFile(filePath, 'utf8')
-      if (committedText !== serialized(value) && !tolerated?.(committedText, artifacts)) {
-        stale.push(filePath)
-      }
-    } catch {
-      stale.push(filePath)
+const SKILL_FILE_RAW_LINE = /^:\d+ \d+ [0-9a-f]+ ([0-9a-f]+) [A-Z]\d*\tskills\/([^/]+)\/SKILL\.md$/u
+
+/** Every `skills/<name>/SKILL.md` blob reachable from HEAD; empty outside a git checkout. */
+function historicalSkillDigests() {
+  // One path-limited log plus one batched read: never a per-commit or per-ref fan-out.
+  const log = tryGit([
+    'log',
+    '--format=',
+    '--raw',
+    '--no-abbrev',
+    '--no-renames',
+    'HEAD',
+    '--',
+    'skills'
+  ])
+  if (log === null) {
+    return []
+  }
+  const namesByBlob = new Map()
+  for (const line of log.split('\n')) {
+    const match = SKILL_FILE_RAW_LINE.exec(line)
+    if (match && !/^0+$/u.test(match[1])) {
+      namesByBlob.set(match[1], match[2])
     }
   }
-  if (stale.length > 0) {
+  if (namesByBlob.size === 0) {
+    return []
+  }
+  const batch = git(['cat-file', '--batch'], { input: `${[...namesByBlob.keys()].join('\n')}\n` })
+  const digests = []
+  for (let offset = 0; offset < batch.length;) {
+    const headerEnd = batch.indexOf(0x0a, offset)
+    const [blob, , size] = batch.subarray(offset, headerEnd).toString('utf8').split(' ')
+    const bytes = batch.subarray(headerEnd + 1, headerEnd + 1 + Number(size))
+    offset = headerEnd + 1 + Number(size) + 1
+    const digest = textDigest(bytes)
+    if (digest !== null) {
+      digests.push([namesByBlob.get(blob), [digest]])
+    }
+  }
+  return digests
+}
+
+function withDigests(ledger, additions) {
+  const skills = { ...ledger.skills }
+  for (const [name, digests] of additions) {
+    skills[name] = [...new Set([...(skills[name] ?? []), ...digests])].sort(compareCodeUnits)
+  }
+  const names = Object.keys(skills).sort(compareCodeUnits)
+  return { schemaVersion: 1, skills: Object.fromEntries(names.map((name) => [name, skills[name]])) }
+}
+
+/** Digests a base ledger listed that this one lost. */
+function findDroppedReleasedDigests(baseLedger, ledger) {
+  return Object.entries(baseLedger.skills ?? {}).flatMap(([name, digests]) =>
+    digests
+      .filter((digest) => !(ledger.skills[name] ?? []).includes(digest))
+      .map((digest) => `${name}:${digest}`)
+  )
+}
+
+async function readReleasedDigests() {
+  const text = await readFile(RELEASED_DIGESTS_PATH, 'utf8').catch(() => null)
+  return text === null ? { schemaVersion: 1, skills: {} } : JSON.parse(text)
+}
+
+async function buildReleasedDigests(manifest) {
+  const current = []
+  for (const skill of manifest.skills) {
+    const bytes = await readFile(path.join(REPO_ROOT, skill.sourcePath, 'SKILL.md'))
+    current.push([skill.name, [textDigest(bytes)]])
+  }
+  return withDigests(await readReleasedDigests(), [...historicalSkillDigests(), ...current])
+}
+
+// Embed install bytes: CLI/paired servers have no app resources directory.
+async function buildBundledSources(manifest, ledger) {
+  const sources = []
+  for (const skill of manifest.skills) {
+    // The installer's untouched-copy rule is "the folder holds exactly SKILL.md".
+    if (skill.files.length !== 1 || skill.files[0].classification !== 'text') {
+      throw new Error(`Bundled skills ship a single text SKILL.md: ${skill.name}`)
+    }
+    const bytes = await readFile(path.join(REPO_ROOT, skill.sourcePath, 'SKILL.md'))
+    sources.push({
+      name: skill.name,
+      text: normalizeText(bytes).toString('utf8'),
+      releasedDigests: ledger.skills[skill.name]
+    })
+  }
+  return (
+    '// Generated by config/scripts/generate-skill-bundle-manifest.mjs. Do not edit.\n\n' +
+    'export type BundledSkillSource = {\n' +
+    '  readonly name: string\n' +
+    '  /** LF-normalised `SKILL.md`, the only file a bundled skill ships. */\n' +
+    '  readonly text: string\n' +
+    '  /** sha256 of every LF-normalised `SKILL.md` any build shipped, this one included. */\n' +
+    '  readonly releasedDigests: readonly string[]\n' +
+    '}\n\n' +
+    '// oxfmt-ignore\n' +
+    'export const BUNDLED_SKILL_SOURCES: readonly BundledSkillSource[] = [\n' +
+    `${sources.map((source) => `  ${JSON.stringify(source)}`).join(',\n')}\n]\n`
+  )
+}
+
+// Why: on a PR merge ref HEAD^1 is the base; locally, the merge base with main.
+function ledgerBaseCommit() {
+  try {
+    return (
+      resolvePullRequestDiffBase(REPO_ROOT, null) ??
+      (tryGit(['merge-base', 'origin/main', 'HEAD'])?.trim() || null)
+    )
+  } catch {
+    return null
+  }
+}
+
+function verifyLedgerKeepsBase(ledger) {
+  const base = ledgerBaseCommit()
+  const relativePath = path.relative(REPO_ROOT, RELEASED_DIGESTS_PATH).split(path.sep).join('/')
+  // Why fail closed on a PR: an unreadable base would otherwise let a shrink through silently.
+  if (
+    process.env.GITHUB_EVENT_NAME === 'pull_request' &&
+    (!base || tryGit(['cat-file', '-e', base]) === null)
+  ) {
+    throw new Error(`Cannot read the pull request base to check ${relativePath} only grows.`)
+  }
+  const baseText = base ? tryGit(['show', `${base}:${relativePath}`]) : null
+  if (baseText === null) {
+    return
+  }
+  const dropped = findDroppedReleasedDigests(JSON.parse(baseText), ledger)
+  if (dropped.length > 0) {
     throw new Error(
-      `Generated skill artifacts are stale:\n${stale
-        .map((filePath) => path.relative(REPO_ROOT, filePath))
-        .join('\n')}\nRun pnpm generate:skill-bundle-manifest.`
+      `${relativePath} dropped digests its base shipped (it is add-only):\n${dropped.join('\n')}`
+    )
+  }
+}
+
+async function verifyGeneratedFile(filePath, expected) {
+  const committedText = await readFile(filePath, 'utf8').catch(() => null)
+  if (committedText !== expected) {
+    throw new Error(
+      `Generated skill bundle artifact is stale:\n${path.relative(REPO_ROOT, filePath)}\n` +
+        'Run pnpm generate:skill-bundle-manifest.'
     )
   }
 }
 
 async function main() {
-  const argv = process.argv.slice(2)
-  const rebuildFromTags = argv.includes('--rebuild-from-tags')
-  const releaseIndex = argv.indexOf('--release')
-  const releaseVersion = releaseIndex !== -1 ? argv[releaseIndex + 1] : null
-  if (releaseIndex !== -1 && !releaseVersion) {
-    throw new Error('--release requires a version argument, e.g. --release 1.4.160')
+  const manifest = await buildCurrentManifest()
+  const ledger = await buildReleasedDigests(manifest)
+  const sources = await buildBundledSources(manifest, ledger)
+  if (process.argv.slice(2).includes('--write')) {
+    await mkdir(OUTPUT_ROOT, { recursive: true })
+    await mkdir(path.dirname(BUNDLED_SOURCES_PATH), { recursive: true })
+    await writeFile(CURRENT_MANIFEST_PATH, serialized(manifest))
+    await writeFile(RELEASED_DIGESTS_PATH, serialized(ledger))
+    await writeFile(BUNDLED_SOURCES_PATH, sources)
+    return
   }
-
-  const committedRegistry = await readCommittedRegistry()
-  const committedMapping = await readCommittedReleaseMapping()
-  const releasedHistory = rebuildFromTags
-    ? releasedHistoryFromTags()
-    : releasedHistoryFromCommitted(committedRegistry, committedMapping)
-  const artifacts = await buildArtifacts(releasedHistory)
-
-  if (releaseVersion) {
-    // Why: the row names revisions the committed registry must already contain,
-    // so proving those artifacts match this ref is what lets the cut record
-    // provenance without regenerating them. If regeneration disagrees with what
-    // is committed, the row would name a revision this tag does not ship.
-    await verifyArtifacts(artifacts, CONTENT_ADDRESSED_PATHS)
-    appendReleaseRow(artifacts, releaseVersion)
-  }
-
-  // Why: released snapshots are append-only. The committed registry/mapping are
-  // read fresh here so the artifacts (which may have appended a release row) can
-  // never alias what we validate against. This mapping must stay the PRE-append
-  // one to match artifacts.releasedSnapshotCounts, which seeding fixed before the
-  // row existed; the post-append mapping names one more revision than the counts
-  // do, which reads as incomplete history and would throw on every cut.
-  assertReleasedHistoryPreserved(committedRegistry, artifacts, committedMapping)
-
-  const shouldWrite = releaseVersion !== null || argv.includes('--write')
-  const writePaths = releaseVersion ? [RELEASE_MAPPING_PATH] : ALL_ARTIFACT_PATHS
-  await (shouldWrite ? writeArtifacts(artifacts, writePaths) : verifyArtifacts(artifacts))
+  await verifyGeneratedFile(CURRENT_MANIFEST_PATH, serialized(manifest))
+  // Equal to its own union with history and the current bytes means none is missing.
+  await verifyGeneratedFile(RELEASED_DIGESTS_PATH, serialized(ledger))
+  verifyLedgerKeepsBase(ledger)
+  await verifyGeneratedFile(BUNDLED_SOURCES_PATH, sources)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
@@ -690,19 +381,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
 }
 
 export {
-  appendReleaseRow,
-  assertReleasedHistoryPreserved,
-  buildArtifacts,
-  buildReleasedHistory,
+  buildCurrentManifest,
   classifyFile,
   collectPackageFiles,
   describeFile,
-  gitTreeSha,
-  isToleratedReleaseMappingPrefix,
+  findDroppedReleasedDigests,
   normalizeText,
   packageDigest,
-  releasedHistoryFromCommitted,
   sortManifestFiles,
-  verifyArtifacts,
-  writeArtifacts
+  withDigests
 }

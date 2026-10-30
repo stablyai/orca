@@ -1,8 +1,12 @@
 import { appendFile, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import {
+  registerTranscriptConsumer,
+  resetTranscriptConsumersForTests
+} from '../ai-vault/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import { parseTranscript } from './session-search-transcript-fixtures'
@@ -56,7 +60,6 @@ async function candidates() {
   ).candidates
 }
 
-/** What a pass hands the read loop: the store's rows, read once. */
 function rows() {
   return new Map(store.files().map((row) => [row.path, row]))
 }
@@ -77,7 +80,6 @@ it('re-reads nothing it already holds, even with a cold session-list cache', asy
   const first = await passOverAll()
   expect(first.stats.fullParses).toBe(2)
 
-  // A restart: the parse cache is gone, the index's `files` table is not.
   store.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
@@ -96,10 +98,6 @@ it('resumes into a grown transcript instead of re-reading it whole', async () =>
   expect(second.stats).toMatchObject({ incremental: 1, fullParses: 0 })
 })
 
-// Nothing is recorded about what a deadline cut off, because being owed is a
-// fact about the row: the file is read on the next pass for the same reason it
-// was owed on this one. The one thing handed back is how many there were, since
-// a candidate with no row yet is a backlog no query can see.
 it('leaves what it ran out of time for owed, with nothing written down', async () => {
   const all = await candidates()
   const cut = await runSessionSearchIndexPass(store, all, { rows: rows(), overdue: () => true })
@@ -111,8 +109,6 @@ it('leaves what it ran out of time for owed, with nothing written down', async (
   expect(store.files()).toHaveLength(2)
 })
 
-// A deferred candidate whose row already says `due` is in `stateCounts().due`,
-// which the status adds `left` to; counting it here would report it twice.
 it('leaves a deferred candidate out of the count when its row already says due', async () => {
   await passOverAll()
   for (const row of store.files()) {
@@ -127,8 +123,6 @@ it('leaves a deferred candidate out of the count when its row already says due',
   expect(cut).toMatchObject({ outOfTime: true, left: 0 })
 })
 
-// The deadline is never applied before the pass has read anything, so a single
-// transcript larger than one deadline is read alone rather than starved.
 it('reads one file even when the deadline has already expired', async () => {
   const only = (await candidates()).slice(0, 1)
   const alone = await runSessionSearchIndexPass(store, only, { rows: rows(), overdue: () => true })
@@ -142,20 +136,52 @@ it('skips a source the reader cannot even open without failing the pass', async 
   await rm(transcript(FIRST))
   await runSessionSearchIndexPass(store, all, { rows: rows() })
 
-  // One session indexed, and the missing one recorded as a failed read rather
-  // than as content the index holds.
   expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
     n: 1
   })
   expect(states()[transcript(FIRST)]).toBe('failed')
 })
 
-// Finding 6: mtime alone is not the freshness key. A transcript that grows
-// while keeping its mtime (a same-second append, a restored timestamp) is a
-// different file to the index, and reading only mtime would skip it forever.
+it('stops a cancelled read part way without counting it as a failure', async () => {
+  // Span several chunks so cancellation leaves most of the transcript unread.
+  const turns = Array.from({ length: 100 }, (_, index) => `${index} ${'x'.repeat(2_000)}`)
+  await writeClaudeTranscript(transcript(FIRST), turns, FIRST)
+  const controller = new AbortController()
+  let firstMessages = 0
+  const unregister = registerTranscriptConsumer({
+    beginRead: (start) =>
+      start.candidate.file.path === transcript(FIRST)
+        ? {
+            message: () => {
+              firstMessages += 1
+              controller.abort()
+            },
+            finish: () => {}
+          }
+        : null
+  })
+  await expect(
+    runSessionSearchIndexPass(store, await candidates(), {
+      rows: rows(),
+      signal: controller.signal
+    })
+  ).rejects.toSatisfy(isAiVaultScanCancelledError)
+  unregister()
+
+  expect(firstMessages).toBeLessThan(turns.length)
+  expect(Object.values(states())).not.toContain('failed')
+
+  await passOverAll()
+  expect(states()).toEqual({
+    [transcript(FIRST)]: 'current',
+    [transcript(SECOND)]: 'current'
+  })
+  expect(errors).toEqual([])
+})
+
 it('re-reads a file that grew without its mtime moving', async () => {
   const path = transcript(FIRST)
-  // A whole-millisecond stamp, so restoring it later reproduces it exactly.
+  // Whole-millisecond stamps can be restored exactly across the append.
   const frozen = new Date(1_740_000_000_000)
   await utimes(path, frozen, frozen)
   await passOverAll()
@@ -168,16 +194,11 @@ it('re-reads a file that grew without its mtime moving', async () => {
   expect(second.stats.fullParses + second.stats.incremental).toBe(1)
 })
 
-// Finding 5: the decision reads the session list's cache and then changes it,
-// so outside the per-path lane an overlapping list parse stores its entry in
-// between and the forced read degrades into a reuse.
 it('is not overtaken by a list parse racing the same path', async () => {
   const path = transcript(FIRST)
   const all = await candidates()
   const only = all.filter((candidate) => candidate.file.path === path)
 
-  // The list parses this path first, so its cursor covers the file, and again
-  // concurrently with the index's pass so the two interleave.
   await parseTranscript(path)
   await Promise.all([
     parseTranscript(path),
@@ -189,12 +210,8 @@ it('is not overtaken by a list parse racing the same path', async () => {
   })
 })
 
-// Finding 4d: a declined read is a parse that returns normally and indexes
-// nothing. It has to leave the row owing a read, not looking covered.
 it('leaves a declined read owed rather than recorded as held', async () => {
   const only = (await candidates()).slice(0, 1)
-  // What a store that refuses a write looks like from the consumer's side: the
-  // read runs, and nothing is written.
   store.beginWrite = () => null
 
   const stats = await runSessionSearchIndexPass(store, only, { rows: rows() })

@@ -1,3 +1,9 @@
+import { randomUUID } from 'node:crypto'
+import {
+  codexMcpToolApprovalDecisions,
+  isCodexMcpToolApproval,
+  type CodexMcpToolApprovalDecision
+} from './codex-mcp-tool-approval'
 import {
   MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
   MAX_CODEX_PROMPT_REGISTRY_BYTES,
@@ -14,22 +20,28 @@ import { readRecord, readString as readRecordString } from './codex-item-field-r
 export const CODEX_COMMAND_APPROVAL_METHOD = 'item/commandExecution/requestApproval'
 export const CODEX_FILE_CHANGE_APPROVAL_METHOD = 'item/fileChange/requestApproval'
 export const CODEX_USER_INPUT_METHOD = 'item/tool/requestUserInput'
+export const CODEX_MCP_ELICITATION_METHOD = 'mcpServer/elicitation/request'
 
 export type CodexPendingPrompt = {
   requestId: number | string
   method: string
   threadId: string
   turnId: string | null
-  /** Oversized compatibility turn ids stay comparable without escaping the registry byte cap. */
+  /** Oversized turn IDs stay comparable within the registry byte cap. */
   turnIdDigest?: string
   codexItemId: string
-  /** One tool item can ask more than once, so approvalId wins over itemId when present. */
+  /** Prefer approvalId for repeated requests from one tool item. */
   promptKey: string
   questionIds: readonly string[]
   questionIdAliases: ReadonlyMap<string, string>
   optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
   answers: Map<string, string>
+  /** Set when the request limits the decisions, so an unoffered one is refused. */
+  offeredDecisions?: readonly CodexMcpToolApprovalDecision[]
 }
+
+export type CodexAbandonedCommand = { threadId: string; itemId: string }
+const NO_ABANDONED_COMMANDS: readonly CodexAbandonedCommand[] = []
 
 export type CodexPromptClaim = {
   readonly itemId: string
@@ -44,16 +56,33 @@ export function isCodexPromptMethod(method: string): boolean {
   return (
     method === CODEX_COMMAND_APPROVAL_METHOD ||
     method === CODEX_FILE_CHANGE_APPROVAL_METHOD ||
-    method === CODEX_USER_INPUT_METHOD
+    method === CODEX_USER_INPUT_METHOD ||
+    method === CODEX_MCP_ELICITATION_METHOD
   )
 }
 
-/** Session-local callback ownership; none of this state is reconstructed from the journal. */
+/** A fresh registry id fences elicitation request ids reused after app-server restart. */
+function readPromptItemId(
+  request: { id: number | string; method: string; params: unknown },
+  registryId: string
+) {
+  if (request.method === CODEX_MCP_ELICITATION_METHOD) {
+    // Turn-less approvals escape turn stop and cleanup, so they keep the safe decline.
+    return isCodexMcpToolApproval(request.params) && readString(request.params, 'turnId')
+      ? `mcp-elicitation:${registryId}:${request.id}`
+      : null
+  }
+  return readString(request.params, 'itemId')
+}
+
+// Callback ownership is session-local and cannot be reconstructed from the journal.
 export class CodexPromptRegistry {
+  private readonly registryId = randomUUID()
   private readonly byAddress = new Map<string, CodexPendingPrompt>()
   private readonly journalItemIds = new Map<string, string>()
   private readonly boundPrompts = new Map<string, CodexPendingPrompt>()
   private readonly claims = new Map<CodexPendingPrompt, CodexPromptClaim>()
+  private abandonedCommands: CodexAbandonedCommand[] = []
 
   get sizes(): { prompts: number; journalBindings: number } {
     return { prompts: this.byAddress.size, journalBindings: this.journalItemIds.size }
@@ -68,7 +97,7 @@ export class CodexPromptRegistry {
     method: string
     params: unknown
   }): CodexPendingPrompt | null {
-    const codexItemId = readString(request.params, 'itemId')
+    const codexItemId = readPromptItemId(request, this.registryId)
     const threadId = readString(request.params, 'threadId')
     if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
       return null
@@ -90,13 +119,19 @@ export class CodexPromptRegistry {
     if (turnId && turnIdentity.turnId === null) {
       return null
     }
+    const isMcpElicitation = request.method === CODEX_MCP_ELICITATION_METHOD
     const prompt: CodexPendingPrompt = {
       requestId: request.id,
       method: request.method,
       threadId,
       ...turnIdentity,
       codexItemId,
-      promptKey: readString(request.params, 'approvalId') ?? codexItemId,
+      promptKey: isMcpElicitation
+        ? codexItemId
+        : (readString(request.params, 'approvalId') ?? codexItemId),
+      ...(isMcpElicitation
+        ? { offeredDecisions: codexMcpToolApprovalDecisions(request.params) }
+        : {}),
       questionIds,
       questionIdAliases:
         request.method === CODEX_USER_INPUT_METHOD
@@ -187,23 +222,6 @@ export class CodexPromptRegistry {
     return this.claims.get(claim.prompt) === claim && this.find(claim.itemId) === claim.prompt
   }
 
-  ownsBoundClaim(
-    claim: CodexPromptClaim,
-    journalItemId: string,
-    threadId: string,
-    turnId: string
-  ): boolean {
-    return (
-      claim.itemId === journalItemId &&
-      this.claims.get(claim.prompt) === claim &&
-      this.journalItemIds.get(journalItemId) ===
-        this.address(claim.prompt.threadId, claim.prompt.promptKey) &&
-      this.boundPrompts.get(journalItemId) === claim.prompt &&
-      claim.prompt.threadId === threadId &&
-      codexPromptMatchesTurn(claim.prompt, turnId)
-    )
-  }
-
   releaseClaim(claim: CodexPromptClaim): void {
     if (this.claims.get(claim.prompt) === claim) {
       this.claims.delete(claim.prompt)
@@ -232,7 +250,23 @@ export class CodexPromptRegistry {
     )
     for (const prompt of prompts) {
       this.forget(prompt)
+      // Only whole-command approvals imply no execution; approvalId targets a subcommand.
+      if (
+        prompt.method === CODEX_COMMAND_APPROVAL_METHOD &&
+        prompt.promptKey === prompt.codexItemId
+      ) {
+        this.abandonedCommands.push({ threadId: prompt.threadId, itemId: prompt.codexItemId })
+      }
     }
+  }
+
+  takeAbandonedCommands(): readonly CodexAbandonedCommand[] {
+    if (this.abandonedCommands.length === 0) {
+      return NO_ABANDONED_COMMANDS
+    }
+    const taken = this.abandonedCommands
+    this.abandonedCommands = []
+    return taken
   }
 
   clear(): void {
@@ -240,6 +274,7 @@ export class CodexPromptRegistry {
     this.journalItemIds.clear()
     this.boundPrompts.clear()
     this.claims.clear()
+    this.abandonedCommands = []
   }
 
   private address(threadId: string, promptKey: string): string {

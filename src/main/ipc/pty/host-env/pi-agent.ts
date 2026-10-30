@@ -1,14 +1,15 @@
 import {
-  getCommandTokenPathBasename,
-  getFirstCommandToken
-} from '../../../../shared/command-token-scanner'
-import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
-import { AGENT_HOOK_RUNTIME_ENV_KEYS, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS } from './spawn-env-keys'
+import { getAgentLaunchExecutableName } from '../../../../shared/agent-command-line-intent'
+import {
+  AGENT_HOOK_RUNTIME_ENV_KEYS,
+  CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS,
+  ORCA_AGENT_SESSION_CALLER_ENV_KEYS
+} from './spawn-env-keys'
 
 export function readEnvWithProcessFallback(
   baseEnv: Record<string, string>,
@@ -42,7 +43,7 @@ export function resolvePiAgentSourceDir(
   const publicDir = readEnvWithProcessFallback(baseEnv, primaryKey)
   const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
   const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
-  // Why: if PI_CODING_AGENT_DIR is a restored Orca overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
+  // Source-less inherited overlays must not be mirrored into another agent's tree.
   if (publicDir && publicDir !== ownOverlayDir && publicDir !== otherOverlayDir) {
     return publicDir
   }
@@ -108,7 +109,6 @@ export function exposePiManagedExtensionEnv(
   }
 }
 
-// Why: variadic because a nested call per source made intermediate `string[] | undefined` collide with the parameter type.
 export function mergePtyEnvDeletions(
   existingKeys: string[] | undefined,
   ...additionalKeyGroups: readonly (readonly string[])[]
@@ -120,7 +120,7 @@ export function mergePtyEnvDeletions(
 }
 
 export function removeCodexHomeDeletionRequests(keys: string[] | undefined): string[] | undefined {
-  // Why: resume provenance is launch-authoritative; late deletions must not fall back to the current account.
+  // Resume provenance selects the home; late deletions must not fall back to current account.
   const filtered = keys?.filter((key) => key !== 'CODEX_HOME' && key !== 'ORCA_CODEX_HOME')
   return filtered?.length ? filtered : undefined
 }
@@ -129,71 +129,67 @@ export function getInheritedAgentHookEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: providers merge process.env after cleanup; delete stale hook keys without dropping fresh coordinates buildPtyHostEnv set.
-  return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
+  // Providers later merge ambient env; delete stale hooks without removing freshly injected coordinates.
+  return [
+    ...AGENT_HOOK_RUNTIME_ENV_KEYS,
+    'ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR',
+    'ORCA_CLAUDE_CONFIG_DIR',
+    'ORCA_OPENCODE_AGENT',
+    'ORCA_OPENCODE_CONFIG_DIR',
+    'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+    'ORCA_MIMOCODE_CONFIG_DIR',
+    'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
+  ].filter((key) => env[key] === undefined)
 }
 
-export function getInheritedClaudeSessionStampEnvKeysToDelete(
+export function getInheritedAgentSessionStampEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: strip only values inherited from the pty host; a caller that explicitly
-  // provides a stamp (deliberately spawning a nested Claude child) keeps it.
-  return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
-}
-
-// Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.
-export function restoreOrStripOverlayEnv(
-  baseEnv: Record<string, string>,
-  keys: {
-    primary: string
-    overlay: string
-    source: string
-  }
-): void {
-  const sourceValue = baseEnv[keys.source] ?? process.env[keys.source]
-  const overlayValue = baseEnv[keys.overlay] ?? process.env[keys.overlay]
-  if (sourceValue) {
-    baseEnv[keys.primary] = sourceValue
-  } else if (overlayValue && baseEnv[keys.primary] === overlayValue) {
-    delete baseEnv[keys.primary]
-  }
-  delete baseEnv[keys.overlay]
-  delete baseEnv[keys.source]
+  // Explicit nested-Claude stamps survive; structured-session caller keys never belong to terminal panes.
+  return [
+    ...CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined),
+    ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
+    // A pane is never a Claude background job; an inherited job dir would silence its agent hooks.
+    'CLAUDE_JOB_DIR'
+  ]
 }
 
 export function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
-  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
-    .toLowerCase()
-    .replace(/\.(?:cmd|exe|sh)$/, '')
-  return binary === 'mimo'
+  return getAgentLaunchExecutableName(launchCommand) === 'mimo'
 }
 
-export function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
-  const sourceHome = baseEnv.ORCA_MIMOCODE_SOURCE_HOME ?? process.env.ORCA_MIMOCODE_SOURCE_HOME
-  if (sourceHome) {
-    return sourceHome
+/** Call after the overlay env is restored: an explicit pane value wins over inherited markers. */
+export function resolveMimocodeSourceConfigDir(
+  baseEnv: Record<string, string>,
+  inheritedEnv: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  if (baseEnv.MIMOCODE_CONFIG_DIR) {
+    return baseEnv.MIMOCODE_CONFIG_DIR
   }
-  const configHome = baseEnv.MIMOCODE_HOME ?? process.env.MIMOCODE_HOME
-  const orcaHome = baseEnv.ORCA_MIMOCODE_HOME ?? process.env.ORCA_MIMOCODE_HOME
-  if (configHome && orcaHome && configHome === orcaHome) {
-    return undefined
+  if (inheritedEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR) {
+    return inheritedEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
   }
-  return configHome
+  const configDir = inheritedEnv.MIMOCODE_CONFIG_DIR
+  return configDir && configDir === inheritedEnv.ORCA_MIMOCODE_CONFIG_DIR ? undefined : configDir
 }
 
 export function resolveOpenCodeSourceConfigDir(
-  baseEnv: Record<string, string>
+  baseEnv: Record<string, string>,
+  inheritedEnv: NodeJS.ProcessEnv = process.env
 ): string | undefined {
+  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? inheritedEnv.OPENCODE_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? inheritedEnv.ORCA_OPENCODE_CONFIG_DIR
+  if (configDir && orcaConfigDir && configDir !== orcaConfigDir) {
+    return configDir
+  }
   const sourceDir =
-    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? inheritedEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
   if (sourceDir) {
     return sourceDir
   }
 
-  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
-  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
-  // Why: with no recorded source dir, an inherited OPENCODE_CONFIG_DIR is Orca-owned, not user config; treating it as user config makes child Orcas mirror the hook dir.
+  // Matching public/private paths identify Orca-owned state, not user config to mirror into child Orcas.
   if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
     return undefined
   }

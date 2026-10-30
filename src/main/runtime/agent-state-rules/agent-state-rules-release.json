@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "liveUpdatable": [
+    "antigravity",
+    "claude",
+    "cline",
+    "codex",
+    "cursor",
+    "omp",
+    "opencode",
+    "prime-agent",
+    "unknown-pane"
+  ]
+}

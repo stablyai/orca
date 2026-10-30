@@ -4,10 +4,13 @@ import type {
   AgentChildWorkInvocationFence,
   AgentChildWorkKind,
   AgentChildWorkMembership,
+  AgentChildWorkOperation,
   AgentChildWorkOutcome,
+  AgentChildWorkOutcomeBasis,
   AgentChildWorkProviderTiming,
   AgentChildWorkProvenance,
   AgentChildWorkRecord,
+  AgentChildWorkResidency,
   AgentChildWorkState
 } from './agent-status-child-work'
 import {
@@ -26,17 +29,25 @@ export type AgentChildWorkObservationAlias = {
   alias: string
 }
 
+/** Sparse/malformed descriptive facts retain stored values; tokens never shrink. Owner/message/timing/definite outcome belong to one invocation. Fold text to one line; omitted operation clears it. */
 export type AgentChildWorkObservationFields = {
   kind: AgentChildWorkKind
   state: AgentChildWorkState
   membership: AgentChildWorkMembership
   outcome?: AgentChildWorkOutcome
+  /** Only with a settled `outcome`; see `AgentChildWorkOutcomeBasis`. */
+  outcomeBasis?: AgentChildWorkOutcomeBasis
   name?: string
   description?: string
   agentType?: string
   model?: string
   totalTokens?: number
   providerTiming?: AgentChildWorkProviderTiming
+  parentChildWorkId?: AgentChildWorkId
+  residency?: AgentChildWorkResidency
+  /** Clamp observedAt to the child evidence window; settled/idle/unverifiable states cannot retain operations. */
+  operation?: AgentChildWorkOperation
+  lastMessage?: string
   observedAt: number
   stoppable: boolean
   provenance: AgentChildWorkProvenance

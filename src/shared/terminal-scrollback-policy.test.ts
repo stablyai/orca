@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS,
-  DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
-  DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
-  DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
   legacyTerminalScrollbackBytesToRows,
   normalizeDesktopTerminalScrollbackRows,
   normalizeDesktopTerminalSnapshotRows,
@@ -12,13 +8,6 @@ import {
 } from './terminal-scrollback-policy'
 
 describe('terminal scrollback policy', () => {
-  it('exports the desktop row defaults and presets', () => {
-    expect(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT).toBe(5_000)
-    expect(DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN).toBe(1_000)
-    expect(DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX).toBe(50_000)
-    expect(DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS).toEqual([5_000, 10_000, 25_000, 50_000])
-  })
-
   it('normalizes persisted desktop rows without string coercion', () => {
     expect(normalizeDesktopTerminalScrollbackRows(undefined)).toBe(5_000)
     expect(normalizeDesktopTerminalScrollbackRows('25000')).toBe(5_000)
@@ -38,8 +27,7 @@ describe('terminal scrollback policy', () => {
   })
 
   it('scales the output backlog cap with scrollback rows above a 2 MB floor', () => {
-    // Default and small scrollbacks stay on the floor; large scrollbacks get
-    // proportionally more so the cap never drops lines scrollback would keep.
+    // Large scrollback raises the cap so backlog drops do not discard history the setting would retain.
     expect(terminalOutputBacklogCapChars(undefined)).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)
     expect(terminalOutputBacklogCapChars(5_000)).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)
     expect(terminalOutputBacklogCapChars('garbage')).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)

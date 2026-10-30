@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { useAppStore } from '@/store'
@@ -95,9 +95,7 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
   })
 
-  // The canned "Connect again to continue" sentence is the same for a timeout and for a refused
-  // host key. Only the detail says which, and for a host key it carries the only remedy the user
-  // will see anywhere in the terminal.
+  // Failure details carry the host-key remedy missing from the generic status sentence.
   it('shows the failure detail beneath the status sentence', () => {
     installSshConnect(vi.fn())
 
@@ -110,7 +108,6 @@ describe('TerminalSshReconnectOverlay', () => {
       />
     )
 
-    // Both, not either: the sentence says what to do, the detail says what happened.
     expect(screen.getByText(/The SSH connection to devbox failed/)).toBeInTheDocument()
     expect(screen.getByText(/ssh-keygen -R devbox/)).toBeInTheDocument()
   })
@@ -126,8 +123,7 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.queryByText(/ssh-keygen/)).not.toBeInTheDocument()
   })
 
-  // A removed target already explains itself and can never reconnect; a stale connection error
-  // underneath would contradict that.
+  // Removed targets cannot reconnect; stale connection errors would contradict the removal notice.
   it('suppresses the detail for a removed target', () => {
     installSshConnect(vi.fn())
 
@@ -197,8 +193,7 @@ describe('TerminalSshReconnectOverlay', () => {
 
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 
-    // Why: the metadata refresh is what flips TerminalPane's targetRemoved
-    // derivation, replacing the failing Connect loop with the ghost-host UI.
+    // Refresh metadata so the pane replaces a failing Connect loop with removed-host recovery.
     await waitFor(() => {
       expect(useAppStore.getState().sshTargetLabels.get('ssh-live')).toBe('devbox')
       expect(useAppStore.getState().removedSshTargetLabels.get('ssh-dead')).toBe('devbox (removed)')
@@ -222,8 +217,7 @@ describe('TerminalSshReconnectOverlay', () => {
 
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 
-    // Why: a removed-labels failure must not discard the refreshed target
-    // list — it alone is enough evidence for targetRemoved to converge.
+    // Keep the refreshed target list even if removed-label metadata fails.
     await waitFor(() => {
       expect(useAppStore.getState().sshTargetLabels.get('ssh-live')).toBe('devbox')
       expect(useAppStore.getState().sshTargetsHydrated).toBe(true)
@@ -246,7 +240,6 @@ describe('TerminalSshReconnectOverlay', () => {
     )
 
     expect(screen.getByText('SSH host removed')).toBeInTheDocument()
-    // No Connect button — reconnect is impossible for a removed target.
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Remove workspace' }))
@@ -279,7 +272,6 @@ describe('TerminalSshReconnectOverlay', () => {
         'ssh-remote-1'
       )
     )
-    // The local ssh API must never see a remote host's target.
     expect(connect).not.toHaveBeenCalled()
   })
 
@@ -310,47 +302,44 @@ describe('TerminalSshReconnectOverlay', () => {
     await waitFor(() =>
       expect(environmentSshMocks.resyncRuntimeEnvironmentSshTargets).toHaveBeenCalledWith('env-1')
     )
-    // The failed-connect resync must not rewrite local target metadata.
     expect(listTargets).not.toHaveBeenCalled()
     expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
   })
 
-  // Why: the sidebar card control, the host-header menu, and this overlay can be on screen
-  // at once; a shared verb table keeps them from naming the same click three ways.
-  it.each([
-    ['disconnected', 'Connect'],
-    ['auth-failed', 'Reconnect'],
-    ['error', 'Retry'],
-    ['reconnection-failed', 'Retry']
-  ] as const)('labels the %s action %s, matching every other SSH surface', (status, verb) => {
-    installSshConnect(vi.fn().mockResolvedValue(undefined))
-
-    render(
-      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="devbox" status={status} />
-    )
-
-    expect(screen.getByRole('button', { name: verb })).toBeEnabled()
-  })
-
-  it('suppresses a second connect while one is already in flight for the same target', async () => {
-    const connect = vi.fn().mockReturnValue(new Promise(() => {}))
+  it('suppresses a second connect before shared target banners repaint', async () => {
+    const pending = Promise.withResolvers<undefined>()
+    const connect = vi.fn().mockReturnValue(pending.promise)
     installSshConnect(connect)
-    const user = userEvent.setup()
 
     render(
-      <TerminalSshReconnectOverlay
-        targetId="ssh-target-1"
-        targetLabel="devbox"
-        status="disconnected"
-      />
+      <>
+        <TerminalSshReconnectOverlay
+          targetId="ssh-target-1"
+          targetLabel="devbox"
+          status="disconnected"
+        />
+        <TerminalSshReconnectOverlay
+          targetId="ssh-target-1"
+          targetLabel="devbox"
+          status="disconnected"
+        />
+      </>
     )
 
-    await user.click(screen.getByRole('button', { name: 'Connect' }))
-
-    // Why: N surfaces share one connection; a second dial on a passphrase-gated
-    // target means a second credential prompt.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Connecting…/ })).toBeDisabled())
-    expect(connect).toHaveBeenCalledTimes(1)
+    const buttons = screen.getAllByRole('button', { name: 'Connect' })
+    try {
+      act(() => {
+        for (const button of buttons) {
+          fireEvent.click(button)
+        }
+      })
+      expect(connect).toHaveBeenCalledExactlyOnceWith({ targetId: 'ssh-target-1' })
+      for (const button of screen.getAllByRole('button', { name: /Connecting…/ })) {
+        expect(button).toBeDisabled()
+      }
+    } finally {
+      await act(async () => pending.resolve(undefined))
+    }
   })
 
   it('publishes the returned SSH state so deferred terminal reattach can resume', async () => {
@@ -378,5 +367,58 @@ describe('TerminalSshReconnectOverlay', () => {
     await waitFor(() =>
       expect(useAppStore.getState().sshConnectionStates.get('ssh-target-1')).toEqual(connectedState)
     )
+  })
+
+  it('offers Move anyway beside Retry for a local move refused only by saved state', async () => {
+    const allowMoveLeavingBehind = vi.fn().mockResolvedValue(undefined)
+    const connect = vi.fn().mockResolvedValue(null)
+    installSshConnect(connect)
+    Object.assign(window.api, {
+      runtimeEnvironments: { managedOrcad: { allowMoveLeavingBehind } }
+    })
+    useAppStore.getState().setSshConnectionState('ssh-target-1', {
+      targetId: 'ssh-target-1',
+      status: 'error',
+      error: 'blocked',
+      reconnectAttempt: 0,
+      managedServer: {
+        kind: 'relay',
+        reason: 'refused',
+        detail: 'This SSH host cannot move yet: automations (2).',
+        canLeaveBehind: true
+      }
+    })
+    const user = userEvent.setup()
+
+    const { rerender } = render(
+      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="lambda" status="error" />
+    )
+    await user.click(screen.getByRole('button', { name: 'Move anyway…' }))
+    await user.click(screen.getByRole('button', { name: 'Move anyway' }))
+    await waitFor(() =>
+      expect(allowMoveLeavingBehind).toHaveBeenCalledWith({ sshTargetId: 'ssh-target-1' })
+    )
+    expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
+
+    // A connect already in flight may clear the refusal, so the button waits for it.
+    rerender(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="lambda"
+        status="connecting"
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Move anyway…' })).toBeDisabled()
+
+    // A remote server's move is that server's own; this desktop can't drive it.
+    rerender(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="lambda"
+        status="error"
+        sshOwnerEnvironmentId="env-1"
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Move anyway…' })).not.toBeInTheDocument()
   })
 })

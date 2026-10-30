@@ -14,10 +14,7 @@ vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// The 2026-09-03 incident: five consecutive "authentication timed out" dials against a
-// live desktop while the cell's assignment tables were lock-contended. Each logged
-// failure was two dials — the timeout counted as a director-class failure, so the phone
-// re-resolved the same cell and waited the full bound again.
+// Do not re-resolve attach timeouts against the same slow cell; that doubles each failed dial’s wait.
 describe('relay dial against a cell that took the dial and stalled', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -43,7 +40,8 @@ describe('relay dial against a cell that took the dial and stalled', () => {
     const onLog = vi.fn()
     const supervisor = new MobileEndpointSupervisor(
       logical,
-      host,
+      host.id,
+      relay,
       dependencies({ openRelay, resolveRelay, onLog })
     )
 
@@ -67,7 +65,8 @@ describe('relay dial against a cell that took the dial and stalled', () => {
     const resolveRelay = vi.fn(async () => relay)
     const supervisor = new MobileEndpointSupervisor(
       logical,
-      host,
+      host.id,
+      relay,
       dependencies({ openRelay, resolveRelay })
     )
 

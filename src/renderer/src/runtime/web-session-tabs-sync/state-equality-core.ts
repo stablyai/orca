@@ -4,6 +4,8 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { mainAgentStatusEqual } from '../../../../shared/main-agent-status'
+import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsBatchRecordKey,
@@ -29,7 +31,8 @@ export function sameAgentStateHistory(
       entry.state === b[index]?.state &&
       entry.prompt === b[index]?.prompt &&
       entry.startedAt === b[index]?.startedAt &&
-      entry.interrupted === b[index]?.interrupted
+      entry.interrupted === b[index]?.interrupted &&
+      mainAgentStatusEqual(entry.mainAgent, b[index]?.mainAgent)
   )
 }
 
@@ -46,6 +49,9 @@ export function agentStatusEntryEqual(
     a.prompt === b.prompt &&
     a.updatedAt === b.updatedAt &&
     a.stateStartedAt === b.stateStartedAt &&
+    a.turnStartedAt === b.turnStartedAt &&
+    a.turnEndedAt === b.turnEndedAt &&
+    a.turnEndDisposition === b.turnEndDisposition &&
     a.agentType === b.agentType &&
     a.paneKey === b.paneKey &&
     a.worktreeId === b.worktreeId &&
@@ -57,8 +63,10 @@ export function agentStatusEntryEqual(
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.lastAssistantMessageIsToolOutput === b.lastAssistantMessageIsToolOutput &&
     a.interrupted === b.interrupted &&
+    mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    programStatusFacetsEqual(a.programStatus, b.programStatus) &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
@@ -71,8 +79,7 @@ export function isAgentStatusFresh(
   >,
   now: number
 ): boolean {
-  // Why the shared accessor: a mirrored row's own stamps are the host's clock, so this must
-  // read the same reader-clock observation time the display gate does or the two disagree.
+  // Use shared reader-clock observation time like display gating; mirrored row stamps belong to host clocks.
   return (
     entry.restoredUnconfirmed !== true &&
     now - agentStatusEvidenceObservedAt(entry) <= AGENT_STATUS_STALE_AFTER_MS
@@ -127,7 +134,7 @@ export function writableWebSessionTabsRecord<K extends WebSessionTabsBatchRecord
   if (!batchContext) {
     return { ...record } as NonNullable<WebSessionTabsSyncState[K]>
   }
-  // Why: one batch owns its record copies, so later snapshots can update them without recopying every workspace.
+  // Batch-owned record copies can be updated in place without recopying all workspaces.
   if (batchContext.changedRecords.has(recordKey)) {
     return record
   }

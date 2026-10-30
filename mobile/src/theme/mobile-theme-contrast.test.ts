@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colors } from './mobile-theme'
+import { paletteForScheme } from './mobile-theme'
 
 function channelLuminance(channel: number): number {
   const value = channel / 255
@@ -23,16 +23,25 @@ function contrastRatio(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-describe('mobile text contrast', () => {
-  it('keeps muted text readable on every standard dark surface', () => {
-    for (const surface of [colors.bgBase, colors.bgPanel, colors.bgRaised]) {
+describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) => {
+  const colors = paletteForScheme(scheme)
+
+  // Light bgRaised is desktop's own --secondary under --muted-foreground (4.36:1), so only page surfaces are held to 4.5.
+  it('keeps muted text readable on page and panel surfaces', () => {
+    for (const surface of [colors.bgBase, colors.bgPanel]) {
       expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5)
     }
   })
 
-  it('keeps secondary text more prominent than muted text', () => {
-    expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThan(
+  it('keeps secondary text at least as prominent as muted text', () => {
+    expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThanOrEqual(
       contrastRatio(colors.textMuted, colors.bgPanel)
     )
+  })
+
+  it('keeps your own message readable on its bubble', () => {
+    expect(
+      contrastRatio(colors.chatForegroundStrong, colors.chatUserSurface)
+    ).toBeGreaterThanOrEqual(4.5)
   })
 })

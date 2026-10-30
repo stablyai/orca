@@ -1,7 +1,11 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { claudeConfigDirEnvPatch, defaultClaudeConfigDir } from './claude-config-dir-pin'
+import {
+  claudeConfigDirEnvPatch,
+  defaultClaudeConfigDir,
+  withoutInheritedClaudeConfigDir
+} from './claude-config-dir-pin'
 
 describe('claude config dir pin', () => {
   it('does not pin the CLI default home, so the macOS Keychain stays reachable', () => {
@@ -30,5 +34,20 @@ describe('claude config dir pin', () => {
     expect(claudeConfigDirEnvPatch('c:\\users\\work\\.claude', { env, platform: 'win32' })).toEqual(
       {}
     )
+  })
+
+  it('drops an inherited CLAUDE_CONFIG_DIR, case-insensitively on Windows, and nothing else', () => {
+    expect(
+      withoutInheritedClaudeConfigDir(
+        { CLAUDE_CONFIG_DIR: '/shell/claude', PATH: '/bin', UNSET: undefined },
+        'darwin'
+      )
+    ).toEqual({ PATH: '/bin' })
+    expect(
+      withoutInheritedClaudeConfigDir({ claude_config_dir: 'C:\\shell', Path: 'C:\\bin' }, 'win32')
+    ).toEqual({ Path: 'C:\\bin' })
+    expect(
+      withoutInheritedClaudeConfigDir({ claude_config_dir: '/shell/claude' }, 'darwin')
+    ).toEqual({ claude_config_dir: '/shell/claude' })
   })
 })

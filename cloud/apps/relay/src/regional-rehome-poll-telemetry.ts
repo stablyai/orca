@@ -1,7 +1,4 @@
-// A gated poll and a poll that simply found nobody to move both produce zero
-// candidates and no attempt row, so an operator watching a stalled rollout
-// cannot tell them apart. One aggregated line a minute per director names the
-// gate and prices the selection, at a rate a 50-polls-a-minute worker can afford.
+// Zero candidates/attempts hides gated vs idle polls; one aggregate line/min prices selection and names the gate without logging every ~50/min poll.
 export type RegionalRehomePollGate =
   | 'open'
   | 'cohort-zero'
@@ -26,6 +23,7 @@ export class RegionalRehomePollTelemetry {
   private gates = { ...EMPTY_GATES }
   private candidates = 0
   private selectionSamplesMs: number[] = []
+  private skippedOffRegionSourceCellsMax = 0
 
   constructor(private readonly write: (line: string) => void = (line) => console.warn(line)) {}
 
@@ -34,11 +32,16 @@ export class RegionalRehomePollTelemetry {
     gate: RegionalRehomePollGate
     candidates: number
     selectionMs?: number
+    skippedOffRegionSourceCells?: number
   }): void {
     if (this.windowStartedAt === null) this.windowStartedAt = input.now
     this.gates[input.gate] += 1
     this.candidates += input.candidates
     if (input.selectionMs !== undefined) this.selectionSamplesMs.push(input.selectionMs)
+    this.skippedOffRegionSourceCellsMax = Math.max(
+      this.skippedOffRegionSourceCellsMax,
+      input.skippedOffRegionSourceCells ?? 0
+    )
     if (input.now - this.windowStartedAt < REGIONAL_REHOME_POLL_SUMMARY_INTERVAL_MS) return
     this.write(
       JSON.stringify({
@@ -48,13 +51,16 @@ export class RegionalRehomePollTelemetry {
         ...this.gates,
         candidates: this.candidates,
         selectionMsMax: round(Math.max(0, ...this.selectionSamplesMs)),
-        selectionMsP95: round(percentile(this.selectionSamplesMs, 0.95))
+        selectionMsP95: round(percentile(this.selectionSamplesMs, 0.95)),
+        // A per-poll maximum: every poll reads the same inventory, so a sum counts polls.
+        skippedOffRegionSourceCells: this.skippedOffRegionSourceCellsMax
       })
     )
     this.windowStartedAt = input.now
     this.gates = { ...EMPTY_GATES }
     this.candidates = 0
     this.selectionSamplesMs = []
+    this.skippedOffRegionSourceCellsMax = 0
   }
 }
 

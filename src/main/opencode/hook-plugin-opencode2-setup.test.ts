@@ -16,7 +16,6 @@ vi.mock('electron', () => ({
 
 import { _internals } from './hook-service'
 
-// Execute the generated module against legacy and current plugin contracts.
 describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (agent) => {
   type PostBody = { payload?: unknown }
 
@@ -43,12 +42,11 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
-  // Why: the plugin resolves hook coords from the endpoint file first and only then from
-  // env. Pin every input here so the run does not depend on the developer's Orca session
-  // (an inherited ORCA_AGENT_HOOK_ENDPOINT would otherwise redirect the post to a live app).
+  // Isolate endpoint-file and environment inputs so tests cannot post to a live Orca session.
   const ENV_KEYS = [
     'ORCA_PANE_KEY',
     'ORCA_OPENCODE_AGENT',
+    'ORCA_OPENCODE_PLUGIN_API',
     'ORCA_AGENT_HOOK_ENDPOINT',
     'ORCA_AGENT_HOOK_PORT',
     'ORCA_AGENT_HOOK_TOKEN'
@@ -66,6 +64,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
       savedEnv[key] = process.env[key]
     }
     process.env.ORCA_OPENCODE_AGENT = agent
+    process.env.ORCA_OPENCODE_PLUGIN_API = 'v2'
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     process.env.ORCA_AGENT_HOOK_PORT = '59999'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -86,7 +85,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
   async function loadPluginModule(
     source = _internals.getOpenCodePluginSource()
   ): Promise<PluginModule> {
-    // Why: a unique basename per load defeats the ESM module cache between cases.
+    // Bypass ESM caching between cases.
     const pluginPath = join(
       tempDir,
       `orca-opencode-status-${Math.random().toString(36).slice(2)}.mjs`
@@ -109,6 +108,58 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     expect(hook).not.toHaveBeenCalled()
     expect(subscribe).not.toHaveBeenCalled()
     await cleanup?.()
+  })
+
+  it('fails open when setup is probed without a usable context', async () => {
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    // OpenCode probes varying setup shapes; each must return cleanup without throwing in the TUI.
+    const contexts: unknown[] = [
+      undefined,
+      {},
+      { session: {} },
+      { session: { hook: vi.fn() }, event: {} }
+    ]
+    for (const ctx of contexts) {
+      const cleanup = await module.default?.setup?.(ctx)
+      expect(cleanup).toBeTypeOf('function')
+      await cleanup?.()
+    }
+  })
+
+  it('disposes cleanly when the prompt hook returns nothing to dispose', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    const cleanup = await module.default?.setup?.({
+      session: {
+        get: async ({ sessionID }: { sessionID: string }) => ({ data: { id: sessionID } }),
+        hook: async () => undefined
+      },
+      event: {
+        subscribe: async function* () {}
+      }
+    })
+    expect(cleanup).toBeTypeOf('function')
+    await cleanup?.()
+  })
+
+  it('exposes a distinct plugin id per agent variant', async () => {
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    // Both plugins share one directory; duplicate IDs disable the second plugin.
+    expect(module.default?.id).toBe(
+      agent === 'opencode2' ? 'orca-opencode2-status' : 'orca-opencode-status'
+    )
   })
 
   it('subscribes through the OpenCode 2 setup API and disposes its registrations', async () => {
@@ -150,6 +201,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
       expect(posts).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
+            opencodeMajor: 2,
             payload: expect.objectContaining({ hook_event_name: 'SessionBusy' })
           }),
           expect.objectContaining({
@@ -165,6 +217,32 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     await cleanup?.()
     expect(dispose).toHaveBeenCalledOnce()
     expect(subscriptionSignal?.aborted).toBe(true)
+  })
+
+  it('declares no OpenCode major on posts from the OpenCode 1 server() entry', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const bodies: Record<string, unknown>[] = []
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      bodies.push(record(JSON.parse(String(init?.body))) ?? {})
+      return new Response('{}', { status: 200 })
+    })
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    const hooks = await module.default?.server?.({
+      client: { session: { get: async () => ({ data: { id: 'ses_root' } }) } }
+    })
+    await hooks?.event({
+      event: {
+        type: 'session.status',
+        properties: { sessionID: 'ses_root', status: { type: 'busy' } }
+      }
+    })
+    await vi.waitFor(() => expect(bodies.length).toBeGreaterThan(0))
+    expect(bodies.filter((body) => 'opencodeMajor' in body)).toEqual([])
+    await hooks?.dispose?.()
   })
 
   it('maps permission, form, and text events through the live setup bridge', async () => {
@@ -201,6 +279,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
                 id: 'form-1',
                 sessionID: 'ses_root',
                 title: 'Pick',
+                metadata: { kind: 'question', tool: { messageID: 'msg-0', id: 'tool-0' } },
                 fields: [
                   {
                     title: 'Color',
@@ -255,6 +334,170 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     await cleanup?.()
   })
 
+  // OpenCode 2 form ownership decides blocker retirement; metadata alone cannot identify it.
+  async function runSetupBridge(
+    events: { type: string; data: Record<string, unknown> }[]
+  ): Promise<{ names: string[]; cleanup?: () => Promise<void> }> {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const names: string[] = []
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      names.push(String(payload(record(JSON.parse(String(init?.body))) ?? {}).hook_event_name))
+      return new Response('{}', { status: 200 })
+    })
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    const cleanup = await module.default?.setup?.({
+      session: {
+        get: async ({ sessionID }: { sessionID: string }) => ({ data: { id: sessionID } }),
+        hook: async () => ({ dispose: vi.fn() })
+      },
+      event: {
+        subscribe: async function* () {
+          for (const event of events) {
+            yield event
+          }
+        }
+      }
+    })
+    return { names, cleanup }
+  }
+
+  function questionForm(id: string): Record<string, unknown> {
+    return {
+      id,
+      sessionID: 'ses_root',
+      title: 'Questions',
+      metadata: { kind: 'question', tool: { messageID: 'msg-0', id: 'tool-0' } },
+      fields: [{ key: 'q0', title: 'Proceed?', type: 'string', options: [] }]
+    }
+  }
+
+  it('ignores a form owned by the non-session elicitation sentinel', async () => {
+    const { names, cleanup } = await runSetupBridge([
+      { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
+      {
+        type: 'form.created',
+        data: {
+          form: {
+            id: 'form-mcp',
+            sessionID: 'global',
+            title: 'server is requesting input',
+            metadata: { kind: 'mcp-elicitation', server: 'server' },
+            fields: [{ key: 'elicitation', title: 'Input', type: 'string', options: [] }]
+          }
+        }
+      },
+      { type: 'form.cancelled', data: { id: 'form-mcp', sessionID: 'global' } },
+      { type: 'session.execution.succeeded', data: { sessionID: 'ses_root' } }
+    ])
+    await vi.waitFor(() => {
+      expect(names.at(-1)).toBe('SessionIdle')
+    })
+    expect(names).not.toContain('AskUserQuestion')
+    await cleanup?.()
+  })
+
+  // Optional metadata kinds cannot decide whether session-owned forms block.
+  it.each([
+    ['no metadata at all', undefined],
+    ['metadata without a kind', { server: 'server' }],
+    ['an unrecognised kind', { kind: 'some.future.kind' }],
+    ['the web search provider picker', { kind: 'websearch.provider' }]
+  ])('blocks the pane on a session-owned form with %s', async (_label, metadata) => {
+    const { names, cleanup } = await runSetupBridge([
+      { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
+      {
+        type: 'form.created',
+        data: {
+          form: {
+            id: 'form-unknown',
+            sessionID: 'ses_root',
+            title: 'Choose a web search provider',
+            ...(metadata === undefined ? {} : { metadata }),
+            fields: [{ key: 'provider', title: 'Provider', type: 'string', options: [] }]
+          }
+        }
+      }
+    ])
+    await vi.waitFor(() => {
+      expect(names).toContain('AskUserQuestion')
+    })
+    expect(names.at(-1)).toBe('AskUserQuestion')
+    await cleanup?.()
+  })
+
+  it.each(['form.replied', 'form.cancelled'])(
+    'retires an admitted unknown-kind blocker on %s',
+    async (resolution) => {
+      const { names, cleanup } = await runSetupBridge([
+        { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
+        {
+          type: 'form.created',
+          data: {
+            form: {
+              id: 'form-unknown',
+              sessionID: 'ses_root',
+              title: 'Web Search',
+              fields: [{ key: 'choice', title: 'Allow?', type: 'string', options: [] }]
+            }
+          }
+        },
+        { type: resolution, data: { id: 'form-unknown', sessionID: 'ses_root' } },
+        { type: 'session.execution.succeeded', data: { sessionID: 'ses_root' } }
+      ])
+      await vi.waitFor(() => {
+        expect(names).toContain('AskUserQuestion')
+        expect(names.at(-1)).toBe('SessionIdle')
+      })
+      await cleanup?.()
+    }
+  )
+
+  it('still blocks on a real question form and retires it on reply', async () => {
+    const { names, cleanup } = await runSetupBridge([
+      { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
+      { type: 'form.created', data: { form: questionForm('form-q') } },
+      {
+        type: 'form.replied',
+        data: { id: 'form-q', sessionID: 'ses_root', answer: { q0: 'Yes' } }
+      },
+      { type: 'session.execution.succeeded', data: { sessionID: 'ses_root' } }
+    ])
+    await vi.waitFor(() => {
+      expect(names).toContain('AskUserQuestion')
+      expect(names.at(-1)).toBe('SessionIdle')
+    })
+    await cleanup?.()
+  })
+
+  it('keeps a live question blocker while an ignored form is raised and resolved', async () => {
+    const { names, cleanup } = await runSetupBridge([
+      { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
+      { type: 'form.created', data: { form: questionForm('form-q') } },
+      {
+        type: 'form.created',
+        data: {
+          form: {
+            id: 'form-mcp',
+            sessionID: 'global',
+            title: 'server is requesting input',
+            metadata: { kind: 'mcp-elicitation', server: 'server' },
+            fields: [{ key: 'elicitation', title: 'Input', type: 'string', options: [] }]
+          }
+        }
+      },
+      { type: 'form.cancelled', data: { id: 'form-mcp', sessionID: 'global' } }
+    ])
+    await vi.waitFor(() => {
+      expect(names).toContain('AskUserQuestion')
+    })
+    expect(names.at(-1)).toBe('AskUserQuestion')
+    await cleanup?.()
+  })
+
   it.each(['waiting', 'idle', 'disposed'])(
     'drops an admitted prompt overtaken by %s',
     async (transition) => {
@@ -288,7 +531,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
       if (transition === 'disposed') {
         await hooks?.dispose?.()
       } else {
-        // Seed ancestry while the earlier prompt lookup remains suspended.
         await hooks?.event({
           event: { type: 'session.created', properties: { info: { id: 'ses_root' } } }
         })

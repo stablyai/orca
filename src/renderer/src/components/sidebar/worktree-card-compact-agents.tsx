@@ -2,8 +2,7 @@ import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { cn } from '@/lib/utils'
 import {
   buildSummaryAgentGroups,
@@ -16,8 +15,7 @@ import { translate } from '@/i18n/i18n'
 export { CompactAgentRow } from './worktree-card-compact-agent-row'
 
 function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
-  // Why: the surrounding worktree list handles Enter/Space as row activation.
-  // Focused nested buttons need those keys to stay local.
+  // Keep nested button Enter/Space local instead of activating the surrounding workspace row.
   if (e.key === 'Enter' || e.key === ' ') {
     e.stopPropagation()
   }
@@ -43,8 +41,7 @@ export function CompactAgentExpansion({
 }: CompactAgentExpansionProps): React.JSX.Element {
   const hasRenderedChildrenRef = useRef(expanded)
   if (expanded) {
-    // Why: keep already-opened content mounted for the collapse transition
-    // without paying an extra Effect-driven render on first expansion.
+    // Retain opened content for collapse animation without an extra effect-driven expansion render.
     hasRenderedChildrenRef.current = true
   }
   const shouldRenderChildren = expanded || hasRenderedChildrenRef.current
@@ -58,7 +55,8 @@ export function CompactAgentExpansion({
       aria-hidden={!expanded}
       inert={!expanded}
     >
-      <div className="min-h-0 overflow-hidden">
+      {/* Why: clip only the height animation; a gutter-hung chevron overflows horizontally. */}
+      <div className="min-h-0 min-w-0 overflow-x-visible overflow-y-clip">
         {shouldRenderChildren && (
           <div
             className={cn(
@@ -106,11 +104,9 @@ export function CompactAgentSummaryButton({
         'compact-agent-summary-button group/agent-summary flex h-6 w-full min-w-0 items-center gap-1 rounded-sm',
         'px-1 text-left text-[11px] leading-none text-muted-foreground',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
-        // Why: worktree-sidebar-accent is near-white in light mode and dark in dark
-        // mode, so hover lightening needs a theme-specific token mix.
+        // The sidebar accent reverses brightness across themes; use the matching hover token mix.
         'hover:bg-worktree-sidebar-accent/55 dark:hover:bg-worktree-sidebar-foreground/[0.035]',
-        // Why: expanded is a tree header inside the card, so only the
-        // standalone collapsed pill gets a resting surface and border.
+        // Only the collapsed pill needs a resting surface; expanded summaries are tree headers.
         expanded
           ? 'compact-agent-summary-button-expanded'
           : 'border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
@@ -151,15 +147,14 @@ export function CompactAgentSummaryButton({
                   className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-sm bg-worktree-sidebar/70 px-1 py-0.5"
                 >
                   <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
-                  {/* Why: same-state agent identities read as one status cluster;
-                      overlapping them saves width without merging different states. */}
+                  {/* Overlap identities only within the same status cluster to save width. */}
                   <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
                     {iconAgents.map((agent) => (
                       <span
                         key={agent.paneKey}
                         className="inline-flex size-4 items-center justify-center rounded-full border border-worktree-sidebar-border/70 bg-worktree-sidebar"
                       >
-                        <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
+                        <AgentTypeIcon agentType={agent.agentType} size={13} />
                       </span>
                     ))}
                   </span>

@@ -44,6 +44,7 @@ function derive(
     useResourceUsageDerivedModel({
       open: true,
       resourceSnapshot: snapshot,
+      runtimeHostResources: [],
       sessions,
       resourceSessionBindings: {
         tabsByWorktree: {},

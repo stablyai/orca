@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getWorktreePaletteSearchScope,
-  makeEmptyPaletteSearchResult,
-  searchWorktrees
-} from './worktree-palette-search'
-import {
-  WORKTREE_PALETTE_QUERY_MAX_BYTES,
-  isWorktreePaletteQueryTooLarge
-} from './worktree-palette-query-bounds'
+import { getWorktreePaletteSearchScope, searchWorktrees } from './worktree-palette-search'
+import { isWorktreePaletteQueryTooLarge } from '../../../shared/palette-match/worktree-palette-query-bounds'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
@@ -33,6 +26,20 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     lastActivityAt: 0,
     ...overrides
   }
+}
+
+const EMPTY_QUERY_RESULT_WT1 = {
+  worktreeId: 'wt-1',
+  matchedFields: [],
+  displayNameRanges: [],
+  branchRanges: [],
+  repoRanges: [],
+  hostRanges: [],
+  supportingText: null,
+  qualityClass: null,
+  rank: null,
+  lastActiveAt: null,
+  activity: { ageBucket: null, timestamp: 0 }
 }
 
 const repoMap = new Map<string, Repo>([
@@ -91,22 +98,7 @@ describe('worktree-palette-search', () => {
   })
 
   it('returns every worktree with no match metadata for an empty query', () => {
-    expect(searchWorktrees([makeWorktree()], '', repoMap)).toEqual([
-      makeEmptyPaletteSearchResult('wt-1')
-    ])
-    expect(makeEmptyPaletteSearchResult('wt-1')).toEqual({
-      worktreeId: 'wt-1',
-      matchedFields: [],
-      displayNameRanges: [],
-      branchRanges: [],
-      repoRanges: [],
-      hostRanges: [],
-      supportingText: null,
-      qualityClass: null,
-      rank: null,
-      lastActiveAt: null,
-      activity: { ageBucket: null, timestamp: 0 }
-    })
+    expect(searchWorktrees([makeWorktree()], '', repoMap)).toEqual([EMPTY_QUERY_RESULT_WT1])
   })
 
   it('finds an emoji-named workspace by its readable branch shortcode', () => {
@@ -125,24 +117,28 @@ describe('worktree-palette-search', () => {
   })
 
   it('drops oversized pasted queries instead of matching their text', () => {
-    // Documents are built per worktree set, not per keystroke, so the byte guard
-    // now lives in query preparation rather than in a pre-scan bail-out.
-    const oversizedQuery = 'jump-palette'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    // Documents are reused across keystrokes; query preparation owns the byte guard.
+    const oversizedQuery = 'a'.repeat(2049)
+    expect(isWorktreePaletteQueryTooLarge('a'.repeat(2048))).toBe(false)
 
     expect(isWorktreePaletteQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchWorktrees([makeWorktree()], oversizedQuery, repoMap)).toEqual([])
   })
 
   it('rejects oversized whitespace before trimming worktree palette queries', () => {
-    const query = ' '.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES + 1)
+    const query = ' '.repeat(2049)
+    expect(searchWorktrees([makeWorktree()], ' '.repeat(2048), repoMap)).toEqual([
+      EMPTY_QUERY_RESULT_WT1
+    ])
 
     expect(searchWorktrees([makeWorktree()], query, repoMap)).toEqual([])
   })
 
   it('enforces the query budget by UTF-8 byte length', () => {
-    const query = 'é'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    const query = 'é'.repeat(1025)
 
-    expect(query.length).toBe(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    expect(isWorktreePaletteQueryTooLarge('é'.repeat(1024))).toBe(false)
+    expect(query.length).toBe(1025)
     expect(isWorktreePaletteQueryTooLarge(query)).toBe(true)
     expect(searchWorktrees([makeWorktree()], query, repoMap)).toEqual([])
   })
@@ -187,14 +183,13 @@ describe('worktree-palette-search', () => {
   })
 
   it('still lists a branch-less row on the empty query, which renders every row', () => {
-    // Why: the empty query short-circuits before any branch read, so the row reaches the
-    // render loop untouched — the label resolution there has to be guarded too.
+    // Empty queries bypass branch reads; render label resolution must guard missing branches too.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: undefined as unknown as string
     })
 
-    expect(searchWorktrees([cleared], '', repoMap)).toEqual([makeEmptyPaletteSearchResult('wt-1')])
+    expect(searchWorktrees([cleared], '', repoMap)).toEqual([EMPTY_QUERY_RESULT_WT1])
   })
 
   it('returns a truncated comment snippet with the highlighted match range', () => {
@@ -546,5 +541,27 @@ describe('worktree-palette-search', () => {
     expect(
       searchWorktrees([worktree], '300', repoMap, { workspacePortsByWorktreeId })
     ).toHaveLength(1)
+  })
+})
+
+describe('secondary workspace attachments in palette search', () => {
+  it('searches the number, identifier, and title of secondary links', () => {
+    const worktree = makeWorktree({
+      linkedPR: 1,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 42, title: 'Secondary payment review' },
+        {
+          provider: 'linear',
+          type: 'issue',
+          number: 0,
+          identifier: 'STA-84',
+          title: 'Secondary payment task'
+        }
+      ]
+    })
+    const repoMap = new Map<string, Repo>()
+    expect(searchWorktrees([worktree], '#42', repoMap)).toHaveLength(1)
+    expect(searchWorktrees([worktree], 'STA-84', repoMap)).toHaveLength(1)
+    expect(searchWorktrees([worktree], 'payment', repoMap)).toHaveLength(1)
   })
 })

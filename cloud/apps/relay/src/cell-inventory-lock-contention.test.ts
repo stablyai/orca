@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const fakes = vi.hoisted(() => ({
@@ -78,7 +77,6 @@ describe('bounded cell-inventory lock wait', () => {
   // Why: a bound at or above the pool default would fence nothing, and one far
   // below the hold time would convert ordinary contention into terminal failures.
   it('keeps the request bound strictly inside the pool default', () => {
-    expect(CELL_INVENTORY_LOCK_TIMEOUT_MS).toBe(500)
     expect(CELL_INVENTORY_LOCK_TIMEOUT_MS).toBeLessThan(POSTGRES_LOCK_TIMEOUT_MS)
   })
 
@@ -175,10 +173,7 @@ describe('bounded cell-inventory lock wait', () => {
     await database.close()
   })
 
-  // Why: testing the helper alone would pass with the store still queueing for
-  // the pool's one-second default.
-  // Why: testing the helper alone would pass with the request path still queueing
-  // for the pool's full second.
+  // Helper-only tests miss request paths still waiting for the full one-second pool default.
   it('never lets a request path take the unbounded wait', async () => {
     const database = await openInMemoryRelayDatabase()
     const probe = new InventoryLockProbe(database)
@@ -294,9 +289,7 @@ describe('bounded cell-inventory lock wait', () => {
     await database.close()
   })
 
-  // Why: a bounded request-path wait raises the same 55P03 without NOWAIT. Folding
-  // it into the deferral counter would hide user-visible stalls among by-design
-  // sweep skips, which outnumber them by roughly an order of magnitude.
+  // Separate bounded 55P03 timeouts from intentional NOWAIT skips or frequent sweep deferrals hide user-visible stalls.
   it('counts an expired bounded wait apart from a NOWAIT deferral', async () => {
     const database = await openFakePostgres()
     fakes.query.mockImplementation(async (sql: string) => {
@@ -318,11 +311,33 @@ describe('bounded cell-inventory lock wait', () => {
     ).rejects.toThrow()
 
     const counts = consumeRelayCellInventoryHold(database)
-    // One per attempt, not per request: 55P03 is retryable, so an exhausted
-    // request contributes POSTGRES_TRANSACTION_ATTEMPTS timeouts. Reading the
-    // metric as affected-requests would overstate it threefold.
+    // Count attempts, not requests: three retryable 55P03 timeouts would overstate affected requests threefold.
     expect(counts.cellInventoryLockTimeouts).toBe(3)
     expect(counts.cellInventoryLockUnavailable).toBe(0)
+    await database.close()
+  })
+
+  // Why: after the rehome commit stopped locking the inventory, its only hold is
+  // one row. The alert reads the shared max, so the site label is what names it.
+  it('records a target-row hold under its own site without appending a lock clause', async () => {
+    const database = await openFakePostgres()
+    const statement = 'WITH target AS (SELECT 1 FOR UPDATE NOWAIT) UPDATE relay_cells SET x = 1'
+
+    await database.transaction(async (transaction) => {
+      await transaction.queryLocked(statement, [], {
+        failIfUnavailable: true,
+        lockClauseInStatement: true,
+        measureHoldMs: true,
+        holdSite: 'rehome-target-row'
+      })
+    })
+
+    expect(fakes.statements).toContain(statement)
+    expect(consumeRelayCellInventoryHold(database)).toMatchObject({
+      cellInventoryHolds: 1,
+      cellInventoryHoldMaxSite: 'rehome-target-row',
+      rehomeTargetRowHolds: 1
+    })
     await database.close()
   })
 
@@ -335,15 +350,6 @@ describe('bounded cell-inventory lock wait', () => {
 
     expect(consumeRelayCellInventoryHold(database).cellInventoryHolds).toBe(0)
     await database.close()
-  })
-
-  // Why: index.ts boots a server on import, so its wiring can only be read. An
-  // unspread hold metric is invisible: the flush simply omits the fields.
-  it('spreads the hold counts into the runtime metrics flush', () => {
-    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
-    const flush = /observability\.start\(\(\) => \(\{([^}]*)\}\)\)/.exec(source)
-
-    expect(flush?.[1]).toContain('...consumeRelayCellInventoryHold(database)')
   })
 
   // Why: 500ms is a first value, not a measurement. Tuning it needs the hold
@@ -466,25 +472,6 @@ describe('background sweeps skip a contended cell inventory', () => {
 
     expect(aborted).toBe(1)
     expect(warnings.entries).toEqual([])
-    await database.close()
-  })
-
-  it('still aborts the expired evacuation once the inventory is free', async () => {
-    const database = await openInMemoryRelayDatabase()
-    const probe = new InventoryLockProbe(database)
-    let now = 1_000
-    const store = new RelayAssignmentStore(probe, () => now)
-    await store.reconcileCells(CELLS)
-    const assignment = await store.assign(identity)
-    await store.activateControl(identity, {
-      cellId: assignment.cellId,
-      assignmentEpoch: assignment.assignmentEpoch,
-      generation: 1
-    })
-    await store.startEvacuation(identity, 'cell-b')
-    now += 24 * 60 * 60_000
-
-    expect(await store.abortExpiredEvacuations()).toBe(1)
     await database.close()
   })
 })

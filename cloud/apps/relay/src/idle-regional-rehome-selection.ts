@@ -4,14 +4,10 @@ import type { RelayDatabase, SqlRow } from './database.js'
 
 export const IDLE_REHOME_PAGE_SIZE = 100
 
-// How many decision rows one poll is allowed to look at. The poll runs about
-// fifty times a minute across the directors, so its cost has to be set by this
-// number and not by the size of the fleet or the width of the cohort.
+// Bound each of ~50 polls/min by decision rows, independent of fleet/cohort size.
 export const IDLE_REHOME_DECISION_WINDOW = 500
 
-// Where the last window ended. A keyset beats OFFSET: `OFFSET n` still has to
-// produce and throw away n rows, and n grew by a page on every poll that
-// dispatched, so the scan got more expensive the longer the rollout ran.
+// Keyset cursor avoids OFFSET’s growing discarded-row scan cost over long rollouts.
 export type IdleRehomeHostCursor = { userId: string; relayHostId: string } | null
 
 export type IdleRegionalRehomeCandidate = IdleRegionalRehomeRequest & { sourceCellUrl: string }
@@ -19,6 +15,16 @@ export type IdleRegionalRehomeCandidate = IdleRegionalRehomeRequest & { sourceCe
 export type IdleRegionalRehomeSelection = {
   candidates: IdleRegionalRehomeCandidate[]
   cursor: IdleRehomeHostCursor
+  // Eligible cells kept out of the source set by `rehomeSourceRegionAllowed`.
+  skippedOffRegionSourceCells: number
+}
+
+// Source-region stopgap keeps commits beside the database while remote cells remain targets; reassess now rehome uses a final NOWAIT cell-row write instead of prolonged fleet locks.
+export function rehomeSourceRegionAllowed(
+  sourceRegion: string,
+  directorRegion: string | undefined
+): boolean {
+  return directorRegion === undefined || sourceRegion === directorRegion
 }
 
 type SourceCell = {
@@ -39,6 +45,8 @@ type SelectionInput = {
   preferenceMaxAgeMs: number
   hostCooldownMs: number
   cursor: IdleRehomeHostCursor
+  // The director's own region; the database lives there. Undefined keeps every source.
+  directorRegion?: string
   connectionHeadroom: ReadonlyMap<string, boolean>
   cellIsClean: (safety: SqlRow | undefined, runtime: SqlRow, now: number) => boolean
 }
@@ -56,7 +64,10 @@ export async function selectIdleRegionalRehomes(
   input: SelectionInput
 ): Promise<IdleRegionalRehomeSelection> {
   const cells = await readCellInventory(input)
-  if (!cells.sources.size || !cells.targetsByRegion.size) return { candidates: [], cursor: null }
+  const skippedOffRegionSourceCells = cells.skippedOffRegionSourceCells
+  if (!cells.sources.size || !cells.targetsByRegion.size) {
+    return { candidates: [], cursor: null, skippedOffRegionSourceCells }
+  }
   const sourceRegions = [...new Set([...cells.sources.values()].map((cell) => cell.region))]
   const targetRegions = [...cells.targetsByRegion.keys()]
   const decisionFilter = `outcome = 'conclusive' AND policy_version = 1
@@ -74,26 +85,20 @@ export async function selectIdleRegionalRehomes(
   const after = input.cursor ? [input.cursor.userId, input.cursor.relayHostId] : []
   const afterFilter = input.cursor ? 'AND (user_id, relay_host_id) > (?, ?)' : ''
 
-  // The window is taken first and on its own so the poll knows where it stopped
-  // reading, not just where it stopped emitting. Every gate below this point can
-  // reject a host, and a cursor that only advanced past emitted rows would park
-  // on a rejected host forever.
+  // Advance by the read window, not emitted candidates, or rejected hosts can pin the cursor forever.
   const window = await input.database.query(
     `SELECT user_id, relay_host_id FROM relay_region_decisions
      WHERE ${decisionFilter} ${afterFilter}
      ORDER BY user_id, relay_host_id LIMIT ?`,
     [...decisionParams, ...after, IDLE_REHOME_DECISION_WINDOW]
   )
-  if (!window.length) return { candidates: [], cursor: null }
+  if (!window.length) return { candidates: [], cursor: null, skippedOffRegionSourceCells }
   const windowEnd = window[window.length - 1]!
   const windowWasFull = window.length === IDLE_REHOME_DECISION_WINDOW
 
   const sourceList = [...cells.sources.values()]
   const rows = await input.database.query(
-    // The verification names the window's keys rather than repeating its LIMIT:
-    // the two reads take separate snapshots, and a decision that turned eligible
-    // between them would otherwise shift the second LIMIT and push the last host
-    // out of it while the cursor still advanced past it.
+    // Verify exact window keys: separate snapshots with repeated LIMIT can admit a newly eligible row while skipping the old last key forever.
     `SELECT d.user_id, d.relay_host_id, d.preferred_region, a.cell_id AS source_cell_id,
        a.assignment_epoch, host.generation
      FROM (SELECT user_id, relay_host_id, preferred_region, incumbent_region, assignment_epoch
@@ -146,7 +151,7 @@ export async function selectIdleRegionalRehomes(
     // Whole hosts only: the lower-priority targets are a host's fallbacks when
     // the first one defers, and splitting them across pages loses them.
     if (candidates.length >= IDLE_REHOME_PAGE_SIZE) {
-      return { candidates, cursor: stoppedAt }
+      return { candidates, cursor: stoppedAt, skippedOffRegionSourceCells }
     }
     const source = cells.sources.get(String(row.source_cell_id))!
     const sourceUnits = units.get(hostKey(row)) ?? 0
@@ -158,21 +163,26 @@ export async function selectIdleRegionalRehomes(
   }
   // A full verification page may have been cut short of the window's end, so only
   // a page that ran the window out may wrap to the head of the keyspace.
-  if (rows.length === IDLE_REHOME_PAGE_SIZE) return { candidates, cursor: stoppedAt }
+  if (rows.length === IDLE_REHOME_PAGE_SIZE) {
+    return { candidates, cursor: stoppedAt, skippedOffRegionSourceCells }
+  }
   return {
     candidates,
+    skippedOffRegionSourceCells,
     cursor: windowWasFull
       ? { userId: String(windowEnd.user_id), relayHostId: String(windowEnd.relay_host_id) }
       : null
   }
 }
 
-// Every cell predicate the candidate join used to re-evaluate per (host, cell)
-// pair. There are tens of cells and tens of thousands of hosts, so this is
-// resolved once per poll against the four small inventory tables.
+// Resolve small inventory predicates once per poll instead of per tens-of-thousands of host/cell pairs.
 async function readCellInventory(
   input: SelectionInput
-): Promise<{ sources: Map<string, SourceCell>; targetsByRegion: Map<string, TargetCell[]> }> {
+): Promise<{
+  sources: Map<string, SourceCell>
+  targetsByRegion: Map<string, TargetCell[]>
+  skippedOffRegionSourceCells: number
+}> {
   const { database, now } = input
   const [runtimeRows, safetyRows, inventory] = await Promise.all([
     database.query('SELECT * FROM relay_cell_runtime'),
@@ -184,6 +194,7 @@ async function readCellInventory(
   const sources = new Map<string, SourceCell>()
   const targetsByRegion = new Map<string, TargetCell[]>()
   const load = new Map<string, number>()
+  let skippedOffRegionSourceCells = 0
   for (const cell of inventory) {
     const cellId = String(cell.cell_id)
     const runtime = runtimes.get(cellId)
@@ -201,13 +212,19 @@ async function readCellInventory(
       continue
     }
     const region = String(cell.region)
-    sources.set(cellId, {
-      cellId,
-      region,
-      cellIncarnation: String(runtime.cell_incarnation),
-      startedAt: Number(runtime.started_at),
-      cellUrl: String(cell.cell_url)
-    })
+    // Only the source set shrinks, which narrows the window's `incumbent_region IN`;
+    // the cell still falls through to the target list below.
+    if (rehomeSourceRegionAllowed(region, input.directorRegion)) {
+      sources.set(cellId, {
+        cellId,
+        region,
+        cellIncarnation: String(runtime.cell_incarnation),
+        startedAt: Number(runtime.started_at),
+        cellUrl: String(cell.cell_url)
+      })
+    } else {
+      skippedOffRegionSourceCells += 1
+    }
     if (input.connectionHeadroom.get(cellId) === false) continue
     const capacityRequests = Number(cell.capacity_requests)
     const reservedRequests = Number(cell.reserved_requests)
@@ -222,7 +239,7 @@ async function readCellInventory(
         load.get(left.cellId)! - load.get(right.cellId)! || (left.cellId < right.cellId ? -1 : 1)
     )
   }
-  return { sources, targetsByRegion }
+  return { sources, targetsByRegion, skippedOffRegionSourceCells }
 }
 
 // One grouped read for the page instead of a correlated aggregate per (host, cell) pair.
@@ -258,9 +275,7 @@ function placeholders(count: number): string {
   return Array.from({ length: count }, () => '?').join(',')
 }
 
-// A derived table the planner can hash, in the one syntax both Postgres and the
-// SQLite test engine accept (`VALUES ... AS t(col)` and LATERAL are not common to
-// both). Only the first branch is cast; both engines take the union's types from it.
+// Derived UNION table is hashable on PostgreSQL and SQLite (unlike aliased VALUES/LATERAL); first branch sets both engines’ types.
 function inlineRows(columns: ReadonlyArray<readonly [string, string]>, rows: number): string {
   const first = columns.map(([name, type]) => `CAST(? AS ${type}) AS ${name}`)
   const rest = Array.from({ length: rows - 1 }, () => `UNION ALL SELECT ${placeholders(columns.length)}`)
@@ -268,7 +283,7 @@ function inlineRows(columns: ReadonlyArray<readonly [string, string]>, rows: num
 }
 
 function hostKey(row: SqlRow): string {
-  return `${String(row.user_id)} ${String(row.relay_host_id)}`
+  return `${String(row.user_id)}\u0000${String(row.relay_host_id)}`
 }
 
 function idleRehomeCandidate(

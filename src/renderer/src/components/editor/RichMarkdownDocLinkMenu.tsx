@@ -46,9 +46,7 @@ export function RichMarkdownDocLinkMenu({
               key={rowKey}
               type="button"
               className={cn('rich-markdown-doc-link-item', index === selectedIndex && 'is-active')}
-              // Why: mousedown inside the editor-mounted popover would otherwise
-              // blur the editor before click fires, losing the selection we need
-              // to run the commit transaction against.
+              // Prevent blur before click so the commit transaction retains its editor selection.
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => editor && commitRow(editor, menu, row)}
             >
@@ -68,10 +66,11 @@ export function RichMarkdownDocLinkMenu({
       )}
       {overflow ? (
         <div className="rich-markdown-doc-link-footer">
-          {translate('auto.components.editor.RichMarkdownDocLinkMenu.2aaf7d9678', 'Showing')}{' '}
-          {rows.length}{' '}
-          {translate('auto.components.editor.RichMarkdownDocLinkMenu.90c5f0e1e4', 'of')}{' '}
-          {totalMatches}
+          {translate(
+            'auto.components.editor.RichMarkdownDocLinkMenu.showingOfTotal',
+            'Showing {{shown}} of {{total}}',
+            { shown: rows.length, total: totalMatches }
+          )}
         </div>
       ) : null}
       <div className="rich-markdown-doc-link-hint">

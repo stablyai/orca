@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 describe('Run coordinator handle history migration', () => {
   let db: OrchestrationDb | undefined
@@ -164,5 +165,37 @@ describe('Run coordinator handle history migration', () => {
     })
 
     expect(db.getMessageById(message.id)?.to_handle).toBe(`run:${run.id}`)
+  })
+
+  it('stops routing an address that grabbed the seat while it worked for the Run', () => {
+    db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'grabbed',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab:leaf'
+    })
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ spec: 'w', runId: run.id }).id,
+      'term_worker'
+    )
+    // An older build remembered the worker as a coordinator address when it bound the Run.
+    db.rememberRunCoordinatorHandle(run.id, 'term_worker')
+    db.db
+      .prepare(
+        `UPDATE dispatch_contexts SET status = 'completed', completed_at = datetime('now', '+1 second') WHERE id = ?`
+      )
+      .run(dispatch.id)
+
+    const mail = db.insertMessage({
+      runId: run.id,
+      from: 'term_coord',
+      to: 'term_worker',
+      subject: 'direct'
+    })
+
+    expect(db.getMessageById(mail.id)?.to_handle).toBe('term_worker')
+    expect(db.getRunMailboxOwnerIdsForHandle('term_worker')).toEqual([])
+    expect(db.routeForeignDirectMessagesToOwnedMailboxes('term_worker').routedCount).toBe(0)
   })
 })

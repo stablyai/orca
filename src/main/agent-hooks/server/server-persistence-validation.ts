@@ -1,11 +1,17 @@
+import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { createHash } from 'node:crypto'
 
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
+  isTurnEndDisposition,
   normalizeAgentStatusPayload,
+  type AgentMainAgentStatus,
   type ParsedAgentStatusPayload
 } from '../../../shared/agent-status-types'
 import { isAgentHookSource } from '../../../shared/agent-hook-relay'
+import type { HostTurnRecord } from '../../../shared/agent-hook-listener/listener-event'
+import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
@@ -24,11 +30,28 @@ export function dropHydratedIdleClaudeSubagents(
     return payload
   }
   const activeSubagents = payload.subagents.filter((subagent) => subagent.state !== 'idle')
-  // Why: an idle teammate's liveness can't be proven across a restart (its TeammateIdle confirmation is in-memory); prune so a dead pile can't resurrect — a live teammate re-earns its row via SubagentStart.
+  // Idle teammates cannot prove liveness across restart; fresh hooks must restore them.
   return {
     ...payload,
     subagents: activeSubagents.length > 0 ? activeSubagents : undefined
   }
+}
+
+/** Old caches use claudeLeadBoundaryChildOnly for a settled main agent; honor it only without mainAgent. */
+function legacyChildOnlyBoundaryMainAgent(
+  payload: ParsedAgentStatusPayload,
+  record: Record<string, unknown>,
+  stateStartedAt: number
+): AgentMainAgentStatus | undefined {
+  if (
+    payload.mainAgent !== undefined ||
+    record.claudeLeadBoundaryChildOnly !== true ||
+    payload.agentType !== 'claude'
+  ) {
+    return undefined
+  }
+  // Older rows may lack the main-agent end stamp; use their row clock as the fallback.
+  return { state: 'done', stateStartedAt: payload.turnCompletedAt ?? stateStartedAt }
 }
 
 export function sanitizeHydratedEntry(
@@ -46,7 +69,7 @@ export function sanitizeHydratedEntry(
   if (record.paneKey !== paneKey) {
     return null
   }
-  // Why: structured rows are never written; the host republishes the live projection on restore.
+  // Structured rows come from the journal projection, never this cache.
   if (record.structuredHost !== undefined) {
     return null
   }
@@ -54,7 +77,6 @@ export function sanitizeHydratedEntry(
   if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
     return null
   }
-  // Why: a stored tabId that diverges from the paneKey's tab segment is corruption; drop instead of hydrating an inconsistent row.
   if (typeof tabId === 'string' && tabId !== parsedPaneKey.tabId) {
     return null
   }
@@ -74,7 +96,6 @@ export function sanitizeHydratedEntry(
   ) {
     return null
   }
-  // Why: connectionId is null (local) or string (relay); any other shape is rejected to keep the typed surface honest.
   const connectionIdRaw = record.connectionId
   let connectionId: string | null
   if (connectionIdRaw === null || connectionIdRaw === undefined) {
@@ -84,10 +105,25 @@ export function sanitizeHydratedEntry(
   } else {
     return null
   }
-  const payload = normalizeAgentStatusPayload(record.payload)
-  if (!payload) {
+  const normalizedPayload = normalizeAgentStatusPayload(record.payload)
+  if (!normalizedPayload) {
     return null
   }
+  const legacyBoundaryMainAgent = legacyChildOnlyBoundaryMainAgent(
+    normalizedPayload,
+    record,
+    stateStartedAt
+  )
+  const payload = legacyBoundaryMainAgent
+    ? { ...normalizedPayload, mainAgent: legacyBoundaryMainAgent }
+    : normalizedPayload
+  const claudeRunningNonAgentTask =
+    typeof record.claudeRunningNonAgentTask === 'boolean'
+      ? record.claudeRunningNonAgentTask
+      : // The legacy child-only flag also proved no shell work remained.
+        legacyBoundaryMainAgent
+        ? false
+        : undefined
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
   const retainedForLiveness = record.retainedForLiveness === true
@@ -112,8 +148,12 @@ export function sanitizeHydratedEntry(
     source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
       ? record.compactTrigger
       : undefined
+  const turnStartedAt = record.turnStartedAt
+  const turnEndedAt = record.turnEndedAt
+  const hostTurn = readHostTurnRecord(record.hostTurn)
   return {
     paneKey,
+    agentPresence: readAgentProcessPresence(record.agentPresence),
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
@@ -127,14 +167,44 @@ export function sanitizeHydratedEntry(
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     teammateName: typeof record.teammateName === 'string' ? record.teammateName : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
-    claudeLeadBoundaryChildOnly: record.claudeLeadBoundaryChildOnly === true ? true : undefined,
+    ...(claudeRunningNonAgentTask !== undefined ? { claudeRunningNonAgentTask } : {}),
     providerSession,
     providerSessionOnly: providerSessionOnly ? true : undefined,
     retainedForLiveness: retainedForLiveness ? true : undefined,
     payload,
     receivedAt,
-    stateStartedAt
+    stateStartedAt,
+    ...(typeof turnStartedAt === 'number' && Number.isFinite(turnStartedAt) && turnStartedAt > 0
+      ? { turnStartedAt }
+      : {}),
+    ...(isTurnEndedAt(turnEndedAt) ? { turnEndedAt } : {}),
+    ...(isTurnEndDisposition(record.turnEndDisposition)
+      ? { turnEndDisposition: record.turnEndDisposition }
+      : {}),
+    ...(hostTurn ? { hostTurn } : {})
   }
+}
+
+function readHostTurnRecord(value: unknown): HostTurnRecord | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const { owner, currentTurnKey, completed } = value
+  if (typeof owner !== 'string' || typeof currentTurnKey !== 'string') {
+    return undefined
+  }
+  if (completed === undefined) {
+    return { owner, currentTurnKey }
+  }
+  return isRecord(completed) &&
+    typeof completed.turnKey === 'string' &&
+    isTurnEndedAt(completed.endedAt)
+    ? {
+        owner,
+        currentTurnKey,
+        completed: { turnKey: completed.turnKey, endedAt: completed.endedAt }
+      }
+    : undefined
 }
 
 export function readPersistedLaunchTokenHash(rawEntry: unknown): string | null {

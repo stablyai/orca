@@ -63,7 +63,8 @@ export function cloneTerminalLayoutSnapshot(
   const cloned: TerminalLayoutSnapshot = {
     root: layout.root,
     activeLeafId: layout.activeLeafId,
-    expandedLeafId: layout.expandedLeafId
+    expandedLeafId: layout.expandedLeafId,
+    ...(layout.chatLeafId ? { chatLeafId: layout.chatLeafId } : {})
   }
   if (layout.ptyIdsByLeafId) {
     cloned.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId }
@@ -111,9 +112,7 @@ export function collectHeadlessParentTabOrder(
   return order
 }
 
-// Why: the group tab order must follow actual creation/insertion order across
-// both terminals and browsers, not list terminals first. A terminal's top-level
-// id is its parentTabId (split leaves share one); a browser's is its own id.
+// Preserve cross-type insertion order; split terminal leaves share parentTabId while browsers use their own id.
 export function collectHeadlessTopLevelTabOrder(
   tabs: readonly RuntimeMobileSessionSnapshotTab[]
 ): string[] {
@@ -138,16 +137,11 @@ export function buildHeadlessMobileSessionTabGroups(
   tabs: readonly RuntimeMobileSessionSnapshotTab[],
   activeTab: RuntimeMobileSessionSnapshotTab | null,
   existingGroups?: readonly RuntimeMobileSessionTabGroup[],
-  // Why: a new tab created via a specific group's "+" must land in THAT group,
-  // not the active one — otherwise every "+" in a split funnels to one group.
+  // A group-specific + must target that group, not whichever group is active.
   newTabAssignment?: { tabId: string; groupId: string }
 ): RuntimeMobileSessionTabGroup[] {
-  // Why: order across terminals and browsers in their actual array order so a
-  // tab opened after a browser tab lands to its right, not regrouped before it.
   const arrivalOrder = collectHeadlessTopLevelTabOrder(tabs)
-  // Why: tabOrder is the user-visible order and must survive a republish. A
-  // materialized idle surface can move to the end of the incoming array, so
-  // retain stored positions and append only genuinely new ids.
+  // Retain stored tab positions; materializing idle surfaces can move their incoming array entries.
   const liveTopLevelIds = new Set(arrivalOrder)
   const tabOrder: string[] = []
   const placed = new Set<string>()
@@ -177,8 +171,6 @@ export function buildHeadlessMobileSessionTabGroups(
     tabOrder[0] ??
     null
 
-  // Why: when the user has split tabs into multiple groups, preserve that
-  // assignment across rebuilds instead of coalescing back to one group.
   if (existingGroups && existingGroups.length > 1) {
     return distributeHeadlessTabsAcrossGroups(
       existingGroups,
@@ -201,9 +193,7 @@ export function buildHeadlessMobileSessionTabGroups(
   ]
 }
 
-// Distribute live top-level tabs into the existing multi-group structure,
-// keeping each tab in its group; tabs new since the last snapshot join the
-// active group. Emptied groups are dropped so a closed split collapses.
+// Preserve groups across rebuilds, send new tabs to the active group, and drop emptied groups.
 export function distributeHeadlessTabsAcrossGroups(
   existingGroups: readonly RuntimeMobileSessionTabGroup[],
   tabOrder: readonly string[],
@@ -216,8 +206,6 @@ export function distributeHeadlessTabsAcrossGroups(
       groupIdByTabId.set(tabId, group.id)
     }
   }
-  // Why: route a freshly-created tab to the group its "+" was clicked in,
-  // when that group still exists; otherwise fall through to the active group.
   const hasTargetGroup =
     newTabAssignment !== undefined &&
     existingGroups.some((group) => group.id === newTabAssignment.groupId)
@@ -248,6 +236,24 @@ export function distributeHeadlessTabsAcrossGroups(
     .filter((group) => group.tabOrder.length > 0)
 }
 
+// Restored splits need an active id from their own groups, never a generated headless id.
+export function pickRestoredActiveGroupId(
+  groups: readonly RuntimeMobileSessionTabGroup[],
+  preferredGroupIds: readonly (string | null | undefined)[],
+  activeTopLevelId: string | null
+): string | null {
+  const groupIds = new Set(groups.map((group) => group.id))
+  const preferred = preferredGroupIds.find((id): id is string => id != null && groupIds.has(id))
+  return (
+    preferred ??
+    (activeTopLevelId
+      ? groups.find((group) => group.tabOrder.includes(activeTopLevelId))?.id
+      : undefined) ??
+    groups[0]?.id ??
+    null
+  )
+}
+
 export function buildMaterializedHeadlessParentLayout(
   leafId: string,
   ptyId: string,
@@ -262,10 +268,7 @@ export function buildMaterializedHeadlessParentLayout(
       ptyIdsByLeafId: { [leafId]: ptyId }
     }
   }
-  // Why: a split must insert the new leaf into the live layout tree with the
-  // requested direction, or the published snapshot keeps the old single-leaf
-  // root and the split renders with a fallback direction ("Split Right" lands
-  // as a top/bottom split). Reuse the persisted-split builder for parity.
+  // Insert into the live tree with the requested direction; otherwise published splits use the fallback orientation.
   if (split) {
     return buildHeadlessTerminalSplitLayout(cloneTerminalLayoutSnapshot(existingLayout), {
       leafId,

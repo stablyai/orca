@@ -92,6 +92,15 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('hides machine-provider SSH targets the same way', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [{ connectionId: 'machine-0123', executionHostId: 'ssh:machine-0123' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshTargetLabels: new Map([['machine-0123', 'omarchy-dev']])
+    })
+    expect(hosts.some((h) => h.id.includes('machine-0123'))).toBe(false)
+  })
+
   it('hides runtime-owned (ephemeral VM) SSH targets from repo-derived hosts', () => {
     const hosts = buildExecutionHostRegistry({
       // A VM-backed repo carries the hidden runtime-owned target on both fields.
@@ -103,13 +112,28 @@ describe('execution host registry', () => {
         { connectionId: 'repo-ssh' }
       ],
       settings: { activeRuntimeEnvironmentId: null },
-      // Even if a stale label leaked in, it must still be filtered out.
+      // Stale labels must not reveal hidden runtime targets.
       sshTargetLabels: new Map([['runtime-ssh-orca-instance-1', 'Hidden VM']])
     })
 
     expect(hosts.some((h) => h.id.includes('runtime-ssh-orca-instance-1'))).toBe(false)
-    // The ordinary repo SSH host is still present.
     expect(hosts.some((h) => h.id === 'ssh:repo-ssh')).toBe(true)
+  })
+
+  it("does not add a client SSH host from a paired server's nested SSH target", () => {
+    const hosts = buildExecutionHostRegistry({
+      // The server's own target id; this client has no such SSH host.
+      repos: [{ connectionId: 'server-ssh', executionHostId: 'runtime:env-1' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshConnectionStates: new Map([
+        [
+          'server-ssh',
+          { targetId: 'server-ssh', status: 'connected', error: null, reconnectAttempt: 0 }
+        ]
+      ])
+    })
+
+    expect(hosts.map((h) => h.id)).toEqual(['local', 'runtime:env-1'])
   })
 
   it('adds saved runtime environments and preserves compatibility state per host', () => {

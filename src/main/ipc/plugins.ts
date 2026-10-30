@@ -1,28 +1,28 @@
-import { ipcMain } from 'electron'
+import { pluginThemeSettingsAfterRemoval } from '../../shared/plugin-theme-settings'
+import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type {
-  PluginPanelActionOutcome,
-  PluginPanelEntry
-} from '../../shared/plugins/plugin-panel-bridge'
+import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
 import {
   installPluginFromGit,
   installPluginFromLocalPath,
   readPluginLockfile,
   removeInstalledPlugin
-} from '../plugins/plugin-install'
+} from '../plugins/installation/plugin-install'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
+import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
 import type { PluginService } from '../plugins/plugin-service'
-import { bindPluginPanelOwnerLifecycle } from '../plugins/plugin-panel-owner-lifecycle'
-import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
-import { pluginConsentRequestSchema } from '../../shared/plugins/plugin-consent-request'
-import { normalizePluginIdList } from '../../shared/plugins/plugin-consent-state'
+import { bindPluginPanelOwnerLifecycle } from '../plugins/panels/plugin-panel-owner-lifecycle'
+import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
+import { pluginConsentRequestSchema } from '../../shared/plugins/approval/plugin-consent-request'
+import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
 import {
   isAllowedPluginGitUrl,
   type PluginLockfile
-} from '../../shared/plugins/plugin-install-lockfile'
+} from '../../shared/plugins/installation/plugin-install-lockfile'
 import {
   registerPluginMarketplaceHandlers,
   type PluginMarketplaceHandlerServices
@@ -40,6 +40,16 @@ const setEnabledArgsSchema = z.object({
 const readPanelEntryArgsSchema = z.object({
   pluginKey: z.string().min(1),
   panelId: z.string().min(1)
+})
+
+const readCustomEditorEntryArgsSchema = z.object({
+  pluginKey: z.string().min(1),
+  editorId: z.string().min(1)
+})
+
+const readNewFileTemplateArgsSchema = z.object({
+  pluginKey: z.string().min(1),
+  newFileId: z.string().min(1)
 })
 
 const invokeCommandArgsSchema = z.object({
@@ -67,10 +77,8 @@ const removeArgsSchema = z.object({
 })
 const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
 
-// Why re-exported: moved to ../plugins/plugin-client-list so the runtime RPC can reach
-// it without ipcMain. Existing importers of this path keep working.
-export { listPluginsForClients } from '../plugins/plugin-client-list'
-import { listPluginsForClients } from '../plugins/plugin-client-list'
+// Preserve import compatibility; runtime RPC uses the Electron-free client-list module.
+import { listPluginsForClients, readInstalledPluginManifest } from '../plugins/plugin-client-list'
 
 export function canRemoveInstalledPlugin(
   pluginService: PluginService,
@@ -93,29 +101,44 @@ export function registerPluginHandlers(
   runtime: OrcaRuntimeService | null,
   marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
-  // The runtime IS the delegate: the structural PluginRuntimeDelegate type
-  // keeps the facade electron-free while main binds the real service.
+  // A structural delegate binds the real runtime without importing Electron into the facade.
   if (runtime) {
     pluginService.setRuntimeDelegate(runtime)
   }
 
   store.onSettingsChanged((updates) => {
     if ('pluginSystemEnabled' in updates || 'devPluginPaths' in updates) {
-      // Main owns plugin lifecycle. Renderer follow-up refreshes are UX only;
-      // a crashed or remote caller must not leave old workers authoritative.
+      // Main owns lifecycle refresh even when a caller crashes before its follow-up refresh.
       void pluginService.refresh().catch((error) => {
         console.warn('[plugins] failed to apply plugin settings change:', error)
       })
     }
   })
 
-  // Why: startup discovery is fire-and-forget; every handler awaits it so an
-  // early renderer fetch can't observe the empty pre-discovery list.
+  // All handlers must await startup discovery to avoid returning a pre-discovery empty list.
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
-  ipcMain.handle('plugins:listLanguagePacks', async () => {
-    await pluginService.whenReady()
-    return pluginService.contentPacks.languagePacks.list()
+  ipcMain.handle('plugins:getInstalledManifest', async (_event, args: unknown) => {
+    const { pluginKey } = logsArgsSchema.parse(args)
+    return readInstalledPluginManifest(pluginService, pluginKey)
   })
+  const handleContentPacks = (channel: string, read: (arg: unknown) => unknown): void => {
+    ipcMain.handle(channel, async (_event, arg: unknown) => {
+      await pluginService.whenReady()
+      return read(arg)
+    })
+  }
+  const { contentPacks } = pluginService
+  handleContentPacks('plugins:listLanguagePacks', () => contentPacks.languagePacks.list())
+  handleContentPacks('plugins:listThemes', () => contentPacks.themes.list())
+  handleContentPacks('plugins:listTerminalThemes', () => contentPacks.terminalThemes.list())
+  handleContentPacks('plugins:listIconThemes', () => contentPacks.iconThemes.list())
+  handleContentPacks('plugins:loadIconTheme', (id) =>
+    typeof id === 'string' ? contentPacks.iconThemes.load(id) : null
+  )
+  handleContentPacks('plugins:listSyntaxes', () => contentPacks.syntaxes.list())
+  handleContentPacks('plugins:loadSyntax', (id) =>
+    typeof id === 'string' ? contentPacks.syntaxes.load(id) : null
+  )
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)
@@ -143,31 +166,44 @@ export function registerPluginHandlers(
     return listPluginsForClients(pluginService)
   })
 
-  // Why: the renderer renders panel HTML via a sandboxed iframe srcdoc, so it
-  // needs (CSP-wrapped) file contents — never a file:// path — across IPC.
-  ipcMain.handle(
-    'plugins:readPanelEntry',
-    async (event, args: unknown): Promise<PluginPanelEntry | null> => {
-      const ownerKey = rendererPanelOwner(event.sender.id)
-      const ownerLease = bindPluginPanelOwnerLifecycle(event.sender, () =>
-        pluginService.panels.revokeOwner(ownerKey)
-      )
-      await pluginService.whenReady()
-      const parsed = readPanelEntryArgsSchema.parse(args)
-      const entry = await pluginService.panels.open(ownerKey, parsed.pluginKey, parsed.panelId)
-      if (!ownerLease.isCurrent()) {
-        pluginService.panels.revokeOwner(ownerKey)
-        return null
-      }
-      return entry
-    }
-  )
+  // Sandboxed iframe srcdoc needs CSP-wrapped HTML contents across IPC.
+  const openFrameEntry = async (
+    sender: IpcMainInvokeEvent['sender'],
+    open: (ownerKey: string, isCurrent: () => boolean) => Promise<PluginFrameEntry | null>
+  ): Promise<PluginFrameEntry | null> => {
+    const ownerKey = rendererPanelOwner(sender.id)
+    const ownerLease = bindPluginPanelOwnerLifecycle(sender, () =>
+      pluginService.panels.revokeOwner(ownerKey)
+    )
+    await pluginService.whenReady()
+    // Why not revoke on a stale load: the owner key may already belong to a successor document.
+    return open(ownerKey, ownerLease.isCurrent)
+  }
 
-  // Panel-originated actions relayed by the renderer's postMessage bridge
-  // host. Capability enforcement happens in main, never in the renderer.
+  ipcMain.handle('plugins:readPanelEntry', (event, args: unknown) => {
+    const parsed = readPanelEntryArgsSchema.parse(args)
+    return openFrameEntry(event.sender, (ownerKey, isCurrent) =>
+      pluginService.panels.open(ownerKey, parsed.pluginKey, parsed.panelId, isCurrent)
+    )
+  })
+
+  ipcMain.handle('plugins:readCustomEditorEntry', (event, args: unknown) => {
+    const parsed = readCustomEditorEntryArgsSchema.parse(args)
+    return openFrameEntry(event.sender, (ownerKey, isCurrent) =>
+      pluginService.panels.openCustomEditor(ownerKey, parsed.pluginKey, parsed.editorId, isCurrent)
+    )
+  })
+
+  ipcMain.handle('plugins:readNewFileTemplate', async (_event, args: unknown) => {
+    const parsed = readNewFileTemplateArgsSchema.parse(args)
+    await pluginService.whenReady()
+    return readApprovedPluginNewFileTemplate(pluginService, parsed.pluginKey, parsed.newFileId)
+  })
+
+  // Renderer forwards frame host calls; main enforces capabilities and surfaces.
   ipcMain.handle(
     'plugins:panelAction',
-    async (event, args: unknown): Promise<PluginPanelActionOutcome> => {
+    async (event, args: unknown): Promise<PluginHostCallOutcome> => {
       await pluginService.whenReady()
       return pluginService.panels.execute(rendererPanelOwner(event.sender.id), args)
     }
@@ -222,7 +258,6 @@ export function registerPluginHandlers(
         pluginKey: parsed.pluginKey
       })
     )
-    // Drop the stale consent so a later reinstall re-prompts from scratch.
     const settings = store.getSettings()
     const consents = { ...settings.pluginConsents }
     delete consents[parsed.pluginKey]
@@ -230,7 +265,11 @@ export function registerPluginHandlers(
       (pluginKey) => pluginKey !== parsed.pluginKey
     )
     store.updateSettings(
-      { pluginConsents: consents, disabledPlugins },
+      {
+        pluginConsents: consents,
+        disabledPlugins,
+        ...pluginThemeSettingsAfterRemoval(settings, parsed.pluginKey)
+      },
       { notifyListeners: true, originWebContentsId: event.sender.id }
     )
     await pluginService.refresh()
@@ -242,13 +281,24 @@ export function registerPluginHandlers(
     return pluginService.getLogs(parsed.pluginKey)
   })
 
-  // Re-discover after settings edits (feature flag, dev paths) — the
-  // renderer calls this right after updating those settings.
   ipcMain.handle('plugins:refresh', async () => {
     await pluginService.refresh()
     return listPluginsForClients(pluginService)
   })
   if (marketplaceServices) {
-    registerPluginMarketplaceHandlers(pluginService, marketplaceServices)
+    registerPluginMarketplaceHandlers(
+      pluginService,
+      marketplaceServices,
+      () => store.getSettings(),
+      (pluginKey, reviewedFingerprint, originWebContentsId) =>
+        applyPluginConsent({
+          store,
+          pluginService,
+          pluginKey,
+          reviewedFingerprint,
+          decision: 'approve',
+          originWebContentsId
+        })
+    )
   }
 }

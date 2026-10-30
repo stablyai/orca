@@ -1,17 +1,18 @@
 import type React from 'react'
+import { sourceControlVariableDescription } from './source-control-variable-description'
 import { Braces } from 'lucide-react'
 import {
   SOURCE_CONTROL_ACTION_VARIABLE_INFO,
   SOURCE_CONTROL_ACTION_VARIABLES,
   type SourceControlActionVariable
 } from '../../../../shared/source-control-ai-action-variables'
-import type { SourceControlActionId } from '../../../../shared/source-control-ai-actions'
+import type { AiActionId } from '../../../../shared/source-control-ai-actions'
 import { Button } from '../ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card'
 import { translate } from '@/i18n/i18n'
 
 type SourceControlActionVariableChipsProps = {
-  actionId: SourceControlActionId
+  actionId: AiActionId
   disabled?: boolean
   variablePreviews?: Partial<Record<string, string>>
   onInsert: (variable: string) => void
@@ -77,7 +78,7 @@ function SourceControlVariableDetails({
     <div className="max-w-80 space-y-2 text-left leading-relaxed">
       <div className="space-y-0.5">
         <div className="font-mono text-[11px]">{`{${variable}}`}</div>
-        <div className="text-muted-foreground">{info.description}</div>
+        <div className="text-muted-foreground">{sourceControlVariableDescription(variable)}</div>
       </div>
       <SourceControlVariableSample
         label={translate(
@@ -86,8 +87,7 @@ function SourceControlVariableDetails({
         )}
         value={info.example}
       />
-      {/* Why: a preview never replaces the description — it is the only in-product warning
-          that a bare `Fixes #{linkedIssue}` degrades to `Fixes #` on an unlinked workspace. */}
+      {/* Previews supplement the warning that missing linkedIssue turns Fixes #{linkedIssue} into Fixes #. */}
       {preview !== undefined ? (
         <SourceControlVariableSample
           label={translate(

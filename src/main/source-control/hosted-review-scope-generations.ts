@@ -1,22 +1,16 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import { MAX_BRANCH_MAP_ENTRIES } from './hosted-review-refresh-pacing'
 
-/**
- * Per-repo invalidation counter for hosted-review lookups (#11532).
- *
- * A lookup that was already out when Orca opened a review has an answer older
- * than the invalidation, so it must not store. Comparing the generation it
- * started at against the current one is what tells the two apart.
- */
+/** Fence lookups begun before review creation so they cannot reinstall stale absence (#11532). */
 const scopeGenerations = new Map<string, number>()
 
-/**
- * Floor for a scope the size cap dropped. Without it an eviction reads back as
- * generation 0 — the same value a lookup that started before the first
- * invalidation captured — and that lookup's pre-invalidation answer would be
- * stored as current. Never decreasing is what keeps the comparison one-way:
- * eviction can only make a lookup discard its result, never adopt a stale one.
- */
+/** Eviction must never read back as the original zero generation. A monotonic floor may discard fresh data but cannot admit stale data. */
 let evictedGeneration = 0
+
+// Cache invalidation and provider reads must use the same host-scoped identity.
+export function hostedReviewRepoScope(repoPath: string, executionHostId: ExecutionHostId): string {
+  return `${executionHostId}\0${repoPath}`
+}
 
 export function scopeGeneration(scope: string): number {
   return scopeGenerations.get(scope) ?? evictedGeneration

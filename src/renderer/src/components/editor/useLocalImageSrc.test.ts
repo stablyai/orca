@@ -1,16 +1,18 @@
 // @vitest-environment happy-dom
 
-import { act, createElement, Fragment } from 'react'
+import { act, createElement, Fragment, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getLocalImageCacheKey,
+  getLocalImageSrcCacheKey,
   invalidateLocalImageSrcCacheForTests,
   loadLocalImageSrc,
-  releaseLocalImageSrc,
+  releaseLocalImageSrcByKey,
   resetLocalImageSrcStateForTests,
   useLocalImageSrc
 } from './useLocalImageSrc'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   blobUrlCache,
   cacheLocalImageBlob,
@@ -46,6 +48,14 @@ function setReadFile(readFile: ReturnType<typeof vi.fn>): void {
   globalThis.window.api = {
     fs: { readFile }
   } as unknown as Window['api']
+}
+
+function releaseByPath(rawSrc: string, filePath: string): void {
+  const key = getLocalImageSrcCacheKey(rawSrc, filePath)
+  if (!key) {
+    throw new Error(`${rawSrc} has no local image cache key`)
+  }
+  releaseLocalImageSrcByKey(key)
 }
 
 async function flushPromises(): Promise<void> {
@@ -95,17 +105,17 @@ afterEach(() => {
 describe('getLocalImageCacheKey', () => {
   it('scopes local markdown image cache entries by runtime owner', () => {
     const localKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
     const remoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
     const otherRemoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: 'env-2' },
+      target: { kind: 'environment' as const, environmentId: 'env-2' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
@@ -275,7 +285,7 @@ describe('loadLocalImageSrc', () => {
     setReadFile(readFile)
 
     const pending = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-    releaseLocalImageSrc('diagram.png', '/repo/docs/readme.md')
+    releaseByPath('diagram.png', '/repo/docs/readme.md')
     read.resolve(binaryPreview())
 
     await expect(pending).resolves.toBeNull()
@@ -296,7 +306,7 @@ describe('loadLocalImageSrc', () => {
     setReadFile(readFile)
 
     const stale = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-    releaseLocalImageSrc('diagram.png', '/repo/docs/readme.md')
+    releaseByPath('diagram.png', '/repo/docs/readme.md')
     const fresh = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
     expect(readFile).toHaveBeenCalledTimes(2)
 
@@ -311,7 +321,7 @@ describe('loadLocalImageSrc', () => {
   it('cleans version metadata for released unique paths', () => {
     for (let index = 0; index < 500; index += 1) {
       const path = `/repo/docs/image-${index}.png`
-      releaseLocalImageSrc(path, '/repo/docs/readme.md')
+      releaseByPath(path, '/repo/docs/readme.md')
       expect(getLocalImageCacheKeyVersion(getLocalImageCacheKey(path, undefined, undefined))).toBe(
         0
       )
@@ -355,7 +365,7 @@ describe('loadLocalImageSrc', () => {
 
     await expect(
       loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-1'
@@ -363,7 +373,7 @@ describe('loadLocalImageSrc', () => {
     ).resolves.toBe('blob:runtime-one')
     await expect(
       loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-2',
         worktreePath: '/repo',
         connectionId: 'ssh-2'
@@ -378,7 +388,7 @@ describe('loadLocalImageSrc', () => {
 
     await expect(
       loadLocalImageSrc('diagram.png', '/tmp/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-2',
@@ -417,5 +427,145 @@ describe('loadLocalImageSrc', () => {
     })
 
     expect(renders).toEqual([undefined])
+  })
+
+  it('never shares a cached image across access kinds', () => {
+    const userFile = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
+      kind: 'user-file'
+    })
+    const fromDocA = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
+      kind: 'document-resource',
+      documentPath: '/tmp/a.md'
+    })
+    const fromDocB = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
+      kind: 'document-resource',
+      documentPath: '/other/b.md'
+    })
+
+    expect(new Set([userFile, fromDocA, fromDocB, getLocalImageCacheKey('/tmp/a.png')]).size).toBe(
+      4
+    )
+  })
+})
+
+describe('useLocalImageSrc runtime owner', () => {
+  const imageSrc = 'diagram.png'
+  const documentPath = '/repo/docs/readme.md'
+
+  function sshOwner(overrides: Partial<RuntimeFileOperationArgs> = {}): RuntimeFileOperationArgs {
+    return {
+      target: { kind: 'local' as const },
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 1,
+      ...overrides
+    }
+  }
+
+  function OwnerProbe({
+    onRender,
+    runtimeContext
+  }: {
+    onRender: (displaySrc: string | undefined) => void
+    runtimeContext: RuntimeFileOperationArgs
+  }): null {
+    onRender(useLocalImageSrc(imageSrc, documentPath, null, runtimeContext))
+    return null
+  }
+
+  // Release on owner-object changes so the probe’s pin alone must keep the displayed URL alive.
+  function ReleaseOnOwnerObject({
+    runtimeContext
+  }: {
+    runtimeContext: RuntimeFileOperationArgs
+  }): null {
+    useEffect(() => {
+      const key = getLocalImageSrcCacheKey(imageSrc, documentPath, null, runtimeContext)
+      return () => {
+        if (key) {
+          releaseLocalImageSrcByKey(key)
+        }
+      }
+    }, [runtimeContext])
+    return null
+  }
+
+  function renderOwner(
+    root: Root,
+    runtimeContext: RuntimeFileOperationArgs,
+    onRender: (displaySrc: string | undefined) => void
+  ): void {
+    root.render(
+      createElement(
+        Fragment,
+        null,
+        createElement(OwnerProbe, { onRender, runtimeContext }),
+        createElement(ReleaseOnOwnerObject, { runtimeContext })
+      )
+    )
+  }
+
+  it('keeps its pin and URL when an equal runtime context is rebuilt', async () => {
+    const readFile = vi.fn().mockResolvedValue(binaryPreview())
+    let nextUrl = 0
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:owner-${++nextUrl}`)
+    setReadFile(readFile)
+    const renders: (string | undefined)[] = []
+    const onRender = (displaySrc: string | undefined): void => {
+      renders.push(displaySrc)
+    }
+
+    const container = document.createElement('div')
+    const root: Root = createRoot(container)
+    await act(async () => {
+      renderOwner(root, sshOwner(), onRender)
+      await flushPromises()
+    })
+    expect(renders.at(-1)).toBe('blob:owner-1')
+
+    for (let update = 0; update < 3; update += 1) {
+      await act(async () => {
+        renderOwner(root, sshOwner(), onRender)
+        await flushPromises()
+      })
+    }
+
+    expect(readFile).toHaveBeenCalledOnce()
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    expect(new Set(renders.filter(Boolean))).toEqual(new Set(['blob:owner-1']))
+    root.unmount()
+  })
+
+  it.each([
+    ['an SSH reconnect', { expectedSshConnectionGeneration: 2 }],
+    ['another worktree', { worktreeId: 'wt-2', worktreePath: '/repo-2' }]
+  ])('re-reads the image after %s changes its owner', async (_label, change) => {
+    const readFile = vi.fn().mockResolvedValue(binaryPreview())
+    let nextUrl = 0
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:owner-${++nextUrl}`)
+    setReadFile(readFile)
+    const renders: (string | undefined)[] = []
+    const onRender = (displaySrc: string | undefined): void => {
+      renders.push(displaySrc)
+    }
+
+    const container = document.createElement('div')
+    const root: Root = createRoot(container)
+    await act(async () => {
+      renderOwner(root, sshOwner(), onRender)
+      await flushPromises()
+    })
+    expect(renders.at(-1)).toBe('blob:owner-1')
+
+    await act(async () => {
+      renderOwner(root, sshOwner(change), onRender)
+      await flushPromises()
+    })
+
+    expect(readFile).toHaveBeenCalledTimes(2)
+    expect(renders.at(-1)).toBe('blob:owner-2')
+    root.unmount()
   })
 })

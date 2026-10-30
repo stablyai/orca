@@ -23,6 +23,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     values
       ? Object.entries(values).reduce(
@@ -121,6 +122,20 @@ describe('resource manager row presentation', () => {
     expect(killButtons).toHaveLength(2)
     expect(container.querySelector('button[aria-label="Kill session ssh-a"]')).not.toBeNull()
     expect(container.querySelector('button[aria-label="Kill session ssh-b"]')).not.toBeNull()
+  })
+
+  it("names the server and offers no kill on a paired server's own samples", () => {
+    renderWorktreeRow(
+      makeWorktree({
+        isRemote: true,
+        hostLabel: 'Lab box',
+        sessions: [makeSession({ sessionId: 'server-a', bound: false, readOnly: true })]
+      })
+    )
+
+    expect(container.textContent).toContain('· Lab box')
+    expect(container.textContent).not.toContain('· remote')
+    expect(container.querySelector('button[aria-label^="Kill session"]')).toBeNull()
   })
 
   it('keeps kill affordances on the orphan bucket rows', () => {

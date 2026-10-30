@@ -3,7 +3,8 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -70,9 +71,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
-    // Why no layout write: a ref is this client's only pointer to a local scrollback file, so the
-    // rebuild carries it for every leaf the host still names. The rebuilt layout then equals the
-    // stored one and the write bails out instead of dropping the ref.
+    // Carry each surviving leaf’s local scrollback ref; unchanged rebuilt layouts then bail without dropping the only disk pointer.
     expect(patch.terminalLayoutsByTabId).toBeUndefined()
   })
 

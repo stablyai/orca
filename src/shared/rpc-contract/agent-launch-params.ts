@@ -1,42 +1,34 @@
-/**
- * The wire shape of `agent.launch`, mirroring `AgentLaunchIntent`.
- *
- * A caller states WHERE the agent lands and WHAT it should say; it never names a mode. There is
- * deliberately no `structured` / `terminal` field and no startup-agent field on the create
- * payload — the host decides, and `withoutReservedAgentCreateFields` strips a stale one out of a
- * payload a caller migrated over from `worktree.create`.
- *
- * Shared rather than main-side because every field resolves to a shared schema: a remote client
- * that sends this method needs `RpcSendParams<'agent.launch'>` to exist, and a method missing from
- * the catalog can only be sent through the raw request port.
- */
+/** Shared agent.launch schema lets remote clients use typed RpcSendParams.
+ * The host honors an explicit surface or refuses it; migrated worktree.create startup-agent fields are stripped. */
 
+import { AGENT_LAUNCH_SURFACES } from '../agent-launch-surface'
 import { z } from 'zod'
+import { isAgentSessionOptions } from '../agent-session-record'
 import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
+import { parsePaneKey } from '../stable-pane-id'
+import { isValidHostTerminalTabId } from '../terminal-tab-id'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import { WorktreeCreate } from './worktree-create-params'
+import { FolderWorkspaceCreate } from './folder-workspace-params'
+import { LaunchSourceParam } from './launch-source-param'
+import { TerminalTabIdParam } from './agent-session-params'
+import { SessionId } from './structured-agent-session-params'
+import { isStructuredAgentSessionIdFor } from '../structured-agent-session-create'
+import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
-const LaunchAgent = z
+const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })
+
+/** A layout id the caller may get wrong without failing the launch: anything but a string is dropped. */
+const tolerantTabLayoutId = z
   .unknown()
-  .superRefine((value, ctx) => {
-    if (!isTuiAgent(value)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Unknown TUI agent' })
-    }
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the superRefine above rejects anything isTuiAgent refuses, so the transform only ever runs on a TuiAgent.
-  .transform((value): TuiAgent => value as TuiAgent)
+  .transform((value): string | undefined => (typeof value === 'string' ? value : undefined))
+  .optional()
 
-export const AgentLaunch = z.object({
+export const AgentLaunchFields = z.object({
   agent: LaunchAgent,
-  /**
-   * Names this launch so a retry replays instead of starting a second agent.
-   *
-   * Optional, and optional forever: shipped mobile sends none, and a host that required one would
-   * refuse every live client. Its absence is not a silent downgrade to a weaker guarantee — it is
-   * the caller declining the guarantee, and the host must never mint an id on a caller's behalf
-   * after an ambiguous launch, because an id minted on the retry is a brand new operation.
-   */
+  /** Caller-minted retry identity; optional forever for shipped clients. Never mint after an ambiguous launch:
+   * a fresh ID on retry would create another operation instead of replaying. */
   operationId: z
     .string()
     .refine(
@@ -52,9 +44,13 @@ export const AgentLaunch = z.object({
     }),
     z.object({
       kind: z.literal('create-worktree'),
-      /** The `worktree.create` request verbatim, so a caller migrating to this method keeps its
-       *  existing payload; the agent fields in it are stripped rather than honoured. */
+      /** Preserve the worktree.create payload while stripping its migrated agent fields. */
       create: WorktreeCreate
+    }),
+    z.object({
+      kind: z.literal('create-folder-workspace'),
+      /** The `folderWorkspace.create` request verbatim; its `createdWithAgent` is the launch's own. */
+      create: FolderWorkspaceCreate
     })
   ]),
   prompt: z
@@ -63,27 +59,77 @@ export const AgentLaunch = z.object({
       delivery: z.enum(['submit', 'draft'])
     })
     .optional(),
-  /** Only the seedable string options a structured create accepts; a terminal launch ignores them. */
+  /** A chat seeds the options it accepts; a terminal launch reads the model, effort and mode. */
   sessionOptions: z.record(z.string(), z.string()).optional(),
+  /** A saved launch choice; absent `sessionOptions`, a terminal applies it as flags too. */
+  chatOptions: z.record(z.string(), z.string()).refine(isAgentSessionOptions).optional(),
   reuseTerminal: z.object({ handle: z.string().min(1, 'Missing terminal handle') }).optional(),
   /** Nullable on purpose: `null` is "no arguments", absent is "use the settings default". */
   agentArgs: z.string().nullable().optional(),
-  /** A start directory other than the workspace root. Terminal-only, and the host downgrades a
-   *  structured launch that carries one rather than ignoring it. */
+  /** Terminal-only cwd; structured launches downgrade rather than silently ignoring it. */
   cwd: z.string().min(1, 'Empty launch cwd').optional(),
-  /**
-   * Telemetry attribution, deliberately `z.string()` rather than the closed `launchSourceSchema`.
-   *
-   * Params are validated by the HOST, so a closed enum here is a version claim pointing the wrong
-   * way: a newer client naming a launch surface an older host has never heard of would have its
-   * whole launch refused over a label nothing reads as behaviour. Bookkeeping must not gate a user
-   * action, so the arm set stays open here and the host parses it leniently at the point it is
-   * actually used — the same `safeParse`-and-skip the PTY spawn already does.
-   */
-  launchSource: z.string().optional()
+  launchSource: LaunchSourceParam.optional(),
+  /** Caller reserves identity, not placement; validate verbatim adoption so reservations match.
+   * Structured launches use its tab half as tabId; reused terminals ignore it. paneKey reports the actual pane.
+   * Tab IDs span workspaces, so mint a fresh UUID per launch. */
+  paneKey: z
+    .string()
+    .refine((value) => {
+      const pane = parsePaneKey(value)
+      return (
+        pane !== null &&
+        pane.tabId === pane.tabId.trim() &&
+        TerminalTabIdParam.safeParse(pane.tabId).success &&
+        isValidHostTerminalTabId(pane.tabId)
+      )
+    }, 'Malformed launch pane key')
+    .optional(),
+  /** Caller-reserved chat ID; refuse duplicates, ignore for terminal outcomes. The returned sessionId is authoritative. */
+  sessionId: SessionId.optional(),
+  /** View-only placement is outside replay identity and never fails launch: fall back from missing group to
+   * anchor group, then active group; drop unknown keys. Requires agent.launch.placement.v1; receipt reports placement. */
+  placement: z
+    .object({ groupId: tolerantTabLayoutId, afterTabId: tolerantTabLayoutId })
+    .optional()
+    .catch(undefined),
+  /** focused selects the tab; background leaves selection; absent reveals as before. Caller navigation defaults
+   * keep paired-device selection local. View-only, outside replay identity; unknown words read as absent. */
+  presentation: z
+    .unknown()
+    .transform((value): 'focused' | 'background' | undefined =>
+      value === 'focused' || value === 'background' ? value : undefined
+    )
+    .optional(),
+  /** Desktop-prepared Claude/Codex home for WSL orcad without account services. Terminal-only; chat warns and
+   * keeps its host home. Optional forever, outside replay identity; old hosts strip it and use their default. */
+  accountEnv: AgentLaunchAccountEnv.optional(),
+  /** Forward the launching user’s chat default when host settings belong to someone else (e.g. relayed phone).
+   * Explicit surface overrides it; feasibility still decides. Outside replay identity; old hosts use their own default. */
+  nativeChatDefault: z.boolean().optional(),
+  /** Explicit terminal runs CLI; proven-unsupported chat refuses before creation. Inside replay identity; unknown
+   * values refuse. Clients must gate on agent.launch.surface.v1 because older hosts strip this field. */
+  surface: z.enum(AGENT_LAUNCH_SURFACES).optional()
 })
+
+/** Caller IDs must retain the agent lane encoded by host-minted IDs. */
+function refuseSessionIdForAnotherAgent(
+  launch: { agent: string; sessionId?: string | undefined },
+  ctx: z.RefinementCtx
+): void {
+  if (launch.sessionId && !isStructuredAgentSessionIdFor(launch.agent, launch.sessionId)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['sessionId'],
+      message: 'Launch session id must be named for its agent'
+    })
+  }
+}
+
+export const AgentLaunch = AgentLaunchFields.superRefine(refuseSessionIdForAnotherAgent)
 
 export type AgentLaunchParams = z.infer<typeof AgentLaunch>
 
 // A distinct method prevents an older receiver from silently dropping the replay requirement.
-export const AgentLaunchReplay = AgentLaunch.required({ operationId: true })
+export const AgentLaunchReplay = AgentLaunchFields.required({ operationId: true }).superRefine(
+  refuseSessionIdForAnotherAgent
+)

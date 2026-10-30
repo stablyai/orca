@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useNow } from '@/hooks/use-now'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import { selectReviewCacheEntry } from '../review-cache-entry-selection'
 import { selectChecksPanelReview, type ChecksPanelReview } from '../checks-panel-review'
 import { isGitLabChecksPanelReview } from './gitlab-review-client'
@@ -27,10 +28,8 @@ type ChecksPanelContextStateInput = Pick<
   | 'commentResolutionLaunchAcceptedRef'
   | 'conflictSummaryRefreshKeyRef'
   | 'createPrInFlightRef'
-  | 'isPanelVisible'
   | 'panelContextKey'
   | 'panelContextKeyRef'
-  | 'panelVisibleSinceRef'
   | 'pendingCommentResolutionRef'
   | 'pollIntervalRef'
   | 'prevChecksRef'
@@ -72,10 +71,8 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     commentResolutionLaunchAcceptedRef,
     conflictSummaryRefreshKeyRef,
     createPrInFlightRef,
-    isPanelVisible,
     panelContextKey,
     panelContextKeyRef,
-    panelVisibleSinceRef,
     pendingCommentResolutionRef,
     pollIntervalRef,
     prevChecksRef,
@@ -123,12 +120,10 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     [clearTitleInputFocusTimer]
   )
 
-  // Why: no key={worktreeId} remount (caused an IPC storm on Windows); reset branch-specific state during render (not useEffect) so it lands on the same paint.
+  // Reset during render for the same paint; key-based remounting caused Windows IPC storms.
   const [prevPanelContextKey, setPrevPanelContextKey] = useState(panelContextKey)
   const [prRefreshStateNow, setPrRefreshStateNow] = useState(() => Date.now())
-  // Why: eligibility expires on wall time, independently of the PR refresh-state
-  // timers, so the freshness gate needs its own tick. ChecksPanel is unmounted
-  // (not hidden) when the panel closes, so the clock needs no visibility gate.
+  // Eligibility expires on wall time; tick separately from PR timers while this mounted panel is open.
   const panelClockNow = useNow(30_000)
   if (panelContextKey !== prevPanelContextKey) {
     setPrevPanelContextKey(panelContextKey)
@@ -148,8 +143,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setCreatePrError(null)
     setIsPublishingBranch(false)
     setAgentComposerState(null)
-    // Why: an accepted launch owns its snapshotted payload; only unaccepted queues drop here.
-    // Ref clears run in the panelContextKey effect below (React render must stay pure).
+    // Accepted launches retain their snapshot; clear only unaccepted queues, with ref writes deferred to the context effect.
     if (!commentResolutionLaunchAcceptedRef.current) {
       setCommentResolutionAckBusyNow(false)
       clearPendingPRCommentAiAck()
@@ -200,10 +194,12 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     refreshContextKeyRef.current = refreshContextKey
     refreshRequestKeyRef.current = null
   }
-  // Why: background PR refreshes replace the cache map; Checks only renders the entry for the active repo and branch.
+  // Background refresh replaces the whole cache map; subscribe only to this repo/branch entry.
   const prCacheEntry = useAppStore((s) => selectReviewCacheEntry(s.prCache, prCacheKey || null))
-  const pr: PRInfo | null = prCacheEntry?.data ?? null
-  const prCachedHasPR = prCacheEntry ? prCacheEntry.data !== null : null
+  const pr: PRInfo | null = isStaleMergedGitHubReviewForHead(prCacheEntry, activeWorktree?.head)
+    ? null
+    : (prCacheEntry?.data ?? null)
+  const prCachedHasPR = prCacheEntry ? pr !== null : null
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
@@ -214,7 +210,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     activeWorktree?.linkedAzureDevOpsPR ??
     activeWorktree?.linkedGiteaPR ??
     null
-  // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from metadata or cache whenever we have one.
+  // Branch lookup loses fork/deleted-head PRs; prefer known review numbers from metadata/cache.
   const linkedPR = activeWorktree?.linkedPR ?? null
   const suppressedGitHubPR = activeWorktree?.suppressedGitHubPR ?? null
   const fallbackGitHubPRNumber = linkedPR == null ? (pr?.number ?? null) : null
@@ -263,7 +259,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
         if (!token) {
           return
         }
-        // Why: time alone doesn't publish Zustand updates; this timeout clears abandoned refresh UI without treating expiry as no-PR evidence.
+        // Time alone emits no Zustand updates; clear abandoned refresh UI without asserting PR absence.
         recordChecksPanelPRRefreshBreadcrumb({
           event: 'stale_cleared',
           provider: 'github',
@@ -292,15 +288,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     repo?.id
   ])
 
-  useEffect(() => {
-    if (!isPanelVisible) {
-      panelVisibleSinceRef.current = null
-      return
-    }
-    panelVisibleSinceRef.current = Date.now()
-  }, [isPanelVisible, panelContextKey, panelVisibleSinceRef])
-
-  // Why: drop unaccepted launch payloads when the panel switches context (refs stay pure in render).
+  // Clear unaccepted payload refs in the effect to keep render pure.
   useEffect(() => {
     if (commentResolutionLaunchAcceptedRef.current) {
       return
@@ -314,7 +302,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     pendingCommentResolutionRef
   ])
 
-  // Record the latest hard refresh error, kept sticky so a background auto-retry can't silently re-enable Create while lookup is impossible.
+  // Keep hard errors sticky across retries so Create stays blocked until qualifying eligibility clears them.
   useEffect(() => {
     const errorType = prRefreshState?.status === 'error' ? prRefreshState.errorType : undefined
     if (!isChecksPanelHardRefreshErrorType(errorType)) {

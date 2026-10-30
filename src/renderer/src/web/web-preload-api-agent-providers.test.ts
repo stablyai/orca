@@ -25,9 +25,11 @@ describe('web native chat preload API', () => {
       timestamp: 42,
       source: 'transcript' as const
     }
+    let readCall: { method: string; params: unknown } | undefined
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
-        call(): Promise<RuntimeRpcResponse<unknown>> {
+        call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          readCall = { method, params }
           return Promise.resolve({
             id: 'read-1',
             ok: true,
@@ -70,6 +72,10 @@ describe('web native chat preload API', () => {
         lifecycle
       }
     )
+    expect(readCall).toMatchObject({
+      method: 'nativeChat.readSession',
+      params: { capabilities: { transcriptSourceOrder: 1 } }
+    })
     const frames: unknown[] = []
     globals.window.api.nativeChat.subscribe(
       { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1' },
@@ -130,15 +136,15 @@ describe('web native chat preload API', () => {
     )
     await Promise.resolve()
 
-    expect(subscribeParams).toMatchObject({ capabilities: { transcriptPending: 1 } })
+    expect(subscribeParams).toMatchObject({
+      capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+    })
 
     // The host's unflushed-transcript frame, then the flush that follows it.
     deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })
     deliver({ type: 'snapshot', messages: [message] })
 
-    // Dropping `pending` would settle an empty read as the session's history.
-    // hasMore proves the pending frame did not consume the initial slot — only
-    // the initial branch infers a filled window from the limit.
+    // Pending is not settled history; hasMore proves only the later initial frame infers a full window from the limit.
     expect(frames).toEqual([
       { type: 'snapshot', messages: [], hasMore: false, pending: true },
       { type: 'snapshot', messages: [message], hasMore: true }
@@ -155,25 +161,43 @@ describe('web MiniMax preload API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps OpenCode Go credential operations local to the desktop', async () => {
+    const { api } = await installApi('Linux')
+    await expect(api.opencodeGoCredentials.getStatus()).resolves.toEqual({
+      apiKeyConfigured: false
+    })
+    await expect(api.opencodeGoCredentials.saveApiKey('fake-key')).rejects.toThrow(/desktop app/i)
+    await expect(api.opencodeGoCredentials.clearApiKey()).resolves.toEqual({
+      apiKeyConfigured: false
+    })
+  })
+
   it('exposes desktop-only MiniMax credential reads as unconfigured and rejects saves', async () => {
     const { api } = await installApi('Linux')
 
     await expect(api.minimaxCredentials.getStatus()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
+      cookieProtection: null,
+      apiKeyProtection: null
     })
     await expect(api.minimaxCredentials.saveCookie('_token=abc')).rejects.toThrow(/desktop app/i)
     await expect(api.minimaxCredentials.clearCookie()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      cookieProtection: null,
+      apiKeyProtection: null
     })
     await expect(api.minimaxCredentials.saveApiKey('sk-test')).rejects.toThrow(/desktop app/i)
     await expect(api.minimaxCredentials.clearApiKey()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      cookieProtection: null,
+      apiKeyProtection: null
     })
   })
 })

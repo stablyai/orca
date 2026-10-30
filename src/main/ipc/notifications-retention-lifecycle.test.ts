@@ -29,6 +29,7 @@ vi.mock('../tray/system-tray', async () =>
 )
 
 import { registerNotificationHandlers } from './notifications'
+import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
 
 // These cases exercise foreground behavior against Electron mocks.
 beforeEach(() => {
@@ -87,7 +88,7 @@ describe('registerNotificationHandlers', () => {
     expect(
       await handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1', paneKey })
     ).toEqual({ delivered: true })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
     getNotificationEventHandler('click')()
 
@@ -113,6 +114,99 @@ describe('registerNotificationHandlers', () => {
     })
   })
 
+  it('reveals the chat tab for a structured session click, where no PTY leaf exists', async () => {
+    const webContentsSend = vi.fn()
+    const mainWindow = {
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: { send: webContentsSend }
+    }
+    getTrustedUIRendererWindowMock.mockReturnValue(mainWindow)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    // Use real pane-key minting to cover the chat's actual synthetic leaf.
+    const paneKey = structuredAgentSessionPaneKey('chat-tab', 'session-abc')
+    const handler = getDispatchHandler()
+    expect(
+      await handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          surface: 'agent-session',
+          worktreeId: 'repo::wt1',
+          paneKey
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    getNotificationEventHandler('click')()
+
+    expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
+      repoId: 'repo',
+      worktreeId: 'repo::wt1'
+    })
+    expect(webContentsSend).toHaveBeenCalledWith('ui:focusEditorTab', {
+      tabId: 'chat-tab',
+      worktreeId: 'repo::wt1',
+      userInitiated: true
+    })
+    expect(webContentsSend).not.toHaveBeenCalledWith('ui:focusTerminal', expect.anything())
+  })
+
+  it('reveals a chat in a folder workspace, whose id carries no repo to activate', async () => {
+    const webContentsSend = vi.fn()
+    getTrustedUIRendererWindowMock.mockReturnValue({
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: { send: webContentsSend }
+    })
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    await getDispatchHandler()(
+      {},
+      {
+        source: 'agent-task-complete',
+        surface: 'agent-session',
+        worktreeId: 'folder:fw-1',
+        paneKey: structuredAgentSessionPaneKey('chat-tab', 'session-abc')
+      }
+    )
+    getNotificationEventHandler('click')()
+
+    expect(webContentsSend).toHaveBeenCalledWith('ui:focusEditorTab', {
+      tabId: 'chat-tab',
+      worktreeId: 'folder:fw-1',
+      userInitiated: true
+    })
+    expect(webContentsSend).not.toHaveBeenCalledWith('ui:activateWorktree', expect.anything())
+  })
+
   it('clears the retained notification fallback timer when the native notification closes', async () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -127,7 +221,7 @@ describe('registerNotificationHandlers', () => {
 
     const handler = getDispatchHandler()
     expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
     const closeHandler = getNotificationEventHandler('close')
     closeHandler()
@@ -152,7 +246,7 @@ describe('registerNotificationHandlers', () => {
 
       const handler = getDispatchHandler()
       expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
-      expect(vi.getTimerCount()).toBe(1)
+      expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
       const failedHandler = getNotificationEventHandler('failed')
       failedHandler({}, 'Application is not code signed')
@@ -207,8 +301,7 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
 
     const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
-    // Why: the darwin authorization gate resolves before the notification is
-    // created, so flush microtasks before grabbing its event listeners.
+    // Resolve async authorization before reading notification listeners.
     await vi.advanceTimersByTimeAsync(0)
     const showHandler = getNotificationOnceEventHandler('show')
     const failedHandler = getNotificationOnceEventHandler('failed')

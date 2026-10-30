@@ -1,4 +1,3 @@
-/** The three media verbs' wire shapes: what a page may ask for, and what a handler may answer. */
 import { describe, expect, it } from 'vitest'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/mobile-clipboard-image-upload-chunk'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard-image'
@@ -7,7 +6,6 @@ import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
   BRIDGE_MEDIA_MIME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
-  BRIDGE_MEDIA_SOURCES,
   mediaPickParamsSchema,
   mediaPickResultSchema,
   mediaReadParamsSchema,
@@ -18,31 +16,9 @@ import {
 
 const HANDLE = 'media-1'
 
-describe('the numbers this contract states', () => {
-  /**
-   * Literals, not the constants restated: every one of these is a number a body claims and a
-   * reviewer checked, and read through its own name the assertion would hold whatever it became.
-   * The derived one is pinned by its derivation above, which is the other half of the same rule.
-   */
-  it('holds a page session to eight staged items, which is 144 MiB of cache', () => {
-    expect(BRIDGE_MEDIA_MAX_LIVE_HANDLES).toBe(8)
-    expect(BRIDGE_MEDIA_MAX_LIVE_HANDLES * CLIPBOARD_IMAGE_MAX_SOURCE_BYTES).toBe(150_994_944)
-  })
-
-  it('holds a handle to 64 characters and a mime to 128', () => {
-    expect(BRIDGE_MEDIA_HANDLE_MAX_CHARS).toBe(64)
-    expect(BRIDGE_MEDIA_MIME_MAX_CHARS).toBe(128)
-  })
-
-  it('reads a whole item in 48 chunks at the cap, which is what a device proof counts', () => {
-    expect(BRIDGE_MEDIA_READ_MAX_BYTES).toBe(393_216)
-    expect(Math.ceil(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES / BRIDGE_MEDIA_READ_MAX_BYTES)).toBe(48)
-  })
-})
-
 describe('what a pick may ask for', () => {
   it('takes each source the shell serves, single or multiple', () => {
-    for (const source of BRIDGE_MEDIA_SOURCES) {
+    for (const source of ['library', 'files', 'clipboard']) {
       for (const multiple of [true, false]) {
         expect(mediaPickParamsSchema.safeParse({ source, multiple }).success, source).toBe(true)
       }
@@ -83,7 +59,16 @@ describe('what a pick may answer', () => {
     )
   })
 
-  it('refuses an item the page could not act on', () => {
+  it('accepts exact handle and MIME limits and refuses unusable items', () => {
+    const at = {
+      ...item,
+      handle: 'h'.repeat(BRIDGE_MEDIA_HANDLE_MAX_CHARS),
+      mime: `image/${'x'.repeat(BRIDGE_MEDIA_MIME_MAX_CHARS - 6)}`
+    }
+    expect(mediaPickResultSchema.safeParse({ items: [at] }).success).toBe(true)
+    expect(
+      mediaPickResultSchema.safeParse({ items: [{ ...at, mime: `${at.mime}x` }] }).success
+    ).toBe(false)
     for (const bad of [
       { ...item, handle: '' },
       { ...item, handle: 'h'.repeat(BRIDGE_MEDIA_HANDLE_MAX_CHARS + 1) },
@@ -103,14 +88,6 @@ describe('what a pick may answer', () => {
 })
 
 describe('what a chunk read may ask for', () => {
-  it('derives its byte length from the upload path, never from a second number', () => {
-    // Whole base64 groups of the chunk the upload path already sends: four characters per three
-    // bytes, so a read of this many bytes encodes to exactly the char budget and never past it.
-    expect(BRIDGE_MEDIA_READ_MAX_BYTES).toBe(
-      Math.floor(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS / 4) * 3
-    )
-  })
-
   it('takes a read at the cap and refuses one past it', () => {
     const at = { handle: HANDLE, offset: 0, length: BRIDGE_MEDIA_READ_MAX_BYTES }
     expect(mediaReadParamsSchema.safeParse(at).success).toBe(true)

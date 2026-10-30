@@ -45,6 +45,7 @@ export function SessionHistorySettingsPane({
   const isWebClient = isWebClientLocation()
   const closeSettingsPage = useAppStore((state) => state.closeSettingsPage)
   const showAiVaultSearch = useAppStore((state) => state.showAiVaultSearch)
+  const markFeatureTipsSeen = useAppStore((state) => state.markFeatureTipsSeen)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
@@ -76,7 +77,6 @@ export function SessionHistorySettingsPane({
     environment
   }))
   const orderedServers = orderSessionSearchServers(serverEntries)
-  // The button's whole reason to exist: a paired server this client could switch on right now.
   const enableableServers = serverEntries.filter((entry) =>
     isTurnOnableSessionSearchState(entry.state)
   )
@@ -91,6 +91,10 @@ export function SessionHistorySettingsPane({
   )
 
   function writePolicy(updates: Partial<typeof policy>): Promise<void> {
+    if (updates.enabled !== undefined) {
+      // Changing search proves discovery; later disabling it must not re-offer the tip.
+      markFeatureTipsSeen(['agent-session-search'])
+    }
     return updateSettings({
       aiVaultSearch: AiVaultSearchSettingsSchema.parse({ ...policy, ...updates })
     })
@@ -116,7 +120,7 @@ export function SessionHistorySettingsPane({
     return save({ enabled: !policy.enabled })
   }
 
-  /** Remembers nothing: what it acts on is read off the rows at the moment it is clicked. */
+  /** Act on current row state without persisting a separate enable-all preference. */
   async function enableOnAllComputers(): Promise<void> {
     setBusy(true)
     setError(null)
@@ -128,7 +132,7 @@ export function SessionHistorySettingsPane({
           setError(saveErrorMessage())
         }
       }
-      // One host at a time: a failure is that host's, and it must not stop the rest.
+      // Handle hosts serially and keep one failure from stopping the rest.
       for (const entry of enableableServers) {
         try {
           await window.api.aiVault.setSearchEnabled(toRuntimeExecutionHostId(entry.id), true)
@@ -157,7 +161,7 @@ export function SessionHistorySettingsPane({
     return mounted.current
   }
 
-  // A stale answer from before the switch went off must not keep reporting progress.
+  // Disabled search must not display progress from an earlier status response.
   const localStatus = policy.enabled ? localRead.status : null
   let localStatusText: string | undefined
   if (policy.enabled) {
@@ -186,7 +190,6 @@ export function SessionHistorySettingsPane({
               )}
         </p>
       </div>
-      {/* Nothing left to switch on means nothing to offer: each row already speaks for itself. */}
       {enableableServers.length === 0 ? null : (
         <div className="flex items-center justify-end pt-2">
           <Button

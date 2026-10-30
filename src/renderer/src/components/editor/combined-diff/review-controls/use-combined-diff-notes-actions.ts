@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { translate } from '@/i18n/i18n'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffCommentsClearOptions } from '@/store/slices/diffComments'
 
 export type CombinedDiffNotesActions = {
   clearNotesDialogVisible: boolean
@@ -19,10 +20,12 @@ export type CombinedDiffNotesActions = {
 export function useCombinedDiffNotesActions({
   clearDiffComments,
   diffCommentsForWorktree,
+  markdownReviewNotesEnabled,
   worktreeId
 }: {
-  clearDiffComments: (worktreeId: string) => Promise<boolean>
+  clearDiffComments: (worktreeId: string, options?: DiffCommentsClearOptions) => Promise<boolean>
   diffCommentsForWorktree: DiffComment[]
+  markdownReviewNotesEnabled: boolean
   worktreeId: string
 }): CombinedDiffNotesActions {
   const diffCommentCount = diffCommentsForWorktree.length
@@ -42,14 +45,13 @@ export function useCombinedDiffNotesActions({
   const [isClearingNotes, setIsClearingNotes] = useState(false)
   const clearNotesDialogVisible = clearNotesDialogOpen && (diffCommentCount > 0 || isClearingNotes)
   if (clearNotesDialogOpen && !clearNotesDialogVisible) {
-    // Why: notes may be cleared outside this dialog; close it this render instead of flashing an empty confirmation.
+    // External note clearing must close the dialog before an empty confirmation can paint.
     setClearNotesDialogOpen(false)
   }
   const [notesCopied, setNotesCopied] = useState(false)
   const mountedRef = useRef(true)
-  // Why: the copy action owns its reset timer instead of repairing copied state after render.
   const notesCopiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after unmount; skip copied feedback rather than start a reset timer on a stale viewer.
+  // Clipboard IPC may settle after unmount; do not start an orphan feedback timer.
   const notesCopyMountedRef = useRef(false)
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export function useCombinedDiffNotesActions({
     (mounted: boolean): void => {
       notesCopyMountedRef.current = mounted
       if (!mounted) {
-        // Why: copied feedback is tied to the surface lifetime; the root-ref unmount is where stale feedback gets disabled.
+        // Disable stale copy feedback and cancel its timer at root detach.
         clearNotesCopiedResetTimer()
       }
     },
@@ -103,7 +105,9 @@ export function useCombinedDiffNotesActions({
     }
     setIsClearingNotes(true)
     try {
-      const ok = await clearDiffComments(worktreeId)
+      const ok = await clearDiffComments(worktreeId, {
+        keepMarkdownNotes: !markdownReviewNotesEnabled
+      })
       if (!mountedRef.current) {
         return
       }
@@ -122,7 +126,7 @@ export function useCombinedDiffNotesActions({
         setIsClearingNotes(false)
       }
     }
-  }, [clearDiffComments, diffCommentCount, isClearingNotes, worktreeId])
+  }, [clearDiffComments, diffCommentCount, isClearingNotes, markdownReviewNotesEnabled, worktreeId])
 
   return {
     clearNotesDialogVisible,

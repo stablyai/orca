@@ -1,10 +1,14 @@
+import {
+  filenameContainsSeparatorVariant,
+  matchQuickOpenSeparatorAlternatives
+} from './quick-open-separator-match'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 import { compareFileNames } from './file-name-sort'
 
 export const QUICK_OPEN_RESULT_LIMIT = 50
 export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
 export const QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS = 256
-export const QUICK_OPEN_SEARCH_VERSION = 1
+export const QUICK_OPEN_SEARCH_VERSION = 3
 
 export type QuickOpenIndexedFile = {
   path: string
@@ -21,6 +25,8 @@ export type QuickOpenSearchResult = {
 export function prepareQuickOpenFiles(files: readonly string[]): QuickOpenIndexedFile[] {
   return files.map((path, inputIndex) => prepareQuickOpenFile(path, inputIndex))
 }
+
+const identifierBoundaries = new WeakMap<QuickOpenIndexedFile, ReadonlySet<number>>()
 
 const preparedQuickOpenFiles = new WeakMap<readonly string[], QuickOpenIndexedFile[]>()
 
@@ -47,6 +53,13 @@ export function isQuickOpenRemoteQueryTooLarge(query: string): boolean {
   return query.length > QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS || isQuickOpenQueryTooLarge(query)
 }
 
+// Typing extends a query, and every term match is a greedy prefix walk, so a longer term can only
+// match a subset of a shorter term's files. Rescore just those instead of the whole listing.
+const lastMatches = new WeakMap<
+  readonly QuickOpenIndexedFile[],
+  { terms: readonly QuickOpenQueryTerm[]; matches: readonly QuickOpenIndexedFile[] }
+>()
+
 export function rankQuickOpenFiles(
   query: string,
   files: readonly QuickOpenIndexedFile[],
@@ -57,18 +70,32 @@ export function rankQuickOpenFiles(
   }
 
   const normalizedQuery = normalizeQuickOpenQuery(query)
+  const previous = lastMatches.get(files)
+  const candidates =
+    previous && narrowsQuickOpenQuery(previous.terms, normalizedQuery) ? previous.matches : files
   const results: QuickOpenRankedResult[] = []
-  for (const file of files) {
-    const score = normalizedQuery ? fuzzyMatchIndexedFile(normalizedQuery, file) : 0
-    if (score !== -1) {
+  const matches: QuickOpenIndexedFile[] = []
+  for (const file of candidates) {
+    const score = scoreQuickOpenTerms(normalizedQuery, file)
+    if (score !== null) {
+      matches.push(file)
       retainTopResult(results, { path: file.path, score, inputIndex: file.inputIndex }, limit)
     }
   }
+  lastMatches.set(files, { terms: normalizedQuery, matches })
   return finalizeResults(results)
 }
 
+/** True when every earlier term is a prefix of some new term, so new matches are a subset. */
+function narrowsQuickOpenQuery(
+  previous: readonly QuickOpenQueryTerm[],
+  next: readonly QuickOpenQueryTerm[]
+): boolean {
+  return previous.every(({ text }) => next.some((term) => term.text.startsWith(text)))
+}
+
 export class QuickOpenPathRanker {
-  private readonly normalizedQuery: string | null
+  private readonly normalizedQuery: readonly QuickOpenQueryTerm[] | null
   private readonly retained: QuickOpenRankedResult[] = []
   private inputIndex = 0
   private matchCount = 0
@@ -86,8 +113,8 @@ export class QuickOpenPathRanker {
     if (this.normalizedQuery === null) {
       return
     }
-    const score = this.normalizedQuery ? fuzzyMatchIndexedFile(this.normalizedQuery, file) : 0
-    if (score === -1) {
+    const score = scoreQuickOpenTerms(this.normalizedQuery, file)
+    if (score === null) {
       return
     }
     this.matchCount++
@@ -106,32 +133,109 @@ export class QuickOpenPathRanker {
   }
 }
 
-function normalizeQuickOpenQuery(query: string): string {
-  return query.trim().replace(/\\/g, '/').toLowerCase()
+type QuickOpenQueryTerm = { text: string; withoutSeparators: string | undefined }
+
+function normalizeQuickOpenQuery(query: string): readonly QuickOpenQueryTerm[] {
+  const terms = [...new Set(query.trim().replace(/\\/g, '/').toLowerCase().split(/\s+/))]
+    .filter(Boolean)
+    .sort()
+  return terms.map((text) => ({
+    text,
+    withoutSeparators:
+      text.includes('-') || text.includes('_') ? text.replace(/[-_]/g, '') : undefined
+  }))
+}
+
+function scoreQuickOpenTerms(
+  terms: readonly QuickOpenQueryTerm[],
+  file: QuickOpenIndexedFile
+): number | null {
+  let score = 0
+  for (const { text: term, withoutSeparators } of terms) {
+    let termScore = fuzzyMatchIndexedFile(term, file)
+    if (termScore === null && withoutSeparators !== undefined) {
+      const filenameStart = file.lowerPath.lastIndexOf('/') + 1
+      const parentStart = file.lowerPath.lastIndexOf('/', filenameStart - 2) + 1
+      const fallback =
+        fuzzyMatchIndexedFile(term, file, withoutSeparators) ??
+        fuzzyMatchIndexedFile(term, file, withoutSeparators, filenameStart) ??
+        fuzzyMatchIndexedFile(term, file, withoutSeparators, parentStart) ??
+        (fuzzyMatchIndexedFile(withoutSeparators, file) === null
+          ? null
+          : matchQuickOpenSeparatorAlternatives(
+              term,
+              file.lowerPath,
+              identifierBoundaries.get(file)
+            ))
+      termScore = fallback === null ? null : fallback + 10
+    }
+    if (termScore === null) {
+      return null
+    }
+    score += termScore
+  }
+  return score
 }
 
 function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexedFile {
   const searchPath = path.replace(/\\/g, '/')
   const lastSlash = searchPath.lastIndexOf('/')
-  return {
+  const file = {
     path,
     lowerPath: searchPath.toLowerCase(),
     lowerFilename: searchPath.slice(lastSlash + 1).toLowerCase(),
     inputIndex
   }
+  if (/[A-Z]/.test(searchPath)) {
+    const boundaries = new Set<number>()
+    let lowerOffset = 0
+    for (let index = 0; index < searchPath.length; index++) {
+      if (
+        index > 0 &&
+        /[A-Z]/.test(searchPath[index]) &&
+        (/[a-z0-9]/.test(searchPath[index - 1]) ||
+          (/[A-Z]/.test(searchPath[index - 1]) && /[a-z]/.test(searchPath[index + 1] ?? '')))
+      ) {
+        boundaries.add(lowerOffset)
+      }
+      lowerOffset += searchPath[index].toLowerCase().length
+    }
+    if (boundaries.size > 0) {
+      identifierBoundaries.set(file, boundaries)
+    }
+  }
+  return file
 }
 
-function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): number {
+function fuzzyMatchIndexedFile(
+  query: string,
+  file: QuickOpenIndexedFile,
+  queryWithoutSeparators?: string,
+  searchStart = 0
+): number | null {
+  const equivalentSeparators = queryWithoutSeparators !== undefined
   let qi = 0
   let score = 0
   let lastMatchIdx = -1
 
   while (qi < query.length) {
-    const next = lastMatchIdx + 1
-    const ti =
-      file.lowerPath[next] === query[qi] ? next : file.lowerPath.indexOf(query[qi], next + 1)
+    const next = lastMatchIdx === -1 ? searchStart : lastMatchIdx + 1
+    let ti = file.lowerPath[next] === query[qi] ? next : file.lowerPath.indexOf(query[qi], next + 1)
+    if (equivalentSeparators && (query[qi] === '-' || query[qi] === '_')) {
+      for (const separator of ['-', '_', ' ']) {
+        const alternate = file.lowerPath.indexOf(separator, next)
+        if (alternate !== -1 && (ti === -1 || alternate < ti)) {
+          ti = alternate
+        }
+      }
+      if (lastMatchIdx >= 0 && ti !== next && identifierBoundaries.get(file)?.has(next)) {
+        score += 2
+        qi++
+        continue
+      }
+    }
     if (ti === -1) {
-      return -1
+      return null
     }
     const gap = lastMatchIdx === -1 ? 0 : ti - lastMatchIdx - 1
     score += gap
@@ -139,7 +243,8 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
       ti > 0 &&
       (file.lowerPath[ti - 1] === '/' ||
         file.lowerPath[ti - 1] === '.' ||
-        file.lowerPath[ti - 1] === '-')
+        file.lowerPath[ti - 1] === '-' ||
+        (equivalentSeparators && file.lowerPath[ti - 1] === '_'))
     ) {
       score -= 5
     }
@@ -147,10 +252,12 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
     qi++
   }
 
-  if (qi < query.length) {
-    return -1
-  }
-  if (file.lowerFilename.includes(query)) {
+  if (
+    equivalentSeparators
+      ? filenameContainsSeparatorVariant(file.lowerFilename, query) ||
+        file.lowerFilename.includes(queryWithoutSeparators ?? query)
+      : file.lowerFilename.includes(query)
+  ) {
     score -= 100
   }
   return score

@@ -57,8 +57,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentStatusKind).toBe('live')
   })
 
-  // Closing a tab while its stream is parked runs dispose() with no effect cleanup left to pair
-  // with it, so unmount safety rests entirely on parking having already unsubscribed.
+  // Parked unmount has no effect cleanup left; parking must already have unsubscribed.
   it('leaves nothing subscribed when the pane unmounts while its stream is parked', async () => {
     const harness = createHarness()
     const closeStream = await openStreamAndConfirmReady(harness)
@@ -77,7 +76,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.subscribeAttempts).toBe(1)
   })
 
-  // STA-3483: the shipped bug was a single 500ms retry that never rescheduled.
   it('keeps retrying a dropped stream with backoff instead of stopping after one attempt', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -91,7 +89,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.subscribeAttempts).toBe(2)
     expect(harness.streams).toHaveLength(1)
 
-    // Why: the second attempt is the next backoff step (1000ms), not another 500ms tick.
     await vi.advanceTimersByTimeAsync(999)
     expect(harness.subscribeAttempts).toBe(2)
 
@@ -117,10 +114,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     )
   })
 
-  // Fix 2: a worktree the host reports as genuinely gone cannot come back on this connection, so
-  // retrying it is unbounded work with a permanent error toast. Note the code used here is one the
-  // host only sends about the thing itself — `selector_not_found` is deliberately excluded, because
-  // it also covers a resolution that merely failed right now.
   it('stops retrying when the runtime reports the stream target is gone', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -150,7 +143,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.subscribeAttempts).toBe(3)
   })
 
-  // Fix 3: a pane that healed itself must not keep showing the failure toast it recovered from.
   it('clears the failure a restart reported once the new stream goes live', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -167,7 +159,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentError).toBeNull()
   })
 
-  // A stream that lasted must forget prior failures, or the next drop inherits their backoff.
   it('backs off from scratch after a stream is confirmed live again', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -202,11 +193,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.streams[1].viewportWidth).toBe(1200)
   })
 
-  // waitForViewportSize can block for a few frames while the element is unmeasurable. An attempt
-  // superseded during that window used to resume and claim the stream token anyway, stranding the
-  // live stream: its 'ready' was then dropped as stale, and because one ready-deadline is kept per
-  // pane, the resuming attempt cancelled the safety net too. The pane sat in 'opening' with nothing
-  // pending — no retry, no reconnect, forever.
+  // A superseded viewport wait must not steal the live stream token or cancel its ready deadline when it resumes.
   it('drops an attempt superseded while it waited for the viewport', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -230,6 +217,21 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentStatusKind).toBe('live')
   })
 
+  it('restarts at the new size when the pane was resized while its stream was opening', async () => {
+    const harness = createHarness()
+    const subscribe = harness.holdNextSubscribe()
+    harness.lifecycle.open()
+    await settle()
+
+    harness.setViewportSize({ width: 1400, height: 900 })
+    expect(harness.lifecycle.restartForViewport('page-1')).toBe(false)
+    subscribe.release()
+    await settle()
+
+    expect(harness.streams.map((stream) => stream.viewportWidth)).toEqual([800, 1400])
+    expect(harness.streams[0].unsubscribeCount).toBe(1)
+  })
+
   it('ignores a viewport change that is within measurement jitter', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -241,7 +243,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.streams).toHaveLength(1)
   })
 
-  // Fix 1a: a superseded viewport restart must not clear busy for the operation that replaced it.
   it('does not clear busy when a superseded viewport restart resolves with no stream', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -264,7 +265,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.busyLog).toEqual(busyAfterNewOperation)
   })
 
-  // Fix 1b: nor may it raise the error of a restart that is no longer the current operation.
   it('does not surface the error of a superseded viewport restart', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -286,7 +286,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentError).toBeNull()
   })
 
-  // The generation bump in restartForViewport is what retires other in-flight operation work.
   it('retires in-flight tab refreshes when a viewport restart supersedes them', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -328,9 +327,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentStatusKind).toBe('live')
   })
 
-  // A transport error is NOT guaranteed to be followed by a close: the web client's
-  // notifySubscriptionsError clears its subscription map and then delivers onError only. So this
-  // must land somewhere the user can act from, or the pane is stranded busy with no way back.
+  // Transport onError may arrive without close; leave the pane actionable rather than busy forever.
   it('leaves a transport error actionable when no close follows it', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -338,19 +335,14 @@ describe('RemoteBrowserStreamLifecycle', () => {
     harness.streams[0].emitTransportError('runtime_timeout', 'socket hiccup')
     await vi.advanceTimersByTimeAsync(120_000)
 
-    // Pane-authored, not the transport's own string: 'socket hiccup' names our plumbing and tells
-    // the user nothing they can act on.
+    // Show recovery copy instead of raw transport text.
     expect(harness.currentError).toBe('Lost connection to the remote server.')
     expect(harness.subscribeAttempts).toBe(1)
     expect(harness.reconnectOffered).toBe(true)
-    // Critically: not busy. A spinner here would also disable the pane's own input handlers.
     expect(harness.busyLog.at(-1)).toBe(false)
   })
 
-  // The same path, but before the host confirmed anything. This is the one stream-ending path that
-  // deliberately keeps its stream token, so the 'never said ready' deadline stayed armed and its
-  // guard still passed — firing 30s later against a stream already declared stopped and withdrawing
-  // the reconnect control with no user action at all.
+  // Transport errors retain their token; cancel the ready deadline so it cannot later withdraw Reconnect.
   it('keeps a transport error actionable when the stream never said ready', async () => {
     const harness = createHarness()
     harness.lifecycle.open()
@@ -420,9 +412,6 @@ describe('RemoteBrowserStreamLifecycle', () => {
   })
 })
 
-// Why these exist: deleting every setReconnectAvailable call site left the whole suite green, so the
-// affordance had no unit coverage at all — only two E2E paths. Each test below fails if its own call
-// site is removed.
 describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -446,9 +435,6 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
     expect(harness.currentError).toBe('Lost connection to the remote server.')
   })
 
-  // The regression the review caught: stopping automatic retries is not the same as removing the
-  // user's last resort. selector_not_found already had to leave the permanent set once, so a
-  // misclassification here must stay recoverable by hand.
   it('offers reconnect even when it stops retrying a permanent failure', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -480,10 +466,7 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(harness.reconnectOffered).toBe(true)
 
-    // NOTE ON WHAT THIS PINS: the clear comes from open(), not from onReady. Once the budget is
-    // spent the scheduler has stopped, so nothing reaches onReady except a fresh open() — which
-    // clears first. onReady's own clear is therefore defence-in-depth against a future path that
-    // sets the flag and then recovers in place; it is deliberately NOT claimed as covered.
+    // This covers open() clearing exhaustion; onReady cannot run after exhaustion without a fresh open.
     harness.failEverySubscribe(null)
     harness.lifecycle.open()
     await settle()
@@ -493,8 +476,6 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
     expect(harness.reconnectOffered).toBe(false)
   })
 
-  // A reopen starts a fresh budget, so a flag left over from a previous exhaustion would show the
-  // control while attempts remain.
   it('does not carry a spent offer into the next open', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -503,8 +484,7 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(harness.reconnectOffered).toBe(true)
 
-    // Failures cleared and no 'ready' emitted yet: the flag must already be down from open() alone,
-    // not from the later confirmation.
+    // Assert before ready so only open() can have cleared exhaustion.
     harness.failEverySubscribe(null)
     harness.lifecycle.open()
     await settle()
@@ -512,11 +492,7 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
   })
 })
 
-// NEW-1 repro: a budget can drain without any attempt throwing. Each restart subscribes fine, then
-// the stream ends before 'ready'. The catch never runs, so setError is never called — and the
-// Reconnect control renders only inside the error toast, so exhaustion produces an invisible
-// affordance, busy stuck true, and no further retries. On main this cycle retried forever and
-// self-healed, so it is a regression in the exact class this work exists to remove.
+// Streams may end before ready without throwing; exhaustion must still publish a notice and usable Reconnect.
 describe('RemoteBrowserStreamLifecycle silent budget drain', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -542,12 +518,7 @@ describe('RemoteBrowserStreamLifecycle silent budget drain', () => {
   })
 })
 
-// A transport error is NOT a stop. On a real socket failure the client calls onError and then
-// onClose (src/shared/remote-runtime-client.ts fail()), and it is onClose that starts the retry
-// budget. Announcing a stop on the error therefore raises the reconnect control ~500ms before the
-// first automatic attempt — the one state this pane must never present, and with raw transport copy
-// the pane exists to keep out of the UI. The E2E cannot see this: manual disconnect delivers close
-// without error, which is the single drop shape where the bug is absent.
+// Socket failure can deliver error then close; close must replace the temporary stop with automatic recovery. Manual-disconnect E2E covers only close.
 describe('RemoteBrowserStreamLifecycle transport error', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -556,11 +527,7 @@ describe('RemoteBrowserStreamLifecycle transport error', () => {
     vi.useRealTimers()
   })
 
-  // Why this pins the METHOD and not just the call site: cancelling the deadline on a transport
-  // error must not also forget how long the stream had been alive, because a close that follows has
-  // to refill the budget for a stream that had proved healthy. Swapping stopWaitingForReady's
-  // clearDeadline() for clear() — deleting exactly what its comment argues for — left all 322 tests
-  // green while silently costing the user one automatic retry.
+  // Cancelling the ready deadline must retain uptime so a following close can refill a healthy stream’s retry budget.
   it('still refills the budget when a close follows a transport error on a healthy stream', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -588,8 +555,7 @@ describe('RemoteBrowserStreamLifecycle transport error', () => {
     expect(harness.reconnectOffered).toBe(true)
   })
 
-  // The usual case: a close does follow. It must take the control back down for the whole ladder,
-  // so the user is not offered a manual retry that competes with the automatic one about to run.
+  // Once close starts automatic recovery, hide manual Reconnect until that budget is exhausted.
   it('withdraws the offer once the close starts the retry budget', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -624,8 +590,6 @@ describe('RemoteBrowserStreamLifecycle transport error', () => {
   })
 })
 
-// These pin the remaining announce sites. Each was verified to leave the suite green when its
-// announce was downgraded to a bare setError — the gap that let a wrong one ship.
 describe('RemoteBrowserStreamLifecycle stop announcements', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -661,8 +625,6 @@ describe('RemoteBrowserStreamLifecycle stop announcements', () => {
     expect(harness.busyLog.at(-1)).toBe(false)
   })
 
-  // This was the one failure path still forwarding raw transport text, which is written for logs and
-  // names our internals. The pane speaks for itself everywhere else.
   it('speaks for itself when a viewport restart fails transiently', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -677,7 +639,6 @@ describe('RemoteBrowserStreamLifecycle stop announcements', () => {
     expect(harness.currentError).toBe('Lost connection to the remote server.')
   })
 
-  // ...but a failure we classified ourselves keeps its own message, which says something true.
   it('keeps a permanent viewport-restart failure specific', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -691,10 +652,7 @@ describe('RemoteBrowserStreamLifecycle stop announcements', () => {
   })
 })
 
-// Two writers, one value — the shape every round of this review has found. The stream token is
-// claimed before subscribe is awaited, so a close can arrive and arm a restart while the subscribe
-// promise is still rejecting. The host does exactly this: it closes the subscription and only then
-// throws (src/main/ipc/runtime-environments.ts, stale pairing).
+// The host can close before subscribe rejects; the armed restart then owns status over the older rejection.
 describe('RemoteBrowserStreamLifecycle close racing a rejected subscribe', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -709,8 +667,7 @@ describe('RemoteBrowserStreamLifecycle close racing a rejected subscribe', () =>
     harness.lifecycle.open()
     await settle()
 
-    // The armed restart owns the status: offering a manual control here shows it for one backoff
-    // step and then swaps it for a spinner, which is the state this pane must never present.
+    // An older rejection must not briefly show manual Reconnect while automatic recovery owns the pane.
     expect(harness.reconnectOffered).toBe(false)
     expect(harness.busyLog.at(-1)).toBe(true)
     expect(harness.currentError).toBeNull()
@@ -730,9 +687,7 @@ describe('RemoteBrowserStreamLifecycle close racing a rejected subscribe', () =>
   })
 })
 
-// A subscribe resolves as soon as the request is sent, so a host that accepts and then goes silent
-// is bounded by nothing on the client. Both busy states hide the reconnect, so this stranded the
-// pane behind a permanent spinner with dead input handlers — the exact failure this work removes.
+// Subscribe resolves when sent; a silent host still needs a ready deadline or the pane stays busy without recovery.
 describe('RemoteBrowserStreamLifecycle host that never says ready', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -770,10 +725,7 @@ describe('RemoteBrowserStreamLifecycle host that never says ready', () => {
   })
 })
 
-// 'ready' proves the host accepted the subscribe, not that the stream is sustained. CDP allows one
-// screencast per page, so a second subscriber on the same remote page evicts the first on every
-// attempt. Refilling the budget on 'ready' turned that into the unbounded retry loop the budget
-// exists to prevent.
+// CDP subscribers evict one another; ready alone must not refill the budget and permit endless flapping.
 describe('RemoteBrowserStreamLifecycle flapping host', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -788,8 +740,7 @@ describe('RemoteBrowserStreamLifecycle flapping host', () => {
 
     for (let round = 0; round < 8; round++) {
       harness.streams.at(-1)!.emitEnd()
-      // Long enough for the next backoff step to fire, short enough that the stream never proves
-      // itself healthy.
+      // Allow backoff to fire without earning a healthy-stream refill.
       await vi.advanceTimersByTimeAsync(9_000)
       harness.streams.at(-1)!.emitReady()
       await settle()

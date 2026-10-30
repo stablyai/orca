@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from './dispatcher'

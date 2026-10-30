@@ -46,8 +46,7 @@ describe('detectWslCommandsOnPath', () => {
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
     const { script } = lastSpec()
-    // Why: zsh aborts on `fi done` — the loop body and `done` must be separated
-    // by a newline. Regression guard for issue #5325.
+    // POSIX shells need a separator before done (#5325).
     expect(script).not.toContain('fi done')
     expect(script).toContain('fi\ndone')
   })
@@ -96,12 +95,7 @@ describe('detectWslCommandsOnPath', () => {
   })
 
   it('finds a real command even with rc/motd-shaped noise ahead of it in stdout (regression)', async () => {
-    // Before this migration the site ran an uncaptured login shell
-    // (buildWslLoginShellCommand) and parsed raw stdout, so the distro's
-    // "run a command as administrator" rc/motd banner shared the stream with
-    // the payload (#11327, #11823 class). The probe lane runs no shell at all,
-    // so a banner has no way to appear; this proves the payload line still
-    // parses correctly even when banner-shaped text precedes it.
+    // Banner-shaped text must not corrupt parsing even though the probe lane itself avoids shell startup.
     runWslProcessMock.mockResolvedValue({
       environmentResolved: true,
       code: 0,
@@ -134,10 +128,7 @@ describe('detectWslCommandsOnPath', () => {
 })
 
 it('does not veto a guest binary on an ordinary Linux mount under /mnt', async () => {
-  // The walk skips PATH components the guest reports as Windows drives. A name
-  // rule on top of that could only do harm: /mnt/d can be an ext4 volume, and
-  // vetoing a path the walk deliberately kept turns the false positive back
-  // into the #9725 false negative.
+  // Only mount evidence identifies Windows drives; /mnt/d may be an ext4 guest volume.
   runWslProcessMock.mockResolvedValue({
     environmentResolved: true,
     code: 0,
@@ -164,8 +155,7 @@ it('still counts a genuine guest install', async () => {
 })
 
 describe('the detection script itself, run by a real POSIX shell', () => {
-  // Not a mock: the fallback is shell globbing and `[ -x ]`, which only the
-  // shell can be trusted about. Skipped on Windows, where /bin/sh is absent.
+  // Execute real shell globbing and executable checks; Windows has no /bin/sh.
   const itPosix = process.platform === 'win32' ? it.skip : it
   let home: string
 
@@ -201,8 +191,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
   }
 
   itPosix('finds an nvm-installed binary the login PATH would have shown', async () => {
-    // #9725: without the login PATH this resolves to nothing and preflight
-    // reports a working install as "not installed".
+    // Version-manager fallback must recover a CLI absent from login PATH (#9725).
     plant('.nvm/versions/node/v20.1.0/bin', 'orca-fake-cli')
     const out = await runScript()
     expect(out).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
@@ -220,8 +209,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
   })
 
   itPosix('finds a CLI when $HOME contains a space', async () => {
-    // The dir list is globbed, so an unquoted $HOME word-split into a relative
-    // path and every CLI read as absent -- the #9725 symptom, from the fix.
+    // HOME with spaces must remain one path throughout fallback glob expansion.
     const spaced = mkdtempSync(join(tmpdir(), 'orca has space-'))
     const previous = home
     home = spaced
@@ -235,8 +223,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
   })
 
   itPosix('does not report a directory as an installed CLI', async () => {
-    // Directories are mode 755 and pass -x. Preflight would say installed and
-    // the launch would fail later with EISDIR.
+    // Directories pass -x but would fail to launch with EISDIR.
     mkdirSync(join(home, '.local/bin/orca-fake-cli'), { recursive: true })
     expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__orca-fake-cli')
   })
@@ -256,11 +243,7 @@ describe('the PATH walk, run by a real POSIX shell', () => {
   const itPosix = process.platform === 'win32' ? it.skip : it
 
   itPosix('finds the guest install behind a Windows binary that shadows it', async () => {
-    // WSL appends the Windows PATH, so a Windows `claude` sits ahead of an
-    // nvm one. Rejecting the resolved path afterwards cannot resume the walk,
-    // so it reports "not installed" for a user who has both -- turning the
-    // false positive into the #9725 false negative. Skipping the component
-    // mid-walk is what actually finds the guest binary.
+    // Skip Windows components during the walk so an interop binary cannot hide a later guest install.
     const root = mkdtempSync(join(tmpdir(), 'orca-walk-'))
     try {
       const win = join(root, 'winmnt/c/npm')
@@ -276,7 +259,7 @@ describe('the PATH walk, run by a real POSIX shell', () => {
       const script = buildPosixCommandPathLookupScript(
         { kind: 'literal', value: 'claude' },
         { skipWindowsMountDirs: true }
-        // Stand in for /proc/mounts, which a test host does not have.
+        // Substitute synthetic Windows-mount evidence for /proc/mounts.
       ).replace(/_orca_win_mounts=\$\([^)]*\)/, `_orca_win_mounts=${join(root, 'winmnt')}`)
       const options: ExecFileSyncOptions = {
         encoding: 'utf8',
@@ -328,9 +311,7 @@ describe('the mount table read, counted against a real shell', () => {
   }
 
   itPosix('reads /proc/mounts once, not once per probed command', async () => {
-    // The prelude is embedded in the lookup script, which the caller wraps in
-    // `for cmd in <every agent>`. An unconditional assignment forked awk once
-    // per CLI -- 36 of them inside the distro against a 10s budget.
+    // Cache mount discovery across the per-agent loop to avoid repeated awk forks.
     expect(await runWithCountingAwk(['claude', 'codex', 'gemini', 'opencode'])).toBe(1)
   })
 
@@ -339,11 +320,7 @@ describe('the mount table read, counted against a real shell', () => {
   })
 
   itPosix('applies the memoised mount list to every command, not just the first', async () => {
-    // Counting forks with a stub that reports NO mounts cannot see the thing
-    // the hoist trades correctness for: a refactor that empties or clobbers
-    // the variable inside the walk keeps the fork count at 1 and keeps the
-    // single-command test green, while every agent after the first stops
-    // skipping /mnt. A surviving mutant proved that gap.
+    // Fork counts alone miss a clobbered mount cache; all later agents must still skip Windows mounts.
     const root = mkdtempSync(join(tmpdir(), 'orca-memo-'))
     try {
       const win = join(root, 'winmnt/c/npm')
@@ -375,7 +352,6 @@ describe('the mount table read, counted against a real shell', () => {
         env: { PATH: `${win}:${guest}:/usr/bin:/bin`, HOME: root }
       }
       const out = String(execFileSync('/bin/sh', ['-c', script], options))
-      // BOTH must resolve behind the mount, not just the first.
       expect(out).toContain(`__ORCA_AGENT_PATH__claude\t${join(guest, 'claude')}`)
       expect(out).toContain(`__ORCA_AGENT_PATH__codex\t${join(guest, 'codex')}`)
     } finally {

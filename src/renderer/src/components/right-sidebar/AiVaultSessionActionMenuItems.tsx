@@ -4,7 +4,6 @@ import {
   FolderOpen,
   LocateFixed,
   MessageSquarePlus,
-  MessagesSquare,
   PanelTopOpen,
   Play,
   Trash2
@@ -13,6 +12,8 @@ import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdow
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { AiVaultSessionSurfaceSwitchMenuItems } from './AiVaultSessionSurfaceSwitchMenuItems'
+import { isAiVaultFolderWorkspaceId } from './ai-vault-session-worktree-affordances'
 
 export function SessionActionMenuItems({
   menuKind = 'dropdown',
@@ -22,8 +23,10 @@ export function SessionActionMenuItems({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   onJumpToOriginalPane,
   showJumpToWorktree,
+  jumpWorkspaceId,
   onJumpToWorktree,
   onCopyResume,
   onCopyId,
@@ -41,11 +44,13 @@ export function SessionActionMenuItems({
   onResume: () => void
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
+  // Offered only on rows native chat owns, where it forks: see ai-vault-session-cli-fork.
+  onResumeInNewCli?: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
+  jumpWorkspaceId?: string | null
   onJumpToWorktree?: () => void
-  // Absent for zero-turn sessions: copying a resume command that lands in an
-  // empty conversation would contradict the "not saved" state.
+  // Hide resume-command copy for zero-turn sessions; it would reopen an empty conversation despite not-saved status.
   onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
@@ -54,19 +59,27 @@ export function SessionActionMenuItems({
   onOpenCwd?: () => void
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
-  onDelete: () => void
+  onDelete?: () => void
 }) {
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd)
+  // Why: Jump/Resume items act on this conversation; the hand-off starts a new one, so it sits apart.
+  const hasItemsAboveHandOff = Boolean(
+    onJumpToOriginalPane ||
+    showJumpToWorktree ||
+    !resumeHidden ||
+    onResumeInNewChat ||
+    onResumeInNewCli ||
+    onCopyResume
+  )
   const deleteLabel = translate('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
   const deleteItem = (
     <Item
       variant="destructive"
       disabled={Boolean(deleteBlockedReason)}
       onSelect={deleteBlockedReason ? undefined : onDelete}
-      // Also on aria-label, so a screen-reader user hears why Delete is
-      // disabled rather than only that it is.
+      // Expose Delete’s blocked reason to screen readers as well as tooltip users.
       aria-label={deleteBlockedReason ? `${deleteLabel}. ${deleteBlockedReason}` : undefined}
     >
       <Trash2 className="size-3.5" />
@@ -88,10 +101,15 @@ export function SessionActionMenuItems({
       {showJumpToWorktree ? (
         <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
           <PanelTopOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
-            'Jump to Worktree'
-          )}
+          {isAiVaultFolderWorkspaceId(jumpWorkspaceId)
+            ? translate(
+                'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToFolder',
+                'Jump to Folder'
+              )
+            : translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
+                'Jump to Worktree'
+              )}
         </Item>
       ) : null}
       {!resumeHidden ? (
@@ -100,24 +118,13 @@ export function SessionActionMenuItems({
           {resumeLabel}
         </Item>
       ) : null}
-      {onResumeInNewChat ? (
-        <Item onSelect={onResumeInNewChat}>
-          <MessagesSquare className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewChat',
-            'Resume in New Chat'
-          )}
-        </Item>
-      ) : null}
-      {onContinueInNewSession ? (
-        <Item onSelect={onContinueInNewSession}>
-          <MessageSquarePlus className="size-3.5" />
-          {translate(
-            'components.agentSessionContinuation.continueInNewSession',
-            'Continue in New Session…'
-          )}
-        </Item>
-      ) : null}
+      <AiVaultSessionSurfaceSwitchMenuItems
+        action="resume"
+        menuKind={menuKind}
+        tooltipSide={menuKind === 'context' ? 'right' : 'left'}
+        onResumeInNewChat={onResumeInNewChat}
+        onResumeInNewCli={onResumeInNewCli}
+      />
       {onCopyResume ? (
         <Item onSelect={onCopyResume}>
           <Copy className="size-3.5" />
@@ -126,6 +133,18 @@ export function SessionActionMenuItems({
             'Copy Resume Command'
           )}
         </Item>
+      ) : null}
+      {onContinueInNewSession ? (
+        <>
+          {hasItemsAboveHandOff ? <Separator /> : null}
+          <Item onSelect={onContinueInNewSession}>
+            <MessageSquarePlus className="size-3.5" />
+            {translate(
+              'components.agentSessionContinuation.handOffToAnotherAgent',
+              'Hand Off to Another Agent'
+            )}
+          </Item>
+        </>
       ) : null}
       {hasLocalPathActions ? (
         <>
@@ -168,25 +187,28 @@ export function SessionActionMenuItems({
           )}
         </Item>
       ) : null}
-      <Separator />
-      {deleteBlockedReason ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* A disabled item is pointer-events:none, so the trigger needs this
-               wrapper to receive hover (as WorktreeContextMenu does). */}
-            <div>{deleteItem}</div>
-          </TooltipTrigger>
-          <TooltipContent
-            side={menuKind === 'context' ? 'right' : 'left'}
-            sideOffset={8}
-            className="max-w-72"
-          >
-            {deleteBlockedReason}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        deleteItem
-      )}
+      {onDelete ? (
+        <>
+          <Separator />
+          {deleteBlockedReason ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* Disabled items ignore pointer events; wrap for tooltip hover as WorktreeContextMenu does. */}
+                <div>{deleteItem}</div>
+              </TooltipTrigger>
+              <TooltipContent
+                side={menuKind === 'context' ? 'right' : 'left'}
+                sideOffset={8}
+                className="max-w-72"
+              >
+                {deleteBlockedReason}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            deleteItem
+          )}
+        </>
+      ) : null}
     </>
   )
 }

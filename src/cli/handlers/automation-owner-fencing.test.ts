@@ -11,15 +11,14 @@ function clientAnsweringShow(owner: unknown): { call: ReturnType<typeof vi.fn> }
   const call = vi.fn(async (method: string) =>
     method === 'automation.show'
       ? ok(owner === undefined ? { automation: { id: 'a1' } } : { automation: { id: 'a1' }, owner })
-      : ok({ automation: { id: 'a1' }, removed: true, id: 'a1', run: { id: 'r1' } })
+      : ok({ automation: { id: 'a1' }, removed: true, id: 'a1', run: { id: 'r1' }, runs: [] })
   )
   return { call }
 }
 
 afterEach(() => vi.restoreAllMocks())
 
-// Why: the fence refuses an unfenced mutation on a generation-bearing SSH record, so
-// every CLI mutation has to read the owner first or it cannot touch its own host.
+// Generation-bearing SSH records reject mutations that omit the owner precondition.
 describe('CLI automation mutations carry the owner they read', () => {
   it.each([
     ['automations remove', 'automation.delete'],
@@ -60,8 +59,7 @@ describe('CLI automation mutations carry the owner they read', () => {
     )
   })
 
-  // An older host has no fence to satisfy, so a missing owner must not become a
-  // fabricated one — and must not stop the mutation either.
+  // Older hosts supply no owner and require no precondition.
   it('omits the precondition when the host reports no owner', async () => {
     const { call } = clientAnsweringShow(undefined)
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
@@ -88,6 +86,6 @@ describe('CLI automation mutations carry the owner they read', () => {
     })
 
     expect(call).toHaveBeenCalledTimes(1)
-    expect(call).toHaveBeenCalledWith('automation.runs', { automationId: 'a1' })
+    expect(call).toHaveBeenCalledWith('automation.runs', { automationId: 'a1', limit: 25 })
   })
 })

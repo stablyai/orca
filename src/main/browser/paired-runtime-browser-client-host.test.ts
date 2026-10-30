@@ -1,5 +1,5 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PairingOffer } from '../../shared/pairing'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
@@ -8,28 +8,26 @@ import type {
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
 import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
 import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
 
-const pairing = {
-  v: 2,
+const pairing = pairedRuntimeConnectionFromOffer({
   endpoint: 'ws://127.0.0.1:6768',
   deviceToken: 'device-token',
   publicKeyB64: 'public-key',
-  pairedDeviceId: 'device-a',
-  scope: 'runtime'
-} as PairingOffer
+  pairedDeviceId: 'device-a'
+})
 
 afterEach(() => {
   subscribeRemoteRuntimeRequestMock.mockReset()
@@ -57,9 +55,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
       expect.any(Object),
       expect.any(Object)
     )
-    // Why a range: retries share one deadline, so the first attach gets whatever is
-    // left of the 15s budget — a clock tick between capturing it and reading it
-    // shaves a millisecond, which an exact 15_000 would fail on.
+    // Retries share a deadline; clock ticks can reduce the first attach timeout.
     const attachTimeoutMs = subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[3]
     expect(attachTimeoutMs).toBeLessThanOrEqual(15_000)
     expect(attachTimeoutMs).toBeGreaterThan(14_000)
@@ -340,7 +336,7 @@ function createHost(
   pageReconciliationProtocolVersion?: 1
 ): PairedRuntimeBrowserClientHost {
   return new PairedRuntimeBrowserClientHost({
-    pairing,
+    connection: pairing,
     authorityRuntimeId: 'runtime-a',
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],

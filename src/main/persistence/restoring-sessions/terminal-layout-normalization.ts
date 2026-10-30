@@ -4,6 +4,16 @@ import type {
   TerminalPaneLayoutNode
 } from '../../../shared/terminal-tab-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import {
+  collectLayoutLeafIdsInOrder,
+  firstLayoutLeafId
+} from '../../../shared/workspace-layout/terminal-pane-tree'
+
+export {
+  collectLayoutLeafIdsInOrder,
+  firstLayoutLeafId,
+  layoutContainsLeafId
+} from '../../../shared/workspace-layout/terminal-pane-tree'
 
 export type LayoutLeafNormalization = {
   snapshot: TerminalLayoutSnapshot
@@ -22,35 +32,6 @@ export function collectLayoutLeafCounts(
   collectLayoutLeafCounts(node.first, counts)
   collectLayoutLeafCounts(node.second, counts)
   return counts
-}
-
-export function collectLayoutLeafIdsInOrder(
-  node: TerminalPaneLayoutNode | null | undefined
-): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLayoutLeafIdsInOrder(node.first), ...collectLayoutLeafIdsInOrder(node.second)]
-}
-
-export function firstLayoutLeafId(node: TerminalPaneLayoutNode | null): string | null {
-  if (!node) {
-    return null
-  }
-  return node.type === 'leaf' ? node.leafId : firstLayoutLeafId(node.first)
-}
-
-export function layoutContainsLeafId(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
-  if (!node) {
-    return false
-  }
-  if (node.type === 'leaf') {
-    return node.leafId === leafId
-  }
-  return layoutContainsLeafId(node.first, leafId) || layoutContainsLeafId(node.second, leafId)
 }
 
 export function cloneLayoutNode(node: TerminalPaneLayoutNode): TerminalPaneLayoutNode {
@@ -135,37 +116,11 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
   snapshot: TerminalLayoutSnapshot,
   preferredLayout?: TerminalLayoutSnapshot
 ): LayoutLeafNormalization {
-  let inputSnapshot = snapshot
-  let changed = false
-  if (!inputSnapshot.root) {
-    if (!preferredLayout?.root) {
-      return { snapshot, changed: false, leafIdByInputLeafId: new Map() }
-    }
-    const root = cloneLayoutNode(preferredLayout.root)
-    const rootLeafIds = new Set(collectLayoutLeafIdsInOrder(root))
-    const activeLeafId =
-      (inputSnapshot.activeLeafId && rootLeafIds.has(inputSnapshot.activeLeafId)
-        ? inputSnapshot.activeLeafId
-        : null) ??
-      (preferredLayout.activeLeafId && rootLeafIds.has(preferredLayout.activeLeafId)
-        ? preferredLayout.activeLeafId
-        : null) ??
-      firstLayoutLeafId(root)
-    const expandedLeafId =
-      (inputSnapshot.expandedLeafId && rootLeafIds.has(inputSnapshot.expandedLeafId)
-        ? inputSnapshot.expandedLeafId
-        : null) ??
-      (preferredLayout.expandedLeafId && rootLeafIds.has(preferredLayout.expandedLeafId)
-        ? preferredLayout.expandedLeafId
-        : null)
-    inputSnapshot = { ...inputSnapshot, root, activeLeafId, expandedLeafId }
-    // Why: a debounced renderer writer can still hold the createTab-era empty layout after the UUID root was sync-flushed.
-    changed = true
-  }
-  const inputRoot = inputSnapshot.root
+  const inputRoot = snapshot.root
   if (!inputRoot) {
     return { snapshot, changed: false, leafIdByInputLeafId: new Map() }
   }
+  let changed = false
   const counts = collectLayoutLeafCounts(inputRoot)
   const duplicatedInputLeafIds = new Set(
     Array.from(counts.entries())
@@ -174,14 +129,12 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
   )
   const inputLeafIdsInOrder = collectLayoutLeafIdsInOrder(inputRoot)
   const preferredLeafIdsInOrder = collectLayoutLeafIdsInOrder(preferredLayout?.root)
-  // Why the uniqueness check: a preferred layout that repeats a UUID would hand two input leaves the
-  // same id, collapsing their pty/buffer/scrollback/title records onto one key.
+  // Duplicate preferred UUIDs would collapse distinct panes' persisted records.
   const usePreferredLeafIds =
     preferredLeafIdsInOrder.length === inputLeafIdsInOrder.length &&
     new Set(preferredLeafIdsInOrder).size === preferredLeafIdsInOrder.length
   const leafIdByInputLeafId = new Map<string, string>()
-  // Why pre-seeded: a stable leaf later in the input keeps its own id, so handing that id to an
-  // earlier non-terminal leaf would recreate the duplicate this pass exists to remove.
+  // Reserve stable input IDs before assigning replacements to earlier legacy leaves.
   const claimedLeafIds = new Set(
     inputLeafIdsInOrder.filter((leafId) => counts.get(leafId) === 1 && isTerminalLeafId(leafId))
   )
@@ -209,42 +162,48 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     ? cloneLayoutWithLeafIds(inputRoot, leafIdByInputLeafId, duplicatedInputLeafIds)
     : inputRoot
   const activeLeafId =
-    inputSnapshot.activeLeafId && !duplicatedInputLeafIds.has(inputSnapshot.activeLeafId)
-      ? (leafIdByInputLeafId.get(inputSnapshot.activeLeafId) ?? firstLayoutLeafId(root))
-      : inputSnapshot.activeLeafId === null
+    snapshot.activeLeafId && !duplicatedInputLeafIds.has(snapshot.activeLeafId)
+      ? (leafIdByInputLeafId.get(snapshot.activeLeafId) ?? firstLayoutLeafId(root))
+      : snapshot.activeLeafId === null
         ? null
         : firstLayoutLeafId(root)
   const expandedLeafId =
-    inputSnapshot.expandedLeafId && !duplicatedInputLeafIds.has(inputSnapshot.expandedLeafId)
-      ? (leafIdByInputLeafId.get(inputSnapshot.expandedLeafId) ?? null)
+    snapshot.expandedLeafId && !duplicatedInputLeafIds.has(snapshot.expandedLeafId)
+      ? (leafIdByInputLeafId.get(snapshot.expandedLeafId) ?? null)
+      : null
+  const chatLeafId =
+    snapshot.chatLeafId && !duplicatedInputLeafIds.has(snapshot.chatLeafId)
+      ? (leafIdByInputLeafId.get(snapshot.chatLeafId) ?? null)
       : null
   const ptyIdsByLeafId = remapLeafRecordForPersistence(
-    inputSnapshot.ptyIdsByLeafId,
+    snapshot.ptyIdsByLeafId,
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
   const buffersByLeafId = remapLeafRecordForPersistence(
-    inputSnapshot.buffersByLeafId,
+    snapshot.buffersByLeafId,
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
   const scrollbackRefsByLeafId = remapLeafRecordForPersistence(
-    inputSnapshot.scrollbackRefsByLeafId,
+    snapshot.scrollbackRefsByLeafId,
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
   const titlesByLeafId = remapLeafRecordForPersistence(
-    inputSnapshot.titlesByLeafId,
+    snapshot.titlesByLeafId,
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
   const recordsChanged =
-    !leafRecordEquivalent(inputSnapshot.ptyIdsByLeafId, ptyIdsByLeafId) ||
-    !leafRecordEquivalent(inputSnapshot.buffersByLeafId, buffersByLeafId) ||
-    !leafRecordEquivalent(inputSnapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
-    !leafRecordEquivalent(inputSnapshot.titlesByLeafId, titlesByLeafId)
+    !leafRecordEquivalent(snapshot.ptyIdsByLeafId, ptyIdsByLeafId) ||
+    !leafRecordEquivalent(snapshot.buffersByLeafId, buffersByLeafId) ||
+    !leafRecordEquivalent(snapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
+    !leafRecordEquivalent(snapshot.titlesByLeafId, titlesByLeafId)
   const metadataChanged =
-    activeLeafId !== inputSnapshot.activeLeafId || expandedLeafId !== inputSnapshot.expandedLeafId
+    activeLeafId !== snapshot.activeLeafId ||
+    expandedLeafId !== snapshot.expandedLeafId ||
+    chatLeafId !== (snapshot.chatLeafId ?? null)
   if (!changed && !recordsChanged && !metadataChanged) {
     return { snapshot, changed: false, leafIdByInputLeafId }
   }
@@ -253,14 +212,16 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
-  } = inputSnapshot
+  } = snapshot
   return {
     snapshot: {
       ...snapshotWithoutLeafRecords,
       root,
       activeLeafId,
       expandedLeafId,
+      ...(chatLeafId ? { chatLeafId } : {}),
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),

@@ -1,20 +1,6 @@
-/**
- * Real-fish regression for #13892: a terminal query reply Orca held back is overtaken
- * by the DA1 answer written later in the same turn, so fish's read sentinel hands the
- * tty to the child while the OSC 11 reply is still queued — and the CHILD READS IT.
- *
- * What is real here: node-pty running fish, `PtyStartupIngress`, `PtyStartupReplyDelivery`
- * and both echo probes, plus the host's own write gate
- * (`answerLiveQueryReply` — copied from local-pty-provider.write, which
- * is what decides whether a reply is deferred at all). Only the renderer is modelled: it
- * answers queries strictly in the order they appear in the stream, so any inversion the
- * child sees was produced by the delivery split and nothing else.
- *
- * The assertion is about a CHILD PROCESS'S STDIN, not the screen: a rendered-output check
- * passes while the bytes are still being eaten by the next `npx` / `brew` confirm prompt.
- * The child reads a full LINE because a leaked reply carries no newline, so a
- * once('data') child would report it alone whenever it happened to land in its own read.
- */
+/** Real-fish #13892 regression: a deferred OSC 11 reply can be overtaken by DA1, letting fish hand the tty to a child before the reply arrives.
+ * Uses node-pty, ingress/delivery, echo probes and the copied local-pty-provider.write host gate. Only the renderer’s remaining replies are modeled, in stream order.
+ * Assert child stdin, since screen checks miss leaks into npx/brew prompts. Read a full line: replies lack newlines and may arrive in their own data event. */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -69,8 +55,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
     expect(fishRequirementViolation(FISH)).toBeNull()
   })
 
-  // Same contract for the other half of the setup: a prebuilt node-pty has no echoState,
-  // so the fix under test would be off and the regression below would run vacuously.
+  // A prebuilt node-pty lacks echoState, disabling the fix and making the regression vacuous.
 
   afterEach(() => {
     if (configHome) {
@@ -125,17 +110,22 @@ describe('a held query reply never reaches the next child process (#13892)', () 
       })
 
       let rendered = ''
+      let oscQueryCount = 0
       const ingress = new PtyStartupIngress({
         ownerBackend: 'posix-pty',
-        write: (data) => term.write(data),
+        write: (data) => {
+          if (data.startsWith('\x1b]1')) {
+            oscQueryCount += 1
+          }
+          term.write(data)
+        },
         onEmission: (emission) => {
           rendered += emission.data
           answerQueriesInOrder(emission.data)
         }
       })
 
-      // The host gate: cooked-echo-risk replies are written by the ingress with their
-      // echo shapes armed; DA1/CPR stay on the host's own path, in call order.
+      // Arm echo shapes for ingress-handled cooked-risk replies; keep DA1/CPR on the host path in call order.
       const hostWrite = (data: string): void => {
         if (ingress.answerLiveQueryReply(data)) {
           return
@@ -144,7 +134,6 @@ describe('a held query reply never reaches the next child process (#13892)', () 
       }
 
       let tail = ''
-      let oscQueryCount = 0
       function answerQueriesInOrder(chunk: string): void {
         let buffer = tail + chunk
         tail = ''
@@ -160,9 +149,6 @@ describe('a held query reply never reaches the next child process (#13892)', () 
             match: candidate.re.exec(rest)
           })).find((entry) => entry.match)
           if (grammar?.match) {
-            if (grammar.candidate === QUERY_GRAMMARS[0]) {
-              oscQueryCount += 1
-            }
             hostWrite(grammar.candidate.reply(grammar.match))
             index = at + grammar.match[0].length
             continue
@@ -186,9 +172,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
         await sleep(500)
         const oscQueriesBeforeHandoff = oscQueryCount
 
-        // Type-ahead is the deterministic shape: queue the child's command while an
-        // external command still owns the tty, so fish repaints its prompt (re-querying
-        // OSC 11) and hands the tty over in the same breath.
+        // Queue type-ahead while sleep owns the tty so fish’s prompt re-query and child handoff happen together.
         term.write('sleep 0.4\r')
         await sleep(150)
         term.write('"$ORCA_NODE_BIN" "$ORCA_CHILD_SCRIPT"\r')
@@ -206,18 +190,14 @@ describe('a held query reply never reaches the next child process (#13892)', () 
 
         const childRead =
           rendered.slice(renderedBeforeChildInput).match(/CHILD-READ:[^\r\n]*/)?.[0] ?? ''
-        // The merge-blocking assertion: the child's first LINE is what the user typed,
-        // with no escape byte in front of it. Pre-fix this reads
-        // `\u001b]11;rgb:1e1e/1e1e/1e1e\u001b\\hello\n`.
+        // Pre-fix, OSC 11 preceded hello in the child’s first line; screen-only assertions missed it.
         expect(childRead).toBe('CHILD-READ:"hello\\n"')
       } finally {
         term.write('exit\r')
         await waitUntil(() => exited, 3_000)
         try {
           term.kill()
-        } catch {
-          // already gone
-        }
+        } catch {}
       }
     },
     45_000

@@ -3,6 +3,7 @@ import { levenshtein } from './edit-distance'
 export type ServeOptionValidationInput = {
   noPairing: boolean
   mobilePairing: boolean
+  grantDesktopControl?: boolean
   recipeJson: boolean
   projectRoot: string | null | undefined
 }
@@ -10,6 +11,9 @@ export type ServeOptionValidationInput = {
 export function getServeOptionValidationError(options: ServeOptionValidationInput): string | null {
   if (options.noPairing && options.mobilePairing) {
     return 'Use either --mobile-pairing or --no-pairing, not both.'
+  }
+  if (options.grantDesktopControl && (options.noPairing || options.mobilePairing)) {
+    return '--grant-desktop-control applies only to the default runtime pairing offer.'
   }
   if (options.recipeJson && options.noPairing) {
     return 'Recipe JSON output requires runtime pairing; remove --no-pairing.'
@@ -28,6 +32,8 @@ const SERVE_SECURITY_FLAG_NAMES = [
   '--serve-no-pairing',
   '--mobile-pairing',
   '--serve-mobile-pairing',
+  '--grant-desktop-control',
+  '--serve-grant-desktop-control',
   '--recipe-json',
   '--serve-recipe-json',
   '--pairing-address',
@@ -75,9 +81,7 @@ export function getServeFlagTypoError(argv: readonly string[]): string | null {
       return `Unknown flag ${name}. Did you mean ${suggestion}?`
     }
 
-    // A value that is not flag-shaped belongs to the preceding known value flag.
-    // A `--`-prefixed space token remains a flag, matching parseArgs; use `=` when
-    // a value itself starts with `--`.
+    // Non-flags belong to known value flags; use = for values starting -- to match parseArgs.
     if (!token.includes('=') && SERVE_VALUE_FLAG_NAMES.has(name)) {
       const value = argv[index + 1]
       if (value !== undefined && !value.startsWith('--')) {

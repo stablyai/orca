@@ -1,43 +1,9 @@
 import type { Repo } from '../../../../shared/repo-types'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { getRepoHostIdentity } from './repo-host-identity'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 
-// Why: after a drag-reorder we optimistically set `repos`, persist, and main
-// broadcasts `repos:changed`. The renderer's own echo handler refetches, which
-// would otherwise hand back field-identical repos as brand-new objects. New
-// identities invalidate the repoMap/repoOrder/rows memos and force the
-// virtualizer to rebuild + re-measure a tick after the drop — the visible jump.
-// Reusing equal objects (and the whole array when nothing moved) makes the echo
-// a no-op render.
-// Why the structural compare: `Repo` carries nested records (hookSettings, upstream,
-// gitRemoteIdentity, repoIcon, path arrays) that structured-clone and main's hydrateRepo rebuild
-// every fetch, so a reference compare would report every repo as changed.
-
-/**
- * Reuses equal rows from `previous` — and the whole array when nothing moved — so a refetch that
- * changed nothing leaves identity-keyed memos and store subscribers untouched. `getIdentity` must
- * be the key the producing merge already dedups by, so it is unique within `next`.
- */
-export function reconcileCatalogRows<T>(
-  previous: readonly T[],
-  next: readonly T[],
-  getIdentity: (row: T) => string
-): readonly T[] {
-  const previousByIdentity = new Map(previous.map((row) => [getIdentity(row), row]))
-  let identical = next.length === previous.length
-  const reconciled = next.map((row, index) => {
-    const existing = previousByIdentity.get(getIdentity(row))
-    if (existing !== undefined && structuralValuesEqual(existing, row)) {
-      if (existing !== previous[index]) {
-        identical = false
-      }
-      return existing
-    }
-    identical = false
-    return row
-  })
-  return identical ? previous : reconciled
-}
+// Reuse structurally equal rows/arrays on IPC echoes after drag reorder or virtualizer memos rebuild and visibly jump. Reference equality cannot compare main-rebuilt/cloned nested Repo fields.
 
 export function reconcileFetchedRepos(
   previous: readonly Repo[],
@@ -55,8 +21,7 @@ export function reuseEqualRecordMap<T>(
   next: Readonly<Record<string, T>>
 ): Readonly<Record<string, T>> {
   const nextKeys = Object.keys(next)
-  // Why: a matching key count plus every `next` key resolving to an equal `previous` entry below
-  // means the key sets match, so a removed key always lands as either a count or a lookup miss.
+  // Equal count plus every next key’s equal previous value proves key-set equality; removals cause count or lookup misses.
   let identical = nextKeys.length === Object.keys(previous).length
   const reconciled: Record<string, T> = {}
   for (const key of nextKeys) {

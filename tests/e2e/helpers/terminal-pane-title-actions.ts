@@ -1,8 +1,3 @@
-/**
- * Shared drivers for the terminal pane title strip: opening the pane context
- * menu and committing a Set Title value through it.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 
@@ -13,8 +8,7 @@ export async function setPaneTitleFromTerminalMenu(page: Page, title: string): P
   await expect(titleInput).toBeVisible()
   await titleInput.fill(title)
   await titleInput.press('Enter')
-  // Why: CI can dispatch Enter before React has committed the filled value;
-  // blurring exercises the same submit path and makes the helper deterministic.
+  // Enter may arrive before React commits the filled value; blur retries the same submit path.
   try {
     await expect(titleInput).toHaveCount(0, { timeout: 500 })
   } catch {

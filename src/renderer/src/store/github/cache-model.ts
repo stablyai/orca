@@ -18,6 +18,7 @@ export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
 export type CacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  fetchedHeadOid?: string | null
   headSha?: string
   sources?: WorkItemsCacheSources
   error?: WorkItemsCacheError
@@ -30,6 +31,8 @@ export type FetchOptions = {
   requireComplete?: boolean
   allowStaleFallback?: boolean
   sourceContext?: TaskSourceContext | null
+  /** A Tasks Refresh/Retry or a single-repo open: a user act that may start a stopped WSL distro. */
+  wakeWslDistro?: boolean
 }
 
 export type RepoScopedFetchOptions = FetchOptions & { repoId?: string }
@@ -61,4 +64,5 @@ export type ProjectRowContentPatch = {
 
 export type GitHubPatchWorkItemOptions = {
   sourceContext?: TaskSourceContext | null
+  ownerRepo?: GitHubOwnerRepo | null
 }

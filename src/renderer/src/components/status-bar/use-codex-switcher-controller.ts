@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { useAppStore } from '../../store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { defaultScopeHost } from '@/lib/default-creation-host'
+import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
   fetchProviderAccountsSnapshot,
   selectCodexProviderAccount
@@ -67,27 +69,30 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
+  const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
+  const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
-    ? (runtimeEnvironments.find(
-        (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()
-      )?.name ??
+    ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
+        ?.name ??
       translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
     : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
-    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
+    getWindowsTerminalCapabilityOwnerKey(activeRuntimeEnvironmentId),
     runtimeTarget
   )
   const codexAccountSyncKey = useAppStore((s) => getCodexAccountSyncKey(s.settings))
-  const accountState = resolveCodexStatusAccountState(settings, accounts)
+  const accountState = resolveCodexStatusAccountState(
+    settings,
+    accounts,
+    activeRuntimeEnvironmentId
+  )
 
-  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
   // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
   const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    const snapshot = await fetchProviderAccountsSnapshot(runtimeTarget)
     // Why: a failed Codex half is a substituted empty roster; keep prior state.
     if (snapshot.failedProviders?.includes('codex')) {
       console.error('Codex account list failed; keeping previous status bar state.')
@@ -96,7 +101,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     if (mountedRef.current) {
       setAccounts(snapshot.codex)
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [runtimeTarget])
 
   useEffect(() => {
     mountedRef.current = true
@@ -110,8 +115,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   }, [accountsExpanded])
 
   useEffect(() => {
-    // Why: the roster mounts this switcher on demand, while the sync key covers
-    // account mutations without refetching again when its submenu opens.
+    // Load on demand at mount and resync account mutations without fetching again on submenu expansion.
     void loadAccounts().catch((error) => {
       console.error('Failed to load Codex accounts for status bar:', error)
     })
@@ -127,7 +131,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await selectCodexProviderAccount(settings, {
+      const next = await selectCodexProviderAccount(runtimeTarget, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
@@ -151,12 +155,11 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
             next.accounts,
             nextActiveAccountId
           ),
-          // Why: two accounts can share an email, so the labels alone cannot
-          // tell the store whether this switch lands back on the launch account.
+          // Emails can coincide; IDs determine whether switching returns to the launch account.
           previousAccountId: previousActiveAccountId ?? null,
           nextAccountId: nextActiveAccountId ?? null,
-          // Why: the mutation wrote this row's slot only, so panes on any other
-          // lane still launch under the account they already had.
+          // Only this owner/runtime slot changed; other lanes keep their current launch accounts.
+          owner: runtimeTarget,
           target,
           // Why: clearing a distro-less WSL row nulls every distro slot at once.
           clearsEveryWslDistro: accountId === null
@@ -270,16 +273,18 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const selectedRuntimeKey = getCodexStatusRuntimeKey(
     normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
   )
-  const fallbackWslDistro = getStatusBarPreferredWslDistro(
-    settings,
-    windowsTerminalCapabilities.wslDistros
-  )
+  // A focused WSL host's accounts are this desktop's for its distro, so that group always shows.
+  const fallbackWslDistro =
+    wslHostDistro ??
+    getStatusBarPreferredWslDistro(settings, windowsTerminalCapabilities.wslDistros)
   const switchGroups = buildCodexStatusSwitchGroups(
     accountState,
     toCodexStatusRuntimeTarget(codexTarget),
     {
       fallbackWslDistro,
-      includeFallbackWsl: !hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings),
+      includeFallbackWsl:
+        wslHostDistro !== null ||
+        (!hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings)),
       hostLabel: providerAccountHostLabel
     }
   )

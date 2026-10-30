@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   getGitBashCandidatePaths,
+  isGitForWindowsBashLauncherPath,
   isWindowsGitBashShellPath,
   resolveGitBashPath,
   resolveWindowsGitBashShellPath
@@ -53,8 +54,7 @@ describe('Git Bash path discovery', () => {
     ).toBe('C:\\Users\\alice\\AppData\\Local\\Programs\\Git\\bin\\bash.exe')
   })
 
-  // Why: resolveWindowsGitBashShellPath has no platform guard of its own, so passing options
-  // explicitly keeps these assertions meaningful on non-Windows CI hosts.
+  // Inject platform options so these assertions also exercise Windows behavior on other hosts.
   it('honors an explicit bash.exe path for future user-configurable launch paths', () => {
     expect(
       resolveWindowsGitBashShellPath('D:\\PortableGit\\bin\\bash.exe', {
@@ -158,5 +158,72 @@ describe('Git Bash path discovery', () => {
         exists: (path) => path === 'C:\\msys64\\usr\\bin\\bash.exe'
       })
     ).toBeNull()
+  })
+
+  it('identifies only the bin\\bash.exe launcher, not the MSYS bash it runs', () => {
+    expect(isGitForWindowsBashLauncherPath('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
+    expect(isGitForWindowsBashLauncherPath('D:\\PortableGit\\bin\\bash.exe')).toBe(true)
+    expect(isGitForWindowsBashLauncherPath('C:\\Program Files\\Git\\usr\\bin\\bash.exe')).toBe(
+      false
+    )
+    expect(isGitForWindowsBashLauncherPath('bash.exe')).toBe(false)
+  })
+
+  it('identifies a launcher in an install folder named anything else', () => {
+    const renamedInstall = (path: string): boolean =>
+      [
+        'C:\\Tools\\Git-2.55\\bin\\bash.exe',
+        'C:\\Tools\\Git-2.55\\usr\\bin\\bash.exe',
+        'C:\\Tools\\Git-2.55\\cmd\\git.exe',
+        'C:\\Tools\\Git-2.55\\git-bash.exe'
+      ].includes(path)
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Tools\\Git-2.55\\bin\\bash.exe', {
+        exists: renamedInstall
+      })
+    ).toBe(true)
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Users\\a\\scoop\\apps\\git\\current\\bin\\bash.exe', {
+        exists: (path) => path.startsWith('C:\\Users\\a\\scoop\\apps\\git\\current\\')
+      })
+    ).toBe(true)
+  })
+
+  it.each([
+    ['usr\\bin\\bash.exe', 'C:\\Tools\\Git-2.55\\usr\\bin\\bash.exe'],
+    ['cmd\\git.exe', 'C:\\Tools\\Git-2.55\\cmd\\git.exe'],
+    ['git-bash.exe', 'C:\\Tools\\Git-2.55\\git-bash.exe']
+  ])('refuses a renamed install root missing only %s', (_label, missingMarker) => {
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Tools\\Git-2.55\\bin\\bash.exe', {
+        exists: (path) => path !== missingMarker
+      })
+    ).toBe(false)
+  })
+
+  it('refuses a bash that is not a Git for Windows launcher, even where every path exists', () => {
+    const everythingExists = (): boolean => true
+    // Direct usr/bin/bash.exe has no nested Git install root.
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Program Files\\Git\\usr\\bin\\bash.exe', {
+        exists: (path) => !path.includes('\\usr\\usr\\') && !path.includes('\\usr\\cmd\\')
+      })
+    ).toBe(false)
+    const observedCygwinRoot = ['C:\\cygwin64\\etc', 'C:\\cygwin64\\var']
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\cygwin64\\bin\\bash.exe', {
+        exists: (path) => observedCygwinRoot.includes(path)
+      })
+    ).toBe(false)
+    // Even Git’s cmd/git.exe and usr/bin/bash.exe paths do not replace the git-bash.exe marker.
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\cygwin64\\bin\\bash.exe', {
+        exists: (path) => path.endsWith('bin\\bash.exe') || path.endsWith('cmd\\git.exe')
+      })
+    ).toBe(false)
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Tools\\sh\\bash.exe', { exists: everythingExists })
+    ).toBe(false)
+    expect(isGitForWindowsBashLauncherPath('bash.exe', { exists: everythingExists })).toBe(false)
   })
 })

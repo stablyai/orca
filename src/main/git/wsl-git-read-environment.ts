@@ -1,24 +1,21 @@
 import { execFile } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
 } from '../../shared/wsl-login-shell-command'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 export type WslGitReadEnvironment = { gitPath: string; home: string; path: string }
 
 const PROBE_TIMEOUT_MS = 10_000
-/**
- * How long a read may wait for a cold probe before taking the login shell.
- * Short enough that a wedged distro cannot stall the panel, long enough that a
- * healthy one resolves and every later read runs shell-free.
- */
+/** Bound cold-probe waits; reads fall back to the login shell while a wedged distro remains unresolved. */
 export const WSL_GIT_READ_ENVIRONMENT_WAIT_MS = 1_500
 const PROBE_MAX_BUFFER = 64 * 1024
 const TRANSIENT_PROBE_RETRY_MS = 30_000
 const MAX_WSL_GIT_READ_ENVIRONMENT_DISTROS = 128
 const environmentByDistro = new Map<string, Promise<WslGitReadEnvironment | null>>()
-// Why the null entries matter: a settled "no direct route" answer is what lets a read skip the
-// bounded probe wait entirely instead of racing an already-decided promise on every call.
+// Cache settled nulls so later reads skip the probe wait.
 const settledEnvironmentByDistro = new Map<string, WslGitReadEnvironment | null>()
 const transientRetryAfterByDistro = new Map<string, number>()
 
@@ -84,15 +81,23 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
     `printf '%s\\0%s\\0%s' "$PATH" "$_orca_git_path" "$HOME"`
   ].join('\n')
   const captured = buildWslCapturedLoginShellCommand(probeCommand)
+  const args = buildWslExecArgs(distro, ['sh', '-lc', captured.command])
   return new Promise((resolve) => {
+    try {
+      assertWslDistroAllowed('wsl.exe', args)
+    } catch {
+      resolve({ kind: 'rejected' })
+      return
+    }
     execFile(
       'wsl.exe',
-      buildWslExecArgs(distro, ['sh', '-lc', captured.command]),
+      args,
       {
         encoding: 'utf8',
         maxBuffer: PROBE_MAX_BUFFER,
         timeout: PROBE_TIMEOUT_MS,
-        windowsHide: true
+        windowsHide: true,
+        cwd: resolveWslInteropSpawnCwd()
       },
       (error, stdout) => {
         if (error) {
@@ -140,17 +145,13 @@ export function getWslGitReadEnvironment(distro: string): Promise<WslGitReadEnvi
   return environment
 }
 
-/**
- * What the shared probe settled to: the environment, `null` for a distro with no
- * usable direct route, `undefined` while nothing has been decided yet.
- */
+/** null means no direct route; undefined means the probe has not settled. */
 export function peekWslGitReadEnvironment(
   distro: string
 ): WslGitReadEnvironment | null | undefined {
   return settledEnvironmentByDistro.get(distro)
 }
 
-/** True once the probe has decided either way, so a read has nothing left to wait for. */
 export function isWslGitReadEnvironmentSettled(distro: string): boolean {
   return settledEnvironmentByDistro.has(distro)
 }

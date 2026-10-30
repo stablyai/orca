@@ -1,4 +1,5 @@
-/** The terminal/worktree capabilities the coordinator needs from the runtime it drives. */
+import type { DispatchPreambleSendOptions } from './preamble'
+
 export type WorktreeDrift = {
   base: string
   behind: number
@@ -9,11 +10,7 @@ export type CoordinatorRuntime = {
   sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
-    options?: {
-      acceptQueued?: boolean
-      observationTimeoutMs?: number
-      requestId?: string
-    }
+    options: DispatchPreambleSendOptions
   ): Promise<unknown>
   listTerminals(
     worktreeSelector?: string,
@@ -30,18 +27,20 @@ export type CoordinatorRuntime = {
     handle: string,
     options?: { condition?: string; timeoutMs?: number }
   ): Promise<{ handle: string; condition: string }>
-  // Why (§3.1): lives on the runtime because it must resolve a worktree, load the repo, and fetch — the coordinator only knows handles + specs.
+  // The runtime resolves repositories and fetches; the coordinator only knows handles and specs.
   probeWorktreeDrift(worktreeSelector: string): Promise<WorktreeDrift>
-  // Why: pane-only fallback preserves reservation identity for lightweight runtime fakes.
+  // Pane-only fallback retains reservation identity in lightweight fakes.
   getTerminalPaneKey?(handle: string): string | null
-  // Why optional: lightweight fakes omit it and get the fail-closed default.
+  // Omitted by lightweight fakes; absence uses the fail-closed default.
   getNestedWorkerMaxDepth?(): number
-  // Why: automatic dispatch persists the same authenticated pane/process tuple as manual dispatch.
+  // Omitted by lightweight fakes; absence keeps the default heartbeat interval.
+  getOrchestrationHeartbeatMinutes?(): number | null
+  // Automatic dispatch must persist the same authenticated pane/process authority as manual dispatch.
   getOrchestrationDispatchAuthority?(handle: string): {
     paneKey: string | null
     processIncarnation: string | null
     launchTokenHash: string | null
   } | null
-  // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
+  // The worker's native/WSL pane determines its packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-dev' | 'orca-ide'
 }

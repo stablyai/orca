@@ -20,7 +20,7 @@ vi.mock('./agent-foreground-process', () => ({
 }))
 
 import { getLocalPtyForegroundProcess } from './local-pty-foreground-inspection'
-import { ptyLastRecognizedForeground, ptyProcesses, ptyShellName } from './local-pty-provider-state'
+import { ptyLastRecognizedForeground, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 
 const SHELL_PID = 4242
 const AGENT_PID = 4300
@@ -77,13 +77,13 @@ describe('local POSIX provider cheap-tier revalidation', () => {
       processName: table === 'agent' ? 'claude' : 'zsh'
     }))
     ptyProcesses.set(ID, proc as never)
-    ptyShellName.set(ID, 'zsh')
+    ptyShellPath.set(ID, '/bin/zsh')
     ptyLastRecognizedForeground.delete(ID)
   })
 
   afterEach(() => {
     ptyProcesses.delete(ID)
-    ptyShellName.delete(ID)
+    ptyShellPath.delete(ID)
     ptyLastRecognizedForeground.delete(ID)
     if (platform) {
       Object.defineProperty(process, 'platform', platform)

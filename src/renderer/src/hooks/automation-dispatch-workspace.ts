@@ -1,4 +1,3 @@
-import { launchWorktreeBackgroundTerminals } from '@/lib/launch-worktree-background-terminals'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -19,6 +18,7 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
+import { buildClientAutomationWorkspaceProvenance } from '../../../shared/automation-workspace-provenance'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -80,7 +80,7 @@ export async function prepareAutomationDispatchWorkspace(args: {
     folderWorkspaceHost && automationWorktree
       ? folderWorkspaceConnectionId
         ? toSshExecutionHostId(folderWorkspaceConnectionId)
-        : folderWorkspaceHost.kind === 'local'
+        : folderWorkspaceHost.kind === 'local' || folderWorkspaceHost.kind === 'runtime'
           ? getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
           : null
       : null
@@ -133,7 +133,7 @@ export async function prepareAutomationDispatchWorkspace(args: {
     const sshState = await window.api.ssh.getState({ targetId: sshTargetId })
     if (sshState?.status !== 'connected') {
       try {
-        const connected = await window.api.ssh.connect({ targetId: sshTargetId })
+        const connected = await window.api.ssh.connect({ targetId: sshTargetId, automatic: true })
         if (connected?.status !== 'connected') {
           throw new Error('SSH target is unavailable.')
         }
@@ -196,8 +196,7 @@ export async function prepareAutomationDispatchWorkspace(args: {
           undefined,
           undefined,
           undefined,
-          // Why: the automation session below owns the prompt-bearing
-          // agent tab; createdWithAgent would reopen an empty fallback.
+          // The automation owns its prompt-bearing tab; createdWithAgent would reopen an empty fallback.
           undefined,
           undefined,
           undefined,
@@ -214,12 +213,15 @@ export async function prepareAutomationDispatchWorkspace(args: {
           undefined,
           undefined,
           {
+            // Why: only a captured host; with none, a project two hosts publish refuses, never guesses.
+            executionHostId: parseExecutionHostId(automation.runContext?.hostId)?.id,
             automationProvenanceRequest: {
               automationId: automation.id,
               automationRunId: run.id,
               dispatchToken,
               createRequestId: automationWorkspaceCreateRequestId
-            }
+            },
+            clientAutomationProvenance: buildClientAutomationWorkspaceProvenance(automation, run)
           }
         )
       : null
@@ -244,17 +246,6 @@ export async function prepareAutomationDispatchWorkspace(args: {
   }
   context.workspaceId = worktree.id
   context.workspaceDisplayName = worktree.displayName
-  if (createResult?.setup || createResult?.defaultTabs) {
-    void launchWorktreeBackgroundTerminals({
-      worktreeId: worktree.id,
-      setup: createResult.setup,
-      defaultTabs: createResult.defaultTabs
-    }).catch((error) => {
-      // Why: setup/defaultTabs match normal worktree creation: they are
-      // best-effort terminal work and must not block the automation agent.
-      console.warn('[automations] Failed to launch workspace setup/default tabs:', error)
-    })
-  }
   return worktree
 }
 

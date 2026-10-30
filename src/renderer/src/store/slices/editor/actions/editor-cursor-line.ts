@@ -8,8 +8,10 @@ export function createEditorCursorLine(
   return {
     editorCursorLine: {},
     setEditorCursorLine: (fileId, line) =>
-      set((s) => ({
-        editorCursorLine: { ...s.editorCursorLine, [fileId]: line }
-      }))
+      set((s) =>
+        s.editorCursorLine[fileId] === line
+          ? s
+          : { editorCursorLine: { ...s.editorCursorLine, [fileId]: line } }
+      )
   }
 }

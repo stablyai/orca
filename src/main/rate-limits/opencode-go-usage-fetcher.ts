@@ -1,41 +1,46 @@
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
-import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import type {
+  ExtraUsageBalance,
+  ProviderRateLimits,
+  UsageRateLimitFailureKind
+} from '../../shared/rate-limit-types'
 import {
   clearOpenCodeSessionCookies,
   createOpenCodeRequestSession,
   OPENCODE_BASE_URL
 } from './opencode-go-request-session'
-import { parseOpenCodeGoStatusPayload } from './opencode-go-status-parsing'
+import {
+  isOpenCodeGoExplicitNoAccessPayload,
+  makeOpenCodeGoZenBalance,
+  parseOpenCodeGoBillingStatusPayload,
+  parseOpenCodeGoStatusPayload
+} from './opencode-go-status-parsing'
+import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const OPENCODE_GO_STATUS_URL = `${OPENCODE_BASE_URL}/console/api/go/status`
+const OPENCODE_BILLING_STATUS_URL = `${OPENCODE_BASE_URL}/console/api/billing/status`
 const API_TIMEOUT_MS = 15_000
+const OPTIONAL_BILLING_TIMEOUT_MS = 5_000
 
-// Server-function hash for the workspaces endpoint — stable identifier used by
-// the opencode.ai SST/TanStack router server-fn protocol.
+// SST/TanStack workspaces server-function routing id.
 const WORKSPACES_SERVER_ID = 'def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f'
 
-// Closed allowlist: only known opencode.ai auth cookies. Console Go usage is
-// authed by __Host-console_session; /_server workspace discovery still uses auth.
+// Send only known auth cookies: console usage needs __Host-console_session; workspace discovery uses auth.
 const AUTH_COOKIE_NAMES = new Set(['auth', '__Host-auth', '__Host-console_session'])
 
-// Why: users may paste just the token value (e.g. "Fe26.2**...") instead of
-// the full cookie header ("auth=Fe26.2**..."). Auto-wrapping avoids a confusing
-// silent failure where the cookie looks non-empty but contains no auth name.
+// Accept pasted token values without requiring the auth= header syntax.
 export function normalizeCookieInput(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed) {
     return trimmed
   }
-  // Already a valid cookie header: has multiple pairs or starts with known name.
   if (trimmed.includes(';') || /^(?:auth|__Host-auth|__Host-console_session)=/i.test(trimmed)) {
     return trimmed
   }
-  // Only wrap if it looks like an Iron Session seal (starts with Fe26.2**)
-  // or a reasonably structured bare token (alphanumeric with dots/dashes).
-  // Otherwise, leave it alone to fail predictably instead of sending malformed auth.
+  // Wrap only seal/structured token shapes; malformed values must fail predictably.
   if (trimmed.startsWith('Fe26.2**') || /^[a-zA-Z0-9.\-_]+$/.test(trimmed)) {
     return `auth=${trimmed}`
   }
@@ -59,12 +64,9 @@ function parseAuthCookies(raw: string): { name: string; value: string }[] {
 }
 
 function parseWorkspaceIds(text: string): string[] {
-  // Match id:"wrk_..." or id: "wrk_..." patterns in JS-serialized output.
-  // Why: Workspace IDs follow a 'wrk_xxx' or 'wk_xxx' pattern. Using a
-  // more specific regex with word boundaries avoids picking up unrelated
-  // object properties that might match a generic ID pattern.
+  // Console uses org_/wrk_; wk_ remains accepted for older workspace responses.
   const ids: string[] = []
-  const workspaceIdRegex = /\bid\s*:\s*["']((?:wrk|wk)_[a-zA-Z0-9]+)["']/g
+  const workspaceIdRegex = /\bid\s*:\s*["']((?:org|wrk|wk)_[a-zA-Z0-9]+)["']/g
   for (const match of text.matchAll(workspaceIdRegex)) {
     const id = match[1]
     if (id && !ids.includes(id)) {
@@ -79,7 +81,6 @@ export async function fetchOpenCodeGoRateLimits(
   workspaceIdOverride?: string,
   networkProxySettings?: NetworkProxySettings
 ): Promise<ProviderRateLimits> {
-  // Normalize before any guard — bare tokens become auth=<token>.
   const normalizedCookie = normalizeCookieInput(cookie)
 
   if (!normalizedCookie) {
@@ -94,7 +95,7 @@ export async function fetchOpenCodeGoRateLimits(
     }
   }
 
-  // Filter to only auth cookies — avoids sending unrelated session data.
+  // Exclude unrelated session data from requests.
   const authCookies = parseAuthCookies(normalizedCookie)
   if (authCookies.length === 0) {
     return {
@@ -108,13 +109,12 @@ export async function fetchOpenCodeGoRateLimits(
     }
   }
 
-  // Why: Chromium can reject a manually supplied Cookie header on Windows.
-  // An isolated session jar lets its network stack attach auth normally.
+  // Chromium may reject manual Cookie headers on Windows; use an isolated jar for normal auth attachment.
   let openCodeSession: Session
   try {
     openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings)
   } catch (error) {
-    return makeOpenCodeError(error)
+    return makeOpenCodeError(error instanceof Error ? error.message : 'Unknown error')
   }
 
   try {
@@ -126,15 +126,49 @@ export async function fetchOpenCodeGoRateLimits(
   }
 }
 
-function makeOpenCodeError(error: unknown): ProviderRateLimits {
+function startOptionalBillingFetch(openCodeSession: Session, workspaceId: string) {
+  const abortController = new AbortController()
+  const promise = (async (): Promise<ExtraUsageBalance> => {
+    const timeout = setTimeout(() => abortController.abort(), OPTIONAL_BILLING_TIMEOUT_MS)
+    try {
+      const response = await openCodeSession.fetch(OPENCODE_BILLING_STATUS_URL, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Origin: OPENCODE_BASE_URL,
+          Referer: `${OPENCODE_BASE_URL}/console/${workspaceId}/billing`,
+          'x-org-id': workspaceId
+        },
+        signal: abortController.signal
+      })
+      if (!response.ok) {
+        abortController.abort()
+        return makeOpenCodeGoZenBalance(null, 'refresh-failed')
+      }
+      const balance = parseOpenCodeGoBillingStatusPayload(await response.text())
+      return makeOpenCodeGoZenBalance(balance, balance === null ? 'billing-unavailable' : null)
+    } catch {
+      return makeOpenCodeGoZenBalance(null, 'refresh-failed')
+    } finally {
+      clearTimeout(timeout)
+    }
+  })()
+  return { promise, abort: () => abortController.abort() }
+}
+
+function makeOpenCodeError(
+  error: string,
+  failureKind?: UsageRateLimitFailureKind
+): ProviderRateLimits {
   return {
     provider: 'opencode-go',
     session: null,
     weekly: null,
     monthly: null,
     updatedAt: Date.now(),
-    error: error instanceof Error ? error.message : 'Unknown error',
-    status: 'error'
+    error,
+    status: 'error',
+    ...(failureKind ? { usageMetadata: { failureKind } } : {})
   }
 }
 
@@ -142,27 +176,19 @@ async function fetchOpenCodeGoRateLimitsWithSession(
   openCodeSession: Session,
   workspaceIdOverride?: string
 ): Promise<ProviderRateLimits> {
-  // Step 1: resolve workspace IDs to try.
   let ids: string[] = []
   const override = workspaceIdOverride?.trim()
 
   if (override) {
-    if (!/^(wrk|wk)_[A-Za-z0-9]+$/.test(override)) {
-      return {
-        provider: 'opencode-go',
-        session: null,
-        weekly: null,
-        monthly: null,
-        updatedAt: Date.now(),
-        error: 'Invalid workspace ID format: must match ^(wrk|wk)_[A-Za-z0-9]+$',
-        status: 'error'
-      }
+    if (!/^(org|wrk|wk)_[A-Za-z0-9]+$/.test(override)) {
+      return makeOpenCodeError(
+        'Invalid workspace ID format: must match ^(org|wrk|wk)_[A-Za-z0-9]+$'
+      )
     }
     ids = [override]
   } else {
     try {
-      // The /_server endpoint uses SST server-function protocol: GET with ?id=<hash>
-      // and X-Server-Id / X-Server-Instance headers for routing.
+      // SST server functions route by query hash plus X-Server-Id/X-Server-Instance.
       const instanceId = `server-fn:${randomUUID()}`
       const workspacesUrl = `${OPENCODE_SERVER_URL}?id=${WORKSPACES_SERVER_ID}`
       const workspacesRes = await openCodeSession.fetch(workspacesUrl, {
@@ -178,51 +204,30 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       })
 
       if (!workspacesRes.ok) {
-        return {
-          provider: 'opencode-go',
-          session: null,
-          weekly: null,
-          monthly: null,
-          updatedAt: Date.now(),
-          error: `Workspaces fetch failed (${workspacesRes.status})`,
-          status: 'error'
-        }
+        return makeOpenCodeError(`Workspaces fetch failed (${workspacesRes.status})`)
       }
 
       const workspacesText = await workspacesRes.text()
       ids = parseWorkspaceIds(workspacesText)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      return {
-        provider: 'opencode-go',
-        session: null,
-        weekly: null,
-        monthly: null,
-        updatedAt: Date.now(),
-        error: message,
-        status: 'error'
-      }
+      return makeOpenCodeError(message, classifyThrownUsageRequestError(err))
     }
   }
 
   if (ids.length === 0) {
-    return {
-      provider: 'opencode-go',
-      session: null,
-      weekly: null,
-      monthly: null,
-      updatedAt: Date.now(),
-      error: 'No workspace ID found — set a Workspace ID override in settings',
-      status: 'error'
-    }
+    return makeOpenCodeError(
+      'No workspace found for this cookie — add an OpenCode Go API key (or run /connect in OpenCode), or set a Workspace ID override'
+    )
   }
 
-  // Why: /workspace/<id>/go now 302s to console login. Usage is JSON at
-  // /console/api/go/status, scoped by x-org-id and authed by the console session.
-  let lastError = ''
+  // Legacy workspace Go pages redirect to login; JSON usage uses console session auth and x-org-id.
+  let lastFailure: ProviderRateLimits | null = null
+  let balanceOnlyResult: ProviderRateLimits | null = null
   for (const candidateId of ids) {
+    let billingTask: ReturnType<typeof startOptionalBillingFetch> | null = null
     try {
-      const statusRes = await openCodeSession.fetch(OPENCODE_GO_STATUS_URL, {
+      const statusPromise = openCodeSession.fetch(OPENCODE_GO_STATUS_URL, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -232,41 +237,68 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         },
         signal: AbortSignal.timeout(API_TIMEOUT_MS)
       })
-
+      billingTask = startOptionalBillingFetch(openCodeSession, candidateId)
+      const statusRes = await statusPromise
       if (!statusRes.ok) {
-        lastError =
+        billingTask.abort()
+        await billingTask.promise
+        lastFailure = makeOpenCodeError(
           statusRes.status === 401
             ? 'Usage fetch failed (401) — paste the full Cookie header including __Host-console_session (auth alone is not enough)'
             : `Usage fetch failed (${statusRes.status})`
+        )
         continue
       }
 
-      const parsed = parseOpenCodeGoStatusPayload(await statusRes.text())
+      const statusText = await statusRes.text()
+      const parsed = parseOpenCodeGoStatusPayload(statusText)
+      const explicitNoAccess = isOpenCodeGoExplicitNoAccessPayload(statusText)
+      if (!parsed && !explicitNoAccess) {
+        billingTask.abort()
+        await billingTask.promise
+        lastFailure = makeOpenCodeError('Could not parse usage data')
+        continue
+      }
+
+      const balance = await billingTask.promise
       if (parsed) {
         return {
           provider: 'opencode-go',
           session: parsed.session,
           weekly: parsed.weekly,
           monthly: parsed.monthly,
+          extraUsage: balance,
           updatedAt: Date.now(),
           error: null,
           status: 'ok'
         }
       }
-      lastError = 'Could not parse usage data'
+      if (balance.balance !== null) {
+        balanceOnlyResult ??= {
+          provider: 'opencode-go',
+          session: null,
+          weekly: null,
+          monthly: null,
+          extraUsage: balance,
+          updatedAt: Date.now(),
+          error: null,
+          status: 'ok'
+        }
+      } else {
+        lastFailure = makeOpenCodeError('Could not parse usage data')
+      }
     } catch (err) {
+      if (billingTask) {
+        billingTask.abort()
+        await billingTask.promise
+      }
       const message = err instanceof Error ? err.message : 'Unknown error'
-      lastError = message
+      lastFailure = makeOpenCodeError(message, classifyThrownUsageRequestError(err))
     }
   }
 
-  return {
-    provider: 'opencode-go',
-    session: null,
-    weekly: null,
-    monthly: null,
-    updatedAt: Date.now(),
-    error: lastError || 'Could not parse usage data from any available workspace',
-    status: 'error'
+  if (balanceOnlyResult) {
+    return balanceOnlyResult
   }
+  return lastFailure ?? makeOpenCodeError('Could not parse usage data from any available workspace')
 }

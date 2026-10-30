@@ -8,7 +8,7 @@ let userDataDir: string
 
 const { removeHostTreeMock, deleteWslFishHistoryFileMock } = vi.hoisted(() => ({
   removeHostTreeMock: vi.fn<(dir: string) => Promise<void>>(),
-  deleteWslFishHistoryFileMock: vi.fn<(distro: string, session: string) => Promise<void>>()
+  deleteWslFishHistoryFileMock: vi.fn<(distro: string, session: string) => Promise<string | void>>()
 }))
 
 vi.mock('./host-tree-removal', () => ({
@@ -29,9 +29,20 @@ import {
   HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS,
   schedulePendingHistoryTreeRemovals
 } from './terminal-history-deletion'
+import {
+  _resetWslBackgroundDistroGateForTests,
+  noteWslDistrosRunning
+} from './wsl-background-distro-gate'
 
-/** A tombstone whose rm fails once used to sit on disk for the rest of the session — only the next
- *  process start re-queued it. Prove the failure re-arms in-process, and that it stays bounded. */
+// Real filesystem reads need the actual event loop, even while timers are faked.
+const realSetImmediate = setImmediate
+
+async function settleTombstoneDirectoryReads(): Promise<void> {
+  for (let index = 0; index < 10; index++) {
+    await new Promise((resolve) => realSetImmediate(resolve))
+  }
+}
+
 describe('tombstoned history removal retries', () => {
   beforeEach(() => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-history-retry-'))
@@ -47,6 +58,7 @@ describe('tombstoned history removal retries', () => {
 
   afterEach(() => {
     cancelPendingHistoryTreeRemovalRetries()
+    _resetWslBackgroundDistroGateForTests()
     vi.useRealTimers()
     rmSync(userDataDir, { recursive: true, force: true })
   })
@@ -71,7 +83,6 @@ describe('tombstoned history removal retries', () => {
       expect(removeHostTreeMock).toHaveBeenCalledTimes(index + 2)
     }
 
-    // Bounded: a permanently wedged tree stops burning timers and waits for the next startup drain.
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(removeHostTreeMock).toHaveBeenCalledTimes(
       HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS.length + 1
@@ -124,9 +135,12 @@ describe('tombstoned history removal retries', () => {
     expect(deleteWslFishHistoryFileMock).toHaveBeenCalledTimes(64)
     expect(releases).toHaveLength(64)
 
-    while (releases.length > 0) {
+    for (let pass = 0; removeHostTreeMock.mock.calls.length < 1_000; pass++) {
+      expect(pass).toBeLessThan(200)
+      await vi.waitFor(() => expect(releases.length).toBeGreaterThan(0))
       releases.splice(0).forEach((release) => release())
       await vi.advanceTimersByTimeAsync(0)
+      await settleTombstoneDirectoryReads()
     }
     expect(removeHostTreeMock).toHaveBeenCalledTimes(1_000)
     expect(deleteWslFishHistoryFileMock).toHaveBeenCalledTimes(1_000)
@@ -135,9 +149,7 @@ describe('tombstoned history removal retries', () => {
   it('caps persistent failures and leaves excess tombstones for a later disk batch', async () => {
     const distroRoot = join(userDataDir, 'terminal-history-wsl', 'Ubuntu')
     mkdirSync(distroRoot, { recursive: true })
-    // Why removeHostTree and not the fish cleanup: a failing fish cleanup no
-    // longer blocks tree removal (most distros have no fish), so the tree
-    // removal itself has to be the thing that fails to exercise the cap.
+    // Fish cleanup failures are tolerated; fail tree removal itself to exercise the cap.
     removeHostTreeMock.mockRejectedValue(new Error('EBUSY'))
     for (let index = 0; index < 1_000; index++) {
       const worktreeId = `repo-1::/path/fail-${index}`
@@ -174,10 +186,7 @@ describe('tombstoned history removal retries', () => {
   })
 
   it('still removes the history tree when WSL fish cleanup fails', async () => {
-    // Why this matters: `injectWslFishHistoryEnv` records a fishSession for EVERY
-    // WSL terminal, and cleanup shells out to `wsl.exe --exec fish`. On a distro
-    // with no fish that always fails — which used to chain into removeHostTree and
-    // leak the bash/zsh history tree for those users permanently.
+    // WSL terminals can record fish sessions even in distros without fish.
     const distroRoot = join(userDataDir, 'terminal-history-wsl', 'Ubuntu')
     mkdirSync(distroRoot, { recursive: true })
     deleteWslFishHistoryFileMock.mockRejectedValue(new Error('fish: command not found'))
@@ -200,6 +209,35 @@ describe('tombstoned history removal retries', () => {
 
     expect(deleteWslFishHistoryFileMock).toHaveBeenCalled()
     expect(removeHostTreeMock).toHaveBeenCalled()
+    expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(0)
+  })
+
+  it('keeps the tombstone while its distro is stopped and finishes once the distro runs', async () => {
+    const distroRoot = join(userDataDir, 'terminal-history-wsl', 'Ubuntu')
+    mkdirSync(distroRoot, { recursive: true })
+    deleteWslFishHistoryFileMock.mockResolvedValueOnce('distro-stopped')
+    const worktreeId = 'repo-1::/path/stopped-distro'
+    const dir = join(distroRoot, hashWorktreeId(worktreeId))
+    mkdirSync(dir, { recursive: true })
+    const fishSession = fishHistorySessionName(hashWorktreeId(worktreeId))
+    writeFileSync(join(dir, 'meta.json'), JSON.stringify({ worktreeId, fishSession }))
+
+    deleteWorktreeHistoryDir(worktreeId)
+    await flushPendingWorktreeHistoryDeletions()
+
+    expect(removeHostTreeMock).not.toHaveBeenCalled()
+    expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(1)
+
+    await schedulePendingHistoryTreeRemovals(distroRoot)
+    await settleTombstoneDirectoryReads()
+    expect(deleteWslFishHistoryFileMock).toHaveBeenCalledTimes(1)
+
+    deleteWslFishHistoryFileMock.mockResolvedValue('deleted')
+    noteWslDistrosRunning(['ubuntu'])
+    await flushPendingWorktreeHistoryDeletions()
+
+    expect(deleteWslFishHistoryFileMock).toHaveBeenLastCalledWith('Ubuntu', fishSession)
+    expect(removeHostTreeMock).toHaveBeenCalledTimes(1)
     expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(0)
   })
 })

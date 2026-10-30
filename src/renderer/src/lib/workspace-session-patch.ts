@@ -20,7 +20,6 @@ import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tab
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
-import { buildPersistedClosedTerminalTabTombstones } from './workspace-session-closed-tab-tombstones'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -65,6 +64,13 @@ export function buildWorkspaceSessionPatch(
   }
   if (changed.has('activeWorktreeId')) {
     patch.activeWorktreeId = snapshot.activeWorktreeId
+  }
+  // Why: without these the debounced writer kept the first focus's key and host forever.
+  if (changed.has('activeWorkspaceKey')) {
+    patch.activeWorkspaceKey = snapshot.activeWorkspaceKey
+  }
+  if (changed.has('activeWorkspaceExecutionHostId')) {
+    patch.activeWorkspaceExecutionHostId = snapshot.activeWorkspaceExecutionHostId ?? null
   }
   if (changed.has('activeTabId')) {
     patch.activeTabId = snapshot.activeTabId
@@ -111,10 +117,7 @@ export function buildWorkspaceSessionPatch(
   ) {
     const terminalSessionData = buildTerminalSessionData(snapshot)
     Object.assign(patch, terminalSessionData)
-    // Why: the reconnect list is derived from persisted remote session ids as
-    // well as live SSH state. Recompute it alongside remoteSessionIdsByTabId
-    // so a crash between patches cannot leave a target on disk whose sessions
-    // were all closed (or vice versa).
+    // Persist recomputed reconnect targets with remote-session IDs so crash between patches cannot leave closed targets or omit surviving sessions.
     patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
       snapshot,
       terminalSessionData.remoteSessionIdsByTabId ?? null
@@ -145,8 +148,7 @@ export function buildWorkspaceSessionPatch(
       )
     )
   }
-  // Why: withoutStagedBrowserTabs hides rows based on the handle map, so clearing a staged flag
-  // changes which browser and tab rows persist even when the rows themselves are untouched.
+  // Staged-browser filtering depends on handles; clearing staged status changes persisted rows even when browser/tab objects are unchanged.
   const stagedVisibilityChanged = changed.has('remoteBrowserPageHandlesByPageId')
   if (stagedVisibilityChanged || changed.has('browserTabsByWorktree')) {
     patch.browserTabsByWorktree = buildPersistedBrowserTabsByWorktree(
@@ -171,6 +173,10 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('clientHostedBrowserCloseIntentsByEnvironment')) {
     patch.clientHostedBrowserCloseIntentsByEnvironment =
       snapshot.clientHostedBrowserCloseIntentsByEnvironment
+  }
+  if (changed.has('pairedTerminalTabCloseIntentsByEnvironment')) {
+    patch.pairedTerminalTabCloseIntentsByEnvironment =
+      snapshot.pairedTerminalTabCloseIntentsByEnvironment
   }
   if (
     stagedVisibilityChanged ||
@@ -197,14 +203,10 @@ export function buildWorkspaceSessionPatch(
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
   }
-  if (changed.has('closedTerminalTabTombstonesByTabId')) {
-    patch.closedTerminalTabTombstonesByTabId = buildPersistedClosedTerminalTabTombstones(
-      snapshot.closedTerminalTabTombstonesByTabId
-    )
-  }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
+    // Why `{}`: the host split drops undefined, so clearing the last record never reached disk.
     patch.sleepingAgentSessionsByPaneKey =
-      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey
+      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey ?? {}
   }
 
   return patch

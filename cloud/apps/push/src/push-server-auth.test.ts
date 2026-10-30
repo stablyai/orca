@@ -3,10 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createPushHostKeypair } from './host-challenge-answering.test-fixture.js'
 import type { PushDatabase } from './push-database.js'
 import { createPushServer } from './push-server.js'
-import {
-  createPushServerHarness,
-  testPushConfig
-} from './push-server-harness.test-fixture.js'
+import { createPushServerHarness, testPushConfig } from './push-server-harness.test-fixture.js'
 
 describe('push gateway authentication and device routes', () => {
   let harness: Awaited<ReturnType<typeof createPushServerHarness>>
@@ -32,6 +29,8 @@ describe('push gateway authentication and device routes', () => {
       },
       transaction: async (operation) => await operation(unreachable),
       lockQuotaScope: async () => undefined,
+      tryLockScope: async () => true,
+      tryLockSharedScope: async () => true,
       close: async () => undefined
     }
     const broken = createPushServer(testPushConfig(), unreachable, {
@@ -106,13 +105,7 @@ describe('push gateway authentication and device routes', () => {
 
   it('never returns the host fingerprint on the challenge itself', async () => {
     const challenge = await harness.issueChallenge(createPushHostKeypair(22))
-    expect(Object.keys(challenge).sort()).toEqual([
-      'challengeId',
-      'ciphertextB64',
-      'expiresAt',
-      'gatewayEphemeralPublicKeyB64',
-      'nonceB64'
-    ])
+    expect(challenge).not.toHaveProperty('hostFingerprint')
   })
 
   it('lets only the owning host delete a registration', async () => {

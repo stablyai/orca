@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: feedback viewer details are loaded through GitHub IPC after the dialog receives the issue URL. */
 import React, { useRef, useState } from 'react'
 import { ExternalLink, Github } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
@@ -20,6 +20,7 @@ import {
   hasAttachableFeedbackImage
 } from '@/lib/feedback-image-attachments'
 import { stripClientEnvironmentFooter } from '../../../../shared/client-environment-info'
+import { FEEDBACK_PAYLOAD_TOO_LARGE_STATUS } from '../../../../shared/feedback-image-limits'
 import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachments'
 import { useSidebarFeedbackEnvironmentPrefill } from './use-sidebar-feedback-environment-prefill'
 import { useSidebarFeedbackImages } from './use-sidebar-feedback-images'
@@ -60,11 +61,14 @@ export function SidebarFeedbackDialog({
   open,
   onOpenChange
 }: SidebarFeedbackDialogProps): React.JSX.Element {
-  const [feedback, setFeedback] = useState('')
+  // Store drafts survive sidebar collapse, which unmounts this dialog.
+  const feedback = useAppStore((s) => s.feedbackDraft.feedback)
+  const submitAnonymously = useAppStore((s) => s.feedbackDraft.submitAnonymously)
+  const setFeedbackDraft = useAppStore((s) => s.setFeedbackDraft)
+  const clearFeedbackDraft = useAppStore((s) => s.clearFeedbackDraft)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
   const [isViewerLoading, setIsViewerLoading] = useState(false)
-  const [submitAnonymously, setSubmitAnonymously] = useState(false)
   const mountedRef = useMountedRef()
   const feedbackTextareaRef = useRef<HTMLTextAreaElement>(null)
   const {
@@ -77,8 +81,16 @@ export function SidebarFeedbackDialog({
     handleRemoveImage,
     clearImages,
     hasPendingImageReads,
-    getReservedImageSlots
+    getReservedImageCapacity
   } = useSidebarFeedbackImages({ open, isSubmitting, mountedRef })
+
+  // Read committed text at call time so late prefill cannot overwrite typing.
+  const setFeedback = React.useCallback(
+    (updater: (current: string) => string) => {
+      setFeedbackDraft({ feedback: updater(useAppStore.getState().feedbackDraft.feedback) })
+    },
+    [setFeedbackDraft]
+  )
 
   useSidebarFeedbackEnvironmentPrefill({
     open,
@@ -138,11 +150,7 @@ export function SidebarFeedbackDialog({
     setIsSubmitting(true)
     try {
       const identity = getSubmitIdentity(viewer, submitAnonymously)
-      // Why: submission is proxied through the main process via IPC because
-      // the packaged Mac build loads the renderer from file://, which makes
-      // cross-origin fetch() fail CORS preflight. Electron's net module in
-      // the main process has no CORS restrictions and works uniformly in dev
-      // and prod.
+      // Main-process IPC avoids packaged file-renderer CORS restrictions during submission.
       const result = await window.api.feedback.submit({
         feedback: trimmed,
         submitAnonymously,
@@ -158,10 +166,30 @@ export function SidebarFeedbackDialog({
         throw new Error(`Feedback request failed: ${result.error}`)
       }
 
+      // Clear delivered text even after unmount, but preserve newer drafts; strip regenerated environment footers before comparing.
+      if (
+        stripClientEnvironmentFooter(useAppStore.getState().feedbackDraft.feedback).trim() ===
+        userText
+      ) {
+        clearFeedbackDraft()
+      }
+
       if (mountedRef.current) {
-        // Why: the text reached us but the screenshots did not, so say that
-        // plainly instead of a blanket success the user would misread.
-        if (result.imagesDelivered === false) {
+        // The dialog closes after delivery; report lost screenshots without implying they remain recoverable here.
+        if (result.imagesFailure) {
+          toast.warning(
+            // Only 413 proves the size limit; other attachment refusals need different explanations.
+            result.imagesFailure.status === FEEDBACK_PAYLOAD_TOO_LARGE_STATUS
+              ? translate(
+                  'auto.components.sidebar.SidebarFeedbackDialog.imagesRejected',
+                  'Feedback sent. Your screenshots were too large to upload and were not included.'
+                )
+              : translate(
+                  'auto.components.sidebar.SidebarFeedbackDialog.imagesNotIncluded',
+                  'Feedback sent. Your screenshots could not be uploaded and were not included.'
+                )
+          )
+        } else if (result.imagesDelivered === false) {
           toast.warning(
             translate(
               'auto.components.sidebar.SidebarFeedbackDialog.imagesNotDelivered',
@@ -176,8 +204,6 @@ export function SidebarFeedbackDialog({
             )
           )
         }
-        setFeedback('')
-        setSubmitAnonymously(false)
         clearImages()
         onOpenChange(false)
       }
@@ -207,23 +233,25 @@ export function SidebarFeedbackDialog({
           event.preventDefault()
           feedbackTextareaRef.current?.focus()
         }}
-        // Why: paste is bound on the dialog rather than the textarea so a
-        // screenshot lands whether or not the caret is in the message box.
+        // Handle image paste across the dialog even without a textarea caret.
         onPaste={(event) => {
           const pasted = extractImageFilesFromDataTransfer(event.clipboardData)
           if (pasted.length === 0) {
             return
           }
-          // Why: consume the paste only when something is actually attachable.
-          // An unsupported image still routes through for its rejection toast,
-          // but preventing default there would silently eat co-pasted text.
-          if (hasAttachableFeedbackImage(pasted, getReservedImageSlots())) {
+          // Consume only attachable image pastes; rejection toasts must not cost co-pasted text.
+          const reserved = getReservedImageCapacity()
+          // An optimistic shrink may fail; let co-pasted text insert now rather than restore it later.
+          if (
+            hasAttachableFeedbackImage(pasted, reserved.count, reserved.bytes, {
+              allowShrinking: event.clipboardData.getData('text/plain').length === 0
+            })
+          ) {
             event.preventDefault()
           }
           handleAddFiles(pasted)
         }}
-        // Why: dragenter/leave fire per nested child; the hook counts depth so
-        // the highlight only clears once the pointer leaves the dialog.
+        // Nested drag events need depth tracking so highlights persist until the pointer leaves the dialog.
         {...dragHandlers}
       >
         <DialogHeader>
@@ -295,7 +323,7 @@ export function SidebarFeedbackDialog({
         <textarea
           ref={feedbackTextareaRef}
           value={feedback}
-          onChange={(event) => setFeedback(event.target.value)}
+          onChange={(event) => setFeedbackDraft({ feedback: event.target.value })}
           placeholder={translate(
             'auto.components.sidebar.SidebarFeedbackDialog.d46ddd66fc',
             'What could we improve?'
@@ -306,6 +334,7 @@ export function SidebarFeedbackDialog({
 
         <SidebarFeedbackImageAttachments
           images={images}
+          pendingCount={pendingImageReadCount}
           disabled={isSubmitting}
           isDragActive={isDragActive}
           onAddFiles={handleAddFiles}
@@ -326,7 +355,9 @@ export function SidebarFeedbackDialog({
                 <input
                   type="checkbox"
                   checked={submitAnonymously}
-                  onChange={(event) => setSubmitAnonymously(event.target.checked)}
+                  onChange={(event) =>
+                    setFeedbackDraft({ submitAnonymously: event.target.checked })
+                  }
                   className={cn(
                     'size-3.5 rounded border border-border bg-background align-middle',
                     'accent-foreground'

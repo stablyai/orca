@@ -1,26 +1,15 @@
 import type { Page } from '@stablyai/playwright-test'
 
-/**
- * Census for the paired HTML preview journey. Since STA-5557 the preview is a client-local
- * *browser* page located by a workspace document and served over `orca-preview://`, so the two
- * halves of the oracle point in opposite directions: the client must gain exactly one browser
- * workspace — the document one — while the host gains no browser page at all.
- */
+// Client-local previews must add one document browser workspace while adding no browser page on the host (STA-5557).
 export type PairedHtmlPreviewInventory = {
   hostResponseOk: boolean
   hostResponseError: string | null
-  /**
-   * Every browser page the host itself holds for the worktree: its own, plus the ones clients
-   * publish to it. Why this and not `session.tabs.list`: a headless host projects only terminals
-   * into that snapshot, so asking it whether a preview reached the host answers "no" whether or
-   * not the preview was ever held back. This reads the registry a published page lands in.
-   */
+  // Inspect the host browser registry; a headless session-tab snapshot omits browsers and would pass even for leaked pages.
   hostBrowserPages: { id: string; url: string; title: string }[]
   /** The same question through the tab snapshot, which is what a mobile or web client sees. */
   hostSessionBrowserTabs: { id: string; url: string }[]
   clientBrowserWorkspaceCount: number
-  /** Why every workspace and not just this one: a routed-out link opens in whichever workspace is
-   *  active, so a per-worktree count could miss a tab that really was created. */
+  // Count all workspaces because routed links can open under whichever workspace is active.
   clientBrowserWorkspaceCountAllWorktrees: number
   /** The client rows this document is open in — the preview, in browser-tab terms. */
   docWorkspaces: DocPreviewWorkspaceRow[]
@@ -61,8 +50,7 @@ export async function readPairedHtmlPreviewInventory(
       call('session.tabs.list')
     ])
     const state = window.__store?.getState()
-    // Why named here: RPC results cross the preload boundary as `unknown`, so this is the one
-    // place the shapes read below are asserted.
+    // Narrow unknown preload replies once at this read boundary.
     const hostPages = pagesResponse.ok
       ? (pagesResponse.result as { tabs: { browserPageId: string; url: string; title: string }[] })
           .tabs
@@ -118,7 +106,6 @@ export async function readPairedHtmlPreviewInventory(
   }, args)
 }
 
-/** The one document row, or a failure naming how many there actually were. */
 export function requireSingleDocWorkspace(
   inventory: PairedHtmlPreviewInventory
 ): DocPreviewWorkspaceRow {
@@ -130,10 +117,7 @@ export function requireSingleDocWorkspace(
   return inventory.docWorkspaces[0]!
 }
 
-/**
- * Reads the rendered document out of the preview guest. The guest is a real `<webview>` on its
- * own partition, so Playwright cannot reach into it directly — the embedder evaluates for us.
- */
+// Read through the embedder because Playwright cannot directly enter a real webview’s separate partition.
 export async function readDocPreviewRenderedText(
   page: Page,
   selector: string
@@ -157,14 +141,8 @@ export async function readDocPreviewRenderedText(
   }, selector)
 }
 
-/**
- * Viewport point of an element inside the preview guest. Playwright cannot target a node in a
- * webview, so the guest reports the rect and the embedder adds the webview's own offset — a real
- * mouse press there is the only click Chromium treats as a user gesture.
- *
- * Returns null until the guest's own hit test at that point resolves to the element, so a caller
- * polling on it cannot click a rect that layout is still moving.
- */
+// Combine guest rect with webview offset for a real Chromium user-gesture click.
+// Return null until the guest’s hit test agrees so moving layout cannot target a stale rect.
 export async function readDocPreviewElementCenter(
   page: Page,
   selector: string
@@ -201,11 +179,7 @@ export async function readDocPreviewElementCenter(
 
 type RoutedPreviewLink = { url: string; opened: boolean }
 
-/**
- * Records every external link the preview routes into a browser tab. The click that triggers this
- * crosses into a guest process, so without the record a missing tab cannot distinguish a press
- * Chromium swallowed from a tab the workspace refused to create.
- */
+// Record routed links so swallowed guest clicks can be distinguished from refused tab creation.
 export async function armPairedHtmlPreviewLinkRouting(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
@@ -234,7 +208,6 @@ export async function readPairedHtmlPreviewLinkRouting(page: Page): Promise<Rout
   )
 }
 
-/** Every preview guest in the client renderer, with the layout it actually has. */
 export async function readDocPreviewGuestRects(
   page: Page
 ): Promise<{ src: string; width: number; height: number; hiddenAncestor: boolean }[]> {

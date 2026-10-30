@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
 import {
   buildWorkspaceCleanupFacetList,
   countWorkspaceCleanupMeasuredRows
@@ -195,6 +196,22 @@ describe('query search', () => {
       expect(matchesWorkspaceCleanupFilters(facets, { ...ANY, query: term }, FACET_NOW)).toBe(true)
     }
     expect(matchesWorkspaceCleanupFilters(facets, { ...ANY, query: 'nope' }, FACET_NOW)).toBe(false)
+  })
+
+  it('matches the displayed git chip label in the current language', async () => {
+    await i18n.changeLanguage('es')
+    try {
+      const facets = makeFacets({
+        candidate: {
+          git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: FACET_NOW }
+        }
+      })
+      expect(
+        matchesWorkspaceCleanupFilters(facets, { ...ANY, query: 'con cambios' }, FACET_NOW)
+      ).toBe(true)
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })
 
@@ -549,19 +566,13 @@ describe('query pipeline', () => {
       .filter((row) => result.selectableIdentities.includes(row.identity))
       .map((row) => row.worktreeId)
 
-    expect(selectableIds).toEqual(
-      expect.arrayContaining(['repo-1::/dirty', 'repo-1::/pinned', 'repo-1::/unknown'])
-    )
-    expect(selectableIds).not.toEqual(
-      expect.arrayContaining([
-        'repo-1::/active',
-        'repo-1::/agent',
-        'repo-1::/ignored',
-        'repo-1::/main',
-        'repo-1::/folder',
-        'repo-1::/remote'
-      ])
-    )
+    expect([...selectableIds].sort()).toEqual([
+      'repo-1::/active',
+      'repo-1::/agent',
+      'repo-1::/dirty',
+      'repo-1::/pinned',
+      'repo-1::/unknown'
+    ])
     expect(canQueueWorkspaceCleanupCandidate(candidates[3])).toBe(true)
     expect(canQueueWorkspaceCleanupCandidate(candidates[4])).toBe(true)
     expect(canQueueWorkspaceCleanupCandidate(candidates[5])).toBe(true)

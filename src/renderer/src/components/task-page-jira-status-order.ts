@@ -1,4 +1,7 @@
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { jiraGetProjectStatusOrder, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { createMetadataRequestStore, loadMetadata } from '@/hooks/metadata-request-cache'
 
@@ -9,6 +12,16 @@ export type TaskPageJiraProjectScope = {
 }
 
 const jiraProjectStatusOrderStore = createMetadataRequestStore<JiraProjectStatusOrder>()
+
+export function getTaskPageJiraStatusOrderRuntimeScopeKey(
+  sourceScopeKey: string,
+  owner: RuntimeClientTarget | null
+): string {
+  return JSON.stringify([
+    sourceScopeKey,
+    owner ? getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(owner)) : null
+  ])
+}
 
 export function getTaskPageJiraStatusOrderScopeKey(
   runtimeScopeKey: string,
@@ -49,14 +62,12 @@ export function loadTaskPageJiraProjectStatusOrder(
   runtimeScopeKey: string,
   projectScope: TaskPageJiraProjectScope
 ): Promise<JiraProjectStatusOrder> {
-  // Why: a project key can exist on multiple Jira sites and runtimes; all three
-  // identities must participate in caching to preserve SSH and multi-site parity.
+  // Cache by runtime, Jira site and project because project keys can repeat across hosts and sites.
   const cacheKey = getTaskPageJiraStatusOrderScopeKey(runtimeScopeKey, projectScope)
   return loadMetadata(jiraProjectStatusOrderStore, cacheKey, () =>
     jiraGetProjectStatusOrder(settings, projectScope.projectKey, projectScope.siteId)
   ).catch((error: unknown) => {
-    // Why: older remote runtimes do not expose this optional metadata method;
-    // an empty order preserves the deterministic alphabetical fallback.
+    // Older hosts lack this optional metadata method; empty order preserves alphabetical fallback.
     console.warn('[jira] Failed to load project status order:', error)
     return { statusIdsByColumn: [] }
   })

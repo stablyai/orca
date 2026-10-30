@@ -1,74 +1,27 @@
-import { useRef, useState } from 'react'
 import { Plus, QrCode } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { HostProfile } from '../transport/types'
-import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { PickerModal } from './PickerModal'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   connectedHosts: HostProfile[]
   onPairDesktop: () => void
-  onCreateWorkspace: (hostId: string) => void
-}
-
-function hostPickerOptions(hosts: HostProfile[]) {
-  const entries = hosts.map((host) => ({
-    host,
-    endpointLabel: hostEndpointLabel(host.endpoint)
-  }))
-  const endpointCounts = new Map<string, number>()
-  for (const entry of entries) {
-    const endpointKey = JSON.stringify([entry.host.name, entry.endpointLabel])
-    endpointCounts.set(endpointKey, (endpointCounts.get(endpointKey) ?? 0) + 1)
-  }
-  return entries.map((entry) => {
-    const endpointKey = JSON.stringify([entry.host.name, entry.endpointLabel])
-    const endpointCollides = (endpointCounts.get(endpointKey) ?? 0) > 1
-    const subtitle = endpointCollides
-      ? `${entry.endpointLabel} · ${entry.host.id}`
-      : entry.endpointLabel
-    return { value: entry.host.id, label: entry.host.name, subtitle }
-  })
+  onCreateWorkspace: () => void
 }
 
 export function MobileHomeQuickActions(props: Props) {
-  const [hostPickerForHostSet, setHostPickerForHostSet] = useState<string | null>(null)
-  const pendingHostIdRef = useRef<string | null>(null)
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const canCreateWorkspace = props.connectedHosts.length > 0
-  const hostSetKey = JSON.stringify(props.connectedHosts.map((host) => host.id))
-  const hostPickerVisible = hostPickerForHostSet === hostSetKey
-  if (hostPickerForHostSet !== null && !hostPickerVisible) {
-    setHostPickerForHostSet(null)
-  }
-
-  function handleCreateWorkspace() {
-    if (props.connectedHosts.length === 1) {
-      props.onCreateWorkspace(props.connectedHosts[0].id)
-      return
-    }
-    if (props.connectedHosts.length > 1) {
-      setHostPickerForHostSet(hostSetKey)
-    }
-  }
-
-  function handleHostSelect(hostId: string) {
-    pendingHostIdRef.current = hostId
-    setHostPickerForHostSet(null)
-  }
-
-  function handleHostPickerClosed() {
-    setHostPickerForHostSet(null)
-    const hostId = pendingHostIdRef.current
-    pendingHostIdRef.current = null
-    if (hostId && props.connectedHosts.some((host) => host.id === hostId)) {
-      props.onCreateWorkspace(hostId)
-    }
-  }
 
   return (
     <>
-      <Text style={styles.sectionHeading}>Quick Actions</Text>
+      <Text style={styles.sectionHeading}>
+        {t('components.homeQuickActions.title', 'Quick Actions')}
+      </Text>
       <View style={styles.quickActions}>
         <Pressable
           accessibilityRole="button"
@@ -78,7 +31,9 @@ export function MobileHomeQuickActions(props: Props) {
           <View style={styles.quickActionIcon}>
             <QrCode size={16} color={colors.textSecondary} />
           </View>
-          <Text style={styles.quickActionLabel}>Pair Desktop</Text>
+          <Text style={styles.quickActionLabel}>
+            {t('components.homeQuickActions.pairDesktop', 'Pair Desktop')}
+          </Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -89,28 +44,21 @@ export function MobileHomeQuickActions(props: Props) {
             !canCreateWorkspace && styles.quickActionDisabled,
             pressed && styles.quickActionPressed
           ]}
-          onPress={handleCreateWorkspace}
+          onPress={props.onCreateWorkspace}
         >
           <View style={styles.quickActionIcon}>
             <Plus size={16} color={colors.textSecondary} />
           </View>
-          <Text style={styles.quickActionLabel}>New Workspace</Text>
+          <Text style={styles.quickActionLabel}>
+            {t('components.homeQuickActions.newWorkspace', 'New Workspace')}
+          </Text>
         </Pressable>
       </View>
-      <PickerModal
-        visible={hostPickerVisible}
-        title="Create Workspace On"
-        options={hostPickerOptions(props.connectedHosts)}
-        selected=""
-        onSelect={handleHostSelect}
-        onClose={() => setHostPickerForHostSet(null)}
-        onAfterClose={handleHostPickerClosed}
-      />
     </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   sectionHeading: {
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
@@ -156,4 +104,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600'
   }
-})
+}))

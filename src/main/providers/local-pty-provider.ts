@@ -1,5 +1,10 @@
 import type * as pty from 'node-pty'
-import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from './pty-provider-contract'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -13,12 +18,18 @@ import {
   inspectLocalPtyChildProcesses
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import type { PtyProcessInspection } from './pty-process-inspection'
+import type { PtyProcessInspection, PtyProcessInspectionOptions } from './pty-process-inspection'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import {
+  _resetPtyOwnerHostColorsForTest,
+  setPtyOwnerHostColors
+} from '../../shared/pty-owner-color-query-colors'
 import {
   advanceLoadGeneration,
   clearPtyState,
   pendingLocalPtySpawns,
   ptyProcesses,
+  ptyIncarnations,
   resetLoadGeneration,
   type DataCallback,
   type ExitCallback
@@ -63,11 +74,6 @@ export class LocalPtyProvider implements IPtyProvider {
     this.opts = opts
   }
 
-  /**
-   * Spawns or reattaches a local PTY session for the renderer process.
-   *
-   * Windows launches can pre-deliver startup commands in argv, so the stdin fallback only runs when needed.
-   */
   spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     return spawnLocalPty(args, () => this.opts)
   }
@@ -81,7 +87,7 @@ export class LocalPtyProvider implements IPtyProvider {
     return writeLocalPty(id, data)
   }
 
-  // In-process node-pty is its own sole owner, so its synchronous answer is the settlement.
+  // In-process node-pty owns the write endpoint; its synchronous answer settles delivery.
   writeWithSettlement(id: string, data: string): WriteSettlement {
     return writeLocalPty(id, data) ? WRITE_ACCEPTED : writeRefused('provider_refused_write')
   }
@@ -118,8 +124,13 @@ export class LocalPtyProvider implements IPtyProvider {
   clearBuffer(id: string): Promise<void> {
     return clearLocalPtyBuffer(id)
   }
+  // A direct PTY keeps no terminal model of its own.
+  async resetInputModes(_id: string): Promise<void> {}
   closeStartupQueryAuthority(id: string): number {
     return closeLocalPtyStartupQueryAuthority(id)
+  }
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    setPtyOwnerHostColors(colors)
   }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
@@ -129,23 +140,43 @@ export class LocalPtyProvider implements IPtyProvider {
     return hasLocalPtyChildProcesses(id)
   }
 
-  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+  async inspectProcess(
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ): Promise<PtyProcessInspection> {
     const proc = ptyProcesses.get(id)
-    const foregroundProcess = await getLocalPtyForegroundProcess(id)
-    // Both fields have to describe one PTY: cleanup plus reactivation across the await above would
-    // otherwise pair the old pane's identity with the replacement's children. The child read below
-    // is synchronous, so this recheck is the last point either answer can drift.
-    if (ptyProcesses.get(id) !== proc) {
+    const incarnation = ptyIncarnations.get(id)
+    if (
+      !proc ||
+      !incarnation ||
+      (options?.expectedIncarnationId && options.expectedIncarnationId !== incarnation)
+    ) {
       return {
         foregroundProcess: null,
-        hasChildProcesses: false,
+        hasChildProcesses: true,
         childProcessEvidence: 'unverifiable'
       }
     }
-    const childProcessEvidence = inspectLocalPtyChildProcesses(id)
+    const foregroundProcess = await (process.platform === 'win32' && options?.steadyState !== true
+      ? confirmLocalPtyForegroundProcess(id, true)
+      : getLocalPtyForegroundProcess(id))
+    // A steady-state poll never decides adoption or close, so it may read the cached process table.
+    const childProcessEvidence = await inspectLocalPtyChildProcesses(
+      id,
+      options?.steadyState !== true,
+      options?.ignoreDetached === true
+    )
+    // Neither asynchronous inspection may publish a replacement pane's identity.
+    if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable'
+      }
+    }
     return {
       foregroundProcess,
-      hasChildProcesses: childProcessEvidence === 'children',
+      hasChildProcesses: childProcessEvidence !== 'no-children',
       childProcessEvidence
     }
   }
@@ -194,24 +225,18 @@ export class LocalPtyProvider implements IPtyProvider {
     return onLocalPtyExit(callback)
   }
 
-  // ─── Local-only helpers (not part of IPtyProvider interface) ───────
-
-  /** Kill orphaned PTYs from previous page loads. */
   killOrphanedPtys(currentGeneration: number): { id: string }[] {
     return killOrphanedLocalPtys(currentGeneration)
   }
 
-  /** Advance the load generation counter (called on renderer reload). */
   advanceGeneration(): number {
     return advanceLoadGeneration()
   }
 
-  /** Get a writable reference to a PTY (for runtime controller). */
   getPtyProcess(id: string): pty.IPty | undefined {
     return getLocalPtyProcess(id)
   }
 
-  /** Kill all in-process local PTYs. Call on app quit. */
   killAll(): void {
     killAllLocalPtys()
   }
@@ -224,4 +249,5 @@ export function _resetLocalPtyProviderStateForTest(): void {
     clearPtyState(id)
   }
   resetLoadGeneration()
+  _resetPtyOwnerHostColorsForTest()
 }

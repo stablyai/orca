@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build } from 'esbuild'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 
 describe.skipIf(process.platform === 'win32')('real sidecar exit reaping', () => {
   let directory = ''
@@ -14,7 +14,7 @@ describe.skipIf(process.platform === 'win32')('real sidecar exit reaping', () =>
     directory = await mkdtemp(join(tmpdir(), 'orca-sidecar-reaping-'))
     entry = join(directory, 'sidecar.cjs')
     await build({
-      entryPoints: [join(__dirname, 'sidecar-entry.ts')],
+      entryPoints: [join(__dirname, 'computer-sidecar.ts')],
       outfile: entry,
       bundle: true,
       platform: 'node',
@@ -30,7 +30,7 @@ describe.skipIf(process.platform === 'win32')('real sidecar exit reaping', () =>
               contents: `
               import { once } from 'node:events';
               import { writeFileSync } from 'node:fs';
-              import { spawnProcess } from '../../shared/child-process/run-process';
+              import { spawnProcess } from '@orca/process-host';
               import { reapMacOSProviderProcess } from './macos-native-provider-process-reaping';
               let child;
               export function currentComputerProvider() {

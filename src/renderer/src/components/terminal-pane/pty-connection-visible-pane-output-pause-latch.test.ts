@@ -1,26 +1,4 @@
-/**
- * STA-4593 incident: typing into a visible remote Codex pane produced no
- * visible output until the user switched workspaces away and back. The host
- * DROPS output while a stream is paused yet keeps accepting input, and every
- * hide→show cycle heals the pane with an unconditional snapshot repaint —
- * which is why the switch "fixed" it and why nothing ever logged an error.
- *
- * Invariant under test: a VISIBLE pane must never be left with a paused output
- * intent. The pause bit must be re-derived from live visibility whenever the
- * chance to sync it was missed.
- *
- * Causal boundary: syncHiddenRendererPtyDelivery issues setOutputPaused only
- * when canUseHiddenOutputSnapshot(ptyId) — which requires
- * transport.getPtyId() === ptyId. During a stream rebind getPtyId() is
- * transiently null, so a reveal that lands in that window is a silent no-op:
- * desiredOutputPaused stays true, the transport replays it verbatim onto the
- * recovered stream, the host drops all output, and the stall watchdog never
- * arms on a paused stream. Nothing re-derives the bit on onConnect or
- * onStreamRecovered.
- *
- * Rig: the hidden-backlog-snapshot suite's mock-transport harness; fake
- * visibility flips drive the real connectPanePty binding.
- */
+// STA-4593: reveal during a null-ID rebind cannot unpause immediately; reconnect must rederive pause intent from live visibility or the host drops visible output indefinitely. Test both connect and stream-recovery callbacks.
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -155,13 +133,13 @@ async function connectVisibleRemotePane(): Promise<{
 }
 
 describe('remote pane output pause vs visibility', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -189,8 +167,7 @@ describe('remote pane output pause vs visibility', () => {
     binding.syncProcessTracking()
     expect(pauseCalls().at(-1)).toBe(true)
 
-    // The stream drops and a resubscribe is in flight: the transport has no
-    // bound PTY id during the rebind window.
+    // Reveal during null-ID rebind cannot reach the host; reconnect must retry visibility sync.
     transport.getPtyId.mockImplementation(() => null)
 
     // The user switches back while the rebind is in flight. The sync cannot
@@ -198,12 +175,7 @@ describe('remote pane output pause vs visibility', () => {
     ;(deps.isVisibleRef as { current: boolean }).current = true
     binding.syncProcessTracking()
 
-    // The rebind completes: the transport re-derives the same pane and reports
-    // the recovered stream. Production replays desiredOutputPaused onto the new
-    // stream verbatim, so unless this moment re-derives pause-from-visibility,
-    // the host keeps dropping every byte for a pane the user is looking at —
-    // while its input keeps being accepted, and the paused stream never arms
-    // the stall watchdog.
+    // Transport recovery replays pause intent verbatim, so it must first rederive it from visibility or drop watched output with no stall watchdog.
     transport.getPtyId.mockImplementation(() => REMOTE_PTY_ID)
     callbacks().onStreamRecovered?.()
     callbacks().onConnect?.()
@@ -227,9 +199,7 @@ describe('remote pane output pause vs visibility', () => {
     ;(deps.isVisibleRef as { current: boolean }).current = true
     binding.syncProcessTracking()
 
-    // When the recovery subscribe's push snapshot carried content — the common
-    // case — the transport fires ONLY onConnect (onStreamRecovered is gated on
-    // an empty snapshot). onConnect must therefore re-derive the bit by itself.
+    // Contentful recovery fires only onConnect; it must repair pause intent without onStreamRecovered.
     transport.getPtyId.mockImplementation(() => REMOTE_PTY_ID)
     callbacks().onConnect?.()
     await flushAsyncTicks(6)

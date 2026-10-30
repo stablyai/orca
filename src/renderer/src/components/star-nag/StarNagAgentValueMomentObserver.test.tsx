@@ -131,8 +131,7 @@ describe('StarNagAgentValueMomentObserver', () => {
     container = rendered.container
     const initialRenders = rendered.getRenderCount()
 
-    // Why: separate acts model separate hook pings; main produced 50 renders and
-    // 25,000 completion-scan entry visits for this exact 500 x 50 scenario.
+    // Separate acts model individual same-state pings so render/scan amplification remains observable.
     for (let ping = 0; ping < 50; ping += 1) {
       act(() => {
         useAppStore.setState((state) => ({
@@ -175,6 +174,36 @@ describe('StarNagAgentValueMomentObserver', () => {
 
     expect(agentValueMoment).not.toHaveBeenCalled()
     expect(showAgentValueMoment).not.toHaveBeenCalled()
+  })
+
+  it('ignores a prompted done whose turn failed', async () => {
+    ;({ root, container } = renderObserver())
+
+    setAgentEntries({ pane: entry({ state: 'working' }) })
+    setAgentEntries({
+      pane: entry({
+        state: 'done',
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 }
+      })
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(2400)
+    })
+
+    expect(agentValueMoment).not.toHaveBeenCalled()
+  })
+
+  it('ignores a return to a done dated before the work it ended', async () => {
+    ;({ root, container } = renderObserver())
+
+    setAgentEntries({ pane: entry({ state: 'done', stateStartedAt: 1 }) })
+    setAgentEntries({ pane: entry({ state: 'working', stateStartedAt: 5 }) })
+    setAgentEntries({ pane: entry({ state: 'done', stateStartedAt: 1 }) })
+    await act(async () => {
+      vi.advanceTimersByTime(2400)
+    })
+
+    expect(agentValueMoment).not.toHaveBeenCalled()
   })
 
   it('waits for other live agents and recent typing to quiet', async () => {

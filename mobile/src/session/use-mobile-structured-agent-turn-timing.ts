@@ -4,42 +4,46 @@ import type {
   AgentJournalSubmission
 } from '../../../src/shared/agent-session-journal-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
+import type { AgentSessionLatestTurn } from '../../../src/shared/agent-session-wire'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { StructuredAgentHostClock } from '../../../src/shared/structured-agent-session-reducer'
-import {
-  selectStructuredAgentRunningTurnTiming,
-  selectStructuredAgentSettledTurns
-} from '../../../src/shared/structured-agent-session-turn-timing'
+import { selectStructuredAgentTurnBars } from '../../../src/shared/structured-agent-session-turn-timing'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
 } from '../../../src/shared/structured-agent-turn-clock-anchor'
 
-/** Host-recorded turn timing for the structured lane: settled durations straight
- *  off the journal, and a skew-free start for the live counter whose host-to-local
- *  conversion is latched once per turn. */
+// Use journal durations and latch the host-to-phone start conversion once per turn so counters remain skew-free.
 export function useMobileStructuredAgentTurnTiming(
   {
     items,
     submissions,
+    latestTurn,
+    working,
     hostClock
   }: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly AgentJournalSubmission[]
+    latestTurn?: AgentSessionLatestTurn | null
+    working?: boolean
     hostClock?: StructuredAgentHostClock | null
   },
   turnId: string | null
-): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
-  const settledTurns = useMemo(
-    () => selectStructuredAgentSettledTurns(items, submissions),
-    [items, submissions]
+): {
+  settledTurns: NativeChatSettledTurns
+  turnJournal: NativeChatTurnJournal
+  workingStartedAt: number | null
+} {
+  const { settledTurns, runningTiming } = useMemo(
+    () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
+    [items, submissions, turnId, latestTurn]
+  )
+  const turnJournal = useMemo(
+    () => ({ items, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
+    [items, submissions, latestTurn, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
-  const runningTiming = useMemo(
-    () => (turnId === null ? null : selectStructuredAgentRunningTurnTiming(items, turnId)),
-    [items, turnId]
-  )
-  // Stamp during render (React's derive-from-props pattern) so the first paint of
-  // a new turn already counts from the right instant.
+  // Derive during render so a new turn’s first paint counts from its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
     turnId,
@@ -50,5 +54,5 @@ export function useMobileStructuredAgentTurnTiming(
   if (step.latch !== latch) {
     setLatch(step.latch)
   }
-  return { settledTurns, workingStartedAt: step.workingStartedAt }
+  return { settledTurns, turnJournal, workingStartedAt: step.workingStartedAt }
 }

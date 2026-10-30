@@ -8,21 +8,14 @@ import type {
 } from '../../../session/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as NativeChatStaleInput from '../../../session/native-chat/mobile-native-chat-stale-input'
 
 const WORKSPACE = 'workspace-1'
 const HOST = 'host-1'
 const FILE = 'src/app.ts'
 const TERMINAL = 'terminal-1'
 
-/**
- * Everything the review screen writes: the note/review-state metadata save, the stage/unstage/
- * discard mutations, the reveal-in-session open, and the two ways review notes reach a terminal.
- *
- * One mount, because the screen composes the comment, git and send hooks into a single interaction
- * surface and they share the client and the error setter. The send arm also drives the stale-input
- * heal, whose clearing write only happens when a prior image paste marked the handle — so the
- * marker is set by an action rather than assumed.
- */
+// Compose review writes as one real surface; seed stale-input healing through the image-paste action that arms it.
 export function diffReviewActionMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -31,9 +24,12 @@ export function diffReviewActionMountAdapters(
       const useInteractions = modules.load<
         typeof import('../../../session/use-mobile-diff-review-interactions')
       >('mobile/src/session/use-mobile-diff-review-interactions.ts').useMobileDiffReviewInteractions
-      const staleInput = modules.load<
-        typeof import('../../../session/mobile-native-chat-stale-input')
-      >('mobile/src/session/mobile-native-chat-stale-input.ts')
+      const reviewSheets = modules.load<
+        typeof import('../../../session/mobile-diff-review-sheets')
+      >('mobile/src/session/mobile-diff-review-sheets.ts')
+      const staleInput = modules.load<typeof NativeChatStaleInput>(
+        'mobile/src/session/native-chat/mobile-native-chat-stale-input.ts'
+      )
       staleInput.resetMobileNativeChatStaleInputForTests()
       const comment: DiffComment = {
         side: 'modified',
@@ -65,7 +61,6 @@ export function diffReviewActionMountAdapters(
       }
       let screenState: ReviewScreenState = {
         kind: 'ready',
-        // These actions never read the status; the queue item above is what they branch on.
         status: mountFixture<Extract<ReviewScreenState, { kind: 'ready' }>['status']>({
           entries: []
         }),
@@ -75,13 +70,23 @@ export function diffReviewActionMountAdapters(
       }
       let actionError: string | null = null
       let busyAction: string | null = null
-      let sendSheet: SendSheetState | null = null
+      let sheets = reviewSheets.NO_REVIEW_SHEETS
+      const sheetIntents = reviewSheets.reviewSheetIntents((action) => {
+        sheets = reviewSheets.reduceReviewSheets(sheets, action)
+      })
+      const sendSheet = (): SendSheetState | null =>
+        sheets.requested?.kind === 'send' ? sheets.requested.load : null
       let interactions: ReturnType<typeof useInteractions>
       const hook = hookMount(() => {
         interactions = useInteractions(
           mountFixture<Parameters<typeof useInteractions>[0]>({
             client,
             connState: 'connected',
+            hostCapabilities: [
+              'agent.launch.v2',
+              'agent.launch.replay.v1',
+              'agent.launch.replay-required.v1'
+            ],
             hostId: HOST,
             worktreeId: WORKSPACE,
             screenState,
@@ -101,7 +106,6 @@ export function diffReviewActionMountAdapters(
             setFilter: () => {},
             setCurrentIndex: () => {},
             setActiveHunkIndex: () => {},
-            setComposer: () => {},
             setComposerBody: () => {},
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update
@@ -109,10 +113,7 @@ export function diffReviewActionMountAdapters(
             setBusyAction: (update) => {
               busyAction = typeof update === 'function' ? update(busyAction) : update
             },
-            setSendSheet: (update) => {
-              sendSheet = typeof update === 'function' ? update(sendSheet) : update
-            },
-            setShowCompletion: () => {},
+            sheets: sheetIntents,
             loadReviewData: () => {
               effect('load-review-data', {})
               return Promise.resolve()
@@ -163,7 +164,7 @@ export function diffReviewActionMountAdapters(
             throw new Error(`Unknown review action: ${name}${String(args.unused ?? '')}`)
           })
         },
-        state: () => ({ screenState, actionError, busyAction, sendSheet }),
+        state: () => ({ screenState, actionError, busyAction, sendSheet: sendSheet() }),
         dispose: () => {
           staleInput.resetMobileNativeChatStaleInputForTests()
           hook.unmount()

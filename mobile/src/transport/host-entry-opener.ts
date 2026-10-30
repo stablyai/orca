@@ -1,4 +1,6 @@
 import { attachPushRegistration } from '../notifications/push-registration'
+import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
+import { startRuntimeStatusProbe } from './runtime-status-probe'
 import {
   connectionLogStore,
   recordConnectionClientSessionStart
@@ -123,12 +125,27 @@ export async function openHostClientEntry(
         detachPushRegistration = null
       }
     }
+    // Probe descriptors per connection, with cutover retry, so every host surface shares the same read without screen-owned requests.
+    let stopDescriptorProbe: (() => void) | null = null
+    const syncDescriptorProbe = (next: ConnectionState): void => {
+      if (next === 'connected') {
+        stopDescriptorProbe ??= startRuntimeStatusProbe(client, (status) => {
+          if (status) {
+            recordHostDescriptorFromStatus(hostId, status)
+          }
+        })
+      } else {
+        stopDescriptorProbe?.()
+        stopDescriptorProbe = null
+      }
+    }
     const unsubscribeState = client.onStateChange((next) => {
       const current = state.store.get(hostId)
       if (!current) {
         return
       }
       syncPushRegistration(next)
+      syncDescriptorProbe(next)
       current.state = next
       state.notifyHostState(hostId, next)
     })
@@ -149,12 +166,15 @@ export async function openHostClientEntry(
         unsubscribeState()
         detachPushRegistration?.()
         detachPushRegistration = null
+        stopDescriptorProbe?.()
+        stopDescriptorProbe = null
       },
       unsubConnectionPath
     }
     state.pendingAcquisitions.delete(hostId)
     state.store.set(hostId, entry)
     syncPushRegistration(entry.state)
+    syncDescriptorProbe(entry.state)
     settle()
     const priorFailureCount = state.retryScheduler.recordSuccess(hostId)
     if (priorFailureCount > 0) {

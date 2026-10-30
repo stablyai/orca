@@ -1,10 +1,10 @@
-// Parser, capture, and formatting rules shared by every shortcut surface.
 import { describe, expect, it } from 'vitest'
 import {
   formatKeybindingList,
   isKeybindingActionId,
   keybindingFromInput,
   keybindingFromInputForAction,
+  keybindingMatchesInput,
   keybindingMatchesAction,
   normalizeKeybinding,
   normalizeKeybindingListForAction,
@@ -13,11 +13,11 @@ import {
 
 describe('keybindings', () => {
   it('accepts bounded plugin command action IDs and rejects malformed variants', () => {
-    expect(isKeybindingActionId('plugin:orca-samples.tasks/open')).toBe(true)
-    expect(isKeybindingActionId('plugin:orca-samples.tasks/task.open-latest')).toBe(true)
+    expect(isKeybindingActionId('plugin:samples.tasks/open')).toBe(true)
+    expect(isKeybindingActionId('plugin:samples.tasks/task.open-latest')).toBe(true)
     expect(isKeybindingActionId('plugin:tasks/open')).toBe(false)
-    expect(isKeybindingActionId('plugin:orca-samples.tasks/../open')).toBe(false)
-    expect(isKeybindingActionId(`plugin:orca-samples.tasks/${'a'.repeat(401)}`)).toBe(false)
+    expect(isKeybindingActionId('plugin:samples.tasks/../open')).toBe(false)
+    expect(isKeybindingActionId(`plugin:samples.tasks/${'a'.repeat(401)}`)).toBe(false)
   })
 
   it('normalizes editable shortcut input and rejects unsafe bindings', () => {
@@ -76,7 +76,11 @@ describe('keybindings', () => {
     ).toEqual({ ok: true, value: 'Mod+Alt+Shift+J' })
     expect(
       keybindingFromInput({ key: 'Control', code: 'ControlLeft', control: true }, 'linux')
-    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+    ).toEqual({
+      ok: false,
+      error: 'Press a key, not only a modifier.',
+      errorCode: 'modifierOnly'
+    })
   })
 
   it('captures macOS Option-composed key events via the physical code', () => {
@@ -97,13 +101,36 @@ describe('keybindings', () => {
         { key: 'Alt', code: 'AltLeft', meta: false, control: false, alt: true, shift: false },
         'darwin'
       )
-    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+    ).toEqual({
+      ok: false,
+      error: 'Press a key, not only a modifier.',
+      errorCode: 'modifierOnly'
+    })
     expect(
       keybindingFromInput(
         { key: '¡', code: 'Digit1', meta: true, control: false, alt: true, shift: false },
         'darwin'
       )
-    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+    ).toEqual({ ok: true, value: 'Mod+Alt+1' })
+  })
+
+  it('round-trips a macOS Option digit outside the 1–9 selection range', () => {
+    const input = { key: 'º', code: 'Digit0', alt: true }
+    expect(keybindingFromInput(input, 'darwin')).toEqual({ ok: true, value: 'Alt+0' })
+    expect(keybindingMatchesInput('Alt+0', input, 'darwin')).toBe(true)
+    expect(keybindingMatchesInput('Alt+1', input, 'darwin')).toBe(false)
+  })
+
+  it('keeps logical keys ahead of physical Option digit capture', () => {
+    const input = { key: '[', code: 'Digit2', alt: true }
+    expect(keybindingFromInput(input, 'darwin')).toEqual({ ok: true, value: 'Alt+BracketLeft' })
+    expect(keybindingMatchesInput('Alt+BracketLeft', input, 'darwin')).toBe(true)
+    expect(keybindingMatchesInput('Alt+2', input, 'darwin')).toBe(false)
+    expect(keybindingFromInput({ ...input, key: '3' }, 'darwin')).toEqual({
+      ok: true,
+      value: 'Alt+3'
+    })
+    expect(keybindingMatchesInput('Alt+2', { ...input, key: '3' }, 'darwin')).toBe(false)
   })
 
   it('applies per-action bare-key rules while capturing shortcuts', () => {
@@ -124,12 +151,11 @@ describe('keybindings', () => {
   })
 
   it('binds F7 / Shift+F7 for diff-change navigation and matches their events', () => {
-    // Opt-in actions accept bare / Shift-only function keys...
     expect(normalizeKeybindingListForAction('editor.nextChange', 'F7')).toEqual(['F7'])
     expect(normalizeKeybindingListForAction('editor.previousChange', 'Shift+F7')).toEqual([
       'Shift+F7'
     ])
-    // ...but they stay unsafe for actions that do not opt in.
+    // Keep bare/Shift function keys unsafe for actions that did not opt in.
     expect(normalizeKeybinding('F7')).toMatchObject({ ok: false })
     expect(normalizeKeybinding('Shift+F7')).toMatchObject({ ok: false })
 
@@ -143,9 +169,9 @@ describe('keybindings', () => {
 
   it('formats keybindings with platform labels', () => {
     expect(formatKeybindingList(['Mod+Shift+J'], 'darwin')).toBe('⌘⇧J')
-    expect(formatKeybindingList(['Mod+Shift+J'], 'linux')).toBe('Ctrl+Shift+J')
+    expect(formatKeybindingList(['Mod+Shift+J'], 'linux')).toBe('Ctrl+⇧+J')
     expect(formatKeybindingList(['Mod+Shift+Backspace'], 'darwin')).toBe('⌘⇧⌫')
-    expect(formatKeybindingList(['Mod+Shift+Backspace'], 'linux')).toBe('Ctrl+Shift+Backspace')
+    expect(formatKeybindingList(['Mod+Shift+Backspace'], 'linux')).toBe('Ctrl+⇧+Backspace')
     expect(formatKeybindingList([], 'win32')).toBe('Unassigned')
   })
 

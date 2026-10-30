@@ -1,10 +1,10 @@
-import {
-  agentChildWorkFencesEqual,
-  type AgentChildWorkId,
-  type AgentChildWorkInvocationFence,
-  type AgentChildWorkKind
+import type {
+  AgentChildWorkId,
+  AgentChildWorkInvocationFence,
+  AgentChildWorkKind
 } from './agent-status-child-work'
 import { parseAgentChildWorkInvocationFence } from './agent-status-child-work-codec'
+import { isBoundedString } from './agent-status-child-work-value-guards'
 import {
   deserializeAgentStatusSubject,
   parseAgentStatusSubject,
@@ -15,7 +15,15 @@ import {
 const CHILD_ALIAS_KEY_PREFIX = 'agent-child-work-alias-v1:'
 const MAX_ALIAS_PART_LENGTH = 512
 
-export type AgentChildWorkAliasKind = 'task_id' | 'tool_use_id'
+/** thread_id identifies a child; turn_id/tool_use_id identify runs. Register hook Claude agent_id as task_id and Codex agent_id as thread_id; intentionally define no separate agent_id kind. */
+export const AGENT_CHILD_WORK_ALIAS_KINDS = [
+  'task_id',
+  'tool_use_id',
+  'thread_id',
+  'turn_id'
+] as const
+export type AgentChildWorkAliasKind = (typeof AGENT_CHILD_WORK_ALIAS_KINDS)[number]
+const ALIAS_KIND_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_ALIAS_KINDS)
 
 export type AgentChildWorkAliasIdentity = Pick<
   AgentChildWorkAliasInput,
@@ -53,24 +61,6 @@ function hasOnlyKeys(
   )
 }
 
-function isBoundedString(value: unknown): value is string {
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > MAX_ALIAS_PART_LENGTH ||
-    value !== value.trim()
-  ) {
-    return false
-  }
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (code <= 0x1f || code === 0x7f) {
-      return false
-    }
-  }
-  return true
-}
-
 function isRevision(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
@@ -83,6 +73,10 @@ function isKind(value: unknown): value is AgentChildWorkKind {
     value === 'monitor' ||
     value === 'unknown'
   )
+}
+
+function isAliasKind(value: unknown): value is AgentChildWorkAliasKind {
+  return typeof value === 'string' && ALIAS_KIND_SET.has(value)
 }
 
 export function parseAgentChildWorkAliasInput(value: unknown): AgentChildWorkAliasInput | null {
@@ -98,12 +92,12 @@ export function parseAgentChildWorkAliasInput(value: unknown): AgentChildWorkAli
       'childWorkId',
       'fence'
     ]) ||
-    !isBoundedString(value.provider) ||
-    !isBoundedString(value.segmentId) ||
+    !isBoundedString(value.provider, MAX_ALIAS_PART_LENGTH) ||
+    !isBoundedString(value.segmentId, MAX_ALIAS_PART_LENGTH) ||
     !isKind(value.kind) ||
-    (value.aliasKind !== 'task_id' && value.aliasKind !== 'tool_use_id') ||
-    !isBoundedString(value.alias) ||
-    !isBoundedString(value.childWorkId)
+    !isAliasKind(value.aliasKind) ||
+    !isBoundedString(value.alias, MAX_ALIAS_PART_LENGTH) ||
+    !isBoundedString(value.childWorkId, MAX_ALIAS_PART_LENGTH)
   ) {
     return null
   }
@@ -200,15 +194,4 @@ export function deserializeAgentChildWorkAliasKey(
     alias: parsed.alias
   }
   return serializeAgentChildWorkAliasKey(identity) === value ? identity : null
-}
-
-export function agentChildWorkAliasesMatch(
-  left: AgentChildWorkAliasInput,
-  right: AgentChildWorkAliasInput
-): boolean {
-  return (
-    serializeAgentChildWorkAliasKey(left) === serializeAgentChildWorkAliasKey(right) &&
-    left.childWorkId === right.childWorkId &&
-    agentChildWorkFencesEqual(left.fence, right.fence)
-  )
 }

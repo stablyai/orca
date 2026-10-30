@@ -6,14 +6,14 @@ import {
 } from './native-chat-http-link-source-owner'
 
 const mocks = vi.hoisted(() => ({
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
+  runtimeEnvironmentIdOrLocalUnlessTwin: vi.fn(),
   getConnectionIdFromState: vi.fn(),
   canOpenWorkspaceBrowserTabOnRuntime: vi.fn(),
   canOpenWorkspaceBrowserTabOnSsh: vi.fn()
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdOrLocalUnlessTwin: mocks.runtimeEnvironmentIdOrLocalUnlessTwin
 }))
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdFromState: mocks.getConnectionIdFromState
@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe('resolveNativeChatHttpLinkSourceOwner', () => {
   it('prefers the workspace runtime owner', () => {
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue('env-1')
 
     expect(resolveNativeChatHttpLinkSourceOwner(state, 'wt-1')).toEqual({
       kind: 'runtime',
@@ -41,7 +41,7 @@ describe('resolveNativeChatHttpLinkSourceOwner', () => {
   })
 
   it('falls back to the SSH connection that owns the workspace', () => {
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
     mocks.getConnectionIdFromState.mockReturnValue('ssh-1')
 
     expect(resolveNativeChatHttpLinkSourceOwner(state, 'wt-1')).toEqual({
@@ -51,16 +51,15 @@ describe('resolveNativeChatHttpLinkSourceOwner', () => {
   })
 
   it('reads a null connection as local', () => {
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
     mocks.getConnectionIdFromState.mockReturnValue(null)
 
     expect(resolveNativeChatHttpLinkSourceOwner(state, 'wt-1')).toEqual({ kind: 'local' })
   })
 
-  // An unresolved owner must not be mistaken for local: a remote link would then
-  // open against the wrong host.
+  // Unknown ownership cannot default local because remote links would route to the wrong host.
   it('reports an unresolved owner as unknown', () => {
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
     mocks.getConnectionIdFromState.mockReturnValue(undefined)
 
     expect(resolveNativeChatHttpLinkSourceOwner(state, 'wt-1')).toEqual({ kind: 'unknown' })

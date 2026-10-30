@@ -1,8 +1,5 @@
-// Transitional: remove once no supported release lacks AGENT_SESSION_TURN_ITEM_CAPABILITY.
-//
-// A client that predates the `turn` item renders the unknown kind as a text bubble, so the
-// host publishes the legacy status form to it at the RPC boundary only. The journal, the
-// status feed, and every in-process reader keep the canonical body.
+// Remove when every supported release has AGENT_SESSION_TURN_ITEM_CAPABILITY.
+// Downgrade turn items to legacy status only at RPC; canonical journal/status/in-process readers keep the body.
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { legacyAgentJournalTurnStatusBody } from '../../../../shared/agent-session-turn-record'
@@ -24,7 +21,10 @@ function readsTurnItems(ctx: TurnItemReader): boolean {
   )
 }
 
-function projectItems(items: AgentJournalRenderItem[]): AgentJournalRenderItem[] {
+function projectItems(
+  items: AgentJournalRenderItem[],
+  sessionAgent: string | null
+): AgentJournalRenderItem[] {
   if (!items.some((item) => item.body.kind === 'turn')) {
     return items
   }
@@ -33,39 +33,45 @@ function projectItems(items: AgentJournalRenderItem[]): AgentJournalRenderItem[]
       return item
     }
     const { kind: _kind, ...turn } = item.body
-    return { ...item, body: legacyAgentJournalTurnStatusBody(turn, item.itemId) }
+    return { ...item, body: legacyAgentJournalTurnStatusBody(turn, item.itemId, sessionAgent) }
   })
 }
 
-function projectPage(page: AgentSessionHistoryPage): AgentSessionHistoryPage {
-  const items = projectItems(page.items)
+function projectPage(
+  page: AgentSessionHistoryPage,
+  sessionAgent: string | null
+): AgentSessionHistoryPage {
+  const items = projectItems(page.items, sessionAgent)
   return items === page.items ? page : { ...page, items }
 }
 
+/** `sessionAgent` names the agent on a turn whose key does not, such as a command's. */
 export function projectTurnItemHistory(
   result: AgentSessionHistoryResult,
-  ctx: TurnItemReader
+  ctx: TurnItemReader,
+  sessionAgent: string | null = null
 ): AgentSessionHistoryResult {
   if (readsTurnItems(ctx)) {
     return result
   }
-  const page = projectPage(result.page)
+  const page = projectPage(result.page, sessionAgent)
   return page === result.page ? result : { ...result, page }
 }
 
 export function projectTurnItemEvent(
   event: AgentSessionSubscribeEvent,
-  ctx: TurnItemReader
+  ctx: TurnItemReader,
+  sessionAgent: string | null = null
 ): AgentSessionSubscribeEvent {
   if (readsTurnItems(ctx)) {
     return event
   }
   if (event.type === 'batch') {
-    const items = projectItems(event.batch.items)
+    const items = projectItems(event.batch.items, sessionAgent)
     return items === event.batch.items ? event : { ...event, batch: { ...event.batch, items } }
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
-    const page = projectPage(event.page)
+    const page = projectPage(event.page, sessionAgent)
     return page === event.page ? event : { ...event, page }
   }
   return event

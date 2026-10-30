@@ -1,23 +1,17 @@
+// @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
-import { documentModuleSource } from './document/document-module-source.test-support'
 import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metrics'
+import { commitFitScale } from './document/fit-scale'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
-// The scope object plus the metrics block, exactly as the document carries them.
-/**
- * The metrics module over a scope the case owns.
- *
- * Imported rather than evaluated: the module reads the terminal and the notify seam off the scope
- * it is handed, so a case builds one with its own terminal double and reads the notifications back
- * out of the seam it passed in.
- */
-function runMetricsOver(term: unknown): Record<string, unknown>[] {
+function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] {
   const notifications: Record<string, unknown>[] = []
   const scope = createTerminalDocumentScope({
     postToHost: (message) => notifications.push(message)
   })
+  scope.currentScale = fitScale
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each case's double implements the buffer members the scan reads, which is what the assertions check.
   scope.term = term as typeof scope.term
   emitKeyboardAvoidanceMetrics(scope)
@@ -31,6 +25,26 @@ type MetricsNotification = {
   contentBottomRow: number
   rows: number
   altScreen: boolean
+}
+
+function checkedMetrics(value: Record<string, unknown> | undefined): MetricsNotification {
+  if (
+    !value ||
+    typeof value.type !== 'string' ||
+    typeof value.cursorY !== 'number' ||
+    typeof value.contentBottomRow !== 'number' ||
+    typeof value.rows !== 'number' ||
+    typeof value.altScreen !== 'boolean'
+  ) {
+    throw new Error('Missing terminal metrics')
+  }
+  return {
+    type: value.type,
+    cursorY: value.cursorY,
+    contentBottomRow: value.contentBottomRow,
+    rows: value.rows,
+    altScreen: value.altScreen
+  }
 }
 
 function makeLine(text = '', styledColumns: number[] = []) {
@@ -55,13 +69,11 @@ function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScree
     getNullCell: () => ({})
   }
   const notified = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: lines.length })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module emits one keyboard-avoidance notify, whose shape this file declares.
-  return notified[0] as MetricsNotification
+  return checkedMetrics(notified[0])
 }
 
 function runTerminalMetrics(term: Terminal) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a real xterm terminal satisfies the document's own narrower shape, which is what the scope field holds.
-  return runMetricsOver(term)[0] as MetricsNotification
+  return checkedMetrics(runMetricsOver(term)[0])
 }
 
 function write(term: Terminal, data: string): Promise<void> {
@@ -75,7 +87,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     expect(runMetrics(lines)).toMatchObject({ contentBottomRow: 2 })
   })
 
-  it('supports cells without decoration APIs and keeps background-only ANSI chrome visible', () => {
+  it('keeps background-only ANSI chrome visible', () => {
     expect(runMetrics([makeLine('header'), makeLine(''), makeLine('')])).toMatchObject({
       contentBottomRow: 0
     })
@@ -93,7 +105,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
       { name: 'underline', data: '\x1b[4m     \x1b[0m', expected: 7 },
       { name: 'strikethrough', data: '\x1b[9m     \x1b[0m', expected: 7 },
       { name: 'overline', data: '\x1b[53m     \x1b[0m', expected: 7 },
-      // Hidden text still reserves TUI layout, so keyboard avoidance treats it as content.
+      // Hidden text still occupies TUI layout and must count toward keyboard avoidance.
       { name: 'invisible text', data: '\x1b[8mfooter\x1b[0m', expected: 7 }
     ]
 
@@ -152,28 +164,6 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     }
   })
 
-  it('releases real xterm metric observers across terminal lifecycles', async () => {
-    for (let cycle = 0; cycle < 25; cycle += 1) {
-      const term = new Terminal({ cols: 10, rows: 4 })
-      let emissions = 0
-      const observer = term.onWriteParsed(() => {
-        runTerminalMetrics(term)
-        emissions += 1
-      })
-      try {
-        await write(term, `cycle ${cycle}`)
-        expect(emissions).toBeGreaterThan(0)
-        observer.dispose()
-        const disposedAt = emissions
-        await write(term, ' after dispose')
-        expect(emissions).toBe(disposedAt)
-      } finally {
-        observer.dispose()
-        term.dispose()
-      }
-    }
-  })
-
   it('stops at the first bottom-up match and skips scans on alternate screen', () => {
     const footer = makeLine('footer')
     const header = makeLine('header')
@@ -190,28 +180,42 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     })
   })
 
-  it('refreshes metrics after every buffer geometry reset', () => {
-    // Four places change the buffer's geometry, and each owes a fresh emit after it: a stale
-    // content-bottom row is what lifts the keyboard over the wrong line. Read from each module's
-    // own source, so a fifth site added in a new module is not silently uncovered.
-    const blocks = [
-      ['terminal-init', 'export function resize('],
-      ['reflow', 'export function reflow('],
-      ['host-message-router', "} else if (msg.type === 'clear') {"],
-      ['text-scaling', 'export function applyTextScale(']
-    ] as const
-
-    for (const [module, opener] of blocks) {
-      const source = documentModuleSource(module)
-      const start = source.indexOf(opener)
-      expect(start, `${module} no longer carries ${opener}`).toBeGreaterThanOrEqual(0)
-      const block = source.slice(start, source.indexOf('\n}', start))
-      const emitAt = block.indexOf('emitKeyboardAvoidanceMetrics(scope)')
-      const geometryAt = block.includes('.resize(')
-        ? block.indexOf('.resize(')
-        : block.indexOf('.reset(')
-      expect(emitAt, `${module} does not emit metrics`).toBeGreaterThanOrEqual(0)
-      expect(emitAt, `${module} emits before it resizes`).toBeGreaterThan(geometryAt)
+  it('reports the row pitch as drawn, fit scale included, and none before a cell is measured', () => {
+    const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
+    const measuredTerm = {
+      buffer: { active: buffer },
+      cols: 10,
+      rows: 47,
+      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
     }
+    const phone = runMetricsOver(measuredTerm)[0]
+    const desktop = runMetricsOver(measuredTerm, 0.5)[0]
+    const unmeasured = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: 47 })[0]
+    expect({
+      phone: phone?.rowPitch,
+      desktop: desktop?.rowPitch,
+      unmeasured: unmeasured?.rowPitch
+    }).toEqual({ phone: 15, desktop: 7.5, unmeasured: 0 })
+  })
+
+  it('reports again when a fit commits a new scale, carrying the new pitch', () => {
+    const notifications: Record<string, unknown>[] = []
+    const scope = createTerminalDocumentScope({
+      postToHost: (message) => notifications.push(message),
+      viewportRect: () => ({ left: 0, top: 0, width: 320, height: 700 })
+    })
+    const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every member the fit and the metrics read, which the assertion checks.
+    scope.term = {
+      buffer: { active: buffer },
+      cols: 80,
+      rows: 40,
+      element: { scrollWidth: 640 },
+      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
+    } as unknown as typeof scope.term
+    scope.surface = document.createElement('div')
+    commitFitScale(scope, 'test', 0, 'test')
+    const metrics = notifications.filter((message) => message.type === 'keyboard-avoidance-metrics')
+    expect(metrics.at(-1)?.rowPitch).toBe(7.5)
   })
 })

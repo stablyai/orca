@@ -16,13 +16,25 @@ import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
-  NotificationSoundResult
+  NotificationSoundResult,
+  StructuredNotificationRead
 } from '../../shared/notification-settings-types'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 
 export type NotificationsApi = {
   getDesktopAwayState: () => Promise<boolean | undefined>
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
-  dismiss: (ids: string[]) => Promise<NotificationDismissResult>
+  /** `paneKeys` also retires every id main announced for those subjects. */
+  dismiss: (
+    ids: string[],
+    paneKeys?: string[],
+    reads?: StructuredNotificationRead[]
+  ) => Promise<NotificationDismissResult>
+  /** The remote host owning this session reports no prompt pending; retires relayed prompt alerts. */
+  settleStructuredPrompts: (
+    scope: AgentSessionExecutionLocation,
+    sessionId: string
+  ) => Promise<void>
   openSystemSettings: () => Promise<void>
   getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
   probeDelivery: (args?: { force?: boolean }) => Promise<NotificationDeliveryProbeResult>
@@ -49,7 +61,8 @@ export type DeveloperPermissionsApi = {
 }
 
 export type ComputerUsePermissionsApi = {
-  getStatus: () => Promise<ComputerUsePermissionStatusResult>
+  // Passive badges pass background to accept a backed-off denial instead of relaunching the helper.
+  getStatus: (args?: { background?: boolean }) => Promise<ComputerUsePermissionStatusResult>
   openSetup: (args?: { id?: ComputerUsePermissionId }) => Promise<ComputerUsePermissionSetupResult>
   reset: () => Promise<ComputerUsePermissionResetResult>
 }

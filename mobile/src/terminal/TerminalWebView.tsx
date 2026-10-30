@@ -1,10 +1,11 @@
-import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
 import { Platform, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
-import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
+import { xtermWebViewSource } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { useTerminalWebViewController } from './use-terminal-webview-controller'
 
@@ -14,6 +15,7 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
+    const t = useMobileTranslation()
     const webViewRef = useRef<WebView>(null)
 
     const post = useCallback((command: TerminalWebViewCommand & { id: number }) => {
@@ -34,6 +36,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     })
 
     useImperativeHandle(ref, () => handle, [handle])
+    // Seed scale in page source before document startup; Android injected scripts may run too late.
+    const [source] = useState(() =>
+      xtermWebViewSource({ textScale: props.textScale ?? 1, shown: props.shownAtMount ?? true })
+    )
 
     const handleMessage = useCallback(
       (event: WebViewMessageEvent) => {
@@ -54,8 +60,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     }, [clearEngineError])
 
     const handleContentProcessDidTerminate = useCallback(() => {
-      // Why: WKWebView content-process loss is recoverable; stale commands belong
-      // to the dead document and the replacement must prove readiness before replay.
+      // Content-process recovery must discard dead-document commands and prove new readiness before replay.
       resetReadiness()
       clearEngineError()
       webViewRef.current?.reload()
@@ -65,24 +70,35 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
         <WebView
           ref={webViewRef}
-          source={XTERM_WEBVIEW_SOURCE}
+          source={source}
           style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
           originWhitelist={['*']}
           javaScriptEnabled
           scrollEnabled={false}
-          // Why: Android parent gesture containers can intercept vertical drags
-          // before the injected xterm scroll router sees them.
+          // Prevent Android parent gestures from intercepting drags before xterm sees them.
           nestedScrollEnabled
           scalesPageToFit={false}
-          // Why: Android WebView defaults textZoom to the system font scale, inflating
-          // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
+          // Fix Android textZoom at 100 so OS font scaling cannot exceed xterm’s canvas-measured grid.
           textZoom={100}
           onLoadStart={resetReadiness}
           onMessage={handleMessage}
-          onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
-          onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}
+          onError={(event) =>
+            reportNativeEngineError(
+              t('terminal.webView.loadFailed', 'Terminal WebView load failed'),
+              event
+            )
+          }
+          onHttpError={(event) =>
+            reportNativeEngineError(
+              t('terminal.webView.httpError', 'Terminal WebView HTTP error'),
+              event
+            )
+          }
           onRenderProcessGone={(event) =>
-            reportNativeEngineError('Terminal WebView render process ended', event)
+            reportNativeEngineError(
+              t('terminal.webView.renderProcessEnded', 'Terminal WebView render process ended'),
+              event
+            )
           }
           onContentProcessDidTerminate={handleContentProcessDidTerminate}
         />

@@ -161,8 +161,7 @@ export function persistEmittedSetupGuideStepId(id: FeatureWallSetupStepId): void
       JSON.stringify([...next])
     )
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; telemetry
-    // is best-effort and must not block the setup-guide state transition.
+    // Telemetry is best-effort; hardened-context localStorage failures must not block setup-guide transitions.
   }
 }
 
@@ -191,7 +190,7 @@ export function reserveTerminalPaneSplitTelemetry(
   }
 }
 
-export function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-work' | 'setup' {
+function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-work' | 'setup' {
   return getFeatureWallSetupSectionId(id)
 }
 

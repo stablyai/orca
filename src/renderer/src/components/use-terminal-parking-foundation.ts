@@ -12,6 +12,11 @@ import {
   takeAllPendingBackgroundTerminalWorktreeMounts,
   takePendingBackgroundTerminalWorktreeMount
 } from './terminal/background-terminal-worktree-mount'
+import type { StartupTerminalTabHold } from './terminal/startup-terminal-tab-hold'
+import {
+  subscribeTerminalPrewarmWorktrees,
+  type TerminalPrewarmStage
+} from './terminal/terminal-worktree-prewarm'
 import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking
@@ -68,8 +73,9 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
-  // Why a ref, not state: the cold-activation pass runs during render, where a
-  // setState would be a render-phase update; the pass returns the count instead.
+  const prewarmLeasesRef = useRef(new Map<string, TerminalPrewarmStage>())
+  const startupTerminalTabHoldRef = useRef<StartupTerminalTabHold | null>(null)
+  // Cold activation runs during render; return its count into a ref instead of triggering a render-phase state update.
   const activationDeferralPlanRevisionRef = useRef(0)
 
   useEffect(() => {
@@ -133,8 +139,12 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       closeDialogDebounceTimers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [])
+  }, [closeDialogDebounceTimersRef, measurableBackgroundWorktreeIdsRef, mountedWorktreeIdsRef])
+
+  useEffect(
+    () => subscribeTerminalPrewarmWorktrees(() => setTerminalParkingRevision((r) => r + 1)),
+    []
+  )
 
   useEffect(() => {
     const timers = terminalWorktreeParkingTimersRef.current
@@ -144,8 +154,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       timers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.
-  }, [])
+  }, [terminalWorktreeParkingTimersRef])
 
   return {
     measurableBackgroundWorktreeTimersRef,
@@ -167,6 +176,8 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     backgroundMountTabIdsByWorktreeRef,
     activationDeferredMountTabIdsByWorktreeRef,
     lastActivationWorktreeIdRef,
+    prewarmLeasesRef,
+    startupTerminalTabHoldRef,
     activationDeferralPlanRevisionRef
   }
 }

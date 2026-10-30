@@ -18,19 +18,8 @@ import {
 } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
 
-// Field bug (v1.4.144-rc.4): switching back to a workspace whose Codex TUI kept
-// streaming while hidden shows a mostly-blank terminal — live block (input box)
-// missing, viewport stranded mid-buffer — until a manual resize (Cmd+L) forces
-// SIGWINCH and Codex repaints. The alt-screen park/reveal specs never caught it
-// because Codex runs in INLINE mode and keeps writing across the reveal.
-//
-// These tests drive a codex-shaped inline TUI that never stops writing, hide
-// the pane across the gate/park boundaries, reveal, and require convergence to
-// the live frame WITHOUT any resize:
-//  1. viewport anchored at the buffer bottom (not stranded mid-scrollback),
-//  2. a recent CODEX_FRAME + the input-box row visible in the on-screen rows,
-//  3. still following (frame number advances on screen) after convergence,
-//  4. xterm grid == fit proposal == PTY-applied size (no stale 80x24 PTY).
+// v1.4.144-rc.4: streaming inline Codex revealed blank/stale until resize; alt-screen parking tests missed the inline path.
+// Across gate/park boundaries require a bottom-anchored advancing live frame/input box and xterm/fit/applied-PTY size agreement without resize.
 
 const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500
 
@@ -41,8 +30,7 @@ test.use({
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'codex-inline-live-block-fixture.cjs')
 const FRAME_RE = /CODEX_FRAME_(\d+)/g
 const INPUT_BOX_MARKER = 'INPUT_BOX_READY_MARKER'
-// The fixture ticks every 60ms; allow a generous parse/delivery lag while
-// still rejecting a frozen frame from before the hide.
+// Allow delivery lag at 60ms ticks while rejecting a frozen pre-hide frame.
 const MAX_VISIBLE_FRAME_LAG = 50
 
 type RevealProbe = {
@@ -72,9 +60,7 @@ function heartbeatFrame(heartbeatPath: string): number {
   }
 }
 
-// Why the pane resolves by tab (not a captured ptyId): agent quick-launch
-// startup can respawn the tab's PTY after the initial bind, so a ptyId
-// captured at mount can go stale while the pane itself stays healthy.
+// Resolve by tab: agent quick-launch may respawn the PTY after initial bind, invalidating a captured ptyId.
 async function probeRevealedPane(page: Page, tabId: string): Promise<RevealProbe | null> {
   return page.evaluate(
     async ({ tabId }) => {
@@ -118,12 +104,7 @@ async function probeRevealedPane(page: Page, tabId: string): Promise<RevealProbe
   )
 }
 
-// Painted-pixels check: buffer-level assertions cannot see paint-layer bugs
-// (atlas wipe races, paused-RenderService swallowed refreshes), where xterm's
-// buffer is perfect but the canvas shows blank/stale cells until a resize.
-// Measure the "ink" (non-background pixel ratio) of a horizontal band of the
-// pane screenshot; the fixture's live block guarantees box-drawing + text ink
-// in its bottom rows whenever paint is healthy.
+// Check screenshot ink in the live block’s bottom band: healthy buffers can hide atlas-wipe or paused-RenderService paint failures.
 function measureBandInkRatio(
   screenshot: Buffer,
   bandTopFraction: number,
@@ -243,7 +224,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
     const state = store.getState()
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     state.setActiveTab(targetTabId)
   }, tabId)
   await expect
@@ -263,7 +244,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
   await expect
@@ -285,14 +266,8 @@ type StreamingTabSetup = {
   stop: () => Promise<void>
 }
 
-// Why a fresh tab per test: the app instance is shared across this file's
-// serial tests, so reusing the initial tab would type the launch command into
-// the previous test's still-running fixture instead of a shell prompt.
-//
-// Why agent-marked: a real Codex tab carries launchAgent/telemetry, which
-// flips the reveal into the live-agent reattach branches (mode-preserving
-// resets, hidden startup query grammar, post-replay focus-in) — the branches
-// the field bug lives behind.
+// Use a fresh tab so serial tests cannot type into the prior streaming fixture.
+// Agent-mark it to exercise live-agent reattach, mode-preserving reset, startup-query and post-replay-focus paths.
 async function startStreamingInlineTui(
   page: Page,
   testInfo: TestInfo,
@@ -321,7 +296,7 @@ async function startStreamingInlineTui(
         }
       })
       state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       return tab.id
     },
     { worktreeId, command }
@@ -334,8 +309,7 @@ async function startStreamingInlineTui(
     .toBe(tabId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneIdentitySnapshot(page, 1)
-  // WebGL on: the paint-layer seams under test (atlas wipes, render-pause
-  // release) only exist on the GPU renderer path.
+  // Require WebGL: atlas-wipe/render-pause seams exist only on the GPU path.
   await forceWebglOnActiveTab(page)
   await expect
     .poll(
@@ -346,8 +320,7 @@ async function startStreamingInlineTui(
       }
     )
     .toBeGreaterThan(5)
-  // Capture the PTY id only after the fixture streams: agent quick-launch can
-  // respawn the tab's PTY when the startup command binds.
+  // Capture PTY id after streaming starts because quick-launch can respawn it.
   const ptyId = (await probeRevealedPane(page, tabId))?.ptyId
   if (!ptyId) {
     throw new Error('streaming tab did not bind a PTY')
@@ -358,7 +331,6 @@ async function startStreamingInlineTui(
     ptyId,
     heartbeatPath,
     stop: async () => {
-      // Ctrl+C so the shared app does not accumulate streaming fixtures.
       await sendToTerminal(page, ptyId, '\x03').catch(() => {})
       await page.waitForTimeout(100)
     }
@@ -373,7 +345,6 @@ async function assertRevealConvergence(
 ): Promise<void> {
   const { tabId, heartbeatPath } = setup
 
-  // Premise: the fixture kept streaming while hidden.
   const heartbeatAtReveal = heartbeatFrame(heartbeatPath)
   expect(heartbeatAtReveal, 'fixture stopped streaming while hidden').toBeGreaterThan(5)
 
@@ -419,8 +390,6 @@ async function assertRevealConvergence(
       throw error
     })
 
-  // Still following: the on-screen frame must keep advancing after convergence
-  // with the viewport still pinned to the bottom.
   const convergedFrame = latestFrame(
     (await probeRevealedPane(page, tabId))?.screenRows.join('\n') ?? ''
   )
@@ -440,8 +409,6 @@ async function assertRevealConvergence(
     )
     .toBeGreaterThan(convergedFrame)
 
-  // Geometry: no stale-80x24 leg — xterm grid, fit proposal, and PTY-applied
-  // size must agree without any manual resize.
   const probe = await probeRevealedPane(page, tabId)
   expect(probe, `${label}: pane disappeared after convergence`).not.toBeNull()
   expect(probe!.proposed, `${label}: fit proposal diverges: ${describeProbe(probe)}`).toEqual({
@@ -457,9 +424,6 @@ async function assertRevealConvergence(
     `${label}: PTY applied size diverges: ${describeProbe(probe)}`
   ).toEqual({ cols: probe!.cols, rows: probe!.rows })
 
-  // Painted pixels: the live block guarantees box-drawing + text ink in the
-  // pane's bottom rows. Blank band + healthy buffer = paint-layer divergence
-  // (atlas wipe race / paused RenderService) — the class a resize also heals.
   const clip = await paneClipRect(page, tabId)
   expect(clip, `${label}: pane rect unavailable for paint check`).not.toBeNull()
   const bandTop = Math.max(0, 1 - 8 / (probe!.rows || 24))
@@ -482,10 +446,7 @@ async function resizeAppWindow(
   deltaWidth: number,
   deltaHeight: number
 ): Promise<void> {
-  // Why the retry: the main-process utility context Playwright evaluates in
-  // can be transiently recycled ("Execution context was destroyed") right
-  // after heavy renderer work like a worktree switch; the resize itself is
-  // idempotent-safe to attempt again.
+  // Retry idempotent resize when heavy renderer work transiently recycles main’s utility execution context.
   let lastError: unknown = null
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -509,8 +470,7 @@ async function resizeAppWindow(
   throw lastError
 }
 
-// CPU throttling around the reveal action simulates the loaded-machine
-// conditions the field failures occur under, deterministically.
+// Throttle only reveal to widen loaded-machine race windows.
 async function withCpuThrottle<T>(page: Page, rate: number, run: () => Promise<T>): Promise<T> {
   const session = await page.context().newCDPSession(page)
   try {
@@ -539,8 +499,7 @@ test.describe('Inline TUI reveal convergence', () => {
     test.setTimeout(120_000)
     const setup = await startStreamingInlineTui(orcaPage, testInfo)
     try {
-      // Tab B hides tab A. Reveal quickly — inside the cold-park delay — so
-      // the reveal exercises the hidden-delivery-gate restore, not parking.
+      // Reveal inside the cold-park delay to isolate hidden-delivery-gate restore.
       const tabBId = await createActiveTerminalTab(orcaPage, setup.worktreeId)
       expect(tabBId).not.toBe(setup.tabId)
       await orcaPage.waitForTimeout(Math.max(50, Math.min(PARKING_DELAY_MS / 2, 200)))
@@ -566,14 +525,11 @@ test.describe('Inline TUI reveal convergence', () => {
       historyLinesPerSecond: 20
     })
     try {
-      // Surface hide: switch to ANOTHER WORKTREE (the field action), which
-      // suspends rendering and takes the heavy resume path on return.
+      // Switch worktrees to exercise surface suspension and heavy resume, matching the field action.
       const otherWorktreeId = await switchToOtherWorktree(orcaPage, setup.worktreeId)
       test.skip(!otherWorktreeId, 'test session has a single worktree; cannot surface-hide')
 
-      // Change the window size while the pane is display:none (0x0 container,
-      // no fit runs). This is what Cmd+L's sidebar toggle does to every hidden
-      // workspace: at reveal the pane grid differs from the daemon snapshot's.
+      // Resize while display:none prevents fit, forcing revealed grid/daemon snapshot dimension disagreement as Cmd+L does.
       await resizeAppWindow(electronApp, -180, -120)
       await orcaPage.waitForTimeout(2_500)
 
@@ -596,13 +552,11 @@ test.describe('Inline TUI reveal convergence', () => {
       seedLines: 8_000
     })
     try {
-      // Tab B hides tab A; the decoy then hides tab B so B (most recently
-      // hidden) takes the #8262 last-active exemption and tab A cold-parks.
+      // Hide A with B, then B with a decoy so B takes #8262’s exemption and A cold-parks.
       const tabBId = await createActiveTerminalTab(orcaPage, setup.worktreeId)
       const decoyTabId = await createActiveTerminalTab(orcaPage, setup.worktreeId)
 
-      // The field failure is periodic, not every reveal — cycle the park →
-      // stream → reveal boundary and require convergence every time.
+      // Repeat park/stream/reveal because the field failure is intermittent.
       const CYCLES = 6
       for (let cycle = 0; cycle < CYCLES; cycle += 1) {
         if (cycle > 0) {
@@ -611,13 +565,10 @@ test.describe('Inline TUI reveal convergence', () => {
         }
         await waitForTabParked(orcaPage, setup.tabId, { parkDelayMs: PARKING_DELAY_MS })
 
-        // Accumulate a field-sized backlog against the parked (unmounted)
-        // view so the reveal replay races the live stream, like a real Codex.
+        // Build a field-sized backlog while unmounted so replay races live output.
         await streamWhileParked(setup, 100)
 
-        // Reveal under CPU throttle: a long replay parse + throttled frames is
-        // the loaded-machine window where the corrective fit and follow-anchor
-        // lose their races in the field.
+        // Throttle reveal so replay parse/corrective fit/follow-anchor races resemble a loaded machine.
         await withCpuThrottle(orcaPage, 6, async () => {
           await activateTerminalTab(orcaPage, setup.tabId)
           await waitForActiveTerminalManager(orcaPage, 30_000)
@@ -641,9 +592,7 @@ test.describe('Inline TUI reveal convergence', () => {
     })
     try {
       const tabBId = await createActiveTerminalTab(orcaPage, setup.worktreeId)
-      // Rapid flapping drives the hidden-delivery gate claim/release IPC and
-      // the hidden-output restore against each other at varied phases — the
-      // desync class behind "bytes dropped on a visible pane" field freezes.
+      // Flap at varied phases to race gate claim/release against restore, exposing visible-pane byte drops.
       for (let flap = 0; flap < 12; flap += 1) {
         await activateTerminalTab(orcaPage, tabBId)
         await orcaPage.waitForTimeout(50 + (flap % 3) * 120)
@@ -668,9 +617,7 @@ test.describe('Inline TUI reveal convergence', () => {
     try {
       const otherWorktreeId = await switchToOtherWorktree(orcaPage, setup.worktreeId)
       test.skip(!otherWorktreeId, 'test session has a single worktree; cannot surface-flap')
-      // Surface-level flapping (the field action): suspend/resume rendering +
-      // heavy resume path race the gate resync and reveal repaint each cycle,
-      // under CPU throttle to widen the race windows like a loaded machine.
+      // Flap whole surfaces under CPU throttle to race suspension/heavy resume with gate resync/repaint.
       await withCpuThrottle(orcaPage, 6, async () => {
         for (let flap = 0; flap < 10; flap += 1) {
           await switchToWorktree(orcaPage, otherWorktreeId!)
@@ -700,8 +647,7 @@ test.describe('Inline TUI reveal convergence', () => {
       await createActiveTerminalTab(orcaPage, setup.worktreeId)
       await waitForTabParked(orcaPage, setup.tabId, { parkDelayMs: PARKING_DELAY_MS })
 
-      // Resize while parked: the remount measures a grid that matches neither
-      // the pre-park xterm nor the daemon snapshot — maximum dimension churn.
+      // Resize while parked so remount matches neither the prior grid nor daemon snapshot.
       await resizeAppWindow(electronApp, -180, -120)
       await streamWhileParked(setup, 100)
 

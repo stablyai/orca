@@ -9,6 +9,12 @@ export const MOBILE_RELAY_CLOSE_CODE = {
 
 export type MobileRelayCloseCode =
   (typeof MOBILE_RELAY_CLOSE_CODE)[keyof typeof MOBILE_RELAY_CLOSE_CODE]
+
+// Mirror cloud/packages/relay-contract RELAY_PHONE_CLOSE_REASON for phone sockets, distinct from host control closes. Older peers omit unknown reasons.
+export const MOBILE_RELAY_PHONE_CLOSE_REASON = {
+  // 4404 with live control but missed data attach deadline; allow one quick same-cell redial.
+  HOST_ATTACH_TIMEOUT: 'attach-timeout'
+} as const
 export type MobileRelayLeg = 'host-control' | 'host-data' | 'phone-invite' | 'phone-resume'
 
 export type MobileRelayRecovery =

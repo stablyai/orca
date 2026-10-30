@@ -1,8 +1,10 @@
-import { Pressable, View } from 'react-native'
+import { View } from 'react-native'
 import { SquareChevronRight } from 'lucide-react-native'
 
-import { colors } from '../theme/mobile-theme'
+import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { styles } from './mobile-session-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   disabled: boolean
@@ -10,21 +12,17 @@ type Props = {
 }
 
 export function QuickCommandsTabButton({ disabled, onPress }: Props) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.tabActionDivider} />
-      <Pressable
-        style={({ pressed }) => [
-          styles.newTerminalButton,
-          pressed && styles.newTerminalButtonPressed,
-          disabled && styles.newTerminalButtonDisabled
-        ]}
+      <MobileSessionHeaderIconButton
         disabled={disabled}
         onPress={onPress}
-        accessibilityLabel="Quick commands"
-      >
-        <SquareChevronRight size={16} color={colors.textSecondary} strokeWidth={2.2} />
-      </Pressable>
+        accessibilityLabel={t('session.quickCommandsTabButton.quickCommands', 'Quick commands')}
+        icon={SquareChevronRight}
+      />
     </>
   )
 }

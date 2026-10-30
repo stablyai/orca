@@ -9,9 +9,10 @@ import {
   getSetupScriptPromptDismissalKey,
   ignoresSharedSetupScripts,
   inspectSetupScriptPromptState,
+  isSilentSetupScriptPromptState,
   isSetupScriptPromptDismissed
 } from './setup-script-prompt'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -124,6 +125,30 @@ describe('setup script prompt inspection', () => {
         inspectImports: vi.fn()
       })
     ).resolves.toEqual({ status: 'error', repoId: 'repo-1' })
+  })
+
+  it('reports a stopped WSL distro as distro-stopped, not a retryable error', async () => {
+    const inspectImports = vi.fn()
+    await expect(
+      inspectSetupScriptPromptState({
+        repo: makeRepo(),
+        checkHooks: vi.fn().mockResolvedValue({
+          status: 'error',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false,
+          unavailable: 'wsl-distro-stopped'
+        }),
+        inspectImports
+      })
+    ).resolves.toEqual({ status: 'distro-stopped', repoId: 'repo-1' })
+    expect(inspectImports).not.toHaveBeenCalled()
+  })
+
+  it('shows nothing for forbidden or distro-stopped states, and still shows errors', () => {
+    expect(isSilentSetupScriptPromptState({ status: 'forbidden' })).toBe(true)
+    expect(isSilentSetupScriptPromptState({ status: 'distro-stopped' })).toBe(true)
+    expect(isSilentSetupScriptPromptState({ status: 'error' })).toBe(false)
   })
 
   it('preserves import behavior for repos with shared hooks', () => {

@@ -1,3 +1,4 @@
+import { getMeasuredCellHeight, getTotalScale } from './cell-metrics'
 import { notify } from './host-notify'
 import type {
   TerminalDocumentCell,
@@ -70,6 +71,7 @@ export function emitKeyboardAvoidanceMetrics(scope: TerminalDocumentScope) {
     cursorY: scope.term.buffer && scope.term.buffer.active ? scope.term.buffer.active.cursorY : 0,
     contentBottomRow: alt ? 0 : computeContentBottomRow(scope),
     rows: scope.term.rows || 0,
-    altScreen: alt
+    altScreen: alt,
+    rowPitch: getMeasuredCellHeight(scope) * getTotalScale(scope)
   })
 }

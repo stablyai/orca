@@ -1,4 +1,7 @@
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { isShowRefNoMatchError } from '../../shared/git-show-ref-no-match'
+
+export { isShowRefNoMatchError }
 
 export type ExactRefProbeExecOptions = {
   maxBuffer?: number
@@ -21,23 +24,6 @@ type ExactRefPresence = 'present' | 'absent' | 'unknown'
 const EXACT_REF_PROBE_CONCURRENCY = 8
 // SHA-1 and SHA-256 repositories both report a full object id here.
 const OBJECT_ID_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
-
-export function isShowRefNoMatchError(error: unknown): boolean {
-  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : undefined
-  // Git reports a missing ref as numeric exit status 1. Keep string-valued
-  // transport/error codes (including a relay that happens to use `"1"`) in
-  // the unknown bucket so SSH loss cannot look like an absent ref.
-  if (record?.code !== 1) {
-    return false
-  }
-  // `--quiet` makes Git print nothing for a missing ref, but a wrapper that
-  // also exits 1 always explains itself: `wsl.exe` on a dead distro, a relay
-  // transport error. Empty stderr is what separates proven absence from a
-  // probe that never ran. A runner that reports no stderr at all (the SSH
-  // provider) keeps its existing exit-code contract.
-  const stderr = record.stderr
-  return stderr === undefined || stderr === null || String(stderr).trim().length === 0
-}
 
 function commandOptions(options: ExactRefProbeExecOptions): ExactRefProbeExecOptions | undefined {
   if (options.maxBuffer === undefined && options.timeoutMs === undefined) {
@@ -135,9 +121,7 @@ export type ExactRefProbeStdinExec = (
   options: ExactRefProbeExecOptions & { stdin: string }
 ) => Promise<{ stdout: string }>
 
-/** `cat-file --batch-check` reports every ref from one child, and reports a missing ref as data
- *  rather than a failed exit — so a batch stays as decidable as a per-ref `show-ref --verify`.
- *  A repo with many remotes otherwise pays one subprocess per remote on every conflict check. */
+/** Batch exact probes in one child; missing refs remain data rather than aborting the batch. */
 export async function probeAnyExactRefBatched(
   runGit: ExactRefProbeStdinExec,
   refs: readonly string[],
@@ -157,7 +141,7 @@ export async function probeAnyExactRefBatched(
   } catch {
     return { found: false, unknown: true }
   }
-  // Trim per line so a CRLF-translating host's `\r` does not become part of the type.
+  // Trim CRLF so carriage returns cannot become part of the type.
   const lines = stdout
     .split('\n')
     .map((line) => line.trim())

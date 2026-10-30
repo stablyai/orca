@@ -2,11 +2,13 @@ import { useCallback, useState } from 'react'
 import { dirname, joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { createRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
+import { createRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
+import { translate } from '@/i18n/i18n'
 
 type UseUntitledFileRenameParams = {
   openFiles: OpenFile[]
@@ -52,7 +54,12 @@ export function useUntitledFileRename({
       )
 
       if (newPath !== oldPath && (await runtimePathExists(fileContext, newPath))) {
-        setRenameError('A file with that name already exists')
+        setRenameError(
+          translate(
+            'auto.components.editor.UntitledFileRenameDialog.nameTaken',
+            'A file with that name already exists'
+          )
+        )
         return
       }
 
@@ -62,7 +69,12 @@ export function useUntitledFileRename({
         try {
           await requestEditorFileSave({ fileId: renameDialogFile.id, fallbackContent: draft })
         } catch {
-          setRenameError('Failed to save file')
+          setRenameError(
+            translate(
+              'auto.components.editor.UntitledFileRenameDialog.saveFailed',
+              'Failed to save file'
+            )
+          )
           return
         }
       }
@@ -79,8 +91,7 @@ export function useUntitledFileRename({
       }
 
       try {
-        // Retarget the untitled tab in place (the coordinator's rekey consumes
-        // its untitled status on this explicit rename), instead of close+reopen.
+        // Rekey in place so explicit rename consumes untitled status without closing/reopening the tab.
         await executeOpenEditorPathMove({
           context: fileContext,
           fromPath: oldPath,

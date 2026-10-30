@@ -1,9 +1,6 @@
 import { useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
-// Why: this registry mirrors the Settings sidebar in one neutral module so
-// Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
-// imports; the boundary is enforced by a focused architecture test.
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -18,8 +15,14 @@ import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useAppStore } from '@/store'
+import { useProjectHostSetupProjection } from '@/store/selectors'
+import {
+  useChatSettingsOwnPermissions,
+  useStructuredAgentSessionHostQueuesMessages
+} from '@/runtime/structured-agent-session-host-capability'
+import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
 import type { Repo } from '../../../shared/repo-types'
 import {
   buildCapabilitySettingsSections,
@@ -30,6 +33,7 @@ import { buildInterfaceSettingsSections } from './settings-navigation-interface-
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
 
@@ -39,22 +43,30 @@ export function buildSettingsNavigationMetadata({
   isLocalWindowsHost = isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
+  nativeChatEnabled = false,
+  hostQueuesMessages = false,
+  typedChatPermissions = false,
   managedBrowserCreationEnabled = !isWebClient,
   mobileEmulatorCreationEnabled = !isWebClient,
   isDev = import.meta.env.DEV,
   isLinearConnected = false,
-  repos
+  repos,
+  projectGrouping
 }: {
   isMac: boolean
   isWindows: boolean
   isLocalWindowsHost?: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
+  nativeChatEnabled?: boolean
+  hostQueuesMessages?: boolean
+  typedChatPermissions?: boolean
   managedBrowserCreationEnabled?: boolean
   mobileEmulatorCreationEnabled?: boolean
   isDev?: boolean
   isLinearConnected?: boolean
   repos: readonly Repo[]
+  projectGrouping?: ProjectGroupingModel
 }): SettingsNavSection[] {
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
     isWindows,
@@ -76,16 +88,18 @@ export function buildSettingsNavigationMetadata({
     isLocalWindowsHost,
     isWindowsTerminalHost,
     isWebClient,
+    nativeChatEnabled,
+    hostQueuesMessages,
+    typedChatPermissions,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
-    repos
+    repos,
+    projectGrouping
   }
 
-  // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
-  // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
-  // order — keep each new entry beside its group's siblings.
+  // Match SETTINGS_NAV_GROUPS order so Settings and Cmd+J keep siblings together.
   return [
     ...buildCapabilitySettingsSections(options),
     ...buildSetupSettingsSections(options),
@@ -96,13 +110,10 @@ export function buildSettingsNavigationMetadata({
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
-  // Why: useTranslation subscribes to language changes, but the active locale
-  // must also be a memo dependency below — a rerender alone returns the cached
-  // previous-language sections, leaving the Settings sidebar and Cmd+J palette
-  // stuck in the old language until Settings is remounted.
-  const { i18n } = useTranslation()
-  const activeLocale = i18n.language
+  // The locale subscription must also invalidate the memo or labels retain the previous language.
+  const languageRevision = useUiLanguageRevision()
   const repos = useAppStore((state) => state.repos)
+  const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
@@ -113,6 +124,9 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       ] as const
     })
   )
+  const nativeChatEnabled = settings?.experimentalNativeChat === true
+  const typedChatPermissions = useChatSettingsOwnPermissions()
+  const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
@@ -120,7 +134,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
-  const runtimeTarget = getActiveRuntimeTarget(settings)
+  // Why: navigation is shared with the palette, which has no host picker.
+  const runtimeTarget = defaultScopeHost(settings)
   const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
@@ -144,9 +159,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     hostPlatform: windowsTerminalCapabilities.hostPlatform
   })
 
-  // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
-  // and search entries cannot drift. Keep this hook free of Settings pane UI
-  // imports; see docs/reference/cmd-j-settings-actions-plan.md.
   return useMemo(
     () =>
       buildSettingsNavigationMetadata({
@@ -155,24 +167,35 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isLocalWindowsHost,
         isWindowsTerminalHost,
         isWebClient,
+        nativeChatEnabled,
+        hostQueuesMessages,
+        typedChatPermissions,
         managedBrowserCreationEnabled,
         mobileEmulatorCreationEnabled,
         isDev: import.meta.env.DEV,
         isLinearConnected,
-        repos
+        repos,
+        projectGrouping: {
+          projects: projectHostSetupProjection.projects,
+          projectHostSetups: projectHostSetupProjection.setups
+        }
       }),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() inside buildSettingsNavigationMetadata reads the UI language and catalogs implicitly.
     [
       isMac,
       isWindows,
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,
+      nativeChatEnabled,
+      hostQueuesMessages,
+      typedChatPermissions,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
       repos,
-      activeLocale
+      projectHostSetupProjection,
+      languageRevision
     ]
   )
 }

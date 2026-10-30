@@ -9,12 +9,7 @@ import {
   directHost
 } from '../relay-pairing-fixtures'
 
-/**
- * The two credential installers that run over an already-paired client: the seven-day rotation and
- * the direct-to-relay upgrade. Both are mutations whose lost reply is unknown rather than failed,
- * so what the recordings have to show is the request order and which authoritative install status
- * each step demanded before it wrote anything down.
- */
+// Record request ordering and authoritative install statuses before persistence; lost credential-mutation replies remain unknown.
 export function relayCredentialMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -106,7 +101,7 @@ export function relayCredentialMountAdapters(
               writeBundle: async (written: { current: { version: number } }) => {
                 effect('bundle-written', { version: written.current.version })
               },
-              saveHost: async () => {
+              setRelayRouting: async () => {
                 effect('host-saved', HOST_ID)
               },
               deleteBundle: async () => {
@@ -116,7 +111,7 @@ export function relayCredentialMountAdapters(
           })
           started.then(
             (result) => {
-              outcome = result === null ? 'declined' : result.host.relayHostId
+              outcome = result === null ? 'declined' : result.relay.relayHostId
             },
             (error: unknown) => {
               outcome = `failed: ${error instanceof Error ? error.message : String(error)}`

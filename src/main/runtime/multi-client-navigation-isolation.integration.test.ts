@@ -1,7 +1,7 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { parsePairingCode } from '../../shared/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
@@ -57,7 +57,6 @@ describe('paired runtime navigation isolation', () => {
     await Promise.all(servers.splice(0).map((server) => server.stop()))
   })
 
-  /** `headless: true` models `orca serve` — no renderer notifier and no attached window. */
   async function startHarness(options: { headless?: boolean } = {}) {
     const hostSelections = { worktreeId: HOST_WORKTREE_ID, tabId: 'host-tab' }
     const activateWorktree = vi.fn((_repoId: string, nextWorktreeId: string) => {
@@ -78,7 +77,6 @@ describe('paired runtime navigation isolation', () => {
         renameTerminal: vi.fn(),
         focusTerminal,
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
@@ -87,9 +85,12 @@ describe('paired runtime navigation isolation', () => {
       seedSessionTabs(runtime)
     }
 
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-navigation-isolation-'))
+    onTestFinished(() => rmSync(userDataPath, { recursive: true, force: true }))
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
-      userDataPath: mkdtempSync(join(tmpdir(), 'orca-navigation-isolation-')),
+      userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
@@ -284,7 +285,6 @@ describe('paired runtime navigation isolation', () => {
     const harness = await startHarness()
     await subscribeBothClientEventStreams(harness)
 
-    // Negative control: repeated ordinary navigation by A never reaches B or the host.
     for (const [index, target] of [
       CLIENT_A2_WORKTREE_ID,
       CLIENT_A_WORKTREE_ID,
@@ -309,8 +309,7 @@ describe('paired runtime navigation isolation', () => {
     })
     await expect(harness.readerA.next('create-with-agent')).resolves.toMatchObject({ ok: true })
 
-    // Fence: a shared-catalog event emitted after the create must be the next frame each
-    // client sees. An activation frame would be delivered ahead of it on the ordered stream.
+    // Ordered shared-catalog event fences the assertion: any erroneous activation would arrive before it.
     harness.runtime.notifyReposChangedForRemoteClients()
     const observed: Record<'a' | 'b', string[]> = { a: [], b: [] }
     for (const [key, reader, id] of [
@@ -326,15 +325,12 @@ describe('paired runtime navigation isolation', () => {
       }
     }
 
-    // The observer must never be navigated by the creator...
     expect(observed.b).not.toContain('activateWorktree')
     expect(observed.b.at(-1)).toBe('reposChanged')
     expect(harness.activateWorktree).not.toHaveBeenCalled()
     expect(harness.hostSelections.worktreeId).toBe(HOST_WORKTREE_ID)
-    // ...nor is the creator's own view driven from the host stream (it navigates from its RPC result)...
     expect(observed.a).not.toContain('activateWorktree')
     expect(observed.a.at(-1)).toBe('reposChanged')
-    // ...while shared catalog state still reaches both clients.
     expect(observed.a).toContain('worktreesChanged')
     expect(observed.b).toContain('worktreesChanged')
   })
@@ -343,15 +339,13 @@ describe('paired runtime navigation isolation', () => {
     const harness = await startHarness()
     await subscribeBothClientEventStreams(harness)
 
-    // The observer is offline while the creator works.
     harness.readerB.dispose()
     await new Promise<void>((resolve) => {
       harness.clientB.ws.once('close', () => resolve())
       harness.clientB.ws.close()
     })
 
-    // Why navigation 'all': a caller-scoped create emits no activation at all, so the
-    // reconnect assertion below would pass vacuously — there must be a real frame to miss.
+    // navigation: all proves an activation occurred while B was offline; caller-scoped creates emit none.
     send(harness.clientA, {
       id: 'create-while-b-offline',
       method: 'worktree.create',
@@ -365,7 +359,6 @@ describe('paired runtime navigation isolation', () => {
     await expect(harness.readerA.next('create-while-b-offline')).resolves.toMatchObject({
       ok: true
     })
-    // The still-connected client proves the activation really was emitted while B was down.
     expect(
       resultType(
         await harness.readerA.next(
@@ -382,8 +375,7 @@ describe('paired runtime navigation isolation', () => {
     send(reconnectedB, { id: 'events-b2', method: 'runtime.clientEvents.subscribe' })
     await reconnectedReaderB.next('events-b2', (response) => resultType(response) === 'ready')
 
-    // Why: the ready snapshot must not carry navigation intent forward; only live,
-    // addressed activation is legitimate, so a reconnect can never inherit it.
+    // Ready snapshots must never retain live navigation intent and replay it on reconnect.
     harness.runtime.notifyReposChangedForRemoteClients()
     const observed: string[] = []
     for (;;) {
@@ -398,8 +390,6 @@ describe('paired runtime navigation isolation', () => {
   })
 
   it('still reveals to every client when a paired caller asks for all-surface navigation', async () => {
-    // Why: the CLI pairs as a runtime device but has no viewer of its own, so
-    // `orca worktree create --activate` against a remote runtime sends navigation 'all'.
     const harness = await startHarness()
     await subscribeBothClientEventStreams(harness)
 
@@ -424,6 +414,8 @@ describe('paired runtime navigation isolation', () => {
       'activateWorktree'
     ])
     expect(harness.activateWorktree).toHaveBeenCalled()
+    expect(eventA).toMatchObject({ result: { navigation: 'all' } })
+    expect(eventB).toMatchObject({ result: { navigation: 'all' } })
   })
 
   it('keeps create activation caller-scoped on a headless orca serve host', async () => {
@@ -449,20 +441,22 @@ describe('paired runtime navigation isolation', () => {
     expect(observed).not.toContain('activateWorktree')
     expect(observed).toContain('worktreesChanged')
 
-    // A headless host with no viewer of its own still reveals an in-process/CLI create.
     await harness.runtime.createManagedWorktree({
       repoSelector: `id:${FOLDER_REPO_ID}`,
       name: 'headless-cli-workspace',
       activate: true
     })
-    expect(
-      resultType(
-        await harness.readerB.next(
-          'events-b',
-          (response) => resultType(response) === 'activateWorktree'
-        )
-      )
-    ).toBe('activateWorktree')
+    harness.runtime.notifyReposChangedForRemoteClients()
+    const afterCliCreate: string[] = []
+    for (;;) {
+      const type = resultType(await harness.readerB.next('events-b'))
+      afterCliCreate.push(type ?? 'unknown')
+      if (type === 'reposChanged' || type === 'activateWorktree') {
+        break
+      }
+    }
+    expect(afterCliCreate).not.toContain('activateWorktree')
+    expect(afterCliCreate).toContain('worktreesChanged')
   })
 
   it('normalizes a paired focused terminal.create before host-renderer activation', async () => {
@@ -502,27 +496,47 @@ describe('paired runtime navigation isolation', () => {
     })
   })
 
-  it('still reveals a host-originated create-with-activate on the host and every client', async () => {
+  it.each([false, true])(
+    'keeps host create activation off paired observers (runHooks=%s)',
+    async (runHooks) => {
+      const harness = await startHarness()
+      await subscribeBothClientEventStreams(harness)
+
+      await harness.runtime.createManagedWorktree({
+        repoSelector: `id:${FOLDER_REPO_ID}`,
+        name: 'cli-created-workspace',
+        activate: !runHooks,
+        runHooks
+      })
+
+      harness.runtime.notifyReposChangedForRemoteClients()
+      for (const [reader, id] of [
+        [harness.readerA, 'events-a'],
+        [harness.readerB, 'events-b']
+      ] as const) {
+        const observed: string[] = []
+        for (;;) {
+          const type = resultType(await reader.next(id))
+          observed.push(type ?? 'unknown')
+          if (type === 'reposChanged' || type === 'activateWorktree') {
+            break
+          }
+        }
+        expect(observed).not.toContain('activateWorktree')
+        expect(observed).toContain('worktreesChanged')
+      }
+      expect(harness.activateWorktree).toHaveBeenCalled()
+    }
+  )
+
+  it('keeps host worktree activation off paired observers', async () => {
     const harness = await startHarness()
     await subscribeBothClientEventStreams(harness)
-
-    // Why: a headless server's only viewer is a remote client, so an in-process/CLI
-    // create must keep reaching clients; only paired-client callers are scoped.
-    await harness.runtime.createManagedWorktree({
-      repoSelector: `id:${FOLDER_REPO_ID}`,
-      name: 'cli-created-workspace',
-      activate: true
-    })
-
-    const [eventA, eventB] = await Promise.all([
-      harness.readerA.next('events-a', (response) => resultType(response) === 'activateWorktree'),
-      harness.readerB.next('events-b', (response) => resultType(response) === 'activateWorktree')
-    ])
-    expect([resultType(eventA), resultType(eventB)]).toEqual([
-      'activateWorktree',
-      'activateWorktree'
-    ])
-    expect(harness.activateWorktree).toHaveBeenCalled()
+    await harness.runtime.activateManagedWorktree(`id:${CLIENT_A_WORKTREE_ID}`)
+    harness.runtime.notifyReposChangedForRemoteClients()
+    expect(resultType(await harness.readerA.next('events-a'))).toBe('reposChanged')
+    expect(resultType(await harness.readerB.next('events-b'))).toBe('reposChanged')
+    expect(harness.hostSelections.worktreeId).toBe(CLIENT_A_WORKTREE_ID)
   })
 
   it('projects session-tab activation only to the paired caller across fanout and reconnect', async () => {
@@ -781,7 +795,7 @@ describe('paired runtime navigation isolation', () => {
     )
     expect(remembered.activeTabId).toBe('client-a-tab')
     expect(remembered.tabs.find((tab) => tab.isActive)?.id).toBe('client-a-tab')
-    // Why: an unknown device must still start from deterministic topology, not inherit another device's restored state.
+    // Unknown devices inherit the host view, never another device's restored state.
     const freshDevice = await restarted.listMobileSessionTabs(
       `id:${SESSION_WORKTREE_ID}`,
       'device-b'

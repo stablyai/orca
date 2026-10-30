@@ -265,6 +265,10 @@ function jsxElementReports(node) {
 
 function bindContext(createVisitors) {
   return (context) => {
+    // Every vertical scroll class and style names overflow; empty visitors skip JS AST deserialization.
+    if (!context.sourceCode.text.includes('overflow') && !context.sourceCode.text.includes('\\')) {
+      return {}
+    }
     const visitors = createVisitors()
     for (const [nodeType, visit] of Object.entries(visitors)) {
       visitors[nodeType] = visit.bind(context)

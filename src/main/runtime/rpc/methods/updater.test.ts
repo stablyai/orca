@@ -31,6 +31,7 @@ describe('runtime updater RPC methods', () => {
   }))
   const runtime = {
     getRuntimeId: () => 'runtime-rpc',
+    machineNameReady: async () => undefined,
     getStatus: () => ({ runtimeId: 'runtime-rpc', liveTabCount: 2, liveLeafCount: 3 })
   }
 

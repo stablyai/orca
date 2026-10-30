@@ -18,6 +18,15 @@ type CacheDependency = {
   value: unknown
 }
 
+function selectCacheReferences(state: ReviewCacheState): ReviewCacheState {
+  // Pick narrows the type, not the object received from the store.
+  return {
+    hostedReviewCache: state.hostedReviewCache,
+    prCache: state.prCache,
+    checksCache: state.checksCache
+  }
+}
+
 function trackCacheReads<K extends ReviewCacheName>(
   state: ReviewCacheState,
   cacheName: K,
@@ -73,22 +82,21 @@ export function createParentPrChecksProjectionSelector(
         return cached.projection
       }
       if (dependenciesAreCurrent(state, cached.cacheReferences, cached.dependencies)) {
-        // Why: adopting unrelated replacement maps keeps later store notifications O(1).
-        cached.cacheReferences = state
+        // Adopt unrelated replacement maps so later notifications stay O(1).
+        cached.cacheReferences = selectCacheReferences(state)
         return cached.projection
       }
     }
 
     const dependencies: CacheDependency[] = []
-    // Why: global provider refreshes replace these maps frequently; track only
-    // cache keys the attached-worktree projection actually reads.
+    // Provider refreshes replace maps frequently; track only keys read by this projection.
     const projection = buildProjection({
       ...inputs,
       hostedReviewCache: trackCacheReads(state, 'hostedReviewCache', dependencies),
       prCache: trackCacheReads(state, 'prCache', dependencies),
       checksCache: trackCacheReads(state, 'checksCache', dependencies)
     })
-    cached = { cacheReferences: state, dependencies, projection }
+    cached = { cacheReferences: selectCacheReferences(state), dependencies, projection }
     return projection
   }
 }

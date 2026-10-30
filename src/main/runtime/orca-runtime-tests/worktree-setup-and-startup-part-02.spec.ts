@@ -1,4 +1,6 @@
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import {
   OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
@@ -10,7 +12,12 @@ import {
   runHook,
   shouldRunSetupForCreate
 } from '../orca-runtime-test-mocks.spec'
-import { expectStablePaneKeyEnv, store } from '../orca-runtime-test-fixtures.spec'
+import {
+  expectStablePaneKeyEnv,
+  spawnedPtyEnv,
+  store,
+  makeRuntimeStoreWithWorkspaceSession
+} from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('sequences setup before startup for opted-in local headless worktree creates', async () => {
@@ -51,7 +58,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -94,9 +100,15 @@ describe('OrcaRuntimeService', () => {
     expect(runHook).not.toHaveBeenCalled()
     expect(createTerminal).toHaveBeenCalledWith(
       `id:${result.worktree.id}`,
-      expect.objectContaining({ viewMode: 'chat' })
+      expect.objectContaining({ viewMode: 'chat' }),
+      expect.objectContaining({
+        id: result.worktree.id,
+        path: result.worktree.path,
+        repoId: result.worktree.repoId,
+        identity: result.worktree.identity
+      })
     )
-    // Why: setup is provisioned fire-and-forget; the wait-for-setup guarantee comes from the shell nonce/marker, not JS spawn ordering.
+    // Fire-and-forget setup is ordered by shell nonce/marker, not JavaScript spawn order.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
     const startup = spawn.mock.calls[0]![0] as {
       command: string
@@ -104,15 +116,19 @@ describe('OrcaRuntimeService', () => {
     }
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+    const setupScript = spawnedPtyEnv(spawn.mock.calls[1]![0])[
+      SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV
+    ]
     const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     expect(startupCommand.length).toBeLessThan(256)
     expect(startupScript).toContain('exec claude')
     expect(startupScript).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('printf')
-    expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
+    expect(spawn.mock.calls[1]![0]).toMatchObject({
+      command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
+    })
+    expect(setupScript).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)
     expect(result.setup).toBeUndefined()
   })
 
@@ -139,7 +155,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -178,7 +193,7 @@ describe('OrcaRuntimeService', () => {
       awaitTerminalProvisioning: true
     })
 
-    // Why: setup now spawns fire-and-forget on a later tick; wait for both PTYs.
+    // Setup spawns on a later tick; wait for both PTYs.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
     expect(spawn).toHaveBeenNthCalledWith(1, expect.objectContaining({ command: 'claude' }))
     expect(spawn).toHaveBeenNthCalledWith(
@@ -216,7 +231,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -283,7 +297,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -315,14 +328,12 @@ describe('OrcaRuntimeService', () => {
         preAllocatedHandle: expect.stringMatching(/^term_/)
       })
     )
-    const initialSpawnEnv =
-      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const initialSpawnEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     expectStablePaneKeyEnv(initialSpawnEnv)
     const initialLeafId = initialSpawnEnv.ORCA_PANE_KEY.slice(
       `${initialSpawnEnv.ORCA_TAB_ID}:`.length
     )
-    // Why: the renderer treats a missing surfaceOwner as "reveal the owner", which
-    // scrolled the sidebar to background CLI creates.
+    // Missing surfaceOwner reveals the owner and can scroll the sidebar during background creates.
     expect(revealTerminalSession).toHaveBeenCalledWith(result.worktree.id, {
       ptyId: 'pty-created-worktree',
       title: null,
@@ -354,7 +365,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -380,8 +390,6 @@ describe('OrcaRuntimeService', () => {
       startup: { command: 'claude' }
     })
 
-    // `orca worktree create --agent claude` without --activate: the agent tab is
-    // adopted, but the sidebar must stay on whatever the user was reading.
     expect(activateWorktree).not.toHaveBeenCalled()
     expect(revealTerminalSession).toHaveBeenCalledWith(
       result.worktree.id,
@@ -413,7 +421,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -440,8 +447,6 @@ describe('OrcaRuntimeService', () => {
       startup: { command: 'claude' }
     })
 
-    // No-regression guard: an explicit --activate still reveals the workspace, so
-    // surfaceOwner must stay absent.
     const revealPayload = revealTerminalSession.mock.calls[0]?.[1] as
       | { surfaceOwner?: boolean }
       | undefined
@@ -472,7 +477,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -509,9 +513,9 @@ describe('OrcaRuntimeService', () => {
     expect(revealPayload).not.toHaveProperty('surfaceOwner')
   })
 
-  it('honors split setup placement for CLI-created worktrees without startup agents', async () => {
+  it('uses a Setup tab for CLI-created worktrees with a retired split preference', async () => {
     const runtimeStore = {
-      ...store,
+      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getSettings: () => ({
         ...store.getSettings(),
         setupScriptLaunchMode: 'split-vertical' as const
@@ -540,7 +544,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -579,20 +582,18 @@ describe('OrcaRuntimeService', () => {
 
     expect(activateWorktree).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
-    const setupEnv = (spawn.mock.calls[1]![0] as { env?: Record<string, string> }).env ?? {}
+    const mainEnv = spawnedPtyEnv(spawn.mock.calls[0]![0])
+    const setupEnv = spawnedPtyEnv(spawn.mock.calls[1]![0])
     expectStablePaneKeyEnv(mainEnv)
     expectStablePaneKeyEnv(setupEnv)
-    expect(setupEnv.ORCA_TAB_ID).toBe(mainEnv.ORCA_TAB_ID)
-    const mainLeafId = mainEnv.ORCA_PANE_KEY!.slice(`${mainEnv.ORCA_TAB_ID!}:`.length)
+    expect(setupEnv.ORCA_TAB_ID).not.toBe(mainEnv.ORCA_TAB_ID)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(
       result.worktree.id,
       expect.objectContaining({
         ptyId: 'pty-cli-setup-setup',
-        tabId: mainEnv.ORCA_TAB_ID,
+        tabId: setupEnv.ORCA_TAB_ID,
         activate: false,
-        splitFromLeafId: mainLeafId,
-        splitDirection: 'vertical'
+        title: 'Setup'
       })
     )
   })

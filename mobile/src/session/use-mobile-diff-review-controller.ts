@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileSourceControlSettings } from '../source-control/mobile-source-control-settings'
 import type { FlatList } from 'react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
@@ -10,8 +13,7 @@ import {
   filterMobileDiffReviewQueue,
   mobileDiffReviewCommentMatchesItem,
   summarizeMobileDiffReviewQueue,
-  type MobileDiffReviewQueueFilter,
-  type MobileDiffReviewQueueItem
+  type MobileDiffReviewQueueFilter
 } from './mobile-diff-review-queue'
 import {
   findMobileDiffReviewInitialIndex,
@@ -20,31 +22,41 @@ import {
 import { loadMobileDiffReviewSnapshot } from './mobile-diff-review-loaders'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
 import { canOpenMobileBranchCompareDiff } from '../source-control/mobile-branch-compare'
-import type {
-  ComposerState,
-  ReviewDiffLine,
-  ReviewScreenState,
-  SendSheetState
-} from './mobile-diff-review-screen-model'
+import type { ReviewDiffLine, ReviewScreenState } from './mobile-diff-review-screen-model'
+import {
+  NO_REVIEW_SHEETS,
+  reduceReviewSheets,
+  reviewComposer,
+  reviewSheetIntents
+} from './mobile-diff-review-sheets'
 import { useMobileDiffReviewInteractions } from './use-mobile-diff-review-interactions'
+import { resolveMobileAgentLaunchAvailability } from './mobile-agent-launch-availability'
 import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
 
 type ControllerInput = {
   client: RpcClient | null
   connState: ConnectionState
+  hostCapabilities: readonly string[]
+  hostStatusPending: boolean
+  hostStatusReadable: boolean
   hostId: string
   worktreeId: string
   name: string
   initialFilter: MobileDiffReviewQueueFilter
   initialTarget: MobileDiffReviewInitialTarget | null
   onOpenSession: () => void
-  onReconnect: (hostId: string) => void | Promise<void>
+  /** Null on the page, where the shell owns the connection. */
+  onReconnect: ((hostId: string) => void | Promise<void>) | null
 }
 
 export function useMobileDiffReviewController(input: ControllerInput) {
+  useMobileTranslation()
   const {
     client,
     connState,
+    hostCapabilities,
+    hostStatusPending,
+    hostStatusReadable,
     hostId,
     worktreeId,
     name,
@@ -61,35 +73,48 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const [filter, setFilter] = useState<MobileDiffReviewQueueFilter>(initialFilter)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [activeHunkIndex, setActiveHunkIndex] = useState<number | null>(null)
-  const [composer, setComposer] = useState<ComposerState | null>(null)
+  const [sheets, dispatchSheets] = useReducer(reduceReviewSheets, NO_REVIEW_SHEETS)
+  const sheetIntents = useMemo(() => reviewSheetIntents(dispatchSheets), [])
+  const composer = reviewComposer(sheets)
   const [composerBody, setComposerBody] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
-  const [discardTarget, setDiscardTarget] = useState<MobileDiffReviewQueueItem | null>(null)
-  const [showOverflow, setShowOverflow] = useState(false)
-  const [sendSheet, setSendSheet] = useState<SendSheetState | null>(null)
-  const [showCompletion, setShowCompletion] = useState(false)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
+  const { compareAgainstUpstream } = useMobileSourceControlSettings(client, connState).settings
 
   const loadReviewData = useCallback(async () => {
     const generation = loadGenerationRef.current + 1
     loadGenerationRef.current = generation
     const isCurrent = () => generation === loadGenerationRef.current
     if (!worktreeId) {
-      setScreenState({ kind: 'error', message: 'Missing worktree' })
+      setScreenState({
+        kind: 'error',
+        message: translate('session.useDiffReviewController.missingWorktree', 'Missing worktree')
+      })
       return
     }
-    // Why (F10): a loaded review outlives a blip — the waiting state is for a screen with nothing
-    // to show, and this branch (not the one below it) is the one a drop actually reaches.
+    // Keep an existing review through disconnects; only empty screens need the waiting state.
     const keepReady = (fallback: ReviewScreenState) => (prev: ReviewScreenState) =>
       prev.kind === 'ready' ? prev : fallback
     if (!client || connState !== 'connected') {
-      setScreenState(keepReady({ kind: 'error', message: 'Waiting for desktop...' }))
+      setScreenState(
+        keepReady({
+          kind: 'error',
+          message: translate(
+            'session.useDiffReviewController.waitingForDesktop',
+            'Waiting for desktop...'
+          )
+        })
+      )
       return
     }
     setScreenState(keepReady({ kind: 'loading' }))
     try {
-      const nextState = await loadMobileDiffReviewSnapshot(client, worktreeId)
+      const nextState = await loadMobileDiffReviewSnapshot(
+        client,
+        worktreeId,
+        compareAgainstUpstream
+      )
       if (!isCurrent()) {
         return
       }
@@ -97,17 +122,19 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       setActionError(nextState.kind === 'ready' ? (nextState.branchError ?? null) : null)
     } catch (err) {
       if (isCurrent()) {
-        // Why (F10): a failed refresh after reconnect must not destroy the review
-        // already on screen; the error state is for a screen with nothing to show.
+        // Failed reconnect reads must not destroy an already loaded review.
         setScreenState(
           keepReady({
             kind: 'error',
-            message: err instanceof Error ? err.message : 'Unable to load review'
+            message:
+              err instanceof Error
+                ? err.message
+                : translate('session.useDiffReviewController.loadFailed', 'Unable to load review')
           })
         )
       }
     }
-  }, [client, connState, worktreeId])
+  }, [client, compareAgainstUpstream, connState, worktreeId])
 
   useEffect(() => {
     void loadReviewData()
@@ -150,8 +177,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       return
     }
     seededInitialTargetRef.current = true
-    // Why: review data loads asynchronously; seed the tapped file only after the
-    // first real queue exists so the clamp effect cannot reset it back to zero.
+    // Seed the tapped file only once the queue exists or clamping would reset its selection.
     setCurrentIndex(findMobileDiffReviewInitialIndex(filteredQueue, initialTarget))
   }, [filteredQueue, initialTarget])
 
@@ -208,8 +234,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     return map
   }, [commentsForCurrentItem])
 
-  // Head branch + SHA for the PR sidebar come from git.status (the review snapshot),
-  // not the branchCompare base ref. headOid is the branch-compare fallback for the SHA.
+  // Use git.status for PR head identity; branchCompare’s base ref is not the head.
   const prSidebarBranch = screenState.kind === 'ready' ? (screenState.status.branch ?? null) : null
   const prSidebarHeadSha =
     screenState.kind === 'ready'
@@ -226,6 +251,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const interactions = useMobileDiffReviewInteractions({
     client,
     connState,
+    hostCapabilities,
     hostId,
     worktreeId,
     screenState,
@@ -243,12 +269,10 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     setFilter,
     setCurrentIndex,
     setActiveHunkIndex,
-    setComposer,
     setComposerBody,
     setActionError,
     setBusyAction,
-    setSendSheet,
-    setShowCompletion,
+    sheets: sheetIntents,
     loadReviewData,
     onOpenSession,
     onReconnect
@@ -257,8 +281,12 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   return {
     ...interactions,
     ...prSidebar,
-    // Exposed so the screen can thread the RPC client + worktree into the PR
-    // sidebar's lazy check-detail fetches (U5) and mutation actions (U6).
+    ...sheetIntents,
+    agentLaunchAvailability: resolveMobileAgentLaunchAvailability({
+      hostCapabilities,
+      statusPending: hostStatusPending,
+      statusReadable: hostStatusReadable
+    }),
     client,
     connState,
     worktreeId,
@@ -273,7 +301,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     currentIndex,
     currentItem,
     diffState,
-    discardTarget,
     fileNotes: commentsByLine.get(0) ?? [],
     filter,
     filteredQueue,
@@ -282,14 +309,8 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     reviewedCount,
     reviewedUnstagedCount,
     screenState,
-    sendSheet,
     setComposerBody,
-    setDiscardTarget,
-    setSendSheet,
-    setShowCompletion,
-    setShowOverflow,
-    showCompletion,
-    showOverflow,
+    sheet: sheets.requested,
     staleCommentIds,
     unsentComments,
     worktreeLabel

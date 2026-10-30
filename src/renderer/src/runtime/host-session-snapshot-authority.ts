@@ -1,4 +1,7 @@
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
+import {
+  CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
+  UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+} from '../../../shared/runtime-types'
 
 type SnapshotPublication = {
   publicationEpoch: string
@@ -9,36 +12,27 @@ type ClientHostedPagePublication = SnapshotPublication & {
   clientHostedPagesUnreconciled?: true
 }
 
-/**
- * Whether a session-tabs snapshot carries the host's answer about a worktree at all.
- *
- * A runtime that has published nothing for a worktree still answers a forced snapshot, with a
- * synthesized empty frame. Every worktree is in that state for a moment after the host process
- * restarts, and the frame is indistinguishable from "the user closed everything" unless the epoch
- * is read: `UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` at version 0 is the runtime saying "ask me
- * later". Absence in such a frame proves nothing, so it must not drive a cull.
- *
- * Deliberately not part of the staleness gate: the frame is not stale, and rejecting it outright
- * would also drop the terminal reconciliation that legitimately rides on it.
- */
+type AgentSessionPublication = SnapshotPublication & {
+  agentSessionsUnverifiable?: true
+}
+
+/** Forced snapshots synthesize empty frames before publication, including after restart. UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH (with optional client navigation suffix) means ask later; absence cannot cull. Keep this separate from staleness so valid terminal reconciliation on the frame still applies. */
 export function hostSnapshotAffirmsWorktreeContents(snapshot: SnapshotPublication): boolean {
-  return !(
-    snapshot.publicationEpoch === UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH &&
-    snapshot.snapshotVersion === 0
+  return (
+    snapshot.publicationEpoch !== UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH &&
+    snapshot.publicationEpoch !==
+      `${UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH}${CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX}`
   )
 }
 
-/**
- * Whether a snapshot's browser rows are the host's answer about this desktop's client-hosted pages.
- *
- * Narrower than {@link hostSnapshotAffirmsWorktreeContents} on purpose. A restarted runtime rebuilds
- * terminals from disk and publishes a real, versioned frame under a real epoch — authoritative for
- * everything it owns, but silently missing the client-hosted pages it has not yet taken back from
- * the hosts still holding them. `clientHostedPagesUnreconciled` is the host saying so, and the
- * runtime bounds it, so trusting it cannot strand a row indefinitely.
- */
+/** Browser authority is narrower than worktree authority: real restarted-runtime frames can omit pages clients still hold. clientHostedPagesUnreconciled withholds that verdict until bounded host reconciliation completes. */
 export function hostSnapshotAffirmsClientHostedPages(
   snapshot: ClientHostedPagePublication
 ): boolean {
   return hostSnapshotAffirmsWorktreeContents(snapshot) && !snapshot.clientHostedPagesUnreconciled
+}
+
+/** Chat authority is narrower than worktree authority: unreadable chat journals yield empty chat rows despite valid terminals. Absence cannot cull saved chat placement. */
+export function hostSnapshotAffirmsAgentSessions(snapshot: AgentSessionPublication): boolean {
+  return hostSnapshotAffirmsWorktreeContents(snapshot) && !snapshot.agentSessionsUnverifiable
 }

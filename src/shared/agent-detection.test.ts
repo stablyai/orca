@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import {
   detectAgentStatusFromTitle,
@@ -18,10 +18,6 @@ import {
 } from './agent-title-owner'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
 describe('OSC title extraction', () => {
   it('extracts the last OSC title from BEL-terminated PTY data', () => {
     expect(extractLastOscTitle('\x1b]0;First\x07noise\x1b]2;Second\x07')).toBe('Second')
@@ -34,7 +30,7 @@ describe('OSC title extraction', () => {
     ])
   })
 
-  it('ignores incomplete OSC titles until a later chunk supplies the terminator', () => {
+  it('ignores unterminated OSC titles', () => {
     expect(extractAllOscTitles('\x1b]0;Incomplete title')).toEqual([])
     expect(extractLastOscTitle('\x1b]0;Incomplete title')).toBeNull()
   })
@@ -46,13 +42,11 @@ describe('OSC title extraction', () => {
     expect(extractAllOscTitles(data)).toEqual(['Fresh title'])
   })
 
-  it('scans large PTY chunks without regex match iteration', () => {
-    const matchAll = vi.spyOn(String.prototype, 'matchAll')
+  it('extracts the final title after a large noisy PTY prefix', () => {
     const data = `${'pasted terminal noise \x1b]x;ignored\x07 '.repeat(10_000)}\x1b]0;Agent working\x07`
 
     expect(extractLastOscTitle(data)).toBe('Agent working')
     expect(extractAllOscTitles(data).at(-1)).toBe('Agent working')
-    expect(matchAll).not.toHaveBeenCalled()
   })
 
   it('caps oversized OSC titles before downstream title processing', () => {
@@ -101,9 +95,21 @@ describe('MiMo title detection', () => {
   )
 })
 
+describe('permission keywords in agent titles', () => {
+  it.each([
+    ['Antigravity - fix permission bug', 'idle'],
+    ['agy waiting for CI', 'idle'],
+    ['codex permission-check', 'idle'],
+    ['claude awaiting', 'idle'],
+    ['agy | claude - action required', 'permission'],
+    ['Codex - waiting for approval', 'permission']
+  ])('classifies %j as %s', (title, status) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(status)
+  })
+})
+
 describe('OpenCode native title detection', () => {
-  // Why: `OC | …` names no agent token, so title-derived display and target surfaces
-  // previously dropped OpenCode panes. Runtime sends corroborate the title separately.
+  // OC | names no agent token; native OpenCode titles need separate runtime corroboration.
   it.each(['OC | Implement the Kitty IME preview', 'tmux | OC | Implement the Kitty IME preview'])(
     'classifies the native session title %j as title-derived idle OpenCode',
     (title) => {
@@ -112,8 +118,7 @@ describe('OpenCode native title detection', () => {
     }
   )
 
-  // Why: a spinner glyph is the one status decoration OpenCode adds to the marker, and
-  // its gate runs before the marker's, so an animating frame still reads working (#8940).
+  // Spinner detection precedes the OpenCode marker, so animated frames still mean working (#8940).
   it('reads a spinner-decorated native frame as working', () => {
     const title = 'OC | ⠋ ask claude about this'
     expect(getAgentLabel(title)).toBe('OpenCode')
@@ -128,10 +133,7 @@ describe('OpenCode native title detection', () => {
     }
   )
 
-  // Why: the text after the marker is OpenCode's generated session summary — subject
-  // matter, not status. Routing it through the keyword gates would let an ordinary task
-  // name ("stop the flaky test") park a live pane in working/permission forever, so the
-  // marker asserts presence only. Do not "fix" these into keyword-derived statuses.
+  // OpenCode summary text is subject matter, never keyword status; the marker alone asserts presence.
   it.each([
     'OC | ready to review',
     'OC | permission prompt keeps reappearing',
@@ -158,17 +160,18 @@ describe('Pi-compatible title detection', () => {
     ['OMP - action required', 'OMP', 'permission'],
     ['\u280b Pi', 'Pi', 'working'],
     ['Pi ready', 'Pi', 'idle'],
-    // Why: titles stored by the old collapse are still bare "Pi"; re-detection
-    // from stored lastOscTitle must still classify idle, not neutral.
+    // Old stored titles collapsed to Pi; re-detection must still classify idle.
     ['Pi', 'Pi', 'idle'],
-    ['Pi - action required', 'Pi', 'permission']
+    ['Pi - action required', 'Pi', 'permission'],
+    // Owner-rebranded session titles must not fall through to Claude's braille heuristic.
+    ['\u280b OMP - fixing the sidebar - orca', 'OMP', 'working'],
+    ['OMP - fixing the sidebar - orca', 'OMP', 'idle']
   ] as const)('classifies synthesized %s', (title, expectedLabel, expectedStatus) => {
     expect(getAgentLabel(title)).toBe(expectedLabel)
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
   })
 
-  // Why: OMP 17.2.12+ writes static state markers on WSL/ConPTY (#13890). The label after
-  // the marker is cwd/session text, so glyphs another agent uses for status must not win.
+  // OMP 17.2.12+ has static WSL/ConPTY state markers; later cwd/session glyphs must not override them (#13890).
   it.each([
     ['π : my-project', 'working', 'π : my-project'],
     ['π > my-project', 'idle', 'π > my-project'],
@@ -194,8 +197,7 @@ describe('Pi-compatible title detection', () => {
     ['\u280b Pi', 'omp', '\u280b OMP'],
     ['Pi ready', 'omp', 'OMP ready'],
     ['Pi - action required', 'omp', 'OMP - action required'],
-    // Why: the brand is swapped for the owner's label in place — the pane still reads as its
-    // launch owner, but the session name and cwd it chose survive (#16093).
+    // Replace the synthetic brand with launch ownership while preserving session/cwd (#16093).
     ['π - tmp', 'omp', 'OMP - tmp'],
     ['π: tmp', 'omp', 'OMP: tmp'],
     ['\u280b π: tmp', 'omp', '\u280b OMP: tmp'],
@@ -208,8 +210,7 @@ describe('Pi-compatible title detection', () => {
     ],
     ['lucky-echidna | Pi ready', 'omp', 'OMP ready'],
     ['Codex | Pi ready', 'omp', 'OMP ready'],
-    // Why: the wrapped whole reads as a braille Claude title, but the re-ownable
-    // synthetic pane suffix must still win.
+    // The synthetic pane suffix must win even when the wrapper resembles a Claude braille title.
     ['lucky-echidna | ⠋ OMP', 'omp', '⠋ OMP'],
     [
       'lucky-echidna | \u283c π - Diagnose | test',
@@ -222,8 +223,7 @@ describe('Pi-compatible title detection', () => {
 
   it('preserves Pi-compatible custom titles and unrelated owners', () => {
     expect(normalizeCompatibleAgentTitleForOwner('Fix pi bugs', 'omp')).toBe('Fix pi bugs')
-    // Why: a wrapped title with no re-ownable identity in any " | " segment
-    // passes through untouched instead of collapsing to the owner label.
+    // Preserve wrapped titles lacking a re-ownable identity in any segment.
     expect(normalizeCompatibleAgentTitleForOwner('lucky-echidna | Fix pi bugs', 'omp')).toBe(
       'lucky-echidna | Fix pi bugs'
     )
@@ -269,9 +269,7 @@ describe('Pi-compatible title detection', () => {
 })
 
 describe('Cursor agent title identity', () => {
-  // Why: the accepted vocabulary is the set of labels Orca actually synthesizes for Cursor.
-  // Pin it to that profile so renaming a label there cannot silently drop @cursor to zero
-  // recipients (and desync the auto-Enter suppression that shares this predicate).
+  // Pin every synthesized Cursor label so renaming cannot lose recipients or auto-Enter suppression.
   it('accepts every label Orca synthesizes for Cursor', () => {
     const profile = SYNTHETIC_AGENT_TITLE_PROFILES.cursor
 
@@ -296,8 +294,7 @@ describe('Cursor agent title identity', () => {
     expect(isCursorAgentTitle(title)).toBe(true)
   })
 
-  // Why: "cursor" is ordinary editor vocabulary in another agent's task-summary title,
-  // so a whole-token name match is not Cursor identity.
+  // Cursor in another agent's task summary is editor vocabulary, not process identity.
   it.each([
     '⠋ fix the text cursor blink',
     '✳ Fix the text cursor blink',

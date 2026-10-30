@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.task-list-linear",
   "family": "tasks.task-list-linear",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
-  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
-  "scenarioSha256": "c589700af145f58c37292dafb891b3b7d50302fd4ec044155c044ccd48f79c74",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "104bf14d3af8": {
       "name": "error",
@@ -81,6 +72,11 @@
       "loading": false,
       "refreshing": false
     },
+    "44679ef67a40": {
+      "name": "loading",
+      "ordinal": 12,
+      "value": false
+    },
     "5b1f238d80cf": {
       "name": "loading",
       "ordinal": 9,
@@ -142,11 +138,6 @@
       "name": "loading",
       "ordinal": 6,
       "value": false
-    },
-    "7560584e376a": {
-      "name": "error",
-      "ordinal": 13,
-      "value": "Connection closed"
     },
     "7b6df16c2cf0": {
       "name": "linear.listIssues#1",
@@ -640,6 +631,11 @@
         }
       }
     },
+    "cf9696e63483": {
+      "name": "refreshing",
+      "ordinal": 13,
+      "value": false
+    },
     "d0a895d46972": {
       "name": "refreshing",
       "ordinal": 15,
@@ -895,10 +891,8 @@
             "88d78bf42794",
             "104bf14d3af8",
             "5b1f238d80cf",
-            "126a1c470845",
-            "7560584e376a",
-            "83e72fb8e8cd",
-            "d0a895d46972"
+            "44679ef67a40",
+            "cf9696e63483"
           ]
         }
       },

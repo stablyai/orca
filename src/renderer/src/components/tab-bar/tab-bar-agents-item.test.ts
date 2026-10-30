@@ -1,19 +1,40 @@
+// @vitest-environment happy-dom
+
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isValidElement } from 'react'
+import { act, createElement, Fragment } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TabBarProps } from './tab-bar-props'
-import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
+import { buildOrderedTabItems, buildTabStripLayoutKey, type TabBarItem } from './tab-bar-item-model'
+import { findActiveVisibleTabId } from './tab-bar-active-visible-tab'
+import { tabItemLabel } from './tab-bar-item-label'
 import {
-  buildOrderedTabItems,
-  buildTabStripLayoutKey,
-  findActiveVisibleTabId,
-  getTabDragLabel,
-  type TabBarItem
-} from './tab-bar-item-model'
-import { renderTabBarItems } from './tab-bar-item-surface'
+  renderTabBarItems,
+  type TabBarItemSurfaceProps,
+  type TabBarItemSurfaceRuntime
+} from './tab-bar-item-surface'
+import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import { resolveTabGroupPanelActiveTabProps } from '../tab-group/tab-group-panel-active-tab-props'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+type EditorTabRender = {
+  file: { id: string; filePath: string; language: string }
+  isActive: boolean
+  isPinned: boolean
+  onClose: () => void
+}
+
+const editorTabRenders: EditorTabRender[] = []
+
+vi.mock('./EditorFileTab', () => ({
+  default: (props: EditorTabRender) => {
+    editorTabRenders.push(props)
+    return null
+  }
+}))
+vi.mock('./TerminalSortableTab', () => ({ default: () => null }))
 
 function makeAgentsTab(overrides: Partial<Tab> = {}): Tab {
   return {
@@ -75,66 +96,79 @@ const TERMINAL_UNIFIED_TAB: Tab = {
 
 const noop = (): void => {}
 
-const RUNTIME: TabBarRuntimeModel = {
-  newTerminalShortcut: '',
-  newBrowserShortcut: '',
-  newSimulatorShortcut: '',
-  newFileShortcut: '',
-  openMarkdownShortcut: null,
-  generatedTabTitlesEnabled: false,
-  mobileEmulatorEnabled: false,
-  showMobileEmulatorIntroCallout: false,
-  unifiedTabs: [],
-  pinTab: noop,
-  unpinTab: noop,
-  defaultWindowsShell: 'powershell.exe',
-  defaultWindowsPowerShellImplementation: 'auto',
-  agentLaunchOptions: [],
-  windowsTerminalCapabilities: {
-    wslAvailable: false,
-    wslDistros: [],
-    pwshAvailable: false,
-    gitBashAvailable: false,
-    hostPlatform: null,
-    isLoading: false
-  },
-  showWindowsShellMenu: false,
-  projectRuntimeShellMenuMode: null,
+const RUNTIME: TabBarItemSurfaceRuntime = {
   resolvedGroupId: 'group-1',
-  statusByRelativePath: new Map(),
+  generatedTabTitlesEnabled: false,
   unifiedTabByVisibleId: new Map(),
-  workspaceHasSimulatorTab: false,
-  toggleTabViewMode: noop,
+  tabAgentTypesByTabId: {},
+  nativeChatTabWideFallbackUnsafeTabsById: {},
   nativeChatTranscriptIsLocalReadable: false,
   managedBrowserCreationEnabled: false,
-  mobileEmulatorCreationEnabled: false,
-  nativeChatEnabled: false,
-  tabAgentTypesByTabId: {},
-  nativeChatTabWideFallbackUnsafeTabsById: {}
+  statusByRelativePath: new Map()
+}
+
+function makeActions(closeFile: (fileId: string) => void): TabBarItemActions {
+  return {
+    activateTerminal: noop,
+    activateFile: noop,
+    activateBrowserTab: noop,
+    activateAgentSession: noop,
+    close: noop,
+    closeFile,
+    closeBrowserTab: noop,
+    closeOthers: noop,
+    closeToRight: noop,
+    closeToLeft: noop,
+    closeSplitPane: noop,
+    closeAllFiles: noop,
+    setCustomTitle: noop,
+    setTabColor: noop,
+    togglePaneExpand: noop,
+    duplicateBrowserTab: noop,
+    makePreviewFilePermanent: noop,
+    togglePinned: noop,
+    toggleViewMode: noop
+  }
 }
 
 /** Derives activeTabId/activeFileId/activeTabType from TabGroupPanel's own projection
  *  (see B2) instead of hand-feeding literals, so a broken projection fails this test. */
-function makeProps(activeTab: Tab | null): TabBarProps {
+function makeProps(activeTab: Tab | null): TabBarItemSurfaceProps {
   return {
-    tabs: [],
     ...resolveTabGroupPanelActiveTabProps(activeTab),
     worktreeId: 'wt-1',
     expandedPaneByTabId: {},
-    onActivate: noop,
-    onClose: noop,
-    onCloseOthers: noop,
-    onCloseToRight: noop,
-    onCloseToLeft: noop,
-    onNewTerminalTab: noop,
-    onNewBrowserTab: noop,
-    onSetCustomTitle: noop,
-    onSetTabColor: noop,
-    onTogglePaneExpand: noop,
     activeBrowserTabId: null,
-    activeSimulatorTabId: null,
-    groupActiveTabId: activeTab?.id ?? null
+    activeSimulatorTabId: null
   }
+}
+
+function renderAgentsRow(activeTab: Tab, closeFile: (fileId: string) => void): EditorTabRender {
+  editorTabRenders.length = 0
+  const root = createRoot(document.createElement('div'))
+  act(() =>
+    root.render(
+      createElement(
+        Fragment,
+        null,
+        renderTabBarItems({
+          items: [TERMINAL_ITEM, makeAgentsItem()],
+          props: makeProps(activeTab),
+          runtime: RUNTIME,
+          actions: makeActions(closeFile),
+          dropIndicatorByVisibleId: new Map(),
+          includeTopTabBorder: true,
+          activeClientHostedBrowserRowId: null
+        })
+      )
+    )
+  )
+  act(() => root.unmount())
+  const agentsRender = editorTabRenders.findLast((render) => render.file.language === 'agents')
+  if (!agentsRender) {
+    throw new Error('expected agents strip item')
+  }
+  return agentsRender
 }
 
 describe('agents strip item', () => {
@@ -180,62 +214,34 @@ describe('agents strip item', () => {
   it('returns the tab label for drag and changes the strip layout key when the label changes', () => {
     const named = makeAgentsItem({ label: 'Agents' })
     const renamed = makeAgentsItem({ label: 'Team agents' })
-    expect(getTabDragLabel(named, false)).toBe('Agents')
-    expect(getTabDragLabel(renamed, false)).toBe('Team agents')
-    expect(buildTabStripLayoutKey([named], false, {}, new Map())).not.toBe(
-      buildTabStripLayoutKey([renamed], false, {}, new Map())
+    expect(tabItemLabel(named, false, null)).toBe('Agents')
+    expect(tabItemLabel(renamed, false, null)).toBe('Team agents')
+    expect(buildTabStripLayoutKey([named], false, {}, new Map(), new Map())).not.toBe(
+      buildTabStripLayoutKey([renamed], false, {}, new Map(), new Map())
     )
   })
 
   it('renders a pinned EditorFileTab that opts back into a close button', () => {
     const onCloseFile = vi.fn()
     const agentsTab = makeAgentsTab()
-    const agentsItem = makeAgentsItem()
-    const rendered = renderTabBarItems({
-      items: [TERMINAL_ITEM, agentsItem],
-      props: { ...makeProps(agentsTab), onCloseFile },
-      runtime: RUNTIME,
-      dropIndicatorByVisibleId: new Map(),
-      includeTopTabBorder: true,
-      activeClientHostedBrowserRowId: null,
-      togglePinned: () => {}
-    })
-
-    const agentsNode = rendered[1]
-    if (!isValidElement(agentsNode)) {
-      throw new Error('expected agents strip item')
-    }
-    expect(agentsNode.props).toMatchObject({
+    const agentsRender = renderAgentsRow(agentsTab, onCloseFile)
+    expect(agentsRender).toMatchObject({
       isPinned: true,
-      // Why it opts in: closing this tab is a real action that prompts about the agents it
-      // hosts, so hiding the control would leave the user with no way to ask for it.
-      showCloseWhenPinned: true,
       isActive: true,
       file: { filePath: 'Agents', language: 'agents' }
     })
+    expect(onCloseFile).not.toHaveBeenCalled()
+    agentsRender.onClose()
+    expect(onCloseFile).toHaveBeenCalledWith(agentsTab.id)
 
-    const terminalActive = renderTabBarItems({
-      items: [TERMINAL_ITEM, agentsItem],
-      props: makeProps(TERMINAL_UNIFIED_TAB),
-      runtime: RUNTIME,
-      dropIndicatorByVisibleId: new Map(),
-      includeTopTabBorder: true,
-      activeClientHostedBrowserRowId: null,
-      togglePinned: () => {}
-    })
-    const inactiveAgents = terminalActive[1]
-    if (!isValidElement(inactiveAgents)) {
-      throw new Error('expected agents strip item')
-    }
-    expect(inactiveAgents.props).toMatchObject({ isActive: false })
+    expect(renderAgentsRow(TERMINAL_UNIFIED_TAB, noop)).toMatchObject({ isActive: false })
 
     const editorFileTabSource = readFileSync(
       join(__dirname, 'EditorFileTab.tsx'),
       'utf8'
     ).replaceAll('\r\n', '\n')
-    expect(editorFileTabSource).toContain('{(!isPinned || showCloseWhenPinned) && (')
+    expect(editorFileTabSource).toContain("{(!isPinned || file.language === 'agents') && (")
     // Middle-click still bails on every pinned tab; only the explicit X is offered here.
     expect(editorFileTabSource).toContain('if (isPinned) {\n            return\n          }')
-    expect(onCloseFile).not.toHaveBeenCalled()
   })
 })

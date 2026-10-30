@@ -1,8 +1,19 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Selection } from 'monaco-editor'
 import type * as DiffCommentZoneCardModule from './diff-comment-zone-card'
+import type { NotesSendMenu } from '../editor/NotesSendMenu'
+
+vi.mock('monaco-editor', () => import('monaco-editor/esm/vs/editor/editor.api.js'))
+
+const notesMenuFixture = vi.hoisted(() => ({
+  NotesSendMenu: vi.fn<typeof NotesSendMenu>(() => {
+    throw new Error('Range selection must not render the agent notes menu')
+  })
+}))
+
+vi.mock('../editor/NotesSendMenu', () => ({ NotesSendMenu: notesMenuFixture.NotesSendMenu }))
 
 const storeFixture = vi.hoisted(() => ({
   activeGroupIdByWorktree: {},
@@ -37,6 +48,12 @@ type DecoratorProps = {
   commentableLineNumbers?: readonly number[]
   addNoteShortcutEnabled?: boolean
   onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
+  // Present on the inline-draft surfaces; absent for the legacy popover callers.
+  onCreateComment?: (args: {
+    lineNumber: number
+    startLine?: number
+    body: string
+  }) => Promise<boolean>
 }
 
 function renderDecorator(fake: FakeDiffCommentEditor, initialProps: DecoratorProps = {}) {
@@ -51,15 +68,14 @@ function renderDecorator(fake: FakeDiffCommentEditor, initialProps: DecoratorPro
         pendingCommentTarget: props.pendingCommentTarget ?? null,
         addNoteShortcutEnabled: props.addNoteShortcutEnabled ?? false,
         onAddCommentClick: props.onAddCommentClick ?? vi.fn(),
+        onCreateComment: props.onCreateComment,
         onDeleteComment: vi.fn()
       }),
     { initialProps }
   )
 }
 
-// Monaco's Selection carries a large method surface the shortcut never touches, so the double is
-// built once here rather than cast at each call site. `anchor` names the end the user dragged
-// from, which Monaco reports separately from the sorted bounds.
+// Monaco exposes drag direction separately from sorted bounds; the double needs only the fields the shortcut reads.
 function selectionOf(
   startLineNumber: number,
   startColumn: number,
@@ -101,20 +117,19 @@ function firePointerEvent(
   node.dispatchEvent(event)
 }
 
-// Mod+Shift+A on the platform this test's user agent reports.
-function pressAddReviewNoteChord(node: HTMLElement): void {
+function pressAddReviewNoteChord(node: HTMLElement): KeyboardEvent {
   const isMac = navigator.userAgent.includes('Mac')
-  node.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key: 'A',
-      code: 'KeyA',
-      shiftKey: true,
-      metaKey: isMac,
-      ctrlKey: !isMac,
-      bubbles: true,
-      cancelable: true
-    })
-  )
+  const event = new KeyboardEvent('keydown', {
+    key: 'A',
+    code: 'KeyA',
+    shiftKey: true,
+    metaKey: isMac,
+    ctrlKey: !isMac,
+    bubbles: true,
+    cancelable: true
+  })
+  node.dispatchEvent(event)
+  return event
 }
 
 const frameCallbacks: FrameRequestCallback[] = []
@@ -139,7 +154,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   document.body.replaceChildren()
-  vi.clearAllMocks()
+  try {
+    expect(notesMenuFixture.NotesSendMenu).not.toHaveBeenCalled()
+  } finally {
+    vi.clearAllMocks()
+  }
 })
 
 describe('useDiffCommentDecorator range highlight', () => {
@@ -172,7 +191,7 @@ describe('useDiffCommentDecorator range highlight', () => {
     })
     const writes = fake.decorationWrites()
 
-    // A scroll rewrites the composer's `top` and hands down a fresh object every frame.
+    // Scrolling passes a fresh composer target each frame without changing its anchor.
     for (let frame = 0; frame < 20; frame += 1) {
       hook.rerender({ pendingCommentTarget: { lineNumber: 14, startLine: 9 } })
     }
@@ -188,7 +207,6 @@ describe('useDiffCommentDecorator range highlight', () => {
     })
     expect(paintedRange(fake)).toEqual({ startLine: 9, endLine: 14 })
 
-    // A review refresh that really widens the patch rebuilds the overlay.
     hook.rerender({
       pendingCommentTarget: { lineNumber: 14, startLine: 9 },
       commentableLineNumbers: [9, 10, 11, 12, 13, 14, 15, 16]
@@ -208,7 +226,6 @@ describe('useDiffCommentDecorator drag affordance', () => {
     fake.emitMouseMove(5)
     const parkedTop = plus!.style.top
 
-    // Press the button itself, then drag down the same column.
     firePointerEvent(plus!, 'pointerdown', {
       clientX: 8,
       clientY: fake.clientYForLine(5)
@@ -287,7 +304,6 @@ describe('useDiffCommentDecorator add-note chord', () => {
 
   it('clamps an upward selection from its anchor, not the hunk above it', () => {
     const fake = createFakeDiffCommentEditor()
-    // Anchored at 41 in the lower hunk, extended up to 12 in the upper one.
     vi.spyOn(fake.editor, 'getSelection').mockReturnValue(selectionOf(12, 2, 41, 6, 'end'))
     const onAddCommentClick = vi.fn()
     renderDecorator(fake, {
@@ -325,7 +341,7 @@ describe('useDiffCommentDecorator add-note chord', () => {
     fake.domNode.dispatchEvent(event)
 
     expect(onAddCommentClick).not.toHaveBeenCalled()
-    // Unconsumed, so whatever else the user bound the chord to still gets it.
+    // Leave unconsumed chords available to other user bindings.
     expect(event.defaultPrevented).toBe(false)
   })
 
@@ -346,7 +362,7 @@ describe('useDiffCommentDecorator add-note chord', () => {
 
   it('stands aside while a gutter drag still owns the band', () => {
     const fake = createFakeDiffCommentEditor()
-    // The pre-drag selection the chord would otherwise open a composer on.
+    // Seed the stale selection the keyboard path must ignore during a drag.
     vi.spyOn(fake.editor, 'getSelection').mockReturnValue(selectionOf(30, 1, 32, 4))
     const onAddCommentClick = vi.fn()
     renderDecorator(fake, { addNoteShortcutEnabled: true, onAddCommentClick })
@@ -358,7 +374,6 @@ describe('useDiffCommentDecorator add-note chord', () => {
     pressAddReviewNoteChord(fake.domNode)
     expect(onAddCommentClick).not.toHaveBeenCalled()
 
-    // Release still commits the swept range, and only that range.
     firePointerEvent(document, 'pointerup', { clientX: 30, clientY: fake.clientYForLine(11) })
     expect(onAddCommentClick).toHaveBeenCalledTimes(1)
     expect(onAddCommentClick).toHaveBeenCalledWith(
@@ -376,5 +391,30 @@ describe('useDiffCommentDecorator add-note chord', () => {
     pressAddReviewNoteChord(fake.domNode)
 
     expect(onAddCommentClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the chord to an open inline draft card instead of re-anchoring it', () => {
+    const fake = createFakeDiffCommentEditor()
+    vi.spyOn(fake.editor, 'getSelection').mockReturnValue(selectionOf(9, 1, 14, 8))
+    renderDecorator(fake, {
+      addNoteShortcutEnabled: true,
+      onCreateComment: vi.fn().mockResolvedValue(true)
+    })
+
+    act(() => {
+      pressAddReviewNoteChord(fake.domNode)
+    })
+    const [zone] = [...fake.zones.values()]
+    expect(zone?.afterLineNumber).toBe(14)
+
+    // Later editor selection changes must not move an open card or its text.
+    vi.spyOn(fake.editor, 'getSelection').mockReturnValue(selectionOf(30, 1, 32, 4))
+    const secondChord: { event?: KeyboardEvent } = {}
+    act(() => {
+      secondChord.event = pressAddReviewNoteChord(fake.domNode)
+    })
+
+    expect(secondChord.event?.defaultPrevented).toBe(true)
+    expect([...fake.zones.values()]).toEqual([zone])
   })
 })

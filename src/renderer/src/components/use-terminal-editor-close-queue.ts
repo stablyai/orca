@@ -1,19 +1,21 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
+import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { isPinnedActiveEditorTab } from './terminal-workspace-model'
+import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import type { TerminalEditorCloseFoundation } from './use-terminal-editor-close-foundation'
 
 export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFoundation) {
   const {
     activeWorktreeId,
     closeFile,
+    closedReactionsRef,
     inFlightSaveFileIdRef,
     pendingEditorCloseQueueRef,
     proceedToNativeWindowClose,
     setActiveFile,
     setActiveTabType,
-    setActiveWorktree,
     setSaveDialogFileId,
     windowCloseAfterDirtyRef
   } = controller
@@ -42,27 +44,38 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     })
   }, [])
 
+  const settleQueuedClose = useCallback(
+    (fileId: string) => {
+      pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+        (queuedId) => queuedId !== fileId
+      )
+      const onClosed = closedReactionsRef.current.get(fileId)
+      closedReactionsRef.current.delete(fileId)
+      onClosed?.()
+    },
+    [closedReactionsRef, pendingEditorCloseQueueRef]
+  )
+
   const getNextQueuedEditorClose = useCallback((): string | null => {
     while (pendingEditorCloseQueueRef.current.length > 0) {
       const fileId = pendingEditorCloseQueueRef.current[0]
       if (inFlightSaveFileIdRef.current === fileId) {
         return null
       }
-      const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
-      if (!file) {
-        pendingEditorCloseQueueRef.current.shift()
+      const state = useAppStore.getState()
+      if (!state.openFiles.some((candidate) => candidate.id === fileId)) {
+        settleQueuedClose(fileId)
         continue
       }
-      if (!file.isDirty) {
+      if (!needsSavePromptOnClose(state, fileId)) {
         closeFile(fileId)
-        pendingEditorCloseQueueRef.current.shift()
+        settleQueuedClose(fileId)
         continue
       }
       return fileId
     }
     return null
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
-  }, [closeFile])
+  }, [closeFile, inFlightSaveFileIdRef, pendingEditorCloseQueueRef, settleQueuedClose])
 
   const advanceEditorCloseQueue = useCallback(() => {
     const nextFileId = getNextQueuedEditorClose()
@@ -70,10 +83,10 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       const state = useAppStore.getState()
       const file = state.openFiles.find((candidate) => candidate.id === nextFileId)
       if (file && file.worktreeId !== state.activeWorktreeId) {
-        setActiveWorktree(file.worktreeId)
+        selectWorkspaceSurface(state, file.worktreeId)
       }
       setActiveFile(nextFileId)
-      setActiveTabType('editor')
+      setActiveTabType('editor', file?.worktreeId ?? state.activeWorktreeId)
       setSaveDialogFileId(nextFileId)
       return
     }
@@ -83,13 +96,13 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       windowCloseAfterDirtyRef.current = null
       proceedToNativeWindowClose(pendingWindowClose.isQuitting)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [
     getNextQueuedEditorClose,
     proceedToNativeWindowClose,
     setActiveFile,
     setActiveTabType,
-    setActiveWorktree
+    setSaveDialogFileId,
+    windowCloseAfterDirtyRef
   ])
 
   const queueEditorCloseRequests = useCallback(
@@ -104,8 +117,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       )
       advanceEditorCloseQueue()
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
-    [advanceEditorCloseQueue]
+    [advanceEditorCloseQueue, pendingEditorCloseQueueRef, windowCloseAfterDirtyRef]
   )
 
   const handleCloseFile = useCallback(
@@ -114,8 +126,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (activeWorktreeId && isPinnedActiveEditorTab(state, activeWorktreeId, fileId)) {
         return
       }
-      const file = state.openFiles.find((candidate) => candidate.id === fileId)
-      if (file?.isDirty) {
+      if (needsSavePromptOnClose(state, fileId)) {
         queueEditorCloseRequests([fileId])
         return
       }
@@ -126,6 +137,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
 
   return {
     waitForFileClosed,
+    settleQueuedClose,
     getNextQueuedEditorClose,
     advanceEditorCloseQueue,
     queueEditorCloseRequests,

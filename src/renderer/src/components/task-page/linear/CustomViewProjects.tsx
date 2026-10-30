@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, ExternalLink } from 'lucide-react'
@@ -95,7 +95,7 @@ export function TaskPageLinearCustomViewProjects({
         errors={linearCustomViewProjectsResult.errors}
         hasMore={linearCustomViewProjectsResult.hasMore}
         count={linearCustomViewProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )

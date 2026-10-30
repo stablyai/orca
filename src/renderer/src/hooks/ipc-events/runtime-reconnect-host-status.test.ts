@@ -9,6 +9,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-e
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { WorktreeEventRuntime } from './worktree-event-runtime'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), {
@@ -33,7 +34,6 @@ function environment(): PublicKnownRuntimeEnvironment {
   } as PublicKnownRuntimeEnvironment
 }
 
-/** What the sidebar host header renders from: 'available' is online, 'disconnected' is the offline GUI. */
 function sidebarHostHealth(): string | undefined {
   const state = useAppStore.getState()
   return buildExecutionHostRegistry({
@@ -73,53 +73,46 @@ describe('remote Orca server reconnect', () => {
     unsubs = []
     liveRuntimeId = 'remote-runtime'
     failingStatusProbes = 0
-    // Module-level sonner double: without this a toast from an earlier test leaks into
-    // the assertions below.
+    // Reset module-level toast state so prior tests cannot leak alerts into assertions.
     vi.mocked(toast.warning).mockClear()
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          list: vi.fn(async () => [environment()]),
-          getStatus: vi.fn(async () => {
-            // Captured before the block so a probe that is still dialing answers with the
-            // runtime it was dispatched against, not with whatever restarted meanwhile.
-            const dispatchedRuntimeId = liveRuntimeId
-            if (failingStatusProbes > 0) {
-              failingStatusProbes -= 1
-              // status.get dials its own socket; it can fail while the control transport is up.
-              return {
-                id: 'status.get',
-                ok: false,
-                error: {
-                  code: 'runtime_unavailable',
-                  message: 'probe socket refused'
-                },
-                _meta: { runtimeId: null }
-              }
-            }
-            return createCompatibleRuntimeStatusResponse(dispatchedRuntimeId)
-          }),
-          call: vi.fn(async () => ({ id: 'x', ok: true, result: [] })),
-          subscribe: vi.fn(
-            async (
-              args: { selector: string },
-              callbacks: { onResponse: (response: unknown) => void }
-            ): Promise<{ unsubscribe: () => void }> => {
-              subscriptionResponders.push({
-                selector: args.selector,
-                onResponse: callbacks.onResponse
-              })
-              return { unsubscribe: vi.fn() }
-            }
-          )
+    stubRuntimeEnvironmentBridge({
+      list: vi.fn(async () => [environment()]),
+      getStatus: vi.fn(async () => {
+        // Capture runtime before dialing so a restart cannot retarget the in-flight probe.
+        const dispatchedRuntimeId = liveRuntimeId
+        if (failingStatusProbes > 0) {
+          failingStatusProbes -= 1
+          // status.get dials its own socket; it can fail while the control transport is up.
+          return {
+            id: 'status.get',
+            ok: false,
+            error: {
+              code: 'runtime_unavailable',
+              message: 'probe socket refused'
+            },
+            _meta: { runtimeId: null }
+          }
         }
-      }
+        return createCompatibleRuntimeStatusResponse(dispatchedRuntimeId)
+      }),
+      call: vi.fn(async () => ({ id: 'x', ok: true, result: [] })),
+      subscribe: vi.fn(
+        async (
+          args: { selector: string },
+          callbacks: { onResponse: (response: unknown) => void }
+        ): Promise<{ unsubscribe: () => void }> => {
+          subscriptionResponders.push({
+            selector: args.selector,
+            onResponse: callbacks.onResponse
+          })
+          return { unsubscribe: vi.fn() }
+        }
+      )
     })
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID } as never,
       runtimeEnvironments: [environment()],
-      // Cleared explicitly: the removal case leaves a tombstone in this module-level
-      // store, which would silently suppress every later test's probes.
+      // Clear module-level removal tombstones or later test probes stay suppressed.
       removedRuntimeEnvironmentIds: new Set(),
       runtimeStatusByEnvironmentId: new Map([
         [ENVIRONMENT_ID, { status: liveRuntimeStatus(), checkedAt: Date.now() }]
@@ -138,7 +131,6 @@ describe('remote Orca server reconnect', () => {
     vi.restoreAllMocks()
   })
 
-  /** Delivers the replay-tagged first response a shared-control reconnect produces. */
   function replaySubscription(selector = ENVIRONMENT_ID): void {
     const responder = subscriptionResponders.findLast((entry) => entry.selector === selector)
     if (!responder) {

@@ -1,5 +1,33 @@
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session-record'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatchWriteFailureReason } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
+
+type WorkerHost = Pick<
+  StructuredAgentSessionHost,
+  | 'hasSession'
+  | 'getSessionTabId'
+  | 'notifySessionTabHidden'
+  | 'setSessionTabVisibility'
+  | 'close'
+  | 'observeJournalPublications'
+> & {
+  deps: {
+    store: Pick<
+      StructuredAgentSessionHost['deps']['store'],
+      'requireWritableRecord' | 'getConversation' | 'getSessionTabId' | 'isSessionTabRetired'
+    >
+  }
+}
 
 const hostRef: { current: unknown } = { current: null }
 const createSpy = vi.fn()
@@ -14,37 +42,48 @@ vi.mock('./structured-agent-session-create', () => ({
 const {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession,
-  sendStructuredWorkerPreamble,
-  structuredWorkerHoldId
+  sendStructuredWorkerPreamble
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
-const { structuredWorkerChildIdentityEnv } =
-  await import('../../structured-worker-child-identity-env')
+const { sealedChildEnv } = await import('../../structured-session-child-env.test-support')
 
-function installHost() {
-  const hold = vi.fn(async () => {})
-  const release = vi.fn()
+function installHost(
+  location: Pick<AgentSessionExecutionLocation, 'executionHostId' | 'wslDistro'> = {
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    wslDistro: null
+  }
+) {
+  const hidden = new Set<string>()
+  const record = (sessionId: string) => agentSessionRecordFixture({ sessionId, location })
   const dispose = vi.fn()
+  const observeJournalPublications = vi.fn(() => dispose)
   hostRef.current = {
-    setSessionTabVisibility: async () => {},
+    hasSession: () => false,
+    getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
+    notifySessionTabHidden: () => {},
+    setSessionTabVisibility: async (id: string, visible: boolean) => {
+      if (visible) {
+        hidden.delete(id)
+      } else {
+        hidden.add(id)
+      }
+    },
     close: async () => {},
     deps: {
       store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: { runtimeFence: 2, runtimeKind: 'native', claimStatus: 'live' }
-        })
+        requireWritableRecord: record,
+        getConversation: (id: string) => agentSessionConversationView(record(id)),
+        getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
+        isSessionTabRetired: (id: string) => hidden.has(id)
       }
     },
-    hold,
-    release,
-    subscribe: () => dispose
-  }
-  return { hold, release, dispose }
+    observeJournalPublications
+  } satisfies WorkerHost
+  return { observeJournalPublications, dispose }
 }
 
-describe('structured worker session hold', () => {
+describe('structured worker session', () => {
   beforeEach(() => {
     structuredWorkerIdentities.clear()
     createSpy.mockReset()
@@ -54,8 +93,8 @@ describe('structured worker session hold', () => {
     }))
   })
 
-  it('takes a resume-capable hold at start and releases it only on settlement', async () => {
-    const { hold, release, dispose } = installHost()
+  it('binds only a journal observer at start, and settlement drops it', async () => {
+    const { observeJournalPublications, dispose } = installHost()
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
@@ -63,27 +102,27 @@ describe('structured worker session hold', () => {
       dispatchId: 'd1',
       onJournalActivity: () => {}
     })
-    // Without the hold, the release clock evicts the provider child 15s after a user closes the
-    // worker's chat tab, killing an idle worker mid-dispatch.
-    expect(hold).toHaveBeenCalledWith(created.identity.sessionId, structuredWorkerHoldId('d1'))
-    expect(release).not.toHaveBeenCalled()
+    // No hold: while the dispatch is open the idle sweep reads it from the orchestration database.
+    expect(hostRef.current).not.toHaveProperty('hold')
+    expect(observeJournalPublications).toHaveBeenCalledWith(
+      created.identity.sessionId,
+      expect.any(Function)
+    )
+    expect(dispose).not.toHaveBeenCalled()
 
     releaseStructuredWorkerSession('d1')
-    expect(release).toHaveBeenCalledWith(created.identity.sessionId, structuredWorkerHoldId('d1'))
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
-    // A second settlement is a no-op rather than a second release of the same holder.
     releaseStructuredWorkerSession('d1')
-    expect(release).toHaveBeenCalledTimes(1)
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('registers the identity BEFORE the session is created, so the child gets the handle', async () => {
     installHost()
     let envAtSpawn: Record<string, string> | undefined
     createSpy.mockImplementation(async (args: { envelope: { sessionId: string } }) => {
-      // `attach` is what spawns the provider child, and the child's env is read from the registry
-      // at spawn time. Registering afterwards ships a worker with no ORCA_TERMINAL_HANDLE.
-      envAtSpawn = structuredWorkerChildIdentityEnv(args.envelope.sessionId, {})
+      // Register worker identity before attach reads the child environment, or ORCA_TERMINAL_HANDLE is absent.
+      envAtSpawn = sealedChildEnv(args.envelope.sessionId)
       return { ok: true, value: { sessionId: args.envelope.sessionId } }
     })
     const created = await createStructuredWorkerSession({
@@ -94,14 +133,22 @@ describe('structured worker session hold', () => {
       onJournalActivity: () => {}
     })
     expect(envAtSpawn?.ORCA_TERMINAL_HANDLE).toBe(created.identity.handle)
-    expect(envAtSpawn?.ORCA_CLI_COMMAND).toBe('orca')
+    // This app's own launcher by absolute path, so a login shell's profile cannot swap in a global.
+    expect(envAtSpawn?.ORCA_CLI_COMMAND).toBe(
+      join(
+        getAppEnvironment().getPath('userData'),
+        'cli',
+        'bin',
+        process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev'
+      )
+    )
     expect(envAtSpawn?.ORCA_PANE_KEY).toBeUndefined()
     releaseStructuredWorkerSession('d_spawn')
   })
 
   it('forgets the identity and discards the session when the start fails', async () => {
-    const { hold } = installHost()
-    hold.mockRejectedValueOnce(new Error('hold refused'))
+    // A session that resolves outside the local host is not a worker this runtime can own.
+    installHost({ executionHostId: 'local', wslDistro: 'Ubuntu' })
     const closed: string[] = []
     ;(hostRef.current as { close: (id: string) => Promise<void> }).close = async (id) => {
       closed.push(id)
@@ -114,7 +161,7 @@ describe('structured worker session hold', () => {
         dispatchId: 'd_fail',
         onJournalActivity: () => {}
       })
-    ).rejects.toThrow('hold refused')
+    ).rejects.toThrow(/local execution host outside WSL/)
     // Neither a live provider child nor a registry entry may outlive the failed start.
     expect(closed).toHaveLength(1)
     expect(structuredWorkerIdentities.getBySessionId(closed[0]!)).toBeNull()
@@ -126,9 +173,7 @@ describe('structured worker session hold', () => {
     ;(hostRef.current as { close: (id: string) => Promise<void> }).close = async (id) => {
       closed.push(id)
     }
-    // `commit` answers this after `attach` SUCCEEDED and only the tab publish failed, so the
-    // provider child is live. Reading it as "refused, nothing created" strands that child with no
-    // hold and no binding, and nothing else in the runtime ever retires it.
+    // operation_unknown after attach can leave a live provider child when only publication failed; failed start must retire it.
     createSpy.mockImplementation(async () => ({
       ok: false,
       refusal: {
@@ -205,12 +250,7 @@ describe('structured worker session hold', () => {
   })
 
   it('refuses a session pinned to a non-local execution host', async () => {
-    installHost()
-    ;(hostRef.current as { deps: { store: { getRecord: () => unknown } } }).deps.store.getRecord =
-      () => ({
-        location: { executionHostId: 'ssh-1', wslDistro: null },
-        lease: { runtimeFence: 2, runtimeKind: 'native', claimStatus: 'live' }
-      })
+    installHost({ executionHostId: toSshExecutionHostId('ssh-1'), wslDistro: null })
     await expect(
       createStructuredWorkerSession({
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
@@ -224,57 +264,216 @@ describe('structured worker session hold', () => {
 })
 
 describe('structured worker dispatch preamble', () => {
-  function hostWithSubmission(submission: Record<string, unknown>) {
+  type PreambleHost = Parameters<typeof sendStructuredWorkerPreamble>[0]['host']
+  type Settled = Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'>
+
+  function submissionOf(settled: Settled): AgentJournalSubmission {
     return {
-      deps: { store: { getRecord: () => ({ lease: { runtimeFence: 7 } }) } },
-      send: async () => ({ ok: true, value: { clientMessageId: 'c1', submission } })
-    } as never
+      clientMessageId: 'c1',
+      fence: 7,
+      payloadFingerprint: 'fingerprint',
+      providerItemId: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      ...settled
+    }
   }
 
-  const send = (host: never) =>
-    sendStructuredWorkerPreamble({ host, sessionId: 's1', dispatchId: 'd1', preamble: 'spec' })
+  function hostWithSubmission(submission: Settled, delivered?: Settled): PreambleHost {
+    return {
+      deps: {
+        store: {
+          selectWritableRecord: (sessionId) => ({
+            kind: 'writable',
+            record: agentSessionRecordFixture({ sessionId })
+          }),
+          requireWritableRecord: (sessionId) =>
+            agentSessionRecordFixture({
+              sessionId,
+              lease: { ...agentSessionRecordFixture({ sessionId }).lease, runtimeFence: 7 }
+            })
+        }
+      },
+      send: async () => ({
+        ok: true,
+        replayed: false,
+        fence: 7,
+        cursor: { epoch: 'epoch-1', sequence: 1 },
+        value: { clientMessageId: 'c1', submission: submissionOf(submission) }
+      }),
+      // What the submission settled as while the worker's agent started; undefined when the
+      // start outlasted the wait.
+      waitForSendSettlement: async () =>
+        delivered
+          ? {
+              cursor: { epoch: 'epoch-1', sequence: 2 },
+              value: { clientMessageId: 'c1', submission: submissionOf(delivered) }
+            }
+          : undefined
+    }
+  }
+
+  const TASK_FROM: AgentMessageSource = {
+    kind: 'agent',
+    senders: [
+      {
+        party: { address: 'term_coord', terminalHandle: 'term_coord', orcaSessionId: null },
+        name: 'Coordinator'
+      }
+    ],
+    orchestration: { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'd1' }
+  }
+
+  const send = (host: PreambleHost) =>
+    sendStructuredWorkerPreamble({
+      host,
+      sessionId: 's1',
+      dispatchId: 'd1',
+      preamble: 'spec',
+      from: TASK_FROM
+    })
+
+  // No source and no person: a restart or a close rejects it, and orchestration re-derives it.
+  it('sends the preamble as no person’s', async () => {
+    const host = hostWithSubmission({ dispatchState: 'accepted', reason: null })
+    const sent = vi.spyOn(host, 'send')
+    await send(host)
+    expect(sent.mock.calls[0]?.[1]).not.toHaveProperty('source')
+    expect(sent.mock.calls[0]?.[1]).not.toHaveProperty('userSend')
+  })
+
+  it('names who the task is from on the turn it sends', async () => {
+    const host = hostWithSubmission({ dispatchState: 'accepted', reason: null })
+    const sent = vi.spyOn(host, 'send')
+    await send(host)
+    expect(sent.mock.calls[0]?.[1]).toMatchObject({ body: { from: TASK_FROM } })
+  })
 
   it('reports the preamble delivered only on an accepted submission', async () => {
     await expect(
       send(hostWithSubmission({ dispatchState: 'accepted', reason: null }))
-    ).resolves.toBeUndefined()
+    ).resolves.toBe('accepted')
+  })
+
+  it('waits for an accepted preamble to be delivered, and reports that delivery (W10)', async () => {
+    await expect(
+      send(
+        hostWithSubmission(
+          { dispatchState: 'pending', reason: null },
+          { dispatchState: 'accepted', reason: null }
+        )
+      )
+    ).resolves.toBe('accepted')
+  })
+
+  it('reports a preamble still held for an agent that outlasted the wait, without failing the start (W10)', async () => {
+    // Pending preamble is held for the starting agent; throwing would tear it down and reject text about to be delivered.
+    await expect(
+      send(hostWithSubmission({ dispatchState: 'pending', reason: null }))
+    ).resolves.toBe('pending')
   })
 
   it('never claims delivery for a submission the provider never acknowledged', async () => {
-    // `dispatchSafely` turns ANY thrown adapter call — provider child dead, transport dropped —
-    // into `unknown`, and `performSend` still returns ok. Reporting that as `dispatch_input:
-    // accepted` marks the worker ready with no task, and the coordinator blocks in
-    // `check --wait --types worker_done` until it times out.
-    for (const dispatchState of ['unknown', 'pending'] as const) {
-      const error = await send(
-        hostWithSubmission({ dispatchState, reason: 'provider child exited' })
-      ).catch((thrown: unknown) => thrown)
-      expect((error as { code?: string }).code).toBe('operation_unknown')
-      // The wiring, not just the throw: this is the code that makes the start receipt
-      // `outcome_unknown` with the worker-show / worker-abandon recovery commands.
-      expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(true)
+    // Adapter throws settle as unknown despite performSend returning ok; claiming readiness strands the coordinator without a delivered task.
+    const error = await send(
+      hostWithSubmission({ dispatchState: 'unknown', reason: 'provider child exited' })
+    ).catch((thrown: unknown) => thrown)
+    expect((error as { code?: string }).code).toBe('operation_unknown')
+    // Verify this reaches the outcome_unknown receipt with worker-show/abandon recovery commands.
+    expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(true)
+  })
+
+  it('reads a queued answer as unacknowledged', async () => {
+    const host: PreambleHost = {
+      ...hostWithSubmission({ dispatchState: 'accepted', reason: null }),
+      send: async () => ({
+        ok: true,
+        replayed: false,
+        fence: 7,
+        cursor: { epoch: 'epoch-1', sequence: 1 },
+        value: { clientMessageId: 'c1', queued: { messageId: 'c1', position: 0, state: 'waiting' } }
+      })
     }
+    await expect(send(host)).rejects.toMatchObject({
+      code: 'operation_unknown',
+      message:
+        'The dispatch preamble was submitted but not acknowledged (unknown): no reason given.'
+    })
   })
 
   it('keeps a rejected preamble a proven failure under a code of its own', async () => {
     const error = await send(
       hostWithSubmission({ dispatchState: 'rejected', reason: 'fence moved' })
     ).catch((thrown: unknown) => thrown)
-    // A verdict, not prose. A coordinator must be able to tell "we could not send it"
-    // from `operation_unknown`'s "it may be running, go look" without parsing a message,
-    // which a bare `Error` forced it to do.
+    // A typed verdict distinguishes definite non-delivery from operation_unknown without parsing prose.
     expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')
     expect((error as Error).message).toMatch(/not delivered: fence moved/)
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
   })
 
-  it('reports a refused transport write as undelivered, never as unknown', async () => {
-    // The state a provably-unwritten frame now settles. Nothing reached the provider,
-    // so there is no running turn for a coordinator to go and look at.
+  it('names a provider log detail the rejection sentence leaves out', async () => {
     const error = await send(
       hostWithSubmission({
         dispatchState: 'rejected',
-        reason: dispatchWriteFailureReason(new Error('broken pipe'))
+        ...codexDispatchRejection(
+          agentSessionFailureFact('providerRejected', {
+            detail: { text: 'thread/start: unsupported service tier', audience: 'log' },
+            neverReachedAgent: true
+          })
+        )
+      })
+    ).catch((thrown: unknown) => thrown)
+    expect(error).toMatchObject({
+      code: 'dispatch_preamble_undelivered',
+      message:
+        "The dispatch preamble was not delivered (providerRejected): Codex didn't accept this message. Details: thread/start: unsupported service tier."
+    })
+  })
+
+  it('does not repeat provider words the rejection sentence already quotes', async () => {
+    const error = await send(
+      hostWithSubmission({
+        dispatchState: 'rejected',
+        ...codexDispatchRejection(
+          agentSessionFailureFact('providerRejected', {
+            detail: { text: 'Unsupported service tier.', audience: 'person' },
+            neverReachedAgent: true
+          })
+        )
+      })
+    ).catch((thrown: unknown) => thrown)
+    expect(error).toMatchObject({
+      message:
+        "The dispatch preamble was not delivered (providerRejected): Codex didn't accept this message: Unsupported service tier."
+    })
+  })
+
+  it('ends the message with one period whether the reason is a sentence or a marker', async () => {
+    const sentence = await send(
+      hostWithSubmission({
+        dispatchState: 'rejected',
+        reason: 'The provider stopped before this message was sent.'
+      })
+    ).catch((thrown: unknown) => thrown)
+    expect(sentence).toMatchObject({
+      message:
+        'The dispatch preamble was not delivered: The provider stopped before this message was sent.'
+    })
+    const marker = await send(
+      hostWithSubmission({ dispatchState: 'unknown', reason: 'provider child exited' })
+    ).catch((thrown: unknown) => thrown)
+    expect(marker).toMatchObject({
+      message:
+        'The dispatch preamble was submitted but not acknowledged (unknown): provider child exited.'
+    })
+  })
+
+  it('reports a refused transport write as undelivered, never as unknown', async () => {
+    // Provably unwritten input has no running turn to inspect; report definitive non-delivery.
+    const error = await send(
+      hostWithSubmission({
+        dispatchState: 'rejected',
+        reason: DISPATCH_REJECTED_WRITE_FAILED
       })
     ).catch((thrown: unknown) => thrown)
     expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')

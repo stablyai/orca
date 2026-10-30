@@ -1,11 +1,7 @@
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
-/**
- * The two push senders are module-private, and the exported entry points that reach them read the
- * keychain host catalog and the device token first. Exposing the senders records the wire the
- * migration moves without teaching the substitute table to fake a device store.
- */
+// Expose private senders to record wire behavior without inventing keychain and device-token storage in substitutes.
 export const pushRegistrationMountExposures: readonly OperationExposure[] = [
   [
     'notifications/push-registration.ts',
@@ -38,7 +34,7 @@ export function pushRegistrationMountAdapters(
                   {
                     platform: 'ios',
                     token: 'apns-token-1',
-                    ...(args.sandbox === true ? { apnsEnvironment: 'sandbox' } : {})
+                    apnsEnvironment: args.sandbox === true ? 'sandbox' : 'production'
                   },
                   { onlyWhenDesktopAway: true, sound: args.sound !== false }
                 )

@@ -1,22 +1,9 @@
-/**
- * A LOCAL agent that FINISHED its turn must not be respawned when the app
- * reopens the workspace.
- *
- * A completed turn is persisted with its state rewritten to 'working' and
- * origin 'live' (store/slices/agent-status.ts, `retainsResumableRecoveryIdentity`)
- * so an abrupt app death cold-restores into the agent instead of a bare shell
- * (#9454). Nothing downstream can then tell "finished" from "interrupted": once
- * the pane is gone, worktree activation reads the record as unfinished work and
- * opens a fresh tab running `--resume`. Killing the PTY removes the pane but
- * never the record, so `orca terminal stop`, a crash, or a pty-exit tab close
- * all leave one queued respawn per finished agent.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/finished-agent-ghost-resume.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
+import {
+  readPersistedProfileState,
+  mutateStoppedProfileState
+} from './helpers/persisted-profile-state'
+// Keep finished local agents from respawning after pane retirement and app restart; retained resume identity must not restate done as working.
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -31,7 +18,6 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { createHostRendererTerminalTab } from './helpers/host-created-terminal-retention-oracle'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-finished-agent-session'
 
@@ -43,13 +29,8 @@ type PersistedRecord = {
 }
 
 function readPersistedRecords(userDataDir: string): Record<string, PersistedRecord> {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  const data = readPersistedProfileState(userDataDir) as {
     workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
   }
   return data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}
@@ -57,24 +38,20 @@ function readPersistedRecords(userDataDir: string): Record<string, PersistedReco
 
 /** Make the resume hermetic: the respawned tab echoes instead of running codex. */
 function stubPersistedResumeCommand(userDataDir: string): PersistedRecord {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
-    workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
-  }
-  const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
-    (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
-  )
-  if (!record) {
-    throw new Error('Expected the finished agent turn to leave a persisted record')
-  }
-  record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-  return record
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as {
+      workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
+    }
+    const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
+      (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
+    )
+    if (!record) {
+      throw new Error('Expected the finished agent turn to leave a persisted record')
+    }
+    record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+    return record
+  })
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -109,7 +86,6 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
     await execInTerminal(page, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(page, marker)
 
-    // The agent reports its turn FINISHED — the ordinary end of an agent run.
     await page.evaluate(
       ({ paneKey, worktreeId: wtId, providerSessionId, transcriptPath }) => {
         window.__store
@@ -131,7 +107,6 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
       }
     )
 
-    // The finished turn keeps its resume identity without restating done as work.
     const liveRecord = await page.evaluate((paneKey) => {
       const record = window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey]
       return record ? { state: record.state, origin: record.origin } : null
@@ -140,12 +115,10 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
     expect(liveRecord?.state, 'the done turn stays done').toBe('done')
     expect(liveRecord?.origin).toBe('live')
 
-    // A second, ordinary terminal: the reported workspaces were never empty, and
-    // an empty one does not reactivate on relaunch at all.
+    // Keep another terminal because empty workspaces do not reactivate on relaunch.
     const survivingTabId = await createHostRendererTerminalTab(page, worktreeId)
 
-    // The PTY dies and its tab closes with it — `orca terminal stop`, a crash,
-    // or the pty-exit auto close. This reason deliberately keeps the record.
+    // Use PTY-exit close to retire the pane while retaining its resume record.
     const tabId = await page.evaluate(
       (wtId) => (window.__store?.getState().tabsByWorktree[wtId] ?? [])[0]?.id ?? null,
       worktreeId
@@ -170,7 +143,6 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
     await session.close(firstApp)
     firstApp = null
 
-    // The record outlived the pane it belonged to.
     const persisted = readPersistedRecords(session.userDataDir)
     const survivor = Object.values(persisted).find(
       (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
@@ -178,7 +150,6 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
     expect(survivor, 'killing the pane left the resume record behind').toBeDefined()
     stubPersistedResumeCommand(session.userDataDir)
 
-    // Reopening the workspace.
     const secondLaunch = await session.launch()
     secondApp = secondLaunch.app
     await waitForSessionReady(secondLaunch.page)
@@ -190,7 +161,6 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
       .toBe(worktreeId)
     await ensureTerminalVisible(secondLaunch.page)
 
-    // THE CLAIM: no tab was opened to resume an agent that had already finished.
     const respawned = await secondLaunch.page.evaluate((wtId) => {
       const state = window.__store?.getState()
       const tabs = state?.tabsByWorktree[wtId] ?? []

@@ -371,6 +371,10 @@ describePostgres('PostgreSQL regional rehoming', () => {
 
   it('rechecks a preference changed while the assignment row is locked', async () => {
     const context = await fixture()
+    const [candidate] = await context.store.selectIdleRegionalRehomeCandidates(
+      safety(context.now())
+    )
+    expect(candidate).toBeDefined()
     let unlock!: () => void
     let locked!: () => void
     const lockedPromise = new Promise<void>((resolve) => (locked = resolve))
@@ -384,16 +388,27 @@ describePostgres('PostgreSQL regional rehoming', () => {
       await unlockPromise
     })
     await lockedPromise
-    const claim = cutover(context.store, context.now())
-    await primary.query(
-      `UPDATE relay_region_decisions SET preferred_region = 'us-central1',
-         observed_at = ? WHERE user_id = ? AND relay_host_id = ?`,
-      [context.now(), context.identity.userId, context.identity.relayHostId]
-    )
-    unlock()
-    await held
+    const claim = context.store.commitIdleRegionalRehome(candidate!, safety(context.now()))
+    try {
+      await vi.waitFor(async () => {
+        const [row] = await primary.query(
+          `SELECT COUNT(*) AS waiting FROM pg_stat_activity
+           WHERE datname = current_database() AND wait_event_type = 'Lock'
+             AND query LIKE 'SELECT %relay_assignments%FOR UPDATE%'`
+        )
+        expect(Number(row?.waiting)).toBeGreaterThan(0)
+      })
+      await primary.query(
+        `UPDATE relay_region_decisions SET preferred_region = 'us-central1',
+           observed_at = ? WHERE user_id = ? AND relay_host_id = ?`,
+        [context.now(), context.identity.userId, context.identity.relayHostId]
+      )
+    } finally {
+      unlock()
+      await held
+    }
 
-    await expect(claim).resolves.toBeNull()
+    await expect(claim).resolves.toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
     expect(
       await primary.query(
         `SELECT COUNT(*) AS count FROM relay_assignment_migrations WHERE user_id = ?`,
@@ -402,34 +417,23 @@ describePostgres('PostgreSQL regional rehoming', () => {
     ).toEqual([{ count: '0' }])
   })
 
-  it('rechecks fleet safety under locks before mutating a candidate', async () => {
+  // The commit reads fleet safety as a snapshot; it no longer locks the safety
+  // table, so the recheck covers a change committed after selection.
+  it('rechecks fleet safety inside the commit before mutating a candidate', async () => {
     const context = await fixture()
     const [request] = await context.store.selectIdleRegionalRehomeCandidates(safety(context.now()))
     expect(request).toBeDefined()
-    let unlock!: () => void
-    let locked!: () => void
-    const lockedPromise = new Promise<void>((resolve) => (locked = resolve))
-    const unlockPromise = new Promise<void>((resolve) => (unlock = resolve))
-    const held = secondary.transaction(async (transaction) => {
-      await transaction.queryLocked(`SELECT * FROM relay_cell_rehome_safety WHERE cell_id = ?`, [
-        context.target.id
-      ])
-      await transaction.query(
-        `UPDATE relay_cell_rehome_safety SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1} WHERE cell_id = ?`,
-        [context.target.id]
-      )
-      locked()
-      await unlockPromise
-    })
-    await lockedPromise
+    await secondary.query(
+      `UPDATE relay_cell_rehome_safety SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1} WHERE cell_id = ?`,
+      [context.target.id]
+    )
     const claim = context.store.commitIdleRegionalRehome(request!, safety(context.now()))
-    unlock()
-    await held
 
     await expect(claim).resolves.toEqual({ outcome: 'deferred', reason: 'fleet-safety' })
+    // A sql spike alone pauses the claim; only the director's sustained check latches.
     expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
-      generation: 2,
-      enabled: false
+      generation: 1,
+      enabled: true
     })
     expect(
       await primary.query(

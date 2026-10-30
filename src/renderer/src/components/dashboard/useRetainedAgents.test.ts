@@ -68,7 +68,12 @@ function makeTab(overrides: Partial<TerminalTab> & { id: string }): TerminalTab 
   }
 }
 
-function makeAgentRow(args: { paneKey: string; state: AgentStatusState; interrupted?: boolean }) {
+function makeAgentRow(args: {
+  paneKey: string
+  state: AgentStatusState
+  interrupted?: boolean
+  mainAgent?: AgentStatusEntry['mainAgent']
+}) {
   const entry: AgentStatusEntry = {
     state: args.state,
     prompt: 'Fix it',
@@ -78,7 +83,8 @@ function makeAgentRow(args: { paneKey: string; state: AgentStatusState; interrup
     terminalTitle: 'Claude',
     stateHistory: [],
     agentType: 'claude',
-    interrupted: args.interrupted
+    interrupted: args.interrupted,
+    mainAgent: args.mainAgent
   }
 
   return {
@@ -134,12 +140,36 @@ describe('collectRetainedAgentsOnDisappear', () => {
     expect(result.toRetain).toEqual([])
   })
 
+  it('retains a failed done row so the failure stays visible, but not a cancelled one', () => {
+    const retainedFor = (outcome: 'failure' | 'cancellation') =>
+      collectRetainedAgentsOnDisappear({
+        previousAgents: new Map([
+          [
+            'tab-1:1',
+            {
+              row: makeAgentRow({
+                paneKey: 'tab-1:1',
+                state: 'done',
+                mainAgent: { state: 'done', outcome, stateStartedAt: 100 }
+              }),
+              worktreeId: 'wt-1'
+            }
+          ]
+        ]),
+        currentAgents: new Map(),
+        retainedAgentsByPaneKey: {},
+        retentionSuppressedPaneKeys: {},
+        recentlyClosedAgentStatusTabIds: {},
+        recentlyRetiredAgentStatusPaneKeys: {}
+      }).toRetain
+
+    expect(retainedFor('failure')).toHaveLength(1)
+    expect(retainedFor('failure')[0]?.entry.mainAgent?.outcome).toBe('failure')
+    expect(retainedFor('cancellation')).toEqual([])
+  })
+
   it('refreshes the retained snapshot when a reused paneKey starts a newer run', () => {
-    // Why: a reused paneKey (same tab+pane, fresh agent start after a prior
-    // retained run) produces a newer startedAt. Without the freshness check
-    // the loop would early-continue because retainedAgentsByPaneKey[paneKey]
-    // is still truthy from the prior run — leaving stale completion data
-    // visible forever for the reused pane.
+    // Reused pane keys can start newer runs; replace older retained completion snapshots instead of skipping a truthy key.
     const prevRow = makeAgentRow({ paneKey: 'tab-1:1', state: 'done' })
     prevRow.startedAt = 200
     const previousAgents = new Map([['tab-1:1', { row: prevRow, worktreeId: 'wt-1' }]])

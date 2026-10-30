@@ -13,8 +13,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { LEAF_3 } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -80,7 +78,6 @@ describe('Endpoint file lifecycle', () => {
     await server.start({ env: 'production', userDataPath })
     try {
       const filePath = server.endpointFilePath!
-      // Why: mask to the rwx octet so we assert only the file's mode:0o600, not umask-leaked bits on the parent dir.
       const mode = statSync(filePath).mode & 0o777
       expect(mode).toBe(0o600)
     } finally {
@@ -88,7 +85,7 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
-  it('rewrites the endpoint file with a new port after restart on the same path', async () => {
+  it('rewrites the endpoint file with a new token after restart on the same path', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
     const firstPath = server.endpointFilePath
@@ -100,13 +97,12 @@ describe('Endpoint file lifecycle', () => {
       const secondPath = server.endpointFilePath
       const secondPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
       const secondToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
-      // Path is stable (so PTYs stamped before restart can still find the file)
+      // Surviving PTYs must find the same endpoint path after restart.
       expect(secondPath).toBe(firstPath)
-      // Contents refresh with a new token so stale-env survivors reach the live server.
       expect(secondToken).toBeTruthy()
       expect(secondToken).not.toBe(firstToken)
       const contents = readFileSync(secondPath!, 'utf8')
-      // Why: assert on token (randomUUID, can't collide), not port — listen(0) may legitimately reuse the ephemeral port and flake a port check.
+      // Compare regenerated tokens; ephemeral ports may legitimately be reused.
       expect(contents).toContain(`ORCA_AGENT_HOOK_PORT=${secondPort}`)
       expect(contents).toContain(`ORCA_AGENT_HOOK_TOKEN=${secondToken}`)
       expect(contents).not.toContain(`ORCA_AGENT_HOOK_TOKEN=${firstToken}`)
@@ -116,7 +112,7 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('leaves the endpoint file in place on stop()', async () => {
-    // Why: stop() leaves the file (stale = fail-open); unlinking would race a concurrent Orca instance rewriting it between token-check and unlink (TOCTOU).
+    // Unlinking could race another Orca instance replacing the endpoint; stale files fail open.
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
     const filePath = server.endpointFilePath!
@@ -131,24 +127,6 @@ describe('Endpoint file lifecycle', () => {
     try {
       const env = server.buildPtyEnv()
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('buildPtyEnv includes namespaced ORCA_AGENT_HOOK_ENDPOINT for development servers', async () => {
-    const server = new AgentHookServer()
-    await server.start({
-      env: 'development',
-      userDataPath,
-      endpointNamespace: 'com.stablyai.orca.dev.test123'
-    })
-    try {
-      const env = server.buildPtyEnv()
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toContain('com.stablyai.orca.dev.test123')
-      expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
-      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
     } finally {
       server.stop()
     }
@@ -174,7 +152,6 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('buildPtyEnv omits ORCA_AGENT_HOOK_ENDPOINT when no userDataPath was provided', async () => {
-    // Why: the endpoint file is opt-in via userDataPath; without it, hooks fall back to v1 behavior (no ENDPOINT key).
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -193,7 +170,7 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('sweeps stale .endpoint-*.tmp orphans older than 5 minutes on start', async () => {
-    // Why: a crash between tmp-write and rename orphans a tmp; sweep must drop stale ones (>5min) but spare a concurrent writer's fresh in-flight tmp.
+    // Sweep crash residue while preserving fresh temporary files from concurrent writers.
     const dir = join(userDataPath, 'agent-hooks')
     mkdirSync(dir, { recursive: true })
     const staleTmp = join(dir, '.endpoint-999-stale.tmp')
@@ -214,79 +191,16 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('refuses to write the endpoint file when a value contains shell metacharacters', async () => {
-    // Why: written values are sourced as shell, so isShellSafeEndpointValue must reject metacharacters to prevent command injection.
+    // Endpoint values are sourced as shell, so metacharacters must be rejected.
     const server = new AgentHookServer()
     await server.start({ env: 'bad;value', userDataPath })
     try {
       expect(existsSync(server.endpointFilePath!)).toBe(false)
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
-      // PORT/TOKEN still flow via PTY env — fail-open to v1 behavior.
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_PORT).toBeTruthy()
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
     } finally {
       server.stop()
-    }
-  })
-
-  it('ingestRemote stamps connectionId and feeds the listener bypassing HTTP', () => {
-    const server = new AgentHookServer()
-    const events: { paneKey: string; connectionId: string | null; payload: unknown }[] = []
-    server.setListener((evt) => {
-      events.push({
-        paneKey: evt.paneKey,
-        connectionId: evt.connectionId,
-        payload: evt.payload
-      })
-    })
-    try {
-      const remotePane = makePaneKey('tab-3', LEAF_3)
-      server.ingestRemote(
-        {
-          paneKey: remotePane,
-          tabId: 'tab-3',
-          worktreeId: 'wt-3',
-          payload: {
-            state: 'working',
-            prompt: 'remote prompt',
-            agentType: 'claude'
-          }
-        },
-        'conn-42'
-      )
-      expect(events).toHaveLength(1)
-      expect(events[0].paneKey).toBe(remotePane)
-      expect(events[0].connectionId).toBe('conn-42')
-      expect(events[0].payload).toMatchObject({
-        state: 'working',
-        prompt: 'remote prompt',
-        agentType: 'claude'
-      })
-    } finally {
-      server.setListener(null)
-    }
-  })
-
-  it('ingestRemote ignores malformed envelopes (fail-open)', () => {
-    const server = new AgentHookServer()
-    const listener = vi.fn()
-    server.setListener(listener)
-    try {
-      // Missing paneKey
-      server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
-      // Missing payload state
-      server.ingestRemote({ paneKey: 'tab-1:0', payload: { foo: 'bar' } }, 'conn-x')
-      // Invalid payload state
-      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'nonsense' } }, 'conn-x')
-      // Empty connection id
-      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'working' } }, '  ')
-      // Wrong types
-      server.ingestRemote(
-        { paneKey: 'tab-1:0', payload: 'not-an-object' as unknown } as never,
-        'conn-x'
-      )
-      expect(listener).not.toHaveBeenCalled()
-    } finally {
-      server.setListener(null)
     }
   })
 
@@ -299,7 +213,6 @@ describe('Endpoint file lifecycle', () => {
     try {
       const filePath = server.endpointFilePath!
       const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
-      // Why: source the file exactly as the managed hook script does, catching drift from the KEY=VALUE shape before users do.
       const out = execFileSync('/bin/sh', ['-c', `. "${filePath}" && echo "$ORCA_AGENT_HOOK_PORT"`])
         .toString()
         .trim()

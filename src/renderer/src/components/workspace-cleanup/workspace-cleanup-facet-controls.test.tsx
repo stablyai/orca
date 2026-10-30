@@ -113,10 +113,7 @@ describe('workspace cleanup facet controls', () => {
   })
 
   it('keeps every numeric threshold off type=number so a wheel tick cannot set it', () => {
-    // Why assert the type rather than dispatch a wheel event: the spinner is a
-    // Chromium behaviour happy-dom does not implement, so a dispatched wheel
-    // changes nothing here either way and the test would pass without the fix.
-    // The type is the property that makes the whole class impossible.
+    // Assert input type because happy-dom cannot reproduce Chromium’s wheel-driven numeric changes.
     renderFacets(createDefaultWorkspaceCleanupFilterState(), createPatchMock())
 
     const numericFacets = [

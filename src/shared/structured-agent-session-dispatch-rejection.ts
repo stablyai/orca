@@ -1,43 +1,34 @@
-// Why a submission is `rejected`: the message provably did not happen.
-//
-// Two different facts reach this state, and the reason string is what tells them
-// apart. A CONTENT rejection is permanent — the provider looked at this payload
-// and refused it, and it would refuse the same payload again; its reason is the
-// provider's own explanation ("Claude messages support at most 20 images") and is
-// meant to be read. A TRANSPORT rejection is transient — the frame was never
-// handed to the provider at all, so the same text under a fresh id is a first
-// delivery and the next attempt may well succeed; its reason names an internal
-// cause and must NOT be put in front of a person.
-//
-// Both are `rejected` because both make the single claim that state exists to
-// make: this message did not reach the provider. Neither is ever re-delivered
-// under its own id — `rejected` is terminal in the reducer — so a retry rotates
-// the client message id, which is a new message and cannot duplicate.
-//
-// Shared rather than main-only because both sides need it: the host writes the
-// reason, and a client has to know which kind it is holding before it can decide
-// whether the string is showable.
+// Rejected proves non-delivery. The host writes printable legacy reason plus typed rejection via agentSessionFailureWords;
+// classifyDispatchRejection owns interpretation. Rejected is terminal: Retry rotates message ID because the old ID never redelivers.
 
+import {
+  isSubmissionRejectionKind,
+  readAgentSessionFailureFact,
+  type SubmissionRejectionKind
+} from './agent-session-failure'
+import type { AgentJournalSubmission } from './agent-session-journal-types'
+
+/** Bare marker is hidden by released clients; log the error separately. Older hosts append : <error>. */
 export const DISPATCH_REJECTED_WRITE_FAILED = 'provider_write_failed'
 
-/** Local admission refused the frame before any transport was involved. Two
- *  strings rather than one provider-neutral marker because both are already
- *  durable journal reasons; rewording either would relabel rows on disk. */
+/** Both provider-specific strings already exist in durable journals; replacing them would relabel saved rows. */
 export const DISPATCH_REJECTED_QUEUE_FULL = 'claude structured dispatch queue is full'
 export const DISPATCH_REJECTED_CODEX_QUEUE_FULL = 'codex structured dispatch queue is full'
 
 /** The provider confirmed a queued frame was withdrawn before execution. */
 export const DISPATCH_REJECTED_CANCELLED = 'provider_cancelled_before_start'
 
-export function dispatchWriteFailureReason(error: unknown): string {
-  const detail = error instanceof Error ? error.message : String(error)
-  return `${DISPATCH_REJECTED_WRITE_FAILED}: ${detail}`
-}
+/** Read-only restart marker; new hosts write a sentence because released clients print it raw. */
+export const DISPATCH_REJECTED_HOST_RESTARTED = 'host_restarted_before_delivery'
 
-/** True for the internal transport marker, false for a provider's own words. */
-export function dispatchRejectionWasTransportWriteFailure(
-  reason: string | null | undefined
-): boolean {
+/** Read-only legacy marker: provider closed before handover. */
+export const DISPATCH_REJECTED_PROVIDER_CLOSED = 'provider_closed_before_delivery'
+
+/** Read-only legacy restart guess: message absent from provider history. */
+export const DISPATCH_REJECTED_NOT_DELIVERED = 'not_delivered'
+
+/** Legacy transport-marker reader; use isWriteFailureSubmission or the classifier, not provider prose. */
+function dispatchRejectionWasTransportWriteFailure(reason: string | null | undefined): boolean {
   return (
     reason === DISPATCH_REJECTED_WRITE_FAILED ||
     reason?.startsWith(`${DISPATCH_REJECTED_WRITE_FAILED}: `) === true
@@ -45,15 +36,159 @@ export function dispatchRejectionWasTransportWriteFailure(
 }
 
 /**
- * True when the reason is ours rather than the provider's, so it must not be
- * shown verbatim. A content rejection carries the provider's own explanation and
- * is the only kind a person should read.
+ * What a rejection means for the chat, whatever wrote it:
+ * - `withdrawn`: the user's Stop took it back; nothing failed.
+ * - `undelivered`: accepted, then never handed over (Orca restarted, the chat closed, the provider
+ *   never took it or stopped first).
+ * - `startFailed`: the agent it waited on did not start.
+ * - `content`: the provider, or Orca's check of the message, refused this payload.
+ * - `transport`: Orca could not hand it over.
  */
-export function dispatchRejectionReasonIsInternal(reason: string | null | undefined): boolean {
+export type DispatchRejectionCategory =
+  | 'withdrawn'
+  | 'undelivered'
+  | 'startFailed'
+  | 'content'
+  | 'transport'
+
+export type DispatchRejectionClassification = {
+  category: DispatchRejectionCategory
+  /** Failure verdict only when the user was failed; lifecycle withdrawals/restarts may be undelivered without failure. */
+  verdict: 'failure' | null
+  /** Absent for untyped legacy prose or a typed fact this build cannot interpret. */
+  kind?: SubmissionRejectionKind
+}
+
+const KIND_CATEGORY = {
+  cancelled: 'withdrawn',
+  hostRestarted: 'undelivered',
+  chatClosed: 'undelivered',
+  notDelivered: 'undelivered',
+  providerExited: 'undelivered',
+  hostStopped: 'undelivered',
+  providerStartFailed: 'startFailed',
+  startFailed: 'startFailed',
+  notSignedIn: 'startFailed',
+  cliMissing: 'startFailed',
+  historyTooLarge: 'startFailed',
+  managedAccountEnvOverride: 'startFailed',
+  accountSwitchInProgress: 'startFailed',
+  managedAccountUnsupported: 'startFailed',
+  launchFolderMissing: 'startFailed',
+  historyInOtherAccount: 'startFailed',
+  claudeAccountFolderMissing: 'startFailed',
+  claudeAccountSetupFailed: 'startFailed',
+  agentCommandNotRunnable: 'startFailed',
+  runtimeNotInstalled: 'startFailed',
+  fullAccessAsRoot: 'startFailed',
+  launchPreparationFailed: 'startFailed',
+  conversationOpenInTerminal: 'startFailed',
+  conversationOpenElsewhere: 'startFailed',
+  restartFailed: 'startFailed',
+  providerRejected: 'content',
+  modelUnavailable: 'content',
+  claudeEffortInvalid: 'content',
+  attachmentInvalid: 'content',
+  attachmentUnreadable: 'content',
+  emptyMessage: 'content',
+  commandUnavailable: 'content',
+  commandRefused: 'content',
+  queueFull: 'transport',
+  writeFailed: 'transport',
+  hostFault: 'transport'
+} satisfies Record<SubmissionRejectionKind, DispatchRejectionCategory>
+
+/** Exhaustive kind placement; null means no failure verdict. */
+const KIND_VERDICT = {
+  cancelled: null,
+  hostRestarted: null,
+  chatClosed: null,
+  notDelivered: null,
+  providerExited: 'failure',
+  providerStartFailed: 'failure',
+  startFailed: 'failure',
+  notSignedIn: 'failure',
+  cliMissing: 'failure',
+  historyTooLarge: 'failure',
+  managedAccountEnvOverride: 'failure',
+  accountSwitchInProgress: 'failure',
+  managedAccountUnsupported: 'failure',
+  launchFolderMissing: 'failure',
+  historyInOtherAccount: 'failure',
+  claudeAccountFolderMissing: 'failure',
+  claudeAccountSetupFailed: 'failure',
+  agentCommandNotRunnable: 'failure',
+  runtimeNotInstalled: 'failure',
+  fullAccessAsRoot: 'failure',
+  launchPreparationFailed: 'failure',
+  conversationOpenInTerminal: 'failure',
+  conversationOpenElsewhere: 'failure',
+  restartFailed: 'failure',
+  providerRejected: 'failure',
+  modelUnavailable: 'failure',
+  claudeEffortInvalid: 'failure',
+  attachmentInvalid: 'failure',
+  attachmentUnreadable: 'failure',
+  emptyMessage: 'failure',
+  commandUnavailable: 'failure',
+  commandRefused: 'failure',
+  queueFull: 'failure',
+  writeFailed: 'failure',
+  hostFault: 'failure',
+  // Orca stopped a start that hung: the agent failed.
+  hostStopped: 'failure'
+} satisfies Record<SubmissionRejectionKind, 'failure' | null>
+
+const LEGACY_MARKER_KINDS: ReadonlyMap<string, SubmissionRejectionKind> = new Map([
+  [DISPATCH_REJECTED_CANCELLED, 'cancelled'],
+  [DISPATCH_REJECTED_HOST_RESTARTED, 'hostRestarted'],
+  [DISPATCH_REJECTED_PROVIDER_CLOSED, 'chatClosed'],
+  [DISPATCH_REJECTED_QUEUE_FULL, 'queueFull'],
+  [DISPATCH_REJECTED_CODEX_QUEUE_FULL, 'queueFull'],
+  [DISPATCH_REJECTED_NOT_DELIVERED, 'notDelivered']
+])
+
+function legacyMarkerKind(reason: string | null): SubmissionRejectionKind | undefined {
+  if (dispatchRejectionWasTransportWriteFailure(reason)) {
+    return 'writeFailed'
+  }
+  return reason === null ? undefined : LEGACY_MARKER_KINDS.get(reason)
+}
+
+/** Typed facts outrank prose; unknown facts prove non-delivery without a failure verdict.
+ * Without facts, interpret legacy markers; other older-host/provider sentences remain content failures. */
+export function classifyDispatchRejection(
+  submission: Pick<AgentJournalSubmission, 'reason'> & { rejection?: unknown }
+): DispatchRejectionClassification {
+  const { rejection } = submission
+  const factKind = readAgentSessionFailureFact(rejection)?.kind
+  if (typeof rejection === 'object' && rejection !== null && !isSubmissionRejectionKind(factKind)) {
+    // Unknown facts prove non-delivery but cannot establish a content failure.
+    return { category: 'undelivered', verdict: null }
+  }
+  const kind = isSubmissionRejectionKind(factKind) ? factKind : legacyMarkerKind(submission.reason)
+  if (!kind) {
+    return { category: 'content', verdict: 'failure' }
+  }
+  return { category: KIND_CATEGORY[kind], verdict: KIND_VERDICT[kind], kind }
+}
+
+/** Withdrawn before running; only an explicit user resend may deliver it. */
+export function dispatchWasWithdrawn(
+  submission: Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'> | undefined
+): boolean {
   return (
-    dispatchRejectionWasTransportWriteFailure(reason) ||
-    reason === DISPATCH_REJECTED_QUEUE_FULL ||
-    reason === DISPATCH_REJECTED_CODEX_QUEUE_FULL ||
-    reason === DISPATCH_REJECTED_CANCELLED
+    submission?.dispatchState === 'rejected' &&
+    classifyDispatchRejection(submission).category === 'withdrawn'
+  )
+}
+
+/** Read write failure even on legacy journals that kept this marker under dispatchState unknown. */
+export function isWriteFailureSubmission(
+  submission: Pick<AgentJournalSubmission, 'reason' | 'rejection'>
+): boolean {
+  return (
+    readAgentSessionFailureFact(submission.rejection)?.kind === 'writeFailed' ||
+    dispatchRejectionWasTransportWriteFailure(submission.reason)
   )
 }

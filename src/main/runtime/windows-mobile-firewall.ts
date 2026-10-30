@@ -5,6 +5,7 @@ import type {
   WindowsMobileFirewallStatus,
   WindowsNetworkCategory
 } from '../../shared/windows-mobile-firewall'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { hasSufficientWindowsFirewallRemoteScope } from './windows-firewall-remote-scope'
 
 const FIREWALL_RULE_NAME = 'Orca.MobilePairing'
@@ -158,29 +159,22 @@ function parseNetworkCategory(value: string): WindowsNetworkCategory {
   return 'unknown'
 }
 
-function quotePowerShell(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 function buildInspectionScript(port: number, executablePath: string, address?: string): string {
   const addressLookup = address
     ? `
 try {
-  $ip = Get-NetIPAddress -IPAddress ${quotePowerShell(address)} -ErrorAction Stop | Select-Object -First 1
+  $ip = Get-NetIPAddress -IPAddress ${quotePowerShellLiteral(address)} -ErrorAction Stop | Select-Object -First 1
   $localAddress = [string]$ip.IPAddress
   $localPrefixLength = [int]$ip.PrefixLength
   $profile = Get-NetConnectionProfile -InterfaceIndex $ip.InterfaceIndex -ErrorAction Stop | Select-Object -First 1
   if ($profile) { $networkCategory = [string]$profile.NetworkCategory }
 } catch {}`
     : ''
-  // Why: NetSecurity filter properties are stable across localized Windows
-  // display output and keep every rule's address scope independent. ActiveStore
-  // includes GPO-applied rules the default persistent store hides, so managed
-  // Block rules cannot produce a false success after repair.
+  // Use stable NetSecurity properties and independent scopes; ActiveStore includes GPO Block rules that could defeat repair.
   return `$ErrorActionPreference = 'Stop'
 $matchingRuleScopes = @()
 $blockingRuleDetected = $false
-$rules = @(Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' })
+$rules = @(Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program ${quotePowerShellLiteral(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' })
 foreach ($rule in $rules) {
   $portFilter = $rule | Get-NetFirewallPortFilter
   $protocol = [string]$portFilter.Protocol
@@ -210,12 +204,9 @@ $networkCategory = 'Unknown'${addressLookup}
 }
 
 function buildRepairScript(port: number, executablePath: string): string {
-  // Why: Windows gives explicit Block rules precedence over narrower Allow
-  // rules, so the user's repair action must remove exact-app conflicts first.
-  // Removal deliberately ignores the Block rule's remote-address scope,
-  // mirroring the fail-closed inspection (the phone address is unknown).
+  // Explicit Blocks outrank Allows; remove exact-app conflicts regardless of scope because the phone IP is unknown.
   return `$ErrorActionPreference = 'Stop'
-$blockingRules = @(Get-NetFirewallApplicationFilter -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' })
+$blockingRules = @(Get-NetFirewallApplicationFilter -Program ${quotePowerShellLiteral(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' })
 foreach ($rule in $blockingRules) {
   $portFilter = $rule | Get-NetFirewallPortFilter
   $protocol = [string]$portFilter.Protocol
@@ -225,19 +216,15 @@ foreach ($rule in $blockingRules) {
     $rule | Remove-NetFirewallRule
   }
 }
-Get-NetFirewallRule -Name ${quotePowerShell(FIREWALL_RULE_NAME)} -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -Name ${quotePowerShell(FIREWALL_RULE_NAME)} -DisplayName ${quotePowerShell(FIREWALL_RULE_DISPLAY_NAME)} -Description 'Allows Orca Mobile to connect to this Orca desktop on private networks.' -Direction Inbound -Action Allow -Enabled True -Profile Private -Protocol TCP -LocalPort ${port} -Program ${quotePowerShell(executablePath)} -EdgeTraversalPolicy Block | Out-Null`
+Get-NetFirewallRule -Name ${quotePowerShellLiteral(FIREWALL_RULE_NAME)} -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+New-NetFirewallRule -Name ${quotePowerShellLiteral(FIREWALL_RULE_NAME)} -DisplayName ${quotePowerShellLiteral(FIREWALL_RULE_DISPLAY_NAME)} -Description 'Allows Orca Mobile to connect to this Orca desktop on private networks.' -Direction Inbound -Action Allow -Enabled True -Profile Private -Protocol TCP -LocalPort ${port} -Program ${quotePowerShellLiteral(executablePath)} -EdgeTraversalPolicy Block | Out-Null`
 }
 
-// Why the elevated child keeps `-EncodedCommand` while the local runner does not: `Start-Process
-// -ArgumentList` joins its array into one ShellExecuteEx parameter string without quoting, and
-// PowerShell then re-splits it on whitespace — measured to collapse `C:\My  App\...` to
-// `C:\My App\...`, which would silently write the firewall rule for the wrong program. Node's
-// argv path (createPowerShellRunner) preserves runs of spaces, so only this hop needs base64.
+// Start-Process re-splits arguments and collapses path whitespace; base64 protects this elevated hop, while the direct Node argv path needs none.
 function buildElevationScript(powershellPath: string, encodedRepairScript: string): string {
   return `$ErrorActionPreference = 'Stop'
 try {
-  $process = Start-Process -FilePath ${quotePowerShell(powershellPath)} -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', '${encodedRepairScript}') -Verb RunAs -Wait -PassThru
+  $process = Start-Process -FilePath ${quotePowerShellLiteral(powershellPath)} -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', '${encodedRepairScript}') -Verb RunAs -Wait -PassThru
   [pscustomobject]@{ launched = $true; exitCode = $process.ExitCode } | ConvertTo-Json -Compress
 } catch {
   [pscustomobject]@{ launched = $false; nativeErrorCode = $_.Exception.NativeErrorCode } | ConvertTo-Json -Compress

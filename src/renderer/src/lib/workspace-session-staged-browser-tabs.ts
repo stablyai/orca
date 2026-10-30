@@ -9,11 +9,7 @@ type StagedBrowserTabSnapshotFields = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-/**
- * Drop browser tabs this client staged optimistically but the host never published. Restoring one
- * would resurrect a workspace pointing at a page id no runtime has ever heard of, so a create that
- * was still in flight at save time must simply not survive the reload.
- */
+/** Drop unpublished optimistic browser tabs on restore; their page IDs have no host owner and would resurrect invalid workspaces. */
 export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotFields>(snapshot: T): T {
   const handles = snapshot.remoteBrowserPageHandlesByPageId ?? {}
   const stagedWorkspaceIds = new Set<string>()
@@ -46,8 +42,7 @@ export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotField
         workspaceId && stagedWorkspaceIds.has(workspaceId) ? null : workspaceId
       ])
     ),
-    // Why: the unified tab must go too — buildPersistedGroupsForWorktree derives each group's
-    // tabOrder from the surviving tabs, so dropping it here also unwinds its slot and focus.
+    // Drop unified tabs too so persisted group order/focus cannot retain staged slots.
     unifiedTabsByWorktree: Object.fromEntries(
       Object.entries(snapshot.unifiedTabsByWorktree).map(([worktreeId, tabs]) => [
         worktreeId,

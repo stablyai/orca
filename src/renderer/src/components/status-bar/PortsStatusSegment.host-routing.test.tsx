@@ -22,8 +22,7 @@ const { popoverHandle, runWorkspacePortScanForTargetMock, storeState } = vi.hois
         ) => void
       >()
   }
-  // Why: the real store writes back. A bare spy lets a publish and the notice
-  // that reads it drift onto different scan keys with every assertion green.
+  // Model real store writes so scan publication and its notice must use the same key.
   storeState.replaceWorkspacePortScans.mockImplementation((scansByKey, projection) => {
     storeState.workspacePortScansByKey = scansByKey
     storeState.workspacePortScan = projection
@@ -56,14 +55,9 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
-  const actual = await import('@/runtime/runtime-client-target')
   return {
-    getActiveRuntimeTarget: actual.getActiveRuntimeTarget,
     callRuntimeRpc: vi.fn(),
-    assertRuntimeEnvironmentCapability: vi.fn(),
-    RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
-      code?: string
-    }
+    assertRuntimeEnvironmentCapability: vi.fn()
   }
 })
 
@@ -238,9 +232,7 @@ describe('PortsStatusSegment popover host routing', () => {
 
     await openPopover()
 
-    // Why: one dropped scan must not clear the host's ports the way the
-    // background poll's debounce does not — the notice names the failure
-    // while the projection keeps serving the last-good rows.
+    // Retain last-good ports after a failed scan while the notice names its failure.
     const failed = storeState.workspacePortScansByKey['environment:env-1:all']
     expect(failed.unavailableReason).toBe('remote scan failed')
     expect(failed.platform).toBe('linux')
@@ -253,8 +245,7 @@ describe('PortsStatusSegment popover host routing', () => {
     expect(projection.result.ports.map((port) => port.port).sort()).toEqual([3000, 5173])
   })
 
-  // Why: separate tests already cover "the failure is stored" and "a stored
-  // failure renders". Only this one proves both halves name the same scan key.
+  // Exercise publication and rendering together to require the failure notice to read the same scan key.
   it('surfaces the host it just failed to scan on the next render', async () => {
     runWorkspacePortScanForTargetMock.mockRejectedValueOnce(new Error('remote scan failed'))
 
@@ -290,14 +281,11 @@ describe('PortsStatusSegment popover host routing', () => {
     expect(container.textContent).toContain(
       'Port scan unavailable on linux-box: Remote connection dropped'
     )
-    // The notice sits above the list rather than replacing it: a reachable
-    // host's count still renders.
+    // A reachable host’s rows remain visible below the failure notice.
     expect(container.textContent).toContain('1 workspace')
   })
 
-  // Why: a failed scan keeps the host's last-good ports, and the badge and
-  // header count them. Replacing the list with the notice left the popover
-  // claiming N ports over an empty body.
+  // Retained ports still count in the badge/header, so their failure notice must not replace the list.
   it('keeps the list under the notice when a failed scan retained its ports', () => {
     act(() => {
       root.unmount()
@@ -319,8 +307,7 @@ describe('PortsStatusSegment popover host routing', () => {
     expect(container.textContent).toContain('Port scan unavailable on Local Linux')
   })
 
-  // Why: total loss of contact is where naming the host matters most, and the
-  // merged projection can only offer platform 'unknown' and raw scan keys.
+  // Name hosts from per-host scans when the merged projection has only unknown platform and raw keys.
   it('names every host when all of them failed with nothing left to list', () => {
     act(() => {
       root.unmount()
@@ -351,8 +338,7 @@ describe('PortsStatusSegment popover host routing', () => {
       root.render(<PortsStatusSegment iconOnly={false} />)
     })
 
-    // Local label comes from the scan's own platform, not the renderer's
-    // userAgent — a paired web client is not the Orca host.
+    // Use the scanned host’s platform; the paired web client may run on a different OS.
     expect(container.textContent).toContain(
       'Port scan unavailable on Local Mac: lsof is unavailable'
     )

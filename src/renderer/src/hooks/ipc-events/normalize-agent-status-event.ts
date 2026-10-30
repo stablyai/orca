@@ -1,4 +1,4 @@
-import type { AgentStatusMetadata } from '../../store/slices/agent-status-contract'
+import type { AgentStatusMetadata } from '../../store/slices/agent-status/agent-status-contract'
 import {
   normalizeAgentStatusPayload,
   type AgentStatusIpcPayload,
@@ -22,7 +22,8 @@ export function normalizeAgentStatusEvent(
     interrupted: data.interrupted,
     sessionBoundary: data.sessionBoundary,
     turnCompletedAt: data.turnCompletedAt,
-    subagents: data.subagents
+    subagents: data.subagents,
+    mainAgent: data.mainAgent
   })
 }
 
@@ -30,12 +31,13 @@ export function normalizeAgentStatusMetadata(
   data: AgentStatusIpcPayload,
   authorityRestartId?: string
 ): AgentStatusMetadata | undefined {
-  if (!data.providerSession && !data.launchToken && !authorityRestartId) {
+  if (!data.providerSession && !data.launchToken && !authorityRestartId && !data.paneOwner) {
     return undefined
   }
   return {
     ...(authorityRestartId ? { authorityRestartId } : {}),
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-    ...(data.launchToken ? { launchToken: data.launchToken } : {})
+    ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+    ...(data.paneOwner ? { paneOwner: data.paneOwner } : {})
   }
 }

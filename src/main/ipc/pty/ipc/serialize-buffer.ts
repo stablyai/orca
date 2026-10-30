@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kitty-keyboard-flags'
 import { isMainWindowPtyIpcEvent } from './write-input'
 import type { PtyIpcSession, SerializeResult } from '../session'
@@ -20,7 +20,7 @@ export function settleSerializeRequest(
 
 export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
   const ipcMain = getPtyIpc()
-  // Why: one persistent listener with a request-ID dispatch table instead of one per call, so concurrent serialize requests don't trip Node's MaxListeners=10 warning.
+  // One persistent listener dispatches by request ID so concurrent serialization cannot exceed listener limits.
   ipcMain.on(
     'pty:serializeBuffer:response',
     (
@@ -37,9 +37,9 @@ export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
         } | null
       }
     ) => {
-      // Why: the snapshot seeds terminal restore state, so only the main window may settle it.
+      // Only the main window may provide state used to seed terminal restore.
       if (
-        !isMainWindowPtyIpcEvent(event, session.mainWindow, session.mainWindow.webContents) ||
+        !isMainWindowPtyIpcEvent(event, session.mainWindow) ||
         typeof args?.requestId !== 'string'
       ) {
         return
@@ -69,8 +69,7 @@ export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
         if (typeof snapshot.lastTitle === 'string' && snapshot.lastTitle.length > 0) {
           result.lastTitle = snapshot.lastTitle
         }
-        // Why gated on seq: without a boundary the flags cannot be reconciled
-        // against live bytes, so they prove nothing.
+        // Kitty flags require their sequence boundary to reconcile against live bytes.
         const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
         if (result.seq !== undefined && kittyKeyboardFlags !== undefined) {
           result.kittyKeyboardFlags = kittyKeyboardFlags
@@ -88,7 +87,8 @@ export function requestSerializedBuffer(
   ptyId: string,
   opts?: { scrollbackRows?: number }
 ): Promise<SerializeResult> {
-  if (session.mainWindow.isDestroyed()) {
+  const { mainWindow } = session
+  if (!mainWindow || mainWindow.isDestroyed()) {
     return Promise.resolve(null)
   }
 
@@ -106,6 +106,6 @@ export function requestSerializedBuffer(
     if (opts) {
       payload.opts = opts
     }
-    session.mainWindow.webContents.send('pty:serializeBuffer:request', payload)
+    mainWindow.webContents.send('pty:serializeBuffer:request', payload)
   })
 }

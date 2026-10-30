@@ -68,8 +68,12 @@ export function workspaceErrorMessage(error: unknown): string {
 }
 
 export function getSelectedWorkspaceId(
-  status: LinearConnectionStatus
+  status: LinearConnectionStatus,
+  options?: { workspaceId?: LinearWorkspaceSelection | null }
 ): LinearWorkspaceSelection | null {
+  if (options?.workspaceId !== undefined) {
+    return options.workspaceId
+  }
   return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
 }
 
@@ -143,8 +147,7 @@ export function shouldRefreshStatusAfterRead(
   workspaceId: LinearWorkspaceSelection | null | undefined,
   status: LinearConnectionStatus
 ): boolean {
-  // Why: 'all' reads can hide per-workspace decrypt failures, and a visible
-  // credential error may have been cleared by a successful credential read.
+  // All-workspace success can hide individual decrypt failures or clear visible credential errors; recheck per-scope evidence.
   return workspaceId === 'all' || status.credentialError !== undefined
 }
 

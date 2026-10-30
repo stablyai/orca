@@ -3,6 +3,8 @@ import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import { settleWorkerForCompletedDispatch } from '../worker-dispatch/worker-dispatch-settlement'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -29,9 +31,9 @@ export function completeDispatch(this: OrchestrationDb, ctxId: string): void {
         capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
       }
     })
-    // Why: a settled Dispatch can never be answered, and a pending thread on it kept the fleet row
-    // demanding input after the work was done.
+    // Settled Dispatches cannot answer questions; close them to clear fleet input demands.
     this.closeQuestionsForDispatch(ctxId)
+    settleWorkerForCompletedDispatch(this.db, ctxId)
     this.db.exec('RELEASE complete_dispatch_transition')
   } catch (error) {
     this.db.exec('ROLLBACK TO complete_dispatch_transition')
@@ -46,27 +48,37 @@ export function settleActiveDispatchesForTask(
   status: 'completed' | 'failed',
   failure?: string
 ): void {
-  const rows = db.db
-    .prepare(
-      "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
-    )
-    .all(taskId) as DispatchContextRow[]
-  for (const row of rows) {
-    transitionLifecycleWithDb(db.db, {
-      entity: 'dispatch',
-      id: row.id,
-      from: row.status,
-      to: status,
-      projection: {
-        completed_at: row.completed_at ?? new Date().toISOString(),
-        last_failure:
-          status === 'failed'
-            ? (failure ?? row.last_failure ?? 'Task marked failed')
-            : row.last_failure,
-        capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
-      }
-    })
-    db.closeQuestionsForDispatch(row.id)
+  const transaction = beginLifecycleWriteTransaction(db.db, 'settle_task_dispatches')
+  try {
+    const rawRows = db.db
+      .prepare(
+        `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')`
+      )
+      .all(taskId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
+    const rows = rawRows as DispatchContextRow[]
+    for (const row of rows) {
+      transitionLifecycleWithDb(db.db, {
+        entity: 'dispatch',
+        id: row.id,
+        from: row.status,
+        to: status,
+        projection: {
+          completed_at: row.completed_at ?? new Date().toISOString(),
+          last_failure:
+            status === 'failed'
+              ? (failure ?? row.last_failure ?? 'Task marked failed')
+              : row.last_failure,
+          capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
+        }
+      })
+      db.closeQuestionsForDispatch(row.id)
+      settleWorkerForCompletedDispatch(db.db, row.id)
+    }
+    commitLifecycleWriteTransaction(db.db, transaction)
+  } catch (error) {
+    rollbackLifecycleWriteTransaction(db.db, transaction)
+    throw error
   }
 }
 
@@ -83,7 +95,7 @@ export function failActiveDispatchForTask(
   return active ? this.failDispatch(active.id, error) : undefined
 }
 
-// Why: only bump status='dispatched' — a zombie heartbeat from a finished dispatch would mask a hung retry from the stale detector (§5.3.4).
+// Late heartbeats from settled Dispatches must not mask a hung retry.
 export function recordHeartbeat(this: OrchestrationDb, dispatchId: string, at: string): void {
   this.db
     .prepare(
@@ -92,29 +104,31 @@ export function recordHeartbeat(this: OrchestrationDb, dispatchId: string, at: s
     .run(at, dispatchId)
 }
 
-// Why: dispatched_at grace skips workers still within their first heartbeat interval; julianday() vs raw-TEXT compare avoids misflagging space-format timestamps as stale (#8452).
+// Allow first-heartbeat grace and compare parsed dates to handle SQLite and ISO formats (#8452).
 export function getStaleDispatches(
   this: OrchestrationDb,
   thresholdIso: string
 ): DispatchContextRow[] {
-  return this.db
+  const rows = this.db
     .prepare(
-      `SELECT * FROM dispatch_contexts
+      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
        WHERE status = 'dispatched'
          AND dispatched_at IS NOT NULL
          AND julianday(dispatched_at) < julianday(?)
          AND (last_heartbeat_at IS NULL OR julianday(last_heartbeat_at) < julianday(?))`
     )
-    .all(thresholdIso, thresholdIso) as DispatchContextRow[]
+    .all(thresholdIso, thresholdIso)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
+  return rows as DispatchContextRow[]
 }
 
 export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
   error: string,
-  options: { workerProcessExited?: boolean; terminationReason?: string } = {}
+  options: { workerProcessExited?: boolean; terminationReason?: string; workerStage?: string } = {}
 ): DispatchContextRow | undefined {
-  // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot cause SQLITE_BUSY_SNAPSHOT.
+  // Reserve the WAL writer before reading to prevent SQLITE_BUSY_SNAPSHOT.
   const transaction = beginLifecycleWriteTransaction(this.db, FAIL_DISPATCH_SAVEPOINT)
   try {
     const before = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
@@ -164,9 +178,11 @@ export function failDispatch(
         capability_revoked_at: before.capability_revoked_at ?? new Date().toISOString()
       }
     })
-    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
-      | DispatchContextRow
-      | undefined
+    const rawContext = this.db
+      .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
+      .get(ctxId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns one Dispatch row or undefined; the adapter exposes unknown.
+    const ctx = rawContext as DispatchContextRow | undefined
     if (!ctx) {
       commitLifecycleWriteTransaction(this.db, transaction)
       return undefined
@@ -179,16 +195,16 @@ export function failDispatch(
         from: worker.state,
         to: 'failed',
         projection: {
-          stage: 'process_exited',
+          stage: options.workerStage ?? 'process_exited',
           last_error: error,
           updated_at: new Date().toISOString()
         }
       })
     }
 
-    // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
+    // Retry as ready: pending tasks are promoted only when a dependency completes.
     const taskStatus: TaskStatus = ctx.status === 'circuit_broken' ? 'failed' : 'ready'
-    // Why: the status guard keeps a late failure from reopening a task that already completed or was retried elsewhere.
+    // A late failure must not reopen a completed or independently retried task.
     const task = this.getTask(ctx.task_id)
     if (
       task?.status === 'dispatched' &&

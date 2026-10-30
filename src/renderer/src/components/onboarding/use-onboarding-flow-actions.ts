@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
-import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -71,7 +71,7 @@ export function useOnboardingFlowActions({
   updateSettings,
   skipOptions
 }: OnboardingFlowActionsArgs) {
-  // Why: sync latch; busyLabel state commits too late to stop a ~30ms Cmd+Enter auto-repeat from re-entering next() and skipping a step.
+  // Latch synchronously: busyLabel commits too late to stop shortcut autorepeat from skipping a step.
   const nextInFlightRef = useRef(false)
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
@@ -203,7 +203,6 @@ export function useOnboardingFlowActions({
       if (!closed) {
         return
       }
-      // Why: repo picker now lives in the Add Project dialog, so skipping optional setup closes onboarding and hands off to it.
       track('onboarding_step_skipped', {
         step: stepNumber,
         value_kind: valueKind,

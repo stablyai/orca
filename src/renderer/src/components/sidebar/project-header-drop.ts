@@ -3,7 +3,7 @@ import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type ProjectHeaderDragBucketKey = string
@@ -11,9 +11,7 @@ export type ProjectHeaderDragBucketKey = string
 export type ProjectHeaderDragRect = {
   repoId: string
   bucketKey: ProjectHeaderDragBucketKey
-  // Index among sibling repo headers in the drag bucket (from the row model),
-  // not the mounted subset. Virtualized rows unmount off-screen headers, so
-  // loop index over mounted rects would map drops to the wrong persisted order.
+  // Use sibling row-model indices because virtualized off-screen headers have no mounted rect.
   headerIndex: number
   top: number
   bottom: number
@@ -42,20 +40,6 @@ export function getSidebarOrderedRepoHeaderIdsByBucket(
     buckets.set(bucketKey, list)
   }
   return buckets
-}
-
-export function getLogicalRepoOrderRankById(
-  orderedRepoIds: readonly string[]
-): Map<string, number> {
-  const rankById = new Map<string, number>()
-  orderedRepoIds.forEach((repoId, index) => {
-    // Why: paired hosts can contribute the same logical project ID; its merged
-    // header must anchor to the first occurrence instead of whichever host loaded last.
-    if (!rankById.has(repoId)) {
-      rankById.set(repoId, index)
-    }
-  })
-  return rankById
 }
 
 export function getProjectGroupOrderForSidebarDrop(args: {
@@ -87,8 +71,7 @@ export function getProjectGroupOrderForSidebarDrop(args: {
   if (after > before) {
     return before + (after - before) / 2
   }
-  // Why: duplicate legacy ranks leave no numeric slot between neighbors; choose
-  // a deterministic finite value so the next drag has a persisted anchor.
+  // Equal legacy ranks have no interior numeric slot; retain a finite deterministic anchor.
   return before + 1
 }
 
@@ -97,8 +80,7 @@ export function mapSidebarProjectHeaderDropIndexToSiblingInsertIndex(args: {
   sourceIndex: number
   siblingCount: number
 }): number {
-  // Why: sidebar drop indices include the dragged header, but group-order ranks
-  // are computed against the sibling list after that header is removed.
+  // Convert the row-model insertion slot to the sibling list with the dragged header removed.
   const adjustedDropIndex =
     args.sourceIndex >= 0 && args.sidebarDropIndex > args.sourceIndex
       ? args.sidebarDropIndex - 1
@@ -210,8 +192,7 @@ export function applyAllRepoInsertAt(
   if (!allRepoIds.includes(draggedRepoId) || insertAt < 0 || insertAt > allRepoIds.length) {
     return null
   }
-  // Why: one merged header controls every host-qualified occurrence; moving
-  // them together prevents a drag from persisting a cross-host split project.
+  // Move every host-qualified occurrence together so a merged project header cannot persist a split.
   const draggedBlock = allRepoIds.filter((repoId) => repoId === draggedRepoId)
   const removedBeforeInsert = allRepoIds
     .slice(0, insertAt)

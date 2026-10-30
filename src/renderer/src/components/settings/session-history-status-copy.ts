@@ -13,6 +13,14 @@ export function isSweepingSessionSearch(status: AiVaultSearchStatus | null): boo
   return status.phase === 'indexing' || (status.phase === 'degraded' && status.filesDue > 0)
 }
 
+/** A whole sweep has finished with nothing left due; failures alone do not hold readiness back. */
+export function isSessionSearchIndexReady(status: AiVaultSearchStatus | null): boolean {
+  if (!status?.enabled || status.lastSweepCompletedAt === null || status.filesDue > 0) {
+    return false
+  }
+  return status.phase === 'current' || status.phase === 'degraded'
+}
+
 export function sessionSearchPollIntervalMs(status: AiVaultSearchStatus | null): number {
   return isSweepingSessionSearch(status)
     ? SESSION_SEARCH_SWEEPING_POLL_MS
@@ -38,12 +46,7 @@ function searchableMessage(status: AiVaultSearchStatus): string {
   )
 }
 
-/**
- * A sweep in flight. The denominator is what the pass knows about so far, which
- * is why it is a plain fraction and never a percentage. Messages are the count
- * already searchable, not a total: nothing knows how many a file holds until it
- * is read.
- */
+/** Show fractions of currently discovered files, never percentages of an unknown total; message counts include only already searchable content. */
 function catchingUpMessage(status: AiVaultSearchStatus): string {
   const indexed = formatSessionCount(status.filesIndexed)
   const total = formatSessionCount(status.filesIndexed + status.filesDue + status.filesFailed)
@@ -61,7 +64,6 @@ function catchingUpMessage(status: AiVaultSearchStatus): string {
   )
 }
 
-/** The one status sentence a computer row shows while its search is on. */
 export function sessionSearchStatusMessage(status: AiVaultSearchStatus): string {
   if (!status.enabled || status.phase === 'idle' || status.phase === 'closed') {
     return translate(
@@ -72,7 +74,6 @@ export function sessionSearchStatusMessage(status: AiVaultSearchStatus): string 
   return isSweepingSessionSearch(status) ? catchingUpMessage(status) : searchableMessage(status)
 }
 
-/** Lines shown under the status sentence when something needs the user's attention. */
 export function sessionSearchStatusDetails(status: AiVaultSearchStatus | null): string[] {
   if (!status?.enabled) {
     return []
@@ -105,7 +106,7 @@ export function sessionSearchReadErrorMessage(): string {
   return translate('sessionHistory.status.error', 'Could not check status. Retrying…')
 }
 
-// IPC wraps a rejection's message, so the host-too-old marker arrives inside a longer string.
+// IPC embeds host-too-old markers in longer wrapped error messages.
 export function isHostTooOldError(error: unknown): boolean {
   return error instanceof Error && error.message.includes('host-too-old')
 }

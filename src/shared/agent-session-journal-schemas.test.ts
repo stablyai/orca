@@ -3,9 +3,9 @@ import {
   AgentJournalItemBodySchema,
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody,
-  isAdmissibleAgentJournalRenderItem,
-  isAdmissibleAgentJournalSubmission
+  isAdmissibleAgentJournalRenderItem
 } from './agent-session-journal-schemas'
+import { isAdmissibleAgentJournalSubmission } from './agent-session-journal-submission-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -20,9 +20,20 @@ const RESOLUTION = {
   resolvedAt: null
 } as const
 
-// Canonical fixtures are typed: if a shape here stops compiling, the schema
-// audit below is validating the wrong model.
+// Typed fixtures ensure the schema audit validates the canonical model.
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
+  {
+    kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }]
+  },
+  {
+    kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }],
+    state: 'completed',
+    completedAt: 2_000
+  },
   {
     kind: 'message',
     role: 'user',
@@ -111,7 +122,7 @@ describe('canonical admission', () => {
     const item: AgentJournalRenderItem = {
       itemId: 'codex:t:turn:0',
       revision: 1,
-      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      body: { kind: 'message', role: 'user', blocks: [] },
       sequence: 1,
       observedAt: 1_000,
       recovered: true
@@ -167,8 +178,6 @@ describe('nested corruption is rejected', () => {
     expect(
       isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'x', turnLifecycle: true })
     ).toBe(false)
-    // A KNOWN block type with a broken payload must not slip through as a
-    // "future" block.
     expect(
       isAdmissibleAgentJournalItemBody({
         kind: 'message',
@@ -182,8 +191,6 @@ describe('nested corruption is rejected', () => {
   })
 
   it('rejects a subagent roster whose entries are malformed', () => {
-    // A KNOWN block type stays a known block: it must not fall through to the
-    // forward-tolerant arm just because its payload is wrong.
     expect(
       isAdmissibleAgentJournalItemBody({
         kind: 'message',
@@ -214,6 +221,22 @@ describe('nested corruption is rejected', () => {
         ]
       })
     ).toBe(true)
+  })
+
+  it('refuses an empty producer id, which a presence test would read as a subagent', () => {
+    const base = {
+      itemId: 'codex:t:turn:0',
+      revision: 1,
+      body: { kind: 'message', role: 'user', blocks: [] },
+      sequence: 1,
+      observedAt: 1_000
+    }
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: 'task-1' })).toBe(true)
+    // An empty id is present and would hide the row from its author on parent-scoped surfaces.
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, parentAgentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, providerParentRef: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, producerKind: '' })).toBe(false)
   })
 
   it('rejects shallow render items and submissions', () => {
@@ -263,9 +286,7 @@ describe('forward tolerance', () => {
   })
 
   it('admits a turn outcome from a later vocabulary but rejects a non-string one', () => {
-    // Open like `state`: a verdict a newer build writes keeps the row readable,
-    // and `readAgentJournalTurnOutcome` is what stops it being acted on. A
-    // non-string stays fatal — the row is structurally wrong, not just newer.
+    // Keep newer string verdicts readable for the outcome reader; nonstrings remain structural damage.
     const turn = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
     expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 'partially-refused' })).toBe(true)
     expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 7 })).toBe(false)
@@ -291,6 +312,7 @@ describe('optional notice metadata', () => {
   it.each([
     {},
     { presentation: 'compaction' },
+    { presentation: 'compaction-skipped', tone: 'warning' },
     { presentation: 'plan-document' },
     { tone: 'warning' },
     { tone: 'error' },
@@ -315,6 +337,57 @@ describe('optional notice metadata', () => {
   })
 })
 
+describe('typed failure facts', () => {
+  it('admits a status row and a submission with a fact, and the same rows without one', () => {
+    const failure = {
+      kind: 'providerStartFailed',
+      detail: { text: 'exit status 1', audience: 'log' }
+    }
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Stopped.', failure })).toBe(
+      true
+    )
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Stopped.' })).toBe(true)
+    const submission = {
+      clientMessageId: 'cm-1',
+      fence: 1,
+      payloadFingerprint: 'fp',
+      dispatchState: 'rejected',
+      providerItemId: null,
+      reason: 'Not sent.',
+      submittedAt: 1,
+      resolvedAt: 2
+    }
+    expect(isAdmissibleAgentJournalSubmission(submission)).toBe(true)
+    expect(isAdmissibleAgentJournalSubmission({ ...submission, rejection: failure })).toBe(true)
+  })
+
+  it("admits a refusal's details, and a row an earlier build wrote with its cause", () => {
+    const refused = (refusal: Record<string, unknown>) =>
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: "Codex couldn't restart.",
+        failure: { kind: 'restartFailed', refusal }
+      })
+    expect(
+      refused({
+        code: 'agent_session_conflict',
+        details: { reason: 'claimConflicted', futureFact: 1 }
+      })
+    ).toBe(true)
+    expect(refused({ code: 'agent_session_conflict', cause: 'claimConflicted' })).toBe(true)
+  })
+
+  it('keeps a kind or audience a newer host writes admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Stopped.',
+        failure: { kind: 'futureKind', detail: { text: 'x', audience: 'future' } }
+      })
+    ).toBe(true)
+  })
+})
+
 describe('optional tool annotations', () => {
   const body = { kind: 'tool-call', name: 'shell', input: null, state: 'completed' }
   it('admits old rows and rows with optional annotations without a new kind', () => {
@@ -330,8 +403,8 @@ describe('optional tool annotations', () => {
     ).toBe(true)
     const padded = AgentJournalItemBodySchema.safeParse({ ...body, callId: ' call-1 ' })
     expect(padded.success).toBe(true)
-    if (padded.success && padded.data.kind === 'tool-call') {
-      expect(padded.data.callId).toBe(' call-1 ')
+    if (padded.success) {
+      expect(padded.data).toMatchObject({ kind: 'tool-call', callId: ' call-1 ' })
     }
   })
   it('admits explicit MCP identity without constraining the raw name', () => {
@@ -363,5 +436,94 @@ describe('optional tool annotations', () => {
         blocks: [{ type: 'tool-call', name: 'shell', input: null, callId: '\n\t' }]
       })
     ).toBe(false)
+  })
+})
+
+describe('thread goal fields', () => {
+  const GOAL = {
+    objective: 'Ship the parser',
+    status: 'active',
+    tokenBudget: null,
+    tokensUsed: 0,
+    timeUsedSeconds: 0,
+    createdAt: 1_000,
+    updatedAt: 1_000
+  } as const
+
+  it('admits a user message sent as a goal and a typed goal transition', () => {
+    const bodies: AgentJournalItemBody[] = [
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Ship the parser' }],
+        sentAs: 'goal'
+      },
+      {
+        kind: 'status',
+        text: 'Goal set: Ship the parser',
+        threadGoal: { state: 'set', goal: GOAL }
+      },
+      { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } }
+    ]
+    for (const body of bodies) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
+    }
+    expect(isAdmissibleAgentJournalMessageBody(bodies[0])).toBe(true)
+  })
+
+  it('keeps a send mode or goal state a newer build writes admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        sentAs: 'scheduled'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [],
+        state: 'paused'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal archived',
+        threadGoal: { state: 'archived' }
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, status: 'snoozed' } }
+      })
+    ).toBe(true)
+  })
+
+  it('rejects a malformed send mode or goal snapshot', () => {
+    for (const body of [
+      { kind: 'message', role: 'user', blocks: [], sentAs: 5 },
+      { kind: 'message', role: 'user', blocks: [], sentAs: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], state: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], completedAt: 'later' },
+      { kind: 'status', text: 'Goal set', threadGoal: { state: 'set' } },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, objective: null } }
+      },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, timeUsedSeconds: 'soon' } }
+      },
+      { kind: 'status', text: 'Goal set', threadGoal: 'set' }
+    ]) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(false)
+    }
   })
 })

@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotCapabilityModule from './terminal-provider-snapshot-capability'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { makeTab, makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeTab } from '../../store/slices/store-session-test-harness'
+import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 
 const { collectPtyIds } = vi.hoisted(() => ({ collectPtyIds: vi.fn() }))
 
@@ -68,7 +69,6 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
     collectPtyIds.mockClear()
     select = createTerminalProviderSnapshotBoundPtyIdsSelector()
     boundPtyIds = select(useAppStore.getState())
-    // Why subscribe: this mirrors how zustand drives the selector — once per store write.
     unsubscribe = useAppStore.subscribe((state) => {
       boundPtyIds = select(state)
     })
@@ -79,8 +79,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
     useAppStore.setState(initialState, true)
   })
 
-  // Why: the collector walks every tab and every layout leaf, and both of these rewrite the maps it
-  // reads without being able to change the pty set.
+  // Title and active-leaf writes replace scanned maps without changing their PTY set.
   it('never re-collects for agent title frames or active-leaf moves', () => {
     expect(collectPtyIds).toHaveBeenCalledTimes(1)
     const initialBoundPtyIds = boundPtyIds
@@ -186,8 +185,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
     expect(boundPtyIds).not.toContain('pty-new')
   })
 
-  // Why: the id array identity is the synchronization loop's restart trigger, so a rebuild that
-  // lands on the same set must reuse the previous array rather than restart the loop.
+  // Unchanged PTY sets must retain array identity or restart the synchronization loop.
   it('keeps the array identity when a rebuild lands on the same id set', () => {
     const initialBoundPtyIds = boundPtyIds
 

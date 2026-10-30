@@ -55,13 +55,33 @@ function readUnixProcesses() {
   return parseUnixProcesses(stdout)
 }
 
+// Win32_Process times use 100ns units; Number(missing) produces plausible zero and silently discards user CPU.
+function cimTimeSeconds(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value / 10_000_000 : null
+}
+
+export function cimCpuSeconds(entry) {
+  const userModeSeconds = cimTimeSeconds(entry.UserModeTime)
+  const kernelModeSeconds = cimTimeSeconds(entry.KernelModeTime)
+  return userModeSeconds !== null && kernelModeSeconds !== null
+    ? userModeSeconds + kernelModeSeconds
+    : null
+}
+
 function readWindowsProcesses() {
+  // Use UTF-8: OEM best-fit maps command-line •/→ to controls (0x07/0x1A), breaking JSON.parse.
   const script =
-    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize,CommandLine | ConvertTo-Json -Compress'
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
+    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize,UserModeTime,KernelModeTime,CommandLine | ConvertTo-Json -Compress'
   const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], {
     encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024
+    maxBuffer: 20 * 1024 * 1024,
+    // Bounds a wedged query; a cold first PowerShell start alone has reached 48 s on CI.
+    timeout: 60_000
   })
+  if (result.error) {
+    throw result.error
+  }
   if (result.status !== 0) {
     throw new Error(result.stderr || 'PowerShell process enumeration failed')
   }
@@ -71,7 +91,7 @@ function readWindowsProcesses() {
     pid: Number(entry.ProcessId),
     ppid: Number(entry.ParentProcessId),
     percentCpu: 0,
-    cpuTimeSeconds: null,
+    cpuTimeSeconds: cimCpuSeconds(entry),
     rssBytes: Number(entry.WorkingSetSize) || 0,
     command: String(entry.CommandLine || '')
   }))

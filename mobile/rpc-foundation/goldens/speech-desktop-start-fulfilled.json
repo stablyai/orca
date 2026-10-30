@@ -1,19 +1,10 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "speech.desktop-start",
   "family": "speech.dictation-start",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
-  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "5d978690e3626892b83bdba64537f9b1e1bb66c2060a00517ceead042a6d2334",
-  "scenarioSha256": "35fadd03f2c98344e22d6aec2dc85ad15ca5ac8e092fc1c29a20366db5d46628",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "3b5708754539": {
+    "4c42677aca21": {
       "name": "speech.dictation.start#1",
       "ordinal": 1,
       "args": [
@@ -30,7 +21,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "timeoutMs": 30000
           }
         }
       ],
@@ -70,7 +61,7 @@
       {
         "id": "recording",
         "observation": {
-          "sender": ["3b5708754539"],
+          "sender": ["4c42677aca21"],
           "payloads": ["a7ddd021010a"],
           "settlements": {
             "start": "84e5ca07cb7a"

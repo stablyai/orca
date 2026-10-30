@@ -1,4 +1,13 @@
 import type { DetectedWorktreeListResult, Worktree } from '../../shared/worktree/types'
+import {
+  runtimeHiddenHostIds,
+  runtimeHiddenRepos,
+  withoutHiddenHosts
+} from './runtime-visible-catalog'
+import {
+  getLocalWorktreeCatalogVersion,
+  localWorktreeCatalogVersionAt
+} from '../local-worktree-scan-generation'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
@@ -13,25 +22,29 @@ import {
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree/ownership'
-import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
+import { projectWorktreeLineageWithHostPeers } from '../worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../shared/worktree/visibility-sources'
-import { mergeWorktree } from '../ipc/worktree-logic'
+import { mergeWorktree } from '../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
-import { pruneMetadataMissingFromAuthoritativeLocalScan } from '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
-import type { NativeLocalWorktreeMetadataScanExpectation } from '../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
-import { getLocalWorktreeScanGeneration } from '../local-worktree-scan-generation'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import type { Store } from '../persistence'
+import {
+  canPruneAuthoritativeLocalMetadata,
+  pruneMetadataMissingFromAuthoritativeLocalScan
+} from '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import type { RuntimeStore } from './runtime-store-contract'
+import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
-import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
+import {
+  getRetiredNameRegistryForRepo,
+  hasRetiredNameRegistryStore
+} from '../worktree-name-retirement'
 
 type Dependencies = {
   getStore(): RuntimeStore | null
@@ -41,31 +54,6 @@ type Dependencies = {
   scanRepo(repo: Repo): Promise<RuntimeWorktreeScanResult>
   /** Hosts this runtime has repos or workspaces on, so a host with no rows is still named. */
   listKnownHostIds(): Iterable<ExecutionHostId>
-}
-
-/**
- * The destructive scan expectation for one repo, or undefined when this repo must not carry one.
- *
- * WSL-routed repos are excluded for the same reason the desktop listing excludes them: the listing
- * runs in the distro and reports Linux paths while metadata can hold UNC ones, and v1 cannot prove
- * those aliases equivalent. A runtime that needs repair throws rather than resolving routing, which
- * is likewise no basis for deleting rows.
- */
-function captureLocalMetadataPruneExpectation(
-  store: RuntimeStore,
-  repo: Repo
-): NativeLocalWorktreeMetadataScanExpectation | undefined {
-  if (typeof store.captureNativeLocalWorktreeMetadataScanExpectation !== 'function') {
-    return undefined
-  }
-  try {
-    if (getLocalProjectWorktreeGitOptions(store as unknown as Store, repo).wslDistro) {
-      return undefined
-    }
-  } catch {
-    return undefined
-  }
-  return store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
 }
 
 export class RuntimeManagedWorktreeQueries {
@@ -98,14 +86,26 @@ export class RuntimeManagedWorktreeQueries {
         )
       ])
     )
+    const hiddenRepos = runtimeHiddenRepos(this.deps.getStore())
     const worktrees = resolved.filter(
       (worktree) =>
+        !hiddenRepos.hasWorktree(worktree) &&
         (!scopedRepo || worktree.repoId === scopedRepo.id) &&
         this.isVisible(worktree, matchers.get(worktree.repoId), sourceDefaultsSupported)
     )
-    // See `listingKnownHostIds`: a scoped listing must still name the host it was asked about.
-    const knownHostIds = listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds())
-    return buildWorktreeListingPage(worktrees, limit, knownHostIds)
+    // Scoped reads must name requested hosts even without rows; hidden retained repos must never reenter scope.
+    const knownHostIds = withoutHiddenHosts(
+      listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds()),
+      runtimeHiddenHostIds(this.deps.getStore())
+    )
+    const page = buildWorktreeListingPage(worktrees, limit, knownHostIds)
+    return {
+      ...page,
+      worktrees: page.worktrees.map((worktree) => ({
+        ...worktree,
+        linkedItems: getWorkspaceAttachments(worktree)
+      }))
+    }
   }
 
   resolveRepoForConnection(selector: string, connectionId?: string | null): Promise<Repo> {
@@ -156,32 +156,26 @@ export class RuntimeManagedWorktreeQueries {
         repoId: repo.id,
         authoritative: true,
         source: 'git',
-        worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
       }
     }
-    // Why capture before the scan: listing can mutate metadata synchronously before its first
-    // await, and the prune revalidates against the rows as they stood when the scan was issued.
-    const metadataScanGeneration = getLocalWorktreeScanGeneration(repo.id)
-    const metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)
-    let scan: RuntimeWorktreeScanResult
-    try {
-      scan = await this.deps.scanRepo(repo)
-    } catch {
-      scan = { ok: false, worktrees: [] }
-    }
-    if (scan.ok) {
-      // Why the runtime sweeps too: the desktop listing that used to own this runs off `ipcMain`,
-      // so a headless host -- which has no renderer -- never pruned its own repos' rows (#17776).
-      if (metadataPruneExpectation) {
+    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
+      this.deps.scanRepo(target)
+    )
+    // Publish overtaken scans as non-authoritative: throwing would drop client rows. Prune nothing; the overtaking mutation's event requests a fresh listing.
+    if (scan.ok && !scan.superseded) {
+      // Headless hosts lack ipcMain listings; runtime must sweep its own metadata too (#17776).
+      if (scan.metadataPruneExpectation && canPruneAuthoritativeLocalMetadata(store)) {
         await pruneMetadataMissingFromAuthoritativeLocalScan({
-          store: store as unknown as Store,
+          store,
           repo,
           gitWorktrees: scan.worktrees,
-          scan: metadataPruneExpectation,
-          scanGeneration: metadataScanGeneration
+          scan: scan.metadataPruneExpectation,
+          scanGeneration: scan.scanGeneration
         })
       }
-      pruneLineageForMissingRepoWorktrees(store as unknown as Store, repo, scan.worktrees)
+      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
     }
     const matcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
@@ -194,7 +188,7 @@ export class RuntimeManagedWorktreeQueries {
     const detected = scan.worktrees.map((gitWorktree) => {
       const id = `${repo.id}::${gitWorktree.path}`
       const meta =
-        readWorktreeMetaForHost(store as unknown as Store, id, expectedHostId) ??
+        readWorktreeMetaForHost(store, id, expectedHostId) ??
         getRepoOwnedWorktreeMeta(repo, id, metaById, repoOwnerCount)
       const worktree = {
         ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
@@ -212,9 +206,11 @@ export class RuntimeManagedWorktreeQueries {
     })
     return {
       repoId: repo.id,
-      authoritative: scan.ok,
+      authoritative: scan.ok && !scan.superseded,
       source: scan.ok ? 'git' : 'metadata-fallback',
-      worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
+      // Stamp the scan's starting generation: that is the catalog its rows describe.
+      catalogVersion: localWorktreeCatalogVersionAt(scan.scanGeneration),
+      worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
     }
   }
 
@@ -294,17 +290,12 @@ export class RuntimeManagedWorktreeQueries {
     retiredNameTiersByRepo: Record<string, number>
   }> {
     const store = this.deps.getStore()
-    if (!store?.getRetiredWorktreeNameRegistry || !store.mergeRetiredWorktreeNames) {
+    if (!store || !hasRetiredNameRegistryStore(store)) {
       return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
     }
     const repo = await this.deps.resolveRepo(repoSelector)
     const settings = store.getSettings()
-    const registry = await getRetiredNameRegistryForRepo(
-      store as never,
-      repo,
-      store.getRepos(),
-      settings
-    )
+    const registry = await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
     return {
       retiredNamesByRepo: { [repo.id]: registry.names },
       retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }

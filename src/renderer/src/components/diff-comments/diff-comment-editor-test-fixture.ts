@@ -1,8 +1,6 @@
 import type { editor as MonacoEditor, IDisposable } from 'monaco-editor'
 
-// A Monaco stand-in for the diff-comment suites: enough of ICodeEditor for the decorator, the
-// add-button overlay and the gutter range drag, with the scroll/hit-test geometry scriptable so
-// a test can place the pointer on a line without a layout engine.
+// Script Monaco hit-test and scroll geometry without a layout engine.
 
 export const FAKE_LINE_HEIGHT_PX = 20
 export const FAKE_EDITOR_TOP_PX = 100
@@ -22,9 +20,10 @@ export type FakeDiffCommentEditor = {
   decorations: () => readonly FakeDecoration[]
   decorationWrites: () => number
   scrollTop: () => number
+  focusCount: () => number
   emitMouseMove: (lineNumber: number) => void
   emitDispose: () => void
-  /** Viewport-relative Y for a line, as the fake hit-test reads it. */
+  /** Viewport-relative Y used by the hit-test. */
   clientYForLine: (lineNumber: number) => number
   setLineCount: (lineCount: number) => void
 }
@@ -33,12 +32,8 @@ type FakeEditorOptions = {
   lineCount?: number
   /** Lines the fake hit-test refuses to resolve, standing in for Monaco returning no position. */
   unresolvableLines?: readonly number[]
-  /**
-   * An x band the hit-test refuses to resolve, standing in for the overlay's own "+" button:
-   * Monaco reports no position for a point over a DOM node it does not own.
-   */
+  /** Monaco cannot resolve positions over the add button’s external DOM. */
   deadColumn?: { fromX: number; toX: number }
-  /** MouseTargetType the hit-test reports, for the gesture's gutter-target filter. */
   gutterTargetType?: MonacoEditor.MouseTargetType
 }
 
@@ -46,8 +41,7 @@ export function createFakeDiffCommentEditor(
   options: FakeEditorOptions = {}
 ): FakeDiffCommentEditor {
   const domNode = document.createElement('div')
-  // A fixed viewport rectangle: happy-dom lays nothing out, and the drag controller only ever
-  // measures the editor's top and bottom edges against the pointer.
+  // happy-dom has no layout; supply the viewport edges used by the drag controller.
   const editorRect: DOMRect = {
     top: FAKE_EDITOR_TOP_PX,
     bottom: FAKE_EDITOR_TOP_PX + FAKE_EDITOR_HEIGHT_PX,
@@ -69,6 +63,7 @@ export function createFakeDiffCommentEditor(
   let scrollTop = 0
   let decorations: FakeDecoration[] = []
   let decorationWrites = 0
+  let focusCount = 0
   const mouseMoveListeners: ((e: { target: { position: { lineNumber: number } } }) => void)[] = []
   const disposeListeners: (() => void)[] = []
   const noopDisposable: IDisposable = { dispose: () => {} }
@@ -100,6 +95,9 @@ export function createFakeDiffCommentEditor(
     getScrollHeight: () => lineCount * FAKE_LINE_HEIGHT_PX,
     getLayoutInfo: () => ({ height: FAKE_EDITOR_HEIGHT_PX, contentLeft: 60 }),
     getSelection: () => null,
+    focus: () => {
+      focusCount += 1
+    },
     deltaDecorations: () => [],
     createDecorationsCollection: () => ({
       set: (next: MonacoEditor.IModelDeltaDecoration[]) => {
@@ -161,6 +159,7 @@ export function createFakeDiffCommentEditor(
     decorations: () => decorations,
     decorationWrites: () => decorationWrites,
     scrollTop: () => scrollTop,
+    focusCount: () => focusCount,
     clientYForLine,
     setLineCount: (next) => {
       lineCount = next

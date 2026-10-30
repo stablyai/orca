@@ -24,6 +24,7 @@ import { PushHostSessionStore } from './host-session-store.js'
 import type { PushDatabase } from './push-database.js'
 import { PushDispatcher } from './push-dispatcher.js'
 import { PushObservability } from './push-observability.js'
+import { reserveRequestConnection } from './push-background-database.js'
 import { createPushReadiness } from './push-readiness.js'
 import { PushRequestDrain } from './push-request-drain.js'
 
@@ -43,8 +44,7 @@ export function readBearer(header: string | undefined): string | null {
   return scheme?.toLowerCase() === 'bearer' && token.length > 0 ? token : null
 }
 
-// Hono's body limit, not a Content-Length check: a chunked body declares no
-// length, and req.json() would buffer all of it before any handler ran.
+// Enforce Hono’s body limit: Content-Length misses chunked bodies that req.json would fully buffer.
 const limitBody = bodyLimit({
   maxSize: PUSH_LIMITS.maxHttpBodyBytes,
   onError: (context) => context.json({ error: 'request_too_large' }, 413)
@@ -60,7 +60,11 @@ export function createPushServer(
   const challenges = new PushHostChallengeStore(database, config.publicUrl, now)
   const sessions = new PushHostSessionStore(database, now)
   const devices = new PushDeviceRegistryStore(database, now)
-  const deliveryStore = new DurablePushStore(database, now)
+  const deliveryStore = new DurablePushStore(
+    database,
+    now,
+    reserveRequestConnection(database, config.databasePoolMax)
+  )
   const apnsTransport = options.apnsTransport ?? (config.apns ? createApnsHttp2Transport() : null)
   const dispatcher = new PushDispatcher({
     devices,
@@ -114,8 +118,7 @@ export function createPushServer(
   const app = new Hono<{ Variables: PushVariables }>()
   const requestDrain = new PushRequestDrain()
   app.use('*', requestDrain.middleware)
-  // Hono's default handler prints the whole error, and a pg error carries the
-  // offending row in `detail`. Only the error's name may reach the logs.
+  // Default Hono logging exposes pg row detail; log only error names.
   app.onError((error, context) => {
     observability.record('request_error')
     console.warn(
@@ -274,6 +277,7 @@ export function createPushServer(
       observability.record('send_queued')
       results.push({ registrationId, status: 'queued' })
     }
+    if (results.some((result) => result.status === 'queued')) worker.wake()
     return context.json({ results })
   })
 

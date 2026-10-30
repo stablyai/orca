@@ -8,17 +8,19 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import {
+  BrowserChromeFoldedMenuItems,
+  type BrowserChromeOverflowMenuProps
+} from '../assemble-chrome/browser-chrome-folded-tools'
 
-/**
- * The preview's overflow menu. It carries the document actions rather than the browsing pane's
- * profile and viewport rows: a preview has no session to switch and no device to emulate.
- */
+/** Preview grants have no browsing session or device emulation; expose document actions instead. */
 export function DocPreviewOverflowMenu({
   onReload,
   onHardReload,
   onOpenSource,
   onCopyPath,
-  onCopyRelativePath
+  onCopyRelativePath,
+  overflow
 }: {
   onReload: () => void
   onHardReload: () => void
@@ -26,11 +28,13 @@ export function DocPreviewOverflowMenu({
   onCopyPath: () => void
   /** Why it lives here: the preview hides the editor's path header, which was the only way to copy it. */
   onCopyRelativePath: () => void
+  overflow: BrowserChromeOverflowMenuProps
 }): React.JSX.Element {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={overflow.triggerRef}
           size="icon"
           variant="ghost"
           className="h-7 w-7"
@@ -42,7 +46,11 @@ export function DocPreviewOverflowMenu({
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" onCloseAutoFocus={overflow.onMenuCloseAutoFocus}>
+        <BrowserChromeFoldedMenuItems
+          tools={overflow.tools}
+          deferUntilClose={overflow.deferUntilClose}
+        />
         <DropdownMenuItem onSelect={onReload}>
           <RefreshCw className="size-3.5" />
           {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}

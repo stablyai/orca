@@ -1,24 +1,21 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.native-chat-stop",
   "family": "session.native-chat-stop",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
-  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
-  "scenarioSha256": "a72f08c12c244912912be34deb3ec12bada6b74f1bc29c0034b347dcba9ddb10",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
+    "3e2d28f3728b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 1000,
+      "value": true
+    },
     "5cd1d4a9aed5": {
       "name": "terminal.send#1",
       "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "650fdd02bab4": {
+    "5cd6e007c8ca": {
       "name": "terminal.send#2",
       "ordinal": 6,
       "args": [
@@ -41,14 +38,14 @@
           "name": "options",
           "value": {
             "budgetSpansConnect": true,
-            "timeoutMs": 14920
+            "timeoutMs": 14000
           }
         }
       ],
       "settlement": {
         "status": "fulfilled",
-        "startedAt": 80,
-        "settledAt": 120,
+        "startedAt": 1000,
+        "settledAt": 1000,
         "value": {
           "id": "frame-3",
           "ok": true,
@@ -64,6 +61,10 @@
       "name": "cancel-pending",
       "ordinal": 1,
       "value": {}
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
     },
     "ab0f3d65723e": {
       "name": "terminal.send#1",
@@ -109,14 +110,6 @@
     },
     "debf84af8d66": {
       "errors": []
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     },
     "ef422fa31f61": {
       "name": "terminal.send#2",
@@ -174,7 +167,7 @@
           "sender": ["ab0f3d65723e", "fcdecc63b46e"],
           "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
           "settlements": {
-            "stop": "eb79a9b3682a"
+            "stop": "9270aeb7d9c6"
           },
           "state": "debf84af8d66",
           "effects": ["75263c07c807"]
@@ -183,10 +176,10 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["ab0f3d65723e", "fcdecc63b46e", "650fdd02bab4"],
+          "sender": ["ab0f3d65723e", "fcdecc63b46e", "5cd6e007c8ca"],
           "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
           "settlements": {
-            "stop": "eb79a9b3682a"
+            "stop": "3e2d28f3728b"
           },
           "state": "debf84af8d66",
           "effects": ["75263c07c807"]

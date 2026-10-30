@@ -1,63 +1,172 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { DeviceRegistry } from '../runtime/device-registry'
 import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
 import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtures'
+import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
+import { profileStateAccessPaths } from '../persistence/profile-state/profile-state-access-owner'
 
 const state = vi.hoisted(() => ({
   root: '',
   controller: null as RuntimeMobileNotificationController | null,
   registry: null as DeviceRegistry | null,
   rpcStarted: false,
+  profileStartupErrors: new Array<Error>(),
+  onSettingsChanged: vi.fn<ProfilePreferences['onSettingsChanged']>(),
+  removeSettingsListener: vi.fn(),
+  startDaemon: vi.fn(async () => {}),
+  stopDaemon: vi.fn(async () => {}),
+  browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
-  send: vi.fn(async () => ({ ok: true, results: [] }))
+  send: vi.fn(async () => ({ ok: true, results: [] })),
+  startCodexHooks: vi.fn(),
+  installManagedAgentHooks: vi.fn(async () => []),
+  refreshOpenCodePlugins: vi.fn(),
+  adoptLoginShellAgentHomes: vi.fn(async () => {})
+}))
+const codexStart = vi.hoisted(() => {
+  const value: { settledAtPublish: boolean | null } = { settledAtPublish: null }
+  return value
+})
+const profile = vi.hoisted(() => {
+  const value: { settings: Partial<GlobalSettings> } = { settings: {} }
+  return value
+})
+// Reconciliation writes user-global agent configs; isolate it from the real home.
+vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  startCodexHooks: state.startCodexHooks
+}))
+vi.mock('../agent-hooks/managed-agent-hook-controls', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  installManagedAgentHooks: state.installManagedAgentHooks
+}))
+vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  hydrateAgentCliShellPath: async () => {}
+}))
+vi.mock('../agent-hooks/agent-home-login-shell', () => ({
+  adoptLoginShellAgentHomes: state.adoptLoginShellAgentHomes
+}))
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))
+vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
+  refreshInstalledOpenCodeStatusPlugins: state.refreshOpenCodePlugins
 }))
 vi.mock('./orcad-app-paths', () => ({
   resolveOrcadInstallRoot: () => state.root,
   resolveOrcadPath: () => state.root,
   resolveUserDataPath: () => state.root
 }))
-vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: async () => null }))
-vi.mock('./orcad-instance-lock', () => ({ acquireOrcadInstanceLock: () => ({ release() {} }) }))
+// Migration otherwise targets the real credential directory.
+vi.mock('./orcad-plaintext-credential-migration', () => ({
+  orcadCredentialRoot: () => state.root,
+  migratePlaintextCredentials: () => ({ sealed: 0, failed: 0 })
+}))
+vi.mock('./orcad-account-services', () => ({ createOrcadAccountServices: () => null }))
+vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
+vi.mock('./orcad-instance-lock', () => ({
+  acquireOrcadInstanceLock: () => ({
+    path: join(state.root, 'orcad.lock'),
+    record: { pid: process.pid, startedAtMs: null, nonce: 'headless-instance' },
+    release() {}
+  })
+}))
 vi.mock('./orcad-daemon-supervision', () => ({
-  startOrcadDaemon: async () => {},
-  stopOrcadDaemon: async () => {}
+  startOrcadDaemon: state.startDaemon,
+  stopOrcadDaemon: state.stopDaemon
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
-vi.mock('../daemon/daemon-init', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
-vi.mock('../ipc/pty', () => ({
-  registerHeadlessPtyRuntime: async () => {},
-  getLocalPtyProvider: () => null,
-  getSshPtyProvider: () => null
+vi.mock('./orcad-automations', () => ({
+  startOrcadAutomations: () => {},
+  stopOrcadAutomationScheduler: () => {},
+  orcadAutomationsKeepHostBusy: () => false
 }))
-vi.mock('../persistence/loading-store/store', () => ({
-  Store: class {
-    getSettings() {
-      return {}
+// Prevent network rule downloads in this unit test.
+vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
+  startAgentStateRulesLiveUpdates: () => {}
+}))
+vi.mock('../daemon/daemon-provider-state', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
+vi.mock('../ipc/pty/register-headless-runtime', () => ({
+  registerHeadlessPtyRuntime: async () => {}
+}))
+vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: () => null }))
+vi.mock('./orcad-profile-state-startup', () => ({
+  createOrcadProfileStateStartup: async () => {
+    const error = state.profileStartupErrors.shift()
+    if (error) {
+      throw error
+    }
+    return {
+      store: {
+        getSettings: () => profile.settings,
+        onSettingsChanged: state.onSettingsChanged,
+        flushFinalOrThrowAsync: async () => {},
+        freezeWritesAsync: async () => {}
+      },
+      authority: {
+        backend: 'sqlite',
+        classification: 'neither',
+        authority_mode: 'sqlite-candidate',
+        runtime: 'orcad',
+        migrated: false
+      }
     }
   }
 }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
   initOrcaProfilePaths() {},
-  ensureActiveOrcaProfile: () => ({ dataFile: join(state.root, 'profile.json') })
+  ensureActiveOrcaProfile: () => ({
+    dataFile: join(state.root, 'profile.json'),
+    stateDatabaseFile: join(state.root, 'profile-state.db'),
+    profile: { id: 'headless-profile' }
+  })
 }))
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile() {} }))
 vi.mock('../server/serve-readiness', () => ({
   ServeReadinessPublisher: class {
-    async publish() {}
+    async publish() {
+      const startAfter: Promise<void> | undefined =
+        state.startCodexHooks.mock.calls[0]?.[0]?.startAfter
+      if (startAfter) {
+        let settled = false
+        void startAfter.then(() => {
+          settled = true
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        codexStart.settledAtPublish = settled
+      }
+    }
   }
 }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
+    readonly sidebarFacts = null
+    readonly agentTransitions = { seedRestoredRows() {} }
+    attachAgentStatusStore() {
+      return () => {}
+    }
+    setEmulatorBridge() {}
     getRuntimeId() {
       return 'headless-runtime'
     }
     rehydrateClientHostedBrowserPages() {}
+    restoreHostAccountLaunchEnv() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async installPendingOrcadMigrationShellHistory() {}
+    async stopLegacyWorkerTerminalRecovery() {}
+    async closeNotificationDismissals() {}
+    flushPaneGrids() {
+      return null
+    }
+    syncWindowGraph() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
@@ -104,9 +213,34 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
   }
 }))
 
+beforeEach(() => {
+  // Restore the prior data-root env after startOrcad canonicalizes it.
+  vi.stubEnv('ORCA_USER_DATA_PATH', '')
+  state.onSettingsChanged.mockReturnValue(state.removeSettingsListener)
+})
+
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(state.root, { recursive: true, force: true })
+  state.profileStartupErrors.length = 0
+  profile.settings = {}
+  codexStart.settledAtPublish = null
   vi.clearAllMocks()
+})
+
+it('refuses recovery overlap before initializing the browser provider or runtime', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-recovery-'))
+  const maintenance = acquireProfileStateMaintenance(state.root)
+  const { startOrcad, parseArgs } = await import('./orcad-entry')
+  const commandArguments = await import('./orcad-command-arguments')
+  try {
+    expect(parseArgs).toBe(commandArguments.parseArgs)
+    await expect(startOrcad({ noPairing: true, json: true })).rejects.toThrow()
+    expect(state.browserProvider).not.toHaveBeenCalled()
+    expect(state.rpcStarted).toBe(false)
+  } finally {
+    maintenance.release()
+  }
 })
 
 it('starts push after RPC identity is available and stops dispatch on shutdown', async () => {
@@ -140,8 +274,143 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   } finally {
     await host.stop()
   }
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+  acquireProfileStateMaintenance(state.root).release()
   expect(state.controller.getListenerCount()).toBe(0)
+  expect(state.rpcStarted).toBe(false)
+  expect(state.onSettingsChanged).toHaveBeenCalledOnce()
+  expect(state.removeSettingsListener).toHaveBeenCalledOnce()
+  await host.stop()
+  expect(state.removeSettingsListener).toHaveBeenCalledOnce()
   expect(await state.controller.registerPushDevice({} as never)).toMatchObject({
     registered: false
   })
+})
+
+it('releases admission when host setup fails before a runtime exists', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-setup-failure-'))
+  state.profileStartupErrors.push(new Error('profile startup failed'))
+  const { startOrcad } = await import('./orcad-entry')
+  await expect(startOrcad()).rejects.toThrow('profile startup failed')
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+  acquireProfileStateMaintenance(state.root).release()
+})
+
+it('serves RPC without waiting for browser discovery', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-browser-pending-'))
+  let finishDiscovery!: () => void
+  state.browserProvider.mockReturnValueOnce(
+    new Promise<null>((resolve) => {
+      finishDiscovery = () => resolve(null)
+    })
+  )
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  expect(host.managedStop).toMatchObject({
+    runtimeId: 'headless-runtime',
+    instance: { pid: process.pid, nonce: 'headless-instance' }
+  })
+  finishDiscovery()
+  await host.stop()
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+})
+
+it('unsubscribes settings when daemon startup fails after hook setup', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-daemon-failure-'))
+  state.startDaemon.mockRejectedValueOnce(new Error('daemon setup failed'))
+  const { startOrcad } = await import('./orcad-entry')
+  await expect(startOrcad()).rejects.toThrow('daemon setup failed')
+  expect(state.onSettingsChanged).toHaveBeenCalledOnce()
+  expect(state.removeSettingsListener).toHaveBeenCalledOnce()
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+  acquireProfileStateMaintenance(state.root).release()
+})
+
+it('spawns the daemon while the hook server is still starting', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-daemon-parallel-'))
+  const { agentHookServer } = await import('../agent-hooks/server')
+  const hookStart = Promise.withResolvers<void>()
+  const start = vi.spyOn(agentHookServer, 'start').mockReturnValue(hookStart.promise)
+  const { startOrcad } = await import('./orcad-entry')
+  const starting = startOrcad({ noPairing: true, json: true })
+
+  await vi.waitFor(() => expect(start).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
+  hookStart.resolve()
+
+  const host = await starting
+  await host.stop()
+})
+
+it('disconnects a daemon still spawning only after it settles, when the hook server fails', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hook-failure-'))
+  const daemonSpawn = Promise.withResolvers<void>()
+  state.startDaemon.mockReturnValueOnce(daemonSpawn.promise)
+  const { agentHookServer } = await import('../agent-hooks/server')
+  vi.spyOn(agentHookServer, 'start').mockRejectedValueOnce(new Error('hook port taken'))
+  const { startOrcad } = await import('./orcad-entry')
+
+  const starting = startOrcad()
+  await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
+  // The cleanup waits on the in-flight spawn rather than disconnecting a half-started provider.
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(state.stopDaemon).not.toHaveBeenCalled()
+  daemonSpawn.resolve()
+
+  await expect(starting).rejects.toThrow('hook port taken')
+  expect(state.stopDaemon).toHaveBeenCalledOnce()
+  acquireProfileStateMaintenance(state.root).release()
+})
+
+it('disconnects the daemon when startup throws between its spawn and the stores', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-early-throw-'))
+  const observability = await import('./orcad-observability')
+  vi.spyOn(observability, 'installOrcadObservability').mockImplementationOnce(() => {
+    throw new Error('observability init failed')
+  })
+  const { startOrcad } = await import('./orcad-entry')
+
+  await expect(startOrcad()).rejects.toThrow('observability init failed')
+
+  expect(state.startDaemon).toHaveBeenCalledOnce()
+  expect(state.stopDaemon).toHaveBeenCalledOnce()
+})
+
+it('installs agent status hooks on the host when it starts', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hooks-'))
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  try {
+    expect(state.startCodexHooks).toHaveBeenCalledOnce()
+    expect(state.startCodexHooks.mock.calls[0]![0].resolveLaunchHome()).toBeNull()
+    // Codex's PATH scan waits for readiness to publish, then runs.
+    expect(codexStart.settledAtPublish).toBe(false)
+    await state.startCodexHooks.mock.calls[0]![0].startAfter
+    await vi.waitFor(() =>
+      expect(state.installManagedAgentHooks).toHaveBeenCalledWith(
+        profile.settings,
+        expect.objectContaining({ shouldHydrateShellPath: true })
+      )
+    )
+    expect(state.refreshOpenCodePlugins).toHaveBeenCalledWith(profile.settings)
+    expect(state.adoptLoginShellAgentHomes.mock.invocationCallOrder[0]).toBeLessThan(
+      state.installManagedAgentHooks.mock.invocationCallOrder[0]!
+    )
+  } finally {
+    await host.stop()
+  }
+})
+
+it('leaves agent configs alone when status hooks are off', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hooks-off-'))
+  profile.settings = { agentStatusHooksEnabled: false }
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  try {
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(state.installManagedAgentHooks).not.toHaveBeenCalled()
+    expect(state.startCodexHooks.mock.calls[0]![0].isEnabled()).toBe(false)
+  } finally {
+    await host.stop()
+  }
 })

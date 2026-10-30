@@ -1,12 +1,8 @@
-// Canonical agent-session boundaries for stats, derived from agent-hook status
-// transitions instead of OSC terminal titles. Titles are a display signal: they
-// miss hook-only agents entirely and classify any braille-spinner TUI as an
-// agent. Hook status is the same truth the sidebar, dashboard, and mobile rows
-// read, so stats now agree with what the user sees.
+// Hook transitions align desktop/dashboard/mobile stats; OSC titles miss hook-only agents and can mistake spinner TUIs for execution.
 
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import { isAgentTimeAccruing } from '../../shared/agent-lead-status-fold'
+import type { AgentStatusPayload } from '../../shared/agent-status-types'
 
-/** Structural subset of the agent-hook enriched payload this module needs. */
 export type AgentSessionStatusEvent = {
   paneKey: string
   worktreeId?: string
@@ -17,9 +13,15 @@ export type AgentSessionStatusEvent = {
   isReplay?: boolean
   /** Nonterminal state backed only by child state restored from disk. */
   restoredUnconfirmed?: true
-  /** When the current state first appeared; preserved across same-state replays. */
+  /** When the current combined state first appeared; preserved across same-state replays. */
   stateStartedAt: number
-  payload: { state: AgentStatusState }
+  /** When this event arrived; a replay restamps it. */
+  receivedAt: number
+  /** When this evidence was first observed; survives a replay. Absent means `receivedAt`. */
+  evidenceObservedAt?: number
+  /** The combined row state and its watch-loop mode: a settled main agent's background shell holds
+   *  the row `working`, and the stats must not count it. */
+  payload: Pick<AgentStatusPayload, 'state' | 'workingMode'>
 }
 
 /** Ordinary pane teardown, or a stamped batch clear for one dropped connection. */
@@ -27,7 +29,6 @@ export type AgentSessionClearEvent =
   | { paneKey: string }
   | { transient: true; connectionId: string; clearedAt: number }
 
-/** Where session boundaries land. Matches StatsCollector's lifecycle API. */
 export type AgentSessionSink = {
   onAgentStart(sessionKey: string, at: number, repoId?: string, worktreeId?: string): void
   onAgentStop(sessionKey: string, at: number): void
@@ -35,59 +36,44 @@ export type AgentSessionSink = {
 
 export type AgentSessionTransition = 'start' | 'stop' | 'none'
 
-// Why: pane keys are unbounded over a long session (every closed-then-reopened
-// pane mints one). Evict oldest so the mirror can't grow without bound; an
-// evicted pane costs at most one missed stop boundary, which the quit flush and
-// pane-clear paths already cover.
+// Bound long-session pane churn; quit flush/clear paths cover any evicted unmatched stop.
 export const AGENT_SESSION_MIRROR_LIMIT = 1000
 
 type MirroredSession = {
-  state: AgentStatusState
+  /** Whether the row last said an agent was executing (the main agent or live agent child work). */
+  executing: boolean
   connectionId: string | null
   /** True while this recorder has an unmatched onAgentStart out to the sink. */
   open: boolean
 }
 
-/**
- * Pure transition classifier — the whole idempotency contract lives here.
- *
- * Rules:
- * - Same state as the mirror is a SNAPSHOT, not a transition. Reconnect replay,
- *   disk hydration, and mid-turn tool-progress events all re-emit the current
- *   state; counting those is what makes every reconnect inflate the totals.
- * - Only a LIVE event may open a session. A replayed or disk-restored `working`
- *   describes work that began in some earlier runtime, so crediting it would
- *   mint a phantom spawn (see #14610: replays carrying an unchanged state used
- *   to re-arm live timing, and cached replays re-fire completion side effects).
- * - Any event may CLOSE a session this recorder opened. A replayed `done` is how
- *   a client learns about a completion it missed while disconnected; refusing it
- *   would strand the session open until the quit flush.
- */
+/** Snapshots never count transitions. Only live evidence may open a session; any event may close one we opened, including completions missed while disconnected (#14610). Restored main-agent facts are historical too. */
 export function classifyAgentSessionTransition(
-  previous: Pick<MirroredSession, 'state' | 'open'> | undefined,
+  previous: Pick<MirroredSession, 'executing' | 'open'> | undefined,
   event: AgentSessionStatusEvent
 ): AgentSessionTransition {
   if (event.providerSessionOnly) {
     return 'none'
   }
-  const next = event.payload.state
-  if (previous && previous.state === next) {
+  const executing = isAgentTimeAccruing(event.payload)
+  if (previous && previous.executing === executing) {
     return 'none'
   }
-  if (next === 'working') {
+  if (executing) {
     const live = event.isReplay !== true && event.restoredUnconfirmed !== true
     return live ? 'start' : 'none'
   }
   return previous?.open ? 'stop' : 'none'
 }
 
-/**
- * Mirrors the last hook state per pane and forwards start/stop edges to a sink.
- *
- * The mirror is updated for every accepted event — including replays that do not
- * count — so the next live transition is computed against the truth the hook
- * server holds, not against a gap.
- */
+/** Use this host's clocks: leaving working uses row state time; edges within working and first live rows after hydration use evidence time to exclude monitoring/history gaps. */
+export function agentExecutionEdgeAt(event: AgentSessionStatusEvent): number {
+  return event.payload.state === 'working'
+    ? (event.evidenceObservedAt ?? event.receivedAt)
+    : event.stateStartedAt
+}
+
+/** Mirror all accepted events, including non-counting replays, so live transitions compare against current hook truth. */
 export class AgentSessionTransitionRecorder {
   private sessions = new Map<string, MirroredSession>()
 
@@ -99,31 +85,35 @@ export class AgentSessionTransitionRecorder {
     }
     const previous = this.sessions.get(event.paneKey)
     const transition = classifyAgentSessionTransition(previous, event)
-    if (transition === 'none' && previous?.state === event.payload.state) {
-      // Refresh recency without touching session state so a long-running pane
-      // isn't evicted ahead of an idle one.
+    const executing = isAgentTimeAccruing(event.payload)
+    if (transition === 'none' && previous?.executing === executing) {
+      // Refresh recency without changing state so long-running panes are not evicted ahead of idle ones.
       this.touch(event.paneKey, previous)
       return
     }
 
     let open = previous?.open ?? false
     if (transition === 'start') {
-      this.sink.onAgentStart(event.paneKey, event.stateStartedAt, undefined, event.worktreeId)
+      this.sink.onAgentStart(
+        event.paneKey,
+        agentExecutionEdgeAt(event),
+        undefined,
+        event.worktreeId
+      )
       open = true
     } else if (transition === 'stop') {
-      this.sink.onAgentStop(event.paneKey, event.stateStartedAt)
+      this.sink.onAgentStop(event.paneKey, agentExecutionEdgeAt(event))
       open = false
     }
 
     this.touch(event.paneKey, {
-      state: event.payload.state,
+      executing,
       connectionId: event.connectionId,
       open
     })
     this.evictOldest()
   }
 
-  /** Pane teardown / dropped connection: close what this recorder still holds open. */
   onCleared(clear: AgentSessionClearEvent): void {
     if ('paneKey' in clear) {
       this.closeAndForget(clear.paneKey, Date.now())

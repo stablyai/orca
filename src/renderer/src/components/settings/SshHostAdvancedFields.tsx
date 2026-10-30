@@ -1,9 +1,4 @@
 import { ChevronDown } from 'lucide-react'
-import {
-  DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
-} from '../../../../shared/ssh-types'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -13,27 +8,30 @@ import { SettingsSwitch } from './SettingsFormControls'
 import type { EditingTarget } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 
-// Why: mirror the composer's "Advanced" disclosure (ghost button + rotating chevron) so the
-// add-host dialog reads the same, while reusing the exact field labels/help text from the
-// Settings SSH form (proxy, jump host, connection reuse, terminal persistence).
+// Match composer disclosure styling while reusing the Settings SSH labels and help.
 export function SshHostAdvancedFields({
   open,
   onOpenChange,
   form,
   disabled,
-  onFormChange
+  onFormChange,
+  offerProxyConnectionReuse = false,
+  offerReconnectOnLaunch = false
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   form: EditingTarget
   disabled: boolean
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
+  /** Only for hosts this Windows desktop dials itself; a paired server runs its own ssh. */
+  offerProxyConnectionReuse?: boolean
+  /** Only for hosts this desktop restores at launch; a paired server keeps its own hosts. */
+  offerReconnectOnLaunch?: boolean
 }): React.JSX.Element {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="col-span-2 sm:col-span-2">
       <CollapsibleTrigger asChild>
-        {/* Why: no negative margin — the button's highlight would overhang and get clipped by the
-            dialog/settings containers. A small left padding keeps it flush without overflow. */}
+        {/* Avoid negative margins that clip button highlights in dialog/Settings containers. */}
         <Button type="button" variant="ghost" size="sm" className="px-2 text-xs">
           {translate('auto.components.sidebar.AddRemoteHostDialog.advanced', 'Advanced')}
           <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
@@ -113,65 +111,96 @@ export function SshHostAdvancedFields({
               )}
             />
           </div>
+          {offerProxyConnectionReuse && navigator.userAgent.includes('Windows') ? (
+            <div className="flex items-start justify-between gap-4 py-1 text-xs">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label className="text-xs font-medium">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.proxyConnectionReuse',
+                    'Reuse one proxy connection'
+                  )}
+                </Label>
+                <p className="text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.proxyConnectionReuseHelp',
+                    "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules."
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={form.systemSshProxyConnectionReuse}
+                disabled={disabled || !form.systemSshConnectionReuse}
+                onChange={() =>
+                  onFormChange((f) => ({
+                    ...f,
+                    systemSshProxyConnectionReuse: !f.systemSshProxyConnectionReuse
+                  }))
+                }
+                ariaLabel={translate(
+                  'auto.components.settings.SshTargetForm.proxyConnectionReuse',
+                  'Reuse one proxy connection'
+                )}
+              />
+            </div>
+          ) : null}
+          {offerReconnectOnLaunch ? (
+            <div className="flex items-start justify-between gap-4 py-1 text-xs">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label className="text-xs font-medium">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.reconnectOnLaunch',
+                    'Reconnect on launch'
+                  )}
+                </Label>
+                <p className="text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.reconnectOnLaunchHelp',
+                    'When off, Orca leaves this host, and any Orca server reached through it, disconnected at launch until you connect it.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={form.reconnectOnLaunch}
+                disabled={disabled}
+                onChange={() =>
+                  onFormChange((f) => ({ ...f, reconnectOnLaunch: !f.reconnectOnLaunch }))
+                }
+                ariaLabel={translate(
+                  'auto.components.settings.SshTargetForm.reconnectOnLaunch',
+                  'Reconnect on launch'
+                )}
+              />
+            </div>
+          ) : null}
           <div className="flex items-start justify-between gap-4 py-1 text-xs">
             <div className="min-w-0 flex-1 space-y-0.5">
               <Label className="text-xs font-medium">
                 {translate(
-                  'auto.components.settings.SshTargetForm.71fc546097',
-                  'Keep terminals alive until reset'
+                  'auto.components.settings.SshTargetForm.allowRemoteCliControl',
+                  "Allow this host's orca CLI to control Orca"
                 )}
               </Label>
               <p className="text-muted-foreground">
                 {translate(
-                  'auto.components.settings.SshTargetForm.b574994adc',
-                  'Use End Remote Terminals or Reset Relay when you want to stop them.'
+                  'auto.components.settings.SshTargetForm.allowRemoteCliControlHelp',
+                  "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server."
                 )}
               </p>
             </div>
             <SettingsSwitch
-              checked={form.relayKeepAliveUntilReset}
+              checked={form.allowRemoteCliControl}
               disabled={disabled}
               onChange={() =>
                 onFormChange((f) => ({
                   ...f,
-                  relayKeepAliveUntilReset: !f.relayKeepAliveUntilReset
+                  allowRemoteCliControl: !f.allowRemoteCliControl
                 }))
               }
               ariaLabel={translate(
-                'auto.components.settings.SshTargetForm.71fc546097',
-                'Keep terminals alive until reset'
+                'auto.components.settings.SshTargetForm.allowRemoteCliControl',
+                "Allow this host's orca CLI to control Orca"
               )}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="add-ssh-relay-grace-period" className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.SshTargetForm.55c56cf2c7',
-                'Timeout after disconnect (seconds)'
-              )}
-            </Label>
-            <Input
-              id="add-ssh-relay-grace-period"
-              type={form.relayKeepAliveUntilReset ? 'text' : 'number'}
-              value={
-                form.relayKeepAliveUntilReset
-                  ? translate('auto.components.settings.SshTargetForm.7c13f58c91', 'Until reset')
-                  : form.relayGracePeriodSeconds
-              }
-              disabled={disabled || form.relayKeepAliveUntilReset}
-              onChange={(e) =>
-                onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
-              }
-              placeholder={String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)}
-              min={MIN_SSH_RELAY_GRACE_PERIOD_SECONDS}
-              max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.settings.SshTargetForm.1b19b00e93',
-                'Bounded timeouts must be between 60 seconds and 7 days.'
-              )}
-            </p>
           </div>
         </div>
       </CollapsibleContent>

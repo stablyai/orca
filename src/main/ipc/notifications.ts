@@ -6,7 +6,8 @@ import type {
   NotificationDismissResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  NotificationPermissionStatusResult
+  NotificationPermissionStatusResult,
+  StructuredNotificationRead
 } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
@@ -14,9 +15,13 @@ import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
+import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
+import { isStructuredAttentionRead } from '../../shared/agent-session-attention'
+import { isAgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import {
   getLastObservedDeliveryOutcome,
   hasTriggeredPermissionDialogThisSession,
@@ -37,7 +42,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     openNotificationSystemSettings()
   })
 
-  // Why: Electron's main process can't read macOS auth status; expose only what we can observe (platform support + whether we've prompted).
+  // Keep the legacy status surface observational; native authorization is read by onboarding below.
   const getPermissionStatus = (): NotificationPermissionStatusResult => ({
     supported: Notification.isSupported(),
     platform: process.platform,
@@ -48,15 +53,15 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.handle(
     'notifications:probeDelivery',
     async (_event, args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> => {
-      // Why: macOS-only — Windows/Linux have no first-use permission dialog, so the onboarding card never renders there.
+      // First-use permission onboarding is macOS-only.
       if (process.platform !== 'darwin' || !Notification.isSupported()) {
         return { state: 'unsupported', authoritative: false }
       }
-      // Why: probes surface the macOS permission dialog, so mark startup registration done to avoid a second prompt later.
+      // Record prompting intent so startup registration cannot trigger a second prompt.
       if (store.getUI().notificationPermissionRequested !== true) {
         store.updateUI({ notificationPermissionRequested: true })
       }
-      // Preferred source: the bundled helper reads real auth silently, so polling tracks System Settings changes without banners.
+      // Prefer silent native reads so System Settings changes are visible without probe banners.
       const authorization = await readNotificationAuthorizationStatus()
       if (authorization === 'authorized') {
         recordNotificationDeliveryOutcome('delivered')
@@ -67,13 +72,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         return { state: 'blocked', authoritative: true }
       }
       if (authorization === 'not-determined') {
-        // Why: the dialog only appears once something asks; fire one probe per session to trigger it, then report pending.
+        // Trigger the first-use presenter once, then report awaiting-decision.
         if (!hasTriggeredPermissionDialogThisSession()) {
           void probeNotificationDelivery()
         }
         return { state: 'awaiting-decision', authoritative: true }
       }
-      // Helper unavailable or 'unknown': fall back to scheduling-based probes with session caching to avoid repeated banners.
+      // Without native evidence, cache scheduling probes within the session to avoid repeat banners.
       const lastObservedDeliveryOutcome = getLastObservedDeliveryOutcome()
       if (!args?.force && lastObservedDeliveryOutcome !== null) {
         return {
@@ -85,23 +90,61 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
   )
 
+  const announced = createAnnouncedNotificationRegistry()
+
   ipcMain.removeHandler('notifications:dismiss')
-  ipcMain.handle('notifications:dismiss', (_event, ids: string[]): NotificationDismissResult => {
-    const uniqueIds = Array.from(
-      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
-    )
-    let dismissed = 0
-    for (const id of uniqueIds) {
-      const entry = activeNotificationsById.get(id)
-      if (entry) {
-        entry.notification.close()
-        entry.release()
-        dismissed += 1
+  ipcMain.handle(
+    'notifications:dismiss',
+    (
+      _event,
+      ids: string[],
+      paneKeys?: string[],
+      reads?: StructuredNotificationRead[]
+    ): NotificationDismissResult => {
+      const uniqueIds = new Set(
+        ids.filter(
+          (id): id is string =>
+            typeof id === 'string' &&
+            id.length > 0 &&
+            !id.startsWith('agent-attention:') &&
+            !announced.isBounded(id)
+        )
+      )
+      const genericMobileIds = new Set(uniqueIds)
+      // Positioned structured alerts need the journal boundary; pane-wide reads retire the rest.
+      for (const paneKey of Array.isArray(paneKeys) ? paneKeys : []) {
+        if (typeof paneKey === 'string') {
+          const read = Array.isArray(reads)
+            ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
+            : undefined
+          const retired = announced.take(paneKey, read)
+          for (const entry of retired) {
+            uniqueIds.add(entry.id)
+            if (!entry.origin) {
+              genericMobileIds.add(entry.id)
+            }
+          }
+          removeReadMacosNotifications(paneKey, retired)
+          if (read) {
+            runtime?.retireStructuredAttention(read)
+          }
+        }
       }
-      runtime?.dismissMobileNotification(id)
+      let dismissed = 0
+      for (const id of uniqueIds) {
+        const entry = activeNotificationsById.get(id)
+        if (entry) {
+          entry.notification.close()
+          entry.release()
+          dismissed += 1
+        }
+        if (genericMobileIds.has(id)) {
+          runtime?.dismissMobileNotification(id)
+        }
+      }
+      return { dismissed }
     }
-    return { dismissed }
-  })
+  )
 
   const deliveryService = createNotificationDeliveryService({
     readNotificationSettings: () => store.getSettings().notifications,
@@ -117,8 +160,24 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
     deliverNative: deliverNativeNotification,
     platform: process.platform,
-    now: () => Date.now()
+    now: () => Date.now(),
+    recordAnnounced: (request) => {
+      if (request.paneKey && request.notificationId) {
+        announced.record(request.paneKey, request.notificationId, request.structuredOrigin)
+      }
+    }
   })
+
+  // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
+  ipcMain.removeHandler('notifications:settleStructuredPrompts')
+  ipcMain.handle(
+    'notifications:settleStructuredPrompts',
+    (_event, scope: unknown, sessionId: unknown): void => {
+      if (isAgentSessionExecutionLocation(scope) && typeof sessionId === 'string' && sessionId) {
+        runtime?.reconcileStructuredPromptAttention({ scope, sessionId, pendingPromptIds: [] })
+      }
+    }
+  )
 
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(

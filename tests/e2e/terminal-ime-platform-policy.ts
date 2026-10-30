@@ -1,26 +1,13 @@
 import type { Page } from '@stablyai/playwright-test'
 
-/**
- * Pins the renderer's IME ownership policy to one platform, from any runner.
- *
- * Every platform-dependent IME decision in the terminal reads `navigator.userAgent` and nothing
- * else — the forwarder that owns printable keydowns installs only when the UA reports macOS, the
- * candidate-key guards only when it reports desktop Linux, and the standalone `keyCode 229`
- * keydown reaches xterm on macOS and Linux but not on Windows. Overriding the UA is therefore the
- * whole platform decision, which is what lets the Windows and Linux shapes run headless on the
- * Linux CI shards instead of needing three runners.
- *
- * What it does NOT simulate is the input framework itself. That comes from the recorded traces
- * replayed against the pinned policy, because the frameworks disagree on ordering in ways no
- * hand-authored sequence would have predicted.
- */
+// Pin terminal IME policy through navigator.userAgent: printable forwarding on macOS/Linux, candidate guards on Linux, and keyCode 229 allowed on macOS/Linux.
+// This selects renderer policy only; replay recorded traces for framework-specific ordering, which the UA override cannot simulate.
 export type ImePlatformPolicy = 'mac' | 'windows' | 'linux'
 
 const USER_AGENT_BY_POLICY: Record<ImePlatformPolicy, string> = {
   mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/146 Safari/537.36',
   windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146 Safari/537.36',
-  // X11 rather than Wayland in the UA string: Chromium reports the same token for both, so the
-  // Wayland traces run under this policy too.
+  // Chromium reports X11 in both X11 and Wayland user agents; both trace types use this policy.
   linux: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
 }
 

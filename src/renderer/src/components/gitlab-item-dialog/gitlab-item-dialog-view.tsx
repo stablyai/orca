@@ -1,5 +1,6 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { CircleDot, ExternalLink, GitMerge, LoaderCircle, RefreshCw, Send, X } from 'lucide-react'
-import { VisuallyHidden } from 'radix-ui'
+import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -50,8 +51,6 @@ export function GitLabItemDialogView({
   updateCommentDraft
 }: Props) {
   const { actionInFlight, commentDraft, commentSubmitting, details, error, loading } = state
-  // Why: GitMerge for MRs visually disambiguates from GitBranch (and
-  // matches gitlab.com's MR iconography); CircleDot stays on issues.
   const Icon = item?.type === 'mr' ? GitMerge : CircleDot
   const prefix = item?.type === 'mr' ? '!' : '#'
   const isMR = item?.type === 'mr'
@@ -199,10 +198,8 @@ export function GitLabItemDialogView({
             </Tabs>
 
             <footer className="flex-none space-y-3 border-t border-border/40 px-5 py-3">
-              {/* Why: comment composer at the top of the footer so the
-                  primary actions row stays visually grouped at the bottom. */}
               <div className="flex items-end gap-2">
-                <textarea
+                <ImeTextarea
                   value={commentDraft}
                   onChange={(event) => updateCommentDraft(event.target.value)}
                   placeholder={translate(
@@ -214,8 +211,7 @@ export function GitLabItemDialogView({
                   disabled={commentSubmitting}
                   className="min-h-9 w-full resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50"
                   onKeyDown={(event) => {
-                    // Why: this is local textarea submit behavior; Settings
-                    // keybindings only cover app commands.
+                    // Textarea submit is local behavior rather than a configurable app command.
                     if (isScreenSubmitShortcut(event) && canSubmitComment && !commentSubmitting) {
                       event.preventDefault()
                       void primaryActions.handleSubmitComment()

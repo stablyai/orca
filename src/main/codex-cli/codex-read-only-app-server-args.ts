@@ -8,10 +8,8 @@ export const CODEX_READ_ONLY_APP_SERVER_ARGS = [
   ...CODEX_READ_ONLY_APP_SERVER_TAIL
 ] as const
 
-// Rate-limit probes are short-lived; plugin startup can launch marketplace
-// clones that outlive the probe teardown. Other read-only app-servers retain
-// normal plugin behavior.
-export const CODEX_RATE_LIMIT_APP_SERVER_ARGS = [
+// Disable plugins only for short-lived probes; marketplace clones can outlive probe teardown.
+export const CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS = [
   '-c',
   'approval_policy=never',
   ...CODEX_DISABLE_PLUGINS_ARGS,

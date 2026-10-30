@@ -12,8 +12,10 @@ import {
   AlertTriangle
 } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
 export type CheckResult = {
@@ -23,6 +25,7 @@ export type CheckResult = {
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
+  useMobileColorScheme()
   switch (status) {
     case 'pass':
       return <CheckCircle2 size={14} color={colors.statusGreen} />
@@ -48,9 +51,11 @@ export function TroubleshootView({
   runDiagnostics: () => void
   onBack: () => void
   onConnectionLog: () => void
-  /** Slot the route fills in a development build and in an OTA build; null in a native build. */
+  /** Developer and shell rows the route fills in. */
   developerRow?: ReactNode
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const toggleSection = useCallback(
@@ -62,13 +67,15 @@ export function TroubleshootView({
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back', 'Back')}
           style={styles.backButton}
           onPress={onBack}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Troubleshooting</Text>
+        <Text style={styles.heading}>
+          {t('diagnostics.troubleshootView.title', 'Troubleshooting')}
+        </Text>
       </View>
 
       <ScrollView
@@ -93,10 +100,10 @@ export function TroubleshootView({
           )}
           <Text style={styles.diagnosticButtonLabel}>
             {diagnosticStatus === 'running'
-              ? 'Running…'
+              ? t('diagnostics.troubleshootView.running', 'Running…')
               : diagnosticStatus === 'done'
-                ? 'Run again'
-                : 'Run diagnostics'}
+                ? t('diagnostics.troubleshootView.runAgain', 'Run again')
+                : t('diagnostics.troubleshootView.runDiagnostics', 'Run diagnostics')}
           </Text>
         </Pressable>
 
@@ -108,7 +115,9 @@ export function TroubleshootView({
           onPress={onConnectionLog}
         >
           <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
+          <Text style={styles.diagnosticButtonLabel}>
+            {t('diagnostics.troubleshootView.viewNetworkDiagnostics', 'View network diagnostics')}
+          </Text>
         </Pressable>
 
         {developerRow}
@@ -132,17 +141,19 @@ export function TroubleshootView({
           </View>
         )}
 
-        <Text style={styles.sectionHeading}>Common issues</Text>
+        <Text style={styles.sectionHeading}>
+          {t('diagnostics.troubleshootView.commonIssues', 'Common issues')}
+        </Text>
 
         <View style={styles.section}>
-          {troubleshootCommonIssues.map((section, i) => (
+          {troubleshootCommonIssues(t).map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
                 style={({ pressed }) => [styles.accordionHeader, pressed && styles.rowPressed]}
                 onPress={() => toggleSection(section.id)}
               >
-                {section.icon}
+                <section.icon size={16} color={colors.textSecondary} />
                 <Text style={styles.accordionTitle}>{section.title}</Text>
                 {expandedId === section.id ? (
                   <ChevronUp size={16} color={colors.textMuted} />

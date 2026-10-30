@@ -1,15 +1,37 @@
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
+import type {
+  StagedStructuredLaunchPrompt,
+  StructuredPromptDeliveryResult
+} from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
+import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
 export type StructuredAgentLaunchOptions = {
+  /** The user action this start serves; only a re-delivery of it joins its chat. */
+  requestId: AgentLaunchRequestId
+  /** Background launches never ask host publication to select their tab. */
+  activate?: boolean
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
-  /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
-   *  identity, not a preference — see `launchIdentity`. */
+  /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
+  promptKeptByCaller?: true
+  // Conversation adoption is launch identity, not a preference; see launchIdentity.
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** The host the route decided on; read only by the caller that starts the launch. */
+  executionHostId?: ExecutionHostId
+  /** The saved selection a paired host reported it will seed; read only by the starting caller. */
+  hostSeedOptions?: Readonly<Record<string, string>>
+  /** Explicit encoded action input, captured durably before any asynchronous preparation. */
+  launchOptions?: Readonly<Record<string, string>>
+  /** Final admission of a source-bound action, immediately before its first create is sent. */
+  beforeCreate?: () => boolean
+  surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 
 export type StructuredLaunchCaller = {
@@ -18,14 +40,20 @@ export type StructuredLaunchCaller = {
 
 export type StructuredLaunchCallerGroup = {
   outcome: 'pending' | 'published' | 'failed' | 'unknown' | 'cancelled'
+  attempt: StructuredLaunchAttempt
+  /** When this attempt failed; a retry starts a new group, so it never outlives the failure. */
+  failedAt?: number
   entries: Set<StructuredLaunchCaller>
   promptDeliveryResults: Set<Promise<StructuredPromptDeliveryResult>>
   onSettled: () => void
 }
 
-export function createStructuredLaunchCallerGroup(): StructuredLaunchCallerGroup {
+export function createStructuredLaunchCallerGroup(
+  attempt: StructuredLaunchAttempt
+): StructuredLaunchCallerGroup {
   return {
     outcome: 'pending',
+    attempt,
     entries: new Set(),
     promptDeliveryResults: new Set(),
     onSettled: () => {}
@@ -46,16 +74,18 @@ function trackPromptDelivery(
 
 export function addStructuredLaunchCaller(args: {
   group: StructuredLaunchCallerGroup
-  launchResult: Promise<{ sessionId: string; fence: number }>
+  launchResult: Promise<StructuredAgentLaunchReceipt>
+  target: RuntimeClientTarget
   options: StructuredAgentLaunchOptions
-  stagedEntry: StructuredAgentSessionOutboxEntry | null
+  stagedPrompt: StagedStructuredLaunchPrompt | null
 }): StructuredLaunchCaller {
   const caller: StructuredLaunchCaller = {}
   args.group.entries.add(caller)
   const promptDeliveryResult = settleStructuredAgentLaunchPrompt({
     launchResult: args.launchResult,
+    target: args.target,
     options: args.options,
-    stagedEntry: args.stagedEntry
+    stagedPrompt: args.stagedPrompt
   })
   caller.promptDeliveryResult = promptDeliveryResult?.catch(() => ({
     delivered: false,
@@ -72,6 +102,9 @@ export function settleStructuredLaunchCallers(
   outcome: 'published' | 'failed' | 'cancelled'
 ): void {
   group.outcome = outcome
+  if (outcome === 'failed') {
+    group.failedAt = Date.now()
+  }
   group.onSettled()
 }
 

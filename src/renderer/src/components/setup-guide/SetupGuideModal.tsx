@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
-import { EyeOff } from 'lucide-react'
 import {
   FEATURE_WALL_SETUP_STEP_IDS,
   getFirstIncompleteFeatureWallSetupStepId,
@@ -14,10 +13,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupChecklist'
-import { SetupGuideProgressRing } from './SetupGuideProgressRing'
 import { useSetupGuideProgress } from './use-setup-guide-progress'
 import { useSetupGuideOpenCloseTelemetry } from './use-setup-guide-telemetry'
 import { translate } from '@/i18n/i18n'
@@ -56,8 +53,7 @@ function SetupGuideModalContent({
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
-  // Why: keep progress inputs live through the close-animation linger; dropping
-  // them mid-fade flips completed rows back to "not done yet" on screen.
+  // Keep progress inputs live through the closing fade so completed rows cannot flash incomplete.
   const progressInputsActive = open || lingering
   const progress = useSetupGuideProgress(
     progressInputsActive,
@@ -141,44 +137,23 @@ function SetupGuideModalContent({
         className="grid h-[min(780px,calc(100vh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-none"
         tabIndex={-1}
       >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={translate(
-                'auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6',
-                'Hide checklist from sidebar'
-              )}
-              onClick={handleHideFromSidebar}
-              className="absolute right-10 top-3.5 text-muted-foreground"
-            >
-              <EyeOff className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {translate(
-              'auto.components.setup.guide.SetupGuideModal.28cf59fcb4',
-              'This will hide the checklist from the sidebar'
-            )}
-          </TooltipContent>
-        </Tooltip>
+        {/* Label Hide separately from Close; small layouts retain the sidebar’s hide control. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={handleHideFromSidebar}
+          className="absolute right-11 top-3.5 hidden sm:inline-flex"
+        >
+          {translate(
+            'auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6',
+            'Hide checklist from sidebar'
+          )}
+        </Button>
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
-          <div className="flex items-center gap-2">
-            <DialogTitle className="text-lg">
-              {translate(
-                'auto.components.setup.guide.SetupGuideModal.48a9e5ef2d',
-                'Getting started'
-              )}
-            </DialogTitle>
-            <SetupGuideProgressRing
-              done={progress.coreDoneCount}
-              total={progress.coreTotal}
-              className="text-green-600 dark:text-green-300"
-              sizeClassName="size-5"
-            />
-          </div>
+          <DialogTitle className="text-lg">
+            {translate('auto.components.setup.guide.SetupGuideModal.48a9e5ef2d', 'Getting started')}
+          </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             {translate(
               'auto.components.setup.guide.SetupGuideModal.3598a3ca0c',

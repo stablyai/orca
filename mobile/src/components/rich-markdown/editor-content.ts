@@ -22,13 +22,7 @@ export function syncTaskCheckboxesDisabled(scope: RichMarkdownEditorScope) {
     })
 }
 
-/**
- * Tells the host what the surface now holds, under the generation it was given.
- *
- * The generation goes back out untouched so the host can drop a change that crossed with content
- * it had already replaced. The document's own rewrites are not changes, which is what
- * `suppressInput` says.
- */
+// Echo host generation unchanged for stale-change filtering; suppressInput excludes document’s own rewrites.
 export function emitChange(scope: RichMarkdownEditorScope) {
   if (scope.suppressInput || !scope.editable) {
     return
@@ -52,15 +46,7 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
   scope.suppressInput = false
 }
 
-/**
- * Takes back the pending input timer, which is the one thing the document owns that outlives it.
- *
- * A listener comes off with the element it was on, but a scheduled callback holds the scope and
- * fires into a document nobody is looking at any more — posting a change to a host that has
- * unmounted the editor, under the generation of content it has replaced. Nothing schedules the
- * handle today; it is cancelled here because the day something does, this is where the cancel has
- * to already be.
- */
+// Cancel pending callback to release scope and prevent change after unmount/content replacement; currently nothing schedules timer, but cancellation must accompany future use.
 export function stopEditorContent(scope: RichMarkdownEditorScope) {
   scope.clearTimer(scope.inputTimer)
   scope.inputTimer = null

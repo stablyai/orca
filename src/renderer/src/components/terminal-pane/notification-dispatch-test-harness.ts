@@ -2,9 +2,9 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
-// Why: the mocked store state lives here so each split suite's hoisted `vi.mock` factory can
-// reach it through a lazy dynamic import (hoisted factories cannot close over imports).
+// Hoisted mock factories reach this state through lazy imports because they cannot capture imports.
 
 export const LIVE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -12,14 +12,25 @@ export const PANE_KEY = `tab-1:${LIVE_LEAF_ID}`
 export const STALE_PANE_KEY = `tab-1:${STALE_LEAF_ID}`
 
 export type NotificationDispatchMockState = {
+  activeView: string
   activeWorktreeId: string | null
   activeTabId: string | null
+  activeTabIdByWorktree: Record<string, string | null>
+  activeGroupIdByWorktree: Record<string, string | null>
+  floatingWorkspacePanelOpen: boolean
+  getActiveTab: (worktreeId: string) => Tab | null
+  groupsByWorktree: Record<string, TabGroup[]>
+  unifiedTabsByWorktree: Record<string, Tab[]>
   tabsByWorktree: Record<string, { id: string; ptyId?: string | null }[]>
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   browserTabsByWorktree: Record<string, unknown[]>
   retainedAgentsByPaneKey: Record<string, { worktreeId: string }>
+  agentLaunchConfigByPaneKey: Record<
+    string,
+    { launchConfig: { agentArgs: string }; identity: { agentType?: string } }
+  >
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   worktreesByRepo: Record<
     string,
@@ -39,12 +50,10 @@ export type NotificationDispatchMockState = {
       agentTaskComplete?: boolean
       customSoundPath?: string | null
       customSoundId?: string | null
+      notifyHiddenWorkspaces?: boolean
     }
   }
-  markWorktreeUnread: ReturnType<typeof vi.fn>
-  markTerminalTabUnread: ReturnType<typeof vi.fn>
-  markTerminalPaneUnread: ReturnType<typeof vi.fn>
-  markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
+  markAgentAttentionUnread: ReturnType<typeof vi.fn>
 }
 
 /** Annotated explicitly so declaration emit never names @vitest/spy internals. */
@@ -58,8 +67,25 @@ export function getNotificationDispatchMockState(): NotificationDispatchMockStat
 
 function buildNotificationDispatchMockState(): NotificationDispatchMockState {
   return {
+    activeView: 'terminal',
     activeWorktreeId: 'wt-secondary',
     activeTabId: 'tab-1',
+    activeTabIdByWorktree: {},
+    activeGroupIdByWorktree: {},
+    floatingWorkspacePanelOpen: false,
+    getActiveTab: (worktreeId) => {
+      const groupId = mockState.activeGroupIdByWorktree[worktreeId]
+      const group = (mockState.groupsByWorktree[worktreeId] ?? []).find(
+        (candidate) => candidate.id === groupId
+      )
+      return (
+        (mockState.unifiedTabsByWorktree[worktreeId] ?? []).find(
+          (tab) => tab.id === group?.activeTabId
+        ) ?? null
+      )
+    },
+    groupsByWorktree: {},
+    unifiedTabsByWorktree: {},
     tabsByWorktree: { 'wt-primary': [{ id: 'tab-1', ptyId: 'pty-1' }] },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     suppressedPtyExitIds: {},
@@ -73,6 +99,7 @@ function buildNotificationDispatchMockState(): NotificationDispatchMockState {
     },
     browserTabsByWorktree: {},
     retainedAgentsByPaneKey: {},
+    agentLaunchConfigByPaneKey: {},
     agentStatusByPaneKey: { [PANE_KEY]: makeAgentStatus(PANE_KEY) },
     worktreesByRepo: {
       repo1: [
@@ -87,14 +114,10 @@ function buildNotificationDispatchMockState(): NotificationDispatchMockState {
     },
     repos: [{ id: 'repo1', displayName: 'orca', connectionId: null }],
     settings: { experimentalTerminalAttention: true, notifications: { customSoundPath: null } },
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    markAgentCompletionPaneUnread: vi.fn()
+    markAgentAttentionUnread: vi.fn()
   }
 }
 
-/** Rebuilds the mocked store and stubs the notification bridge; returns the fresh state. */
 export function resetNotificationDispatchMockState(): NotificationDispatchMockState {
   vi.clearAllMocks()
   mockState = buildNotificationDispatchMockState()

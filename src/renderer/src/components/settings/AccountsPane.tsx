@@ -11,21 +11,25 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
-  hasRemoteProviderAccountOwner,
+  getProviderAccountsOwnerKey,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
+import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 import {
-  getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
+  getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
-  getAccountsPaneSearchEntries
+  getAccountsPaneSearchEntries,
+  getAccountsZcodePlanSearchEntries
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
@@ -34,8 +38,12 @@ import {
   providerAccountIsActiveInView,
   providerAccountMatchesView
 } from './provider-account-visibility'
-import { Separator } from '../ui/separator'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { AntigravityAccountsSection } from './AntigravityAccountsSection'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { CursorAccountsSection } from './CursorAccountsSection'
+import { ZcodePlanAccountsSection } from './ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -43,13 +51,16 @@ import type {
   CodexAccountAction,
   RemoveAccountTarget
 } from './accounts-pane-types'
-import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './accounts-pane-runtime'
+import {
+  EMPTY_WSL_DISTROS,
+  getRuntimeSentenceLabel,
+  getSelectedAccountRuntime
+} from './accounts-pane-runtime'
 import { watchCodexConfigSyncStatus } from './accounts-pane-config-sync'
 import {
   createClaudeAccountActionRunner,
   createCodexAccountActionRunner
 } from './accounts-pane-account-actions'
-import { createMiniMaxCredentialActions } from './accounts-pane-minimax-actions'
 import { renderAccountsLocationSection } from './accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './accounts-pane-codex-section'
@@ -57,7 +68,9 @@ import {
   renderGeminiAccountsSection,
   renderOpenCodeAccountsSection
 } from './accounts-pane-provider-setting-sections'
-import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
+import { MiniMaxAccountsSection } from './MiniMaxAccountsSection'
+import { useUsageHostSettings } from './use-usage-host-settings'
+import { ManagedDataAccountsSection } from './ManagedDataAccountsSection'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export { getAccountsPaneSearchEntries }
@@ -65,11 +78,13 @@ export { getAccountsPaneSearchEntries }
 export function AccountsPane({
   settings,
   updateSettings,
+  hostScope,
   wslSupportedPlatform = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
-  accountOwnerPlatform = null
+  accountOwnerPlatform = null,
+  wslHostDistro = null
 }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
@@ -78,28 +93,32 @@ export function AccountsPane({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
-  const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
-  const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
-  const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
-  const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
-  const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
+  const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId' | 'apiKey'>>(
+    new Set()
+  )
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
     wslAvailable,
     wslDistros,
-    wslCapabilitiesLoading
+    wslCapabilitiesLoading,
+    wslHostDistro
   )
-  // Why: with a Remote Orca Server active the server owns provider accounts
-  // (see #7973); every list/select/remove below must scope to it, not host/WSL.
-  const isRemoteAccountScope = hasRemoteProviderAccountOwner(settings)
-  const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
-  // Why: keep the real name separate from the prose fallback below; the scope
-  // label must not interpolate the fallback.
+  // Route all account actions to the Settings-selected owner, independent of focused host (#7973).
+  const accountOwner = hostScope.target
+  const isRemoteAccountScope = accountOwner.kind === 'environment'
+  const scopeEnvironmentId = runtimeTargetEnvironmentId(hostScope.target)
+  // Late select/remove results belong to their original owner, not the newly shown host.
+  const accountOwnerKey = getProviderAccountsOwnerKey(accountOwner)
+  const currentAccountOwnerKeyRef = useRef(accountOwnerKey)
+  useEffect(() => {
+    currentAccountOwnerKeyRef.current = accountOwnerKey
+  }, [accountOwnerKey])
+  const isCurrentAccountOwner = (): boolean => currentAccountOwnerKeyRef.current === accountOwnerKey
+  // Keep real names separate so scope labels cannot interpolate prose fallbacks.
   const remoteServerName = isRemoteAccountScope
-    ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
-        ?.name ?? null)
+    ? (runtimeEnvironments.find((environment) => environment.id === scopeEnvironmentId)?.name ??
+      null)
     : null
   const remoteServerLabel = isRemoteAccountScope
     ? (remoteServerName ??
@@ -108,21 +127,11 @@ export function AccountsPane({
   const accountRuntime = isRemoteAccountScope
     ? { runtime: 'host' as const, label: remoteServerLabel ?? '' }
     : localAccountRuntime
-  // Why: host runtime labels are standalone UI labels; interpolated prose needs sentence casing.
-  const accountRuntimeSentenceLabel =
-    !isRemoteAccountScope &&
-    accountRuntime.runtime === 'host' &&
-    !navigator.userAgent.includes('Windows')
-      ? `${accountRuntime.label.charAt(0).toLocaleLowerCase()}${accountRuntime.label.slice(1)}`
-      : accountRuntime.label
-  const localAccountRuntimeSentenceLabel =
-    localAccountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
-      ? `${localAccountRuntime.label.charAt(0).toLocaleLowerCase()}${localAccountRuntime.label.slice(1)}`
-      : localAccountRuntime.label
-  // Why: users read the remote-scoped list as their desktop accounts being
-  // deleted (#8186); say they are intact and link the default-runtime control.
-  // The web client has no desktop-owned accounts and cannot select Local
-  // desktop, so promising a switch back would be a dead end there.
+  const accountRuntimeSentenceLabel = isRemoteAccountScope
+    ? accountRuntime.label
+    : getRuntimeSentenceLabel(accountRuntime)
+  const localAccountRuntimeSentenceLabel = getRuntimeSentenceLabel(localAccountRuntime)
+  // Reassure desktop users that remote scope did not delete local accounts (#8186); web clients cannot switch back to local accounts.
   const remoteAccountScopeNotice =
     isRemoteAccountScope && !isWebClientLocation() ? (
       <ProviderHostScopeControl
@@ -142,8 +151,7 @@ export function AccountsPane({
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
-  // Why: capture the account's runtime slot when the dialog opens; the roster
-  // can change underneath an open dialog and lose the slot to diff for restarts.
+  // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
   const accountVisibilityOptions = {
@@ -157,8 +165,7 @@ export function AccountsPane({
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
-  // Why: System default lights only when no account row is active; while a remote
-  // owner's platform is unknown WSL rows hide fail-closed, so check the full roster.
+  // Unknown remote platforms hide WSL rows; check the full roster before marking System default active.
   const ownerPlatformUnknown = isRemoteAccountScope && accountOwnerPlatform === null
   const systemCodexActive = !(
     ownerPlatformUnknown ? codexAccounts.accounts : visibleCodexAccounts
@@ -170,13 +177,10 @@ export function AccountsPane({
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
-  // Why: the system default's real identity is host-scoped (it reflects the
-  // runtime's own ~/.codex), so only surface it in the host view. Per-distro
-  // WSL falls back to the generic label.
+  // System identity reflects the host’s ~/.codex; per-distro WSL uses generic copy.
   const systemCodexIdentity =
     accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
-  // Why: remote snapshots own their system-default identity, but the desktop's
-  // rate-limit poll must not be misattributed to a remote account owner.
+  // Desktop rate-limit polls cannot describe remote-owned auth warnings.
   const activeCodexAuthWarning = codexAccountsLoaded
     ? getCodexAccountAuthWarning({
         limits: isRemoteAccountScope ? null : codexRateLimits,
@@ -187,26 +191,17 @@ export function AccountsPane({
         authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
       })
     : null
-  // Why: the mirror keeps serving the last synced settings when ~/.codex is
-  // unusable, so without this the user only sees their edits being ignored.
+  // An unusable ~/.codex leaves the mirror serving stale settings; surface why edits are ignored.
   const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
   useEffect(() => {
-    // Why: the status resolves the host's own ~/.codex and shared runtime home.
-    // A WSL or remote scope mirrors different homes entirely, so showing it there
-    // would name a config file that has nothing to do with the selected runtime.
+    // Sync status describes local host homes; WSL/remote scopes mirror unrelated homes.
     if (isRemoteAccountScope || accountRuntime.runtime !== 'host') {
       setCodexConfigSync(null)
       return
     }
-    // Why: a temporarily locked managed home clears on its own, but this effect
-    // only reruns on scope/runtime/selection changes — none of which a lock
-    // release triggers. Without a retry the warning would stick until remount.
-    // Serialized (timeout, not interval) so a slow response can never be
-    // overwritten by an older one.
+    // Retry transient managed-home locks serially; lock release changes no effect dependency and overlapping polls could apply stale results.
     return watchCodexConfigSyncStatus(setCodexConfigSync)
-    // Why: the status resolves whichever home the ACTIVE selection mirrors into
-    // (per-account, shared, or none for the real-home lane), so switching
-    // accounts must refetch or the banner describes the previous account.
+    // Selection changes choose a different mirrored home; refetch rather than describe the previous account.
   }, [isRemoteAccountScope, accountRuntime.runtime, activeCodexAccountId, codexAccountsLoaded])
   const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
@@ -214,74 +209,57 @@ export function AccountsPane({
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
-  const recordOpenCodeSettingEdit = (field: 'cookie' | 'workspaceId'): void => {
+  const recordOpenCodeSettingEdit = (field: 'cookie' | 'workspaceId' | 'apiKey'): void => {
     if (recordedOpenCodeSettingEditsRef.current.has(field)) {
       return
     }
     recordedOpenCodeSettingEditsRef.current.add(field)
     recordFeatureInteraction('usage-tracking')
   }
-  const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
-    try {
-      const status = await window.api.minimaxCredentials.getStatus()
-      setMiniMaxConfigured(status.cookieConfigured)
-      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
-    } catch (error) {
-      console.error('Failed to load MiniMax credential status:', error)
-    }
-  }
-  const { saveMiniMaxCookie, clearMiniMaxCookie, saveMiniMaxApiKey, clearMiniMaxApiKey } =
-    createMiniMaxCredentialActions({
-      miniMaxCookieDraft,
-      setMiniMaxCookieDraft,
-      miniMaxApiKeyDraft,
-      setMiniMaxApiKeyDraft,
-      setMiniMaxApiKeyConfigured,
-      setMiniMaxConfigured,
-      setMiniMaxCredentialBusy,
-      recordFeatureInteraction
-    })
+  // Usage credentials belong beside the selected host’s poller.
+  const usageCredentialHost = { owner: accountOwner, label: remoteServerLabel }
+  const usageHostSettings = useUsageHostSettings(
+    accountOwner,
+    remoteServerLabel,
+    settings,
+    updateSettings
+  )
 
   useEffect(() => {
-    void refreshMiniMaxCredentialStatus()
-  }, [])
-
-  useEffect(() => {
-    // Why: remote snapshots stream usage refreshes after the synchronous ready
-    // message, so the watcher stays open for the pane's lifetime; the local
-    // path resolves once and the close() is a no-op.
-    const watcher = watchProviderAccounts(
-      { activeRuntimeEnvironmentId },
-      {
-        onSnapshot: (snapshot) => {
-          // Why: a failed provider's half is a substituted empty roster, not
-          // authoritative data; keep prior state and leave the loaded gate shut.
-          if (!snapshot.failedProviders?.includes('codex')) {
-            setCodexAccounts(snapshot.codex)
-            setCodexAccountsLoaded(true)
-          }
-          if (!snapshot.failedProviders?.includes('claude')) {
-            setClaudeAccounts(snapshot.claude)
-          }
-        },
-        onError: (error) => {
-          toast.error(
-            translate(
-              'auto.components.settings.AccountsPane.loadAccountsFailed',
-              'Could not load provider accounts.'
-            ),
-            { description: String((error as Error)?.message ?? error) }
-          )
+    const owner: RuntimeClientTarget = scopeEnvironmentId
+      ? { kind: 'environment', environmentId: scopeEnvironmentId }
+      : { kind: 'local' }
+    // Keep remote watchers open for streamed usage after the initial snapshot; local watchers resolve once.
+    const watcher = watchProviderAccounts(owner, {
+      onSnapshot: (snapshot) => {
+        // Failed-provider rosters are substituted empty data; retain prior state and keep the loaded gate shut.
+        if (!snapshot.failedProviders?.includes('codex')) {
+          setCodexAccounts(snapshot.codex)
+          setCodexAccountsLoaded(true)
         }
+        if (!snapshot.failedProviders?.includes('claude')) {
+          setClaudeAccounts(snapshot.claude)
+        }
+      },
+      onError: (error) => {
+        toast.error(
+          translate(
+            'auto.components.settings.AccountsPane.loadAccountsFailed',
+            'Could not load provider accounts.'
+          ),
+          { description: String((error as Error)?.message ?? error) }
+        )
       }
-    )
+    })
     return () => {
       watcher.close()
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [scopeEnvironmentId])
 
   const runCodexAccountAction = createCodexAccountActionRunner({
     settings,
+    accountOwner,
+    isCurrentAccountOwner,
     accountRuntime,
     isRemoteAccountScope,
     codexAccounts,
@@ -292,7 +270,8 @@ export function AccountsPane({
     recordFeatureInteraction
   })
   const runClaudeAccountAction = createClaudeAccountActionRunner({
-    settings,
+    accountOwner,
+    isCurrentAccountOwner,
     accountRuntime,
     isRemoteAccountScope,
     claudeAccounts,
@@ -303,6 +282,7 @@ export function AccountsPane({
   })
   const model: AccountsPaneSectionModel = {
     settings,
+    accountOwner,
     updateSettings,
     searchQuery,
     recordFeatureInteraction,
@@ -340,23 +320,18 @@ export function AccountsPane({
     codexRateLimitTarget,
     setRemoveCodexTarget,
     runCodexAccountAction,
-    recordOpenCodeSettingEdit,
-    miniMaxRateLimits,
-    miniMaxApiKeyDraft,
-    setMiniMaxApiKeyDraft,
-    miniMaxApiKeyConfigured,
-    saveMiniMaxApiKey,
-    clearMiniMaxApiKey,
-    miniMaxCookieDraft,
-    setMiniMaxCookieDraft,
-    miniMaxConfigured,
-    miniMaxCredentialBusy,
-    saveMiniMaxCookie,
-    clearMiniMaxCookie
+    recordOpenCodeSettingEdit
   }
   const visibleSections = [
+    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
+      <div key={accountOwnerKey} className="space-y-8">
+        <ManagedDataAccountsSection provider="opencode" target={accountOwner} />
+        <ManagedDataAccountsSection provider="devin" target={accountOwner} />
+      </div>
+    ) : null,
     wslSupportedPlatform &&
     !isRemoteAccountScope &&
+    !wslHostDistro &&
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())
       ? renderAccountsLocationSection(model)
       : null,
@@ -369,26 +344,45 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
       ? renderGeminiAccountsSection(model)
       : null,
+    matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
+      <AntigravityAccountsSection
+        key={`antigravity:${accountOwnerKey}:${accountRuntime.runtime}:${accountRuntime.wslDistro ?? ''}`}
+        owner={accountOwner}
+        target={{ runtime: accountRuntime.runtime, wslDistro: accountRuntime.wslDistro }}
+        label={accountRuntimeSentenceLabel}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model)
       : null,
-    matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries())
-      ? renderMiniMaxAccountsSection(model)
-      : null,
+    matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries()) ? (
+      <MiniMaxAccountsSection
+        key={`minimax:${accountOwnerKey}`}
+        host={usageCredentialHost}
+        usageSettings={usageHostSettings}
+        miniMaxRateLimits={isRemoteAccountScope ? null : miniMaxRateLimits}
+        recordFeatureInteraction={recordFeatureInteraction}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+      <CursorAccountsSection key="cursor" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
+      <ZcodePlanAccountsSection
+        key={`zcode:${accountOwnerKey}`}
+        host={usageCredentialHost}
+        usageSettings={usageHostSettings}
+      />
     ) : null
-  ].filter(Boolean)
+  ]
 
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="group" />
     </div>
   )
 }

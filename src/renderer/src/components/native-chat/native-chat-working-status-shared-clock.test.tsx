@@ -20,7 +20,7 @@ function renderTurns(count: number, startedAt: number): void {
     root.render(
       <>
         {Array.from({ length: count }, (_, index) => (
-          <NativeChatWorkingStatus key={index} startedAt={startedAt} thinking={false} />
+          <NativeChatWorkingStatus key={index} startedAt={startedAt} />
         ))}
       </>
     )
@@ -61,9 +61,7 @@ describe('native chat working status elapsed clock', () => {
 
   it('renders the compact duration in the completed status label', () => {
     act(() => {
-      root.render(
-        <NativeChatWorkingStatus startedAt={1_000_000} thinking={false} workedSeconds={69} />
-      )
+      root.render(<NativeChatWorkingStatus startedAt={1_000_000} workedSeconds={69} />)
     })
 
     expect(elapsedLabels()).toEqual(['Worked for 1m 9s'])
@@ -72,7 +70,6 @@ describe('native chat working status elapsed clock', () => {
   it('collapses every in-flight turn onto one shared visibility-gated timer', () => {
     renderTurns(3, 1_000_000)
 
-    // One shared 1s clock for all three turns, not one interval per turn.
     expect(vi.getTimerCount()).toBe(1)
     act(() => vi.advanceTimersByTime(3_000))
     expect(elapsedLabels()).toEqual(['Working for 3s', 'Working for 3s', 'Working for 3s'])
@@ -96,14 +93,9 @@ describe('native chat working status elapsed clock', () => {
     expect(vi.getTimerCount()).toBe(1)
   })
 
-  it('holds no timer for a thinking turn or a completed turn', () => {
+  it('holds no timer for a completed turn', () => {
     act(() => {
-      root.render(
-        <>
-          <NativeChatWorkingStatus startedAt={1_000_000} thinking />
-          <NativeChatWorkingStatus startedAt={1_000_000} thinking={false} workedSeconds={12} />
-        </>
-      )
+      root.render(<NativeChatWorkingStatus startedAt={1_000_000} workedSeconds={12} />)
     })
     expect(vi.getTimerCount()).toBe(0)
   })

@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { terminalDisplayModeSet } from './mobile-session-write-operations'
-import { useMobileNativeChatTerminalStream } from './use-mobile-native-chat-terminal-stream'
+import { useMobileNativeChatTerminalStream } from './native-chat/use-mobile-native-chat-terminal-stream'
 import type { MobileSessionTerminalSubscriptionModel } from './use-mobile-session-terminal-subscription'
 
 export function useMobileSessionTerminalStreamDisplay(
@@ -16,7 +16,6 @@ export function useMobileSessionTerminalStreamDisplay(
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
-    initializedHandlesRef,
     webReadyHandlesRef,
     activeSessionTab,
     nativeChatInputLeaseReady,
@@ -34,12 +33,10 @@ export function useMobileSessionTerminalStreamDisplay(
     subscribingRef: subscribingHandlesRef,
     leaseOnlyRef: leaseOnlyHandlesRef,
     webReadyRef: webReadyHandlesRef,
-    initializedRef: initializedHandlesRef,
     subscribe: subscribeToTerminal,
     unsubscribe: unsubscribeTerminal
   })
 
-  // Why: server does the resize and emits 'resized' on the existing subscription — no client-side state tracking needed.
   const toggleInFlightRef = useRef<Set<string>>(new Set())
   const toggleDisplayMode = useCallback(
     async (handle: string) => {
@@ -50,20 +47,19 @@ export function useMobileSessionTerminalStreamDisplay(
         return
       }
       const current = terminalModes.get(handle) ?? 'auto'
-      // Why: 'phone' is an observed state, not a setting; the toggle only requests 'auto' or 'desktop'.
+      // Phone is observed state; request auto or desktop rather than persisting it.
       const next: 'auto' | 'desktop' =
         current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
       toggleInFlightRef.current.add(handle)
       try {
-        // The reply is unread: the server resizes and reports it on the existing subscription.
         await terminalDisplayModeSet.request(client, {
           terminal: handle,
           mode: next,
-          // Why: presence-lock take-floor — requesting 'auto' is the explicit "drive at phone dims" gesture.
+          // Requesting auto explicitly takes the input floor and phone dimensions.
           ...(deviceTokenRef.current
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
             : {}),
-          // Why: late-bind viewport for terminals subscribed before measurement, or auto toggles no-op on a null stored viewport.
+          // Measure viewport live so pre-measure subscriptions can switch to auto successfully.
           ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})
         })
       } catch {

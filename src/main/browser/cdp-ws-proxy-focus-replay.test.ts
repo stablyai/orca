@@ -6,6 +6,7 @@ import {
   getSendCommandCalls,
   getSendCommandMethods,
   sendAndReceive,
+  mockAsWebContents,
   type MockWebContents
 } from './cdp-ws-proxy-test-harness'
 
@@ -13,9 +14,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-// Why: the proxy focuses the guest webContents natively before Input.insertText,
-// which blurs any element a prior DOM.focus targeted. These tests pin the replay
-// that re-applies that focus so text lands in the intended field.
+// Native focus before insertion can blur the DOM.focus target; replay restores it.
 describe('CdpWsProxy DOM.focus replay', () => {
   let mock: MockWebContents
   let proxy: CdpWsProxy
@@ -23,8 +22,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    proxy = new CdpWsProxy(mock.webContents as any)
+    proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {})
     endpoint = await proxy.start()
   })
 
@@ -220,8 +218,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
     client.send(JSON.stringify({ id: 25, method: 'DOM.focus', params: { backendNodeId: 66 } }))
     await new Promise((r) => setTimeout(r, 10))
-    // Why: dispatch the next message before the in-flight DOM.focus sendCommand
-    // resolves, reproducing the pipelining race the fix closes.
     client.send(
       JSON.stringify({ id: 26, method: 'Input.insertText', params: { text: 'pipelined' } })
     )
@@ -261,9 +257,8 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
     expect(insertResponse.id).toBe(29)
     expect(insertResponse.result).toEqual({})
-    // Why: both Page.bringToFront and Input.insertText natively call focus(),
-    // independent of the (now-cleared) DOM.focus replay.
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(2)
+    // Only insertText focuses natively; bringToFront is a no-op.
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
     expect(getSendCommandMethods(mock)).toEqual(['Page.enable', 'DOM.focus', 'Input.insertText'])
     client.close()
   })
@@ -299,8 +294,6 @@ describe('CdpWsProxy DOM.focus replay', () => {
     await sendAndReceive(first, { id: 33, method: 'DOM.focus', params: { backendNodeId: 12 } })
     first.close()
 
-    // Why: a new client connection replaces the previous one; the stale focus
-    // stored by the departed client must not leak into the new client's insert.
     const second = await connect(endpoint)
     const insertResponse = await sendAndReceive(second, {
       id: 34,
@@ -329,17 +322,14 @@ describe('CdpWsProxy DOM.focus replay', () => {
     const client = await connect(endpoint)
     client.send(JSON.stringify({ id: 35, method: 'DOM.focus', params: { backendNodeId: 7 } }))
     await new Promise((r) => setTimeout(r, 10))
-    // Pipeline the insert while DOM.focus is still in flight, then drop the client.
     client.send(JSON.stringify({ id: 36, method: 'Input.insertText', params: { text: 'gone' } }))
     await new Promise((r) => setTimeout(r, 10))
     client.close()
     await new Promise((r) => setTimeout(r, 10))
 
-    // Resolve the in-flight DOM.focus only after the client is gone.
     resolveFocus({})
     await new Promise((r) => setTimeout(r, 20))
 
-    // Why: a disconnected client's focus replay and insert must not reach the live page.
     const methods = getSendCommandMethods(mock)
     expect(methods.filter((m) => m === 'DOM.focus')).toHaveLength(1)
     expect(methods).not.toContain('Input.insertText')
@@ -352,8 +342,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       const [method] = args as [string]
       if (method === 'DOM.focus') {
         domFocusCalls += 1
-        // Why: let the first DOM.focus resolve so a replay is queued, then hang the
-        // replay so the client can disconnect while it is in flight.
+        // Stall the replay, after the initial focus succeeds, to disconnect during it.
         if (domFocusCalls === 2) {
           return new Promise<Record<string, unknown>>((resolve) => {
             resolveReplay = resolve

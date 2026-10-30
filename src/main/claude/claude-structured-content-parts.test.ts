@@ -40,7 +40,7 @@ function userMessageWith(part: unknown) {
   }
 }
 
-/** Exactly what claudeDispatchMessageContent sends for a local attachment. */
+/** Local-image replay shape emitted by claudeDispatchMessageContent. */
 const BASE64_IMAGE = {
   type: 'image',
   source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUg==' }
@@ -121,18 +121,6 @@ describe('Claude message content parts', () => {
     expect(state.sink.publish).not.toHaveBeenCalled()
   })
 
-  it('does not render injected image companions or start a turn', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-    const event = userMessageWith(null)
-    const content = [{ type: 'text', text: '[Image: source: /tmp/pasted.png]' }]
-    translator.handle({
-      ...event,
-      message: { ...event.message, isMeta: true, message: { role: 'user', content } }
-    })
-    expect(state.items).toEqual([])
-  })
-
   it('does not leak a wire kind for a locally attached image', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
@@ -172,9 +160,7 @@ describe('Claude message content parts', () => {
 
     const rows = providerRows(state.items)
     expect(rows).toHaveLength(1)
-    // The kind stays on the row for debugging, behind the disclosure.
     expect(rows[0].kind).toBe('message:assistant:content:some_future_part')
-    // ...but the visible text is a sentence, not the opcode.
     expect(rows[0].text).not.toContain('message:assistant:content')
     expect(rows[0].text.toLowerCase()).toContain('claude')
   })

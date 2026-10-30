@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { useRetiredWorktreeNames } from './useRetiredWorktreeNames'
 
 const listRetiredNames = vi.fn()
@@ -12,10 +12,11 @@ beforeEach(() => {
   Object.assign(window, { api: { worktrees: { listRetiredNames } } })
 })
 
+afterEach(cleanup)
+
 describe('useRetiredWorktreeNames', () => {
   it('keeps the previous names while a refresh is in flight', async () => {
-    // Why: refreshKey changes on every workspace-list mutation, so create-multiple refetches after
-    // each create. Dropping to empty in between would suggest a spent name in exactly that window.
+    // Keep spent names during mutation-triggered refetches so create-multiple cannot suggest one again.
     listRetiredNames.mockResolvedValueOnce(registry(['nautilus']))
     const { result, rerender } = renderHook(
       ({ key }: { key: string }) => useRetiredWorktreeNames('repo-1', key),

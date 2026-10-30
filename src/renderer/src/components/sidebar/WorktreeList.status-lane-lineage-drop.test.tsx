@@ -23,6 +23,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
+  setVisibleReviewCardWorktreeIds: vi.fn<(ids: readonly string[]) => void>(),
   activateWorktreeFromSidebar: vi.fn(),
   openModal: vi.fn(),
   updateWorktreeMeta: vi.fn(),
@@ -51,16 +52,15 @@ function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
   }
 }
 
-vi.mock('@/store', () => {
-  const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
-    selector: (state: Record<string, unknown>) => unknown
-  ) => unknown) & {
-    getState: () => Record<string, unknown>
-  }
-  useAppStore.getState = () => mockStore.state
-  return { useAppStore }
-})
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
+    {
+      getState: () => mockStore.state,
+      subscribe: () => () => {}
+    }
+  )
+}))
 
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
@@ -128,10 +128,7 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' }),
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 vi.mock('./CacheTimer', () => ({
   default: () => null,
@@ -147,7 +144,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -215,8 +211,6 @@ function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
   }
 }
 
-// Grouped by workspace status: parent + its visible lineage child both live in the
-// "in-progress" lane; an unrelated bystander sits in "todo".
 function setStatusLaneState(): void {
   const repo = makeRepo()
   const parent = makeWorktree({
@@ -280,6 +274,7 @@ function setStatusLaneState(): void {
     remoteBranchConflictByWorktreeId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
     repos: [repo],
     retainedAgentsByPaneKey: {},
     revealWorktreeInSidebar: vi.fn(),
@@ -298,6 +293,8 @@ function setStatusLaneState(): void {
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    structuredChatSleptAtByPaneKey: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
     updateRepo: vi.fn(),
@@ -332,8 +329,6 @@ async function renderWorktreeList(): Promise<HTMLDivElement> {
   return container
 }
 
-// A minimal DataTransfer stand-in: the native-drop commit path only reads the
-// worktree-id payloads and the type list off it.
 function makeWorktreeIdDataTransfer(worktreeIds: readonly string[]): DataTransfer {
   const [firstId] = worktreeIds
   const data: Record<string, string> = {
@@ -361,11 +356,12 @@ function findStatusLaneHeader(container: HTMLElement, status: WorkspaceStatus): 
 
 async function dropWorktreesOnStatusLane(
   header: HTMLElement,
-  worktreeIds: readonly string[]
+  worktreeIds: readonly string[],
+  dataTransfer: DataTransfer = makeWorktreeIdDataTransfer(worktreeIds)
 ): Promise<void> {
   const event = new Event('drop', { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'dataTransfer', {
-    value: makeWorktreeIdDataTransfer(worktreeIds)
+    value: dataTransfer
   })
   await act(async () => {
     header.dispatchEvent(event)
@@ -406,12 +402,29 @@ describe('WorktreeList status-lane drop carries visible lineage children (#9083)
     const container = await renderWorktreeList()
     const todoHeader = findStatusLaneHeader(container, 'todo')
 
-    // Only the parent id rides on the native drag payload; the wrapper must expand it.
+    // Native drag carries only the parent ID; the wrapper must add its lineage children.
     await dropWorktreesOnStatusLane(todoHeader, ['parent'])
 
     const updates = committedStatusUpdates()
     expect(updates.get('parent')).toEqual({ workspaceStatus: 'todo' })
     expect(updates.get('child')).toEqual({ workspaceStatus: 'todo' })
+  })
+
+  it('ignores a hybrid file drag with a workspace id in plain text', async () => {
+    const container = await renderWorktreeList()
+    const todoHeader = findStatusLaneHeader(container, 'todo')
+    const hybridTransfer = {
+      types: ['Files', 'text/plain'],
+      files: [{ name: 'notes.txt' }],
+      getData: (type: string) => (type === 'text/plain' ? 'parent' : '')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The drop reader uses only types and getData from this fixture.
+    const dataTransfer = hybridTransfer as unknown as DataTransfer
+
+    await dropWorktreesOnStatusLane(todoHeader, ['parent'], dataTransfer)
+
+    expect(mockStore.updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(mockStore.updateWorktreesMeta).not.toHaveBeenCalled()
   })
 
   it('leaves worktrees in other lanes untouched', async () => {

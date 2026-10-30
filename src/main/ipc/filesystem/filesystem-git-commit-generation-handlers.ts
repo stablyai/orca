@@ -1,3 +1,7 @@
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../../shared/text-generation-failure-copy'
 import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
@@ -9,10 +13,7 @@ import {
 } from '../../text-generation/commit-message-text-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/commit-message-host-key'
 import { getStagedCommitContext } from '../../git/status'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../providers/ssh-git-dispatch'
+import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control-ai-action-variables'
@@ -62,40 +63,14 @@ export function registerFilesystemGitCommitGenerationHandlers(
             await getRepoForSourceControlAi(store, args)
           )
       if (!resolvedSettings.ok) {
-        return { success: false, error: resolvedSettings.error }
+        return {
+          success: false,
+          error: resolvedSettings.error,
+          ...textGenerationFailureCodeFields(resolvedSettings)
+        }
       }
       if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return {
-            success: false,
-            error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-          }
-        }
-        let context
-        try {
-          context = await provider.getStagedCommitContext(args.worktreePath)
-        } catch (error) {
-          console.error('[filesystem] Failed to read remote staged commit context:', error)
-          return {
-            success: false,
-            error: 'Failed to read staged changes.'
-          }
-        }
-        if (!context) {
-          return { success: false, error: 'No staged changes to summarize.' }
-        }
-        context = withLinkedIssueDraftContext(
-          context,
-          resolveSourceControlAiLinkedIssue(store, args)
-        )
-        return generateCommitMessageFromContext(context, resolvedSettings.params, {
-          kind: 'remote',
-          cwd: args.worktreePath,
-          execute: (plan, cwd, timeoutMs, operation) =>
-            provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
-          missingBinaryLocation: 'remote PATH'
-        })
+        return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -113,11 +88,11 @@ export function registerFilesystemGitCommitGenerationHandlers(
         console.error('[filesystem] Failed to read staged commit context:', error)
         return {
           success: false,
-          error: 'Failed to read staged changes.'
+          ...textGenerationFailure('stagedChangesReadFailed')
         }
       }
       if (!context) {
-        return { success: false, error: 'No staged changes to summarize.' }
+        return { success: false, ...textGenerationFailure('noStagedChanges') }
       }
       context = withLinkedIssueDraftContext(
         context,
@@ -143,11 +118,6 @@ export function registerFilesystemGitCommitGenerationHandlers(
     'git:cancelGenerateCommitMessage',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return
-        }
-        await provider.cancelGenerateCommitMessage(args.worktreePath, 'commit-message')
         return
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)

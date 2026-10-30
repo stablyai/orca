@@ -60,9 +60,10 @@ export class ClaimedAgentPtyOwnerRegistry {
       disposition?: AgentSessionClaimedSpawnResult['disposition']
     }>
     isLive?: (owner: LiveAgentSessionOwner) => boolean | Promise<boolean>
+    /** Called when this request waits on another request's start instead of starting its own. */
+    onJoin?: () => void
   }): Promise<AgentSessionClaimedSpawnResult> {
-    // Why: callers retain their request objects across retries; snapshot them so
-    // mutation during an awaited liveness/spawn check cannot change registry keys.
+    // Snapshot reused retry arguments before awaits so caller mutations cannot change registry keys.
     const requestedClaim = cloneClaim(args.claim)
     const requestedSurface = cloneSurface(args.surface)
     const key = agentSessionClaimKey(requestedClaim)
@@ -92,6 +93,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       if (reserved.worktreeScopeDigest !== requestedClaim.worktreeScopeDigest) {
         throw new Error('agent_session_conflict')
       }
+      args.onJoin?.()
       const result = await reserved.promise
       return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
     }
@@ -104,8 +106,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       resolveReservation = resolve
       rejectReservation = reject
     })
-    // Why: the creating caller receives the spawn error directly; keep a
-    // no-join reservation rejection from becoming an unhandled promise.
+    // The creator receives spawn errors directly; handle reservation rejection even without joiners.
     void promise.catch(() => {})
     this.reserved.set(key, {
       claim: requestedClaim,
@@ -143,8 +144,7 @@ export class ClaimedAgentPtyOwnerRegistry {
         spawned.disposition !== 'adopted' &&
         !agentSessionSurfacesEqual(owner.surface, requestedSurface)
       ) {
-        // Why: only an already-reconciled owner may override placement; a fresh
-        // owner returning another surface would let a lower layer forge authority.
+        // Only reconciled owners may override placement; a fresh owner cannot forge another surface’s authority.
         throw new Error('agent_session_ownership_unknown')
       }
       const reservation = this.reserved.get(key)
@@ -156,8 +156,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       keys.add(key)
       this.keysByPtyId.set(owner.ptyId, keys)
       promotedOwner = owner
-      // Why: exit can beat spawn completion. Index before the awaited proof so
-      // a generation-matched exit can remove this owner instead of being lost.
+      // Index before awaited proof so an exit beating spawn completion can remove the matching generation.
       if (args.isLive && !(await args.isLive(cloneOwner(owner)))) {
         throw new Error('agent_session_exited_during_start')
       }
@@ -224,8 +223,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       throw new Error('execution_owner_unavailable')
     }
 
-    // Why: recovery decisions must observe one complete provider snapshot;
-    // mutating only after validation prevents first-provider residue on conflict.
+    // Validate a complete provider snapshot before mutation so conflicts leave no partial provider state.
     this.live.clear()
     this.conflicts.clear()
     for (const [key, owner] of next.live) {

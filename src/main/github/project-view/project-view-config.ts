@@ -6,15 +6,14 @@ import type {
   GitHubProjectViewLayout
 } from '../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import { driftError } from './project-error-classification'
+import { githubProjectHost } from '../../../shared/github/project-identity'
+import { driftError, extractGraphqlErrors } from './project-error-classification'
 import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
 import { normalizeField, type RawProjectV2Field } from './project-view-field-normalization'
 import { FIELD_CONFIG_FRAGMENT } from './project-view-query-fragments'
 
 const VIEWS_PAGE_SIZE = 20
 const FIELDS_PAGE_SIZE = 50
-
-// ─── Project config fetch (views + fields, paginated) ──────────────────
 
 type RawProjectConfig = {
   id?: string
@@ -37,9 +36,34 @@ export type RawProjectView = {
     nodes?: (RawProjectV2Field | null)[]
   }
   groupByFields?: { nodes?: (RawProjectV2Field | null)[] }
+  verticalGroupByFields?: { nodes?: (RawProjectV2Field | null)[] }
   sortByFields?: {
     nodes?: ({ direction?: string; field?: RawProjectV2Field | null } | null)[]
   }
+}
+
+// Older GHES hosts omit vertical grouping so one missing field cannot break all views.
+const hostsWithoutVerticalGroupBy = new Set<string>()
+
+export function resetVerticalGroupByCapabilityForTests(): void {
+  hostsWithoutVerticalGroupBy.clear()
+}
+
+function verticalGroupBySelection(host: string | undefined): string {
+  return hostsWithoutVerticalGroupBy.has(githubProjectHost(host))
+    ? ''
+    : 'verticalGroupByFields(first:10) { nodes { ...FieldConfig } }'
+}
+
+function errorsIndicateVerticalGroupBy(raw: { stderr: string; stdout: string }): boolean {
+  // Partial-error data can echo the field name even when the schema supports it.
+  return extractGraphqlErrors(raw.stderr, raw.stdout).some(
+    (error) =>
+      /\bverticalGroupByFields\b/.test(error.message ?? '') &&
+      /(?:doesn't exist|does not exist|cannot query field|unknown field|undefined field)/i.test(
+        error.message ?? ''
+      )
+  )
 }
 
 export function ownerQueryRoot(ownerType: GitHubProjectOwnerType): string {
@@ -65,7 +89,7 @@ export async function fetchProjectViewsPage(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
-  const query = `
+  const buildQuery = (): string => `
     query(${afterVar}$owner:String!, $num:Int!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
@@ -79,6 +103,7 @@ export async function fetchProjectViewsPage(args: {
                 nodes { ...FieldConfig }
               }
               groupByFields(first:10) { nodes { ...FieldConfig } }
+              ${verticalGroupBySelection(args.host)}
               sortByFields(first:10) {
                 nodes { direction field { ...FieldConfig } }
               }
@@ -93,18 +118,29 @@ export async function fetchProjectViewsPage(args: {
   if (args.after) {
     vars.after = args.after
   }
-  const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
-    query,
+  let res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
+    buildQuery(),
     vars,
     projectGhExecOptions(args.host)
   )
+  if (!res.ok && verticalGroupBySelection(args.host) && errorsIndicateVerticalGroupBy(res.raw)) {
+    hostsWithoutVerticalGroupBy.add(githubProjectHost(args.host))
+    res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
+      buildQuery(),
+      vars,
+      projectGhExecOptions(args.host)
+    )
+  }
   if (!res.ok) {
     return res
   }
   const top = res.data[root]
   const project = top?.projectV2 ?? null
   if (!project || typeof project.id !== 'string') {
-    return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+    }
   }
   const pageInfo = project.views?.pageInfo
   const views = (project.views?.nodes ?? []).filter((v): v is RawProjectView => v !== null)
@@ -124,7 +160,7 @@ export async function fetchViewFieldsContinuation(
 ): Promise<
   { ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }
 > {
-  // Why: address the view directly via node(id:) instead of re-walking all views each page — one round-trip per field page.
+  // Address view ID directly to avoid rewalking every view for each field page.
   const query = `
     query($after:String!, $viewId:ID!) {
       node(id:$viewId) {
@@ -189,6 +225,13 @@ export function finalizeView(
       groupByFields.push(n)
     }
   }
+  const verticalGroupByFields: GitHubProjectField[] = []
+  for (const f of raw.verticalGroupByFields?.nodes ?? []) {
+    const n = normalizeField(f)
+    if (n) {
+      verticalGroupByFields.push(n)
+    }
+  }
   const sortByFields: GitHubProjectSort[] = []
   for (const s of raw.sortByFields?.nodes ?? []) {
     if (!s || (s.direction !== 'ASC' && s.direction !== 'DESC')) {
@@ -206,16 +249,15 @@ export function finalizeView(
       number: typeof raw.number === 'number' ? raw.number : 0,
       name: typeof raw.name === 'string' ? raw.name : '',
       layout,
-      // Why: `ProjectV2View.filter` is nullable — normalize to ''.
       filter: typeof raw.filter === 'string' ? raw.filter : '',
       fields,
       groupByFields,
-      sortByFields
+      sortByFields,
+      // Preserve absence for older hosts and cached payloads.
+      ...(raw.verticalGroupByFields ? { verticalGroupByFields } : {})
     }
   }
 }
-
-// ─── View selection ───────────────────────────────────────────────────
 
 export function matchesSelector(
   raw: RawProjectView,

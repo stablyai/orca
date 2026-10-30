@@ -17,6 +17,8 @@ export async function dismissHostPushNotification(
   if (!fingerprint) {
     return
   }
-  const fence = event.notificationEpoch && event.notificationSeq !== undefined ? event : undefined
-  await dismissPresentedPushNotification(event.notificationId, fingerprint, fence)
+  const target = event.dismissedDelivery ?? event
+  const fence =
+    target.notificationEpoch && target.notificationSeq !== undefined ? target : undefined
+  await dismissPresentedPushNotification(target.notificationId, fingerprint, fence)
 }

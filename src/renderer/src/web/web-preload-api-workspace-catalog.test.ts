@@ -241,25 +241,23 @@ describe('web worktree preload API', () => {
   })
 
   it.each(['web-server-a', 'web-server-b'])(
-    'attributes server-local worktrees to their own paired runtime %s',
+    'attributes server-local detected worktrees to their own paired runtime %s',
     async (environmentId) => {
       vi.doMock('./web-runtime-client', () => ({
         WebRuntimeClient: class {
           call(): Promise<RuntimeRpcResponse<unknown>> {
             return Promise.resolve({
-              id: 'worktree-list',
+              id: 'detected-list',
               ok: true,
               result: {
+                repoId: 'repo-1',
+                authoritative: true,
+                source: 'git',
                 worktrees: [
+                  { id: 'repo-1::/srv/repo', repoId: 'repo-1', path: '/srv/repo', hostId: 'local' },
                   {
-                    id: 'repo-1::/srv/repo',
+                    id: 'repo-1::/ssh/repo',
                     repoId: 'repo-1',
-                    path: '/srv/repo',
-                    hostId: 'local'
-                  },
-                  {
-                    id: 'repo-2::/ssh/repo',
-                    repoId: 'repo-2',
                     path: '/ssh/repo',
                     hostId: 'ssh:hub-private-target'
                   }
@@ -272,45 +270,57 @@ describe('web worktree preload API', () => {
           close(): void {}
         }
       }))
-
       const globals = installBrowserGlobals('Linux')
       writeStoredRuntimeEnvironment(globals.storage, environmentId)
       const { installWebPreloadApi } = await import('./web-preload-api')
       installWebPreloadApi()
 
-      await expect(globals.window.api.worktrees.list({ repoId: 'repo-1' })).resolves.toMatchObject([
-        {
-          id: 'repo-1::/srv/repo',
-          hostId: 'local',
-          runtimeOwnerEnvironmentId: environmentId
-        },
-        {
-          id: 'repo-2::/ssh/repo',
-          hostId: 'ssh:hub-private-target',
-          runtimeOwnerEnvironmentId: environmentId
-        }
-      ])
+      await expect(
+        globals.window.api.worktrees.listDetected({ repoId: 'repo-1' })
+      ).resolves.toMatchObject({
+        repoId: 'repo-1',
+        authoritative: true,
+        worktrees: [
+          { hostId: 'local', runtimeOwnerEnvironmentId: environmentId },
+          { hostId: 'ssh:hub-private-target', runtimeOwnerEnvironmentId: environmentId }
+        ]
+      })
     }
   )
 
-  it('does not let a stale listAll response repopulate the next server cache', async () => {
+  it('does not let a stale detected-worktree catalog repopulate the next server cache', async () => {
     let resolveServerA: ((response: RuntimeRpcResponse<unknown>) => void) | undefined
+    const detectedList = (repoId: string, path: string): RuntimeRpcResponse<unknown> => ({
+      id: `detected-${repoId}`,
+      ok: true,
+      result: {
+        repoId,
+        authoritative: true,
+        source: 'git',
+        worktrees: [{ id: `${repoId}::${path}`, repoId, path }]
+      },
+      _meta: { runtimeId: `runtime-${repoId}` }
+    })
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
-        constructor(private readonly offer: { publicKeyB64: string }) {}
+        constructor(private readonly connection: { hostPublicKeyB64: string }) {}
 
-        call(): Promise<RuntimeRpcResponse<unknown>> {
-          if (this.offer.publicKeyB64 === 'public-key') {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          const serverA = this.connection.hostPublicKeyB64 === 'public-key'
+          if (method === 'repo.list') {
+            return Promise.resolve({
+              id: 'repo-list',
+              ok: true,
+              result: { repos: [{ id: serverA ? 'repo-a' : 'repo-b' }] },
+              _meta: { runtimeId: serverA ? 'runtime-a' : 'runtime-b' }
+            })
+          }
+          if (serverA) {
             return new Promise((resolve) => {
               resolveServerA = resolve
             })
           }
-          return Promise.resolve({
-            id: 'server-b-list',
-            ok: true,
-            result: { worktrees: [{ id: 'worktree-b', repoId: 'repo-b', path: '/srv/b' }] },
-            _meta: { runtimeId: 'runtime-b' }
-          })
+          return Promise.resolve(detectedList('repo-b', '/srv/b'))
         }
 
         close(): void {}
@@ -322,40 +332,41 @@ describe('web worktree preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    const serverAList = globals.window.api.worktrees.listAll()
+    const serverAStatus = globals.window.api.git.status({ worktreePath: '/srv/a' })
     await vi.waitFor(() => expect(resolveServerA).toBeTypeOf('function'))
-    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+    await globals.window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Server B',
       pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
     })
-    resolveServerA?.({
-      id: 'server-a-list',
-      ok: true,
-      result: { worktrees: [{ id: 'worktree-a', repoId: 'repo-a', path: '/srv/a' }] },
-      _meta: { runtimeId: 'runtime-a' }
-    })
+    resolveServerA?.(detectedList('repo-a', '/srv/a'))
 
-    await expect(serverAList).rejects.toThrow(
+    await expect(serverAStatus).rejects.toThrow(
       'The paired Orca server changed while the request was in progress.'
     )
-    await expect(globals.window.api.worktrees.listAll()).resolves.toMatchObject([
-      { id: 'worktree-b', runtimeOwnerEnvironmentId: paired.environment.id }
-    ])
+    await expect(globals.window.api.shell.pathExists('/srv/a/file.ts')).resolves.toBe(false)
+    await expect(globals.window.api.shell.pathExists('/srv/b/file.ts')).resolves.toBe(true)
   })
 
-  it('reuses the worktree catalog cache until disconnect invalidates its runtime owner', async () => {
+  it('reuses the detected-worktree catalog cache until disconnect invalidates its runtime owner', async () => {
     const calls: string[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string): Promise<RuntimeRpcResponse<unknown>> {
           calls.push(method)
+          const results: Record<string, unknown> = {
+            'status.get': { runtimeId: 'runtime-a', version: '1.0.0' },
+            'repo.list': { repos: [{ id: 'repo-a' }] },
+            'worktree.detectedList': {
+              repoId: 'repo-a',
+              authoritative: true,
+              source: 'git',
+              worktrees: [{ id: 'repo-a::/srv/a', repoId: 'repo-a', path: '/srv/a' }]
+            }
+          }
           return Promise.resolve({
             id: method,
             ok: true,
-            result:
-              method === 'status.get'
-                ? { runtimeId: 'runtime-a', version: '1.0.0' }
-                : { worktrees: [{ id: 'worktree-a', repoId: 'repo-a', path: '/srv/a' }] },
+            result: results[method],
             _meta: { runtimeId: 'runtime-a' }
           })
         }
@@ -368,64 +379,19 @@ describe('web worktree preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    await globals.window.api.worktrees.listAll()
-    await globals.window.api.worktrees.listAll()
+    await expect(globals.window.api.shell.pathExists('/srv/a/one.ts')).resolves.toBe(true)
+    await expect(globals.window.api.shell.pathExists('/srv/a/two.ts')).resolves.toBe(true)
     await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
     await globals.window.api.runtimeEnvironments.connect({ selector: 'web-server-a' })
-    await globals.window.api.worktrees.listAll()
+    await expect(globals.window.api.shell.pathExists('/srv/a/one.ts')).resolves.toBe(true)
 
-    expect(calls).toEqual(['worktree.list', 'status.get', 'worktree.list'])
-  })
-
-  it('preserves runtime-routed detected-worktree host ownership in the compatibility shape', async () => {
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(): Promise<RuntimeRpcResponse<unknown>> {
-          return Promise.resolve({
-            id: 'detected-list',
-            ok: true,
-            result: {
-              repoId: 'repo-1',
-              authoritative: true,
-              source: 'git',
-              worktrees: [
-                { id: 'repo-1::/srv/repo', repoId: 'repo-1', path: '/srv/repo', hostId: 'local' },
-                {
-                  id: 'repo-1::/ssh/repo',
-                  repoId: 'repo-1',
-                  path: '/ssh/repo',
-                  hostId: 'ssh:hub-private-target'
-                }
-              ]
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage, 'web-env-1')
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(
-      globals.window.api.worktrees.listDetected({ repoId: 'repo-1' })
-    ).resolves.toMatchObject({
-      repoId: 'repo-1',
-      authoritative: true,
-      worktrees: [
-        {
-          hostId: 'local',
-          runtimeOwnerEnvironmentId: 'web-env-1'
-        },
-        {
-          hostId: 'ssh:hub-private-target',
-          runtimeOwnerEnvironmentId: 'web-env-1'
-        }
-      ]
-    })
+    expect(calls).toEqual([
+      'repo.list',
+      'worktree.detectedList',
+      'status.get',
+      'repo.list',
+      'worktree.detectedList'
+    ])
   })
 
   it('falls back to legacy worktree.list when detectedList is unavailable', async () => {
@@ -676,12 +642,11 @@ describe('web worktree preload API', () => {
         params: expect.objectContaining({ repo: 'repo-1', nameWasGenerated: true })
       }
     ])
-    // Why: this client hand-enumerates create params, so a new optional field silently vanishes.
-    // Absent must mean user-typed — the host neither skips a retired candidate nor retires it.
+    // Hand-enumerated params can drop new fields; absence must retain user-typed semantics for retired names.
     expect(runtimeCalls[0]?.params).not.toHaveProperty('nameWasGenerated')
   })
 
-  // Why: without it the host records the app's parent pick as a CLI flag, which cleans up differently.
+  // Without origin, the host treats an app parent pick as a CLI flag with different cleanup.
   it('marks a parent-picked create as a manual action', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({

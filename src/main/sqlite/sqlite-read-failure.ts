@@ -1,34 +1,40 @@
-// Why (#15036): a read-only SQLite open can fail for reasons that demand
-// opposite responses, and both arrive as an opaque driver string. Contention is
-// transient — retry later, never persist it as a permanent failure. A missing
-// wal-index is structural — retrying forever cannot fix it.
+// #15036: retry transient contention, but missing wal-index is structural; opaque driver text must not conflate them.
 
 /** Primary result codes; extended codes pack the primary code in the low byte. */
 const SQLITE_BUSY = 5
 const SQLITE_LOCKED = 6
+const SQLITE_CORRUPT = 11
 const SQLITE_CANTOPEN = 14
+const SQLITE_NOTADB = 26
 
-// Shared with the Codex index-heal pass, which only ever sees a relayed message
-// string (app-server RPC drops `errcode`), so message matching is not optional.
+// Relayed app-server errors omit errcode, so Codex index-heal also needs message matching.
 const CONTENTION_MESSAGE = /SQLITE_(?:BUSY|LOCKED)|database (?:is )?(?:busy|locked)/i
 
 function primaryErrcode(error: unknown): number | null {
-  if (!error || typeof error !== 'object' || !('errcode' in error)) {
+  if (!error || typeof error !== 'object') {
     return null
   }
-  const errcode = (error as { errcode?: unknown }).errcode
+  const errcode = 'errcode' in error ? error.errcode : undefined
   return typeof errcode === 'number' && Number.isFinite(errcode) ? errcode & 0xff : null
+}
+
+function isSqliteDriverError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ERR_SQLITE_ERROR'
+}
+
+export function isSqliteCorruption(error: unknown): boolean {
+  if (!isSqliteDriverError(error)) {
+    return false
+  }
+  const errcode = primaryErrcode(error)
+  return errcode === SQLITE_CORRUPT || errcode === SQLITE_NOTADB
 }
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/**
- * True when a SQLite failure means "someone else holds the database right now".
- * @param error - The thrown value from a `node:sqlite` call or a relayed message.
- * @returns Whether the caller should retry later rather than record a failure.
- */
+/** Transient contention may succeed on retry; never persist it as permanent failure. */
 export function isTransientSqliteContention(error: unknown): boolean {
   const errcode = primaryErrcode(error)
   if (errcode === SQLITE_BUSY || errcode === SQLITE_LOCKED) {
@@ -40,27 +46,12 @@ export function isTransientSqliteContention(error: unknown): boolean {
 export type SqliteReadFailureKind =
   /** Another connection holds the lock; the same read can succeed later. */
   | 'contended'
-  /**
-   * The database file itself is present, but SQLite still could not open the
-   * set of files it needs — in practice the `-wal`/`-shm` pair a read-only WAL
-   * open requires, which shares that cannot host SQLite shared memory (9p
-   * `\\wsl.localhost`, SMB, SSHFS) refuse. Retrying cannot fix it.
-   */
+  /** Required read-only WAL companion files unavailable, as on 9p/SMB/SSHFS without SQLite shared memory; retries cannot fix it. */
   | 'wal-index-unavailable'
   /** Anything else: corrupt file, wrong schema, permissions. */
   | 'unreadable'
 
-/**
- * Classify why a read-only SQLite open or query failed.
- *
- * Pure: the caller supplies the "does the database file exist" evidence, so
- * neither branch needs a filesystem probe of its own. That matters on a WSL 9p
- * share, where an extra sync stat is exactly the hang the transcript gate exists
- * to prevent.
- * @param args.error - The thrown value.
- * @param args.databaseFileExists - Whether the main database file was present.
- * @returns Which of the three failure modes the error represents.
- */
+/** Use caller-supplied presence evidence; an extra synchronous stat over WSL 9p could itself hang. */
 export function classifySqliteReadFailure(args: {
   error: unknown
   databaseFileExists: boolean
@@ -68,8 +59,7 @@ export function classifySqliteReadFailure(args: {
   if (isTransientSqliteContention(args.error)) {
     return 'contended'
   }
-  // SQLITE_CANTOPEN against a database that is right there names a companion
-  // file — the wal-index a read-only WAL open needs — not the database itself.
+  // CANTOPEN with proven database presence means required companion files are unavailable.
   if (primaryErrcode(args.error) === SQLITE_CANTOPEN && args.databaseFileExists) {
     return 'wal-index-unavailable'
   }

@@ -1,6 +1,8 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CODEX_PROMPT_MAX_ANSWER_BYTES } from './codex-prompt-registry-bounds'
 import {
+  CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   type CodexPendingPrompt,
   type CodexPromptClaim,
@@ -16,6 +18,7 @@ export {
 export {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   CodexPromptRegistry,
   isCodexPromptMethod,
@@ -23,8 +26,6 @@ export {
   type CodexPromptClaim
 } from './codex-prompt-registry'
 
-/** The decisions Codex accepts for both approval requests. Anything else is a
- *  client-supplied option id that never came from a Codex prompt. */
 export const CODEX_APPROVAL_DECISIONS = ['accept', 'acceptForSession', 'decline', 'cancel'] as const
 export type CodexApprovalDecision = (typeof CODEX_APPROVAL_DECISIONS)[number]
 
@@ -32,8 +33,6 @@ function isCodexApprovalDecision(optionId: string): optionId is CodexApprovalDec
   return CODEX_APPROVAL_DECISIONS.some((decision) => decision === optionId)
 }
 
-/** A user-input request can carry several questions but takes ONE reply, so an
- *  option id has to name the question it answers. */
 export function encodeCodexQuestionOptionId(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
 }
@@ -55,35 +54,72 @@ export function decodeCodexQuestionOptionId(
   }
 }
 
-/**
- * Records one answer and returns the reply payload once the request is fully
- * answered. A multi-question user-input request stays pending until every
- * question has an answer, because Codex takes one reply for all of them.
- */
-export function applyCodexPromptAnswer(
+export type CodexPreparedAnswer =
+  | { kind: 'decision'; decision: CodexApprovalDecision }
+  | { kind: 'answer'; questionId: string; answer: string }
+
+/** Validate without mutation so unusable answers are rejected before journal commit. */
+export function prepareCodexPromptAnswer(
   prompt: CodexPendingPrompt,
-  optionId: string
-): Record<string, unknown> | null {
+  response: AgentSessionPromptResponse
+): CodexPreparedAnswer {
   if (prompt.method !== CODEX_USER_INPUT_METHOD) {
-    if (!isCodexApprovalDecision(optionId)) {
-      throw new Error(`${optionId} is not a Codex approval decision`)
+    if (response.kind !== 'option' || !isCodexApprovalDecision(response.optionId)) {
+      throw new Error(`Codex item ${prompt.codexItemId} takes an approval decision`)
     }
-    return { decision: optionId }
+    if (prompt.offeredDecisions && !prompt.offeredDecisions.some((d) => d === response.optionId)) {
+      throw new Error(`Codex item ${prompt.codexItemId} did not offer ${response.optionId}`)
+    }
+    return { kind: 'decision', decision: response.optionId }
   }
-  const mapped = prompt.optionAnswers.get(optionId)
-  const decoded = mapped ?? decodeCodexQuestionOptionId(optionId)
+  const entry =
+    response.kind === 'answers' && response.answers.length === 1 ? response.answers[0] : null
+  if (!entry) {
+    throw new Error(`Codex item ${prompt.codexItemId} takes one question answer`)
+  }
+  const optionId = entry.optionIds[0]
+  const decoded =
+    optionId === undefined
+      ? { questionId: entry.questionId, answer: entry.other?.trim() ?? '' }
+      : (prompt.optionAnswers.get(optionId) ?? decodeCodexQuestionOptionId(optionId))
   const questionId =
     (decoded?.questionId
       ? (prompt.questionIdAliases.get(decoded.questionId) ?? decoded.questionId)
       : null) ?? (prompt.questionIds.length === 1 ? prompt.questionIds[0] : null)
-  const answer = decoded?.answer ?? optionId
+  const answer = decoded?.answer ?? optionId ?? ''
   if (!questionId || !prompt.questionIds.includes(questionId)) {
-    throw new Error(`${optionId} does not name a question on Codex item ${prompt.codexItemId}`)
+    throw new Error(`The answer does not name a question on Codex item ${prompt.codexItemId}`)
   }
   if (Buffer.byteLength(answer, 'utf8') > CODEX_PROMPT_MAX_ANSWER_BYTES) {
     throw new Error('codex prompt answer exceeds bounded registry state')
   }
-  prompt.answers.set(questionId, answer)
+  return { kind: 'answer', questionId, answer }
+}
+
+/** Mirrors the reply Codex's own TUI sends for an MCP tool-call approval. */
+function codexMcpElicitationReply(decision: CodexApprovalDecision): Record<string, unknown> {
+  if (decision === 'accept' || decision === 'acceptForSession') {
+    return {
+      action: 'accept',
+      content: null,
+      _meta: decision === 'acceptForSession' ? { persist: 'session' } : null
+    }
+  }
+  // Only accept and cancel are offered; the reason separates a user cancel from an interruption.
+  return { action: 'cancel', content: null, _meta: { codex_approval_cancellation_reason: 'user' } }
+}
+
+/** Accumulate answers until Codex's single reply can include every question. */
+export function applyCodexPromptAnswer(
+  prompt: CodexPendingPrompt,
+  prepared: CodexPreparedAnswer
+): Record<string, unknown> | null {
+  if (prepared.kind === 'decision') {
+    return prompt.method === CODEX_MCP_ELICITATION_METHOD
+      ? codexMcpElicitationReply(prepared.decision)
+      : { decision: prepared.decision }
+  }
+  prompt.answers.set(prepared.questionId, prepared.answer)
   if (prompt.questionIds.some((id) => !prompt.answers.has(id))) {
     return null
   }
@@ -98,24 +134,23 @@ export function applyCodexPromptAnswer(
   return { answers }
 }
 
-/** Throws for a prompt Codex is no longer waiting on, which the wire reports as
- *  "recorded but not confirmed" rather than as a delivered answer. */
+/** A lost claim reports the committed answer as unconfirmed on the wire. */
 export function answerCodexPrompt(
   registry: CodexPromptRegistry,
   connection: Pick<CodexAppServerConnection, 'respond'>,
   claim: CodexPromptClaim,
-  optionId: string
+  prepared: CodexPreparedAnswer
 ): void {
   if (!registry.ownsClaim(claim)) {
     throw new Error(`codex app-server is no longer waiting on ${claim.itemId}`)
   }
   const prompt = claim.prompt
-  const reply = applyCodexPromptAnswer(prompt, optionId)
+  const reply = applyCodexPromptAnswer(prompt, prepared)
   if (reply === null) {
     registry.releaseClaim(claim)
     return
   }
-  // Forget first: a second answer must find nothing rather than reply twice.
+  // Forget before responding to prevent duplicate replies.
   registry.forget(prompt)
   connection.respond(prompt.requestId, reply)
 }

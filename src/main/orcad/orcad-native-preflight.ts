@@ -1,9 +1,3 @@
-/**
- * The native precondition orcad runs before its runtime loads anything native.
- *
- * Split from `node-pty-precondition.ts` so the decision (what to do about a verdict) is
- * testable apart from the detection (what the verdict is).
- */
 import process from 'node:process'
 import { setRuntimeTerminalUnavailableCause } from '../runtime/native-terminal-availability'
 import { terminalUnavailableMessage } from '../../shared/runtime-types'
@@ -13,15 +7,11 @@ import {
   probeLocalBuildToolchainHints,
   type NodePtyPreconditionVerdict
 } from './node-pty-precondition'
+import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 
-/**
- * EX_CONFIG. Why not 1: a supervisor that restarts on 1 would restart forever against a
- * host that can never load this binary. This code says "the host is not equipped", which
- * is a different instruction from "it crashed".
- */
-export const ORCAD_NATIVE_PRECONDITION_EXIT_CODE = 78
-
-export type NativePreflightHooks = {
+type NativePreflightHooks = {
+  /** The slot's last launch on this unchanged host passed this probe (startup qualification). */
+  qualified?: boolean
   check?: () => NodePtyPreconditionVerdict
   toolchainHints?: (platform: NodeJS.Platform) => string[]
   warn?: (message: string) => void
@@ -29,14 +19,20 @@ export type NativePreflightHooks = {
   exit?: (code: number) => never
 }
 
-/**
- * Returns true when boot may continue.
- *
- * A `blocked` verdict never returns: continuing would reach the very `require` the probe
- * just proved fatal, and the operator would get the loader's stack trace instead of the
- * sentence printed here.
- */
+/** Abort proven load failures before native require; inconclusive probes may still boot. */
 export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boolean {
+  return runOrcadNativePreflightVerdict(hooks) !== 'blocked'
+}
+
+/** As runOrcadNativePreflight, reporting the verdict: only an 'ok' may qualify the slot. */
+export function runOrcadNativePreflightVerdict(
+  hooks: NativePreflightHooks = {}
+): NodePtyPreconditionVerdict['status'] {
+  if (hooks.qualified) {
+    // Same bytes, runtime, libc and kernel as a launch whose probe passed: skip the child (≈0.1 s).
+    setRuntimeTerminalUnavailableCause(null)
+    return 'ok'
+  }
   const check = hooks.check ?? checkNodePtyPrecondition
   const warn = hooks.warn ?? ((message: string) => console.warn(message))
   const fail = hooks.fail ?? ((message: string) => console.error(message))
@@ -44,10 +40,10 @@ export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boole
   const verdict = check()
 
   if (verdict.status === 'ok') {
-    // Why clear rather than leave alone: a previous run in this process may have recorded
+    // Clear stale degradation when this process probes successfully again.
     // a cause, and status.get must not keep reporting a degradation that no longer holds.
     setRuntimeTerminalUnavailableCause(null)
-    return true
+    return 'ok'
   }
 
   const reason = verdict.reason ?? 'unknown'
@@ -60,13 +56,13 @@ export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boole
   if (verdict.status === 'blocked') {
     const hints = (hooks.toolchainHints ?? probeLocalBuildToolchainHints)(verdict.abi.platform)
     fail(`orcad: ${formatNodePtyPreconditionReport(verdict, message, hints)}`)
-    exit(ORCAD_NATIVE_PRECONDITION_EXIT_CODE)
-    return false
+    exit(ORCAD_EXIT_CONFIGURATION)
+    return 'blocked'
   }
 
-  // `degraded` and `unverifiable` both boot. The first is a proven spawn-time fault the
+  // Spawn faults permit other RPCs; inconclusive probes cannot justify refusing startup.
   // host can still serve around; the second established nothing, and refusing to boot on
   // an inconclusive probe would take down hosts that work.
   warn(`orcad: ${formatNodePtyPreconditionReport(verdict, message)}`)
-  return true
+  return verdict.status
 }

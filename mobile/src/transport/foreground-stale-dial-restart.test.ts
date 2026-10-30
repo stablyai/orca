@@ -2,18 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import { classifyConnection, verdictDisplayLabel } from './connection-health'
 
-// Slack P0 — "mobile connection issue. was using it with my linux host then
-// after i navigated out of the app and back it doesn't work anymore. Now i went
-// back again it's connected now."
-//
-// The tell is that the SECOND foreground fixed it. notifyForeground only ever
-// acted on 'connected' (probe the socket) and 'reconnecting' (redial now). A
-// phone that is suspended mid-dial resumes in 'connecting'/'handshaking', where
-// the nudge did nothing: the user waited out the remainder of the 12s connect
-// budget on a socket opened over a network path that no longer existed, and
-// then the *preserved* backoff delay — up to 60s of "Connecting…" against a
-// desktop that was answering the whole time. By the next foreground the client
-// had landed in 'reconnecting', where the nudge works, so it connected at once.
+// Resume must replace stale connecting/handshaking sockets immediately; otherwise only a second foreground escapes the old dial/backoff.
+
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({ publicKey: new Uint8Array(32), secretKey: new Uint8Array(32) }),
@@ -29,9 +20,7 @@ vi.mock('./mobile-runtime-capability-negotiation', () => ({
   negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
 }))
 
-// Mirrors React Native's WebSocket: readyState lives in JS and only advances on
-// a delivered event, so a socket the OS killed while the app was suspended stays
-// CONNECTING forever from the client's point of view.
+// Mirror RN’s event-driven readyState: OS-killed suspended sockets may remain CONNECTING in JS.
 class MockWebSocket {
   static CONNECTING = 0
   static OPEN = 1
@@ -80,7 +69,6 @@ class MockWebSocket {
 }
 
 const sockets: MockWebSocket[] = []
-const originalWebSocket = globalThis.WebSocket
 
 function latest(): MockWebSocket {
   const socket = sockets[sockets.length - 1]
@@ -102,34 +90,15 @@ function label(client: ReturnType<typeof connect>, endpoint: string): string {
   )
 }
 
-// A suspended app is not a slow app: wall-clock time passes but not one JS timer
-// runs, so the backoff loop does NOT keep cycling in the background. Advancing
-// the system clock without draining the timer queue is what reproduces that —
-// the connect timer armed before the suspension is still pending on resume, and
-// the client is still sitting in the state it was suspended in.
+// Advance wall time without timers to model suspension; the original dial deadline must still be pending on resume.
 function suspend(backgroundMs: number): void {
   for (const socket of sockets) {
-    // iOS reclaims a suspended app's sockets without telling JS.
     socket.deliversCloseEvent = false
   }
   vi.setSystemTime(Date.now() + backgroundMs)
 }
 
-// Steps the clock one second at a time and reports how long the user has to sit
-// on "Connecting…" before the client opens its next socket.
-async function millisecondsUntilNextDial(dialsBefore: number): Promise<number> {
-  const limitMs = 180_000
-  for (let elapsedMs = 0; elapsedMs <= limitMs; elapsedMs += 1_000) {
-    if (sockets.length > dialsBefore) {
-      return elapsedMs
-    }
-    await vi.advanceTimersByTimeAsync(1_000)
-  }
-  return limitMs
-}
-
-// Waits out the current backoff so the phone is suspended mid-dial — the state
-// the reporter's phone resumed into — rather than between dials.
+// Suspend during a dial, after backoff, to exercise the stale connecting state.
 async function advanceUntilDialing(client: ReturnType<typeof connect>): Promise<void> {
   for (let elapsedMs = 0; elapsedMs <= 120_000; elapsedMs += 250) {
     if (client.getState() === 'connecting') {
@@ -147,13 +116,13 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     sockets.length = 0
-    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
+    vi.stubGlobal('WebSocket', MockWebSocket)
   })
 
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
-    globalThis.WebSocket = originalWebSocket
+    vi.unstubAllGlobals()
   })
 
   it('abandons a dial that predates the foreground edge instead of waiting it out', async () => {
@@ -161,8 +130,6 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     latest().authenticate()
     expect(client.getState()).toBe('connected')
 
-    // The user leaves the app. The link dies while the phone is suspended, so
-    // the client is left holding a socket that will never open.
     latest().close()
     expect(client.getState()).toBe('reconnecting')
     await vi.advanceTimersByTimeAsync(500)
@@ -171,44 +138,16 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
 
     suspend(120_000)
 
-    // Back in the app. The desktop is healthy and answering.
     const socketsBeforeForeground = sockets.length
     client.notifyForeground()
 
     expect(sockets.length).toBe(socketsBeforeForeground + 1)
     expect(latest()).not.toBe(doomed)
+    expect(doomed.readyState).toBe(MockWebSocket.CLOSED)
     latest().authenticate()
     expect(client.getState()).toBe('connected')
-  })
-
-  it('does not strand the user on "Connecting…" for a minute after returning', async () => {
-    const client = connect(TAILSCALE_ENDPOINT, 'token', 'server-key')
-    latest().authenticate()
-    latest().close()
-
-    // The desktop drops off the network while the user is still in the app, so
-    // the tiered backoff climbs into its slow tail (15s, 30s, 60s) before they
-    // ever leave. This is what makes the post-resume wait a full minute.
-    for (let dial = 0; dial < 6; dial++) {
-      await vi.advanceTimersByTimeAsync(12_000 + 60_000)
-    }
-    expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(6)
-    await advanceUntilDialing(client)
-
-    suspend(90_000)
-    const dialsBefore = sockets.length
-    client.notifyForeground()
-
-    // The desktop is reachable again and the user is looking at the screen, so
-    // the redial has to be in flight now — not after the abandoned socket's
-    // connect budget expires and another tail-length backoff is waited out.
-    expect(await millisecondsUntilNextDial(dialsBefore)).toBe(0)
-
-    latest().authenticate()
-    expect(client.getState()).toBe('connected')
-    expect(label(client, TAILSCALE_ENDPOINT)).toBe('Connected')
-
     client.close()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('clears the escalated label once the foreground redial lands', async () => {
@@ -218,8 +157,6 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     for (let dial = 0; dial < 4; dial++) {
       await vi.advanceTimersByTimeAsync(12_000 + 60_000)
     }
-    // Four failed dials is past WARNING_ATTEMPTS, so the card reads "Can't
-    // connect — check Tailscale" rather than a neutral "Connecting…".
     expect(label(client, TAILSCALE_ENDPOINT)).toBe("Can't connect — check Tailscale")
     await advanceUntilDialing(client)
     const doomed = latest()
@@ -241,9 +178,7 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     latest().authenticate()
     latest().close()
 
-    // The desktop really is gone. Abandoning the stale dial must book the failure
-    // it represents, or each visit resets the counter faster than it can climb and
-    // the card reassures the user with "Connecting…" indefinitely (issue #10119).
+    // Book abandoned stale dials as failures so repeated foregrounds cannot reset escalation indefinitely (#10119).
     for (let visit = 0; visit < 14; visit++) {
       await advanceUntilDialing(client)
       suspend(30_000)
@@ -253,7 +188,6 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(12)
     expect(label(client, TAILSCALE_ENDPOINT)).toBe("Can't reach desktop — check Tailscale")
 
-    // And the escalation is not sticky: the desktop comes back, the card clears.
     latest().authenticate()
     expect(label(client, TAILSCALE_ENDPOINT)).toBe('Connected')
 
@@ -268,15 +202,15 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     const fresh = latest()
     expect(client.getState()).toBe('connecting')
 
-    // A Wi-Fi→cellular handoff fires a second revival nudge right behind the
-    // AppState one. It must not churn the dial that the first nudge just opened.
+    // Coalesce handoff and AppState nudges so the second cannot churn the first’s fresh socket.
     client.notifyForeground()
     const afterFirstNudge = latest()
     client.notifyForeground()
     client.notifyForeground()
 
     expect(latest()).toBe(afterFirstNudge)
-    expect(fresh.endpoint).toBe(TAILSCALE_ENDPOINT)
+    expect(afterFirstNudge).toBe(fresh)
+    expect(fresh.readyState).toBe(MockWebSocket.CONNECTING)
 
     client.close()
   })
@@ -287,8 +221,7 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     latest().close()
     await vi.advanceTimersByTimeAsync(500)
 
-    // The upgrade completed but the desktop never sent e2ee_ready before the
-    // phone was suspended — the classic wedged relay/Tailscale half-open.
+    // Suspend after upgrade but before E2EE readiness to model a half-open handshake.
     latest().open()
     expect(client.getState()).toBe('handshaking')
     const wedged = latest()

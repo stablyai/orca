@@ -10,18 +10,23 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getRepositoryLocalCommandsSectionId } from '../settings/repository-settings-targets'
+import { getRepositoryLocalCommandsSectionId } from '../settings/repository/repository-settings-targets'
 import {
   requestContextualTourWhenReady,
   type RequestContextualTourWhenReadyArgs
 } from '../contextual-tours/request-contextual-tour-when-ready'
 import { translate } from '@/i18n/i18n'
 
-export const SETUP_GUIDE_PROJECT_PROMPT = "First add a project you'd like to work on."
+export function setupGuideProjectPrompt(): string {
+  return translate(
+    'auto.components.feature.wall.FeatureWallSetupWorkflowActions.addProjectFirst',
+    "First add a project you'd like to work on."
+  )
+}
 
 export function promptForSetupGuideProject(openModal: (modal: 'add-repo') => void): void {
   openModal('add-repo')
-  toast.message(SETUP_GUIDE_PROJECT_PROMPT)
+  toast.message(setupGuideProjectPrompt())
 }
 
 export function getSetupGuideGitRepo(
@@ -161,12 +166,26 @@ export function SetupScriptAction(): React.JSX.Element {
     }
   }, [repo, setupScript, updateRepo])
 
+  // Why: disabled inputs with the prerequisite in fine print read as broken; lead with the fix.
+  if (!canConfigure) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.486c2f4d8d',
+            'Add a git project first, then configure the setup script for that repository.'
+          )}
+        </p>
+        <AddReposAction />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <Input
           value={setupScript}
-          disabled={!canConfigure}
           onChange={(event) => setSetupScript(event.target.value)}
           placeholder={translate(
             'auto.components.feature.wall.FeatureWallSetupWorkflowActions.5c5b65044e',
@@ -182,7 +201,7 @@ export function SetupScriptAction(): React.JSX.Element {
           type="button"
           size="sm"
           className="gap-2"
-          disabled={!canConfigure || setupScript.trim().length === 0}
+          disabled={setupScript.trim().length === 0}
           onClick={() => void handleSaveSetupScript()}
         >
           <Save className="size-3.5" />
@@ -197,7 +216,6 @@ export function SetupScriptAction(): React.JSX.Element {
         variant="ghost"
         size="sm"
         className="w-fit gap-2 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
-        disabled={!canConfigure}
         onClick={openLocalCommandSettings}
       >
         <Settings className="size-3.5" />
@@ -206,14 +224,6 @@ export function SetupScriptAction(): React.JSX.Element {
           'View in settings'
         )}
       </Button>
-      {!canConfigure ? (
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.486c2f4d8d',
-            'Add a git project first, then configure the setup script for that repository.'
-          )}
-        </p>
-      ) : null}
     </div>
   )
 }

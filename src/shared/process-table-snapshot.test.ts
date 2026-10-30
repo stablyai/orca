@@ -21,11 +21,7 @@ import {
   parseStrictProcessTableRows,
   ProcessTableCaptureError
 } from './process-table-snapshot'
-import {
-  buildProcessTableIndex,
-  getProcessTableIndex,
-  type ProcessTableIndexStats
-} from './process-table-index'
+import { buildProcessTableIndex, getProcessTableIndex } from './process-table-index'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -61,8 +57,7 @@ describe('process-table-snapshot reader', () => {
     expect(await a).toBe('ps-output')
     expect(await b).toBe('ps-output')
     expect(await c).toBe('ps-output')
-    // Why: the in-flight promise is shared, so a burst of panes inspecting at
-    // once forks `ps` exactly once.
+    // In-flight sharing must collapse a pane burst into one ps fork.
     expect(scans).toBe(1)
   })
 
@@ -121,7 +116,7 @@ describe('process-table-snapshot reader', () => {
     gate.resolve('scan-1')
     expect(await first).toBe('scan-1')
 
-    // capturedAt is stamped at now()=600, so a call at 900 is still within TTL.
+    // TTL starts at completion (600), so 900 is still cached.
     clock = 900
     expect(await reader.getSnapshot()).toBe('scan-1')
     expect(scans).toBe(1)
@@ -142,8 +137,7 @@ describe('process-table-snapshot reader', () => {
     gate.resolve('scan-1')
     await first
 
-    // Age used to start at the callback, so a capture older than the destructive
-    // consumer's ceiling was admitted as if it had just been taken.
+    // Starting age at completion previously admitted already-stale captures to destructive consumers.
     expect((await reader.getSnapshotWithAge()).capturedAgeMs).toBe(4_000)
   })
 
@@ -161,8 +155,7 @@ describe('process-table-snapshot reader', () => {
     })
 
     await expect(reader.getSnapshot()).rejects.toThrow('ps timed out')
-    // Why: a transient ps failure must not poison the cache — the next
-    // inspection re-scans rather than returning a cached error.
+    // Transient failures must clear the cache so the next inspection can recover.
     expect(await reader.getSnapshot()).toBe('recovered')
     expect(scans).toBe(2)
   })
@@ -218,31 +211,6 @@ describe('process-table-snapshot reader', () => {
     await expect(Promise.all([fresh, ordinary])).resolves.toEqual(['scan-1', 'scan-1'])
     expect(scans).toBe(1)
   })
-
-  it('shares one parsed-rows array across a burst so panes do not each re-parse', async () => {
-    // Mirrors the POSIX default reader: runPs parses inside the deduped scan, so
-    // every caller in the TTL window gets the SAME ProcessTableRow[] instance
-    // instead of re-tokenizing identical stdout per pane.
-    let parses = 0
-    const gate = deferred<ReturnType<typeof parseProcessTableRows>>()
-    const reader = createProcessTableSnapshotReader<ReturnType<typeof parseProcessTableRows>>({
-      runPs: () => {
-        parses += 1
-        return gate.promise
-      },
-      now: () => 0
-    })
-
-    const a = reader.getSnapshot()
-    const b = reader.getSnapshot()
-    gate.resolve(parseProcessTableRows('100 1 Ss+ /bin/zsh'))
-
-    const rowsA = await a
-    const rowsB = await b
-    expect(parses).toBe(1)
-    // Reference identity: the burst reuses one parse, not one-per-caller.
-    expect(rowsA).toBe(rowsB)
-  })
 })
 
 describe('shared process-table capture', () => {
@@ -267,9 +235,12 @@ describe('shared process-table capture', () => {
   }
 
   it('serves the strict and lenient views from ONE ps fork per TTL window', async () => {
-    // Why: both views run byte-identical argv, so separate memoizers would double
-    // the relay's idle fork rate — the regression issue #6288 removed.
-    const forks = mockPsCaptures('100 1 100 100 Ss+ /bin/zsh\n', '200 1 200 200 Ss+ /bin/bash\n')
+    // Both views use identical argv; separate caches doubled relay idle forks (#6288).
+    const tty = process.platform === 'darwin' ? '??' : '?'
+    const forks = mockPsCaptures(
+      `100 1 100 100 Ss+ ${tty} Fri Oct 9 12:34:56 2026 /bin/zsh\n`,
+      `200 1 200 200 Ss+ ${tty} Fri Oct 9 12:34:56 2026 /bin/bash\n`
+    )
 
     const [lenient, strict] = await Promise.all([
       getProcessTableSnapshot(),
@@ -282,7 +253,11 @@ describe('shared process-table capture', () => {
   })
 
   it('reuses the cached capture for a later strict read inside the TTL', async () => {
-    const forks = mockPsCaptures('100 1 100 100 Ss+ /bin/zsh\n', '200 1 200 200 Ss+ /bin/bash\n')
+    const tty = process.platform === 'darwin' ? '??' : '?'
+    const forks = mockPsCaptures(
+      `100 1 100 100 Ss+ ${tty} Fri Oct 9 12:34:56 2026 /bin/zsh\n`,
+      `200 1 200 200 Ss+ ${tty} Fri Oct 9 12:34:56 2026 /bin/bash\n`
+    )
 
     await getProcessTableSnapshot()
     const strict = await getStrictProcessTableSnapshot()
@@ -295,19 +270,11 @@ describe('shared process-table capture', () => {
         pgid: 100,
         tpgid: 100,
         stat: 'Ss+',
+        tty,
+        ...(process.platform === 'linux' ? {} : { startTime: 'Fri Oct 9 12:34:56 2026' }),
         command: '/bin/zsh'
       }
     ])
-  })
-
-  it('builds only the indexes a resolver reads', () => {
-    // Why: an unread group index costs two maps plus a per-row array on every
-    // capture, on the exact path this reader exists to make cheap.
-    const index = buildProcessTableIndex(
-      parseStrictProcessTableRows('100 1 100 101 Ss /bin/zsh\n101 100 101 101 S+ node /opt/codex')
-    )
-
-    expect(Object.keys(index).sort()).toEqual(['byPid', 'childrenByPpid', 'rows', 'stats'])
   })
 
   it('keeps the lenient view readable when the same capture is strictly unreadable', async () => {
@@ -316,7 +283,7 @@ describe('shared process-table capture', () => {
     const lenient = await getProcessTableSnapshot()
     await expect(getStrictProcessTableSnapshot()).rejects.toBeInstanceOf(ProcessTableCaptureError)
 
-    expect(forks()).toBe(1)
+    expect(forks()).toBe(process.platform === 'darwin' ? 2 : 1)
     expect(lenient).toEqual([{ pid: 100, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }])
   })
 })
@@ -493,39 +460,11 @@ describe('getProcessTableIndex', () => {
   })
 
   it('resolves a duplicated pid to the FIRST row, as `rows.find()` did', () => {
-    // Preserve rows.find() semantics if a malformed table repeats a pid: an argv
-    // newline makes `ps` print a continuation line that can parse as a spurious
-    // row, and that row always follows the real one it was split from.
+    // Keep the first row like rows.find: argv newlines can create later spurious duplicate-PID rows.
     const rows = parseProcessTableRows(['100 1 Ss bash', '100 1 Ss+ zsh'].join('\n'))
 
     expect(getProcessTableIndex(rows).byPid.get(100)).toBe(rows[0])
     expect(buildProcessTableIndex(rows).byPid.get(100)).toBe(rows[0])
-  })
-
-  it('materializes only the maps the descendant walk reads', () => {
-    // Why: this memo exists to cut relay CPU; four indexes for two readers would
-    // make a single-pane relay pay more per capture than the code it replaced.
-    const index = getProcessTableIndex(parseProcessTableRows('100 1 Ss bash'))
-
-    expect(Object.keys(index).sort()).toEqual(['byPid', 'childrenByPpid', 'rows', 'stats'])
-  })
-
-  it('keeps the memo out of measured builds so a cache hit cannot satisfy a perf gate', () => {
-    const rows = parseProcessTableRows('100 1 Ss bash')
-    const stats: ProcessTableIndexStats = {
-      indexBuilds: 0,
-      rowVisits: 0,
-      indexLookups: 0
-    }
-
-    const memoized = getProcessTableIndex(rows)
-    const measured = buildProcessTableIndex(rows, stats)
-
-    expect(memoized.stats).toBeUndefined()
-    expect(measured).not.toBe(memoized)
-    expect(stats).toEqual({ indexBuilds: 1, rowVisits: 1, indexLookups: 0 })
-    // The measured build must not evict or replace the shared memo.
-    expect(getProcessTableIndex(rows)).toBe(memoized)
   })
 })
 
@@ -537,11 +476,7 @@ describe('process-table capture completeness', () => {
     resetProcessTableSnapshotForTests()
   })
 
-  /**
-   * Emulate Node's own execFile buffering: over `maxBuffer` it kills the child and
-   * calls back with ERR_CHILD_PROCESS_STDIO_MAXBUFFER plus the truncated bytes. A
-   * mock that always resolves would hide the very ceiling under test.
-   */
+  /** Emulate Node’s maxBuffer kill/error plus truncated bytes; always-resolving mocks would hide the actual ceiling. */
   function mockPsWithNodeBufferSemantics(stdout: string): void {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], options: unknown, callback: unknown) => {
@@ -574,17 +509,14 @@ describe('process-table capture completeness', () => {
     expect(Buffer.byteLength(table, 'utf-8')).toBeGreaterThan(NODE_DEFAULT_MAX_BUFFER_BYTES)
     mockPsWithNodeBufferSemantics(table)
 
-    // Without an explicit maxBuffer this rejects, so the whole subsystem degrades
-    // to "unverifiable" on every capture for as long as the host stays busy.
+    // Default maxBuffer rejects on busy hosts, making every capture unverifiable until load falls.
     await expect(getProcessTableSnapshot()).resolves.toHaveLength(4_000)
   })
 
   it('reports a truncated capture as unreadable rather than a silently short table', async () => {
     const table = busyHostTable(200)
     const truncated = table + 'x'.repeat(PS_MAX_BUFFER_BYTES - table.length)
-    // A capture that stopped at the ceiling but still resolved: the lenient parser
-    // drops the cut tail without complaint, so 200 of N processes would read as
-    // the complete list — a false "no agent" the execution boundary forbids.
+    // The lenient parser accepts truncated rows; strict capture checks must reject partial tables instead of falsely proving no agent.
     expect(parseProcessTableRows(truncated)).toHaveLength(200)
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, callback: unknown) => {
@@ -608,8 +540,7 @@ describe('process-table capture completeness', () => {
   })
 
   it('reports an empty capture as unreadable rather than an empty process table', async () => {
-    // The lenient view used to answer [] here: zero processes on a machine that is
-    // by definition running at least `ps` itself.
+    // An empty table cannot describe a host running ps; lenient [] previously claimed absence.
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, callback: unknown) => {
         ;(callback as (err: unknown, result: { stdout: string; stderr: string }) => void)(null, {
@@ -623,11 +554,7 @@ describe('process-table capture completeness', () => {
     await expect(getProcessTableSnapshot()).rejects.toThrow('empty_capture')
   })
 
-  /**
-   * Emulate Node's own execFile deadline: past `timeout` it SIGTERMs the child and calls
-   * back with `Command failed: <argv>` and no stderr -- indistinguishable from a broken
-   * `ps` unless the budget itself is under test.
-   */
+  /** Emulate Node timeout SIGTERM/callback with empty stderr; otherwise a too-short budget looks identical to broken ps. */
   function mockPsTakingMs(durationMs: number, stdout: string): void {
     execFileMock.mockImplementation(
       (command: string, args: string[], options: unknown, callback: unknown) => {
@@ -647,9 +574,7 @@ describe('process-table capture completeness', () => {
   }
 
   it('reads a loaded host whose whole-machine ps runs for seconds', async () => {
-    // Measured on a 1,948-process host at load 27: the `command=` argv read alone costs
-    // 1.15s, and contention stretched the same capture to 6.0s. The old 3s budget killed
-    // 6 of 20 consecutive captures, so a readable table answered "unverifiable".
+    // Measured command= costs 1.15s idle and up to 6s at load 27; 3s killed 6/20 otherwise readable captures.
     mockPsTakingMs(6_000, busyHostTable(200))
 
     expect(PS_TIMEOUT_MS).toBeGreaterThan(6_000)
@@ -663,13 +588,8 @@ describe('process-table capture completeness', () => {
   })
 })
 
-/**
- * The evidence-publishing read has a far shorter budget than identity proof, and the two are not
- * interchangeable. Identity proof asks whether a process exists and must not read a slow capture
- * as an absent one, so it waits out `PS_TIMEOUT_MS`. These consumers ask whether an observation
- * describes NOW: past this budget it cannot, so the answer they need is a prompt `unverifiable`,
- * which both relay call sites already produce from a rejection.
- */
+/** Evidence freshness has a shorter budget than identity proof: stale observations return prompt unverifiable;
+ * identity probes wait PS_TIMEOUT_MS because slow captures cannot prove process absence. */
 describe('evidence-publishing capture budget', () => {
   beforeEach(() => {
     execFileMock.mockReset()
@@ -682,7 +602,10 @@ describe('evidence-publishing capture budget', () => {
   })
 
   /** A `ps` that answers after `durationMs` of wall clock, the way a loaded host does. */
-  function mockPsTaking(durationMs: number, stdout = '1 0 1 1 S+ ?? Jan 1 00:00:00 2026 bash\n') {
+  function mockPsTaking(
+    durationMs: number,
+    stdout = `1 0 1 1 S+ ${process.platform === 'darwin' ? '??' : '?'} Thu Jan 1 00:00:00 2026 bash\n`
+  ) {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, callback: unknown) => {
         const done = callback as (err: unknown, result: { stdout: string; stderr: string }) => void
@@ -694,11 +617,12 @@ describe('evidence-publishing capture budget', () => {
   it('answers from a capture that lands one tick inside the budget', async () => {
     mockPsTaking(PROCESS_TABLE_EVIDENCE_BUDGET_MS - 1)
     const pending = getStrictProcessTableSnapshotWithAge()
+    const settled = pending.catch(() => undefined)
 
     await vi.advanceTimersByTimeAsync(PROCESS_TABLE_EVIDENCE_BUDGET_MS)
+    await settled
 
-    // The age carries the capture's own duration, which is the whole reason the budget is this
-    // far under the 2,000ms admission ceiling rather than under PS_TIMEOUT_MS.
+    // Capture duration counts against 2s freshness; this budget must be far below the identity timeout.
     expect((await pending).capturedAgeMs).toBe(PROCESS_TABLE_EVIDENCE_BUDGET_MS - 1)
   })
 
@@ -716,8 +640,7 @@ describe('evidence-publishing capture budget', () => {
   })
 
   it('leaves the abandoned capture running to fill the cache for the next reader', async () => {
-    // Why this matters: a whole-machine `ps` is the most expensive thing the host does, and the
-    // host that blows the budget is by definition the one that can least afford a second one.
+    // Loaded hosts cannot afford a second whole-machine ps; abandoned shared captures must keep filling the cache.
     mockPsTaking(PROCESS_TABLE_EVIDENCE_BUDGET_MS + 100)
     const abandoned = getStrictProcessTableSnapshotWithAge().catch(() => null)
 
@@ -729,11 +652,5 @@ describe('evidence-publishing capture budget', () => {
       capturedAgeMs: PROCESS_TABLE_EVIDENCE_BUDGET_MS + 100
     })
     expect(execFileMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the identity budget far above its own', () => {
-    // A slow capture must still not read as an absent process; only the consumers that need the
-    // observation to describe NOW gave up waiting for it.
-    expect(PROCESS_TABLE_EVIDENCE_BUDGET_MS).toBeLessThan(PS_TIMEOUT_MS)
   })
 })

@@ -8,9 +8,17 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../shared/automation-precheck'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import type {
+  HeadlessAutomationDispatcher,
+  HeadlessAutomationDispatchLaunch
+} from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
+import {
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
+import { parseWslDistroHold } from '../../shared/wsl-distro-stopped-hold'
 
 export type HeadlessAutomationDispatchContext = {
   automation: Automation
@@ -23,8 +31,21 @@ export type HeadlessAutomationDispatchContext = {
   watchRun: (run: AutomationRun) => void
 }
 
+/** Record dispatch refusals as skips. */
+export class AutomationDispatchRefusedError extends Error {
+  constructor(readonly failure: AutomationRunFailure) {
+    super(failure.error)
+  }
+}
+
 function describeDispatchError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** A launch the runtime held for a stopped WSL distro is a retryable skip, not a crash (E9). */
+function heldForStoppedWslDistro(error: unknown): AutomationRunFailure | null {
+  const hold = parseWslDistroHold(describeDispatchError(error))
+  return hold ? automationRunFailure('wslDistroStopped', { distro: hold.distro }) : null
 }
 
 export async function runHeadlessAutomationDispatch(
@@ -42,53 +63,71 @@ export async function runHeadlessAutomationDispatch(
       error: formatAutomationPrecheckFailure(precheckResult)
     })
   }
+  let launch: HeadlessAutomationDispatchLaunch
+  // The agent can finish before launch returns.
+  const dispatchedAt = Date.now()
   try {
-    const launch = await ctx.dispatcher({ automation, run, target })
-    const launchRunTarget = {
-      workspaceId: launch.workspaceId,
-      workspaceDisplayName: launch.workspaceDisplayName ?? null,
-      terminalSessionId: launch.terminalSessionId,
-      terminalPaneKey: launch.terminalPaneKey ?? null,
-      terminalPtyId: launch.terminalPtyId ?? null
-    }
-    const updated = runs.updateRun({
-      runId: run.id,
-      status: 'dispatched',
-      ...launchRunTarget,
-      error: null
-    })
-    if (!launch.completion) {
-      // Why: a dispatcher that reports no completion promise would otherwise
-      // leave the run at 'dispatched' for the process lifetime.
-      ctx.watchRun(updated)
-      return updated
-    }
-    void launch.completion
-      .then((completion) =>
-        ctx.markDispatchResult({
-          runId: run.id,
-          status: completion.status,
-          ...launchRunTarget,
-          precheckResult,
-          outputSnapshot: completion.outputSnapshot ?? null,
-          error: completion.error ?? null
-        })
-      )
-      .catch((error) =>
-        ctx.markDispatchResult({
-          runId: run.id,
-          status: 'dispatch_failed',
-          ...launchRunTarget,
-          error: describeDispatchError(error)
-        })
-      )
-    return updated
+    launch = await ctx.dispatcher({ automation, run, target })
   } catch (error) {
+    const refusal =
+      error instanceof AutomationDispatchRefusedError
+        ? error.failure
+        : heldForStoppedWslDistro(error)
     return runs.updateRun({
       runId: run.id,
-      status: 'dispatch_failed',
+      status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
-      error: describeDispatchError(error)
+      ...(refusal ?? { error: describeDispatchError(error) })
     })
   }
+  const launchRunTarget = {
+    workspaceId: launch.workspaceId,
+    workspaceDisplayName: launch.workspaceDisplayName ?? null,
+    terminalSessionId: launch.terminalSessionId,
+    terminalPaneKey: launch.terminalPaneKey ?? null,
+    terminalPtyId: launch.terminalPtyId ?? null
+  }
+  const updated = runs.updateRun({
+    runId: run.id,
+    status: 'dispatched',
+    dispatchedAt,
+    ...launchRunTarget,
+    // Watched completions omit the precheck result.
+    ...(precheckResult ? { precheckResult } : {}),
+    error: null
+  })
+  // Start observation without waiting for persistence acknowledgement.
+  if (!launch.completion) {
+    ctx.watchRun({
+      ...run,
+      ...launchRunTarget,
+      status: 'dispatched',
+      dispatchedAt,
+      error: null
+    })
+  } else {
+    void launch.completion
+      .then(
+        (completion) =>
+          ctx.markDispatchResult({
+            runId: run.id,
+            status: completion.status,
+            ...launchRunTarget,
+            precheckResult,
+            outputSnapshot: completion.outputSnapshot ?? null,
+            error: completion.error ?? null,
+            errorCode: completion.errorCode ?? null,
+            errorParams: completion.errorParams ?? null
+          }),
+        (error) =>
+          ctx.markDispatchResult({
+            runId: run.id,
+            status: 'dispatch_failed',
+            ...launchRunTarget,
+            error: describeDispatchError(error)
+          })
+      )
+      .catch((error) => console.error('[automations] Failed to persist run completion:', error))
+  }
+  return updated
 }

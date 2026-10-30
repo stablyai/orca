@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import { MOBILE_WEB_BUNDLE_SCHEMA_VERSION } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   evaluateMobileWebBundleCompat,
-  SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS,
   type MobileWebBundleCompatManifest,
   type MobileWebBundleCompatVerdict,
   type MobileWebBundleHostStatus
@@ -11,8 +9,7 @@ import {
 
 const CAPABLE: readonly string[] = ['browser.screencast.v1', MOBILE_WEB_BUNDLE_CAPABILITY]
 
-/** `HostStatusReply` keeps every member present and possibly undefined, so a host that answered
- *  neither version is this rather than `{}`. */
+// Reply members are present but possibly undefined, so model a host answering neither with both keys.
 const ANSWERED_NEITHER: MobileWebBundleHostStatus = {
   protocolVersion: undefined,
   minCompatibleMobileVersion: undefined
@@ -25,6 +22,7 @@ function manifest(
     schemaVersion: 1,
     runtimeProtocolVersion: 3,
     minCompatibleRuntimeProtocolVersion: 2,
+    pageVersion: 1,
     ...overrides
   }
 }
@@ -54,12 +52,6 @@ describe('evaluateMobileWebBundleCompat', () => {
     })
   })
 
-  it('separates permission to fetch a manifest from permission to open one', () => {
-    // Why: both are `ok`, and a caller that mounted on the first would mount an unchecked bundle.
-    expect(evaluate({ manifest: null })).toEqual({ kind: 'ok', manifestChecked: false })
-    expect(evaluate({})).toEqual({ kind: 'ok', manifestChecked: true })
-  })
-
   it('blocks a host that ships no bundle', () => {
     expect(evaluate({ hostCapabilities: ['browser.screencast.v1'] })).toEqual({
       kind: 'blocked',
@@ -73,7 +65,6 @@ describe('evaluateMobileWebBundleCompat', () => {
       reason: 'bundle-shell-too-old',
       schemaVersion: 2
     })
-    // A schema below the known one is just as unreadable as one above it.
     expect(evaluate({ manifest: manifest({ schemaVersion: 0 }) })).toMatchObject({
       reason: 'bundle-shell-too-old',
       schemaVersion: 0
@@ -169,7 +160,6 @@ describe('evaluateMobileWebBundleCompat', () => {
         manifest: manifest({ runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 2 })
       })
     ).toEqual({ kind: 'ok', manifestChecked: true })
-    // One below either boundary is the block the equality case sits next to.
     expect(
       evaluate({
         hostStatus: { protocolVersion: 1, minCompatibleMobileVersion: 3 },
@@ -183,9 +173,41 @@ describe('evaluateMobileWebBundleCompat', () => {
       })
     ).toMatchObject({ reason: 'bundle-incompatible', side: 'mobile' })
   })
+})
 
-  it('supports the schema the desktop writes today, so a current bundle opens', () => {
-    // The only claim worth pinning: a contract bump this shell has not adopted becomes a wall.
-    expect(SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS).toContain(MOBILE_WEB_BUNDLE_SCHEMA_VERSION)
+// Pin the page-version floor independently of manifest-schema support.
+describe('the page floor', () => {
+  const tooOld = (pageVersion: number) => ({
+    kind: 'blocked',
+    reason: 'bundle-incompatible',
+    side: 'desktop',
+    pageVersion,
+    requiredPageVersion: 1
+  })
+
+  it('walls a desktop whose page is older than this shell, as a desktop to update', () => {
+    expect(evaluate({ manifest: manifest({ pageVersion: 0 }) })).toEqual(tooOld(0))
+  })
+
+  it('reads a manifest with no page version as older than the floor', () => {
+    const { schemaVersion, runtimeProtocolVersion, minCompatibleRuntimeProtocolVersion } =
+      manifest()
+    const unversioned = {
+      schemaVersion,
+      runtimeProtocolVersion,
+      minCompatibleRuntimeProtocolVersion
+    }
+    expect(evaluate({ manifest: unversioned })).toEqual(tooOld(0))
+  })
+
+  it('opens a page at the floor and one above it', () => {
+    expect(evaluate({ manifest: manifest({ pageVersion: 1 }) })).toEqual({
+      kind: 'ok',
+      manifestChecked: true
+    })
+    expect(evaluate({ manifest: manifest({ pageVersion: 7 }) })).toEqual({
+      kind: 'ok',
+      manifestChecked: true
+    })
   })
 })

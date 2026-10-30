@@ -8,6 +8,8 @@ import { claudeRosterToSnapshots } from '../../claude-subagent-roster'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import type { HookListenerState } from '../listener-state'
+import { mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
+import { claudeMainAgentStatusForPayload } from './claude-roster-state'
 
 export function buildClaudeStatusPayload(
   state: HookListenerState,
@@ -19,24 +21,25 @@ export function buildClaudeStatusPayload(
     stateName: AgentStatusState
     workingMode?: AgentWorkingMode
     updateToolSnapshot: boolean
-    interrupted?: boolean
     sessionBoundary?: boolean
-    turnCompletedAt?: number
+    claudeTaskWakeupPending?: ParsedAgentStatusPayload['claudeTaskWakeupPending']
   }
 ): ParsedAgentStatusPayload | null {
-  // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
+  // Roster refreshes read cached tool state without clearing live cards or previews.
   const snapshot = options.updateToolSnapshot
     ? resolveToolState(state, paneKey, extractToolFields('claude', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('claude', eventName)
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
-  // Why: validate directly — the JSON stringify/parse round trip other normalizers use is pure overhead on this hot per-hook path.
-  // The normalizer clamps `interrupted` to done payloads, so a gated 'working' emit drops it; claudeLeadStateByPaneKey preserves it for the eventual done.
+  // Read mainAgent/verdict/turn stamp from one lead record; keep interruption there while child-held rows omit it.
+  const mainAgentRecord = state.claudeLeadStateByPaneKey.get(paneKey)
+  // Validate directly to avoid hot-path stringify/parse overhead.
   return normalizeAgentStatusPayload({
     state: options.stateName,
     workingMode: options.workingMode,
-    // Why: only lead-origin events may reset the prompt cache; a child-driven refresh must not blank the lead's prompt label.
+    claudeTaskWakeupPending: options.claudeTaskWakeupPending,
+    // Only lead events reset prompt labels; child refreshes retain them.
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
@@ -46,9 +49,10 @@ export function buildClaudeStatusPayload(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    interrupted: options.interrupted,
+    interrupted: mainAgentTurnInterrupted(mainAgentRecord),
     sessionBoundary: options.sessionBoundary,
-    turnCompletedAt: options.turnCompletedAt,
-    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
+    turnCompletedAt: mainAgentRecord?.turnCompletedAt,
+    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
+    mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
   })
 }

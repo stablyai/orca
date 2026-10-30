@@ -1,11 +1,21 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { quitProcess } from './process-quit-request'
+import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import { checkServeUserDataPath } from './serve-user-data-path-guard'
+import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
+import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
+import {
+  hasMissingProfileStateDatabaseWithRetainedAuthority,
+  readActiveProfileId,
+  readPersistedHttp1CompatibilityMode
+} from './http1-compatibility-profile-state'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -32,22 +42,6 @@ function parseBooleanEnvFlag(value: string | undefined): boolean | null {
   return null
 }
 
-function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
-  const dataFile = join(userDataPath, 'orca-data.json')
-  if (!existsSync(dataFile)) {
-    return false
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
-      settings?: { electronHttp1CompatibilityMode?: unknown }
-    }
-    return parsed.settings?.electronHttp1CompatibilityMode === true
-  } catch {
-    return false
-  }
-}
-
 export function shouldDisableHttp2ForElectronNetworking(
   options: NetworkCompatibilityOptions = {}
 ): boolean {
@@ -56,11 +50,20 @@ export function shouldDisableHttp2ForElectronNetworking(
     return envValue
   }
   const userDataPath = options.userDataPath ?? app.getPath('userData')
-  // Why the marker first: this runs before app.whenReady(), and the settings file is the multi-MB
-  // orca-data.json the Store parses again moments later. The marker is refreshed whenever settings
-  // change, so the full read only happens on a profile that has never written one.
+  const activeProfileId = readActiveProfileId(userDataPath)
+  // Read the small marker before parsing settings again; untrusted SQLite profiles fail closed rather than revive JSON.
+  if (
+    activeProfileId !== undefined &&
+    activeProfileId !== null &&
+    hasMissingProfileStateDatabaseWithRetainedAuthority(userDataPath, activeProfileId)
+  ) {
+    return false
+  }
   return (
-    readHttp1CompatibilityMarker(userDataPath) ?? readPersistedHttp1CompatibilityMode(userDataPath)
+    (activeProfileId === null
+      ? null
+      : readHttp1CompatibilityMarker(userDataPath, activeProfileId)) ??
+    readPersistedHttp1CompatibilityMode(userDataPath)
   )
 }
 
@@ -70,7 +73,7 @@ export function configureElectronNetworkCompatibility(
   if (!shouldDisableHttp2ForElectronNetworking(options)) {
     return
   }
-  // Why: Chromium's HTTP/2 switch is process-wide and only applies before the first session exists, so set it during early startup.
+  // HTTP/2 selection is process-wide and must precede the first Electron session.
   app.commandLine.appendSwitch('disable-http2')
 }
 
@@ -78,8 +81,7 @@ export function disableUnsupportedChromiumFeatures(): void {
   appendDisabledChromiumFeatures([...DISABLED_CHROMIUM_FEATURES])
 }
 
-// Why: Chromium clamps hidden-page timers to 1/min after 5min on every desktop platform,
-// delaying agent-done/bell notifications ~60s. Call site is unconditional (see index.ts).
+// Hidden-page timers otherwise clamp to once/minute after five minutes, delaying agent notifications on every platform.
 export function optOutOfHiddenPageWakeUpThrottling(): void {
   appendDisabledChromiumFeatures(['IntensiveWakeUpThrottling'])
 }
@@ -100,10 +102,10 @@ function getProcessPathDelimiter(): string {
 
 function requestDevParentShutdown(): void {
   devParentShutdownRequested = true
-  app.quit()
+  quitProcess()
 
   const forceExitTimer = setTimeout(() => {
-    // Why: app.quit() may stall on macOS quit handlers or window-close guards, so force-exit after a grace period to avoid a hung dev app.
+    // Force exit after grace: macOS quit handlers/window guards can stall dev shutdown.
     app.exit(0)
   }, DEV_PARENT_SHUTDOWN_GRACE_MS)
 
@@ -124,30 +126,20 @@ export function patchPackagedProcessPath(): void {
   }
 
   const home = process.env.HOME ?? ''
-  // Why two lists: a seed exists so a GUI-launched Electron can *find* a tool
-  // its minimal PATH omits. Putting one ahead of the inherited PATH does more
-  // than that — it re-ranks binaries the user already has, and `~/bin` and
-  // `~/.local/bin` are arbitrary user-writable directories that can shadow any
-  // system tool. On the #18234 reporter's box `~/.local/bin/gh` is a wrapper
-  // around `mise x gh -- gh`; hoisting it over /usr/bin/gh made us run the
-  // wrapper where their own shell ran the real binary, and the inner bare `gh`
-  // then resolved back to the wrapper. So: append these, and let a real
-  // ordering opinion come from the login shell via mergePathSegments.
+  // #18234: append generic user bins; prepending ~/.local/bin made a gh/mise wrapper recursively shadow system gh. Shell hydration owns user ordering.
   const isGenericUserBinDir = (path: string): boolean =>
     process.platform !== 'win32' &&
     home !== '' &&
     (path === join(home, 'bin') || path === join(home, '.local/bin'))
   const appendPaths: string[] = []
-  // Why these still lead: version-manager shims must beat a system install or
-  // an nvm/mise/asdf user gets the wrong runtime, which is the whole reason
-  // this seeding is ordered rather than appended (see hydrate-shell-path.ts).
+  // Version-manager shims must lead to preserve the selected runtime.
   const prependPaths: string[] = []
 
   if (process.platform !== 'win32') {
     appendPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
 
     if (process.platform === 'linux') {
-      // Why: snap and Linuxbrew ship on Linux only, so seeding them elsewhere adds phantom PATH entries every spawn must stat.
+      // Avoid phantom snap/Linuxbrew paths on non-Linux hosts.
       appendPaths.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
     }
 
@@ -158,21 +150,27 @@ export function patchPackagedProcessPath(): void {
         join(home, 'bin'),
         join(home, '.local/bin'),
         join(home, '.nix-profile/bin'),
-        // Why: some agent CLIs install into ~/.<name>/bin; GUI-launched Electron's minimal PATH misses them (stablyai/orca#829).
+        // GUI PATH omits agent-specific install directories (#829).
         join(home, '.opencode/bin'),
-        join(home, '.vite-plus/bin')
+        join(home, '.vite-plus/bin'),
+        join(home, '.grok/bin')
       )
+    }
+
+    if (process.platform === 'darwin' && existsSync('/opt/local/bin/port')) {
+      // MacPorts is rare, so gate on default-prefix `port`; last so it only fills gaps, never re-ranks seeded dirs.
+      appendPaths.push('/opt/local/bin', '/opt/local/sbin')
     }
   }
 
-  // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail (also seeds Windows user-local dirs).
-  // Why the filter: that list carries `~/bin` and `~/.local/bin` too, because
-  // bun/pnpm/npm --user also install there. Those two are generic user bin
-  // directories, not a version manager's own shim directory, so they hold
-  // whatever the user last dropped in them and must not outrank a system dir.
-  // The specific dirs (.volta/bin, .asdf/shims, mise shims, .bun/bin, …) keep
-  // leading, which is what the ordering was actually for.
-  prependPaths.push(...getVersionManagerBinPaths().filter((path) => !isGenericUserBinDir(path)))
+  // env-node shebangs require runtime shims; exclude generic user bins so arbitrary wrappers cannot shadow system tools.
+  for (const path of getVersionManagerBinPaths()) {
+    if (isWindowsFnmDefaultAliasDir(path)) {
+      appendPaths.push(path)
+    } else if (!isGenericUserBinDir(path)) {
+      prependPaths.push(path)
+    }
+  }
 
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
   const currentPath = process.env[pathKey] ?? ''
@@ -190,18 +188,13 @@ export function patchPackagedProcessPath(): void {
 export function configureDevUserDataPath(isDev: boolean): void {
   const e2eConfig = getMainE2EConfig()
   if (e2eConfig.userDataDir) {
-    // Why: the E2E suite launches a fresh Electron app for each spec. A
-    // dedicated userData path per launch prevents persisted repos, worktrees,
-    // and session state from leaking between tests through the shared dev
-    // profile while still leaving the user's real packaged profile untouched.
+    // Isolate each E2E launch from persisted profiles while leaving the real packaged profile untouched.
     const e2eHomeDir = process.env.ORCA_E2E_HOME_DIR ?? join(e2eConfig.userDataDir, 'home')
-    // Why: E2E imports can resolve os.homedir() before Electron is ready. Abort
-    // startup if a direct launch skipped the disposable Node-home contract.
+    // Imports can resolve homedir before Electron readiness; reject launches outside disposable Node home.
     if (!areSameE2EHomePath(homedir(), e2eHomeDir)) {
       throw new Error('Refusing to start E2E outside its disposable home boundary')
     }
-    // Why: on macOS Electron resolves app.getPath('home') from the native user
-    // database, not HOME. Set it explicitly before any Codex paths are built.
+    // macOS Electron reads home from the native user database, so set it before building Codex paths.
     mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
     app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
@@ -213,11 +206,11 @@ export function configureDevUserDataPath(isDev: boolean): void {
   }
   const overrideUserDataPath = process.env.ORCA_DEV_USER_DATA_PATH
   if (overrideUserDataPath) {
-    // Why: automated repros need an isolated profile so the dev's persisted tabs/worktrees don't skew startup and hide window bugs.
+    // Why: run-electron-vite-dev.mjs resolves a per-worktree (or shared orca-dev) profile here; repros also pass isolated ones.
     app.setPath('userData', overrideUserDataPath)
     return
   }
-  // Why: without a dev-only path, pnpm dev overwrites the packaged app's runtime pointer under userData and breaks the orca CLI.
+  // Why: launches that bypass the dev runner still need a dev-only path, or they overwrite the packaged app's runtime pointer under userData and break the orca CLI.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 
@@ -230,13 +223,24 @@ function areSameE2EHomePath(left: string, right: string): boolean {
 }
 
 export function configureOrcaUserDataPathEnv(): void {
-  // Why: relaunches can inherit a stale ORCA_USER_DATA_PATH; canonicalize before CLI-shared modules build runtime-home paths.
-  process.env.ORCA_USER_DATA_PATH = app.getPath('userData')
+  const userDataPath = app.getPath('userData')
+  // Validate final userData before instance locking; preflight catches refusals and exits serve.
+  const serveProfileRefusal = checkServeUserDataPath({
+    isServeMode: process.argv.includes('--serve'),
+    userDataPath
+  })
+  if (serveProfileRefusal) {
+    throw new Error(serveProfileRefusal)
+  }
+  // Canonicalize stale inherited profile overrides before CLI modules derive runtime-home paths.
+  process.env.ORCA_USER_DATA_PATH = userDataPath
+  // An Orca launched from another Orca terminal must own its CLI children.
+  stampRuntimeSourceEnv(process.env, null)
 }
 
 export function shouldInstallManagedHooks(isDev: boolean): boolean {
   void isDev
-  // Why: managed hooks now target Orca-owned Codex homes, not ~/.codex, so keep install on for all agents until each gets its own seam.
+  // Codex hooks now target Orca-owned homes; retain installation until every agent has its own seam.
   return true
 }
 
@@ -245,7 +249,7 @@ export function installDevParentDisconnectQuit(isDev: boolean): void {
     return
   }
 
-  // Why: on macOS Ctrl+C can stop the electron-vite parent without closing the window, so quit when the IPC channel disconnects.
+  // macOS Ctrl+C can stop electron-vite without closing Electron; couple shutdown to IPC disconnect.
   process.once('disconnect', () => {
     requestDevParentShutdown()
   })
@@ -282,7 +286,7 @@ export function installDevParentWatchdog(isDev: boolean): void {
 
     if (parentPidChanged || parentMissing) {
       clearInterval(timer)
-      // Why: the dev runner spawns Electron without IPC, so on macOS Ctrl+C leaves Orca open; watch the parent PID to couple shutdown.
+      // Dev launches lack IPC; parent-PID monitoring closes Electron after macOS Ctrl+C.
       requestDevParentShutdown()
     }
   }, 1000)
@@ -296,7 +300,7 @@ export function installDevParentSignalQuit(isDev: boolean): void {
   }
 
   const onSignal = (): void => {
-    // Why: run-electron-vite-dev forwards terminal shutdown signals here, so don't preserve the detached daemon for warm reattach.
+    // Forwarded dev shutdown must also stop the detached daemon rather than preserve warm reattach.
     requestDevParentShutdown()
   }
 
@@ -306,43 +310,34 @@ export function installDevParentSignalQuit(isDev: boolean): void {
 
 export function enableMainProcessGpuFeatures(): void {
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
-    // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
+    // Ubuntu/Xvfb E2E needs software rendering to avoid GPU-process startup failure.
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu')
     return
   }
 
   if (process.platform === 'darwin') {
-    // Why: Graphite can strand corrupt Metal tiles after idle; Ganesh preserves GPU compositing without the stale surface.
-    // Reached on every macOS launch only because GPU fallback skips this function and is win32-only; if fallback ever
-    // reaches macOS this must move out of this path or Macs silently lose the fix.
+    // Graphite can retain corrupt Metal tiles after idle. Keep this macOS fix unconditional if GPU fallback ever expands beyond win32.
     app.commandLine.appendSwitch('disable-skia-graphite')
   }
 
-  // Why: Blink evicts the oldest WebGL context past 16/renderer and each terminal pane holds one, silently downgrading panes to DOM.
-  // 128 raises the ceiling for real layouts while staying bounded so context leaks still surface.
+  // Each terminal consumes WebGL context capacity; raise the default 16 limit while keeping leaks bounded.
   app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
 
-  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
-  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
-  const isLinuxX11Override =
-    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
-  const isLinuxWaylandSession =
-    process.platform === 'linux' &&
-    !isLinuxX11Override &&
-    (Boolean(process.env.WAYLAND_DISPLAY) ||
-      process.env.XDG_SESSION_TYPE === 'wayland' ||
-      ozonePlatformHint === 'wayland' ||
-      ozonePlatform === 'wayland')
-  if (isLinuxWaylandSession) {
-    // Why: #5319 — Wayland loses the eager GPU channel; drop the GPU sandbox so Chromium opens it lazily.
+  const waylandSession = isLinuxWaylandSession({
+    platform: process.platform,
+    env: process.env,
+    ozonePlatform: app.commandLine.getSwitchValue('ozone-platform')
+  })
+  if (waylandSession) {
+    // #5319: drop the Wayland GPU sandbox so Chromium opens the lost eager channel lazily.
     app.commandLine.appendSwitch('disable-gpu-sandbox')
   }
 
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
-    // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
-    ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+    // Use conservative GPU-channel flags; xterm acceleration needs WebGL rather than global Vulkan/Graphite/WebGPU.
+    ...(waylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     existingFeatures
   ]
     .filter(Boolean)

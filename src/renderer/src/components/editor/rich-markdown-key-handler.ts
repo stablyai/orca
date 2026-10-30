@@ -1,3 +1,4 @@
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -55,7 +56,8 @@ export type KeyHandlerContext = {
   handleLocalImagePickRef: MutableRefObject<() => void>
   handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
-  flushPendingSerialization: () => void
+  /** Returns true when the pending edit was rejected instead of committed. */
+  flushPendingSerialization: () => boolean
   openSearchRef: MutableRefObject<() => void>
   openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   setIsEditingLink: (editing: boolean) => void
@@ -70,17 +72,23 @@ export type KeyHandlerContext = {
 }
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
-  return event.isComposing || editor?.view.composing === true
+  return isImeOwnedKeyboardEvent(event) || editor?.view.composing === true
 }
 
-/**
- * Why: extracted from RichMarkdownEditor to stay under the file line-limit
- * while keeping the keyboard handler logic co-located and testable.
- */
 export function createRichMarkdownKeyHandler(
   ctx: KeyHandlerContext
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
+    if (isImeOwnedKeyboardEvent(event)) {
+      return false
+    }
+    // Save must flush pending text even while the editor's composition state lingers.
+    if (handleRichMarkdownSaveShortcut(ctx, event)) {
+      return true
+    }
+    if (isComposingMarkdownInput(event, ctx.editorRef.current)) {
+      return false
+    }
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
     if (
       handleRichMarkdownCitationKey({
@@ -103,15 +111,11 @@ export function createRichMarkdownKeyHandler(
       ctx.openSearchRef.current()
       return true
     }
-    if (handleRichMarkdownSaveShortcut(ctx, event)) {
-      return true
-    }
     if (handleRichMarkdownAddReviewNoteShortcut(ctx, event)) {
       return true
     }
 
-    // Strikethrough: Cmd/Ctrl+Shift+X (standard shortcut used by Google
-    // Docs, Notion, etc. — supplements Tiptap's built-in Mod+Shift+S).
+    // Offer the familiar Mod+Shift+X alternative to Tiptap’s Mod+Shift+S.
     if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
       event.preventDefault()
       ctx.editorRef.current?.chain().focus().toggleStrike().run()
@@ -176,9 +180,7 @@ export function createRichMarkdownKeyHandler(
         event.preventDefault()
         return true
       }
-      // Why: table Enter (cell below / add row) must run before ProseMirror
-      // inserts an in-cell paragraph that GFM serialization cannot keep — but
-      // the slash/doc-link menus own Enter while open (their blocks run later).
+      // Table Enter must precede unserializable in-cell paragraph insertion; open menus retain Enter ownership.
       if (
         ed &&
         !ctx.slashMenuRef.current &&
@@ -191,10 +193,7 @@ export function createRichMarkdownKeyHandler(
       }
     }
 
-    // Tab/Shift-Tab: table cell nav first, then list indent/outdent, code-block
-    // spaces, and prevent focus escaping the editor.
-    // When the slash menu or doc-link menu is open, Tab selects a row instead
-    // (handled in the menu blocks below).
+    // Menus own Tab while open; otherwise navigate table cells before list/code indentation and prevent focus escape.
     if (event.key === 'Tab' && !ctx.slashMenuRef.current && !ctx.docLinkMenuRef.current) {
       event.preventDefault()
       const ed = ctx.editorRef.current
@@ -203,8 +202,7 @@ export function createRichMarkdownKeyHandler(
       }
       flushPendingProseMirrorSelection(ed)
 
-      // Why: Orca's Tab handler runs before TipTap Table shortcuts and used to
-      // always sink/lift lists, so table cell Tab/Shift-Tab never fired.
+      // Run table navigation before list indentation because this handler precedes Tiptap’s table shortcuts.
       if (!isComposingMarkdownInput(event, ed) && handleRichMarkdownTableTab(ed, event.shiftKey)) {
         return true
       }
@@ -221,19 +219,12 @@ export function createRichMarkdownKeyHandler(
         return true
       }
 
-      // Why: sinkListItem succeeds when the item has a previous sibling;
-      // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
+      // Consume Tab even when list indentation no-ops, preventing focus escape.
       indentRichMarkdownListItem(ed)
       return true
     }
 
-    // ── Doc-link menu navigation ──────────────────────
-    // Why: this block MUST be registered before the slash-menu block below.
-    // The slash-menu block early-returns with `return false` when no slash
-    // menu is open, which short-circuits every subsequent handler — a
-    // doc-link block placed after it would be dead code. When THIS menu is
-    // closed, fall through (no early return) so the slash-menu block below
-    // still gets a chance.
+    // Handle document links before the slash-menu early return or their menu becomes unreachable.
     const currentDocLinkMenu = ctx.docLinkMenuRef.current
     if (currentDocLinkMenu) {
       const currentFilteredDocLinkRows = ctx.filteredDocLinkRowsRef.current
@@ -262,9 +253,7 @@ export function createRichMarkdownKeyHandler(
         return true
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
-        // Why: with zero rows (empty state), Enter must fall through so it
-        // behaves as a normal paragraph break instead of silently eating the
-        // keystroke. syncDocLinkMenu closes the popover on the next tick.
+        // With no rows, let Enter create a paragraph; the next sync closes the menu.
         if (currentFilteredDocLinkRows.length === 0 || !activeEditorForDocLink) {
           return false
         }
@@ -282,13 +271,9 @@ export function createRichMarkdownKeyHandler(
         ctx.setDocLinkMenu(null)
         return true
       }
-      // Any other key (including ArrowLeft/ArrowRight, Backspace, printable
-      // characters) falls through. syncDocLinkMenu re-runs on the next
-      // onUpdate/onSelectionUpdate and closes or refreshes the popover based
-      // on whether the trigger still matches.
+      // Other keys fall through; selection/content updates resync the trigger and popover.
     }
 
-    // ── Slash menu navigation ─────────────────────────
     const currentSlashMenu = ctx.slashMenuRef.current
     if (!currentSlashMenu) {
       return false
@@ -306,8 +291,7 @@ export function createRichMarkdownKeyHandler(
       return false
     }
 
-    // Why: handleKeyDown is frozen from the first render, so this closure
-    // must read editorRef to get the live editor instance.
+    // The lifetime-stable handler must read the current editor from its ref.
     const activeEditor = ctx.editorRef.current
     if (!activeEditor) {
       return false
@@ -331,8 +315,7 @@ export function createRichMarkdownKeyHandler(
     }
     if (event.key === 'Enter' || event.key === 'Tab') {
       event.preventDefault()
-      // Why: this key handler is stable for the editor lifetime, so the ref
-      // mirrors the latest highlighted slash-menu item for keyboard picks.
+      // Read the latest highlighted command through its ref, avoiding the initial render’s stale selection.
       const selectedCommand = currentFilteredSlashCommands[ctx.selectedCommandIndexRef.current]
       if (selectedCommand) {
         runSlashCommand(

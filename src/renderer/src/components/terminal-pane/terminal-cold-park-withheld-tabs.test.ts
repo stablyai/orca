@@ -22,6 +22,7 @@ function pinnedRecord(pinnedUntilMs: number | null): ParkVerdictFlipRecord {
     windowStartMs: 0,
     flips: 0,
     notified: false,
+    lastFlipMs: 0,
     burstStartMs: 0,
     burstFlips: 0,
     pinnedUntilMs
@@ -46,8 +47,7 @@ describe('withholdUnparkableTerminalTabs', () => {
     expect(parkVerdictPinUntilMsByTabId.size).toBe(0)
   })
 
-  // Why both returned values matter: the caller needs the deadline to schedule
-  // the recheck that lets the tab park again once damping lapses.
+  // Return the deadline too: it schedules the only wakeup that releases damping.
   it('withholds a pinned tab and reports its deadline', () => {
     const records = new Map([['tab-a', pinnedRecord(9_000)]])
 
@@ -75,12 +75,10 @@ describe('withholdUnparkableTerminalTabs', () => {
     })
 
     expect(parkedTabIds.has('tab-a')).toBe(false)
-    // No pin: an uncovered tab has no damping deadline to recheck at.
     expect(parkVerdictPinUntilMsByTabId.size).toBe(0)
   })
 
-  // Why: an expired pin must hand the tab back to the parking policy, not
-  // strand it mounted for the rest of the session.
+  // Expired pins must release tabs back to policy instead of retaining them forever.
   it('parks a tab whose pin has lapsed', () => {
     const records = new Map([['tab-a', pinnedRecord(500)]])
 

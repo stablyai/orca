@@ -7,9 +7,6 @@ import { permissionArgs, type AndroidPermissionOp } from './android-permissions'
 import { logcatArgs, parseLogcatLine, type LogcatEntry } from './android-logcat'
 import { parseUiAutomatorXml, type AndroidAxNode } from './uiautomator-tree'
 
-// Impure capability operations: compose the pure arg-builders/parsers with the
-// command runner. The backend exposes thin delegations to these.
-
 const UIAUTOMATOR_DUMP_PATH = '/sdcard/window_dump.xml'
 
 export async function installAndroidApk(
@@ -58,8 +55,7 @@ export async function dumpAndroidAccessibilityTree(
   sdk: AndroidSdkPaths,
   serial: string
 ): Promise<AndroidAxNode> {
-  // uiautomator dump writes XML to a device file; read it back and parse. Check
-  // the dump first — otherwise `cat` can return a stale file from a prior dump.
+  // Check the dump before reading its file to avoid returning stale XML.
   ensureAdbOk(
     await runner(sdk.adb, ['-s', serial, 'shell', 'uiautomator', 'dump', UIAUTOMATOR_DUMP_PATH]),
     'uiautomator dump'
@@ -77,7 +73,7 @@ export async function captureAndroidLogcat(
   serial: string,
   options?: { lines?: number; filters?: readonly string[] }
 ): Promise<LogcatEntry[]> {
-  // One-shot dump for a request/response RPC; follow-mode would need streaming.
+  // RPC reads need a one-shot dump; follow mode requires streaming.
   const result = ensureAdbOk(
     await runner(sdk.adb, logcatArgs(serial, { ...options, dump: true })),
     'adb logcat'

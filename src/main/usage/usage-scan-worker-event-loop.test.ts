@@ -8,24 +8,9 @@ import { Worker } from 'node:worker_threads'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { UsageScanWorkerClient, scanCodexUsageOnWorker } from './usage-scan-worker-client'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import { readUsageSourceCache, type UsageSourceCacheRef } from './usage-source-cache-file'
 
-// Why this test exists: "the scan no longer blocks the main process" is not a
-// stopwatch claim. It measures the *calling* thread's event-loop active time —
-// the milliseconds that thread spent running JS rather than parked in the
-// loop's poll phase.
-//
-// One case runs both arms over one corpus so they are compared against each
-// other rather than each against a fixed threshold: the identical scan goes
-// first through the pre-worker calling-thread path, then through the worker,
-// and the worker arm must cost the caller a fraction of the JS time.
-//
-// Active milliseconds, not the active/wall fraction (issue #18788): CPU
-// contention drags the calling-thread arm's *fraction* down toward the
-// worker's — a loaded ubuntu runner measured 0.76 against a 0.8 floor — while
-// stretching wall time, which widens the millisecond gap instead.
-//
-// The presence preconditions on both arms are load-bearing. An arm that
-// silently scanned nothing would otherwise satisfy the comparison trivially.
+// Compare calling-thread active JS milliseconds for identical inline/worker corpora, not CPU-contention-sensitive active/wall ratios (#18788). Require both arms to scan real data or an empty scan could pass.
 
 const FILE_COUNT = 600
 const EVENTS_PER_FILE = 60
@@ -57,8 +42,7 @@ function buildRolloutLines(sessionId: string, seed: number): string {
       payload: { cwd: '/tmp/orca-usage-oracle-project', model: 'gpt-5.6-sol' }
     })
   ]
-  // Seeded per file so no two rollouts mint the same event key; identical keys
-  // would be deduped as fork copies and shrink the corpus the scan actually parses.
+  // Unique event keys per file prevent fork-copy deduplication from shrinking the measured corpus.
   let total = seed * 10_000_000
   for (let index = 0; index < EVENTS_PER_FILE; index++) {
     total += TOKENS_PER_EVENT
@@ -84,7 +68,6 @@ function buildRolloutLines(sessionId: string, seed: number): string {
               total_tokens: TOKENS_PER_EVENT
             }
           },
-          // Padding so each line is rollout-shaped rather than trivially short.
           text: 'x'.repeat(200)
         }
       })
@@ -137,13 +120,7 @@ function createWorkerClient(): UsageScanWorkerClient {
   })
 }
 
-/**
- * Run `fn` with both Codex session lanes pointed at the fixture.
- * Why the real process environment and not the Worker `env` option: that option
- * only replaces the worker's JS-visible `process.env`, while `os.homedir()`
- * reads the OS environment the threads share — so a worker given `HOME` there
- * still scanned the developer's real ~/.codex.
- */
+/** Set the real process environment: Worker env changes process.env but os.homedir reads the shared OS environment and would scan the developer's real history. */
 async function withCorpusEnv<T>(fn: () => Promise<T>): Promise<T> {
   const previous = {
     ORCA_USER_DATA_PATH: process.env.ORCA_USER_DATA_PATH,
@@ -166,9 +143,7 @@ beforeAll(async () => {
   corpusRoot = mkdtempSync(join(tmpdir(), 'orca-usage-scan-oracle-'))
   writeCorpus(corpusRoot)
   workerEntryPath = join(corpusRoot, 'usage-scan-worker-entry.cjs')
-  // Why bundle here: `new Worker` needs JavaScript, and the production entry is
-  // emitted by the app build. Bundling the same source keeps the oracle running
-  // the real scanner instead of a stand-in.
+  // Bundle the production source because Worker needs JavaScript; keep the oracle on the real scanner.
   await build({
     entryPoints: [resolve(__dirname, 'usage-scan-worker-entry.ts')],
     outfile: workerEntryPath,
@@ -186,9 +161,7 @@ afterAll(() => {
 
 describe('usage scan worker event-loop occupancy', () => {
   it('costs the calling thread a fraction of the JS time the same scan does inline', async () => {
-    // Calling thread first: the baseline is measured with no worker alive, and
-    // the worker arm then reads an OS cache the inline arm already warmed,
-    // which can only understate the gap being asserted.
+    // Measure inline before any worker exists; warming OS cache for the worker only understates the asserted gap.
     const caller = await measureCallerOccupancy(() => scanCodexUsageOnCallingThread())
     expect(caller.value.processedFiles).toHaveLength(FILE_COUNT)
     expect(caller.value.sessions).toHaveLength(FILE_COUNT)
@@ -196,17 +169,23 @@ describe('usage scan worker event-loop occupancy', () => {
     expect(caller.value.dailyAggregates[0]?.eventCount).toBe(EXPECTED_EVENTS)
 
     const client = createWorkerClient()
+    const sourceCache: UsageSourceCacheRef = {
+      path: join(corpusRoot, 'orca-codex-usage-sources.json'),
+      schemaVersion: 1,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
     const worker = await measureCallerOccupancy(() =>
-      withCorpusEnv(() => scanCodexUsageOnWorker((body) => client.scan(body), WORKTREES, []))
+      withCorpusEnv(() =>
+        scanCodexUsageOnWorker((body) => client.scan(body), WORKTREES, sourceCache)
+      )
     )
-    expect(worker.value.source).toHaveLength(FILE_COUNT)
+    expect(await readUsageSourceCache(sourceCache)).toHaveLength(FILE_COUNT)
     expect(worker.value.sessions).toHaveLength(FILE_COUNT)
     expect(worker.value.dailyAggregates).toHaveLength(1)
     expect(worker.value.dailyAggregates[0]?.eventCount).toBe(EXPECTED_EVENTS)
 
-    // The caller still pays to post the request and structured-clone a
-    // 600-file result back, so this is a fifth, not a rout. Measured margin is
-    // ~50x idle and ~90x under CPU contention.
+    // Request posting/cloning still costs main time; allow one fifth of inline occupancy (measured margins 50–90x).
     expect(
       worker.occupancy.activeMs,
       `${formatOccupancy('worker', worker.occupancy)}; ${formatOccupancy('calling thread', caller.occupancy)}`

@@ -6,22 +6,17 @@ const WORKTREE = 'repo-9::/w'
 const BRANCH_COMPARE = {
   summary: {
     baseRef: 'origin/main',
-    baseOid: 'base-oid',
+    baseOid: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
     compareRef: 'feature',
-    headOid: 'head-oid',
-    mergeBase: 'merge-base',
+    headOid: 'f0e1d2c3b4a5968778695a4b3c2d1e0f98765432',
+    mergeBase: '0123456789abcdef0123456789abcdef01234567',
     changedFiles: 1,
     status: 'ready'
   },
   entries: []
 }
 
-/**
- * The review screen's three loaders, mounted as the plain async senders they are. `scope` picks the
- * diff arm: a worktree item asks `git.diff`, a branch item asks `git.branchDiff` from the compare
- * summary above. Text diffs are deliberately not scripted — highlighting them reaches `lowlight`,
- * which the module loader refuses as an unspecified native dependency.
- */
+// Use real async loaders; omit text highlighting because lowlight is outside this recorder’s declared module boundary.
 export function diffReviewMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -59,7 +54,7 @@ export function diffReviewMountAdapters(
       return {
         action(name, args) {
           if (name === 'snapshot') {
-            return loaders.loadMobileDiffReviewSnapshot(client, WORKTREE).then((value) => {
+            return loaders.loadMobileDiffReviewSnapshot(client, WORKTREE, false).then((value) => {
               snapshot = value
               return value
             })

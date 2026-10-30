@@ -5,12 +5,6 @@ const WORKTREE = 'repo-9::/w'
 const PR_NUMBER = 12
 const FORK_REPO = { owner: 'fork-owner', repo: 'fork-repo', host: 'github.enterprise.test' }
 
-/**
- * The PR sidebar's `github.*` surface: seven reads and twelve mutations, all exported async
- * functions taking a client, so no React host is needed and the recorded state is each wrapper's
- * own `{ ok }` outcome. `fork` picks the arm that forwards a `prRepo` slug, which only the
- * allow-listed methods accept.
- */
 export function githubPrMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -171,12 +165,22 @@ export function githubPrMountAdapters(
     'session.pr-triage-launch': ({ client }) => {
       const launch = modules.load<typeof import('../../../session/pr-ai-triage-launch')>(
         'mobile/src/session/pr-ai-triage-launch.ts'
-      ).createTerminalAndSendPrompt
+      ).launchAgentWithPrompt
       let launched: unknown = 'unlaunched'
       return {
         action: (_name, args) =>
-          launch(client, WORKTREE, String(args.prompt ?? 'Fix the failing checks')).then(() => {
-            launched = 'sent'
+          launch({
+            client,
+            hostCapabilities:
+              args.legacyHost === true
+                ? []
+                : ['agent.launch.v2', 'agent.launch.replay.v1', 'agent.launch.replay-required.v1'],
+            worktreeId: WORKTREE,
+            actionId: 'fixChecks',
+            prompt: String(args.prompt ?? 'Fix the failing checks'),
+            launchSource: 'task_page'
+          }).then((result) => {
+            launched = result
           }),
         state: () => ({ launched }),
         dispose: () => {}

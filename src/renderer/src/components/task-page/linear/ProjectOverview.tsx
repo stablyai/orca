@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LinearProjectOverview } from '@/components/linear-project-view-surfaces'
 export function TaskPageLinearProjectOverview({
   model

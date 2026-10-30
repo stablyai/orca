@@ -1,4 +1,4 @@
-// Split from github.test.ts to keep it under its line cap.
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'

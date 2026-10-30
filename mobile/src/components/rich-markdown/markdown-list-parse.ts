@@ -41,12 +41,7 @@ export function listKind(item: ParsedListItem): 'task' | 'ol' | 'ul' {
   return item.ordered ? 'ol' : 'ul'
 }
 
-/**
- * The run of list lines starting at an index, as a tree, and where the run ended.
- *
- * A stack rather than recursion because indentation can drop by more than one level at a time, and
- * the caller needs the index the run stopped at to carry on reading blocks after it.
- */
+// Parse contiguous list run with stack: indent can drop several levels and caller needs end index to resume block parsing.
 export function parseListTree(
   lines: string[],
   startIndex: number

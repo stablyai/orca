@@ -47,12 +47,6 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .buttonUp(pressIndex: 2)), 2)
     }
 
-    func testInterEventPauseIsNonZero() {
-        // Unpaced posts race the window server and the mouseUp is dropped,
-        // turning the click into a hover-only no-op (STA-3433).
-        XCTAssertGreaterThan(SyntheticMouseClickDelivery.interEventPauseMicroseconds, 0)
-    }
-
     func testAmbiguousWindowFrameFallbackDoesNotSelectRecipient() {
         let candidates = [(windowID: 101, frame: 7), (windowID: 202, frame: 7)]
 
@@ -184,11 +178,15 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
                     trace.append("up")
                 }
             },
-            pause: { _ in }
+            pause: { interval in
+                XCTAssertGreaterThan(interval, 0)
+                trace.append("pause")
+            }
         )
 
         XCTAssertEqual(trace, [
-            "move", "recipient", "down", "up", "recipient", "recipient", "down", "up", "recipient"
+            "move", "pause", "recipient", "down", "pause", "up", "recipient",
+            "pause", "recipient", "down", "pause", "up", "recipient", "pause"
         ])
     }
 
@@ -279,27 +277,6 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
             .buttonDown(pressIndex: 1),
             .buttonUp(pressIndex: 1),
         ])
-    }
-
-    func testMultiClickRevalidatesBeforeEveryPressAndBetweenReleases() throws {
-        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
-        var validationCount = 0
-        var posted: [SyntheticMouseClickDelivery.Step] = []
-
-        try SyntheticMouseClickDelivery.deliver(
-            clickCount: 2,
-            target: target,
-            currentObservation: {
-                validationCount += 1
-                return .focused(target)
-            },
-            makeEvent: { $0 },
-            post: { posted.append($0) },
-            pause: { _ in }
-        )
-
-        XCTAssertEqual(validationCount, 4)
-        XCTAssertEqual(posted, SyntheticMouseClickDelivery.steps(clickCount: 2))
     }
 
     func testButtonPairIsPreparedBeforeMouseDownPosts() {

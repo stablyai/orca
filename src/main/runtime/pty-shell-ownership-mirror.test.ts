@@ -6,14 +6,31 @@ describe('PtyShellOwnershipMirror', () => {
     const confirm = vi.fn(async () => true)
     const mirror = new PtyShellOwnershipMirror(confirm)
 
-    // Restored bytes bypass scan(); the seed must carry the alt state or a
-    // pane reattached mid-TUI never proves ownership after the TUI dies.
+    // Restored bytes bypass scan; seed alternate-screen state so later TUI death can prove shell ownership.
     mirror.seedOwner(undefined, { alternateScreen: true })
     mirror.scan('\x1b]133;D;137\x07')
 
     await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1))
     await mirror.settle()
     expect(mirror.owner).toBe('shell')
+  })
+
+  it('asks at the real D after refuted stray Ds, in lockstep with the host barrier', async () => {
+    let hostGrounded = false
+    const confirm = vi.fn(async () => hostGrounded)
+    const mirror = new PtyShellOwnershipMirror(confirm)
+    mirror.scan('\x1b]133;C\x07\x1b[>1u\x1b[?1049hAGENT')
+
+    for (let index = 1; index <= 5; index += 1) {
+      mirror.scan('\x1b]133;C\x07nested\x1b]133;D;0\x07')
+      await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(index))
+      await mirror.settle()
+    }
+    hostGrounded = true
+    mirror.scan('\x1b]133;D;137\x07')
+
+    await vi.waitFor(() => expect(mirror.owner).toBe('shell'))
+    expect(confirm).toHaveBeenCalledTimes(6)
   })
 
   it('does not arm from a seed on the normal buffer', async () => {
@@ -55,8 +72,6 @@ describe('PtyShellOwnershipMirror', () => {
     })
     mirror.seedOwner(undefined, { alternateScreen: true })
     mirror.scan('\x1b]133;D;137\x07')
-    // The settle deadline outlives the attempt deadline, so this waits out the
-    // retirement of the hung attempt.
     await mirror.settle()
     expect(mirror.owner).toBeUndefined()
 

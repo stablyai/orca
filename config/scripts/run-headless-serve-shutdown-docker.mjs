@@ -63,6 +63,9 @@ try {
     'build',
     '--platform',
     platform,
+    ...(process.env.ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE
+      ? ['--cache-from', process.env.ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE]
+      : []),
     '-f',
     shutdownDockerfile,
     '-t',

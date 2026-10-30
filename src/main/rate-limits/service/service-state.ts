@@ -13,6 +13,8 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
+  type AntigravityUsageEnabledResolver,
+  type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
@@ -31,13 +33,18 @@ export abstract class RateLimitServiceState {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    cursor: null,
+    zcode: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
+  protected cursorAuthConfigured = false
+  protected openCodeGoApiKeyConfigured = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
   protected deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
-  // Why: throttle repeated focus/show/restore events so one outage doesn't create a tight provider retry loop.
+  // Coalesce focus/show/restore bursts into provider-throttled retries.
   protected lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
@@ -46,9 +53,11 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    cursor: 0,
+    zcode: 0
   }
-  // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
+  // Failures increase activation backoff; success/unavailable resets it.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
@@ -57,7 +66,9 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    cursor: 0,
+    zcode: 0
   }
   protected mainWindow: BrowserWindow | null = null
   protected detachWindowListeners: (() => void) | null = null
@@ -70,18 +81,23 @@ export abstract class RateLimitServiceState {
   protected fetchIdleResolvers: (() => void)[] = []
   protected codexFetchGeneration = 0
   protected claudeFetchGeneration = 0
-  // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
+  // Why: cached display receipts cannot establish when the selected account was last checked.
+  protected lastClaudeCheckCompletedAt: number | null = null
+  // Capture account attribution once per cycle instead of rerunning auth preparation on every post.
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
+  protected zcodeFetchGeneration = 0
+  protected antigravityFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
+  protected lastZcodeConfigHash = ''
   protected codexHomePathResolver: CodexHomePathResolver | null = null
   protected codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
   }
-  // Why: resolved per cycle — the local-account runtime policy can flip between fetches.
+  // Runtime policy may change between cycles.
   protected kimiHomeResolver: KimiHomeResolver | null = null
   protected claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   protected claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
@@ -89,8 +105,11 @@ export abstract class RateLimitServiceState {
     wslDistro: null
   }
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
+  protected openCodeGoApiKeyResolver: (() => string | null) | null = null
   protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
+  protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
+  protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
@@ -129,7 +148,7 @@ export abstract class RateLimitServiceState {
         isFetching: fetching.has(accountId)
       })
     }
-    // Why: include fetching-but-uncached accounts so the renderer shows a loading indicator for newly added accounts.
+    // New uncached accounts still need loading indicators.
     for (const accountId of fetching) {
       if (!cache.has(accountId)) {
         result.push({

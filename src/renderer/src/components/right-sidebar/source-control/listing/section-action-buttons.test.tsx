@@ -3,26 +3,17 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { SourceControlBranchSection } from './branch-section'
 import { SourceControlUncommittedSections } from './uncommitted-sections'
-import type { SourceControlDisplaySection, SourceControlDisplaySectionId } from './section-order'
+import type {
+  SourceControlDisplaySection,
+  SourceControlDisplaySectionId
+} from '../../../../../../shared/source-control-section-order'
 
 afterEach(cleanup)
-
-const BRANCH_SUMMARY: GitBranchCompareSummary = {
-  baseRef: 'origin/main',
-  baseOid: 'base-oid',
-  compareRef: 'feature',
-  headOid: 'head-oid',
-  mergeBase: 'merge-base-oid',
-  changedFiles: 1,
-  status: 'ready'
-}
 
 const UNSTAGED_ENTRY: GitStatusEntry = {
   path: 'src/app.ts',
@@ -30,57 +21,32 @@ const UNSTAGED_ENTRY: GitStatusEntry = {
   area: 'unstaged'
 }
 
-// Sections render collapsed so the assertions see the header actions alone,
-// without the virtualized file list.
-function renderBranchSection(): void {
-  render(
-    <TooltipProvider>
-      <SourceControlBranchSection
-        branchSummary={BRANCH_SUMMARY}
-        filteredBranchEntries={[]}
-        totalBranchEntryCount={0}
-        collapsedSections={new Set(['branch'])}
-        toggleSection={vi.fn()}
-        sourceControlViewMode="list"
-        visibleBranchTreeRows={[]}
-        fileListScrollElement={null}
-        collapsedTreeDirs={new Set()}
-        toggleTreeDir={vi.fn()}
-        currentWorktreeId="worktree-1"
-        worktreePath="/tmp/worktree-1"
-        revealInExplorer={vi.fn()}
-        activeConnectionId={null}
-        openCommittedDiff={vi.fn()}
-        openBranchAllDiffs={vi.fn()}
-        diffCommentCountByPath={new Map()}
-      />
-    </TooltipProvider>
+function renderUncommittedSections({
+  sections = [{ id: 'unstaged', area: 'unstaged', items: [UNSTAGED_ENTRY] }],
+  handleStageSectionPaths = vi.fn()
+}: {
+  sections?: SourceControlDisplaySection[]
+  handleStageSectionPaths?: (
+    sectionId: SourceControlDisplaySectionId,
+    paths: readonly string[]
+  ) => Promise<void>
+} = {}): void {
+  const unfilteredById = new Map<SourceControlDisplaySectionId, SourceControlDisplaySection>(
+    sections.map((section) => [section.id, section])
   )
-}
-
-// An unstaged section with one plain entry surfaces Discard all + Stage all
-// next to View all — the crowded case the single-line layout has to survive.
-function renderUncommittedSections(): void {
-  const section: SourceControlDisplaySection = {
-    id: 'unstaged',
-    area: 'unstaged',
-    items: [UNSTAGED_ENTRY]
-  }
-  const unfilteredById = new Map<SourceControlDisplaySectionId, SourceControlDisplaySection>([
-    ['unstaged', section]
-  ])
   render(
     <TooltipProvider>
       <SourceControlUncommittedSections
-        displaySections={[section]}
+        displaySections={sections}
         unfilteredDisplaySectionsById={unfilteredById}
         normalizedFilter=""
-        collapsedSections={new Set(['unstaged'])}
+        collapsedSections={new Set(sections.map((section) => section.id))}
         toggleSection={vi.fn()}
         onViewSection={vi.fn()}
         isExecutingBulk={false}
         requestDiscardAllInArea={vi.fn()}
         handleStageAllPaths={vi.fn()}
+        handleStageSectionPaths={handleStageSectionPaths}
         handleUnstagePaths={vi.fn()}
         sourceControlViewMode="list"
         visibleTreeRowsBySection={{}}
@@ -110,42 +76,17 @@ function renderUncommittedSections(): void {
 }
 
 describe('source control section header actions', () => {
-  it('groups the uncommitted View all button with the icon actions in one row', () => {
-    renderUncommittedSections()
+  it('includes untracked files in the Changes header Stage all', () => {
+    const handleStageSectionPaths = vi.fn(async () => {})
+    const changes: SourceControlDisplaySection = {
+      id: 'unstaged',
+      area: 'unstaged',
+      items: [UNSTAGED_ENTRY, { path: 'new.ts', status: 'untracked', area: 'untracked' }]
+    }
+    renderUncommittedSections({ sections: [changes], handleStageSectionPaths })
 
-    const viewAll = screen.getByRole('button', { name: 'View all' })
-    const discardAll = screen.getByRole('button', { name: 'Discard all' })
-    const stageAll = screen.getByRole('button', { name: 'Stage all' })
+    fireEvent.click(screen.getByRole('button', { name: 'Stage all' }))
 
-    // One shared parent, not a sibling of the icon cluster: that grouping is
-    // what keeps View all on the icons' line instead of below them.
-    expect(viewAll.parentElement).toBe(discardAll.parentElement)
-    expect(viewAll.parentElement).toBe(stageAll.parentElement)
-    expect(viewAll.parentElement?.className).not.toContain('flex-wrap')
-  })
-
-  it('seats the uncommitted action row in a header slot that cannot shrink or wrap', () => {
-    renderUncommittedSections()
-
-    const actionsSlot = screen.getByRole('button', { name: 'View all' }).parentElement
-      ?.parentElement
-    expect(actionsSlot).toHaveClass('shrink-0')
-    expect(actionsSlot?.className).not.toContain('flex-wrap')
-  })
-
-  it('seats the branch View all button in a header slot that cannot shrink or wrap', () => {
-    renderBranchSection()
-
-    const actionsSlot = screen.getByRole('button', { name: 'View all' }).parentElement
-    expect(actionsSlot).toHaveClass('shrink-0')
-    expect(actionsSlot?.className).not.toContain('flex-wrap')
-  })
-
-  it('keeps the View all label on a single line', () => {
-    renderBranchSection()
-
-    // Supplied by the shared Button base variant; pinned here so a change to that
-    // variant can't silently start wrapping these labels.
-    expect(screen.getByRole('button', { name: 'View all' })).toHaveClass('whitespace-nowrap')
+    expect(handleStageSectionPaths).toHaveBeenCalledWith('unstaged', ['src/app.ts', 'new.ts'])
   })
 })

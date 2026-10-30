@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import {
@@ -29,8 +30,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Why: an agent reads the receipt code to pick a recovery; every case is driven from the real
-// RPC dispatcher and checked against the shared contract the CLI-side test formats.
+// Drive real dispatch and shared receipt codes so agents can select recovery without parsing prose.
 describe('orchestration dispatch failure codes through RpcDispatcher', () => {
   it('reports task_not_found for a task id that does not exist', async () => {
     const harness = createHarness()
@@ -141,9 +141,7 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
   it('types the atomic claim loser when the task changes after the ready precheck', async () => {
     const harness = createHarness()
     const task = harness.db.createTask({ spec: 'raced' })
-    // Why: the pane lookup runs after the ready precheck and before the DB claim, so failing the
-    // task there is the interleaving a concurrent status change produces. The loser's DB refusal
-    // must carry the same typed receipt instead of the bare Error it used to throw.
+    // Change task state between ready precheck and DB claim; the losing claim must return the same typed refusal.
     vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) => {
       if (handle === WORKER_HANDLE) {
         harness.db.updateTaskStatus(task.id, 'failed', 'raced out')

@@ -6,9 +6,17 @@ import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
+import { runWithRemoteCliPageAdmission } from './remote-cli-page-admission'
+import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
+import { releaseHeldPageInput } from './guest-direct-key-input'
+import {
+  captureRemoteCliBrowserRevocation,
+  captureRemoteCliBrowserScope,
+  runOutsideRemoteCliBrowserScope
+} from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
-  // Why: route tab switch through the command queue so it can't race in-flight commands targeting the old tab.
+  // Serialize tab switches behind commands targeting the current tab.
   async tabSwitch(
     index: number | undefined,
     worktreeId?: string,
@@ -16,7 +24,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
   ): Promise<BrowserTabSwitchResult> {
     return this.enqueueCommand(worktreeId, async () => {
       const tabs = this.getRegisteredTabs(worktreeId)
-      // Why: queue delay can change the tab list before execution — recompute against live webContents so no vanished index is activated.
+      // The tab list may change while this switch waits in the queue.
       const liveEntries = [...tabs.entries()].filter(([, wcId]) => this.getWebContents(wcId))
       let switchedIndex = index ?? -1
       let resolvedPageId = browserPageId
@@ -33,9 +41,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       }
       const [tabId, wcId] = liveEntries[switchedIndex]
       this.activeWebContentsId = wcId
-      // Why: resolveActiveTab prefers the per-worktree map, so update it or later commands keep routing to the old tab.
       const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(tabId)
-      // Why: `tab switch --page` may omit --worktree, so still update the owning worktree's active slot for later scoped commands.
+      // Page-only switches must also update the owning workspace for later scoped commands.
       if (owningWorktreeId) {
         this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
       }
@@ -43,18 +50,12 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       return { switched: switchedIndex, browserPageId: tabId }
     })
   }
-  // ── Internal ──
 
   protected async enqueueCommand<T>(
     worktreeId: string | undefined,
     execute: (sessionName: string) => Promise<T>
   ): Promise<T> {
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      undefined,
-      async (sessionName) => execute(sessionName),
-      { ensureVisible: false }
-    )
+    return this.enqueueTargetedCommand(worktreeId, undefined, execute)
   }
 
   protected async enqueueTargetedCommand<T>(
@@ -64,14 +65,18 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     this.assertCommandAdmission()
-    const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
-    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
+    const assertNotRevoked = captureRemoteCliBrowserRevocation()
+    const origin = captureRemoteCliBrowserScope()
+    assertNotRevoked()
+    const { browserPageId: pageId } = this.resolveCommandTarget(
+      worktreeId,
+      browserPageId,
+      options.requireScopedTarget
+    )
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
+    const agentCommand = this.browserManager.beginAgentCommand(pageId)
 
-    if (options.ensureSession !== false) {
-      await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
-    }
-    this.assertCommandAdmission()
-
+    // Dropped commands never execute, so settling also ends the lease; ending twice is harmless.
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
       if (!queue) {
@@ -79,74 +84,92 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         this.commandQueues.set(sessionName, queue)
       }
       queue.push({
-        execute: (() =>
-          this.executeWithVisibleTarget(
-            sessionName,
-            worktreeId,
-            target,
-            execute,
-            options
-          )) as () => Promise<unknown>,
+        execute: () => {
+          assertNotRevoked()
+          const run = (): Promise<T> =>
+            this.executeQueuedCommand(
+              worktreeId,
+              pageId,
+              (session, target) => {
+                const gate = (): void => assertNotRevoked(target.webContentsId)
+                gate()
+                return origin.bridged
+                  ? this.runHostCommand(session, target.webContentsId, gate, origin, () =>
+                      execute(session, target)
+                    )
+                  : execute(session, target)
+              },
+              options
+            )
+          return origin.run(() => agentCommand.run(run))
+        },
         resolve: resolve as (value: unknown) => void,
         reject
       })
       this.processQueue(sessionName)
-    })
+    }).finally(agentCommand.end)
   }
 
-  protected async executeWithVisibleTarget<T>(
-    sessionName: string,
+  protected async executeQueuedCommand<T>(
     worktreeId: string | undefined,
-    target: ResolvedBrowserCommandTarget,
+    browserPageId: string,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions
   ): Promise<T> {
-    if (options.ensureVisible === false) {
-      return execute(sessionName, target)
-    }
-
-    // Why: inactive panes are display:none; the automation lease makes only this target paintable without selecting it.
-    const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
+    this.assertCommandAdmission()
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    // A queued page may acquire a replacement guest before execution.
+    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    const releaseGuest = this.browserManager.holdGuestActive(target.webContentsId)
     try {
-      const visibleTarget = await this.refreshTargetAfterAutomationVisibility(
-        sessionName,
-        worktreeId,
-        target,
-        options
-      )
-      return await execute(sessionName, visibleTarget)
+      if (options.ensureSession !== false) {
+        await this.ensureSession(sessionName, browserPageId, target.webContentsId)
+      }
+      return await execute(sessionName, target)
     } finally {
-      restore()
+      releaseGuest()
     }
   }
 
-  protected async refreshTargetAfterAutomationVisibility(
+  /** Revocation must stop every later step of a host command. */
+  private runHostCommand<T>(
     sessionName: string,
-    worktreeId: string | undefined,
-    target: ResolvedBrowserCommandTarget,
-    options: EnqueueTargetedCommandOptions
-  ): Promise<ResolvedBrowserCommandTarget> {
-    const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
-    if (visibleTarget.webContentsId === target.webContentsId) {
-      return visibleTarget
-    }
+    webContentsId: number,
+    gate: () => void,
+    { revoked, hostRevoked }: { revoked?: AbortSignal; hostRevoked?: AbortSignal },
+    execute: () => Promise<T>
+  ): Promise<T> {
+    return runWithRemoteCliPageAdmission(webContentsId, gate, execute, {
+      revoked,
+      hostRevoked,
+      inPageTurn: (work) => this.enqueueDesktopPageWork(sessionName, work),
+      retire: () =>
+        this.destroySession(sessionName, {
+          closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
+          keepQueuedCommands: true
+        }),
+      releaseHeld: (release) => {
+        const wc = this.getWebContents(webContentsId)
+        return wc
+          ? releaseHeldPageInput(wc, release, () =>
+              this.browserManager.guardUserFocusForAgentInput(webContentsId)
+            )
+          : Promise.resolve()
+      }
+    })
+  }
 
-    if (this.activeWebContentsId === target.webContentsId) {
-      this.activeWebContentsId = visibleTarget.webContentsId
-    }
-    if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === target.webContentsId) {
-      this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
-    }
-
-    // Why: making a parked webview paintable can re-register the page with a new guest webContents; tear down the stale session.
-    await this.restartSessionForTarget(
-      sessionName,
-      visibleTarget.browserPageId,
-      visibleTarget.webContentsId,
-      { recreate: options.ensureSession !== false }
-    )
-
-    return visibleTarget
+  /** Serialize desktop cleanup with commands on the same page. */
+  private enqueueDesktopPageWork(sessionName: string, work: () => Promise<void>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      let queue = this.commandQueues.get(sessionName)
+      if (!queue) {
+        queue = []
+        this.commandQueues.set(sessionName, queue)
+      }
+      queue.push({ execute: () => runOutsideRemoteCliBrowserScope(work), resolve, reject })
+      void this.processQueue(sessionName)
+    })
   }
 
   protected async processQueue(sessionName: string): Promise<void> {

@@ -1,48 +1,71 @@
-// Where the browser-history block lands inside the omnibox entry rows: below
-// every file the query matched and below anything the user typed as a URL,
-// above the new-file and web-search fallbacks.
+// Place history with matching URL entries, otherwise below file matches and above creation/search fallbacks.
 
 import { dropUrlEntriesCoveredByHistoryRows } from './open-tab-entry-dedupe'
+import { normalizeBrowserHistoryUrl } from '../../../../shared/workspace-session-browser-history'
 import {
   isActiveEntryOption,
+  type ActiveEntryOption,
   type ActiveOption,
   type BrowserHistoryOmniboxRow
 } from './tab-create-entry-active-option'
 import type { TabEntryOption } from './tab-create-entry-action'
 
-// Leaving the workspace is the heavier action, so a local file outranks a
-// remembered page even when the match was fuzzy.
-function isFileOrUrlOption(option: TabEntryOption): boolean {
+function isTypedUrlOption(option: TabEntryOption): boolean {
   const { kind } = option.classification
-  return (
-    kind === 'existing-file' ||
-    kind === 'absolute-file' ||
-    kind === 'explicit-url' ||
-    kind === 'host-url'
-  )
+  return kind === 'explicit-url' || kind === 'host-url'
 }
 
-export function insertHistoryRowsBelowFileMatches(
-  entryOptions: readonly TabEntryOption[],
-  historyRows: readonly BrowserHistoryOmniboxRow[]
-): readonly ActiveOption[] {
-  const options = dropUrlEntriesCoveredByHistoryRows(entryOptions, historyRows)
-    .filter(isActiveEntryOption)
-    .map((option) => ({ kind: 'entry' as const, option }))
-  if (historyRows.length === 0) {
-    return options
+// Prefer workspace files over navigating away to remembered pages, including fuzzy file matches.
+function isFileOption(option: TabEntryOption): boolean {
+  const { kind } = option.classification
+  return kind === 'existing-file' || kind === 'absolute-file' || kind === 'html-file-url'
+}
+
+function historyInsertIndex(
+  options: readonly ActiveEntryOption[],
+  keptOptions: readonly ActiveEntryOption[]
+): number {
+  // Reuse typed-URL placement so browsing history cannot change Enter’s destination ranking.
+  const urlIndex = options.findIndex(isTypedUrlOption)
+  if (urlIndex !== -1) {
+    return keptOptions.includes(options[urlIndex]) ? urlIndex + 1 : urlIndex
   }
-  // Scanning for the last one, not the leading run: the classifier promotes web
-  // search above fuzzy files for phrase queries, and history belongs under both.
+  // Find the last file match because phrase queries can interleave web search before fuzzy files.
   let insertAt = 0
-  for (const [index, option] of options.entries()) {
-    if (isFileOrUrlOption(option.option)) {
+  for (const [index, option] of keptOptions.entries()) {
+    if (isFileOption(option)) {
       insertAt = index + 1
     }
   }
+  return insertAt
+}
+
+export function placeHistoryRowsInEntryOptions(
+  entryOptions: readonly TabEntryOption[],
+  historyRows: readonly BrowserHistoryOmniboxRow[]
+): readonly ActiveOption[] {
+  const options = entryOptions.filter(isActiveEntryOption)
+  const keptOptions = dropUrlEntriesCoveredByHistoryRows(options, historyRows)
+  const rows = keptOptions.map((option) => ({ kind: 'entry' as const, option }))
+  if (historyRows.length === 0) {
+    return rows
+  }
+  const urlClassification = options.find(isTypedUrlOption)?.classification
+  const normalizedTypedUrl =
+    urlClassification?.kind === 'explicit-url' || urlClassification?.kind === 'host-url'
+      ? normalizeBrowserHistoryUrl(urlClassification.url)
+      : undefined
+  const typedUrlHistoryRow = historyRows.find(
+    (row) => row.entry.normalizedUrl === normalizedTypedUrl
+  )
+  // A replacement must keep the typed destination ahead of more frequently visited subpages.
+  const rankedHistoryRows = typedUrlHistoryRow
+    ? [typedUrlHistoryRow, ...historyRows.filter((row) => row !== typedUrlHistoryRow)]
+    : historyRows
+  const insertAt = historyInsertIndex(options, keptOptions)
   return [
-    ...options.slice(0, insertAt),
-    ...historyRows.map((option) => ({ kind: 'history' as const, option })),
-    ...options.slice(insertAt)
+    ...rows.slice(0, insertAt),
+    ...rankedHistoryRows.map((option) => ({ kind: 'history' as const, option })),
+    ...rows.slice(insertAt)
   ]
 }

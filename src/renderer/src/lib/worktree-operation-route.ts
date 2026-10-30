@@ -1,29 +1,40 @@
 import type { AppState } from '@/store/types'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   hasIndexedDetectedWorktree,
+  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { onPairedWebClientHost } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
 
-export { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
-
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
   runtimeEnvironmentId: string | null
+}
+
+/** The floating workspace has no host record; its files always live on this machine. */
+export function getFloatingWorkspaceOperationRoute(
+  worktreeId: string
+): WorktreeOperationRoute | null {
+  return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+    ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
+    : null
 }
 
 export type WorktreeOperationRouteResolution =
@@ -47,11 +58,7 @@ export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
   removedRuntimeEnvironmentIds?: ReadonlySet<string>
 }
 
-/**
- * Owner rows for this id on one host, read from the repo catalog AND the detected-worktree index
- * because owner provenance is split across both stores — a HUB-projected owner may appear in
- * either one, and missing it would drop the transport the caller needs.
- */
+/** Read repo AND detected catalogs: HUB owner provenance can be in either; missing it loses the required transport. */
 function ownerRecordsOnHost(
   state: WorktreeOperationRouteState,
   worktreeId: string,
@@ -76,15 +83,11 @@ function ownerRecordsOnHost(
   return owners
 }
 
-/**
- * The active workspace's host selection is authoritative identity, but it carries no transport:
- * an `ssh:` host reached through a paired HUB names the target, not the HUB that proxies it. Keep
- * the selected host and recover the runtime owner from the matching owner rows (#11346).
- */
-export function resolveActiveWorkspaceRoute(
+/** Active host selection proves identity, not transport. An SSH target can be proxied by a paired HUB; recover its runtime from matching owner rows (#11346). */
+function resolveActiveWorkspaceRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
-): WorktreeOperationRoute | null {
+): WorktreeOperationRouteResolution | null {
   const activeHost =
     state.activeWorktreeId === worktreeId
       ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
@@ -92,12 +95,7 @@ export function resolveActiveWorkspaceRoute(
   return activeHost ? resolveSelectedHostRoute(state, worktreeId, activeHost) : null
 }
 
-/**
- * Route an operation at the host the CALLER named rather than whichever host
- * the active workspace happens to select. `repoId::path` ids repeat across
- * hosts, so a destructive path that resolves host-blind can delete the same-id
- * workspace on the wrong machine (STA-4343); qualified callers resolve here.
- */
+/** Honor the caller’s host qualifier: repoId::path repeats across hosts, so host-blind destructive routing can delete a twin on another machine (STA-4343). */
 export function resolveWorktreeOperationRouteResultForHost(
   state: WorktreeOperationRouteState,
   worktreeId: string,
@@ -105,16 +103,10 @@ export function resolveWorktreeOperationRouteResultForHost(
 ): WorktreeOperationRouteResolution {
   const host = parseExecutionHostId(executionHostId)
   // Why: an unparseable qualifier is not evidence of an owner — fail closed.
-  return host
-    ? { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
-    : { kind: 'missing' }
+  return host ? resolveSelectedHostRoute(state, worktreeId, host) : { kind: 'missing' }
 }
 
-/**
- * `null`-returning adapter for host-qualified callers with no branch for `ambiguous` vs
- * `missing`. The fail-closed decision stays in the `*Result` resolver so the two entry
- * points can never disagree about what counts as an owner.
- */
+/** Null adapter for callers unable to distinguish ambiguous/missing; keep fail-closed policy in the Result resolver. */
 export function resolveWorktreeOperationRouteForHost(
   state: WorktreeOperationRouteState,
   worktreeId: string,
@@ -124,43 +116,80 @@ export function resolveWorktreeOperationRouteForHost(
   return resolution.kind === 'resolved' ? resolution.route : null
 }
 
-/**
- * An authoritative host selection already names the target, so only the transport has to be
- * recovered — and only for `ssh:`, which a paired HUB can proxy. Rival HUBs projecting the same
- * host stay unresolved rather than guessing one.
- */
-function resolveSelectedHostRoute(
+/** A direct repo row backs a listing no row ties to a server, so a same-id proxy cannot claim it. */
+function isDirectListing(
   state: WorktreeOperationRouteState,
   worktreeId: string,
-  selectedHost: NonNullable<ReturnType<typeof parseExecutionHostId>>
-): WorktreeOperationRoute {
-  if (selectedHost.kind === 'runtime') {
-    return { executionHostId: selectedHost.id, runtimeEnvironmentId: selectedHost.environmentId }
-  }
-  // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
-  if (selectedHost.kind !== 'ssh') {
-    return { executionHostId: selectedHost.id, runtimeEnvironmentId: null }
-  }
+  executionHostId: ExecutionHostId,
+  hubOwners: { environmentIds: Set<string> }
+): boolean {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  return (
+    hubOwners.environmentIds.size === 0 &&
+    Boolean(
+      state.repos?.some(
+        (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
+      )
+    )
+  )
+}
+
+function collectHubOwnerEnvironmentIds(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): { environmentIds: Set<string>; hasAmbiguousOwner: boolean } {
   const environmentIds = new Set<string>()
-  for (const owner of ownerRecordsOnHost(state, worktreeId, selectedHost.id)) {
+  let hasAmbiguousOwner = false
+  for (const owner of ownerRecordsOnHost(state, worktreeId, executionHostId)) {
     const resolution = resolveExactWorktreeRoute(state, owner)
+    hasAmbiguousOwner ||= resolution.kind === 'ambiguous'
     if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
       environmentIds.add(resolution.route.runtimeEnvironmentId)
     }
   }
-  const environmentId = environmentIds.values().next().value
+  return { environmentIds, hasAmbiguousOwner }
+}
+
+// Authoritative SSH selection still needs HUB transport. Rival HUBs or contradictory transport rows remain ambiguous; dropping transport would use this app’s own SSH connection (review-5 #2).
+function resolveSelectedHostRoute(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  selectedHost: NonNullable<ReturnType<typeof parseExecutionHostId>>
+): WorktreeOperationRouteResolution {
+  if (selectedHost.kind === 'runtime') {
+    return {
+      kind: 'resolved',
+      route: { executionHostId: selectedHost.id, runtimeEnvironmentId: selectedHost.environmentId }
+    }
+  }
+  // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
+  if (selectedHost.kind !== 'ssh') {
+    return {
+      kind: 'resolved',
+      route: onPairedWebClientHost(state, {
+        executionHostId: selectedHost.id,
+        runtimeEnvironmentId: null
+      })
+    }
+  }
+  const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
+  if (
+    hubOwners.environmentIds.size > 1 ||
+    (hubOwners.hasAmbiguousOwner && !isDirectListing(state, worktreeId, selectedHost.id, hubOwners))
+  ) {
+    return { kind: 'ambiguous' }
+  }
   return {
-    executionHostId: selectedHost.id,
-    // Why: rival HUBs projecting the same host cannot be disambiguated by the host selection alone.
-    runtimeEnvironmentId: environmentIds.size === 1 && environmentId ? environmentId : null
+    kind: 'resolved',
+    route: onPairedWebClientHost(state, {
+      executionHostId: selectedHost.id,
+      runtimeEnvironmentId: hubOwners.environmentIds.values().next().value ?? null
+    })
   }
 }
 
-/**
- * Distinct execution hosts the store knows as owners of this id. More than one
- * means an unqualified destructive call cannot pick a target without guessing;
- * empty means no owner row carries host provenance (legacy hydration).
- */
+/** Known owner hosts: multiple makes unqualified destructive routing ambiguous; none means legacy hydration lacks provenance. */
 export function getWorktreeOperationOwnerHostIds(
   state: WorktreeOperationRouteState,
   worktreeId: string
@@ -183,10 +212,7 @@ export function getWorktreeOperationOwnerHostIds(
   return [...hostIds]
 }
 
-/**
- * `null`-returning adapter over the owner-routed resolver for call sites that cannot act on
- * `ambiguous` — collapsing both refusals to `null` keeps them fail-closed at the call site.
- */
+/** Collapse ambiguous/missing to null for callers unable to act on either, preserving fail-closed behavior. */
 export function resolveWorktreeOperationRoute(
   state: WorktreeOperationRouteState,
   worktreeId: string
@@ -195,22 +221,26 @@ export function resolveWorktreeOperationRoute(
   return resolution.kind === 'resolved' ? resolution.route : null
 }
 
-/**
- * Owner precedence for owner-routed operations: stamped identity first, the legacy
- * pre-owner-projection branches strictly below it, and an id no row can place fails closed —
- * defaulting an unplaceable id to `local` would aim the operation at the wrong machine.
- */
+/** Prefer stamped identity over legacy hydration branches; unknown IDs fail closed because default-local can target the wrong machine. */
 export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
-  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
-  if (activeRoute) {
-    return { kind: 'resolved', route: activeRoute }
+  const resolution = resolveOwnerRouteResult(state, worktreeId)
+  return resolution.kind === 'resolved'
+    ? { kind: 'resolved', route: onPairedWebClientHost(state, resolution.route) }
+    : resolution
+}
+
+function resolveOwnerRouteResult(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): WorktreeOperationRouteResolution {
+  const activeResolution = resolveActiveWorkspaceRouteResult(state, worktreeId)
+  if (activeResolution) {
+    return activeResolution
   }
-  // Why: folder workspaces are not Git worktrees — they never appear in the worktree/repo
-  // catalogs scanned below, so without this branch a plain local folder workspace reads as an
-  // unresolved cross-host identity and every owner-routed operation fails closed (#10251).
+  // Folders never appear in worktree/repo catalogs; resolve their own records or local folders fail closed as unknown cross-host IDs (#10251).
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return resolveFolderWorkspaceOperationRoute(state, workspaceScope.folderWorkspaceId)
@@ -225,37 +255,14 @@ export function resolveWorktreeOperationRouteResult(
     resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
     hasDetectedWorktree
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
+  const hasKnownRepo = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   if (!hasKnownWorktree && !hasKnownRepo) {
     return { kind: 'missing' }
   }
 
-  // Why: pre-owner-projection runtimes published no host fields; terminal routing retains their single focused-runtime behavior.
-  const legacyRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
-  const savedRuntimeIds = state.runtimeEnvironments?.map((environment) => environment.id.trim())
-  const legacyRuntimeIsUnambiguous =
-    savedRuntimeIds === undefined ||
-    (savedRuntimeIds.length === 1 && savedRuntimeIds[0] === legacyRuntimeEnvironmentId)
-  if (legacyRuntimeEnvironmentId && !legacyRuntimeIsUnambiguous) {
-    return { kind: 'missing' }
-  }
-  if (legacyRuntimeEnvironmentId) {
-    return {
-      kind: 'resolved',
-      route: {
-        executionHostId: `runtime:${encodeURIComponent(legacyRuntimeEnvironmentId)}`,
-        runtimeEnvironmentId: legacyRuntimeEnvironmentId
-      }
-    }
-  }
-  // Why: a found repo/worktree record is positive identity evidence, so keep terminal-owner
-  // parity with the folder branch below. Every stamped row already routed above, so an unstamped
-  // repo row here is a legacy pre-owner-projection row — local by construction, as
-  // getRepoExecutionHostId, main's resolveRepoOwnershipEvidence and Repo.executionHostId's own
-  // contract all agree. Without this, the legacy hydration gates fail a genuinely local git
-  // worktree closed whenever any unrelated runtime is saved — the #10251 symptom, for git
-  // worktrees (#16733). A repo row on its own is repo identity, not worktree identity (#16841),
-  // so a known worktree row — listed or currently detected — must back it.
+  // Every server row is stamped on arrival; focus cannot make an unstamped row remote.
+  const savedRuntimes = state.runtimeEnvironments
+  // A listed/detected worktree backed by an unstamped repo proves local identity, matching folder routing despite unrelated saved runtimes (#16733). Stamped rows routed above; a repo alone proves no worktree exists (#16841).
   const localOwnerRoute = hasKnownWorktree
     ? resolveUnstampedLocalWorktreeRoute(state, repoId)
     : null
@@ -264,9 +271,9 @@ export function resolveWorktreeOperationRouteResult(
   }
   // Why: no saved runtime can publish a remote ownerless row; otherwise current detected presence affirms identity under the stamped-writer invariant.
   const mayBeLegacyLocal =
-    savedRuntimeIds === undefined ||
+    savedRuntimes === undefined ||
     (state.runtimeEnvironmentCatalogHydrated === true &&
-      (savedRuntimeIds.length === 0 || hasDetectedWorktree))
+      (savedRuntimes.length === 0 || hasDetectedWorktree))
   return mayBeLegacyLocal
     ? {
         kind: 'resolved',
@@ -275,18 +282,12 @@ export function resolveWorktreeOperationRouteResult(
     : { kind: 'missing' }
 }
 
-/**
- * A local route for a worktree whose only repo rows predate owner projection — the exact
- * condition `resolveExplicitWorktreeOperationRouteResult` already routed above if it applied to
- * any row. Reaching this function means every row for `repoId` is unstamped, so
- * `getRepoExecutionHostId`'s own fallback resolves each of them to `local`; a row only has to
- * exist.
- */
+/** All repo rows reaching here predate owner projection (stamped rows routed above), so getRepoExecutionHostId resolves any existing row local. */
 function resolveUnstampedLocalWorktreeRoute(
   state: WorktreeOperationRouteState,
   repoId: string
 ): WorktreeOperationRoute | null {
-  const hasUnstampedRepoRow = state.repos?.some((repo) => repo.id === repoId) ?? false
+  const hasUnstampedRepoRow = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   return hasUnstampedRepoRow
     ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
     : null
@@ -301,12 +302,10 @@ function resolveFolderWorkspaceOperationRoute(
   folderWorkspaceId: string
 ): WorktreeOperationRouteResolution {
   if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
-    // Why: deleted/stale folder ids keep failing closed like unknown worktrees.
+    // Deleted/stale folder IDs fail closed like unknown worktrees.
     return { kind: 'missing' }
   }
-  // Why: a found folder record is positive identity evidence, so keep terminal-owner parity;
-  // the worktree legacy hydration gates would fail local folders closed whenever unrelated
-  // runtimes exist — the exact #10251 symptom.
+  // A found folder proves identity; unrelated saved runtimes must not fail it closed (#10251).
   const executionHostId = getExecutionHostIdForFolderWorkspace(state, folderWorkspaceId)
   const parsedHost = parseExecutionHostId(executionHostId)
   return {
@@ -316,18 +315,4 @@ function resolveFolderWorkspaceOperationRoute(
       runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     }
   }
-}
-
-/**
- * Projects the route's runtime environment onto settings so a routed operation runs against the
- * owner's environment rather than whichever one the UI has active; settings can still be absent
- * during early hydration, hence the synthesized fallback.
- */
-export function settingsForWorktreeOperationRoute(
-  settings: AppState['settings'],
-  route: WorktreeOperationRoute
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: route.runtimeEnvironmentId }
-    : ({ activeRuntimeEnvironmentId: route.runtimeEnvironmentId } as AppState['settings'])
 }

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { OFFLINE_DECODE_CHUNK_SECONDS, OfflineAudioChunker } from './stt-offline-audio-chunker'
 
-// Why: a small rate keeps test arrays tiny while exercising the same
-// seconds-based limits used with real 16 kHz audio.
+// Small arrays exercise the same seconds-based limits as 16kHz audio.
 const SAMPLE_RATE = 1000
 const CHUNK_LIMIT = OFFLINE_DECODE_CHUNK_SECONDS * SAMPLE_RATE
 

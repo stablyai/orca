@@ -1,11 +1,8 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { CodexBackgroundCommandTracker } from './codex-background-command-tracker'
-import {
-  CodexItemStreamRetention,
-  MAX_CODEX_ITEM_STREAM_METADATA_BYTES
-} from './codex-item-stream-retention'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import { settleCodexJournalTurn } from './codex-structured-journal-settlement'
 
@@ -28,7 +25,7 @@ function command(threadId: string, id: string, method = 'item/started') {
   }
 }
 
-function fixture(maxMetadataBytes?: number) {
+function fixture() {
   const rows = new Map<string, AgentJournalItemBody>()
   const scheduled = new Set<() => void>()
   const sink = {
@@ -44,7 +41,7 @@ function fixture(maxMetadataBytes?: number) {
   const items = new CodexJournalItems(
     {
       sink,
-      maxMetadataBytes,
+      attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
       schedule: (run) => {
         scheduled.add(run)
         return () => {
@@ -70,14 +67,15 @@ describe('persistent command retention', () => {
     items.streams.flush()
     const originalJoin = Array.prototype.join
     let retainedJoins = 0
-    const spy = vi
-      .spyOn(Array.prototype, 'join')
-      .mockImplementation(function (this: unknown[], separator) {
-        if (this[0] === 'retained-prefix') {
-          retainedJoins += 1
-        }
-        return originalJoin.call(this, separator)
-      })
+    const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+      this: unknown[],
+      separator
+    ) {
+      if (this[0] === 'retained-prefix') {
+        retainedJoins += 1
+      }
+      return originalJoin.call(this, separator)
+    })
     try {
       for (let index = 0; index < 100; index += 1) {
         items.streams.flush()
@@ -96,7 +94,6 @@ describe('persistent command retention', () => {
       Array.from({ length: 64 }, (_, index) => command(`thread-${thread}`, `exec-${index}`))
     ).flat()
     for (const event of events) {
-      expect(tracker.canObserve(event)).toBe(true)
       expect(items.handle(event)).toMatchObject({ admission: { accepted: true } })
       tracker.observe(event)
       expect(
@@ -107,23 +104,30 @@ describe('persistent command retention', () => {
         }).admission
       ).toEqual({ accepted: true })
     }
+    expect(tracker.tasks()).toEqual([])
     for (let thread = 0; thread < 7; thread += 1) {
+      const threadId = `thread-${thread}`
+      expect(tracker.threadCommands(threadId)).toHaveLength(64)
       expect(
         settleCodexJournalTurn({
           sessionId: 'session',
-          threadId: `thread-${thread}`,
+          threadId,
           turnId: 'turn',
           turnLifecycle: null,
+          completedAt: 1,
+          turnEnd: 'completed',
           sink,
           streams: items.streams,
-          activeItems: items.activeItems
+          activeItems: items.activeItems,
+          attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE })
         })
       ).toEqual({ accepted: true })
+      expect(tracker.endTurn(threadId, 'turn')).toHaveLength(64)
+      expect(tracker.tasks()).toHaveLength((thread + 1) * 64)
     }
     expect(items.activeItems.size).toBe(448)
     expect(items.streams.persistentCount).toBe(448)
     expect(tracker.tasks()).toHaveLength(448)
-    expect(tracker.retainedMetadataBytes).toBeLessThan(256 * 1024)
     for (const event of events) {
       items.streams.handle(event.threadId, 'item/commandExecution/outputDelta', {
         turnId: 'turn',
@@ -154,48 +158,8 @@ describe('persistent command retention', () => {
     expect(items.activeItems.size).toBe(0)
     expect(items.streams.persistentCount).toBe(0)
     expect(tracker.tasks()).toEqual([])
-    expect(tracker.retainedMetadataBytes).toBeLessThan(64 * 1024)
     items.dispose()
-    tracker.clear()
-    expect(tracker.retainedMetadataBytes).toBe(0)
     expect(scheduled.size).toBe(0)
-  })
-
-  it('rejects command metadata exhaustion before appending or evicting live state and frees it on completion', () => {
-    const { items, rows } = fixture(800)
-    const first = command('root', 'first')
-    const second = command('root', 'second')
-    expect(items.handle(first)).toMatchObject({ admission: { accepted: true } })
-    const prior = [...rows]
-    expect(items.handle(second)).toMatchObject({ admission: { accepted: false, reason: 'failed' } })
-    expect([...rows]).toEqual(prior)
-    expect(items.activeItems.size).toBe(1)
-    expect(items.handle(command('root', 'first', 'item/completed'))).toMatchObject({
-      admission: { accepted: true }
-    })
-    expect(items.handle(second)).toMatchObject({ admission: { accepted: true } })
-    items.dispose()
-  })
-
-  it('accounts metadata bytes instead of interpreting the item count as liveness', () => {
-    const retention = new CodexItemStreamRetention()
-    for (let index = 0; index < 448; index += 1) {
-      const item = command('root', `exec-${index}`).params.item
-      expect(
-        retention.retain(item.id, {
-          item,
-          identity: { provider: 'orca', clientMessageId: item.id }
-        })
-      ).toBe(true)
-    }
-    expect(retention.size).toBe(448)
-    expect(retention.retainedBytes).toBeLessThan(256 * 1024)
-    expect(retention.retainedBytes).toBeLessThan(MAX_CODEX_ITEM_STREAM_METADATA_BYTES)
-    expect(retention.overCapacity).toBe(false)
-    expect(retention.oldestEvictable()).toBeUndefined()
-    retention.clear()
-    expect(retention.retainedBytes).toBe(0)
-    expect(retention.persistentSize).toBe(0)
   })
 
   it('retains startup provenance when large command metadata is bounded', () => {
@@ -209,9 +173,12 @@ describe('persistent command retention', () => {
         threadId: 'root',
         turnId: 'turn',
         turnLifecycle: null,
+        completedAt: 1,
+        turnEnd: 'completed',
         sink,
         streams: items.streams,
-        activeItems: items.activeItems
+        activeItems: items.activeItems,
+        attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       })
     ).toEqual({ accepted: true })
     expect(items.activeItems.size).toBe(1)

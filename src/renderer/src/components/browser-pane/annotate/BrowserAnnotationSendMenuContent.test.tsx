@@ -1,6 +1,4 @@
 import React from 'react'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
 
@@ -72,14 +70,16 @@ function findByType(node: unknown, type: string): ReactElementLike {
 }
 
 describe('BrowserAnnotationSendMenuContent', () => {
-  it('uses the review notes send content so existing agent sessions are selectable', () => {
+  it('forwards annotation content and delivery callbacks to the review notes menu', () => {
     const onPromptDelivered = vi.fn()
+    const onPromptHandedOff = vi.fn()
     const tree = expand(
       <BrowserAnnotationSendMenuContent
         worktreeId="wt-1"
         groupId="group-1"
         prompt="browser annotation prompt"
         onPromptDelivered={onPromptDelivered}
+        onPromptHandedOff={onPromptHandedOff}
       />
     )
 
@@ -89,22 +89,8 @@ describe('BrowserAnnotationSendMenuContent', () => {
       prompt: 'browser annotation prompt',
       promptDelivery: 'submit-after-ready',
       launchSource: 'notes_send',
-      onPromptDelivered
+      onPromptDelivered,
+      onPromptHandedOff
     })
-  })
-
-  it('is wired into both browser annotation send surfaces', () => {
-    const bannerSource = readFileSync(
-      fileURLToPath(new URL('../assemble-chrome/browser-page-chrome-banners.tsx', import.meta.url)),
-      'utf8'
-    )
-    const traySource = readFileSync(
-      fileURLToPath(new URL('./browser-page-annotation-tray.tsx', import.meta.url)),
-      'utf8'
-    )
-    const sendSurfaces = `${bannerSource}\n${traySource}`
-
-    expect(sendSurfaces.match(/<BrowserAnnotationSendMenuContent\b/g)).toHaveLength(2)
-    expect(sendSurfaces).not.toContain('<QuickLaunchAgentMenuItems')
   })
 })

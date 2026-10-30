@@ -1,10 +1,7 @@
 import {
   clearWindowTimer,
-  postToReactNativeWebView,
-  promptWindowForUrl,
   windowDocument,
   windowSelection,
-  windowVisualViewportInset,
   type RichMarkdownEditorHost,
   type RichMarkdownEditorHostSeams
 } from './document-host-seams'
@@ -15,25 +12,13 @@ export type {
   RichMarkdownEditorHostSeams
 } from './document-host-seams'
 
-/**
- * The state one editor document shares across its modules.
- *
- * Every mutable binding the hand-written script declared is here, because a module's own `let`
- * would be shared by every document on the page: the second mount would inherit the first's
- * generation, its remembered caret and its last reported inset (ruling 21). One object per call,
- * built by the factory, so two editors on one page are two editors.
- */
+// Own all mutable editor state per factory call; module let would leak generation, caret and inset between overlapping mounts (ruling 21).
 export type RichMarkdownEditorState = {
   /** The editable surface, read once when the document starts. */
   editor: HTMLElement | null
   /** `editor-content`: the markdown the document last rendered or serialized. */
   lastMarkdown: string
-  /**
-   * `editor-content`: the pending input timer, cleared before every content replacement.
-   *
-   * Nothing schedules it today — the change message is posted straight from the input listener —
-   * and it is kept because the clear is what a debounce would need and costs nothing without one.
-   */
+  // Keep pending-input timer cleared on content replacement; currently unscheduled, but retained cancellation supports future debounce.
   inputTimer: number | null
   /** `editor-content`: the host's generation, echoed back on every change so it can drop stale ones. */
   documentGeneration: number
@@ -55,10 +40,10 @@ export type RichMarkdownEditorState = {
   stopped: boolean
 }
 
-/** The document's whole scope: its state, and the seams to whatever is hosting it. */
+/** The document's whole scope: its state, and the seams to the page that mounted it. */
 export type RichMarkdownEditorScope = RichMarkdownEditorState & RichMarkdownEditorHostSeams
 
-/** The initial values, which are the ones the script's own declarations carried. */
+// Initialize per-document state to native script’s original defaults.
 function createRichMarkdownEditorState(): RichMarkdownEditorState {
   return {
     editor: null,
@@ -76,26 +61,17 @@ function createRichMarkdownEditorState(): RichMarkdownEditorState {
   }
 }
 
-/** The seams' defaults: the window reads and writes the script already did. */
-function createRichMarkdownEditorHostSeams(): RichMarkdownEditorHostSeams {
-  return {
-    postToHost: postToReactNativeWebView,
-    promptForUrl: promptWindowForUrl,
-    keyboardInsetSource: windowVisualViewportInset,
-    clearTimer: clearWindowTimer,
-    getSelection: windowSelection,
-    getDocument: windowDocument,
-    root: null
-  }
-}
-
 export function createRichMarkdownEditorScope(
-  host: RichMarkdownEditorHost = {}
+  host: RichMarkdownEditorHost
 ): RichMarkdownEditorScope {
-  const named = Object.fromEntries(Object.entries(host).filter(([, hook]) => hook !== undefined))
   return {
     ...createRichMarkdownEditorState(),
-    ...createRichMarkdownEditorHostSeams(),
-    ...named
+    clearTimer: host.clearTimer ?? clearWindowTimer,
+    getSelection: host.getSelection ?? windowSelection,
+    getDocument: host.getDocument ?? windowDocument,
+    root: host.root ?? null,
+    postToHost: host.postToHost,
+    promptForUrl: host.promptForUrl,
+    keyboardInsetSource: host.keyboardInsetSource
   }
 }

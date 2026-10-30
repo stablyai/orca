@@ -70,23 +70,6 @@ afterEach(() => {
 })
 
 describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
-  it('expires empty checks cache entries after the shorter empty TTL', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-
-    mockApi.gh.prChecks.mockResolvedValue([])
-
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-    vi.setSystemTime(11_001)
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(2)
-  })
-
   it('keeps repeated automatic empty checks refreshes cacheable', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

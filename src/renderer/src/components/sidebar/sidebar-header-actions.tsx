@@ -44,13 +44,10 @@ function NewWorkspaceButton({
   preserveWorkspaceBoardOpen: boolean
 }): React.JSX.Element {
   const keybindings = useAppStore((s) => s.keybindings)
-  // Why primary: workspace.create binds both Mod+N and Mod+Shift+N, and listing
-  // every alias in a one-line tooltip reads as noise rather than help.
+  // Show the primary create shortcut so aliases do not crowd the tooltip.
   const shortcutLabel = formatOptionalPrimaryShortcutLabel('workspace.create', keybindings)
   const label = translate('auto.components.sidebar.SidebarHeader.92154beb7e', 'New workspace')
 
-  // Why the tour handoff here: the tour highlights this button, and it is now
-  // the control that performs the action rather than one that opens a menu.
   const handleCreateWorkspace = useCallback(() => {
     openWorkspaceCreationComposerWithTourHandoff()
   }, [])
@@ -81,23 +78,24 @@ function NewWorkspaceButton({
 
 export function SidebarHeaderActions({
   onWorkspaceBoardMenuOpenChange,
-  agentsViewActive = false
+  agentsViewActive = false,
+  activityOptionsTarget
 }: {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   agentsViewActive?: boolean
+  activityOptionsTarget?: React.Ref<HTMLDivElement>
 }): React.JSX.Element {
   return (
     <div className="flex shrink-0 items-center gap-1" data-sidebar-header-actions="">
-      {/* Why both hidden in the agents view: it lists activity, not projects. */}
-      {agentsViewActive ? null : (
-        <>
+      <div ref={activityOptionsTarget} className="flex size-6 shrink-0 items-center">
+        {agentsViewActive ? null : (
           <SidebarWorkspaceOptionsMenu
             preserveWorkspaceBoardOpen
             onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
           />
-          <AddProjectButton preserveWorkspaceBoardOpen />
-        </>
-      )}
+        )}
+      </div>
+      <AddProjectButton preserveWorkspaceBoardOpen />
       <NewWorkspaceButton preserveWorkspaceBoardOpen />
     </div>
   )

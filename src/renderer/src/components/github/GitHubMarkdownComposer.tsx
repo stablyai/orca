@@ -201,15 +201,14 @@ export function GitHubMarkdownComposer({
       return
     }
     editorRef.current = editor
-    editor.setEditable(!disabled)
+    editor.setEditable(!disabled, false)
   }, [disabled, editor])
 
   useEffect(() => {
     if (!editor) {
       return
     }
-    // Why: parent clears to '' after submit; always reset the editor so stale
-    // draft text never survives a successful comment post.
+    // Reset on the parent’s post-submit empty value so a successfully posted draft cannot linger.
     if (!value.trim()) {
       if (editor.getMarkdown().trim()) {
         applyingExternalValueRef.current = true

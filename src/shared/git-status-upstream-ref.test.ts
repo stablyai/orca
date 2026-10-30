@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { isSafeGitRefName, isSafeGitStatusUpstreamRef } from './git-status-upstream-ref'
 
 describe('git status upstream refs', () => {
+  it.each([
+    'refs/heads/feature./valid',
+    'refs/heads/feature./运动记录',
+    'refs/remotes/origin./main'
+  ])('accepts a trailing dot in an intermediate component: %s', (ref) => {
+    expect(isSafeGitRefName(ref)).toBe(true)
+  })
+
+  it.each(['refs/heads/feature.', 'refs/heads/.hidden/valid', 'refs/heads/feature.lock/valid'])(
+    'rejects an unsafe dot placement: %s',
+    (ref) => {
+      expect(isSafeGitRefName(ref)).toBe(false)
+    }
+  )
+
   it('accepts exact remote and custom upstream namespaces', () => {
     expect(isSafeGitStatusUpstreamRef('refs/remotes/team/fork/feature/nested')).toBe(true)
     expect(isSafeGitStatusUpstreamRef('refs/custom/origin/main')).toBe(true)

@@ -1,8 +1,6 @@
 name: Mobile iOS Release
 
-# Why a separate workflow from Android: iOS releases go through App Store
-# review, which can take days. Decoupling the triggers lets an Android release
-# ship immediately without waiting on iOS, and vice versa.
+# Release iOS independently so App Store review cannot block Android.
 on:
   push:
     tags:
@@ -22,30 +20,19 @@ on:
         description: 'Optional TestFlight external tester changelog'
         required: false
         type: string
-      shell:
-        description: 'Which shell the binary mounts: native screens, or the web page delivered over the air. Default native; `ota` is the only value that changes it.'
-        required: false
-        default: native
-        type: choice
-        options:
-          - native
-          - ota
+
+permissions:
+  contents: read
 
 jobs:
   ios-build:
-    # GitHub-hosted macOS runner: required for Xcode. Expo SDK 55's
-    # expo-modules-core declares swift_version 6.0 and uses Swift 6 syntax
-    # (@MainActor isolation). Xcode 16.x (macos-15) can't even parse it
-    # ("unknown attribute 'MainActor'"), so we need Xcode 26.x → macos-26.
+    # Use macos-26/Xcode 26 for Expo SDK 55’s Swift 6 syntax/isolation; Xcode 16 runners cannot parse it.
     runs-on: macos-26
     # Archive + upload is ~30–40m when healthy; 90m leaves margin for setup.
     timeout-minutes: 90
 
     env:
-      # Why: this job and ios-distribute resolve gems ~25 minutes apart, so both
-      # must install the committed Gemfile.lock exactly. Frozen turns a lockfile
-      # drift into a setup failure instead of two different fastlane versions in
-      # one release.
+      # Freeze Gemfile.lock in both jobs; installs ~25min apart must not resolve different fastlane versions.
       BUNDLE_FROZEN: 'true'
 
     outputs:
@@ -70,6 +57,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -107,14 +95,10 @@ jobs:
         run: npx expo prebuild --platform ios --no-install
 
       - name: Install CocoaPods
-        run: npx pod-install ios
+        working-directory: mobile/ios
+        run: bundle exec pod install
 
-      # Why: `-allowProvisioningUpdates` + the App Store Connect API key can
-      # create/refresh provisioning profiles, but it cannot recreate the
-      # distribution certificate's PRIVATE KEY across runs. So we import a
-      # pre-exported distribution .p12 (created once via Apple Developer) into a
-      # throwaway keychain. The keychain is ephemeral to the runner and torn
-      # down with the VM; nothing secret is written to the repo.
+      # Import exported distribution .p12 into ephemeral runner keychain: provisioning updates/API key cannot recreate its private key.
       - name: Import distribution certificate
         env:
           IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
@@ -149,13 +133,7 @@ jobs:
           # Keep fastlane non-interactive and quiet about analytics in CI.
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
-          # The one build-time constant that decides whether this binary mounts the web page or
-          # the native screens. A tag push and a schedule carry no inputs, so both read native.
-          EXPO_PUBLIC_MOBILE_SHELL: ${{ inputs.shell || 'native' }}
-        run: |
-          set -euo pipefail
-          echo "Mobile shell: $EXPO_PUBLIC_MOBILE_SHELL"
-          bundle exec fastlane ios build_and_upload
+        run: bundle exec fastlane ios build_and_upload
 
       - name: Upload .ipa artifact
         if: always()

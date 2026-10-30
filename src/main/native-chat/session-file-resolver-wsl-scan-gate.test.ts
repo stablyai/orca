@@ -29,6 +29,15 @@ vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => ({
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: mocks.walk
 }))
+// These cases cover root and path policy; the E9 gate has its own suite.
+vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
+vi.mock('../wsl/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl')
+  return {
+    wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
+    listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
+  }
+})
 vi.mock('../wsl', () => ({
   getWslHomeAsync: vi.fn(async () => '\\\\wsl.localhost\\Ubuntu\\home\\ada'),
   listRunningWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
@@ -174,8 +183,7 @@ describe('Codex WSL scan gate', () => {
     ).rejects.toBe(abortReason)
   })
 
-  // The scan layer's own waiter already wins this race; the resolver's post-catch
-  // signal check is the backstop if that ever stops holding.
+  // Scan cancellation normally wins; the resolver’s post-catch check remains a backstop.
   it('reports the abort, not a refusal, when a scanned root is aborted mid-scan', async () => {
     const controller = new AbortController()
     const abortReason = new Error('caller went away')

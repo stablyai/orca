@@ -1,13 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { DirCache } from './file-explorer-types'
-import { normalizeAbsolutePath, isPathEqualOrDescendant } from './file-explorer-paths'
+import { isPathEqualOrDescendant } from './file-explorer-paths'
 import { useAppStore } from '@/store'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
-// ── dirCache subtree purge ───────────────────────────────────────────
-// Why: dirCache is component-local useState in useFileExplorerTree, not
-// Zustand. This helper accepts the setter so it can be called from the
-// watch effect without Zustand coupling. See design §5.2.
+// dirCache is component-local; accept its setter without coupling the watch effect to Zustand (design §5.2).
 
 function createSubtreeMatcher(paths: ReadonlySet<string>): (candidatePath: string) => boolean {
   const normalizedRoots = new Set([...paths].map(normalizeRuntimePathForComparison))
@@ -41,7 +38,8 @@ function createSubtreeMatcher(paths: ReadonlySet<string>): (candidatePath: strin
 
 export function purgeDirCacheSubtrees(
   setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>,
-  deletedPaths: ReadonlySet<string>
+  deletedPaths: ReadonlySet<string>,
+  snapshot?: { cache: Record<string, DirCache>; keys: readonly string[] }
 ): void {
   if (deletedPaths.size === 0) {
     return
@@ -50,7 +48,8 @@ export function purgeDirCacheSubtrees(
   setDirCache((prev) => {
     let changed = false
     const next: Record<string, DirCache> = {}
-    for (const key of Object.keys(prev)) {
+    const keys = prev === snapshot?.cache ? snapshot.keys : Object.keys(prev)
+    for (const key of keys) {
       if (shouldPurge(key)) {
         changed = true
       } else {
@@ -61,10 +60,7 @@ export function purgeDirCacheSubtrees(
   })
 }
 
-// ── expandedDirs subtree purge ───────────────────────────────────────
-// Why: expandedDirs lives in Zustand keyed by worktreeId. After an
-// external directory delete, all expanded descendants of the deleted
-// path must be removed so the tree doesn't show phantom folders.
+// Purge expanded descendants from Zustand after external deletion to prevent phantom folders.
 
 export function purgeExpandedDirsSubtrees(
   worktreeId: string,
@@ -98,19 +94,13 @@ export function purgeExpandedDirsSubtrees(
   })
 }
 
-// ── pendingExplorerReveal cleanup ────────────────────────────────────
-// Why: if the reveal target was inside a deleted subtree, keeping it
-// would cause the reveal logic to expand stale ancestor directories.
+// Drop deleted reveal targets so reveal cannot expand stale ancestors.
 
 export function clearStalePendingReveal(deletedPath: string): void {
-  const normalized = normalizeAbsolutePath(deletedPath)
   useAppStore.setState((state) => {
     if (
       state.pendingExplorerReveal &&
-      isPathEqualOrDescendant(
-        normalizeAbsolutePath(state.pendingExplorerReveal.filePath),
-        normalized
-      )
+      isPathEqualOrDescendant(state.pendingExplorerReveal.filePath, deletedPath)
     ) {
       return { pendingExplorerReveal: null }
     }

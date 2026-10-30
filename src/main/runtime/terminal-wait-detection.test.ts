@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
+  isKnownReadyPromptPreview,
+  isMuseReadyPromptPreview
 } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
-// Why these shapes: Codex agents working on Orca print `rg` hits from this very detector and its
-// specs, so quoted prompt wording lands in scrollback while the terminal sits at its input box.
+// Agents print rg hits from this detector into scrollback; quoted source must not masquerade as a live prompt.
 const QUOTED_DETECTOR_SOURCE_LINE =
   "└   if (hooksindex !== -1 && normalized.includes('press enter to confirm', hooksindex)) {"
 const QUOTED_PERMISSION_FIXTURE_LINE =
@@ -199,8 +199,7 @@ describe('detectTerminalWaitBlockedReason live prompts', () => {
   })
 })
 
-// Why: these matchers never inspect the pane's agent, so a Codex-named reason on a non-Codex screen
-// reaches the user verbatim through the CLI and the worker receipt's "Agent startup blocked:" line.
+// Matchers lack agent identity; provider-specific reason text reaches unrelated agents' CLI/worker receipts verbatim.
 describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
   const NON_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = [
     {
@@ -268,8 +267,7 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
     }
   ]
 
-  // Why: the reason was previously picked by looking for 'codex' in 600 chars of scrollback, so any
-  // agent that merely narrated about Codex handed its user a Codex label.
+  // Mentioning Codex in scrollback must not label another agent's wait Codex.
   it('does not borrow a Codex label from scrollback that only mentions Codex', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
@@ -294,11 +292,7 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
   }
 })
 
-// Antigravity readiness, and what this file does NOT claim about it.
-//
-// The detector recognizes a ready screen by the Antigravity header and a lone '>' caret. Model
-// names are not part of the signal: the logo can prefix the row, and Antigravity can run models
-// other than Gemini. Dialog selections keep their labels after '>', so they remain distinguishable.
+// Antigravity readiness uses its header and bare caret; models vary and dialog selections retain labels after >.
 describe('Antigravity readiness does not absorb its own startup dialog', () => {
   const TRUST_DIALOG_WITH_CARET = [
     'Antigravity CLI 1.0.3',
@@ -350,8 +344,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     })
   }
 
-  // Discriminating: the Gemini model line and caret satisfy readiness, so only the dialog sitting
-  // *below* them keeps this unready. Drop the ordering rule and this goes green-to-red.
+  // Gemini readiness still matches above the dialog; only ordering can keep the newer dialog blocked.
   it('keeps reporting a dialog that opens after a Gemini ready screen', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
@@ -381,8 +374,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(isKnownReadyPromptPreview(waitText)).toBe(false)
   })
 
-  // Discriminating: a stale dialog above a reprinted Gemini ready screen must stop being reported,
-  // which is the whole point of the dismissed-modal rule.
+  // A reprinted ready screen supersedes an older dialog above it.
   it('clears once a Gemini ready screen replaces the dialog', () => {
     const waitText = waitTextFor([
       ...TRUST_DIALOG_WITH_CARET,
@@ -489,8 +481,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     it(`refuses ${dialog.name} whose wording names no blocked reason, account row and all`, () => {
       const waitText = waitTextFor(dialog.lines)
 
-      // No blocked-signal rule matches, so the ordering defense cannot reach these: readiness has to
-      // refuse them on its own or the orchestrator types into a live dialog.
+      // No blocked-signal rule matches; readiness itself must reject these dialogs to prevent injection.
       expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
       expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
@@ -505,4 +496,91 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
   }
+})
+
+// Muse 1.3.0 node-pty capture: echo-provider ready screen with trust flag, plus trust dialog without it.
+const MUSE_READY_SCREEN_ECHO = [
+  '  Muse Code 1.3.0',
+  '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+  '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+  '❯ ────────────────────────────────────────────────────────────────────',
+  '  echo · /private/tmp · YOLO'
+]
+
+const MUSE_READY_SCREEN_META = [
+  '  Muse Code 1.3.0',
+  '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+  '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+  '❯ ────────────────────────────────────────────────────────────────────',
+  '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
+]
+
+const MUSE_TRUST_DIALOG = [
+  'Do you trust this workspace?',
+  'Workspace: /private/tmp',
+  'Trusting allows project-local skills, rules, hooks, and plugin config to load before the model runs.',
+  'Only trust this workspace when you trust its contents.',
+  '> 1  Trust and continue',
+  '  2  Quit',
+  'Use Up/Down or 1/2, then Enter. Esc quits.'
+]
+
+describe('isMuseReadyPromptPreview', () => {
+  it('recognizes a Muse ready screen across providers', () => {
+    expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_ECHO))).toBe(true)
+    expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_META))).toBe(true)
+  })
+
+  it('tolerates ANSI styling around the ready markers', () => {
+    const esc = String.fromCharCode(27)
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor([
+          `  ${esc}[1m${esc}[38;2;204;211;219;49mMuse Code 1.3.0`,
+          `── Voice input (⌥ + v to start) ───`,
+          `${esc}[38;2;90;160;255;49m❯ ${esc}[39m${esc}[49m`,
+          `  echo · /private/tmp · ${esc}[38;2;243;139;168;49mYOLO`
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('recognizes a composer without the voice-input label (#25005)', () => {
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor(['  Muse Code 1.4.2', '──────────────────────────❯ ──────────────────────────'])
+      )
+    ).toBe(true)
+  })
+
+  it('refuses a bare Muse mention without its composer', () => {
+    expect(isMuseReadyPromptPreview(waitTextFor(['comparing Muse Code vs codex']))).toBe(false)
+    expect(
+      isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.3.0', '  echo · /private/tmp · YOLO']))
+    ).toBe(false)
+    expect(isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.4.2 (1.4.2-R1)', '~/app ❯']))).toBe(
+      false
+    )
+    expect(isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.4.2', '╭─ ~/app', '╰─❯']))).toBe(
+      false
+    )
+  })
+
+  it('refuses the Muse trust dialog, which carries no banner or composer', () => {
+    const waitText = waitTextFor(MUSE_TRUST_DIALOG)
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+  })
+
+  it('dismisses a trust dialog once Muse paints its ready screen', () => {
+    const waitText = waitTextFor([...MUSE_TRUST_DIALOG, ...MUSE_READY_SCREEN_META])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+    expect(isMuseReadyPromptPreview(waitText)).toBe(true)
+  })
+
+  it('refuses a ready screen once a blocked dialog opens below it', () => {
+    const waitText = waitTextFor([...MUSE_READY_SCREEN_META, ...MUSE_TRUST_DIALOG])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+  })
 })

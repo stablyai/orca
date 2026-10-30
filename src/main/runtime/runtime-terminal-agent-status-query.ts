@@ -11,7 +11,11 @@ import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   terminalTitleBlocksExplicitAgentStatus,
-  getLatestAgentCandidateTitleInfo
+  getDisplayPromptLifecycle,
+  getLatestAgentCandidateTitleInfo,
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
+  type TitleDisplayClear
 } from './runtime-worktree-status-projection'
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import { getTerminalState } from './terminal-wait-results'
@@ -38,6 +42,11 @@ type Dependencies = {
     ptyId: string
   ): { status: AgentStatus | null; updatedAt: number } | null | undefined
   isRunning(handle: string): Promise<boolean>
+  getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
+  /** Stamps blocked text the PTY's throttled scan has not yet judged. */
+  flushPendingBlockedStamp(ptyId: string): void
+  /** The settled screen when it proves blocked tail text was erased; null keeps the tail. */
+  readScreenClearingBlockedTail(ptyId: string, lastOutputAt: number | null): string | null
 }
 
 export class RuntimeTerminalAgentStatusQuery {
@@ -63,9 +72,11 @@ export class RuntimeTerminalAgentStatusQuery {
 
   private async readStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
     const ptyId = this.getPtyId(handle)
-    const terminal = this.getSnapshot(handle, ptyId)
+    // Use display state: stale-spinner clearing leaves foreground evidence to identify agents that exited behind it.
+    const clear = this.deps.getTitleDisplayClear(ptyId)
+    const terminal = this.getSnapshot(handle, ptyId, clear)
     const explicitStatus = this.deps.getExplicitStatus(handle)
-    const lifecycle = this.deps.getLifecycleStatus(ptyId)
+    const lifecycle = getDisplayPromptLifecycle(this.deps.getLifecycleStatus(ptyId), clear)
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
     const liveTitleClearsBlockedText =
       terminal.titleStatusIsLive &&
@@ -94,8 +105,7 @@ export class RuntimeTerminalAgentStatusQuery {
       return { handle, isRunningAgent: true, status: 'permission' }
     }
     if (explicitStatus) {
-      // Why: permission titles can linger after hooks report the agent resumed.
-      // Fresh hook state is tighter, but current shell/management evidence wins.
+      // Fresh hooks supersede lingering permission titles, but current shell/management proves release.
       const isRunningAgent =
         !terminalTitleBlocksExplicitAgentStatus(terminal.title) &&
         !(await this.terminalHasShellForegroundProcess(handle, ptyId))
@@ -107,8 +117,7 @@ export class RuntimeTerminalAgentStatusQuery {
       }
     }
     if (terminal.titleStatus) {
-      // Why: an OpenCode marker and a lone quarter-circle spinner (STA-4028) are activity,
-      // not identity, so resolve both through the identity/foreground evidence path.
+      // OpenCode markers and quarter-circle spinners indicate activity, not identity; resolve foreground/identity separately (STA-4028).
       if (
         isOpenCodeNativeTitle(terminal.title) ||
         isQuarterCircleSpinnerOnlyAgentTitle(terminal.title)
@@ -151,27 +160,25 @@ export class RuntimeTerminalAgentStatusQuery {
     if (this.getPtyId(handle) === expectedPtyId) {
       return
     }
-    // Why: delayed process evidence belongs only to the PTY that started the
-    // read, while callers still rely on the established stale-handle contract.
+    // Delayed process evidence belongs to the original PTY; retain stale-handle refusal semantics.
     throw new Error('terminal_handle_stale')
   }
 
+  /** `displayClear` projects the snapshot as display shows it; evidence callers omit it. */
   getSnapshot(
     handle: string,
-    expectedPtyId: string
-  ): {
-    waitText: string
-    waitBlockedAt: number | null
-    title: string | null
-    titleStatus: AgentStatus | null
-    titleStatusIsLive: boolean
-  } {
-    const pty = this.deps.getLivePty(handle)
-    if (pty) {
-      if (!pty.pty.connected || pty.pty.ptyId !== expectedPtyId) {
+    expectedPtyId: string,
+    displayClear: TitleDisplayClear | null = null
+  ): RuntimeTerminalAgentStatusSnapshot {
+    this.deps.flushPendingBlockedStamp(expectedPtyId)
+    const live = this.deps.getLivePty(handle)
+    if (live) {
+      if (!live.pty.connected || live.pty.ptyId !== expectedPtyId) {
         throw new Error('terminal_not_writable')
       }
-      const leaf = this.deps.getPrimaryLeaf(pty.pty.ptyId)
+      const pty = { pty: getPtyDisplayRecord(live.pty, displayClear) }
+      const primaryLeaf = this.deps.getPrimaryLeaf(live.pty.ptyId)
+      const leaf = primaryLeaf ? getLeafDisplayRecord(primaryLeaf, displayClear) : null
       const leafTitle = leaf
         ? getLatestAgentCandidateTitleInfo(
             { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
@@ -184,13 +191,8 @@ export class RuntimeTerminalAgentStatusQuery {
           { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
           { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
         )
-      const waitText = buildTerminalWaitText(
-        pty.pty.tailBuffer,
-        pty.pty.tailPartialLine,
-        pty.pty.preview
-      )
       return {
-        waitText,
+        waitText: this.readWaitText(expectedPtyId, pty.pty),
         waitBlockedAt: pty.pty.waitBlockedAt,
         title: ptyTitle?.title ?? null,
         titleStatus: ptyTitle
@@ -200,7 +202,7 @@ export class RuntimeTerminalAgentStatusQuery {
       }
     }
 
-    const { leaf } = this.deps.getLiveLeaf(handle)
+    const leaf = getLeafDisplayRecord(this.deps.getLiveLeaf(handle).leaf, displayClear)
     if (getTerminalState(leaf) !== 'running') {
       throw new Error('terminal_exited')
     }
@@ -216,12 +218,28 @@ export class RuntimeTerminalAgentStatusQuery {
       { title: this.deps.getTabTitle(leaf.tabId), updatedAt: 0 }
     )
     return {
-      waitText: buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
+      waitText: this.readWaitText(expectedPtyId, leaf),
       waitBlockedAt: leaf.waitBlockedAt,
       title: title?.title ?? null,
       titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
       titleStatusIsLive: (title?.updatedAt ?? 0) > 0
     }
+  }
+
+  // Why the screen may only clear: the line tail keeps a dialog the TUI erased in place (#24187).
+  private readWaitText(
+    ptyId: string,
+    record: Pick<RuntimeLeafRecord, 'tailBuffer' | 'tailPartialLine' | 'preview' | 'lastOutputAt'>
+  ): string {
+    const tailText = buildTerminalWaitText(
+      record.tailBuffer,
+      record.tailPartialLine,
+      record.preview
+    )
+    if (detectTerminalWaitBlockedReason(tailText) === null) {
+      return tailText
+    }
+    return this.deps.readScreenClearingBlockedTail(ptyId, record.lastOutputAt) ?? tailText
   }
 
   private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {

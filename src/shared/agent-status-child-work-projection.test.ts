@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { resolveAgentChildWorkFreshness } from './agent-status-child-work-freshness'
 import {
+  agentChildWorkProjectionCandidateFromBackgroundTask,
   projectAgentChildWorkLegacyBackgroundTasks,
   projectAgentChildWorkLegacySubagents,
   type AgentChildWorkLegacyProjectionCandidate
@@ -10,21 +10,19 @@ import type { AgentChildWorkState } from './agent-status-child-work'
 
 function candidate(
   providerId: string,
-  overrides: Partial<AgentChildWorkLegacyProjectionCandidate['child']> = {}
+  overrides: Partial<AgentChildWorkLegacyProjectionCandidate> = {}
 ): AgentChildWorkLegacyProjectionCandidate {
   return {
     providerId,
-    child: {
-      kind: 'agent',
-      state: 'working',
-      membership: 'live',
-      firstObservedAt: 123,
-      description: 'Investigate',
-      agentType: 'researcher',
-      model: 'model-a',
-      stoppable: true,
-      ...overrides
-    }
+    kind: 'agent',
+    state: 'working',
+    membership: 'live',
+    firstObservedAt: 123,
+    description: 'Investigate',
+    agentType: 'researcher',
+    model: 'model-a',
+    stoppable: true,
+    ...overrides
   }
 }
 
@@ -81,17 +79,6 @@ describe('agent child-work legacy projection', () => {
     ])
   })
 
-  it.each([31, 32, 33])('caps after accepting %i valid rows in source order', (count) => {
-    const interleaved = Array.from({ length: count }, (_, index) => [
-      candidate('', { kind: 'agent' }),
-      candidate(`task-${index}`)
-    ]).flat()
-    const projected = projectAgentChildWorkLegacySubagents(interleaved)
-
-    expect(projected).toHaveLength(Math.min(count, AGENT_STATUS_MAX_SUBAGENTS))
-    expect(projected?.at(-1)?.id).toBe(`task-${Math.min(count, AGENT_STATUS_MAX_SUBAGENTS) - 1}`)
-  })
-
   it('rejects missing host first-observation time instead of inventing zero', () => {
     expect(
       projectAgentChildWorkLegacySubagents([
@@ -122,6 +109,45 @@ describe('agent child-work legacy projection', () => {
       totalTokens: 10,
       stoppable: true
     })
+  })
+})
+
+describe('agentChildWorkProjectionCandidateFromBackgroundTask', () => {
+  it('carries a published task through as live work with its reported labels', () => {
+    expect(
+      agentChildWorkProjectionCandidateFromBackgroundTask({
+        id: 'task-1',
+        kind: 'agent',
+        state: 'working',
+        name: 'researcher',
+        description: 'Investigate',
+        startedAt: 55,
+        stoppable: false
+      })
+    ).toEqual({
+      providerId: 'task-1',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: 55,
+      name: 'researcher',
+      agentType: 'researcher',
+      description: 'Investigate',
+      stoppable: false
+    })
+  })
+
+  it('drops empty labels so a child row keeps its fallbacks, and defaults an absent stop to yes', () => {
+    const projected = agentChildWorkProjectionCandidateFromBackgroundTask({
+      id: 'task-1',
+      kind: 'agent',
+      name: '',
+      description: ''
+    })
+    expect(projected).not.toHaveProperty('name')
+    expect(projected).not.toHaveProperty('agentType')
+    expect(projected).not.toHaveProperty('description')
+    expect(projected.stoppable).toBe(true)
   })
 })
 

@@ -8,12 +8,7 @@ import {
   relativePathInsideRoot
 } from '../../../../shared/cross-platform-path'
 
-// Pure classifier for markdown link targets. Called by the link-activation
-// dispatcher (activateMarkdownLink slice action) from three call sites —
-// MarkdownPreview, RichMarkdownEditor Cmd-click, RichMarkdownLinkBubble open —
-// so behavior stays consistent across preview/rich/bubble entry points.
-//
-// See docs/markdown-internal-link-opening-design.md for the full rationale.
+// Share classification across preview, rich-editor and link-bubble activation; see docs/markdown-internal-link-opening-design.md.
 
 export type MarkdownLinkTarget =
   | { kind: 'anchor' }
@@ -56,7 +51,7 @@ function normalizePathForCompare(p: string): string {
   return np
 }
 
-function hasMarkdownExtension(p: string): boolean {
+export function hasMarkdownExtension(p: string): boolean {
   const lastDot = p.lastIndexOf('.')
   if (lastDot === -1) {
     return false
@@ -64,9 +59,7 @@ function hasMarkdownExtension(p: string): boolean {
   return MARKDOWN_EXTENSIONS.has(p.slice(lastDot).toLowerCase())
 }
 
-// Extract `:line` or `:line:col` from the end of a path. Must anchor to
-// end-of-string and require digits so legal filenames containing `:` are not
-// silently truncated.
+// Require trailing numeric line/column syntax so filenames containing colons are not truncated.
 function extractTrailingLineCol(path: string): { path: string; line?: number; column?: number } {
   const match = /:(\d+)(?::(\d+))?$/.exec(path)
   if (!match) {
@@ -79,8 +72,7 @@ function extractTrailingLineCol(path: string): { path: string; line?: number; co
   }
 }
 
-// Parse `#L10` / `#L10C5` anchor (case-insensitive). Non-matching fragments
-// (e.g., `#heading`) return undefined so they flow through as normal links.
+// Leave non-line fragments such as heading anchors available to normal link handling.
 function extractHashLineCol(hash: string): { line?: number; column?: number } {
   if (!hash) {
     return {}
@@ -99,8 +91,7 @@ function extractHashLineCol(hash: string): { line?: number; column?: number } {
 function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL | null {
   try {
     if (isWindowsAbsolutePathLike(rawHref)) {
-      // Why: URL treats `C:\...` as a custom `c:` scheme unless the Windows
-      // absolute path is first converted to the file URL form used downstream.
+      // Convert Windows drive paths to file URLs before URL mistakes the drive letter for a scheme.
       return new URL(filesystemPathHrefToFileUri(rawHref))
     }
     return new URL(rawHref, toFileUrl(sourceFilePath))
@@ -143,8 +134,6 @@ export function resolveMarkdownLinkTarget(
     return null
   }
 
-  // Why: hash-based line anchor takes precedence; fall back to trailing
-  // `:line:col` syntax only if no hash anchor was found.
   const hashParsed = extractHashLineCol(resolved.hash)
   let line = hashParsed.line
   let column = hashParsed.column
@@ -179,10 +168,7 @@ export function resolveMarkdownLinkTarget(
       ? computeRelativePath(pathForClassification, worktreeRoot)
       : undefined
 
-  // Rebuild a file: URI without the line anchor so the OS handler gets a
-  // clean path. Use the original resolved URL minus the hash as an
-  // approximation; for trailing-colon paths there's no clean URL form,
-  // so we reconstruct from the stripped absolute path.
+  // Strip line anchors before OS handoff; trailing-colon syntax requires rebuilding the file URL from its stripped path.
   const cleanUri = line === undefined ? resolved.toString() : toFileUrl(pathForClassification)
   return {
     kind: 'file',

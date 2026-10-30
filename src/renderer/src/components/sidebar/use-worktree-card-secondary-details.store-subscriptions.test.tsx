@@ -3,10 +3,11 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getWorktreeCardDetails } from '../../../../shared/worktree/card-properties'
 import { useAppStore } from '@/store'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeCardSecondaryDetails } from './use-worktree-card-secondary-details'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -93,9 +94,9 @@ function secondaryDetailsArgs(settings: GlobalSettings) {
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,
-    cardProps: [] as never,
     newCardStyle: false,
     compactCards: false,
+    cardDetails: getWorktreeCardDetails([], { compactWorktreeCards: false, newCardStyle: false }),
     agentActivityDisplayMode: 'compact' as const,
     workspacePorts: [],
     openTaskPage: (() => {}) as never,
@@ -131,8 +132,7 @@ describe('useWorktreeCardSecondaryDetails store subscriptions', () => {
     }
     mount(<Probe />)
 
-    // Why: promptCacheTtlMs comes from the settings the card already subscribes to,
-    // so this hook must not open a third subscription for the same field.
+    // Reuse settings passed by the card rather than adding a per-card subscription for the same field.
     expect(listenerCount() - baseline).toBe(composedListeners)
 
     unmount()
@@ -219,6 +219,44 @@ describe('useWorktreeCardSecondaryDetails store subscriptions', () => {
 
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Update the remote runtime to unlink GitHub pull requests'
+    )
+  })
+  it('unlinks the chosen sibling while retaining the selected review and other sources', async () => {
+    const primary: WorkspaceAttachment = {
+      provider: 'github',
+      type: 'pr',
+      number: 42,
+      url: 'https://github.com/acme/orca/pull/42'
+    }
+    const sibling: WorkspaceAttachment = {
+      provider: 'github',
+      type: 'pr',
+      number: 42,
+      url: 'https://github.com/other/orca/pull/42'
+    }
+    const updateWorktreeMeta = vi.fn().mockResolvedValue({ ok: true })
+    let unlink: ((item?: WorkspaceAttachment) => Promise<void>) | null = null
+    function Probe(): null {
+      const details = useWorktreeCardSecondaryDetails({
+        ...secondaryDetailsArgs(makeSettings(300_000)),
+        worktree: {
+          ...makeWorktree(),
+          hostId: 'ssh:builder',
+          linkedPR: 42,
+          linkedItems: [primary, sibling]
+        },
+        prDisplay: { provider: 'github', number: 42, title: 'Primary', url: primary.url },
+        updateWorktreeMeta
+      })
+      unlink = details.handleUnlinkReview
+      return null
+    }
+    mount(<Probe />)
+    await act(() => unlink?.(sibling))
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      { linkedItemsBase: [primary, sibling], linkedItems: [primary] },
+      { executionHostId: 'ssh:builder' }
     )
   })
 })

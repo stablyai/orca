@@ -6,6 +6,7 @@ import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
+import WslMovedProjectsSection from './WslMovedProjectsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -18,13 +19,17 @@ import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redi
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
+import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
+import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
+import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 
-// Why lazy: the Agents list pulls the whole activity pipeline (virtualizer, markdown
-// previews, thread derivation); users on the workspace view should not load or render any of it.
+// Keep the Agents activity pipeline out of the workspace view’s initial bundle.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
+const SleepTwinWorkspaceDialog = lazyWithRetry(() => import('./SleepTwinWorkspaceDialog'))
 const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
@@ -32,8 +37,7 @@ const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSi
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
-// Why: straddle the sidebar/terminal seam so the divider sits on the border-l
-// instead of leaving a blank strip between the hover target and the edge.
+// Straddle the terminal seam so the resize divider sits on the border.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
   'group absolute -right-1.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-center'
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
@@ -65,8 +69,7 @@ function Sidebar({
   const [agentQuery, setAgentQuery] = React.useState('')
   const [agentOptionsTarget, setAgentOptionsTarget] = React.useState<HTMLDivElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)
-  // Held here so collapsed groups (and the layout the saved scrollTop assumes)
-  // survive the Agents list unmounting on sidebar body switches.
+  // Retain collapse state and scroll geometry across Agents-list unmounts.
   const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
     ReadonlySet<string>
   >(() => new Set())
@@ -94,7 +97,7 @@ function Sidebar({
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
-  const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
+  const { dropOwnerRef, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,
     workspaceBoardRenderedOpen,
@@ -147,24 +150,32 @@ function Sidebar({
   })
 
   useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
+  // A collapsed sidebar takes no drops.
+  const sidebarRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node
+      dropOwnerRef(sidebarOpen ? node : null)
+    },
+    [containerRef, dropOwnerRef, sidebarOpen]
+  )
 
   return (
     <TooltipProvider delayDuration={400}>
       <div
-        ref={containerRef}
-        data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
+        ref={sidebarRef}
         className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
         style={leftSidebarStyle}
         {...dropHandlers}
       >
         {sidebarOpen && (
           <>
-            {/* Fixed controls */}
             <SidebarNav />
             <SidebarHeader
               onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
               activityOptionsTarget={setAgentOptionsTarget}
             />
+            <SeveredTerminalDaemonBanner />
+            <StalledTerminalDaemonBanner />
             {sidebarBody === 'agents' ? (
               <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
                 <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
@@ -181,21 +192,25 @@ function Sidebar({
                 </ActivityThreadCollapseContext.Provider>
               </React.Suspense>
             ) : (
-              <WorktreeList
-                scrollOffsetRef={worktreeScrollOffsetRef}
-                scrollAnchorRef={worktreeScrollAnchorRef}
-                workspaceBoardOpen={workspaceBoardOpen}
-                onWorktreeCardClick={closeWorkspaceBoard}
-                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-              />
+              <>
+                <LocalGitToolchainScanBanner />
+                <StartupWorktreeRefreshStatus />
+                <WorktreeList
+                  scrollOffsetRef={worktreeScrollOffsetRef}
+                  scrollAnchorRef={worktreeScrollAnchorRef}
+                  workspaceBoardOpen={workspaceBoardOpen}
+                  onWorktreeCardClick={closeWorkspaceBoard}
+                  onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                  onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                  onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                />
+                <WslMovedProjectsSection />
+              </>
             )}
 
             <div className="relative shrink-0">
               <SetupScriptPromptCard />
 
-              {/* Fixed bottom toolbar */}
               <SidebarToolbar
                 workspaceBoardOpen={workspaceBoardOpen}
                 workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
@@ -224,7 +239,6 @@ function Sidebar({
           </div>
         ) : null}
 
-        {/* Resize handle */}
         {sidebarOpen && (
           <div
             data-sidebar-resize-handle=""
@@ -241,11 +255,11 @@ function Sidebar({
         )}
       </div>
 
-      {/* Dialogs render outside sidebar to avoid clipping. Lazy-load them only
-      for the modal that needs their flow-specific hooks and UI. */}
+      {/* Render dialogs outside the sidebar to avoid clipping; mount each flow only while its modal is active. */}
       <React.Suspense fallback={null}>
         {activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null}
         {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
+        {activeModal === 'confirm-sleep-twin' ? <SleepTwinWorkspaceDialog /> : null}
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}

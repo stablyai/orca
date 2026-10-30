@@ -1,3 +1,4 @@
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -10,8 +11,18 @@ vi.mock('@/lib/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 
+const launchErrorMocks = vi.hoisted(() => {
+  return { StructuredAgentSessionCreateRefusalError: class extends Error {} }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
 vi.mock('@/lib/launch-structured-agent-session', () => ({
-  StructuredAgentSessionCreateRefusalError: class extends Error {}
+  StructuredAgentSessionCreateRefusalError:
+    launchErrorMocks.StructuredAgentSessionCreateRefusalError
 }))
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
@@ -65,9 +76,15 @@ describe('settleStructuredAgentLaunch', () => {
     const onStructuredReady = vi.fn()
 
     await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', { prompt: 'Fix' }, { onStructuredReady })
+      settleStructuredAgentLaunch(
+        'worktree-1',
+        'codex',
+        { requestId: 'request-1', prompt: 'Fix' },
+        { onStructuredReady }
+      )
     ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1', promptDeliveryResult })
     expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'codex', {
+      requestId: 'request-1',
       prompt: 'Fix'
     })
     expect(onStructuredReady).toHaveBeenCalledWith('session-1')
@@ -81,7 +98,12 @@ describe('settleStructuredAgentLaunch', () => {
       })
     })
 
-    const handle = beginStructuredAgentLaunchSettlement('worktree-1', 'codex', {}, {})
+    const handle = beginStructuredAgentLaunchSettlement(
+      'worktree-1',
+      'codex',
+      { requestId: 'request-2' },
+      {}
+    )
 
     expect(handle.sessionId).toBe('session-1')
     resolveLaunch({ sessionId: 'session-1', fence: 1 })
@@ -95,7 +117,9 @@ describe('settleStructuredAgentLaunch', () => {
     const error = new StructuredAgentSessionCreateRefusalError('unsupported')
     fakeLaunch({ launchResult: Promise.reject(error) })
 
-    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
+    await expect(
+      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-3' }, {})
+    ).resolves.toEqual({
       kind: 'failed',
       error
     })
@@ -107,7 +131,9 @@ describe('settleStructuredAgentLaunch', () => {
       visibilityUnknown: true
     })
 
-    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
+    await expect(
+      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-4' }, {})
+    ).resolves.toEqual({
       kind: 'visibility-unknown',
       sessionId: 'session-1'
     })
@@ -118,7 +144,9 @@ describe('settleStructuredAgentLaunch', () => {
     const error = new Error('boom')
     const { releaseCallerAfterUnknownOutcome } = fakeLaunch({ launchResult: Promise.reject(error) })
 
-    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
+    await expect(
+      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-5' }, {})
+    ).resolves.toEqual({
       kind: 'failed',
       error
     })
@@ -133,7 +161,7 @@ describe('settleStructuredAgentLaunch', () => {
       settleStructuredAgentLaunch(
         'worktree-1',
         'codex',
-        {},
+        { requestId: 'request-6' },
         {
           onStructuredReady,
           signal: fakeCancellation(true).signal
@@ -151,7 +179,7 @@ describe('settleStructuredAgentLaunch', () => {
       settleStructuredAgentLaunch(
         'worktree-1',
         'codex',
-        {},
+        { requestId: 'request-7' },
         {
           signal: fakeCancellation(true).signal
         }
@@ -172,7 +200,7 @@ describe('settleStructuredAgentLaunch', () => {
     const settlement = settleStructuredAgentLaunch(
       'worktree-1',
       'codex',
-      {},
+      { requestId: 'request-8' },
       { onStructuredReady, signal: cancellation.signal }
     )
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
@@ -197,7 +225,7 @@ describe('settleStructuredAgentLaunch', () => {
     const settlement = settleStructuredAgentLaunch(
       'worktree-1',
       'codex',
-      {},
+      { requestId: 'request-9' },
       { signal: cancellation.signal }
     )
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledExactlyOnceWith(
@@ -213,7 +241,12 @@ describe('settleStructuredAgentLaunch', () => {
     const cancellation = fakeCancellation()
 
     await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { signal: cancellation.signal })
+      settleStructuredAgentLaunch(
+        'worktree-1',
+        'codex',
+        { requestId: 'request-10' },
+        { signal: cancellation.signal }
+      )
     ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1' })
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
     expect(cancellation.removeEventListener).toHaveBeenCalledOnce()

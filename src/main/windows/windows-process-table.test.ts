@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,11 +25,7 @@ const DETAILED_FLAGS = 6
 
 const getAllProcesses = vi.fn()
 
-// A real snapshot always contains the querying process; the reader rejects a
-// table without it, because that is what a blocked CreateToolhelp32Snapshot
-// returns -- an empty list rather than an error. It also always carries our own
-// command line, since a process can always open itself -- an empty one there is
-// the host-wide-refusal signal, not a fixture detail.
+// Honest snapshots contain self; self also permits command-line queries, unlike protected processes.
 type NativeRow = {
   pid: number
   ppid: number
@@ -54,13 +51,7 @@ const NATIVE: NativeRow[] = [
   }
 ]
 
-/**
- * The vendored wrapper, faithfully: one `requestInProgress` latch over a shared
- * callback queue, resolved asynchronously. A second caller that arrives while a
- * request is in flight has its `flags` DISCARDED and is served the first
- * caller's rows -- the defect this module's read gate has to exclude. A
- * synchronous mock cannot express it, because nothing ever overlaps.
- */
+/** Model the asynchronous wrapper: overlapping callers lose their flags and receive the first read's rows. */
 let coalescingCalls: { flags: number }[] = []
 let maxConcurrentNativeCalls = 0
 
@@ -79,11 +70,7 @@ function coalescingModule(): {
       }
       requestInProgress = true
       coalescingCalls.push({ flags: flags ?? 0 })
-      // The rows the addon would produce for exactly these flags. Each field is
-      // gated on its OWN bit: reusing the CommandLine bit for both would strip
-      // creationTimeMs from an identity read that did request CreationTime, and
-      // no case could then tell a served-someone-else's-rows bug from a
-      // correctly-shaped cheap read.
+      // Gate each field on its own bit so identity creation-time omissions differ from coalesced flag errors.
       const requested = flags ?? 0
       const rows: NativeRow[] = NATIVE.map((row) => ({
         pid: row.pid,
@@ -104,22 +91,13 @@ function coalescingModule(): {
   }
 }
 
-/** One instance for the whole test: the latch it models is module-global. */
+/** Share the mock's module-global latch across reads. */
 function installCoalescingModule(): void {
   const native = coalescingModule()
   __setWindowsProcessTreeLoaderForTests(() => native)
 }
 
-/**
- * The relay's bare addon: `adaptAddon` over `getProcessList`, with no queue of
- * any kind. Two simultaneous `CreateToolhelp32Snapshot` calls are the crash the
- * vendor's queue exists to prevent, so here re-entry is observable rather than
- * silently absorbed.
- *
- * Concurrency has to be measured against this and never against the coalescing
- * mock, whose own latch means it can only ever report one call in flight -- an
- * assertion that holds whether or not this module excludes anything.
- */
+/** Bare addon exposes overlap directly; the coalescing mock hides concurrent callers behind its own latch. */
 function installBareAddonModule(): void {
   let inFlight = 0
   const native = {
@@ -176,8 +154,7 @@ describe('windows process table', () => {
   })
 
   it('asks for the command line but never for memory', async () => {
-    // Memory costs a second OpenProcess(PROCESS_VM_READ) per process and no
-    // caller reads a working set off this table.
+    // No caller needs Memory, which adds a VM_READ handle per process.
     await readWindowsProcessTableFresh()
     expect(getAllProcesses.mock.calls[0]?.[1]).toBe(DETAILED_FLAGS)
   })
@@ -210,10 +187,7 @@ describe('windows process table', () => {
     expect(detailed).toHaveLength(16)
   })
 
-  // The npm wrapper coalesces rather than queues: a second concurrent caller's
-  // flags are discarded and it is served the first caller's rows. Overlapping an
-  // identity read with a detailed one therefore used to hand agent recognition a
-  // table with every command line empty.
+  // The wrapper discards overlapping flags; identity-first used to strip detailed command lines.
   async function expectEachViewGotItsOwnFlags(
     identity: Promise<WindowsProcessIdentityRow[]>,
     detailed: Promise<WindowsProcessRow[]>
@@ -221,16 +195,10 @@ describe('windows process table', () => {
     const [identityRows, detailedRows] = await Promise.all([identity, detailed])
     expect(detailedRows.some((row) => row.command === '"C:/a b/orca.exe" --x')).toBe(true)
     expect(identityRows.every((row) => !('command' in row))).toBe(true)
-    // Both sets carry what their own flags asked for. Not redundant with the
-    // flags check below: that one catches a read served the OTHER set's rows,
-    // this one catches field shaping -- identity dropping CreationTime from its
-    // flags, or toIdentityRow failing to forward it. Neither sees the other's
-    // failure, so keep both.
+    // Verify both row shape and requested flags: either alone misses the other failure mode.
     expect(identityRows.map((row) => row.creationTimeMs)).toEqual([undefined, 1_700_000_000_000])
     expect(detailedRows.map((row) => row.creationTimeMs)).toEqual([undefined, 1_700_000_000_000])
-    // Two calls, each with its own flags. Concurrency is asserted separately,
-    // against the bare addon: this mock's own latch means it could never report
-    // more than one call in flight, whatever this module did.
+    // This coalescing mock serializes itself; measure our gate against the bare addon separately.
     expect(coalescingCalls.map((call) => call.flags).sort()).toEqual([
       IDENTITY_FLAGS,
       DETAILED_FLAGS
@@ -271,11 +239,7 @@ describe('windows process table', () => {
   })
 
   it('keeps one read in flight across a test reset', async () => {
-    // Replacing the gate rather than chaining onto it lets a waiter still
-    // holding the old chain run beside a read queued on the new one. Reachable
-    // only from the test hooks -- which is the problem: it hands a suite two
-    // concurrent calls into its own mock, the exact condition the cases above
-    // exist to detect.
+    // Replacing the gate lets old-chain waiters overlap reads queued on its replacement.
     installBareAddonModule()
     const inFlight = readWindowsProcessTableFresh()
     const waiter = readWindowsProcessIdentityTableFresh()
@@ -311,19 +275,20 @@ describe('windows process table', () => {
   })
 
   it('shares the wedge gate across flag sets, because they share one addon', async () => {
-    // One wedged read latches the vendored `requestInProgress` and pins the one
-    // libuv slot whichever flags asked for it, so a per-flag-set gate would let
-    // the other reader keep parking callbacks behind it.
+    // Both flags share one wedged addon; separate gates would accumulate retained callbacks.
     vi.useFakeTimers()
     getAllProcesses.mockImplementation(() => {})
     resetWindowsProcessTableForTests()
     const wedge = readWindowsProcessIdentityTableFresh()
-    const wedgeAssertion = expect(wedge).rejects.toThrow(/timed out/)
+    const wedgeAssertion = expect(wedge).rejects.toBeInstanceOf(WindowsProcessTableTimeoutError)
     await vi.advanceTimersByTimeAsync(3_000)
     await wedgeAssertion
 
     await expect(readWindowsProcessTableFresh()).rejects.toThrow(/wedged/)
-    await expect(readWindowsProcessIdentityTableFresh()).rejects.toThrow(/wedged/)
+    // Timeouts remain distinguishable from unreadable evidence.
+    await expect(readWindowsProcessIdentityTableFresh()).rejects.toBeInstanceOf(
+      WindowsProcessTableTimeoutError
+    )
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
@@ -331,10 +296,7 @@ describe('windows process table', () => {
   it('only advertises PID-safe ownership when the BINARY reports creation-time support', () => {
     expect(isWindowsProcessStartTimeAvailable()).toBe(true)
 
-    // The shape CI produced: pnpm patched the source tree, so the enum carries
-    // CreationTime, while the tarball's prebuilt .node still ignores flag 4.
-    // Believing the enum here is what let structured chat run with a reaper
-    // that can never identify a PID.
+    // Patched JS can advertise CreationTime over a prebuilt that still ignores flag4.
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       supportedProcessDataFlags: 3,
@@ -342,7 +304,7 @@ describe('windows process table', () => {
     }))
     expect(isWindowsProcessStartTimeAvailable()).toBe(false)
 
-    // An addon predating the export at all reports nothing, which is also false.
+    // Older binaries lack the capability export entirely.
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses
@@ -357,9 +319,7 @@ describe('windows process table', () => {
   })
 
   it('rejects rather than reporting an empty machine when the module is absent', async () => {
-    // A caller that reads "no processes" acts on it -- by declaring a tree dead,
-    // or by concluding a shell has no children. Absence must not look like that,
-    // and neither must a fallback that also fails.
+    // Absent or failed readers cannot claim no processes are running.
     __setWindowsProcessTreeLoaderForTests(() => null)
     __setWindowsProcessTableCimScanForTests(async () => {
       throw new Error('powershell unavailable')
@@ -375,17 +335,14 @@ describe('windows process table', () => {
   })
 
   it('rejects an empty snapshot rather than reporting an idle machine', async () => {
-    // CreateToolhelp32Snapshot failing under an EDR hook or a restricted token
-    // yields an empty vector, not an error. Callers act on "nothing is running"
-    // by concluding a live PTY root is already gone.
+    // A blocked snapshot can return [] without error; it must not prove a live root dead.
     getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb([]))
     resetWindowsProcessTableForTests()
     await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unreadable/)
   })
 
   it('rejects when the snapshot never calls back', async () => {
-    // The vendored reader latches a module-global on a wedge, so without a
-    // deadline one hang kills the process table for the life of the app.
+    // A missing callback must not strand process queries forever.
     vi.useFakeTimers()
     getAllProcesses.mockImplementation(() => {})
     resetWindowsProcessTableForTests()
@@ -403,9 +360,7 @@ describe('windows process table', () => {
   })
 })
 
-// Why this path exists: relay deployment installs only node-pty and
-// @parcel/watcher, so a Windows SSH host has no native binding and every read
-// used to reject -- which agent recognition reads as "no evidence" forever.
+// Relays without a staged addon need fallback; failed evidence otherwise leaves agent names stale.
 describe('PowerShell fallback when the native binding is absent', () => {
   let platform: PropertyDescriptor | undefined
   const cimScan = vi.fn()
@@ -437,12 +392,9 @@ describe('PowerShell fallback when the native binding is absent', () => {
   })
 
   it('serves the identity view from the one scan a relay can afford', async () => {
-    // With no binding there is only one scan to run and it costs ~1.4s and a
-    // powershell.exe, so the cheap view must ride it rather than fork a second.
+    // Share the expensive CIM scan between views.
     __setWindowsProcessTreeLoaderForTests(() => null)
-    // Projected, not merely widened: an identity row carries no command line on
-    // any host, so nothing can come to depend on the fallback happening to have
-    // one.
+    // Strip command lines even on fallback so identity callers cannot depend on them.
     await expect(readWindowsProcessIdentityTableFresh()).resolves.toEqual([
       { pid: process.pid, ppid: 0, name: 'node.exe' },
       { pid: 200, ppid: process.pid, name: 'claude.exe' }
@@ -469,8 +421,7 @@ describe('PowerShell fallback when the native binding is absent', () => {
   })
 
   it('does not engage when a present binding fails its read', async () => {
-    // A wedged or blocked reader must not silently start forking a shell at the
-    // caller's poll rate; only absence is unrecoverable.
+    // Native failure must not start PowerShell at polling cadence.
     const getAllProcesses = vi.fn()
     getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb([]))
     __setWindowsProcessTreeLoaderForTests(() => ({
@@ -479,6 +430,26 @@ describe('PowerShell fallback when the native binding is absent', () => {
     }))
     await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unreadable/)
     expect(cimScan).not.toHaveBeenCalled()
+  })
+
+  it('says so in the log, once, rather than falling back silently', async () => {
+    // Legitimate relay fallback must still emit a capability warning (#16905).
+    const fallbackWarnings = (): number =>
+      warn.mock.calls.filter((call) =>
+        String(call[0]).includes('falling back to a powershell.exe CIM scan')
+      ).length
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    __setWindowsProcessTreeLoaderForTests(() => null)
+
+    await readWindowsProcessTableFresh()
+    await readWindowsProcessTableFresh()
+    expect(fallbackWarnings()).toBe(1)
+
+    // Reinjection models a fresh process and must restore its once-only warning.
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    await readWindowsProcessTableFresh()
+    expect(fallbackWarnings()).toBe(2)
+    warn.mockRestore()
   })
 
   it('rejects a scan missing our own pid instead of reporting an idle machine', async () => {
@@ -512,10 +483,7 @@ describe('sticky wedge', () => {
   })
 
   it('stops calling the reader after a timeout instead of queueing a callback per tick', async () => {
-    // The vendored reader latches a global while a request is in flight and
-    // drains its queue only when that request completes. In the wedge this
-    // guards against it never does, so every retry would add a closure that is
-    // never called.
+    // A wedged wrapper retains callbacks forever unless re-entry is refused.
     vi.useFakeTimers()
     const getAllProcesses = vi.fn(() => {})
     __setWindowsProcessTreeLoaderForTests(() => ({
@@ -534,10 +502,7 @@ describe('sticky wedge', () => {
   })
 
   it('never re-enters the reader while the timed-out read is still out', async () => {
-    // A cooldown bounds the RATE of new callbacks, not the total: one probe per
-    // window still retains one more closure in the still-latched native queue
-    // every window, for the life of the app. Only the outstanding read can
-    // reopen the gate, so a permanent wedge retains exactly one callback.
+    // Cooldowns limit callback rate, not retention; only the outstanding callback can reopen the gate.
     vi.useFakeTimers()
     const getAllProcesses = vi.fn(() => {})
     __setWindowsProcessTreeLoaderForTests(() => ({
@@ -551,9 +516,7 @@ describe('sticky wedge', () => {
     await wedgeAssertion
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
 
-    // Four windows of the cooldown this replaced, each with concurrent callers.
-    // Rejection reasons are deliberately not asserted here: the leak this test
-    // pins is the call count, and it must fail on that alone.
+    // Concurrent retries across four old cooldown windows must retain exactly one callback.
     for (let window = 0; window < 4; window += 1) {
       await vi.advanceTimersByTimeAsync(30_000)
       const attempts = [
@@ -561,19 +524,16 @@ describe('sticky wedge', () => {
         readWindowsProcessTableFresh().catch(() => 'rejected'),
         readWindowsProcessTableFresh().catch(() => 'rejected')
       ]
-      // Long enough for a probe's own deadline, had one been let through.
+      // Let any accidentally admitted probe reach its own deadline.
       await vi.advanceTimersByTimeAsync(3_000)
       expect(await Promise.all(attempts)).toEqual(['rejected', 'rejected', 'rejected'])
     }
 
-    // Still the one callback the wedge is holding -- not one more per window.
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
   })
 
   it('resumes as soon as the timed-out read finally calls back', async () => {
-    // The stuck request completing is what drains the vendored queue, so it is
-    // the only honest evidence the reader recovered. Waiting out a wall clock
-    // afterwards would strand a reader that is already answering.
+    // Only completion of the stuck request proves the queue drained; recovery needs no further cooldown.
     vi.useFakeTimers()
     let stuck: ((rows: typeof NATIVE | undefined) => void) | undefined
     const getAllProcesses = vi.fn((cb: (rows: typeof NATIVE | undefined) => void) => {
@@ -621,7 +581,7 @@ describe('sticky wedge', () => {
   })
 
   it('clears the deadline when the reader throws synchronously', async () => {
-    // An orphaned timer would fire later and wedge a reader that had recovered.
+    // An uncleared timer can wedge a reader after a synchronous throw already recovered.
     vi.useFakeTimers()
     const getAllProcesses = vi.fn(() => {
       throw new Error('addon exploded')
@@ -634,7 +594,7 @@ describe('sticky wedge', () => {
     await expect(readWindowsProcessTableFresh()).rejects.toThrow(/exploded/)
     await vi.advanceTimersByTimeAsync(10_000)
 
-    // The recovered reader must answer, not report a wedge left by a dead timer.
+    // Recovery must not inherit the old deadline's wedge.
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: (cb: (rows: typeof NATIVE | undefined) => void) => cb(NATIVE)
@@ -643,9 +603,7 @@ describe('sticky wedge', () => {
   })
 })
 
-// Why against the real require and not the loader seam: relay hosts have no
-// node_modules of ours, so which specifier resolves IS the behaviour. #15749
-// passed its suites because every one of them replaced the loader wholesale.
+// Exercise real require resolution: replacing the loader hid missing relay specifiers (#15749).
 describe('resolving the native reader', () => {
   let platform: PropertyDescriptor | undefined
   const PACKAGE_SPECIFIER = '@vscode/windows-process-tree'
@@ -678,7 +636,7 @@ describe('resolving the native reader', () => {
     }
   }
 
-  /** An addon built before the creation-time patch: no capability export at all. */
+  /** Older binaries have no creation-time capability export. */
   function staleAddonReturning(rows: unknown): { getProcessList: ReturnType<typeof vi.fn> } {
     return { getProcessList: vi.fn((cb: (r: unknown) => void) => cb(rows)) }
   }
@@ -727,10 +685,7 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessTableFresh()
-    // Same flag set as the package path (6). Dropping CreationTime would strand
-    // the relay's own teardown on bare pids: every Windows descendant identity
-    // is a pid plus a creation time, so a table without one can never prove a
-    // tree exited. Memory stays off -- a second per-process handle nothing reads.
+    // Detailed reads need creation times for PID-safe teardown and omit unused Memory.
     expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 6)
     expect(isWindowsProcessStartTimeAvailable()).toBe(true)
   })
@@ -744,15 +699,12 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessIdentityTableFresh()
-    // CreationTime (4) and nothing else: no CommandLine, so the only per-process
-    // handle is the PROCESS_QUERY_LIMITED_INFORMATION one GetProcessTimes needs.
+    // CreationTime alone uses a limited handle/GetProcessTimes; no command-line query.
     expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 4)
   })
 
   it('trusts the staged addon on its own report, not on ours', async () => {
-    // A relay carrying an addon built before the creation-time patch still
-    // enumerates, so the table stays usable -- but it cannot prove identity,
-    // and saying otherwise would hand teardown a PID it can never re-check.
+    // Old addons still enumerate but cannot prove PID incarnation without creation times.
     const addon = staleAddonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -781,8 +733,7 @@ describe('resolving the native reader', () => {
   })
 
   it('rejects an addon that loads without the call we need', async () => {
-    // An arch mismatch or a truncated upload can still produce a loadable file.
-    // Binding to it would reject every read forever; the scan still works.
+    // Unusable addon shapes must fall back rather than reject every subsequent read.
     const cimScan = vi
       .fn()
       .mockResolvedValue([
@@ -799,10 +750,7 @@ describe('resolving the native reader', () => {
     expect(cimScan).toHaveBeenCalledTimes(1)
   })
 
-  // A relay bundle and the addon staged beside it redeploy independently, so a
-  // host that never took a new bundle can still be loading the published
-  // prebuilt -- which binds fine and then walks every process's address space.
-  // The relay build asserts the symbol is absent; nothing did at load.
+  // Independent deployment can leave a loadable old addon that still imports ReadProcessMemory.
   function withStagedAddonBinary(
     bytes: string,
     addon: unknown
@@ -866,9 +814,7 @@ describe('resolving the native reader', () => {
   })
 })
 
-// The cliff the removed PEB fallback leaves behind: a hooked ntdll that refuses
-// class 60 empties every command line, and the addon still loads and still
-// enumerates, so every health check the app has stays green.
+// Kernel command-line refusal leaves enumeration healthy; capability checks alone miss it.
 describe('warning when command-line recovery is refused host-wide', () => {
   let platform: PropertyDescriptor | undefined
   let warn: ReturnType<typeof vi.spyOn>

@@ -11,8 +11,6 @@ export type WindowsTerminalCapabilities = {
   pwshAvailable: boolean
   gitBashAvailable: boolean
   hostPlatform: NodeJS.Platform | null
-  /** Host-owned PID-reuse proof; absent means the host did not advertise it. */
-  windowsProcessStartTimeAvailable?: boolean
   isLoading: boolean
 }
 
@@ -61,8 +59,7 @@ export function getWindowsTerminalCapabilityOwnerKey(
   activeRuntimeEnvironmentId?: string | null,
   sshConnectionId?: string | null
 ): string {
-  // Why: remote desktop and paired web clients can switch hosts; Git Bash/WSL availability is
-  // host-owned, so a previous runtime's answer must not bleed into the next.
+  // Shell availability belongs to hosts; runtime switches must not reuse previous-owner Git Bash/WSL answers.
   const connectionId = sshConnectionId?.trim()
   const environmentId = activeRuntimeEnvironmentId?.trim()
   if (connectionId && environmentId) {
@@ -150,8 +147,7 @@ export function loadWindowsTerminalCapabilities(
     return pendingCapabilities
   }
 
-  // Why: Settings, status bar, and paired web tab bars need one shared answer.
-  // Separate probes can leave one surface showing stale Windows shell choices.
+  // Share one probe across Settings/status/web bars or shell choices can disagree.
   const requestId = ++nextCapabilityRequestId
   latestCapabilityRequestIdByOwnerKey.set(ownerKey, requestId)
   const nextPendingCapabilities = readWindowsTerminalCapabilities(target, sshConnectionId)
@@ -174,14 +170,6 @@ export function loadWindowsTerminalCapabilities(
 
   pendingCapabilitiesByOwnerKey.set(ownerKey, nextPendingCapabilities)
   return nextPendingCapabilities
-}
-
-export function refreshWindowsTerminalCapabilities(
-  ownerKey?: string,
-  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
-  sshConnectionId?: string | null
-): Promise<WindowsTerminalCapabilities> {
-  return loadWindowsTerminalCapabilities({ force: true, ownerKey, target, sshConnectionId })
 }
 
 export function selectWindowsTerminalCapabilitiesForOwner(

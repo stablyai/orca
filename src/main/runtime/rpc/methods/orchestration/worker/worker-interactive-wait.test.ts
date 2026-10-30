@@ -1,5 +1,4 @@
-// `worker-show` must distinguish a worker parked on a human prompt (STA-3714, STA-4513).
-// Deliberately unmocked below the RPC so detector, plumbing, and RPC shape are all covered.
+// Drive real detector/plumbing through RPC to distinguish workers waiting on human prompts (STA-3714, STA-4513).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -109,11 +108,6 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
       'launch-hash', // A dispatch recorded against a process that has since been replaced.
       opts?.breakIdentity === true ? `${incarnation}:replaced` : incarnation
     )
-    db.mintDispatchCapability({
-      dispatchId: dispatch.id,
-      paneKey,
-      processIncarnation: opts?.breakIdentity === true ? `${incarnation}:replaced` : incarnation
-    })
 
     const method = workerShowMethod()
     return method.handler(method.params?.parse({ dispatch: dispatch.id }), { runtime })
@@ -135,16 +129,14 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
   })
 
   it('reports an explicit null for the same lane inside a long tool call', async () => {
-    // Why an explicit null and not an omitted key: a coordinator has to tell "not waiting"
-    // from "this host is too old to know", and only absence may mean the latter.
+    // Explicit null means checked-and-not-waiting; absence preserves compatibility with hosts too old to know.
     const result = await showWorkerPaneServing(fixture('cursor-agent-long-tool-call'))
 
     expect(result).toMatchObject({ observation: { exactWorker: true, agentWait: null } })
   })
 
   it('omits the field entirely for a worker it could not verify', async () => {
-    // Why not null: null is a claim that Orca looked. A replaced process is never looked at,
-    // and reporting "no wait" there is the false negative this field exists to remove.
+    // Replaced processes were never checked; null would falsely claim no wait.
     const result = (await showWorkerPaneServing(fixture('cursor-agent-approval-prompt'), {
       breakIdentity: true
     })) as { observation: Record<string, unknown> }
@@ -159,7 +151,7 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
       observation: { agentWait: unknown }
     }
 
-    // Why the explicit shape first: comparing the two fields alone passes when both are absent.
+    // Assert shape before equality, which otherwise passes when both fields are absent.
     expect(result.observation.agentWait).toMatchObject({
       source: 'prompt-text',
       reason: 'agent-approval-prompt'

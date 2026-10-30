@@ -2,8 +2,8 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import type { PtyTransport } from './pty-transport-types'
+import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 import {
   installTerminalImeCompositionRoute,
   XTERM_COMPOSITION_SESSION_START_EVENT
@@ -328,7 +328,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
     vi.runAllTimers()
 
     expect(harness.sendInput).toHaveBeenCalledTimes(1)
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', 'driving')
     hook.unmount()
     harness.dispose()
   })
@@ -351,7 +351,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
     vi.runAllTimers()
 
     expect(harness.sendInput).toHaveBeenCalledTimes(1)
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', 'driving')
     hook.unmount()
     harness.dispose()
   })
@@ -374,7 +374,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
 
     expect(harness.setActivePane).toHaveBeenCalledWith(2, { focus: false })
     expect(harness.sendInput).toHaveBeenCalledOnce()
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', 'driving')
     hook.unmount()
     harness.dispose()
   })

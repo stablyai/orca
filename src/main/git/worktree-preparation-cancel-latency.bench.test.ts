@@ -1,8 +1,6 @@
 // Opt in: ORCA_WORKTREE_PREPARATION_CANCEL_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/git/worktree-preparation-cancel-latency.bench.test.ts
 //
-// Measures the create-side cost of an obsolete preparation: the wall time of a fresh checkout
-// (the next Create's critical path) while an evicted preparation's checkout is either left running
-// (main before #18951) or aborted (after). Same code, same fixture; only the abort differs.
+// Compare fresh-checkout latency while obsolete preparations keep running or are aborted.
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -43,14 +41,26 @@ function nextPreparedPath(label: string): string {
   return join(preparationRoot, `${process.pid}-${label}-${sequence}`)
 }
 
+const lockReasons = new Map<string, string>()
+
 function checkout(preparedPath: string, signal?: AbortSignal): Promise<void> {
+  const lockReason = createWorktreePreparationLockReason(`bench-${sequence}`)
+  lockReasons.set(preparedPath, lockReason)
   return prepareWorktreeCreateCheckout(
     repoPath,
     preparedPath,
     'main',
-    createWorktreePreparationLockReason(`bench-${sequence}`),
+    lockReason,
     signal ? { signal } : {}
   )
+}
+
+function discard(preparedPath: string): Promise<void> {
+  const lockReason = lockReasons.get(preparedPath)
+  if (!lockReason) {
+    throw new Error('The benchmark checkout has no lock reason')
+  }
+  return discardPreparedWorktree(repoPath, preparedPath, {}, lockReason)
 }
 
 async function runTrial(variant: Variant, obsolete: number): Promise<Sample> {
@@ -60,8 +70,7 @@ async function runTrial(variant: Variant, obsolete: number): Promise<Sample> {
     checkout(path, controllers[index].signal).catch(() => {})
   )
   if (variant === 'aborted') {
-    // Eviction aborts in the same turn the incoming preparation is armed, so abort before the
-    // fresh checkout starts.
+    // Model eviction aborting before the next checkout starts.
     controllers.forEach((controller) => controller.abort())
   }
   const freshPath = nextPreparedPath('fresh')
@@ -69,11 +78,7 @@ async function runTrial(variant: Variant, obsolete: number): Promise<Sample> {
   await checkout(freshPath)
   const freshCheckoutMs = performance.now() - started
   await Promise.all(obsoleteWork)
-  await Promise.all(
-    [...obsoletePaths, freshPath].map((path) =>
-      discardPreparedWorktree(repoPath, path).catch(() => {})
-    )
-  )
+  await Promise.all([...obsoletePaths, freshPath].map((path) => discard(path).catch(() => {})))
   return { variant, obsolete, freshCheckoutMs }
 }
 
@@ -115,10 +120,10 @@ describeBench('obsolete preparation cancellation latency', () => {
   })
 
   it('reports fresh checkout wall time with obsolete checkouts running vs aborted', async () => {
-    // Warm the object store and page cache once so the first variant is not penalised.
+    // Warm the cache so the first variant is not penalized.
     const warm = nextPreparedPath('warm')
     await checkout(warm)
-    await discardPreparedWorktree(repoPath, warm)
+    await discard(warm)
 
     const samples: Sample[] = []
     for (const obsolete of OBSOLETE_COUNTS) {

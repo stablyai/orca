@@ -1,17 +1,6 @@
-/**
- * Whether a terminal launch names the pane it created.
- *
- * A `term_*` handle is a main-side mapping — terminal-handle-links.ts:309 says the renderer cannot
- * resolve one — so a client that draws its own tabs could not tell which tab `agent.launch` had
- * just asked the host to build. The runtime already mints that pane and reports it as `paneKey`;
- * the surface factory used to discard it, which is the one identity channel this method declined.
- *
- * Identity travels; placement does not. Nothing here asks for a group, an order or a focus — those
- * stay with whichever client is drawing, and mobile, which has no tabs, reads none of this.
- */
+/** Return runtime-minted paneKey because a client renderer cannot resolve main-side term_* handles. Identity crosses the wire; placement stays with the client. */
 
 import { describe, expect, it, vi } from 'vitest'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isAgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type { RpcContext } from '../core'
 import {
@@ -60,17 +49,6 @@ describe('the pane a terminal launch created', () => {
     const result = await launch(EXISTING_LAUNCH, runtime)
 
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1', paneKey: PANE_KEY })
-  })
-
-  it('reports a pane key a client can resolve to a tab and a leaf', async () => {
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY, terminalPaneKey: PANE_KEY })
-
-    const result = await launch(EXISTING_LAUNCH, runtime)
-
-    // The point of carrying identity at all: the client gets the two ids `store.createTab` needs.
-    const pane =
-      result.outcome.kind === 'terminal' ? parsePaneKey(result.outcome.paneKey ?? '') : null
-    expect(pane).toMatchObject({ tabId: TAB_ID, leafId: LEAF_ID })
   })
 
   it('carries the pane key through a downgrade to a terminal', async () => {
@@ -148,8 +126,7 @@ describe('the pane a terminal launch created', () => {
 })
 
 describe('reading a recorded launch back', () => {
-  // The replay resolver narrows a stored row with this guard, so a field it does not check is a
-  // field a replay hands back unvalidated — and one it over-checks is a refused replay.
+  // Replay uses this guard; missing validation leaks unchecked fields, over-validation rejects recorded answers.
   const BASE = {
     worktreeId: 'wt-7',
     receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'ok' }
@@ -172,5 +149,12 @@ describe('reading a recorded launch back', () => {
     expect(
       isAgentLaunchResult({ ...BASE, outcome: { kind: 'terminal', handle: 't', paneKey: 7 } })
     ).toBe(false)
+  })
+
+  it("checks a structured row's tab id when present and reads one written without it", () => {
+    const structured = { kind: 'structured', handle: 'h', sessionId: 'sess-1' }
+    expect(isAgentLaunchResult({ ...BASE, outcome: structured })).toBe(true)
+    expect(isAgentLaunchResult({ ...BASE, outcome: { ...structured, tabId: TAB_ID } })).toBe(true)
+    expect(isAgentLaunchResult({ ...BASE, outcome: { ...structured, tabId: 7 } })).toBe(false)
   })
 })

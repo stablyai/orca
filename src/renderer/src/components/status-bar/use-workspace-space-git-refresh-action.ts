@@ -1,12 +1,12 @@
 import { useCallback } from 'react'
-import type { GitStatusResult } from '../../../../shared/git-status-types'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { useAppStore } from '../../store'
 import { findRepoForHost } from '../../store/slices/repo-host-identity'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceSpaceManagerBindings = ReturnType<typeof useWorkspaceSpaceManagerBindings>
 
@@ -47,30 +47,37 @@ export function useWorkspaceSpaceGitRefreshAction(bindings: WorkspaceSpaceManage
         hostId: worktree.executionHostId,
         settings
       })
-      const host = parseExecutionHostId(worktree.executionHostId)
-      const ownerSettings = settings
-        ? {
-            ...settings,
-            activeRuntimeEnvironmentId: host?.kind === 'runtime' ? host.environmentId : null
-          }
-        : { activeRuntimeEnvironmentId: host?.kind === 'runtime' ? host.environmentId : null }
+      // Why: a scan row without a host id came from this app's own scan.
+      const ownerTarget = worktree.executionHostId
+        ? ipcOrRuntimeTargetForHostId(worktree.executionHostId)
+        : ({ kind: 'local' } as const)
 
       return (
-        owner
-          ? getRuntimeGitStatus({
-              settings: ownerSettings,
-              worktreeId: worktree.worktreeId,
-              worktreePath: worktree.path,
-              connectionId: owner.connectionId ?? undefined
-            })
-          : Promise.reject(new Error('Workspace owner is no longer available'))
+        owner && ownerTarget
+          ? getRuntimeGitStatus(
+              {
+                target: ownerTarget,
+                worktreeId: worktree.worktreeId,
+                worktreePath: worktree.path,
+                connectionId: owner.connectionId ?? undefined
+              },
+              { includeLineStats: false, admissionTier: 'background' }
+            )
+          : Promise.reject(
+              new Error(
+                translate(
+                  'auto.components.status.bar.workspaceSpaceGitRefresh.ownerUnavailable',
+                  'Workspace owner is no longer available'
+                )
+              )
+            )
       )
         .then((status) => {
           if (gitStatusScanGenerationRef.current !== scanGeneration) {
             return
           }
           const nextStatus = new Map(gitStatusByWorktreeIdentityRef.current)
-          nextStatus.set(identity, (status as GitStatusResult).entries)
+          nextStatus.set(identity, status.entries)
           gitStatusByWorktreeIdentityRef.current = nextStatus
           setGitStatusByWorktreeIdentity(nextStatus)
           setGitRefreshStateByWorktreeId((current) => ({

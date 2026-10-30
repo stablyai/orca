@@ -13,7 +13,6 @@ export const testState = {
   previousUserDataPath: undefined as string | undefined
 }
 
-/** Fresh managed-accounts + fake `~` per test; mirrors the original suite hooks. */
 export function registerCodexAccountsTestHomes(): void {
   beforeEach(() => {
     vi.resetModules()
@@ -56,13 +55,14 @@ export function createStore(settings: GlobalSettings) {
       return settings
     }),
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
-    replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn((next: CodexResetCreditAttemptLedger) => {
-      resetLedger = structuredClone(next)
-    })
+    replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn(
+      async (next: CodexResetCreditAttemptLedger) => {
+        resetLedger = structuredClone(next)
+      }
+    )
   }
 }
 
-/** Rate-limit collaborator surface the accounts service calls into. */
 export type RateLimitsStub = {
   refreshForCodexAccountChange: Mock<(...args: unknown[]) => Promise<void>>
   evictInactiveCodexCache: Mock<(...args: unknown[]) => void>
@@ -75,7 +75,6 @@ export function createRateLimits(): RateLimitsStub {
   }
 }
 
-/** Runtime-home collaborator surface the accounts service calls into. */
 export type RuntimeHomeStub = {
   syncForCurrentSelection: Mock<(...args: unknown[]) => void>
   clearLastWrittenAuthJson: Mock<(...args: unknown[]) => void>

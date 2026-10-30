@@ -79,7 +79,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
         toolInput: 'pnpm test',
         terminalHandle: 'term-future',
         receivedAt: 1_700_000_000_000,
-        stateStartedAt: 1_699_999_999_000
+        stateStartedAt: 1_699_999_999_000,
+        // A reload starts with no state history; the host's turn start must arrive with the row.
+        turnStartedAt: 1_699_999_990_000
       }
     ])
     await Promise.resolve()
@@ -113,7 +115,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         toolInput: 'pnpm test'
       }),
       'SSH Tab',
-      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+      {
+        updatedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000,
+        turnStartedAt: 1_699_999_990_000
+      },
       expectWorktreeRouting('wt-1'),
       undefined
     )

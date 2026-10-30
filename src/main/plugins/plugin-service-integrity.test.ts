@@ -2,12 +2,15 @@ import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema, type PluginManifest } from '../../shared/plugins/plugin-manifest'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import {
+  pluginManifestSchema,
+  type PluginManifest
+} from '../../shared/plugins/manifest/plugin-manifest'
 import { hashPluginTree } from './plugin-content-hash'
 import { PluginContentVerifier } from './plugin-content-integrity'
 import { PluginService } from './plugin-service'
-import type { PluginWorkerFactory } from './plugin-worker-manager'
+import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
 
 const roots: string[] = []
 
@@ -16,17 +19,18 @@ async function createInstalledPlugin(options: { worker: boolean }): Promise<{
   pluginKey: string
   rootDir: string
   manifest: PluginManifest
+  contentHash: string
 }> {
   const userDataPath = await mkdtemp(join(tmpdir(), 'orca-plugin-service-integrity-'))
   roots.push(userDataPath)
-  const pluginKey = 'orca-samples.demo'
+  const pluginKey = 'samples.demo'
   const pluginDir = join(userDataPath, 'plugins', pluginKey)
   const stagingDir = join(pluginDir, 'staging')
   await mkdir(stagingDir, { recursive: true })
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: 'Demo',
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -52,14 +56,14 @@ async function createInstalledPlugin(options: { worker: boolean }): Promise<{
   const rootDir = join(pluginDir, content.hash)
   await rename(stagingDir, rootDir)
   await writeFile(join(pluginDir, 'current'), content.hash)
-  return { userDataPath, pluginKey, rootDir, manifest }
+  return { userDataPath, pluginKey, rootDir, manifest, contentHash: content.hash }
 }
 
 function createService(
   plugin: Awaited<ReturnType<typeof createInstalledPlugin>>,
   workerFactory?: PluginWorkerFactory
 ): PluginService {
-  const consentFingerprint = fingerprintPluginConsent(plugin.manifest)
+  const consentFingerprint = fingerprintPluginConsent(plugin.manifest, plugin.contentHash)
   return new PluginService({
     userDataPath: plugin.userDataPath,
     hostVersion: '1.4.0',

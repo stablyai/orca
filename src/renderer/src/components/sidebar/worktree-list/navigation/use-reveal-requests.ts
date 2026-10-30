@@ -12,7 +12,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
 
 function workspacePassesFilters(
@@ -27,8 +27,7 @@ function workspacePassesFilters(
   )
 }
 
-// Turns a "show me the current workspace" request into whatever the sidebar must change
-// first — grouping mode, active filters — before the viewport can scroll to it.
+// Adjust grouping and filters before scheduling the requested workspace’s viewport reveal.
 export function useSidebarRevealRequests(args: {
   groupBy: WorktreeGroupBy
   renderedSidebarRowKeys: ReadonlySet<string>

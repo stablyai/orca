@@ -15,7 +15,8 @@ import {
   getRuntimeEnvironmentConnectionGeneration
 } from './runtime-status'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getPairedDeviceIdsByEnvironment } from '@/components/sidebar/workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../../../shared/workspace-creator-visibility'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
@@ -64,14 +65,7 @@ function stubRuntimeEnvironmentApi({
   getStatus?: ReturnType<typeof vi.fn>
   list?: ReturnType<typeof vi.fn>
 }) {
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        getStatus,
-        list
-      }
-    }
-  })
+  stubRuntimeEnvironmentBridge({ getStatus, list })
   return { getStatus, list }
 }
 
@@ -205,8 +199,7 @@ describe('runtime-status slice', () => {
 
   it('still learns a paired device id when the re-probed status is unchanged', () => {
     const store = createSliceStore()
-    // Why: the status arrives before the catalog, so only the second (identical) probe
-    // can carry the id onto the environment — the map guard must not swallow it.
+    // Status may precede catalog; an identical later probe must still publish the device ID onto the environment.
     const status = makeStatus({ pairedDeviceId: 'client-device' })
     store.getState().setRuntimeEnvironmentStatus('env-a', { status, checkedAt: 1 })
     store.getState().setRuntimeEnvironments([makeEnvironment()])
@@ -611,7 +604,7 @@ describe('runtime-status slice', () => {
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
     const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { getStatus, call } } })
+    stubRuntimeEnvironmentBridge({ getStatus, call })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
 
@@ -633,10 +626,7 @@ describe('runtime-status slice', () => {
   })
 
   it('drops a recent compatibility failure on a direct non-null status publish', async () => {
-    // Why: paths like Settings "Connect" publish the host online via
-    // setRuntimeEnvironmentStatus directly (not refreshRuntimeEnvironmentStatus)
-    // and then trigger a reuse-flagged repo.list. The stale failure must drop so
-    // that reuse-flagged catalog fetch re-probes the now-reachable host.
+    // Settings Connect publishes reachable status before reuse-flagged repo.list; clear stale failure so that read re-probes.
     clearRuntimeCompatibilityCacheForTests()
     let offline = true
     const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
@@ -654,7 +644,7 @@ describe('runtime-status slice', () => {
       }
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
 
@@ -672,9 +662,7 @@ describe('runtime-status slice', () => {
   })
 
   it('preserves a recent compatibility failure on a null (offline) status publish', async () => {
-    // Why: recording an unreachable host must not undermine the fanout fix — a
-    // null status is not proof of reachability, so reuse-flagged sweeps keep
-    // reusing the one recent failure instead of re-probing per repo.
+    // Null status proves no recovery; fanout must keep sharing the cached compatibility failure.
     clearRuntimeCompatibilityCacheForTests()
     let offline = true
     const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
@@ -692,7 +680,7 @@ describe('runtime-status slice', () => {
       }
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
 
@@ -726,13 +714,9 @@ describe('runtime-status slice', () => {
 
   it('preserves successful reachability when reading its snapshot fails', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          getStatus: vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')),
-          getStatusSnapshots: vi.fn().mockRejectedValue(new Error('IPC read failed'))
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      getStatus: vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')),
+      getStatusSnapshots: vi.fn().mockRejectedValue(new Error('IPC read failed'))
     })
     try {
       const store = createSliceStore()
@@ -909,10 +893,7 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.has('env-b')).toBe(false)
   })
 
-  // Why: skill discovery waits for the catalog to settle. A rejected read must
-  // release that wait without claiming the catalog is hydrated — host routing
-  // uses `runtimeEnvironmentCatalogHydrated` to fail closed on an unknown
-  // catalog, and an empty stale list must not be mistaken for "no runtimes".
+  // Failed catalog reads release skill discovery waiters without marking routing hydrated; empty stale state cannot prove no runtimes.
   it('settles failed catalog reads and allows a later hydration retry', async () => {
     const list = vi
       .fn()

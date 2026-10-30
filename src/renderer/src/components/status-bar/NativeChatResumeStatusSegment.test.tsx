@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { resetLocalStructuredChatsForTests } from '@/runtime/local-structured-chats'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -10,14 +11,18 @@ import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest
 } from '../native-chat-resume-on-restart-dialog'
-import { _resetNativeChatRestartOffer } from '../native-chat-resume-on-restart-store'
+import {
+  _resetNativeChatRestartOffer,
+  localNativeChatRestartStore
+} from '../native-chat-resume-on-restart-store'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc
+  callStructuredAgentSession: rpc,
+  // A failed row opens the status feed; these cases never drive it.
+  subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
 
 const candidates: ResumeCandidate[] = [
   {
@@ -38,7 +43,18 @@ const candidates: ResumeCandidate[] = [
   }
 ]
 
-/** Mounts the segment and snoozes the launch dialog the offer raises, as the modal's close does. */
+function stageLocalHost(installed: boolean): void {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      app: {
+        holdsStructuredAgentSessions: async () => installed,
+        onStructuredAgentSessionsHeldChanged: () => () => undefined
+      }
+    }
+  })
+}
+
 async function mount(iconOnly = false): Promise<void> {
   await act(async () => {
     render(
@@ -57,12 +73,14 @@ describe('NativeChatResumeStatusSegment', () => {
     consumeNativeChatResumeOnRestartDialogRequest()
     useAppStore.setState({
       ...useAppStore.getInitialState(),
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
     })
   })
 
   afterEach(() => {
     cleanup()
+    resetLocalStructuredChatsForTests()
+    Reflect.deleteProperty(window, 'api')
     _resetNativeChatRestartOffer()
     consumeNativeChatResumeOnRestartDialogRequest()
     useAppStore.setState(useAppStore.getInitialState(), true)
@@ -83,6 +101,51 @@ describe('NativeChatResumeStatusSegment', () => {
       'agentSession.restartResumable'
     ])
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+  })
+
+  // The remaining offer and a completed resume’s failure are separate facts with separate entries.
+  it('keeps a failed resume as its own entry beside any remaining offer', async () => {
+    const failed = {
+      ...candidates[0]!,
+      failedAt: 60_000,
+      outcome: 'refused',
+      reason: 'agent_session_restart_work_superseded'
+    }
+    rpc.mockResolvedValue({ sessions: candidates.slice(1), failed: [failed] })
+    await mount()
+
+    expect(screen.getByText('1 chat to resume')).toBeTruthy()
+    const entry = screen.getByRole('button', {
+      name: '1 chat failed to resume. Click for details.'
+    })
+    expect(entry.textContent).toBe('1 chat failed to resume')
+
+    rpc.mockResolvedValue({ sessions: [], failed: [failed] })
+    await act(async () => entry.click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+    expect(screen.queryByText('1 chat to resume')).toBeNull()
+    expect(screen.getByText('1 chat failed to resume')).toBeTruthy()
+  })
+
+  // Unconfirmed chats may already be running; calling them failed would invite duplicate continuation.
+  it('does not call an unconfirmed resume failed', async () => {
+    const failure = (sessionId: 'a' | 'b', outcome: 'refused' | 'unconfirmed') => ({
+      ...candidates.find((entry) => entry.sessionId === sessionId)!,
+      failedAt: 60_000,
+      outcome,
+      reason: outcome === 'refused' ? 'agent_session_restart_work_superseded' : 'pending'
+    })
+    rpc.mockResolvedValue({
+      sessions: [],
+      failed: [failure('a', 'refused'), failure('b', 'unconfirmed')]
+    })
+    await mount()
+
+    expect(
+      screen.getByRole('button', { name: '2 chats to check after resuming. Click for details.' })
+        .textContent
+    ).toBe('2 chats to check')
+    expect(screen.queryByText(/failed to resume/)).toBeNull()
   })
 
   it('names a single chat in the singular', async () => {
@@ -118,22 +181,65 @@ describe('NativeChatResumeStatusSegment', () => {
     ])
   })
 
-  it('hides when the feature is disabled or the host offers nothing', async () => {
+  it('hides when no chat exists and the setting is off, or the host offers nothing', async () => {
     rpc.mockResolvedValue({ sessions: candidates })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: false }
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
     })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()
-    // Nothing is even asked of the host while the feature is off.
     expect(rpc).not.toHaveBeenCalled()
 
     cleanup()
     rpc.mockResolvedValue({ sessions: [] })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
     })
     await mount()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  // The setting picks what new agents open as; chats that already exist keep their offer.
+  it('offers to continue the chats this machine holds while the setting is off', async () => {
+    rpc.mockResolvedValue({ sessions: candidates })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
+    })
+    stageLocalHost(true)
+    await mount()
+
+    expect(rpc).toHaveBeenCalledWith(expect.anything(), 'agentSession.restartResumable')
+    expect(screen.getByRole('button')).toBeTruthy()
+  })
+
+  // The offer is this machine's runtime's; a paired server's chats are no reason to build it.
+  it("does not ask this machine for an offer over a paired server's chats", async () => {
+    rpc.mockResolvedValue({ sessions: candidates })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: false },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'agent-session:claude_1',
+            entityId: 'claude_1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            executionHostId: 'runtime:server-1',
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude',
+            label: 'Claude Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    stageLocalHost(false)
+    await mount()
+
+    expect(rpc).not.toHaveBeenCalled()
     expect(screen.queryByRole('button')).toBeNull()
   })
 
@@ -143,5 +249,29 @@ describe('NativeChatResumeStatusSegment', () => {
 
     expect(screen.getByRole('button').textContent).toContain('2')
     expect(screen.queryByText('2 chats to resume')).toBeNull()
+  })
+
+  it('keeps run-only uncertainty reachable until its viewed summary is closed', async () => {
+    rpc.mockResolvedValue({ sessions: [candidates[0]], failed: [] })
+    await mount()
+    rpc.mockImplementation(async (_target, method) => {
+      if (method === 'agentSession.restartContinue') {
+        throw new Error('accepted reply lost')
+      }
+      return { sessions: [], failed: [] }
+    })
+    await act(async () => localNativeChatRestartStore.continueNativeChatRestartOffer(['a']))
+    const entry = screen.getByRole('button', {
+      name: '1 chat to check after resuming. Click for details.'
+    })
+    expect(screen.queryByText(/failed to resume/)).toBeNull()
+    await act(async () => entry.click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+    const run = localNativeChatRestartStore.getNativeChatRestartRun()!
+    act(() => {
+      localNativeChatRestartStore.markFinishedNativeChatRestartRunShown(run)
+      localNativeChatRestartStore.releaseFinishedNativeChatRestartRun()
+    })
+    expect(screen.queryByRole('button')).toBeNull()
   })
 })

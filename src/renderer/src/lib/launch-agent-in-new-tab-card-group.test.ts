@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 
-const mockCreateTab = vi.fn()
-const mockLaunchAgentInWebHostTab = vi.fn()
-const mockIsWebRuntimeSessionActive = vi.fn()
-const mockResolveAgentLaunchGroupId =
-  vi.fn<(worktreeId: string, callerGroupId: string | undefined) => string | undefined>()
+const {
+  mockCreateTab,
+  mockLaunchAgentInWebHostTab,
+  mockIsWebRuntimeSessionActive,
+  mockLaunchStructuredAgentFromNewTab,
+  mockResolveAgentLaunchGroupId
+} = vi.hoisted(() => ({
+  mockCreateTab: vi.fn(),
+  mockLaunchAgentInWebHostTab: vi.fn(),
+  mockIsWebRuntimeSessionActive: vi.fn(),
+  mockLaunchStructuredAgentFromNewTab: vi.fn(),
+  mockResolveAgentLaunchGroupId:
+    vi.fn<(worktreeId: string, callerGroupId: string | undefined) => string | undefined>()
+}))
 
 // Why annotated consts rather than casts: this repo forbids type assertions, and an empty
 // literal inside the double would otherwise infer a uselessly narrow type.
@@ -44,21 +55,26 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => null
 }))
 
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => 'web-runtime'
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => 'web-runtime'
 }))
 
 vi.mock('@/lib/launch-agent-web-host-tab', () => ({
   launchAgentInWebHostTab: mockLaunchAgentInWebHostTab
+}))
+
+vi.mock('@/lib/launch-agent-in-new-tab-structured-route', () => ({
+  launchStructuredAgentFromNewTab: mockLaunchStructuredAgentFromNewTab
 }))
 
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
@@ -78,21 +94,26 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
 describe('launchAgentInNewTab agent card group', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    setLocalRuntimeCapabilitiesForTests([])
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockResolveAgentLaunchGroupId.mockReturnValue('card-group-1')
     mockLaunchAgentInWebHostTab.mockResolvedValue({ delivered: true, failureNotified: false })
+    mockLaunchStructuredAgentFromNewTab.mockReturnValue(null)
   })
 
   it('resolves the card group once the terminal launch is committed', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', requestId: 'terminal' })
 
     expect(mockResolveAgentLaunchGroupId).toHaveBeenCalledTimes(1)
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'card-group-1', undefined, {
-      launchAgent: 'codex'
-    })
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      'card-group-1',
+      undefined,
+      expect.objectContaining({ launchAgent: 'codex' })
+    )
   })
 
   it('does not resolve a card group when startup validation rejects the launch', async () => {
@@ -101,6 +122,7 @@ describe('launchAgentInNewTab agent card group', () => {
     const result = launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
+      requestId: 'terminal',
       agentArgs: '--model "unterminated'
     })
 
@@ -115,6 +137,7 @@ describe('launchAgentInNewTab agent card group', () => {
     const result = launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
+      requestId: 'terminal',
       beforeSurfaceOpen: () => false
     })
 
@@ -130,6 +153,7 @@ describe('launchAgentInNewTab agent card group', () => {
     const result = launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
+      requestId: 'terminal',
       beforeSurfaceOpen: () => false
     })
 
@@ -142,7 +166,7 @@ describe('launchAgentInNewTab agent card group', () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', requestId: 'terminal' })
 
     expect(mockResolveAgentLaunchGroupId).toHaveBeenCalledTimes(1)
     expect(mockLaunchAgentInWebHostTab).toHaveBeenCalledWith(
@@ -156,17 +180,19 @@ describe('launchAgentInNewTab agent card group', () => {
     const result = launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
-      agentSessionLaunchPlan: {
+      groupId: 'caller-group',
+      agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
         route: 'structured-native-chat',
+        requestId: 'chat',
         agent: 'claude',
-        worktreeId: 'wt-1',
-        // Why null: a structured launch that never begins must leave no card group behind.
-        begin: () => null,
-        launch: async () => null
-      }
+        worktreeId: 'wt-1'
+      })
     })
 
     expect(result).toBeNull()
     expect(mockResolveAgentLaunchGroupId).not.toHaveBeenCalled()
+    expect(mockLaunchStructuredAgentFromNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ groupId: 'caller-group' })
+    )
   })
 })

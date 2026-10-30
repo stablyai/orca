@@ -2,24 +2,32 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
-import { authorizeExternalPath } from '../ipc/filesystem-auth'
+import {
+  agentSessionPastedImageName,
+  sanitizeAgentSessionAttachmentName,
+  type AgentSessionAttachmentClipboardTarget
+} from '../../shared/agent-session-attachments'
+import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
+  /** A phone-picked file's own name; without it the paste is saved as a .png. */
+  fileName?: string
   runtimeEnvironmentId?: string | null
+  /** With `runtimeEnvironmentId`: store the image as an attachment of this structured chat. */
+  agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+  /** A native-chat composer paste: kept in Orca's paste folder so its draft can bring it back. */
+  forNativeChatDraft?: boolean
+  /** With forNativeChatDraft, sends claim local structured-chat pastes from the chat attachment store. */
+  forStructuredChat?: boolean
 }
 
-const REMOTE_CLIPBOARD_IMAGE_TEMP_DIR = '/tmp'
-
-function joinRemotePath(basePath: string, fileName: string): string {
-  if (isWindowsAbsolutePathLike(basePath)) {
-    return path.win32.join(basePath, fileName)
-  }
-  return path.posix.join(basePath, fileName)
+// The path is typed into terminals, so keep no character a shell would expand.
+function shellInertFileName(name: string): string {
+  return sanitizeAgentSessionAttachmentName(name).replace(/[^\p{L}\p{M}\p{N} ._-]/gu, '_')
 }
 
 export async function saveClipboardImageBufferAsTempFile(
@@ -28,22 +36,23 @@ export async function saveClipboardImageBufferAsTempFile(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
 
-  const fileName = `orca-paste-${Date.now()}-${randomUUID()}.png`
-
   if (args?.connectionId) {
-    const provider = requireSshFilesystemProvider(args.connectionId)
-    const remoteTempDir = (await provider.getTempDir?.()) ?? REMOTE_CLIPBOARD_IMAGE_TEMP_DIR
-    const remotePath = joinRemotePath(remoteTempDir, fileName)
-    // Why: SSH terminal agents run on the remote host, so the pasted path must
-    // name a remote file. The provider's base64 path writes binary bytes via SFTP.
-    await provider.writeFileBase64(remotePath, buffer.toString('base64'))
-    return remotePath
+    throw new SshHostNotServedError(args.connectionId)
   }
 
-  const tempPath = path.join(getAppEnvironment().getPath('temp'), fileName)
+  // Composer drafts must restore pastes after restart; terminal/editor/phone pastes use OS temp.
+  let folder = getAppEnvironment().getPath('temp')
+  if (args?.forNativeChatDraft === true) {
+    folder = nativeChatPasteFolder()
+    await fs.mkdir(folder, { recursive: true })
+  }
+  // A picked file keeps its own name, so the paste gets a folder to stay unique.
+  const tempPath = args?.fileName
+    ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
+    : path.join(folder, agentSessionPastedImageName(Date.now(), randomUUID()))
+  if (args?.fileName) {
+    await fs.mkdir(path.dirname(tempPath), { recursive: true })
+  }
   await fs.writeFile(tempPath, buffer)
-  // Why: the OS temp dir is outside every allowed root, so without this the
-  // composer's own thumbnail/preview read of the file it just wrote is denied.
-  authorizeExternalPath(tempPath)
   return tempPath
 }

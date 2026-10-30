@@ -1,6 +1,11 @@
+import { getCellHeight, getCellWidth, getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
-import { getCellHeight } from './fit-scale'
-import { getCellWidth, getTotalScale } from './viewport-transform'
+
+// Subtract the host origin before grid mapping; embedded terminals sit below headers while native windows start at zero.
+export function viewportPoint(scope: TerminalDocumentScope, clientX: number, clientY: number) {
+  const frame = scope.viewportRect()
+  return { x: clientX - frame.left, y: clientY - frame.top }
+}
 
 export function viewportToCell(scope: TerminalDocumentScope, clientX: number, clientY: number) {
   if (!scope.term) {
@@ -15,8 +20,9 @@ export function viewportToCell(scope: TerminalDocumentScope, clientX: number, cl
   if (total <= 0) {
     total = 1
   }
-  const sx = (clientX - scope.panX) / total
-  const sy = (clientY - scope.panY) / total
+  const point = viewportPoint(scope, clientX, clientY)
+  const sx = (point.x - scope.panX) / total
+  const sy = (point.y - scope.panY) / total
   let col = Math.floor(sx / cellW)
   let viewportRow = Math.floor(sy / cellH)
   if (col < 0) {

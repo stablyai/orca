@@ -205,6 +205,52 @@ describe('gitlab client — MR operations', () => {
       expect(result.items[0].isCrossRepository).toBe(true)
     })
 
+    it('probes one more page when GitLab sends no pagination totals', async () => {
+      const mr = (iid: number) => ({
+        id: iid,
+        iid,
+        title: `mr ${iid}`,
+        state: 'opened',
+        source_branch: `b${iid}`,
+        target_branch: 'main'
+      })
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: {}
+      })
+      expect(await listMergeRequests('/repo', 'all', 3, 2)).toMatchObject({
+        totalPages: 4,
+        totalCount: 0
+      })
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({ body: JSON.stringify([mr(3)]), headers: {} })
+      expect((await listMergeRequests('/repo', 'all', 4, 2)).totalPages).toBe(4)
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: { 'x-total': '7' }
+      })
+      expect(await listMergeRequests('/repo', 'all', 1, 2)).toMatchObject({
+        totalPages: 4,
+        totalCount: 7
+      })
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: {}
+      })
+      expect((await listMergeRequests('/repo', 'all', 1, 2)).totalPages).toBe(2)
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+      expect((await listMergeRequests('/repo', 'all', 2, 2)).totalPages).toBe(2)
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: { 'x-total-pages': '5', 'x-total': '7' }
+      })
+      expect((await listMergeRequests('/repo', 'all', 1, 2)).totalPages).toBe(5)
+    })
+
     it('falls back to glab mr list when project ref is unresolved', async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
@@ -256,7 +302,6 @@ describe('gitlab client — MR operations', () => {
       await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
       const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-      // Why (#6263): the cwd-inferred fallback must honor the typed query too.
       const searchIdx = callArgs.indexOf('--search')
       expect(searchIdx).toBeGreaterThanOrEqual(0)
       expect(callArgs[searchIdx + 1]).toBe('fix login')
@@ -312,8 +357,7 @@ describe('gitlab client — MR operations', () => {
       expect(result.items).toEqual([])
     })
 
-    // Why: the title carries a classifier keyword, so this also pins that a wrapped payload stays
-    // out of the substring matcher — classifying it would swap the body for "check your connection".
+    // A classifier keyword in a content title must not replace the opaque response diagnostic.
     it('reports the body instead of ".map is not a function" when the API returns a non-array', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify({ data: [{ iid: 7, title: 'fix network timeout' }] }),
@@ -337,8 +381,6 @@ describe('gitlab client — MR operations', () => {
       expect(result.error?.message).not.toContain('is not a function')
     })
 
-    // Why: the whole point of surfacing the body — a GitLab error envelope now
-    // classifies like any other glab failure instead of collapsing to 'unknown'.
     it('classifies a GitLab error envelope returned on exit 0', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify({ message: '403 Forbidden' }),
@@ -349,8 +391,7 @@ describe('gitlab client — MR operations', () => {
       expect(result.error?.type).toBe('permission_denied')
     })
 
-    // Why: the sibling title matches an earlier classifier branch than the envelope does, so this
-    // fails if the payload leaks into classification instead of only the envelope's own message.
+    // Only the envelope message is diagnostic; sibling payload keywords must not change classification.
     it('classifies an error envelope by its message, not its sibling payload', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify({

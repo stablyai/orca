@@ -1,15 +1,24 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Why: when the preferred WS port is taken (second Orca instance), the OS
-// assigns a random port. Paired mobile devices store ws://ip:port endpoints,
-// so a port that changes on every restart permanently orphans those pairings
-// (STA-1511). Persist the assigned fallback so the same instance re-binds the
-// same port next launch — the transport binds a persisted fallback BEFORE the
-// preferred port, so pairings survive even when the preferred port is free
-// again.
+// Persist fallback endpoints across restarts so paired phones stay reachable even when the preferred port later becomes free (STA-1511).
 
 const FALLBACK_PORT_FILE = 'mobile-ws-fallback-port.json'
+const FALLBACK_LADDER_SIZE = 31
+// Reserve 6769 for pnpm dev (main-process-runtime-launch.ts) so other instances cannot steal its paired endpoint.
+const DEV_PINNED_WS_PORT = 6769
+
+// Try deterministic ports below OS dynamic ranges; rebooted Hyper-V/WSL reservations otherwise move advertised ports.
+export function wsFallbackPortLadder(preferredPort: number): number[] {
+  if (preferredPort === 0) {
+    return []
+  }
+  const last = Math.min(65535, preferredPort + FALLBACK_LADDER_SIZE)
+  return Array.from(
+    { length: last - preferredPort },
+    (_, index) => preferredPort + 1 + index
+  ).filter((port) => port !== DEV_PINNED_WS_PORT)
+}
 
 function isValidPort(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 65535
@@ -32,6 +41,15 @@ export function readWsFallbackPort(userDataPath: string): number | undefined {
   return undefined
 }
 
+// Drop unusable persisted ports so next launch retries preferred instead of chasing fallbacks.
+export function clearWsFallbackPort(userDataPath: string): void {
+  try {
+    rmSync(join(userDataPath, FALLBACK_PORT_FILE), { force: true })
+  } catch {
+    // Best-effort like the write: a stale file only costs one failed bind.
+  }
+}
+
 export function writeWsFallbackPort(userDataPath: string, port: number): void {
   if (!isValidPort(port)) {
     return
@@ -39,7 +57,6 @@ export function writeWsFallbackPort(userDataPath: string, port: number): void {
   try {
     writeFileSync(join(userDataPath, FALLBACK_PORT_FILE), JSON.stringify({ port }), 'utf8')
   } catch {
-    // Why: persistence is best-effort — failing to record the port must not
-    // break transport startup; the cost is a re-pair after the next restart.
+    // Failed persistence must not prevent startup; phones may need re-pairing after restart.
   }
 }

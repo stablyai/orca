@@ -1,32 +1,31 @@
 import { readFile, stat } from 'node:fs/promises'
-import * as path from 'node:path'
 import { isBinaryBuffer } from '../../../shared/binary-buffer'
+import { isMissingGitBlobPath } from '../../../shared/git-blob-absence'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsyncBuffer } from '../runner'
 import { isMaxBufferOverflowError } from '../max-buffer-overflow'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
-import { PREVIEWABLE_BINARY_MIME_TYPES } from './previewable-binary-mime-types'
+import {
+  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
+  filePreviewExtension
+} from '../../../shared/file-preview-kind'
 
 export type GitBlobReadResult = {
   content: string
   isBinary: boolean
   exists: boolean
-  /**
-   * The read did not complete: the blob is neither known-present nor proven
-   * absent. Callers must not persist a diff built on one, because the empty side
-   * it produces is indistinguishable from a genuinely new file.
-   */
+  /** Unknown presence: never cache a diff whose empty side came from an incomplete read. */
   failed?: boolean
+  /** Past MAX_GIT_SHOW_BYTES: left unread and reported binary, so older diff readers stay safe. */
+  tooLarge?: boolean
 }
 
-/**
- * Tell "Git ran and said the path is not there" apart from "the read never got
- * an answer". Git exits 128 for a missing path in a tree or the index; a WSL
- * relay that never reached Git exits with anything else, or with a spawn errno.
- */
-function isProvenAbsentError(error: unknown): boolean {
-  return (error as { code?: unknown } | null)?.code === 128
+const TOO_LARGE_BLOB: GitBlobReadResult = {
+  content: '',
+  isBinary: true,
+  exists: true,
+  tooLarge: true
 }
 
 export async function readUnstagedLeftBlob(
@@ -35,13 +34,11 @@ export async function readUnstagedLeftBlob(
   options: GitRuntimeOptions = {}
 ): Promise<GitBlobReadResult> {
   const indexBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
-  if (indexBlob.exists) {
+  if (indexBlob.exists || indexBlob.failed) {
     return indexBlob
   }
 
-  const headBlob = await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-  // Why: if the index read never got an answer, falling back to HEAD is a guess, not a proof.
-  return indexBlob.failed ? { ...headBlob, failed: true } : headBlob
+  return readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
 }
 
 export async function readGitBlobAtIndexPath(
@@ -49,7 +46,7 @@ export async function readGitBlobAtIndexPath(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBlobReadResult> {
-  // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
+  // Git blob syntax requires forward slashes, including on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
   try {
     const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
@@ -60,9 +57,14 @@ export async function readGitBlobAtIndexPath(
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
-      return { content: '', isBinary: true, exists: true }
+      return TOO_LARGE_BLOB
     }
-    return { content: '', isBinary: false, exists: false, failed: !isProvenAbsentError(error) }
+    return {
+      content: '',
+      isBinary: false,
+      exists: false,
+      failed: !isMissingGitBlobPath(error, gitPath)
+    }
   }
 }
 
@@ -72,7 +74,7 @@ export async function readGitBlobAtOidPath(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBlobReadResult> {
-  // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
+  // Git blob syntax requires forward slashes, including on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
   try {
     const { stdout } = await gitExecFileAsyncBuffer(
@@ -86,9 +88,14 @@ export async function readGitBlobAtOidPath(
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
-      return { content: '', isBinary: true, exists: true }
+      return TOO_LARGE_BLOB
     }
-    return { content: '', isBinary: false, exists: false, failed: !isProvenAbsentError(error) }
+    return {
+      content: '',
+      isBinary: false,
+      exists: false,
+      failed: !isMissingGitBlobPath(error, gitPath, oid)
+    }
   }
 }
 
@@ -97,7 +104,7 @@ export async function readWorkingTreeFile(filePath: string): Promise<GitBlobRead
   try {
     fileStat = await stat(filePath)
   } catch (error) {
-    // Why: only ENOENT is a real deletion; other stat errors are read failures, not absence.
+    // Only ENOENT proves deletion; other stat errors leave presence unknown.
     const missing = (error as NodeJS.ErrnoException)?.code === 'ENOENT'
     return { content: '', isBinary: false, exists: !missing, ...(missing ? {} : { failed: true }) }
   }
@@ -105,23 +112,22 @@ export async function readWorkingTreeFile(filePath: string): Promise<GitBlobRead
     return { content: '', isBinary: false, exists: false }
   }
   if (fileStat.size > MAX_GIT_SHOW_BYTES) {
-    // Why: mirror git's maxBuffer cap for working-tree reads so readFile can't pull in huge assets.
-    return { content: '', isBinary: true, exists: true }
+    // Mirror the Git buffer cap so filesystem reads cannot load huge assets.
+    return TOO_LARGE_BLOB
   }
   try {
     const buffer = await readFile(filePath)
     return bufferToBlob(buffer, filePath)
   } catch {
-    // Why: the file exists but could not be read — a read failure, not a deletion.
     return { content: '', isBinary: false, exists: true, failed: true }
   }
 }
 
 function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {
   const isBinary = isBinaryBuffer(buffer)
-  // Return base64 for recognized image formats so the renderer can display them
+  // Encode previewable binaries for the renderer.
   const isPreviewableBinary = filePath
-    ? !!PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+    ? !!IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
     : false
   return {
     content: isBinary

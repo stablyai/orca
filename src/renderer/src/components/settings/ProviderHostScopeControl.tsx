@@ -1,12 +1,12 @@
 import { ServerCog } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import type { ProviderAccountScope, ProviderRateLimitScope } from './provider-account-scope'
+import type { ProviderHostScope } from './provider-account-scope'
 import { translate } from '@/i18n/i18n'
 
 type ProviderHostScopeControlProps = {
   labelPrefix: string
-  scope: ProviderAccountScope | ProviderRateLimitScope
+  scope: ProviderHostScope
   className?: string
 }
 
@@ -26,8 +26,7 @@ export function ProviderHostScopeControl({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        {/* Why: integration cards can become narrow while Settings navigation
-        remains visible, so the action must wrap before scope copy collapses. */}
+        {/* Wrap actions before narrow integration cards collapse the scope copy. */}
         <div className="min-w-[min(14rem,100%)] flex-1">
           <span className="font-medium text-foreground">
             {translate(

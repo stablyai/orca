@@ -1,10 +1,12 @@
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
+import {
+  isTerminalInputPaused,
+  TerminalInputPausedError,
+  type TerminalInputSource
+} from '../../../terminal-input-admission'
+import type { RpcCallerIdentity } from '../../rpc-caller-identity'
 import { InvalidArgumentError } from '../../core'
-import type {
-  DriverState,
-  OrcaRuntimeService,
-  SubscriptionRegistration
-} from '../../../orca-runtime'
+import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import type { DriverState, OrcaRuntimeService } from '../../../orca-runtime'
 import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
@@ -12,26 +14,39 @@ import {
 } from '../../../../../shared/terminal-input'
 import type { TerminalViewportClient } from './terminal-stream-types'
 
+export function terminalInputSourceForClient(
+  client: TerminalViewportClient | undefined,
+  caller?: RpcCallerIdentity
+): TerminalInputSource {
+  if (client?.type === 'mobile') {
+    return 'mobile'
+  }
+  if (!client) {
+    return 'legacy'
+  }
+  if (caller?.kind === 'local-cli') {
+    return 'programmatic'
+  }
+  // Paired CLI versions already declare this source; authentication and floor remain unchanged.
+  if (caller?.kind === 'paired-device' && client.type === 'desktop' && client.id === 'orca-cli') {
+    return 'programmatic'
+  }
+  return 'desktop'
+}
+
 export function isTerminalInputLockedForClient(
   runtime: OrcaRuntimeService,
   ptyId: string,
   client: TerminalViewportClient | undefined
 ): boolean {
-  if (client?.type === 'mobile') {
-    return false
-  }
-  // Why: pre-refactor mobile builds sent no client metadata, so treat a missing client as legacy mobile (unlocked).
-  if (!client) {
-    return false
-  }
-  return runtime.getDriver(ptyId).kind === 'mobile'
+  return isTerminalInputPaused(runtime, ptyId, terminalInputSourceForClient(client))
 }
 
 export async function assertTerminalSendTextWithinLimit(text: string | undefined): Promise<void> {
   if (!text) {
     return
   }
-  // Why: sends can be paste-sized; validate outside Zod so large input yields before runtime dispatch.
+  // Validate paste-sized payloads outside Zod so large requests yield before dispatch.
   if (await isTerminalInputTooLargeWithYield(text, TERMINAL_INPUT_MAX_BYTES)) {
     throw new InvalidArgumentError(TERMINAL_INPUT_TOO_LARGE_ERROR)
   }
@@ -50,53 +65,9 @@ export function resolveMobileFloorClientId(
   return null
 }
 
-export type TerminalStreamInputOutcome = 'delivered' | 'rejected' | 'failed'
+export type TerminalStreamInputOutcome = 'delivered' | 'rejected' | 'failed' | 'paused'
 
-export function watchSubscriptionLifetime(
-  runtime: OrcaRuntimeService,
-  ptyId: string,
-  signal: AbortSignal | undefined,
-  registration: SubscriptionRegistration
-): () => void {
-  let unsubscribeExit: (() => void) | null = null
-  let removeAbort: (() => void) | null = null
-  let stopped = false
-  const stop = (): void => {
-    stopped = true
-    unsubscribeExit?.()
-    removeAbort?.()
-  }
-  const release = (): void => {
-    registration.releaseIfCurrent()
-    stop()
-  }
-  unsubscribeExit = runtime.subscribeToPtyExit(ptyId, release)
-  if (stopped) {
-    unsubscribeExit()
-    return stop
-  }
-  if (!signal) {
-    return stop
-  }
-  if (signal.aborted) {
-    release()
-    return stop
-  }
-  const onAbort = (): void => release()
-  removeAbort = () => signal.removeEventListener('abort', onAbort)
-  signal.addEventListener('abort', onAbort, { once: true })
-  if (stopped) {
-    removeAbort()
-  }
-  return stop
-}
-
-export function isTerminalStreamInputRejection(error: unknown): boolean {
-  // Why: a lease refusal is a deliberate rejection, not a transport failure, so the stream reports
-  // it through the WriteUnavailable frame old clients already decode rather than a new opcode.
-  if (isAgentSessionPtyWriteRefusedError(error)) {
-    return true
-  }
+function isTerminalStreamInputRejection(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_not_writable') || message.includes('terminal_handle_stale')
 }
@@ -108,35 +79,53 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    /** Waits for the provider's handoff; one that may have written is `failed`, not `rejected`. */
+    requireWriteSettlement?: boolean
   }
 ): Promise<TerminalStreamInputOutcome> {
+  const inputSource = terminalInputSourceForClient(args.client)
   const action = { text: args.text, enter: false, interrupt: false }
   const clientId = args.isMobile ? args.client?.id : undefined
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
+  const settlement = args.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}
   try {
-    if (!clientId) {
-      const result = await runtime.sendTerminal(args.terminal, action)
-      return result.accepted ? 'delivered' : 'rejected'
-    }
     const result = await runtime.sendTerminal(args.terminal, action, {
-      reserveWrite: (writePtyId) => {
-        const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
-        if (!claim) {
-          throw new Error('mobile_input_floor_unavailable')
-        }
-        floorClaim.current = claim
-      },
-      afterWrite: () => commitMobileInputFloorClaim(floorClaim)
+      inputKind: 'driving',
+      inputSource,
+      ...settlement,
+      ...(clientId
+        ? {
+            reserveWrite: (writePtyId: string) => {
+              const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
+              if (!claim) {
+                throw new Error('mobile_input_floor_unavailable')
+              }
+              floorClaim.current = claim
+            },
+            afterWrite: () => commitMobileInputFloorClaim(floorClaim)
+          }
+        : {})
     })
-    if (!result.accepted) {
+    const outcome = streamInputOutcome(result)
+    if (outcome === 'rejected') {
       floorClaim.current?.rollback()
-      return 'rejected'
     }
-    return 'delivered'
+    return outcome
   } catch (error) {
     floorClaim.current?.rollback()
+    if (error instanceof TerminalInputPausedError) {
+      return 'paused'
+    }
     return isTerminalStreamInputRejection(error) ? 'rejected' : 'failed'
   }
+}
+
+function streamInputOutcome(result: RuntimeTerminalSend): TerminalStreamInputOutcome {
+  if (result.writeSettlement?.outcome === 'unverifiable') {
+    // Why: only bytes that may already be in flight are ambiguous; the rest are a proven refusal.
+    return result.writeSettlement.bytesHandedToTransport ? 'failed' : 'rejected'
+  }
+  return result.accepted ? 'delivered' : 'rejected'
 }
 
 export type MobileInputFloorClaimHolder = {
@@ -153,7 +142,7 @@ export async function commitMobileInputFloorClaim(
   try {
     await current.commit()
   } finally {
-    // Why: the runtime may yield before the next write, which then needs a fresh reservation if desktop reclaimed the floor.
+    // After runtime yields, reserve again if desktop reclaimed the floor before the next write.
     if (claim.current === current) {
       claim.current = null
     }

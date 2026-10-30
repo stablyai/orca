@@ -8,8 +8,7 @@ const {
   getBitbucketRepoSlugMock,
   getGiteaRepoSlugMock,
   getHostedReviewForBranchMock,
-  getRepoSlugMock,
-  getSshGitProviderMock
+  getRepoSlugMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   glabExecFileAsyncMock: vi.fn(),
@@ -18,8 +17,7 @@ const {
   getBitbucketRepoSlugMock: vi.fn(),
   getGiteaRepoSlugMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
-  getRepoSlugMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+  getRepoSlugMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
@@ -53,10 +51,6 @@ vi.mock('../gitea/client', () => ({
   getGiteaPullRequest: vi.fn()
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
@@ -75,8 +69,7 @@ function resetMocks(): void {
     getBitbucketRepoSlugMock,
     getGiteaRepoSlugMock,
     getHostedReviewForBranchMock,
-    getRepoSlugMock,
-    getSshGitProviderMock
+    getRepoSlugMock
   ]) {
     mock.mockReset()
   }
@@ -142,8 +135,7 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
       head: 'feature/self-hosted-mr'
     })
 
-    // The probe is bounded: a dead mount must not pin the forge detection that
-    // every hosted-review lookup starts with (P1-D).
+    // A dead mount must not pin provider detection beyond its deadline (P1-D).
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo',
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS

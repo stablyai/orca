@@ -1,42 +1,46 @@
 import type { GitHubIssueUpdate } from '../../shared/issue-mutation-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { LocalGitExecOptions } from './gh-utils'
-import { getIssueGitHubApiRepository, resolveGitHubRepoExecution } from './github-api-repository'
+import {
+  resolveGitHubRepoExecution,
+  resolveIssueGitHubApiRepositorySource,
+  type GitHubApiRepository
+} from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
+import { codeHostFailure, combinedClassifiedFailure } from '../../shared/code-host-failure-copy'
+import type { ClassifiedError } from '../../shared/classified-error'
 
-/**
- * Update an existing GitHub issue. Fans out to separate gh commands for
- * state changes vs field edits since `gh issue edit` does not support state.
- *
- * Why this path doesn't take a preference (mirrors `getIssue`): mutations
- * target an issue number already bound to a worktree / linked elsewhere in
- * the UI. Routing an update through the live per-repo preference would let
- * a user open upstream#N, toggle the selector to origin, save, and silently
- * write to origin#N — a different issue (or 404). That is the exact
- * silent-source-switch class of wrongness #1186 / the parent design doc
- * guard against. List and create paths honor preference; mutations stay on
- * the heuristic `getIssueOwnerRepo`.
- */
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
   updates: GitHubIssueUpdate,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference,
+  ownerRepoOverride?: GitHubApiRepository | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
-    () => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
+    ownerRepoOverride ??
+      (async () =>
+        (
+          await resolveIssueGitHubApiRepositorySource(
+            repoPath,
+            preference,
+            connectionId,
+            localGitOptions
+          )
+        ).source),
     connectionId,
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   const repo = `${ownerRepo.owner}/${ownerRepo.repo}`
-  const errors: string[] = []
+  const errors: ClassifiedError[] = []
 
-  // State change requires a separate command
   if (updates.state) {
     await acquire()
     try {
@@ -54,11 +58,9 @@ export async function updateIssue(
         await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
       }
     } catch (err) {
+      // Why: gh exits 0 when the issue is already in the target state, so any failure is real.
       const stderr = err instanceof Error ? err.message : String(err)
-      // Treat "already closed/open" as a no-op
-      if (!stderr.toLowerCase().includes('already')) {
-        errors.push(classifyGhError(stderr).message)
-      }
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
@@ -73,20 +75,19 @@ export async function updateIssue(
           '-X',
           'PATCH',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
-          '--raw-field',
-          `body=${updates.body}`
+          '--input',
+          '-'
         ],
-        ghOptions
+        { ...ghOptions, stdin: JSON.stringify({ body: updates.body }) }
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
   }
 
-  // Field edits (labels, assignees, title) via gh issue edit
   const editArgs: string[] = ['issue', 'edit', String(issueNumber), '--repo', repo]
   let hasEditArgs = false
 
@@ -117,14 +118,14 @@ export async function updateIssue(
       await ghExecFileAsync(editArgs, ghOptions)
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
   }
 
   if (errors.length > 0) {
-    return { ok: false, error: errors.join('; ') }
+    return combinedClassifiedFailure(errors)
   }
   return { ok: true }
 }

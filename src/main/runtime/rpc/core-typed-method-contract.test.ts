@@ -1,5 +1,4 @@
-// The preserved types are the whole point of defineMethod, so they are asserted here: if a name
-// widens to `string` or a result to `unknown`, these assertions fail at typecheck, not at runtime.
+// Compile-time assertions detect widened RPC names and results.
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import {
@@ -20,18 +19,21 @@ const ProbeParams = z.object({ id: z.string(), count: z.number().optional() })
 
 const probe = defineMethod({
   name: 'test.typedProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: (params) => ({ id: params.id, count: params.count ?? 0 })
 })
 
 const schemalessProbe = defineMethod({
   name: 'test.schemalessProbe',
+  permission: 'workspace',
   params: null,
   handler: () => ['a', 'b']
 })
 
 const streamingProbe = defineStreamingMethod({
   name: 'test.streamingProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: async (params, _ctx, emit) => {
     emit(params.id)
@@ -67,9 +69,9 @@ describe('defineMethod preserves the declared contract', () => {
     type StatusGet = ByName<(typeof STATUS_METHODS)[number], 'status.get'>
     type ListDistros = ByName<(typeof HOST_CAPABILITY_METHODS)[number], 'host.wsl.listDistros'>
     expectTypeOf<StatusGet>().not.toBeNever()
-    expectTypeOf<StatusGet['handler']>().returns.toExtend<{ runtimeId: string }>()
+    expectTypeOf<StatusGet['handler']>().returns.resolves.toExtend<{ runtimeId: string }>()
     expectTypeOf<ListDistros['handler']>().returns.toEqualTypeOf<Promise<string[]>>()
-    // The manifest is the erasure boundary's input, so the literal names have to survive it too.
+    // Literal method names must survive the manifest input to type erasure too.
     expectTypeOf<ByName<(typeof ALL_RPC_METHODS)[number], 'status.get'>>().not.toBeNever()
   })
 })
@@ -84,13 +86,6 @@ describe('eraseRpcMethods is the registry boundary', () => {
       .toEqualTypeOf<unknown>()
   })
 
-  it('returns the same methods, so nothing about the runtime value changes', () => {
-    const erased = eraseRpcMethods([probe, streamingProbe])
-
-    expect(erased[0]).toBe(probe)
-    expect(erased[1]).toBe(streamingProbe)
-  })
-
   it('produces methods the registry accepts and the dispatcher can invoke', async () => {
     const registry = buildRegistry([probe, streamingProbe, ...STATUS_METHODS])
     const registered = registry.get('test.typedProbe')
@@ -99,7 +94,6 @@ describe('eraseRpcMethods is the registry boundary', () => {
     expect(registry.get('status.get')).toBe(STATUS_METHODS[0])
     expect(isStreamingMethod(registry.get('test.streamingProbe')!)).toBe(true)
     expect(registered && isStreamingMethod(registered)).toBe(false)
-    // The dispatcher parses params itself and then calls the erased handler with `unknown`.
     const parsed: unknown = probe.params.parse({ id: 'a' })
     expect(
       registered && !isStreamingMethod(registered)

@@ -1,4 +1,5 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { RouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -6,6 +7,7 @@ import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-ge
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
+import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -37,7 +39,7 @@ type Params = {
   busyActionRef: MutableRefObject<string | null>
   setBusyAction: (next: string | null) => void
   setActionError: (next: string | null) => void
-  setCommitMessage: (next: string) => void
+  setCommitMessage: Dispatch<SetStateAction<string>>
   setGeneratingMessage: (next: boolean) => void
   setShowActionSheet: (next: boolean) => void
   setLocalBranches: (next: RuntimeGitLocalBranches | null) => void
@@ -45,13 +47,9 @@ type Params = {
   setCreatedPrUrl: (next: string | null) => void
   setCreatedPrWarning: (next: string | null) => void
   recordCommitFailure: RecordMobileCommitFailure
-  // Hub override: switch to the History segment instead of pushing the route.
   onOpenHistory?: () => void
 }
 
-// All git workflow + action-sheet runners for the source-control panel. Split
-// out of the state hook to keep each file under the line limit; behavior is
-// unchanged from the original inline definitions.
 export function useMobileSourceControlRunners(params: Params) {
   const {
     client,
@@ -113,7 +111,8 @@ export function useMobileSourceControlRunners(params: Params) {
           return false
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Source control action failed')
+        const text = translate('sourceControl.runners.actionFailed', 'Source control action failed')
+        setActionError(err instanceof Error ? err.message : text)
         return false
       } finally {
         if (busyActionRef.current === actionId) {
@@ -164,12 +163,12 @@ export function useMobileSourceControlRunners(params: Params) {
     [runGitSyncSteps, runGitWorkflow]
   )
 
-  const stageAll = useCallback(async () => {
-    if (stageablePaths.length === 0) {
-      return
-    }
-    await runGitAction('stage-all', 'git.bulkStage', { filePaths: stageablePaths })
-  }, [runGitAction, stageablePaths])
+  const stageAll = useMobileStageAllRunner({
+    status,
+    stageablePaths,
+    runGitWorkflow,
+    sendGitRequest
+  })
 
   const unstageAll = useCallback(async () => {
     if (unstageablePaths.length === 0) {
@@ -177,22 +176,6 @@ export function useMobileSourceControlRunners(params: Params) {
     }
     await runGitAction('unstage-all', 'git.bulkUnstage', { filePaths: unstageablePaths })
   }, [runGitAction, unstageablePaths])
-
-  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
-    commitMessage,
-    stagedEntries,
-    sendGitRequest,
-    sendCommitRequest,
-    runGitSyncSteps,
-    runGitWorkflow,
-    loadStatus,
-    mountedRef,
-    busyActionRef,
-    setBusyAction,
-    setActionError,
-    setCommitMessage,
-    recordCommitFailure
-  })
 
   const { generateCommitMessage, cancelGenerateCommitMessage } = useMobileCommitMessageGeneration({
     client,
@@ -205,6 +188,23 @@ export function useMobileSourceControlRunners(params: Params) {
     setActionError
   })
 
+  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
+    commitMessage,
+    stagedEntries,
+    sendGitRequest,
+    sendCommitRequest,
+    cancelGenerateCommitMessage,
+    runGitSyncSteps,
+    runGitWorkflow,
+    loadStatus,
+    mountedRef,
+    busyActionRef,
+    setBusyAction,
+    setActionError,
+    setCommitMessage,
+    recordCommitFailure
+  })
+
   const createPr = useMobileCreatePrRunner({
     client,
     worktreeId,
@@ -215,6 +215,7 @@ export function useMobileSourceControlRunners(params: Params) {
     mountedRef,
     runGitWorkflow,
     loadStatus,
+    cancelGenerateCommitMessage,
     setActionError,
     setCommitMessage,
     setShowActionSheet,
@@ -251,9 +252,7 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const openHistory = useCallback(() => {
     setShowActionSheet(false)
-    // Inside the hub, History is a segment — switch to it rather than pushing a
-    // route. Fallback pushes the hub with `tab=history` (not the redirecting
-    // /history route) so deep links land in one hop.
+    // History is a local hub segment; fallback navigation targets the hub directly to avoid a redirect hop.
     if (onOpenHistory) {
       onOpenHistory()
       return
@@ -270,7 +269,6 @@ export function useMobileSourceControlRunners(params: Params) {
     }
   }, [hostId, onOpenHistory, router, setShowActionSheet, worktreeId])
 
-  // Switch to a local branch, then reload status.
   const checkoutBranch = useCallback(
     async (branch: string) => {
       setShowBranchPicker(false)
@@ -281,7 +279,6 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({
     client,
-    worktreeId,
     sendGitRequest,
     runGitWorkflow,
     runGitSequence,
@@ -292,7 +289,6 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet
   })
 
-  // Abort an in-progress merge/rebase from the conflict banner.
   const abortConflictOperation = useCallback(
     async (operation: string) => {
       const method =

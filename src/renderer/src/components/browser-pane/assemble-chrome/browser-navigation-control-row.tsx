@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -7,35 +7,25 @@ import {
   BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
 } from './browser-chrome-address-slot'
 
-/**
- * The history/reload/navigate surface a browser backend must provide to be driven by
- * browser chrome. Local and client-hosted panes back this with a <webview>, the legacy
- * remote pane with runtime RPCs.
- */
+/** Local/client-hosted panes provide webview controls; legacy streamed panes provide runtime RPCs. */
 export type BrowserNavigationControls = {
   canGoBack: boolean
   canGoForward: boolean
-  loading: boolean
   goBack: () => void
   goForward: () => void
   reload: () => void
   navigate: (url: string) => void
 }
 
-/**
- * The toolbar row every browser surface shares: back, forward, reload, then whatever names the
- * thing on screen, then that surface's tools.
- *
- * Why the middle is a slot rather than the address bar: a web page is named by a URL you may
- * retype, a workspace document by a path you may not. Both still sit in the same place, at the
- * same size, between the same controls — so the identity widget is what varies, not the row.
- */
+/** Share history/tool layout while the identity slot varies between editable URLs and read-only document paths. */
 export function BrowserNavigationControlRow({
   controls,
   addressSlot,
   reloadControl,
   reloadLabel,
+  reloadShowsStop = false,
   showTourAnchors = true,
+  rowRef,
   children
 }: {
   controls: BrowserNavigationControls
@@ -44,12 +34,16 @@ export function BrowserNavigationControlRow({
   reloadControl?: React.ReactNode
   /** Accessible name for the default reload button, which doubles as Stop and Retry. */
   reloadLabel?: string
+  /** Only when the default button's click stops the load, matching its Stop label. */
+  reloadShowsStop?: boolean
   /** Off for surfaces the browsing tour does not cover — a second anchor would steal its steps. */
   showTourAnchors?: boolean
+  rowRef?: React.Ref<HTMLDivElement>
   children?: React.ReactNode
 }): React.JSX.Element {
   return (
     <div
+      ref={rowRef}
       className="relative z-10 flex shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
       {...(showTourAnchors ? { 'data-contextual-tour-target': 'browser-toolbar' } : {})}
     >
@@ -81,11 +75,7 @@ export function BrowserNavigationControlRow({
           onClick={controls.reload}
           aria-label={reloadLabel ?? translate('browser.navigation.reload', 'Reload')}
         >
-          {controls.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
+          {reloadShowsStop ? <X className="size-4" /> : <RefreshCw className="size-4" />}
         </Button>
       )}
 

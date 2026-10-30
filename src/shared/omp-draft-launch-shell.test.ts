@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
 
 const shells = ['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish'].filter(

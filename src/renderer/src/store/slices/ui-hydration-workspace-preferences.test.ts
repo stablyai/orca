@@ -139,7 +139,9 @@ describe('createUISlice hydratePersistedUI', () => {
       'kimi',
       'minimax',
       'antigravity',
-      'grok'
+      'grok',
+      'cursor',
+      'zcode'
     ])
     expect(setUI).toHaveBeenCalledWith({
       statusBarItems: [
@@ -149,13 +151,17 @@ describe('createUISlice hydratePersistedUI', () => {
         'kimi',
         'minimax',
         'antigravity',
-        'grok'
+        'grok',
+        'cursor',
+        'zcode'
       ],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
-      _grokStatusBarDefaultAdded: true
+      _grokStatusBarDefaultAdded: true,
+      _cursorStatusBarDefaultAdded: true,
+      _zcodeStatusBarDefaultAdded: true
     })
   })
 
@@ -171,7 +177,9 @@ describe('createUISlice hydratePersistedUI', () => {
         _kimiStatusBarDefaultAdded: true,
         _minimaxStatusBarDefaultAdded: true,
         _antigravityStatusBarDefaultAdded: true,
-        _grokStatusBarDefaultAdded: true
+        _grokStatusBarDefaultAdded: true,
+        _cursorStatusBarDefaultAdded: true,
+        _zcodeStatusBarDefaultAdded: true
       })
     )
 
@@ -229,32 +237,89 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().usagePercentageDisplay).toBe('used')
   })
 
-  it('persists and hydrates the status bar usage mode', () => {
+  it('initializes new users with compact status bar usage', () => {
+    expect(createUIStore().getState().statusBarUsageMode).toBe('compact')
+  })
+
+  it.each(['verbose', 'compact'] as const)(
+    'persists and hydrates explicit %s usage mode',
+    (mode) => {
+      const setUI = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+      const store = createUIStore()
+
+      store.getState().setStatusBarUsageMode(mode)
+
+      expect(store.getState().statusBarUsageMode).toBe(mode)
+      expect(setUI).toHaveBeenCalledWith({ statusBarUsageMode: mode })
+
+      const restoredStore = createUIStore()
+      restoredStore.getState().hydratePersistedUI(makePersistedUI({ statusBarUsageMode: mode }))
+      expect(restoredStore.getState().statusBarUsageMode).toBe(mode)
+    }
+  )
+
+  it.each([undefined, null, 'expanded'])(
+    'hydrates missing or invalid status bar usage mode %j as compact',
+    (value) => {
+      const store = createUIStore()
+      const ui = makePersistedUI()
+      if (value === undefined) {
+        delete ui.statusBarUsageMode
+      } else {
+        Reflect.set(ui, 'statusBarUsageMode', value)
+      }
+
+      store.getState().hydratePersistedUI(ui)
+
+      expect(store.getState().statusBarUsageMode).toBe('compact')
+    }
+  )
+
+  it('hydrates and permanently dismisses the Compact change notice', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
 
-    expect(store.getState().statusBarUsageMode).toBe('verbose')
-
-    store.getState().setStatusBarUsageMode('compact')
-
-    expect(store.getState().statusBarUsageMode).toBe('compact')
-    expect(setUI).toHaveBeenCalledWith({ statusBarUsageMode: 'compact' })
-
-    store.getState().hydratePersistedUI(makePersistedUI({ statusBarUsageMode: 'verbose' }))
-    expect(store.getState().statusBarUsageMode).toBe('verbose')
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ statusBarCompactChangeNoticeDismissed: false }))
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(false)
+    setUI.mockClear()
+    store.getState().dismissStatusBarCompactChangeNotice()
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
+    expect(setUI).toHaveBeenCalledWith({ statusBarCompactChangeNoticeDismissed: true })
+    store.getState().dismissStatusBarCompactChangeNotice()
+    expect(setUI).toHaveBeenCalledTimes(1)
   })
 
-  it('defaults invalid status bar usage modes to verbose', () => {
-    const store = createUIStore()
+  it.each(['verbose', 'compact'] as const)(
+    'dismisses the Compact notice when choosing %s',
+    (mode) => {
+      const setUI = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+      const store = createUIStore()
+      store
+        .getState()
+        .hydratePersistedUI(makePersistedUI({ statusBarCompactChangeNoticeDismissed: false }))
 
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        statusBarUsageMode: 'expanded' as PersistedUIState['statusBarUsageMode']
+      store.getState().setStatusBarUsageMode(mode)
+
+      expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
+      expect(setUI).toHaveBeenCalledWith({
+        statusBarUsageMode: mode,
+        statusBarCompactChangeNoticeDismissed: true
       })
-    )
+    }
+  )
 
-    expect(store.getState().statusBarUsageMode).toBe('verbose')
+  it('keeps the Compact notice hidden with an older host that omits its flag', () => {
+    const store = createUIStore()
+    const ui = makePersistedUI()
+    delete ui.statusBarCompactChangeNoticeDismissed
+    store.getState().hydratePersistedUI(ui)
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
   })
 
   it('clamps persisted workspace board column width', () => {
@@ -310,7 +375,8 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().browserDefaultZoomLevel).toBe(1.5)
+    // 1.26 is about 130%, which snaps to Chrome's 125% preset.
+    expect(1.2 ** store.getState().browserDefaultZoomLevel).toBeCloseTo(1.25)
   })
 
   it('persists normalized default browser zoom changes', () => {
@@ -320,8 +386,10 @@ describe('createUISlice hydratePersistedUI', () => {
 
     store.getState().setBrowserDefaultZoomLevel(10)
 
-    expect(store.getState().browserDefaultZoomLevel).toBe(5)
-    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel: 5 })
+    // Clamped to Chrome's 500% maximum.
+    const { browserDefaultZoomLevel } = store.getState()
+    expect(1.2 ** browserDefaultZoomLevel).toBeCloseTo(5)
+    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel })
   })
 
   it('drops an invalid Kagi session link during hydration', () => {
@@ -399,8 +467,7 @@ describe('createUISlice hydratePersistedUI', () => {
     })
   })
 
-  // Why: the Linear issue view is device-local now. A host that still holds one from
-  // an older build must not reintroduce the key the strict ui.set schema rejects.
+  // Ignore legacy host-persisted Linear views: now device-local, their key is rejected by strict ui.set.
   it('ignores a stale host-persisted Linear issue view during hydration', () => {
     const store = createUIStore()
 
@@ -529,8 +596,7 @@ describe('createUISlice hydratePersistedUI', () => {
     const firstHostIds = store.getState().agentsVisibleHostIds
     const firstRepoIds = store.getState().agentsFilterRepoIds
 
-    // Why identity (toBe): sync hydration fires on every ui:changed broadcast, and a
-    // fresh array would invalidate the agents-view scope memos each time.
+    // Sync fires on every ui:changed; preserve array identity to avoid rebuilding agent scope memos.
     store.getState().hydratePersistedUI(makePersistedUI({ ...persisted }))
     expect(store.getState().agentsVisibleHostIds).toBe(firstHostIds)
     expect(store.getState().agentsFilterRepoIds).toBe(firstRepoIds)
@@ -549,11 +615,32 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().agentsVisibleHostIds).toBeNull()
     expect(store.getState().agentsFilterRepoIds).toEqual([])
+    expect(store.getState().agentsHideWorkspacesFromOtherDevices).toBe(false)
+    expect(store.getState().agentsHideAutomationGeneratedWorkspaces).toBe(false)
+    expect(store.getState().agentsHideCliCreatedWorkspaces).toBe(false)
     expect(store.getState().agentsShowChildAgents).toBe(false)
     expect(store.getState().agentsCompactMode).toBe(true)
     expect(store.getState().agentsShowSearch).toBe(true)
     expect(store.getState().agentsReadFilter).toBe('all')
     expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('restores the agents workspace-origin filters independently of the workspace-nav ones', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsHideWorkspacesFromOtherDevices: true,
+        agentsHideAutomationGeneratedWorkspaces: true,
+        agentsHideCliCreatedWorkspaces: true,
+        hideCliCreatedWorkspaces: false
+      })
+    )
+
+    expect(store.getState().agentsHideWorkspacesFromOtherDevices).toBe(true)
+    expect(store.getState().agentsHideAutomationGeneratedWorkspaces).toBe(true)
+    expect(store.getState().agentsHideCliCreatedWorkspaces).toBe(true)
+    expect(store.getState().hideCliCreatedWorkspaces).toBe(false)
   })
 
   it('restores a hidden agents search field', () => {
@@ -660,8 +747,7 @@ describe('createUISlice hydratePersistedUI', () => {
         'tab-recent:0': now
       })
     } finally {
-      // The shared afterEach restores mocks/globals but not timers, so clean up
-      // here to avoid leaking fake timers into subsequent tests.
+      // Shared teardown leaves timers intact; restore real timers so later tests cannot inherit this clock.
       vi.useRealTimers()
     }
   })
@@ -674,8 +760,7 @@ describe('createUISlice hydratePersistedUI', () => {
     try {
       const store = createUIStore()
       const malicious: Record<string, number> = {}
-      // Object.defineProperty so these land as own enumerable properties rather
-      // than getting silently re-routed to Object.prototype by the JS engine.
+      // Define __proto__ as an own enumerable property rather than changing Object.prototype.
       Object.defineProperty(malicious, '__proto__', {
         value: now,
         enumerable: true,

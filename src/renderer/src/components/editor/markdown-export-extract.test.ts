@@ -36,6 +36,22 @@ describe('getActiveMarkdownExportPayload', () => {
     vi.unstubAllGlobals()
   })
 
+  it('rejects virtual, loading, and failed previews even if export eligibility is stale', async () => {
+    const root = document.createElement('div')
+    root.innerHTML =
+      '<div class="markdown-body" data-markdown-preview-incomplete="true"><h1>Partial</h1><img src="blob:unmounted"></div>'
+    const subtree = root.firstElementChild
+    if (!subtree) {
+      throw new Error('Missing fixture subtree')
+    }
+    const clone = vi.spyOn(subtree, 'cloneNode')
+    expect(
+      await getActiveMarkdownExportPayload({ fileId: '/repo/docs/readme.md', root })
+    ).toBeNull()
+    expect(clone).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('embeds blob image sources so the PDF export window can render local images', async () => {
     const root = document.createElement('div')
     root.innerHTML =
@@ -70,8 +86,7 @@ describe('getActiveMarkdownExportPayload', () => {
   it('strips preview annotation controls so Add note buttons never reach the PDF', async () => {
     await mockPreviewOpenFile()
     const root = document.createElement('div')
-    // Why: class-only fixture proves the explicit selector scrubs even when
-    // the data attr is absent; two blocks prove every block is scrubbed.
+    // Class-only controls in multiple blocks verify scrubbing without the generic data attribute.
     root.innerHTML = `
       <div class="markdown-body">
         <div class="markdown-annotation-block" data-source-line="1" data-source-end-line="1">
@@ -111,8 +126,7 @@ describe('getActiveMarkdownExportPayload', () => {
   it('strips list-block annotation controls while preserving list text', async () => {
     await mockPreviewOpenFile()
     const root = document.createElement('div')
-    // Why: attr-only fixture (renamed class) proves the generic
-    // data-orca-export-hide rule scrubs even after a class rename.
+    // Attribute-only controls verify scrubbing survives class renames.
     root.innerHTML = `
       <div class="markdown-body">
         <ul>

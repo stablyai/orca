@@ -22,7 +22,7 @@ import {
 } from './appimage-stable-launcher'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { buildBareOrcaCliScript } from './linux-bare-orca-dispatcher'
-import { quoteShell } from './cli-install-path-format'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 const SHIM_DIR_NAME = 'linux-orca-cli-shim'
 
@@ -36,13 +36,7 @@ export type LinuxTerminalOrcaCliShimOptions = {
   appImageCacheRootPath?: string
 }
 
-// Why: on Linux the CLI installs as `orca-ide` so it never shadows the GNOME
-// Orca screen reader at /usr/bin/orca — but agent-facing surfaces (skills,
-// dispatch preambles, CLI hints) all invoke bare `orca`, so on stock Ubuntu an
-// agent inside an Orca terminal would launch the screen reader instead
-// (stablyai/orca#7904). Prepending this userData-scoped shim dir to managed-PTY
-// PATH makes bare `orca` resolve to the Orca CLI inside Orca terminals only,
-// leaving the user's own shells (and their screen reader) untouched.
+// Prepend only in managed PTYs so agents' bare `orca` calls reach the CLI instead of GNOME Orca.
 export function ensureLinuxTerminalOrcaCliShimDir(
   options: LinuxTerminalOrcaCliShimOptions
 ): string | null {
@@ -175,12 +169,12 @@ function buildAppImageLiveLauncherScript(
   launcherPath: string,
   fence: AppImageRuntimeFence
 ): string {
-  const runtimePid = quoteShell(String(fence.pid))
-  const runtimeStartTime = quoteShell(fence.startTime)
-  const runtimeRoot = quoteShell(fence.runtimeRoot)
-  const expectedRuntimeIdentity = quoteShell(fence.runtimeIdentity)
-  const expectedLauncherIdentity = quoteShell(fence.launcherIdentity)
-  const quotedLauncherPath = quoteShell(launcherPath)
+  const runtimePid = quotePosixShellDoubleQuotedApostrophe(String(fence.pid))
+  const runtimeStartTime = quotePosixShellDoubleQuotedApostrophe(fence.startTime)
+  const runtimeRoot = quotePosixShellDoubleQuotedApostrophe(fence.runtimeRoot)
+  const expectedRuntimeIdentity = quotePosixShellDoubleQuotedApostrophe(fence.runtimeIdentity)
+  const expectedLauncherIdentity = quotePosixShellDoubleQuotedApostrophe(fence.launcherIdentity)
+  const quotedLauncherPath = quotePosixShellDoubleQuotedApostrophe(launcherPath)
   return `#!/usr/bin/env bash
 runtime_pid=${runtimePid}
 runtime_start_time=${runtimeStartTime}

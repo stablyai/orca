@@ -1,27 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const {
   applyAgentStatusHooksEnabledMock,
   constructorArgsMock,
+  moduleEvaluationMock,
   callMock,
   getCliStatusMock,
   testUserDataPathRef
 } = vi.hoisted(() => ({
   applyAgentStatusHooksEnabledMock: vi.fn(async () => []),
   constructorArgsMock: vi.fn(),
+  moduleEvaluationMock: vi.fn(),
   callMock: vi.fn(),
   getCliStatusMock: vi.fn(),
   testUserDataPathRef: { current: '' }
 }))
 
-// Why: `main` reaches RuntimeClient through `await import('./runtime-client.js')`
-// now. Mocking the same specifier the eager import used proves the dynamic
-// import still resolves to the module the 10 existing vi.mock suites target.
-// Why: --environment is now resolved against the paired-environment store before the client is
-// constructed, so a forwarding assertion needs an environment that actually resolves.
+// Explicit environment selectors must resolve before the client is constructed.
 vi.mock('./runtime/environments', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -30,21 +28,14 @@ vi.mock('./runtime/environments', async (importOriginal) => {
   }
 })
 
-// Why: this suite runs the REAL `main()`, and `agent hooks off` below reaches the production
-// handler, which calls removeManagedAgentHooks() against the developer's OWN ~/.claude and
-// ~/.cursor — a green test run silently deleted every Orca-managed hook on the machine, so agent
-// status stopped reporting until the next Orca restart (STA-5679). The byte-for-byte equivalence
-// twin already refuses these tokens for exactly this reason
-// (config/scripts/cli-runtime-client-deferral-equivalence.mjs); this is the same guard for vitest.
-// Stubbed, not dropped: the row is the only case that reads ctx.client, so it carries the
-// null-vs-undefined coverage the rest of the table cannot.
+// Stub hook writes: this suite runs real handlers that would otherwise edit the developer's agent configs.
 vi.mock('../main/agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
-  getManagedAgentHookStatuses: vi.fn(() => []),
-  prepareManagedCodexHomeBeforeShellLaunch: vi.fn(async () => {})
+  getManagedAgentHookStatuses: vi.fn(() => [])
 }))
 
 vi.mock('./runtime-client', () => {
+  moduleEvaluationMock()
   class RuntimeClient {
     call = callMock
     getCliStatus = getCliStatusMock
@@ -60,7 +51,7 @@ vi.mock('./runtime-client', () => {
 import { main } from './index'
 import * as dispatchModule from './dispatch'
 
-const CLI_DIR = __dirname
+const evaluationsBeforeMain = moduleEvaluationMock.mock.calls.length
 
 describe('RuntimeClient module-graph deferral', () => {
   let logSpy: ReturnType<typeof vi.spyOn>
@@ -84,37 +75,8 @@ describe('RuntimeClient module-graph deferral', () => {
     process.exitCode = 0
   })
 
-  // Why: the whole point of the change. These modules load on EVERY
-  // invocation, so a value-import of the barrel from any of them drags the
-  // RuntimeClient graph (zod, ws, tweetnacl) back onto the --help path.
-  it.each([
-    'args.ts',
-    'flags.ts',
-    'dispatch.ts',
-    'format.ts',
-    'cli-error.ts',
-    'selectors.ts',
-    'execution-host-flag.ts'
-  ])('%s imports error classes from ./runtime/types, not the barrel', (file) => {
-    const source = readFileSync(join(CLI_DIR, file), 'utf8')
-    const valueImports = source
-      .split('\n')
-      .filter((line) => line.startsWith('import ') && line.includes("'./runtime-client'"))
-    for (const line of valueImports) {
-      expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
-    }
-    // Why: format.ts re-exports its error formatters; the guarded import lives in cli-error.ts.
-    if (file !== 'format.ts') {
-      expect(source).toContain("} from './runtime/types'")
-    }
-  })
-
-  it('index.ts has no eager value-import of the runtime client', () => {
-    const source = readFileSync(join(CLI_DIR, 'index.ts'), 'utf8')
-    expect(source).toContain("import type { RuntimeClient } from './runtime-client'")
-    expect(source).not.toMatch(/^import \{[^}]*RuntimeClient[^}]*\} from '\.\/runtime-client'/m)
-    expect(source).toContain("await import('./runtime-client.js')")
-    expect(source).toContain("import { reportCliError } from './cli-error'")
+  it('does not evaluate the runtime-client module before main', () => {
+    expect(evaluationsBeforeMain).toBe(0)
   })
 
   it('constructs no client for --help', async () => {
@@ -128,18 +90,7 @@ describe('RuntimeClient module-graph deferral', () => {
     expect(constructorArgsMock).not.toHaveBeenCalled()
   })
 
-  // Why: `agent hooks on|off` are the only commands that both sit in a
-  // suppressed group and touch ctx.client, and they rewrite the real ~/.claude
-  // hook config — so the byte-for-byte equivalence script cannot invoke them.
-  // Assert the constructor arguments directly instead: `null` (not `undefined`)
-  // is what stops the ORCA_* env fallback re-activating for local-only groups.
-  //
-  // `constructs` is declared per case and asserted BEFORE the args, because
-  // only `agent hooks off` reads ctx.client. Looping over `mock.calls` alone
-  // would pass vacuously for the other four, and would keep passing if the one
-  // case that carries the null-vs-undefined coverage stopped constructing at
-  // all. The zero rows are not filler: they assert the deferral itself — a
-  // local-only group must reach its handler without building a client.
+  // Assert construction counts before arguments; otherwise an unused getter would pass vacuously.
   const SUPPRESSED_GROUPS: [name: string, argv: string[], constructs: number][] = [
     ['agent', ['agent', 'hooks', 'off'], 1],
     ['environment', ['environment', 'list'], 0],
@@ -149,11 +100,13 @@ describe('RuntimeClient module-graph deferral', () => {
   ]
 
   it.each(SUPPRESSED_GROUPS)(
-    'constructs exactly %s expected clients, with null remote selection',
+    'suppresses ambient remote selection for %s with the expected client count',
     async (_name, argv, constructs) => {
       vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
       vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
-      getCliStatusMock.mockResolvedValue({ result: { runtime: { reachable: false } } })
+      getCliStatusMock.mockResolvedValue({
+        result: { runtime: { reachable: false }, app: { running: false } }
+      })
 
       await main(argv, '/tmp/repo')
 
@@ -180,10 +133,7 @@ describe('RuntimeClient module-graph deferral', () => {
     }
   )
 
-  // Why: four of the five groups above never read ctx.client, so they can only
-  // assert that no client is built — not that suppression forwards `null`.
-  // Stub dispatch and read the getter directly so every group asserts the
-  // constructor arguments unconditionally, exactly once.
+  // Probe the getter directly: handlers that never use it cannot verify null selector forwarding.
   it.each(SUPPRESSED_GROUPS.map(([name, argv]) => [name, argv] as const))(
     'forwards null remote selection to the client %s would build',
     async (_name, argv) => {
@@ -206,9 +156,6 @@ describe('RuntimeClient module-graph deferral', () => {
     }
   )
 
-  // Why: the mirror — the same stubbed-dispatch probe must show `undefined`
-  // (not `null`) for a non-suppressed group, or the assertion above would pass
-  // for a build that suppressed EVERY command's env fallback.
   it('forwards undefined remote selection for a non-suppressed group', async () => {
     vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
     const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
@@ -225,9 +172,6 @@ describe('RuntimeClient module-graph deferral', () => {
     }
   })
 
-  // Why: the mirror of the above — for every other command the env fallback
-  // MUST stay live, which the RuntimeClient default parameters implement. That
-  // only works if `undefined` is forwarded.
   it('forwards undefined for non-suppressed commands so the env fallback applies', async () => {
     callMock.mockResolvedValue({ result: { worktrees: [] } })
 
@@ -252,13 +196,18 @@ describe('RuntimeClient module-graph deferral', () => {
     expect(constructorArgsMock.mock.calls[0][3]).toBe('env-1')
   })
 
-  // Why: the getter is memoised; a dynamic import inside it would have made it
-  // async and changed every handler signature.
   it('reuses one client instance across repeated ctx.client reads', async () => {
-    callMock.mockResolvedValue({ result: { worktrees: [] } })
+    const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
+    try {
+      await main(['worktree', 'list', '--json'], '/tmp/repo')
 
-    await main(['worktree', 'list', '--json'], '/tmp/repo')
-
-    expect(constructorArgsMock).toHaveBeenCalledTimes(1)
+      expect(dispatchSpy).toHaveBeenCalledTimes(1)
+      const ctx = dispatchSpy.mock.calls[0]?.[1]
+      const first = ctx?.client
+      expect(ctx?.client).toBe(first)
+      expect(constructorArgsMock).toHaveBeenCalledTimes(1)
+    } finally {
+      dispatchSpy.mockRestore()
+    }
   })
 })

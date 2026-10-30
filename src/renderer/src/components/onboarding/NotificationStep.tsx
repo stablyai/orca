@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { BellRing, FileAudio, Upload } from 'lucide-react'
+import { BellRing, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
+import { sendNotificationSettingsTestNotification } from '@/components/settings/notification-settings-copy'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import {
   MacNotificationPermissionCard,
@@ -27,24 +27,13 @@ type NotificationStepProps = {
 
 const CHOOSE_CUSTOM_SOUND_VALUE = 'choose-custom-file'
 
-type NotificationSoundSelectValue =
-  | GlobalSettings['notifications']['customSoundId']
-  | typeof CHOOSE_CUSTOM_SOUND_VALUE
-
-function isNotificationSoundId(
-  value: NotificationSoundSelectValue
-): value is GlobalSettings['notifications']['customSoundId'] {
-  return value !== CHOOSE_CUSTOM_SOUND_VALUE
-}
-
 export function NotificationStep({
   settings,
   updateSettings
 }: NotificationStepProps): React.JSX.Element {
   const notificationSettings = settings?.notifications
   const notificationSettingsRef = useRef(notificationSettings)
-  // Why: undefined settings are still loading — assume enabled (the default)
-  // so the fresh-install permission flow starts without waiting.
+  // Unloaded settings use enabled’s default so fresh-install permission checks can start immediately.
   const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
     notificationSettings?.enabled !== false
   )
@@ -55,14 +44,12 @@ export function NotificationStep({
 
   if (syncedNotificationSettingsRef.current !== notificationSettings) {
     syncedNotificationSettingsRef.current = notificationSettings
-    // Why: handlers optimistically update the ref before persisted settings
-    // flow back through props, so local re-renders must not overwrite it.
+    // Preserve optimistic handler writes until persisted props change; local rerenders must not overwrite them.
     notificationSettingsRef.current = notificationSettings
   }
 
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
-    // Why: onboarding sits above body-level portals, so the select menu must
-    // portal into the overlay to stay clickable.
+    // Portal inside onboarding so its overlay cannot block the menu.
     setSelectPortalRoot(node?.closest<HTMLElement>('[data-onboarding-overlay]') ?? node)
   }, [])
 
@@ -123,13 +110,19 @@ export function NotificationStep({
     }
   }
 
-  const handleSoundSelect = async (value: NotificationSoundSelectValue): Promise<void> => {
-    if (!isNotificationSoundId(value)) {
+  const handleSoundSelect = async (value: string): Promise<void> => {
+    if (value === CHOOSE_CUSTOM_SOUND_VALUE) {
       await handleChooseCustomSound()
       return
     }
-    await updateNotificationSettings({ customSoundId: value })
-    await previewSound(value)
+    const option = getNotificationSoundOptions(
+      notificationSettingsRef.current?.customSoundPath
+    ).find((candidate) => candidate.id === value)
+    if (!option) {
+      return
+    }
+    await updateNotificationSettings({ customSoundId: option.id })
+    await previewSound(option.id)
   }
 
   const handleSendTestNotification = async (): Promise<void> => {
@@ -151,8 +144,7 @@ export function NotificationStep({
     if (!mountedRef.current || !showsMacPermissionCard) {
       return
     }
-    // Why: the test doubles as a permission re-check — its confirmed outcome
-    // is fresher than whatever the mount-time probe reported.
+    // The test outcome is fresher permission evidence than the mount-time probe.
     if (outcome === 'delivered') {
       setMacPermissionState('enabled')
     } else if (outcome === 'not-displayed') {
@@ -176,7 +168,7 @@ export function NotificationStep({
   const soundOptions = getNotificationSoundOptions(customPath)
 
   return (
-    <div ref={setSelectPortalHost} className="space-y-5">
+    <div ref={setSelectPortalHost} className="space-y-6">
       <MacNotificationPermissionCard state={macPermissionState} />
 
       <section className="space-y-3">
@@ -192,75 +184,64 @@ export function NotificationStep({
           </p>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <FileAudio className="size-4" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={selectedSoundId}
+            disabled={isPickingSound}
+            onValueChange={(value) => void handleSoundSelect(value)}
+          >
+            <SelectTrigger className="w-56 max-w-full" size="sm">
+              <SelectValue
+                placeholder={translate(
+                  'auto.components.onboarding.NotificationStep.dc897423e1',
+                  'Choose notification sound'
+                )}
+              />
+            </SelectTrigger>
+            <SelectContent
+              portalContainer={selectPortalRoot}
+              align="start"
+              className="w-[--radix-select-trigger-width]"
+            >
+              {soundOptions.map((option) => {
+                const OptionIcon = option.icon
+                return (
+                  <SelectItem key={option.id} value={option.id}>
+                    <OptionIcon className="size-4" />
+                    <span className="truncate">{option.title}</span>
+                  </SelectItem>
+                )
+              })}
+              <SelectSeparator />
+              <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
+                <Upload className="size-4" />
+                <span>
+                  {customPath
+                    ? translate(
+                        'auto.components.onboarding.NotificationStep.ac80d97e02',
+                        'Change custom file'
+                      )
+                    : translate(
+                        'auto.components.onboarding.NotificationStep.c0692baa52',
+                        'Choose custom file'
+                      )}
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => void handleSendTestNotification()}
+          >
+            <BellRing className="size-3.5" />
             {translate(
-              'auto.components.onboarding.NotificationStep.53aaffe49a',
-              'Notification Sound'
+              'auto.components.onboarding.NotificationStep.3bede04483',
+              'Send test notification'
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={selectedSoundId}
-              disabled={isPickingSound}
-              onValueChange={(value) =>
-                void handleSoundSelect(value as NotificationSoundSelectValue)
-              }
-            >
-              <SelectTrigger className="w-[360px] max-w-full" size="sm">
-                <SelectValue
-                  placeholder={translate(
-                    'auto.components.onboarding.NotificationStep.dc897423e1',
-                    'Choose notification sound'
-                  )}
-                />
-              </SelectTrigger>
-              <SelectContent
-                portalContainer={selectPortalRoot}
-                align="start"
-                className="w-[--radix-select-trigger-width]"
-              >
-                {soundOptions.map((option) => {
-                  const OptionIcon = option.icon
-                  return (
-                    <SelectItem key={option.id} value={option.id}>
-                      <OptionIcon className="size-4" />
-                      <span className="truncate">{option.title}</span>
-                    </SelectItem>
-                  )
-                })}
-                <SelectSeparator />
-                <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
-                  <Upload className="size-4" />
-                  <span>
-                    {customPath
-                      ? translate(
-                          'auto.components.onboarding.NotificationStep.ac80d97e02',
-                          'Change Custom File'
-                        )
-                      : translate(
-                          'auto.components.onboarding.NotificationStep.c0692baa52',
-                          'Choose Custom File'
-                        )}
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => void handleSendTestNotification()}
-            >
-              <BellRing className="size-3.5" />
-              {translate(
-                'auto.components.onboarding.NotificationStep.3bede04483',
-                'Send Test Notification'
-              )}
-            </Button>
-          </div>
+          </Button>
         </div>
       </section>
     </div>

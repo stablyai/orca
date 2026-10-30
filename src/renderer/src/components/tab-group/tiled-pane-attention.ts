@@ -9,7 +9,7 @@ import {
 import { agentDotStateFrameToneClassName } from '../AgentStateDot'
 import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
-import { resolveNativeChatHookState } from '../native-chat/use-native-chat-hook-status'
+import { resolveNativeChatHookState } from '../../../../shared/native-chat/native-chat-live-status'
 
 /** States that earn a tiled-pane frame tint: the dashboard's attention/done buckets. */
 export type TiledPaneFrameState = Exclude<AgentStatusState, 'working'>

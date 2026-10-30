@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { makeCloseTestTab, preparePendingSplitClose } from './pending-split-close-test-fixture'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { flushPtySideEffects } from './pty-transport-test-harness'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 const replyFor = (kind: 'reattach' | 'cold-restore-new' | 'ordinary-fresh') => ({
   id: 'pty-restored',
@@ -15,6 +16,7 @@ it.each(['reattach', 'cold-restore-new', 'ordinary-fresh'] as const)(
     const p = await preparePendingSplitClose()
     expect(p.transport.getPtyId()).toBeNull()
     p.actions.executeClosePane(1)
+    await p.mainAnswered()
     expect(p.transports.has(1)).toBe(false)
     expect(p.state.terminalLayoutsByTabId[p.tabId].ptyIdsByLeafId?.[p.leafId]).toBeUndefined()
     expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith('pty-restored')
@@ -59,6 +61,7 @@ it.each(['layout', 'transport'] as const)(
       }
     }
     p.actions.executeClosePane(1)
+    await p.mainAnswered()
     p.spawn.resolve(replyFor('reattach'))
     await p.connecting
     expect(window.api.pty.kill).not.toHaveBeenCalled()
@@ -70,6 +73,7 @@ it('protects a different tab owner present before explicit close', async () => {
   const p = await preparePendingSplitClose()
   p.state.tabsByWorktree.workspace.push(makeCloseTestTab('survivor', 'pty-restored'))
   p.actions.executeClosePane(1)
+  await p.mainAnswered()
   p.spawn.resolve(replyFor('cold-restore-new'))
   await p.connecting
   expect(window.api.pty.kill).not.toHaveBeenCalled()
@@ -80,6 +84,7 @@ it.each(['same-leaf', 'different-tab', 'new-transport-map'] as const)(
   async (owner) => {
     const p = await preparePendingSplitClose()
     p.actions.executeClosePane(1)
+    await p.mainAnswered()
     const { createIpcPtyTransport } = await import('./pty-transport')
     const replacement = createIpcPtyTransport({})
     if (owner === 'same-leaf') {
@@ -100,6 +105,7 @@ it.each(['same-leaf', 'different-tab', 'new-transport-map'] as const)(
 it('retains explicit close intent across repeated generic destroy calls', async () => {
   const p = await preparePendingSplitClose()
   p.actions.executeClosePane(1)
+  await p.mainAnswered()
   p.transport.destroy?.()
   p.transport.destroy?.()
   p.spawn.resolve(replyFor('cold-restore-new'))
@@ -110,6 +116,7 @@ it('retains explicit close intent across repeated generic destroy calls', async 
 it('preserves a different returned reattach identity', async () => {
   const p = await preparePendingSplitClose()
   p.actions.executeClosePane(1)
+  await p.mainAnswered()
   p.spawn.resolve({ id: 'different-existing-session', isReattach: true })
   await p.connecting
   expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith('pty-restored')
@@ -122,6 +129,7 @@ it('retries an eager provider failure when the same-ID reply arrives', async () 
     new Error('provider temporarily unavailable')
   )
   p.actions.executeClosePane(1)
+  await p.mainAnswered()
   await flushPtySideEffects()
   expect(warn).toHaveBeenCalledWith(
     '[terminal-retirement] provider teardown failed',
@@ -136,6 +144,7 @@ it('does not invent a late session after a rejected spawn', async () => {
   const p = await preparePendingSplitClose()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   p.actions.executeClosePane(1)
+  await p.mainAnswered()
   p.spawn.reject(new Error('spawn rejected'))
   await p.connecting
   expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith('pty-restored')
@@ -146,6 +155,7 @@ it('routes direct SSH retirement through the existing IPC identity', async () =>
   const p = await preparePendingSplitClose(id)
   p.state.worktreesByRepo = { repo: [{ id: 'workspace', repoId: 'repo', hostId: 'ssh:ssh-1' }] }
   p.actions.executeClosePane(1)
+  await p.mainAnswered()
   p.spawn.resolve({ id, isReattach: true })
   await p.connecting
   expect(window.api.pty.kill).toHaveBeenNthCalledWith(1, id)
@@ -177,6 +187,7 @@ it.each(['runtime-handle', 'runtime-legacy', 'unresolved-owner', 'runtime-native
       }
     }
     p.actions.executeClosePane(1)
+    await p.mainAnswered()
     p.spawn.resolve({ id, isReattach: true })
     await p.connecting
     expect(window.api.pty.kill).not.toHaveBeenCalled()
@@ -187,7 +198,30 @@ it('retires a local folder-workspace split without a git worktree row', async ()
   const p = await preparePendingSplitClose('pty-restored', folderWorkspaceKey('folder-1'))
   p.state.worktreesByRepo = {}
   p.actions.executeClosePane(1)
+  await p.mainAnswered()
   p.spawn.resolve(replyFor('reattach'))
   await p.connecting
   expect(window.api.pty.kill).toHaveBeenCalledTimes(2)
+})
+
+it('commits the explicit split close in main by its leaf without waiting for its write', async () => {
+  const p = await preparePendingSplitClose()
+  // Main's durable write never settles here: the pane must still leave and be killed at once.
+  const closeTerminalSurface = vi.fn(() => new Promise<void>(() => {}))
+  Object.assign(window.api, { session: { ...window.api.session, closeTerminalSurface } })
+  p.actions.executeClosePane(1)
+  await p.mainAnswered()
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    expect(p.sentPaneCloses()).toEqual([
+      { type: 'closePane', workspace: 'workspace', tabId: p.tabId, leafId: p.leafId }
+    ])
+  } else {
+    expect(closeTerminalSurface).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: 'workspace',
+      target: { kind: 'pane', tabId: p.tabId, leafId: p.leafId }
+    })
+  }
+  expect(p.transports.has(1)).toBe(false)
+  expect(p.state.terminalLayoutsByTabId[p.tabId].ptyIdsByLeafId?.[p.leafId]).toBeUndefined()
+  expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith('pty-restored')
 })

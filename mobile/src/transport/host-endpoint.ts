@@ -1,7 +1,6 @@
-// Why: mobile host profiles store a single websocket endpoint fixed at pair
-// time. Edit-host lets the user rewrite host/port without re-pairing; this
-// helper accepts phone-friendly input (bare IP, host:port, or full ws URL)
-// and normalizes to the ws(s):// form RpcClient expects.
+import { hostEndpointCopy } from './host-endpoint-copy'
+
+// Normalize Edit Host input to a websocket authority without requiring re-pairing.
 
 export type NormalizeHostEndpointResult =
   | { ok: true; endpoint: string }
@@ -24,8 +23,7 @@ const NUMERIC_IPV4_CANDIDATE = /^(?:0[xX][0-9a-fA-F]+|\d+)(?:\.(?:0[xX][0-9a-fA-
 export function displayHostEndpoint(endpoint: string): string {
   try {
     const url = new URL(endpoint)
-    // Why: some URL parsers leave IPv6 brackets on hostname, others strip them.
-    // Normalize once so round-trip through normalizeHostEndpoint stays stable.
+    // Normalize IPv6 brackets because URL implementations differ.
     const host = formatHostForUrl(unwrapHostname(url.hostname))
     const port = resolveWebsocketUrlPort(endpoint, url)
     if (port.kind === 'invalid') {
@@ -41,12 +39,7 @@ function unwrapHostname(hostname: string): string {
   return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname
 }
 
-/**
- * Recover an explicitly written port from a ws(s) URL authority.
- * Why: `new URL('ws://host:80').port` and `wss://host:443` are empty — the
- * URL parser hides scheme-default ports, so callers that need the user's
- * literal :80/:443 must re-parse the original string.
- */
+// Re-read authority ports because URL.port hides explicit scheme-default :80/:443.
 function extractExplicitPortFromWebsocketUrl(input: string): string | null {
   const withoutScheme = input.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
   if (withoutScheme.startsWith('[')) {
@@ -68,8 +61,7 @@ function extractExplicitPortFromWebsocketUrl(input: string): string | null {
 
 function resolveWebsocketUrlPort(input: string, url?: URL): WebsocketUrlPortResolution {
   const explicit = extractExplicitPortFromWebsocketUrl(input)
-  // Why: missing and invalid are different states. Treating both as null lets
-  // an explicit :0/:99999 silently inherit fallbackPort on permissive parsers.
+  // Reject explicit invalid ports rather than treating them as missing and silently using fallbackPort.
   if (explicit !== null && !isValidPort(explicit)) {
     return { kind: 'invalid' }
   }
@@ -107,7 +99,7 @@ export function normalizeHostEndpoint(
 ): NormalizeHostEndpointResult {
   const trimmed = input.trim()
   if (!trimmed) {
-    return { ok: false, error: 'Enter a host address.' }
+    return { ok: false, error: hostEndpointCopy.addressRequired() }
   }
 
   const fallbackPort = resolveFallbackPort(options?.fallbackPort)
@@ -134,67 +126,63 @@ function resolveFallbackPort(value: string | number | undefined): string {
 function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostEndpointResult {
   const explicitPort = resolveWebsocketUrlPort(input)
   if (explicitPort.kind === 'invalid') {
-    return { ok: false, error: 'Port must be 1–65535.' }
+    return { ok: false, error: hostEndpointCopy.invalidPort() }
   }
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//.exec(input)?.[1]?.toLowerCase()
   if (scheme !== 'ws' && scheme !== 'wss') {
-    return { ok: false, error: 'Use ws:// or wss:// (or host:port).' }
+    return { ok: false, error: hostEndpointCopy.invalidScheme() }
   }
 
   const rawAuthority = parseRawSchemeAuthority(input)
   if (rawAuthority.hasUserInfo) {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: hostEndpointCopy.invalidAddress() }
   }
   if (rawAuthority.hasPathOrQuery) {
-    return { ok: false, error: 'Host must not include a path or query.' }
+    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed() }
   }
   if (
     rawAuthority.hostname &&
     validateNumericIpv4Candidate(normalizeRawNumericIpv4Candidate(rawAuthority.hostname))
   ) {
-    return { ok: false, error: 'Not a valid hostname.' }
+    return { ok: false, error: hostEndpointCopy.invalidHostname() }
   }
 
   let url: URL
   try {
     url = new URL(input)
   } catch {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: hostEndpointCopy.invalidAddress() }
   }
 
   if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-    return { ok: false, error: 'Use ws:// or wss:// (or host:port).' }
+    return { ok: false, error: hostEndpointCopy.invalidScheme() }
   }
   if (!url.hostname) {
-    return { ok: false, error: 'Missing hostname.' }
+    return { ok: false, error: hostEndpointCopy.hostnameRequired() }
   }
 
-  // Why: edit-host persists a bare host:port WebSocket endpoint. Path/query/
-  // userinfo are not part of the pairing contract — reject rather than strip
-  // so typos like desk/path or desk?route cannot be saved silently.
+  // Reject path/query/userinfo instead of silently stripping address typos.
   if (url.username || url.password) {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: hostEndpointCopy.invalidAddress() }
   }
   if ((url.pathname && url.pathname !== '/') || url.search || url.hash) {
-    return { ok: false, error: 'Host must not include a path or query.' }
+    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed() }
   }
 
   const hostname = unwrapHostname(url.hostname)
-  // Why: WHATWG URL accepts legacy aliases and rewrites them to a different
-  // IPv4 address. Only an already-canonical raw dotted quad may become IPv4.
+  // Reject legacy IPv4 aliases that WHATWG URL would rewrite to a different address.
   if (rawAuthority.hostname && isCanonicalIpv4(hostname) && rawAuthority.hostname !== hostname) {
-    return { ok: false, error: 'Not a valid hostname.' }
+    return { ok: false, error: hostEndpointCopy.invalidHostname() }
   }
   const hostError = validateHostname(hostname)
   if (hostError) {
     return { ok: false, error: hostError }
   }
 
-  // Why: keep explicit :80/:443 (URL.port is empty for scheme defaults) instead
-  // of rewriting them to fallbackPort (usually 6768).
+  // Preserve explicit default ports; URL.port would otherwise replace them with fallbackPort.
   const resolvedPort = resolveWebsocketUrlPort(input, url)
   if (resolvedPort.kind === 'invalid') {
-    return { ok: false, error: 'Port must be 1–65535.' }
+    return { ok: false, error: hostEndpointCopy.invalidPort() }
   }
   const port = resolvedPort.kind === 'valid' ? resolvedPort.port : fallbackPort
 
@@ -240,14 +228,14 @@ function normalizeHostPort(
   if (input.startsWith('[')) {
     const close = input.indexOf(']')
     if (close <= 1) {
-      return { ok: false, error: 'Not a valid address.' }
+      return { ok: false, error: hostEndpointCopy.invalidAddress() }
     }
     host = input.slice(1, close)
     const rest = input.slice(close + 1)
     if (rest.startsWith(':')) {
       port = rest.slice(1)
     } else if (rest.length > 0) {
-      return { ok: false, error: 'Not a valid address.' }
+      return { ok: false, error: hostEndpointCopy.invalidAddress() }
     }
   } else {
     const firstColon = input.indexOf(':')
@@ -256,18 +244,16 @@ function normalizeHostPort(
       host = input.slice(0, firstColon)
       port = input.slice(firstColon + 1)
     } else {
-      // No port, or bare IPv6 (multiple colons, no brackets).
       host = input
     }
   }
 
   host = host.trim()
   if (!host) {
-    return { ok: false, error: 'Missing hostname.' }
+    return { ok: false, error: hostEndpointCopy.hostnameRequired() }
   }
 
-  // Why: bare input is not a URL, so characters that only make sense in a URL
-  // (path, query, fragment, whitespace) must not be treated as hostname bytes.
+  // Validate bare hosts too; URL-only delimiters must never become hostname bytes.
   const hostError = validateHostname(host)
   if (hostError) {
     return { ok: false, error: hostError }
@@ -276,7 +262,7 @@ function normalizeHostPort(
   if (port !== undefined) {
     port = port.trim()
     if (!isValidPort(port)) {
-      return { ok: false, error: 'Port must be 1–65535.' }
+      return { ok: false, error: hostEndpointCopy.invalidPort() }
     }
   }
 
@@ -288,42 +274,35 @@ function formatHostForUrl(host: string): string {
   return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
 }
 
-/**
- * Reject hostnames that would be illegal or ambiguous in a websocket URL.
- * Allows DNS labels, `.local` mDNS, IPv4, and IPv6 hex forms.
- */
 function validateHostname(host: string): string | null {
   if (!host) {
-    return 'Missing hostname.'
+    return hostEndpointCopy.hostnameRequired()
   }
-  // Spaces, path/query/fragment separators, userinfo separators, brackets.
   if (/[\s/?#@[\]]/.test(host)) {
-    return 'Not a valid hostname.'
+    return hostEndpointCopy.invalidHostname()
   }
   const numericIpv4Error = validateNumericIpv4Candidate(host)
   if (numericIpv4Error) {
     return numericIpv4Error
   }
   if (host.includes(':')) {
-    // Why: a hex/colon regex accepts malformed forms such as two `::` runs.
-    // Reuse the URL parser that WebSocket will ultimately use.
+    // Use the WebSocket URL parser to reject malformed IPv6 that a hex/colon regex accepts.
     if (!/^[0-9a-fA-F:]+$/.test(host)) {
-      return 'Not a valid hostname.'
+      return hostEndpointCopy.invalidHostname()
     }
     try {
       new URL(`ws://[${host}]:${DEFAULT_PORT}`)
     } catch {
-      return 'Not a valid hostname.'
+      return hostEndpointCopy.invalidHostname()
     }
     return null
   }
-  // DNS / IPv4 / mDNS: labels of alnum and hyphen, dots between, no empty labels.
   if (
     !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
       host
     )
   ) {
-    return 'Not a valid hostname.'
+    return hostEndpointCopy.invalidHostname()
   }
   return null
 }
@@ -333,7 +312,7 @@ function validateNumericIpv4Candidate(host: string): string | null {
     return null
   }
   if (!isCanonicalIpv4(host)) {
-    return 'Not a valid hostname.'
+    return hostEndpointCopy.invalidHostname()
   }
   return null
 }

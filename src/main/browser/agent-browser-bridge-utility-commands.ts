@@ -5,8 +5,6 @@ import type { BrowserBackResult, BrowserReloadResult } from '../../shared/runtim
 import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
 
 export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {
-  // ── Clipboard commands ──
-
   async clipboardRead(worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'read'])
@@ -26,8 +24,6 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 
-  // ── Dialog commands ──
-
   async dialogAccept(text?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['dialog', 'accept']
@@ -43,8 +39,6 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
       return await this.execAgentBrowser(sessionName, ['dialog', 'dismiss'])
     })
   }
-
-  // ── Storage commands ──
 
   async storageLocalGet(
     key: string,
@@ -100,8 +94,6 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 
-  // ── Download command ──
-
   async download(
     selector: string,
     path: string,
@@ -112,8 +104,6 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
       return await this.execAgentBrowser(sessionName, ['download', selector, path])
     })
   }
-
-  // ── Highlight command ──
 
   async highlight(selector: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
@@ -134,7 +124,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   }
 
   async reload(worktreeId?: string, browserPageId?: string): Promise<BrowserReloadResult> {
-    // Why: reload can trigger an Electron process swap that destroys the session mid-command — reload via webContents directly instead.
+    // Reload directly because a process swap can destroy the helper session mid-command.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {
@@ -163,7 +153,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
 
         wc.on('did-finish-load', onFinish)
         wc.on('did-fail-load', onFail)
-        // Why: clear the fallback timer on load; otherwise each reload leaks the webContents + listeners until the 10s timeout.
+        // Clear this timer on load to release WebContents and listeners promptly.
         fallbackTimer = setTimeout(finish, 10_000)
         if (typeof fallbackTimer.unref === 'function') {
           fallbackTimer.unref()

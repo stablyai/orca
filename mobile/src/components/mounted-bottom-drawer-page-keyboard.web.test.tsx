@@ -1,0 +1,160 @@
+// @vitest-environment happy-dom
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// Match page graph: RN Web Keyboard has no metrics and inert listener; web keyboard seam observes shell resize.
+vi.mock('react-native', async () => {
+  const React = await import('react')
+  const { default: Keyboard }: { default: unknown } =
+    // @ts-expect-error TS7016: react-native-web ships no type declarations.
+    await import('react-native-web/dist/exports/Keyboard')
+  return {
+    BackHandler: { addEventListener: () => ({ remove: () => {} }) },
+    Keyboard,
+    Modal: 'Modal',
+    Platform: { OS: 'web', select: (options: { web?: unknown }) => options.web },
+    Pressable: 'Pressable',
+    ScrollView: 'ScrollView',
+    StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
+    View: 'View',
+    // Subscribed, as react-native-web's is: the shell shortening the WebView is a resize.
+    useWindowDimensions: () => {
+      const read = () => ({ width: window.innerWidth, height: window.innerHeight })
+      const [size, setSize] = React.useState(read)
+      React.useEffect(() => {
+        const onResize = () => setSize(read())
+        window.addEventListener('resize', onResize)
+        return () => window.removeEventListener('resize', onResize)
+      }, [])
+      return size
+    }
+  }
+})
+vi.mock(
+  '../platform/keyboard-occlusion',
+  async () => await import('../platform/keyboard-occlusion.web')
+)
+vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 24, bottom: 0, left: 0, right: 0 })
+}))
+vi.mock('react-native-gesture-handler', () => {
+  const chain: Record<string, unknown> = {}
+  for (const method of [
+    'activeOffsetY',
+    'simultaneousWithExternalGesture',
+    'onBegin',
+    'onUpdate',
+    'onEnd'
+  ]) {
+    chain[method] = () => chain
+  }
+  return {
+    Gesture: { Pan: () => chain, Native: () => chain },
+    GestureDetector: 'GestureDetector',
+    GestureHandlerRootView: 'GestureHandlerRootView'
+  }
+})
+vi.mock('react-native-reanimated', async () => {
+  const React = await import('react')
+  return {
+    default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
+    useSharedValue: (initial: number) => React.useRef({ value: initial }).current,
+    useAnimatedStyle: (style: () => object) => style(),
+    useAnimatedScrollHandler: () => () => {},
+    withSpring: (to: number) => to,
+    withTiming: (to: number) => to,
+    runOnJS: (fn: () => void) => fn,
+    interpolate: () => 0,
+    Extrapolation: { CLAMP: 'clamp' }
+  }
+})
+
+import { MountedBottomDrawer } from './mounted-bottom-drawer'
+import { publishShellKeyboardSource } from '../platform/keyboard-occlusion.web'
+
+const RESTING_HEIGHT = 900
+const IME_HEIGHT = 300
+
+function setWindowHeight(height: number): void {
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
+  window.dispatchEvent(new Event('resize'))
+}
+
+function renderSheet(fillAvailable = true): ReactTestRenderer {
+  let renderer!: ReactTestRenderer
+  act(() => {
+    renderer = create(
+      <MountedBottomDrawer
+        visible
+        fillAvailable={fillAvailable}
+        onClose={() => {}}
+        onHidden={() => {}}
+      >
+        {null}
+      </MountedBottomDrawer>
+    )
+  })
+  return renderer
+}
+
+function sheetStyle(renderer: ReactTestRenderer): Record<string, unknown> {
+  const sheet = renderer.root.find((node) => node.props.testID === 'bottom-drawer-sheet')
+  const style: unknown[] = [sheet.props.style].flat(Infinity)
+  return Object.assign({}, ...style.filter((entry) => typeof entry === 'object' && entry !== null))
+}
+
+describe('a sheet on the page', () => {
+  afterEach(() => {
+    publishShellKeyboardSource(null)
+    setWindowHeight(RESTING_HEIGHT)
+  })
+
+  it('mounts against react-native-web, whose Keyboard has no metrics()', () => {
+    setWindowHeight(RESTING_HEIGHT)
+    const renderer = renderSheet()
+    expect(sheetStyle(renderer).marginBottom).toBe(0)
+    act(() => renderer.unmount())
+  })
+
+  it('sits on the keyboard the shell says covers the page, as it does natively', () => {
+    let height = 0
+    const listeners = new Set<(next: number) => void>()
+    publishShellKeyboardSource({
+      read: () => height,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      }
+    })
+    try {
+      setWindowHeight(RESTING_HEIGHT)
+      const renderer = renderSheet()
+      act(() => {
+        height = IME_HEIGHT
+        listeners.forEach((listener) => listener(IME_HEIGHT))
+      })
+      expect(sheetStyle(renderer)).toMatchObject({
+        marginBottom: IME_HEIGHT,
+        height: RESTING_HEIGHT - IME_HEIGHT - 24 - 16
+      })
+      act(() => {
+        height = 0
+        listeners.forEach((listener) => listener(0))
+      })
+      expect(sheetStyle(renderer).marginBottom).toBe(0)
+      act(() => renderer.unmount())
+      expect(listeners.size).toBe(0)
+    } finally {
+      publishShellKeyboardSource(null)
+    }
+  })
+
+  it('lifts a content-sized sheet over a keyboard already up, which sends no new event', () => {
+    publishShellKeyboardSource({ read: () => IME_HEIGHT, subscribe: () => () => {} })
+    setWindowHeight(RESTING_HEIGHT)
+    const renderer = renderSheet(false)
+    expect(sheetStyle(renderer).transform).toEqual([{ translateY: -IME_HEIGHT }])
+    act(() => renderer.unmount())
+  })
+})

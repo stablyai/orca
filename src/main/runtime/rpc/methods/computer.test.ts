@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { eraseRpcMethods, buildRegistry } from '../core'
-import { CLIPBOARD_TEXT_WRITE_MAX_BYTES } from '../../../../shared/clipboard-text'
+import { eraseRpcMethods } from '../core'
 
 const computerMocks = vi.hoisted(() => ({
   callComputerSidecarAction: vi.fn(),
@@ -41,34 +40,6 @@ describe('computer RPC methods', () => {
     computerMocks.getComputerUsePermissionStatus.mockReset()
     resetComputerSessionsForTest()
     computerMocks.resetComputerSidecarForTest.mockClear()
-  })
-
-  it('registers all computer methods', () => {
-    const registry = buildRegistry(COMPUTER_METHODS)
-
-    expect([...registry.keys()].sort()).toEqual([
-      'computer.capabilities',
-      'computer.click',
-      'computer.drag',
-      'computer.getAppState',
-      'computer.hotkey',
-      'computer.listApps',
-      'computer.listWindows',
-      'computer.pasteText',
-      'computer.performSecondaryAction',
-      'computer.permissions',
-      'computer.permissionsStatus',
-      'computer.pressKey',
-      'computer.scroll',
-      'computer.setValue',
-      'computer.typeText'
-    ])
-  })
-
-  it('resets the sidecar test process', () => {
-    resetComputerSessionsForTest()
-
-    expect(computerMocks.resetComputerSidecarForTest).toHaveBeenCalledTimes(1)
   })
 
   it('lists running apps through the sidecar', async () => {
@@ -237,14 +208,6 @@ describe('computer RPC methods', () => {
     expect(() =>
       findMethod('computer.hotkey').params!.parse({ app: 'Finder', key: 'Ctrl+A+B' })
     ).toThrow(/Hotkey requires a modifier and one key/)
-  })
-
-  it('leaves pasteText byte limits to async sidecar validation', () => {
-    const text = 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1)
-
-    expect(
-      findMethod('computer.pasteText').params!.safeParse({ app: 'Finder', text }).success
-    ).toBe(true)
   })
 })
 

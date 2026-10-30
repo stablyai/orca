@@ -3,6 +3,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environ
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../shared/ephemeral-vm-recipe-diagnostics'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -11,6 +12,8 @@ export type EphemeralVmApi = {
     recipes: OrcaHooks['environmentRecipes']
     diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
     message?: string
+    messageCode?: string
+    messageParams?: Record<string, string | number>
   }>
   listRecipeCatalog: () => Promise<
     {
@@ -45,11 +48,13 @@ export type EphemeralVmApi = {
         connectionType: 'ssh'
         runtime: EphemeralVmRuntimeRecord
         sshTargetId: string
+        /** The managed Orca server the host runs; its workspace lives there. */
+        environmentId?: string
         expectedRefHead?: string
         stderr: string
         warnings: EphemeralVmRecipeResultWarning[]
       }
-    | { ok: false; error: string; stderr: string; stdout: string }
+    | ({ ok: false; stderr: string; stdout: string } & EphemeralVmFailure)
   >
   cancelProvision: (args: { provisionId: string }) => Promise<{ cancelled: boolean }>
   onProvisionEvent: (
@@ -60,7 +65,6 @@ export type EphemeralVmApi = {
     runtimeId: string
     workspaceId: string
   }) => Promise<EphemeralVmRuntimeRecord>
-  suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
   resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>

@@ -1,12 +1,11 @@
 import {
-  IDLE,
   collectTabPaneInputs,
   resolveAttention,
   type SmartClass,
-  type TabPaneInputSources,
-  type WorktreeAttention
-} from '@/components/sidebar/smart-attention'
-import { tabHasLivePty } from './tab-has-live-pty'
+  type TabPaneInputSources
+} from '../../../shared/sidebar-list/smart-attention'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
+import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 import type { WorktreeStatus } from './worktree-status'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -15,13 +14,8 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 
 /** Row model for Cmd+J's empty-query recent tabs section. */
 export type RecentWorkspaceTabRow = {
-  /** Palette item id. */
   id: string
-  /**
-   * Per-occurrence identity used while the palette is open. Persisted tab ids can collide across
-   * hosts (or in a transient duplicate snapshot), so ordering must not use `id` as its key.
-   * Callers that know their ids are unique may omit this and fall back to `id`.
-   */
+  // Order by per-occurrence identity: persisted IDs can collide across hosts/transient snapshots. Unique-ID callers may omit it and use id.
   occurrenceId?: string
   worktreeId: string
   /** Host owner used to distinguish same-id rows published by two hosts. */
@@ -42,24 +36,9 @@ const STATUS_BY_ATTENTION_CLASS: Record<SmartClass, WorktreeStatus | null> = {
   1: 'permission',
   2: 'done',
   3: 'working',
-  // Why null for 4: an unverifiable pane has no reported state to name, so it falls through
-  // to the live-PTY branch below and reads 'active' — never 'working' and never 'done'.
+  // Unknown pane state falls through to live-PTY active, never working/done.
   4: null,
   5: null
-}
-
-export function resolveRecentWorkspaceTabAttention(
-  row: RecentWorkspaceTabRow,
-  paneSources: TabPaneInputSources,
-  now: number
-): WorktreeAttention {
-  if (!row.terminalTab) {
-    return IDLE
-  }
-  return resolveAttention(
-    collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now),
-    now
-  )
 }
 
 /** Live status dot for a hero row — re-read on agent churn, unlike the frozen ordering. */
@@ -74,6 +53,21 @@ export function resolveRecentWorkspaceTabStatus(
   const panes = collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now)
   const attention = resolveAttention(panes, now)
   const explicit = STATUS_BY_ATTENTION_CLASS[attention.cls]
+  if (explicit === 'permission') {
+    return explicit
+  }
+  const verdicts = new Set(
+    panes.flatMap((pane) =>
+      pane.kind === 'hook' &&
+      isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        ? [agentVerdictDisplayMark(pane.entry)]
+        : []
+    )
+  )
+  // Why: a failed main agent outranks the subagent work still holding its row live.
+  if (verdicts.has('failed')) {
+    return 'failed'
+  }
   if (explicit === 'working') {
     const hasForegroundWork = panes.some(
       (pane) =>
@@ -82,16 +76,11 @@ export function resolveRecentWorkspaceTabStatus(
     )
     return hasForegroundWork ? 'working' : 'monitoring'
   }
-  if (explicit === 'permission') {
-    return explicit
+  if (verdicts.has('unconfirmed')) {
+    return 'unconfirmed'
   }
-  const hasInterrupted = panes.some(
-    (pane) =>
-      pane.kind === 'hook' &&
-      pane.entry.interrupted === true &&
-      isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
-  )
-  if (hasInterrupted) {
+  // Why: attention demotes a user's Stop, but its tab still says it was interrupted.
+  if (verdicts.has('interrupted')) {
     return 'interrupted'
   }
   if (explicit === 'done') {

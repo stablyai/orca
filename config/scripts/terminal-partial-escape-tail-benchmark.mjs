@@ -1,17 +1,15 @@
 #!/usr/bin/env node
-// Times the partial-escape-tail fold that runs once per PTY chunk for every terminal against a
-// baseline with the pre-change shape (unconditional concat + per-code-unit walk). Equivalence is
-// proven over a corpus first, so the reported speedup cannot come from the gate changing the answer.
+// Compare production per-PTY-chunk fold with unconditional concat/scan baseline; verify corpus equivalence before timing.
 import { performance } from 'node:perf_hooks'
-import {
-  advancePartialEscapeTail,
-  extractPartialEscapeTail,
-  MAX_PARTIAL_ESCAPE_TAIL_LENGTH
-} from '../../src/shared/terminal-partial-escape-tail.ts'
+import { createJiti } from 'jiti'
 
 const CHUNK_BYTES = 16 * 1024
 const CHUNKS = 640
 const ROUNDS = 7
+// Use jiti: Node type stripping cannot resolve graph’s extensionless relative imports.
+const jiti = createJiti(import.meta.url)
+const { advancePartialEscapeTail, extractPartialEscapeTail, MAX_PARTIAL_ESCAPE_TAIL_LENGTH } =
+  await jiti.import('../../src/shared/terminal-partial-escape-tail.ts')
 
 function baselineAdvance(pendingTail, chunk) {
   const tail = extractPartialEscapeTail(pendingTail + chunk)

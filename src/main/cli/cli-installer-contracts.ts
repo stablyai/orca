@@ -12,7 +12,7 @@ export type CliInstallerOptions = {
   localAppDataPath?: string
   processPathEnv?: string | null
   commandPathOverride?: string | null
-  /** Feeds into the /usr/local/bin existence check at construction time; used in tests to simulate absent /usr/local/bin on arm64 without relying on real filesystem state. */
+  /** Override the default macOS path to test fallback when /usr/local/bin is absent. */
   defaultMacCommandPath?: string
   privilegedRunner?: (command: string) => Promise<void>
   userPathReader?: () => Promise<WindowsUserPathReadResult>
@@ -24,6 +24,8 @@ export type CliInstallerOptions = {
   appImagePath?: string | null
   appImageCacheRootPath?: string
   appImageExtractRunner?: (appImagePath: string, cwd: string) => Promise<void>
+  /** Absolute time (ms) by which AppImage extraction and its lock wait must finish. */
+  appImageDeadlineAt?: number
 }
 
 export type InstallSpec = {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   addWorktree,
@@ -20,6 +20,7 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
@@ -30,7 +31,7 @@ describe('OrcaRuntimeService', () => {
       badgeColor: 'blue',
       addedAt: 1,
       kind: 'folder' as const,
-      // removeManagedWorktree executes inside this selected runtime, where PTYs are local ids.
+      // This selected runtime owns removal; its PTY ids are local.
       executionHostId: 'runtime:env-1' as const
     }
     const rootWorktreeId = 'folder-repo::/workspace/folder'
@@ -47,11 +48,11 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
-      removeWorktreeMeta: (worktreeId: string) => {
+      removeWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget) => {
         delete metaById[worktreeId]
       }
     }
@@ -290,7 +291,6 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('creates a runtime local worktree from the detected default when the persisted base is stale', async () => {
-    // Regression: a stale persisted repo base must fall back to the detected default.
     const runtime = new OrcaRuntimeService(store)
     const createdWorktree = {
       path: '/tmp/workspaces/cli-refresh-fails',
@@ -490,7 +490,6 @@ describe('OrcaRuntimeService', () => {
       if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
         return { stdout: '/tmp/repo/.git\n', stderr: '' }
       }
-      // No local remote-tracking base ref -> nothing to fall back on.
       if (args[0] === 'rev-parse' && args[1] === '--verify') {
         throw new Error('missing ref')
       }
@@ -515,9 +514,78 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('creates from the local branch only when the caller opts in and the remote base cannot be fetched', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/cli-offline-base',
+      head: 'main-sha',
+      branch: 'cli-offline-base',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(addWorktree).mockResolvedValueOnce({})
+    vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
+        return { stdout: '/tmp/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/main^{commit}')) {
+        return { stdout: 'main-sha\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--verify') {
+        throw new Error('missing ref')
+      }
+      if (args.includes('fetch')) {
+        throw new Error('network unavailable')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'cli-offline-base',
+          baseBranch: 'origin/main'
+        })
+      ).rejects.toThrow(
+        'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+      )
+      expect(addWorktree).not.toHaveBeenCalled()
+
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'cli-offline-base',
+        baseBranch: 'origin/main',
+        allowLocalBaseFallback: true
+      })
+
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'cli-offline-base',
+        'main',
+        false,
+        false,
+        {}
+      )
+      expect(result.baseFallback).toEqual({ requestedRef: 'origin/main', localRef: 'main' })
+      expect(result.worktree).toMatchObject({ path: createdWorktree.path, baseRef: 'main' })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
   it('creates a branchNameOverride worktree from the selected matching remote base ref', async () => {
     const runtime = new OrcaRuntimeService(store)
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/feature-something')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/feature-something')
     vi.mocked(listWorktrees).mockResolvedValueOnce([
@@ -537,8 +605,7 @@ describe('OrcaRuntimeService', () => {
       branchNameOverride: 'feature/something'
     })
 
-    // Why: an explicit branch override adopts the local branch before the conflict
-    // probe, so no lazy adoption callback is handed to getBranchConflictKind.
+    // Explicit branch overrides adopt before conflict probing, leaving no lazy-adopt callback.
     expect(getBranchConflictKind).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       'feature/something',

@@ -1,10 +1,3 @@
-/**
- * Global session fields live in the 'local' slice. Copies of them inside a non-local host partition
- * are legacy residue: the split never writes them there and the merge never reads them from there
- * unless local has nothing. These tests pin the drop to exactly that condition, keep the renderer's
- * merge landing on the same value either way, and re-check the two safety gates that decide which
- * global fields may be dropped at all.
- */
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-types'
@@ -46,11 +39,8 @@ function parse(
 describe('HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS', () => {
   it('only lists fields that are global AND that no worktree-ownership pass follows', () => {
     for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
-      // Gate 1: the renderer's split/merge treat it as local-owned, so a non-local copy is dead.
       expect(WORKSPACE_SESSION_FIELD_OWNERSHIP[field]).toBe('global')
-      // Gate 2: `collectPersistedSessionWorktreeOwners` and the deregistered-repo residue sweep
-      // walk EVERY partition through this table. Anything but 'none' means dropping the field
-      // could un-own a worktree and get its metadata pruned.
+      // Worktree-owning fields cannot be dropped: every partition contributes metadata ownership.
       expect(WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND[field]).toBe('none')
     }
   })
@@ -68,15 +58,11 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
       },
       local
     )
-    // Back to the default from the spread, not the 65 KB stale replica. The merge reads this field
-    // from local whenever local has it, so the renderer still sees `https://local.test`
-    // (`workspace-session-host-split.test.ts` pins that half of the contract).
     expect(partitions[HOST]?.browserUrlHistory).toEqual([])
   })
 
   it('retains a non-local global field the local slice does NOT have', () => {
-    // `workspaceDocHistory` is optional and absent from the defaults, so local can genuinely lack
-    // it and the merge's fallback to another slice is live.
+    // Optional doc history lacks defaults; local absence keeps the remote fallback meaningful.
     const local = localSession({})
     expect(local.workspaceDocHistory).toBeUndefined()
     const docs = [docEntry('/repo/remote.md')]
@@ -84,7 +70,6 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
       { [HOST]: { ...getDefaultWorkspaceSession(), workspaceDocHistory: docs } },
       local
     )
-    // Retained, so the merge's "fall back to any slice that has it" path still finds a value.
     expect(partitions[HOST]?.workspaceDocHistory).toEqual(docs)
   })
 
@@ -115,9 +100,7 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
       {
         [HOST]: {
           ...getDefaultWorkspaceSession(),
-          // A `'direct'` worktree reference the residue sweep reads out of every partition.
           activeWorktreeId: 'repo-1::/tmp/a',
-          // Read on a partition by the mobile terminal projection.
           activeTabId: 'remote-tab',
           tabsByWorktree: tabs,
           terminalTopologyRevisionByRepoId: { 'repo-1': 4 }

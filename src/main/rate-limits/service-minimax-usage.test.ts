@@ -29,8 +29,16 @@ vi.mock('./kimi-fetcher', () => ({
   fetchKimiRateLimits: vi.fn()
 }))
 
-vi.mock('./opencode-go-usage-fetcher', () => ({
-  fetchOpenCodeGoRateLimits: vi.fn()
+vi.mock('./opencode-go-usage-source-selection', () => ({
+  fetchOpenCodeGoUsage: vi.fn()
+}))
+
+vi.mock('./zcode-usage-fetcher', () => ({
+  fetchZcodeRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./minimax/minimax-fetcher', () => ({
@@ -39,6 +47,14 @@ vi.mock('./minimax/minimax-fetcher', () => ({
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn()
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -56,9 +72,7 @@ vi.mock('../minimax/minimax-api-key-store', () => ({
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
-    // Why: these cases only stub MiniMax, so the surrounding fetch cycle still
-    // needs healthy Claude/Codex results — previously inherited implicitly from
-    // earlier tests' persistent mocks (clearAllMocks keeps implementations).
+    // Seed healthy siblings explicitly; clearAllMocks retains implementations from earlier cases.
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
   })
@@ -266,13 +280,11 @@ describe('RateLimitService', () => {
     await service.refresh()
     expect(service.getState().minimax?.session?.usedPercent).toBe(10)
 
-    // Why: changing only the endpoint must invalidate the previous snapshot —
-    // the response shape and host differ, so the old data is misleading.
+    // Endpoint changes invalidate usage because both response host and shape may differ.
     endpointMode = 'cn'
     await service.refresh()
     expect(service.getState().minimax?.session?.usedPercent).toBe(20)
 
-    // Why: adding an API key while staying on CN must also force a refresh.
     apiKey = 'sk-cn-key-9876'
     await service.refresh()
     expect(service.getState().minimax?.session?.usedPercent).toBe(30)

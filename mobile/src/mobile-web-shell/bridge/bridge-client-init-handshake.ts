@@ -1,22 +1,15 @@
-/** The page asks again until the shell answers; a session has no other way to start. */
+import { BRIDGE_PROTOCOL_VERSION, type BridgeClientMessage } from './bridge-envelope'
+
 export const BRIDGE_READY_RETRY_MIN_MS = 50
 export const BRIDGE_READY_RETRY_MAX_MS = 2000
 
 export type BridgeInitHandshake = {
-  /** Posts `ready` now, and again on a widening backoff until `stop`. */
   start: () => void
   stop: () => void
-  /** For a shell rebuilt under the page: the wait starts over from the floor. */
   restart: () => void
 }
 
-/**
- * How the page gets a session.
- *
- * The shell posts `init` when it is ready, but a page that loaded first, or reloaded after the shell
- * had already sent one, would wait forever for a frame that has been and gone. Asking on a widening
- * backoff costs one frame at a time and needs nothing remembered on the shell's side.
- */
+// Ask ready on backoff because the page may load/reload after a previous init was sent; the shell needs no delivery history to repair it.
 export function createBridgeInitHandshake(ask: () => void): BridgeInitHandshake {
   let timer: ReturnType<typeof setTimeout> | null = null
   let delayMs = BRIDGE_READY_RETRY_MIN_MS
@@ -45,4 +38,8 @@ export function createBridgeInitHandshake(ask: () => void): BridgeInitHandshake 
       start()
     }
   }
+}
+
+export function createPageReadyFrame(): Extract<BridgeClientMessage, { type: 'ready' }> {
+  return { v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }
 }

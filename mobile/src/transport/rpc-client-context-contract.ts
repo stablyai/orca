@@ -4,6 +4,9 @@ import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
+/** Re-dials one host. `null` where this document cannot dial: the page's shell owns the connection. */
+export type ForceReconnect = ((hostId: string) => Promise<void>) | null
+
 export type RpcClientContextValue = {
   acquire: (
     hostId: string,
@@ -13,7 +16,7 @@ export type RpcClientContextValue = {
   release: (hostId: string, acquisition: HostClientAcquisition) => void
   releaseAndCloseIfUnused: (hostId: string, acquisition: HostClientAcquisition) => void
   closeIfUnused: (hostId: string) => void
-  forceReconnect: (hostId: string) => Promise<void>
+  forceReconnect: ForceReconnect
   refreshHostClient: (hostId: string) => void
   forgetHostClient: (hostId: string) => void
   disconnectHostClient: (hostId: string) => void

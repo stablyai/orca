@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -45,6 +45,10 @@ import { okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
+  const priorExitCode = process.exitCode
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -102,7 +106,6 @@ describe('orca cli worktree awareness', () => {
 
   it('rejects emulator gesture points outside normalized coordinates', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       [
@@ -128,13 +131,10 @@ describe('orca cli worktree awareness', () => {
       }
     })
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('rejects emulator gesture points with invalid edge markers', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       [
@@ -159,7 +159,5 @@ describe('orca cli worktree awareness', () => {
         message: 'gesture point 0 edge must be an integer between 0 and 4'
       }
     })
-
-    process.exitCode = priorExitCode
   })
 })

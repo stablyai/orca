@@ -1,6 +1,4 @@
-// Entry point for the main-process source-control surface. The implementation lives in
-// `./source-control/*`; this file stays the single import path because ~40 modules and tests
-// (many via `vi.mock('../git/status')`) already resolve their git reads/writes through it.
+// Preserve the source-control import/mocking entry point; implementation lives in source-control.
 export { getStatus } from './source-control/status-read'
 export type { GetStatusOptions } from './source-control/get-status-options'
 export { getSubmoduleStatus } from './source-control/submodule-status'
@@ -32,7 +30,13 @@ export { getBranchCompare } from './source-control/branch-compare'
 export { getBranchDiff } from './source-control/branch-diff'
 export { getCommitCompare } from './source-control/commit-compare'
 export { getCommitDiff } from './source-control/commit-diff'
-export { bulkStageFiles, bulkUnstageFiles, stageFile, unstageFile } from './source-control/staging'
+export {
+  bulkStageFiles,
+  bulkUnstageFiles,
+  stageFile,
+  stageWorktreeChanges,
+  unstageFile
+} from './source-control/staging'
 export { getStagedCommitContext } from './source-control/staged-commit-context'
 export { commitChanges } from './source-control/commit-changes'
 export {

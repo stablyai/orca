@@ -6,7 +6,6 @@ import type {
   ItemDialogTab
 } from '@/components/github/github-work-item-identity'
 
-/** Re-exported so Project-view callers keep a stable import path. */
 export type GitHubItemDialogProjectOrigin = GitHubWorkItemProjectOrigin
 
 export type GitHubItemDialogProps = {
@@ -16,7 +15,6 @@ export type GitHubItemDialogProps = {
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   backLabel?: string
-  /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
     itemKey: { id: string; repoId: string },
@@ -25,4 +23,24 @@ export type GitHubItemDialogProps = {
   onClose: () => void
   /** Optional Project-origin context; when set, edits route via slug-addressed IPCs against the row's repo (slug routing wins for writes). */
   projectOrigin?: GitHubItemDialogProjectOrigin
+}
+
+export type GitHubItemDialogEditSectionProps = {
+  item: GitHubWorkItem
+  repoPath: string | null
+  repoId: string | null
+  sourceContext?: TaskSourceContext | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  localState: GitHubWorkItem['state']
+  localLabels: string[]
+  onStateChange: (state: GitHubWorkItem['state']) => void
+  onLabelsChange: (labels: string[]) => void
+  /** Invalidate the parent’s detail cache after mutation so reopening cannot show stale data during FRESH_MS. */
+  onMutated: () => void
+  assignees: string[]
+  onUse: (item: GitHubWorkItem) => void
+  onOpenOrUse?: (item: GitHubWorkItem) => void
+  attachedWorkspaceLabel?: string | null
+  /** `horizontal`: compact pill strip for the non-issue drawer/header; `top-columns`: labeled columns above the issue page body. */
+  layout?: 'horizontal' | 'top-columns'
 }

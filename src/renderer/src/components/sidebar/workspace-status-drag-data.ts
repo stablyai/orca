@@ -15,8 +15,7 @@ export function writeWorkspaceDragData(
     return
   }
   dataTransfer.effectAllowed = 'move'
-  // Why: keep the original single-id payload for older drop targets while
-  // board-to-board drags can move the whole selected batch.
+  // Retain the single-ID payload for older targets while boards also carry the selected batch.
   dataTransfer.setData(WORKSPACE_STATUS_DRAG_TYPE, firstWorktreeId)
   dataTransfer.setData(WORKSPACE_STATUS_DRAG_IDS_TYPE, JSON.stringify(worktreeIds))
   dataTransfer.setData('text/plain', firstWorktreeId)
@@ -24,17 +23,7 @@ export function writeWorkspaceDragData(
 
 export function readWorkspaceDragData(dataTransfer: DataTransfer): string | null {
   const typed = readWorkspaceStatusDragPayload(dataTransfer, WORKSPACE_STATUS_DRAG_TYPE)
-  if (typed.status === 'ok') {
-    return typed.value
-  }
-  if (typed.status === 'too-large') {
-    return null
-  }
-  const plain = readWorkspaceStatusDragPayload(dataTransfer, 'text/plain')
-  if (plain.status === 'ok') {
-    return plain.value
-  }
-  return null
+  return typed.status === 'ok' ? typed.value : null
 }
 
 export function readWorkspaceDragDataIds(dataTransfer: DataTransfer): string[] {
@@ -49,7 +38,7 @@ export function readWorkspaceDragDataIds(dataTransfer: DataTransfer): string[] {
         return collectWorkspaceStatusDragIds(parsed) ?? []
       }
     } catch {
-      // Fall back to the legacy single-card payload below.
+      // Older targets publish only the single-card payload.
     }
   }
   const singleId = readWorkspaceDragData(dataTransfer)
@@ -74,8 +63,7 @@ export function hasWorkspaceDragData(dataTransfer: DataTransfer): boolean {
   const types = Array.from(dataTransfer.types)
   return (
     hasBoundedWorkspaceStatusDragPayload(dataTransfer, types, WORKSPACE_STATUS_DRAG_IDS_TYPE) ||
-    hasBoundedWorkspaceStatusDragPayload(dataTransfer, types, WORKSPACE_STATUS_DRAG_TYPE) ||
-    hasBoundedWorkspaceStatusDragPayload(dataTransfer, types, 'text/plain')
+    hasBoundedWorkspaceStatusDragPayload(dataTransfer, types, WORKSPACE_STATUS_DRAG_TYPE)
   )
 }
 

@@ -6,7 +6,6 @@ import { mountFixture } from '../recorder-fixture-shape'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -18,7 +17,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -79,7 +77,7 @@ const GITLAB_ISSUE_ITEM = {
     type: 'issue',
     state: 'opened',
     labels: ['bug'],
-    projectRef: 'group/project'
+    projectRef: { host: 'gitlab.com', path: 'group/project' }
   }
 } as const
 
@@ -93,7 +91,7 @@ const GITLAB_MR_ITEM = {
     type: 'mr',
     state: 'opened',
     labels: [],
-    projectRef: 'group/project'
+    projectRef: { host: 'gitlab.com', path: 'group/project' }
   }
 } as const
 
@@ -140,12 +138,6 @@ function linearDetailPayload(): Record<string, unknown> {
   }
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share. Copied per module rather than shared, because an adapter may not import another file
- * in this directory: a golden pins the one module it was recorded through, so plumbing reaching
- * across the seam would drive recordings its header does not cover.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -193,10 +185,6 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * Editing an item's labels, assignees and reviewers, and the Linear equivalents. The hosted hook
- * routes by provider and item type, so each arm is mounted against the item shape that selects it.
- */
 export function taskItemHostedMetadataMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

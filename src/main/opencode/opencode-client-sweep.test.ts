@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../../shared/child-process/process-spec'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import {
   isOpenCodeClientArgv,
   isOpenCodeClientProcess,
@@ -150,9 +150,9 @@ describe('isOpenCodeClientProcess', () => {
 })
 
 describe('sweepProcessIdentities', () => {
-  function psRunner(outputs: Record<'args' | 'comm', string | Error>): (
-    spec: ProcessSpec
-  ) => Promise<ProcessResult> {
+  function psRunner(
+    outputs: Record<'args' | 'comm', string | Error>
+  ): (spec: ProcessSpec) => Promise<ProcessResult> {
     return async (spec: ProcessSpec): Promise<ProcessResult> => {
       const kind = spec.args?.some((arg) => arg.includes('comm=')) ? 'comm' : 'args'
       const output = outputs[kind]

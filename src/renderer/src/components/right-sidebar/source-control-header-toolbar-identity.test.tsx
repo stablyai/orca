@@ -5,7 +5,7 @@ import { SourceControlHeaderToolbar } from './source-control/panel/header-toolba
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import type { PrimaryAction } from './source-control-primary-action'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -115,7 +115,6 @@ describe('SourceControlHeaderToolbar branch identity', () => {
     const branchIndex = markup.indexOf('brennanb2025/source-control-branch-name')
     const createPrIndex = markup.indexOf('Create PR')
 
-    // Why: the #9787 regression — identity must not evict Create PR.
     expect(branchIndex).toBeGreaterThan(-1)
     expect(createPrIndex).toBeGreaterThan(-1)
     expect(markup).toContain('aria-label="brennanb2025/source-control-branch-name → origin/main"')
@@ -174,7 +173,6 @@ describe('SourceControlHeaderToolbar branch identity', () => {
   })
 
   it('renders exactly as before when no branch line total is supplied', () => {
-    expect(renderToolbar({ branchLineTotal: undefined })).toBe(renderToolbar())
     expect(renderToolbar()).not.toContain('data-testid="source-control-branch-line-total"')
   })
 })

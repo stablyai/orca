@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-28T21:44:00.000Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.158.0, plain launch (no -m/-c) on a fresh CODEX_HOME. Greeting layout: an unboxed `>_ OpenAI Codex (v0.158.0)` header with no model:/directory: labels, starting from a provisional screen whose directory reads `loading`; the live status row under the composer appears last. Braille logo animation frames included. Cut 4.6 s after spawn. Home-directory user name redacted by hand, same length.",
+  "exitCode": null
+}

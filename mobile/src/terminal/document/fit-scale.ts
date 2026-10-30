@@ -1,31 +1,12 @@
 import { repositionOverlay } from './selection-overlay'
-import {
-  computeFitScale,
-  flog,
-  getCellWidth,
-  getTotalScale,
-  updateTransform
-} from './viewport-transform'
+import { computeFitScale, flog, updateTransform } from './viewport-transform'
+import { getCellWidth, getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
+import type { TerminalViewportChange } from './document-host-seams'
 import { scheduleDocumentFrame } from './document-frame-registry'
+import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
-/** The narrowest grid a fit or a text-scale change will fit to. */
-export const MIN_FIT_COLS = 20
-
-export function getCellHeight(scope: TerminalDocumentScope) {
-  if (!scope.term || !scope.term._core) {
-    return 15
-  }
-  const core = scope.term._core
-  if (core._renderService && core._renderService.dimensions) {
-    return core._renderService.dimensions.css.cell.height || 15
-  }
-  return 15
-}
-
-// Why: clamp pan so the terminal content always covers the viewport
-// when zoomed in. When content is smaller than viewport in a
-// dimension, pin to top-left (no floating in the middle).
+// Keep content covering the viewport; smaller dimensions pin top-left rather than floating.
 export function clampPan(scope: TerminalDocumentScope) {
   if (!scope.term || !scope.term.element) {
     return
@@ -33,8 +14,7 @@ export function clampPan(scope: TerminalDocumentScope) {
   const ts = getTotalScale(scope)
   const cw = scope.term.element.scrollWidth * ts
   const ch = scope.term.element.scrollHeight * ts
-  const vpW = window.innerWidth
-  const vpH = window.innerHeight
+  const { width: vpW, height: vpH } = scope.viewportRect()
   if (cw > vpW) {
     scope.panX = Math.min(0, Math.max(vpW - cw, scope.panX))
   } else {
@@ -47,24 +27,17 @@ export function clampPan(scope: TerminalDocumentScope) {
   }
 }
 
-// Why: intentional no-op. Mobile replays a live PTY snapshot then applies
-// live cursor-relative chunks from that same PTY; resizing only the WebView
-// xterm changes cursor coordinates and makes TUI repaint chunks duplicate or
-// overlap. Kept as a no-op so its call sites stay legible.
+// Intentional no-op: resizing only phone xterm would change cursor coordinates and corrupt subsequent live PTY repaints.
 export function adjustRowsForViewport() {}
 
-// Why: cold-start fit. After init() opens xterm, the renderer needs
-// several frames before cell dimensions are computed. Reading too early
-// gives cellWidth=0 (renderer service not ready) or scrollWidth=0 (DOM
-// not laid out), and computeFitScale returns 1 → no zoom.
-//
-// Gate: cellWidth × cols is the canonical "logical width" of the grid
-// and reflects xterm's layout decision, independent of buffer content.
-// We commit when cellWidth becomes positive (renderer ready). Fallback:
-// if cellWidth never becomes available, gate on stable positive
-// scrollWidth (xterm rendered something). Cap at 60 frames (~1s @60Hz)
-// so a backgrounded WebView never spins forever.
+// Cold xterm layout needs frames before cells are measured; prefer cell width, fall back to stable scrollWidth, and bound retries.
 const FIT_RETRY_MAX_FRAMES = 60
+
+function isViewportShown(scope: TerminalDocumentScope) {
+  const { width, hidden } = scope.viewportRect()
+  return hidden !== true && Number.isFinite(width) && width > 0
+}
+
 export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
   if (!scope.term || !scope.term.element) {
     return
@@ -77,6 +50,11 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
       return
     }
     if (!scope.term || !scope.term.element) {
+      return
+    }
+    // Hidden grids may not measure cells; defer fit until shown.
+    if (!isViewportShown(scope)) {
+      scope.fitPending = reason
       return
     }
     attempts++
@@ -117,10 +95,9 @@ export function commitFitScale(
     return
   }
   const preSnapScale = computeFitScale(scope)
+  scope.fitPending = null
   scope.currentScale = preSnapScale
-  // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
-  // sub-pixels) snap to 1 to avoid imperceptible shrinkage that prevents
-  // a second applyFitScale from observing a "no-op needed" state.
+  // Snap near-one fits to one so sub-pixel scrollbars cannot create endless non-noop fits.
   if (scope.currentScale >= 0.95) {
     scope.currentScale = 1
   }
@@ -133,9 +110,9 @@ export function commitFitScale(
 
   const cellW = getCellWidth(scope)
   const sw = scope.term.element.scrollWidth
-  const vpW = window.innerWidth
+  const vpW = scope.viewportRect().width
   const expectedW = cellW * scope.term.cols
-  const suspect = scope.currentScale === 1 && scope.term.cols > 0 && expectedW > vpW + 1 // expected wider than viewport but no zoom
+  const suspect = scope.currentScale === 1 && scope.term.cols > 0 && expectedW > vpW + 1
   if (suspect) {
     flog(scope, 'commit-SUSPECT', {
       reason: reason,
@@ -151,34 +128,29 @@ export function commitFitScale(
     })
   }
   repositionOverlay(scope)
+  // Scale changes drawn row pitch even without new terminal output.
+  emitKeyboardAvoidanceMetrics(scope)
 }
 
-/**
- * The refit every host needs: the viewport changed, so the scale the fit was computed against is
- * gone. A keyboard opening or closing, an orientation change, a shell resizing the container.
- *
- * Owned here because the refit is this module's own work — it was reached through the WebView's
- * message bridge only because that was where the listener happened to be installed, and the page
- * had to copy the five calls into its mount to get it at all (ruling 24).
- */
+// Viewport resize invalidates fit for every host, including keyboard and orientation changes.
 export function startFitScale(scope: TerminalDocumentScope) {
-  const refit = () => {
+  const refit = (change: TerminalViewportChange) => {
+    // Reshowing the same box preserves pan/zoom unless a hidden fit was deferred.
+    if (change === 'shown') {
+      if (scope.fitPending !== null) {
+        applyFitScale(scope, scope.fitPending)
+      }
+      return
+    }
     applyFitScale(scope, 'window-resize')
     adjustRowsForViewport()
     repositionOverlay(scope)
     clampPan(scope)
     updateTransform(scope)
   }
-  window.addEventListener('resize', refit)
-  scope.removeViewportRefit = () => {
-    window.removeEventListener('resize', refit)
-  }
+  scope.removeViewportRefit = scope.observeViewport(refit)
 }
 
-/**
- * Ruling 21: the retry loop is abandoned by bumping the token it compares itself against, which is
- * how it already abandons a superseded attempt.
- */
 export function stopFitScale(scope: TerminalDocumentScope) {
   scope.fitRetryToken++
   if (scope.removeViewportRefit) {

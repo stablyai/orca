@@ -1,10 +1,4 @@
-/**
- * Shared harness for exercising the daemon's generated bash rcfile against a real
- * interactive bash, and asserting the OSC 133 command lifecycle it must emit.
- *
- * Why its own module: both the launch-config suite and the bash-wrapper suite
- * need it, and duplicating a live-shell harness invites the two copies to drift.
- */
+// Exercise generated rcfiles in real interactive bash for both launch-config and wrapper tests.
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { writeFileSync } from 'node:fs'

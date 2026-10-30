@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 
-/** TabGroupPanel's root className: pane borders/dimming, composed via cn() so no computed
+/** TabGroupPanel's root className: pane borders, composed via cn() so no computed
  *  fragment is ever spliced into another template literal. */
 export function tabGroupPanelFrameClassName(args: {
   hasSplitGroups: boolean
@@ -23,9 +23,7 @@ export function tabGroupPanelFrameClassName(args: {
     isFocused
   } = args
   return cn(
-    // Why: vertical borders stay `border-border` so the focus highlight (--accent ~#f5f5f5 in
-    // light) doesn't paint a near-white strip by the resize handle; only the bottom border
-    // changes on focus. Unfocused split groups dim subtly so the focused one reads as selected.
+    // Keep vertical seams neutral and change only the bottom focus border.
     `group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
       hasSplitGroups
         ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
@@ -35,7 +33,7 @@ export function tabGroupPanelFrameClassName(args: {
             touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
           } border-border ${
             isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
-          } ${isFocused ? '' : 'opacity-95'}`
+          }`
         : ''
     }`
   )

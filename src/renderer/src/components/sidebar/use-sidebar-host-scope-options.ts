@@ -8,9 +8,7 @@ import {
   type SidebarHostScopeOption
 } from './sidebar-host-options'
 
-/** Shared host-scope derivation for the sidebar scope strip and the workspace
- * options menu so both surfaces consume the same live runtime status without
- * duplicating store wiring. */
+/** Share live host derivation between the scope strip and workspace options. */
 export function useSidebarHostScopeOptions(): {
   hostOptions: SidebarHostOption[]
   hostScopeOptions: SidebarHostScopeOption[]
@@ -21,6 +19,8 @@ export function useSidebarHostScopeOptions(): {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const wslHostStatuses = useAppStore((s) => s.wslHostStatuses)
+  const wslHostServerFilesMissing = useAppStore((s) => s.wslHostServerFiles === 'missing')
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const hostOptions = useMemo(
@@ -32,7 +32,10 @@ export function useSidebarHostScopeOptions(): {
         settings,
         runtimeEnvironments,
         runtimeStatusByEnvironmentId,
-        hostLabelOverrides
+        hostLabelOverrides,
+        wslHostStatuses,
+        wslHostsEnabled: settings?.experimentalWslHosts === true,
+        wslHostServerFilesMissing
       }),
     [
       repos,
@@ -41,7 +44,9 @@ export function useSidebarHostScopeOptions(): {
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
-      hostLabelOverrides
+      hostLabelOverrides,
+      wslHostStatuses,
+      wslHostServerFilesMissing
     ]
   )
   const hostScopeOptions = useMemo(() => buildSidebarHostScopeOptions(hostOptions), [hostOptions])

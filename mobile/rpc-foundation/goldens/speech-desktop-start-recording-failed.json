@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "speech.desktop-start",
   "family": "speech.dictation-start",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
-  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "5d978690e3626892b83bdba64537f9b1e1bb66c2060a00517ceead042a6d2334",
-  "scenarioSha256": "75b8d1b7ed98b2bf7420986958d0a36222b007c535f85c1308b534301241ec2d",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "1cf8d4be517f": {
       "activeId": {
@@ -20,41 +11,7 @@
       "idle": true,
       "started": "unstarted"
     },
-    "217153ab0a32": {
-      "name": "speech.dictation.cancel#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.cancel"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "dictation-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "cancelled": true
-          }
-        }
-      }
-    },
-    "3b5708754539": {
+    "4c42677aca21": {
       "name": "speech.dictation.start#1",
       "ordinal": 1,
       "args": [
@@ -71,7 +28,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "timeoutMs": 30000
           }
         }
       ],
@@ -84,6 +41,40 @@
           "ok": true,
           "result": {
             "started": true
+          }
+        }
+      }
+    },
+    "4c97e2d0e296": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "cancelled": true
           }
         }
       }
@@ -120,7 +111,7 @@
       {
         "id": "rolled-back",
         "observation": {
-          "sender": ["3b5708754539", "217153ab0a32"],
+          "sender": ["4c42677aca21", "4c97e2d0e296"],
           "payloads": ["a7ddd021010a", "d6e61920633f"],
           "settlements": {
             "start": "7a657475cacc"

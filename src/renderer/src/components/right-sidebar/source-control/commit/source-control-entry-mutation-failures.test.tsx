@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   toastDismiss: vi.fn<(id: string) => void>(),
   stagePath: vi.fn(),
   unstagePath: vi.fn(),
+  bulkUnstagePaths: vi.fn(),
   discardPath: vi.fn()
 }))
 
@@ -21,12 +22,12 @@ vi.mock('@/components/editor/editor-autosave', () => ({
   notifyEditorExternalFileChange: vi.fn(),
   requestEditorSaveQuiesce: vi.fn(async () => {})
 }))
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
   stageRuntimeGitPath: (...args: unknown[]) => mocks.stagePath(...args),
   unstageRuntimeGitPath: (...args: unknown[]) => mocks.unstagePath(...args),
   discardRuntimeGitPath: (...args: unknown[]) => mocks.discardPath(...args),
   bulkDiscardRuntimeGitPaths: vi.fn(),
-  bulkUnstageRuntimeGitPaths: vi.fn()
+  bulkUnstageRuntimeGitPaths: (...args: unknown[]) => mocks.bulkUnstagePaths(...args)
 }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, {
@@ -36,7 +37,7 @@ vi.mock('@/store', () => ({
 
 import { useSourceControlDiscardConfirmation } from './use-discard-confirmation'
 import { useSourceControlEntryMutations } from './use-entry-mutations'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 const EMPTY_GROUPS: SourceControlEntryGroups = { unstaged: [], staged: [], untracked: [] }
 
@@ -60,7 +61,7 @@ function clickRetry(): void {
 function renderMutations() {
   return renderHook(() =>
     useSourceControlEntryMutations({
-      activeRepoSettings: null,
+      activeRepoTarget: { kind: 'local' },
       activeWorktreeId: 'wt-1',
       worktreePath: '/repo',
       refreshActiveGitStatusAfterMutation: async () => {}
@@ -71,7 +72,7 @@ function renderMutations() {
 function renderDiscard(discardSingle: (path: string) => Promise<void>) {
   return renderHook(() =>
     useSourceControlDiscardConfirmation({
-      activeRepoSettings: null,
+      activeRepoTarget: { kind: 'local' },
       activeWorktreeId: 'wt-1',
       worktreePath: '/repo',
       grouped: EMPTY_GROUPS,
@@ -118,14 +119,12 @@ describe('source-control entry mutation failures', () => {
 
     expect(mocks.stagePath).toHaveBeenCalledTimes(2)
     expect(mocks.stagePath.mock.calls[1]?.[1]).toBe('src/app.ts')
-    // Why: the retry succeeded, so no second failure toast — and the first one is cleared.
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('source-control-entry-mutation')
   })
 
   it('re-raises the failure toast when the retry fails again', async () => {
-    // Why: sonner removes an action-clicked toast by id ~200ms later, so a fast re-failure could be
-    // swallowed; the toast must survive the retry and show the second error.
+    // Preserve fast retry failures against Sonner's ~200ms delayed action-click removal.
     mocks.stagePath.mockRejectedValueOnce(new Error('index.lock exists'))
     mocks.stagePath.mockRejectedValueOnce(new Error('still locked'))
     const { result } = renderMutations()
@@ -152,6 +151,25 @@ describe('source-control entry mutation failures', () => {
     })
 
     expect(lastToast().title).toBe('Failed to unstage “src/app.ts”')
+  })
+
+  it('unstages both rename paths in one request and retains them on retry', async () => {
+    mocks.bulkUnstagePaths.mockRejectedValueOnce(new Error('index.lock exists'))
+    mocks.bulkUnstagePaths.mockResolvedValueOnce(undefined)
+    const { result } = renderMutations()
+
+    await act(async () => {
+      await result.current.handleUnstage('src/new.ts', 'src/old.ts')
+    })
+    await act(async () => {
+      clickRetry()
+    })
+
+    expect(mocks.unstagePath).not.toHaveBeenCalled()
+    expect(mocks.bulkUnstagePaths).toHaveBeenCalledTimes(2)
+    for (const call of mocks.bulkUnstagePaths.mock.calls) {
+      expect(call[1]).toEqual(['src/new.ts', 'src/old.ts'])
+    }
   })
 
   it('leaves a successful stage silent, and clears a stale failure it supersedes', async () => {

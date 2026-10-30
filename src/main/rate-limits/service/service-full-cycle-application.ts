@@ -1,5 +1,6 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
+import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
+import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
@@ -25,6 +26,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      zcodeConfigChanged,
+      zcodeGeneration,
+      antigravityGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -34,7 +38,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      cursorResultPromise,
+      zcodeResultPromise,
+      antigravityResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -79,9 +86,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
-
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
         ? opencodeGoResult.value
@@ -125,14 +129,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHome = this.resolveCodexHome(codexTarget)
+    const latestCodexHome = await this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
-    // Why: a finishing skip has no provenance, so an in-flight result must never be
-    // applied as though the target had become the system default (#STA-4422).
+    // Skips have no provenance and must not reattribute in-flight usage to System Default (#STA-4422).
     const shouldApplyCodex =
       !codexFetchGated &&
       !latestCodexHome.skip &&
@@ -140,7 +143,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath)
     const codexBecameUnavailable =
       !codexFetchGated && latestCodexHome.skip && codexGeneration === this.codexFetchGeneration
-    // Why: a gated cycle made no Claude attempt; applying its passthrough result would grow the failure streak and reset stale-policy clocks for free.
+    // Gated Claude made no attempt; passthrough must not advance failure or stale-policy clocks.
     const shouldApplyClaude =
       !claudeFetchGated &&
       claudeGeneration === this.claudeFetchGeneration &&
@@ -156,7 +159,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.trackActiveFailureStreak('codex', codex)
     }
     this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -165,7 +167,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.trackActiveFailureStreak('minimax', miniMax)
     }
 
-    // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
+    // Both generation and provenance must match before an in-flight Codex result can publish.
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
@@ -183,7 +185,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
@@ -191,25 +192,66 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const grokResult = await grokResultPromise
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
+      grokResultPromise,
+      cursorResultPromise,
+      zcodeResultPromise,
+      antigravityResultPromise
+    ])
     if (signal.aborted) {
       return
     }
-    const grok =
-      grokResult.status === 'fulfilled'
-        ? grokResult.value
-        : ({
-            provider: 'grok',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+    const grok = settleSiblingProviderResult('grok', grokSettled)
+    const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
+    const zcode = isZcodeUsageCredentialCurrent(settledZcode)
+      ? settledZcode
+      : {
+          ...settledZcode,
+          status: 'unavailable' as const,
+          session: null,
+          weekly: null,
+          monthly: null,
+          error: 'ZCode Coding Plan account changed during refresh'
+        }
+    const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
+    const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
+    const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
+    // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
+    const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
+    const cursorAccount = cursor.usageMetadata?.authProvenance
+    const cursorAccountChanged =
+      previousCursorAccount !== undefined &&
+      cursorAccount !== undefined &&
+      previousCursorAccount !== cursorAccount
+    const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
+    const zcodeAccount = zcode.usageMetadata?.authProvenance
+    const sameZcodeAccount =
+      previousZcodeAccount !== undefined &&
+      zcodeAccount !== undefined &&
+      previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
+    this.trackActiveFailureStreak('cursor', cursor)
+    if (shouldApplyZcode) {
+      this.trackActiveFailureStreak('zcode', zcode)
+    }
+    if (shouldApplyAntigravity) {
+      this.trackActiveFailureStreak('antigravity', antigravity)
+    }
     this.updateState({
       ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok)
+      grok: this.applyStalePolicy(grok, previousState.grok),
+      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      zcode: !shouldApplyZcode
+        ? this.state.zcode
+        : zcodeConfigChanged
+          ? zcode
+          : zcode.status === 'error' && !sameZcodeAccount
+            ? zcode
+            : this.applyStalePolicy(zcode, previousState.zcode),
+      antigravity: shouldApplyAntigravity
+        ? this.applyStalePolicy(antigravity, previousState.antigravity)
+        : this.state.antigravity
     })
   }
 }

@@ -126,6 +126,23 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     expect(second.start).not.toHaveBeenCalled()
   })
 
+  it('reports a page as hosted only by the live composition of its own environment', async () => {
+    const cleanup = deferred<void>()
+    const composition = createComposition(undefined, undefined, undefined, false, cleanup.promise)
+    composition.hostsPage.mockImplementation((browserPageId) => browserPageId === 'page-a')
+    composition.replaceAuthority.mockRejectedValueOnce(new Error('replacement attach failed'))
+    const registry = new PairedRuntimeBrowserClientHostRegistry({
+      createComposition: vi.fn(() => composition)
+    })
+    await registry.start(input(11))
+
+    expect(registry.hostsPage('environment-a', 'page-a')).toBe(true)
+    expect(registry.hostsPage('environment-a', 'page-b')).toBe(false)
+    expect(registry.hostsPage('environment-b', 'page-a')).toBe(false)
+    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow()
+    expect(registry.hostsPage('environment-a', 'page-a')).toBe(false)
+  })
+
   it('closes only the selected environment and permits a later exact restart', async () => {
     const first = createComposition()
     const second = createComposition()
@@ -177,6 +194,7 @@ function createComposition(
     }),
     replaceAuthority: vi.fn(async () => ({ ...authority, authorityRuntimeId: 'runtime-b' })),
     retirePage: vi.fn(async () => true),
+    hostsPage: vi.fn((_browserPageId: string) => false),
     close: vi.fn(async () => {
       if (order && closeLabel) {
         order.push(closeLabel)

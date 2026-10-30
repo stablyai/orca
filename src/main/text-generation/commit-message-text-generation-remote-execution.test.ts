@@ -80,11 +80,7 @@ describe('generateCommitMessageFromContext', () => {
   })
 
   it('keeps the unverifiable wording when the link is declared lost instead of timing out', async () => {
-    // Declaring a wedged link lost disposes the mux before the 30s response deadline, so this leg
-    // now sees CONNECTION_LOST where it used to see SSH_MUX_REQUEST_TIMEOUT. Both mean the frame
-    // reached the wire and no answer came back, so both must keep "may still be running" — falling
-    // through to "could not be reached" asserts absence the client cannot observe
-    // (docs/reference/ssh-execution-boundary.md).
+    // Both lost mux and response timeout mean dispatched work may still run; neither proves the host was never reached (ssh-execution-boundary.md).
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',

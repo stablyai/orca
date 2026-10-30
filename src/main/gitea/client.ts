@@ -16,9 +16,7 @@ import {
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
-// Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
-// reviewer data per PR). The default 5s cap aborted responses right as they
-// completed, so the work was discarded and retried on the next refresh (#8807).
+// Forgejo may spend several seconds loading reviewers for one pulls page.
 const PULL_REQUEST_LIST_TIMEOUT_MS = 15_000
 const PULL_REQUEST_PAGE_LIMIT = 50
 const MAX_PULL_REQUEST_PAGES = 5
@@ -39,6 +37,8 @@ export type GiteaAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  // Why: only a single-resource fetch may read 404 as "absent". See requestJsonAtBase.
+  allowNotFound?: boolean
 }
 
 function envValue(name: string): string | null {
@@ -81,9 +81,7 @@ async function requestJsonAtBase<T>(
   baseUrl: string,
   path: string,
   options: RequestOptions = {},
-  // Why: the existing-review lookup behind Create must distinguish a real
-  // transport/auth failure from an accepted "no PR". When true, a failed request
-  // throws instead of collapsing to null so callers never report false not_found.
+  // Creation needs transport/auth failures distinguished from confirmed absence.
   throwOnFailure = false
 ): Promise<T | null> {
   const config = getAuthConfig()
@@ -97,7 +95,8 @@ async function requestJsonAtBase<T>(
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
+      // Why: listing 404s still signal repository or access failures.
+      if (throwOnFailure && !(options.allowNotFound && response.status === 404)) {
         throw new Error(`Gitea request failed: HTTP ${response.status}`)
       }
       return null
@@ -128,10 +127,11 @@ function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
   return `${configuredApiBaseUrl(repo)}/${encodedRepoPath(repo)}`
 }
 
-/** Invalidate the shared /pulls scan after Orca itself creates a PR so the
- *  next worktree-card refresh sees it instead of a cached miss. */
+/** Invalidate after creation so card refreshes cannot reuse a cached miss. */
 export function invalidateGiteaPullRequestScanForRepo(repo: GiteaRepoRef): void {
-  invalidateGiteaPullRequestScan(giteaPullRequestScanKey(repo))
+  const repoKey = giteaPullRequestScanKey(repo)
+  invalidateGiteaPullRequestScan(repoKey)
+  invalidateGiteaPullRequestScan(`${repoKey}::strict`)
 }
 
 async function getCommitStatus(
@@ -259,9 +259,7 @@ export async function getGiteaPullRequestForBranch(
 
   if (branchName) {
     const pullRequests = await scanGiteaPullRequests(
-      // Why: throwing scans keep a separate cache namespace so they never reuse a
-      // prior swallowing scan's cached-empty from a failed page fetch, which would
-      // otherwise let a real lookup failure masquerade as "no PR".
+      // Strict scans must not inherit an empty result produced by a failed lenient scan.
       throwOnFailure ? `${giteaPullRequestScanKey(repo)}::strict` : giteaPullRequestScanKey(repo),
       (page) =>
         requestJson<RawGiteaPullRequest[]>(
@@ -283,8 +281,6 @@ export async function getGiteaPullRequestForBranch(
     )
     const raw = pullRequests.find((item) => matchesBranch(item, branchName))
     if (raw) {
-      // Why (#9171): discard a non-open implicit branch match on the repo
-      // default branch and fall through to the linked-number fallback below.
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
         state: mapGiteaPullRequestState(raw),
         reviewNumber: raw.number ?? null,
@@ -306,17 +302,13 @@ export async function getGiteaPullRequestForBranch(
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
     `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
-    {},
+    { allowNotFound: true },
     throwOnFailure
   )
   return raw ? normalizePullRequest(repo, raw) : null
 }
 
-/**
- * Existing-review lookup that surfaces transport/auth failures instead of
- * collapsing them to null, so a failed lookup becomes
- * `reviewLookupOutcome: 'unavailable'` rather than a false "No pull request found".
- */
+/** Surface lookup failures as unavailable rather than a false missing review. */
 export function getGiteaPullRequestForBranchOrThrow(
   repoPath: string,
   branch: string,

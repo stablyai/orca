@@ -2,28 +2,7 @@ import type { IPty } from 'node-pty'
 import { createRequire } from 'node:module'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
-/**
- * Job-object ownership for a ConPTY's process tree.
- *
- * Before this, Orca answered "is this tree mine, and how do I kill it?" by
- * scraping the process table, walking parent pids back to itself, and then
- * running `taskkill /T /F` only if the walk said yes. Every step of that is a
- * guess:
- *
- * - a pid walk cannot survive pid reuse, so teardown had to refuse whenever it
- *   was unsure, and a refused kill is an orphaned agent tree holding the
- *   worktree directory open (#9045, #10475, #10087);
- * - a descendant that reparented is invisible to the walk entirely;
- * - the scrape itself could be blocked by policy, which read as "no evidence".
- *
- * A job object replaces the inference with a handle. node-pty puts each shell
- * into its own job at creation, before it can spawn anything, so membership is
- * the kernel's answer rather than ours.
- *
- * The job is not kill-on-close: it makes an explicit teardown exact, and
- * deliberately does not change what a clean shell exit means for anything the
- * user backgrounded.
- */
+/** Kernel job handles own ConPTY descendants across PID reuse/reparenting (#9045/#10475/#10087). Per-PTY jobs make explicit teardown exact without kill-on-close, preserving background children on clean shell exit. */
 
 const requireFromMain = createRequire(__filename)
 
@@ -31,6 +10,22 @@ type ConptyNative = {
   terminateJob: (id: number, shellPid: number) => boolean
   listJobProcessIds: (id: number, shellPid: number) => number[] | null
   assignCurrentProcessToJob: () => boolean
+  assignCurrentProcessToStrictJob?: () => boolean
+  /** Absent on builds that predate the terminal process ceiling. */
+  setActiveProcessLimit?: (limit: number) => boolean
+}
+
+type SelfOwnedPty = IPty & {
+  jobRootProcessIsWrapper?: true
+  shellProcessId?: number
+  terminateOwnedTree?: () => JobTerminationOutcome
+  listOwnedProcessIds?: () => readonly number[] | null
+}
+
+/** The gate's pid never proves that its user shell remains alive. */
+export function ptyShellProcessId(proc: IPty): number | undefined {
+  const owned: SelfOwnedPty = proc
+  return owned.jobRootProcessIsWrapper ? owned.shellProcessId : proc.pid
 }
 
 let cachedNative: ConptyNative | null | undefined
@@ -49,8 +44,7 @@ function loadConptyNative(): ConptyNative | null {
       loadNativeModule: (name: string) => { module: unknown }
     }
     const native = loadNativeModule('conpty').module as Partial<ConptyNative>
-    // Why feature-detect: a node-pty rebuilt from unpatched sources exports
-    // neither symbol, and calling through would throw on every teardown.
+    // Feature-detect patched symbols; unpatched node-pty must degrade without throwing.
     cachedNative =
       typeof native?.terminateJob === 'function' && typeof native?.listJobProcessIds === 'function'
         ? (native as ConptyNative)
@@ -61,14 +55,7 @@ function loadConptyNative(): ConptyNative | null {
   return cachedNative
 }
 
-/**
- * node-pty's per-terminal handle id, paired with the shell pid that proves it.
- *
- * Neither is on the public `IPty` surface, so read defensively. The pid is not
- * belt-and-braces: the winpty backend mints `pty` ids from its own counter and
- * the JS layer stores both in the same field, so an id alone can name a
- * different, live ConPTY pane. The native side refuses on a pid mismatch.
- */
+/** Pair private PTY ID with shell PID defensively: winpty's separate counter can collide with a live ConPTY ID; native code rejects mismatches. */
 function ptyJobTarget(proc: IPty): { id: number; shellPid: number } | null {
   const id = (proc as unknown as { _pty?: unknown })._pty
   const shellPid = proc.pid
@@ -80,15 +67,25 @@ function ptyJobTarget(proc: IPty): { id: number; shellPid: number } | null {
 
 export type JobTerminationOutcome = 'terminated' | 'unavailable'
 
-/**
- * Kill a PTY's entire process tree.
- *
- * Returns `unavailable` — never a false `terminated` — when the tree has no
- * job. Callers must degrade to the older best-effort path rather than treat
- * that as success, because "we could not tell" is exactly the state that used
- * to be misread as "nothing to kill".
- */
+/** Unavailable job ownership is never successful termination; callers must use their fallback. */
 export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
+  const owned: SelfOwnedPty = proc
+  if (typeof owned.terminateOwnedTree === 'function') {
+    let outcome: JobTerminationOutcome
+    try {
+      outcome = owned.terminateOwnedTree()
+    } catch {
+      return 'unavailable'
+    }
+    if (outcome === 'terminated') {
+      recordSelfInitiatedTreeKill({
+        pid: proc.pid,
+        site: 'windows-pty-job-teardown',
+        scope: 'win-pty-job'
+      })
+    }
+    return outcome
+  }
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
   if (!target || !native) {
@@ -103,10 +100,7 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
   if (!terminated) {
     return 'unavailable'
   }
-  // Outside the try: that catch is the native-refusal contract, and a throw from
-  // the breadcrumb path would downgrade a real termination to `unavailable`,
-  // escalating callers to the pid-addressed taskkill this instrumentation exists
-  // to constrain.
+  // Keep diagnostics outside the native catch: a breadcrumb throw must not downgrade termination and escalate taskkill.
   recordSelfInitiatedTreeKill({
     pid: target.shellPid,
     site: 'windows-pty-job-teardown',
@@ -115,23 +109,16 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
   return 'terminated'
 }
 
-/**
- * Pids still alive in a PTY's tree, or null when there is no answer.
- *
- * Measured on Windows 11: once the shell exits, node-pty closes the job, so a
- * terminated tree reports **null**, not `[]`. (Its handle record now outlives
- * the shell until `kill()` runs — see config/patches/node-pty@1.1.0.patch — but
- * the nulled job handle is what makes the answer null either way.)
- * Null therefore means "unverifiable" in the sense of
- * docs/reference/ssh-execution-boundary.md — this build has no job support,
- * the terminal is not a ConPTY, or it is no longer tracked. It is never
- * evidence that processes died.
- *
- * The value this does add is descendant liveness for a tree that IS still
- * tracked: a pane whose shell is alive can be asked what is running under it,
- * including children that detached from the console.
- */
+/** Null means unverifiable, never dead: shell exit closes the job even while its handle record survives until kill(). Tracked jobs include detached descendants; see docs/reference/ssh-execution-boundary.md. */
 export function listPtyJobProcessIds(proc: IPty): readonly number[] | null {
+  const owned: SelfOwnedPty = proc
+  if (typeof owned.listOwnedProcessIds === 'function') {
+    try {
+      return owned.listOwnedProcessIds()
+    } catch {
+      return null
+    }
+  }
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
   if (!target || !native) {
@@ -144,31 +131,7 @@ export function listPtyJobProcessIds(proc: IPty): readonly number[] | null {
   }
 }
 
-/**
- * Put this process in a kill-on-close job so its descendants die with it.
- *
- * Why this is separate from the per-PTY jobs: those cannot carry
- * KILL_ON_JOB_CLOSE, because their handle is released when the shell exits and
- * that would reap whatever the user had backgrounded. This one is released only
- * when the process itself dies, so it reaps a crashed host without changing
- * what a clean exit means. Children inherit membership, so the per-PTY jobs
- * nest inside it and every pty is covered.
- *
- * Call it from the pty spawn path, not from startup: resolving the native
- * module loads the ConPTY addon, and paying that before the daemon publishes
- * its endpoint delays readiness — the boot smoke test caught exactly that.
- *
- * Call it BEFORE the first pty. `AssignProcessToJobObject` adds only the named
- * process; children inherit membership, but a pty that already exists does not
- * join retroactively and would not be reaped.
- *
- * Call it from the terminal daemon, not from the app: an app-main crash must
- * still leave sessions alive, which is what win-crash-survival-e2e asserts. A
- * daemon death reaping its shells is the intended change (#9195, #10415).
- *
- * Returns false when the OS refuses -- an outer job that forbids nesting -- in
- * which case orphan behaviour is simply what it was before.
- */
+/** Assign the terminal daemon to a separate kill-on-close job before its first PTY; existing children cannot join retroactively. Do this in the spawn path after readiness to avoid loading ConPTY during startup. Never assign app-main: sessions must survive its crashes. Per-PTY jobs stay non-kill-on-close to preserve clean-exit background children. Refused nesting returns false (#9195/#10415). */
 let hostJobAssigned: boolean | null = null
 
 export function assignHostProcessToKillOnCloseJob(): boolean {
@@ -179,6 +142,19 @@ export function assignHostProcessToKillOnCloseJob(): boolean {
   return hostJobAssigned
 }
 
+/** Native messaging helpers must inherit ownership even when they request breakaway. */
+export function assignHostProcessToStrictKillOnCloseJob(): boolean {
+  const native = nativeLoader()
+  if (typeof native?.assignCurrentProcessToStrictJob !== 'function') {
+    return false
+  }
+  try {
+    return native.assignCurrentProcessToStrictJob()
+  } catch {
+    return false
+  }
+}
+
 function assignHostProcessOnce(): boolean {
   const native = nativeLoader()
   if (!native) {
@@ -186,6 +162,19 @@ function assignHostProcessOnce(): boolean {
   }
   try {
     return native.assignCurrentProcessToJob()
+  } catch {
+    return false
+  }
+}
+
+/** An ActiveProcessLimit for every later ConPTY's job; false when this build cannot set one. */
+export function setPtyActiveProcessLimit(limit: number): boolean {
+  const native = nativeLoader()
+  if (typeof native?.setActiveProcessLimit !== 'function') {
+    return false
+  }
+  try {
+    return native.setActiveProcessLimit(limit)
   } catch {
     return false
   }
@@ -201,4 +190,16 @@ export function __setConptyJobNativeForTests(loader?: () => ConptyNative | null)
   nativeLoader = loader ?? loadConptyNative
   cachedNative = undefined
   hostJobAssigned = null
+}
+
+type UnreadyWindowsPty = IPty & { _agent?: { kill?: () => void } }
+
+// Bypass node-pty's output-deferred kill to release silent ConPTY hosts, input pipes and output workers immediately.
+export function killConptyNow(proc: IPty): void {
+  const pane: UnreadyWindowsPty = proc
+  try {
+    pane._agent?.kill?.()
+  } catch {
+    // Best effort; the host job still reaps the console host with the daemon.
+  }
 }

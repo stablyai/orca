@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 import {
-  FEATURE_WALL_SETUP_STEPS,
-  type FeatureWallSetupStepId
-} from '../../../../shared/feature-wall-setup-steps'
-import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+  getFeatureWallSetupProgress,
+  getSetupGuideProgressSnapshot,
+  hasCompletedPreBrowserSetup,
+  type FeatureWallSetupProgressInput
+} from '../feature-wall/feature-wall-setup-progress'
 import {
   getSetupGuideBrowserMilestoneAwareProgress,
   shouldMarkBrowserMilestoneLegacyComplete
@@ -17,93 +20,86 @@ import {
   settleSetupScriptProbe
 } from './setup-guide-progress-readiness'
 
-function makePreBrowserDoneStepState(): Partial<Record<FeatureWallSetupStepId, boolean>> {
-  return Object.fromEntries(
-    FEATURE_WALL_SETUP_STEPS.map((step) => [step.id, step.id !== 'browser'])
-  ) as Partial<Record<FeatureWallSetupStepId, boolean>>
-}
-
-function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): FeatureWallSetupProgress {
+function makeLegacyInput(
+  overrides: Partial<FeatureWallSetupProgressInput> = {}
+): FeatureWallSetupProgressInput {
   return {
-    ready: true,
-    stepDone: {
-      'default-agent': false,
-      'add-two-repos': false,
-      notifications: false,
-      'two-worktrees': false,
-      browser: false,
-      'task-sources': false,
-      'agent-capabilities': false,
-      'setup-script': false
-    },
-    coreDoneCount: 0,
-    coreTotal: FEATURE_WALL_SETUP_STEPS.length,
+    settings: createGlobalSettingsFixture({
+      defaultTuiAgent: 'claude',
+      notifications: {
+        ...createGlobalSettingsFixture().notifications,
+        enabled: true,
+        agentTaskComplete: true
+      }
+    }),
+    featureInteractions: { 'terminal-pane-split': { firstInteractedAt: 1, interactionCount: 1 } },
+    hasConnectedTaskSource: true,
+    browserUseSkillInstalled: true,
+    computerUseSkillInstalled: true,
+    computerUsePermissionsReady: true,
+    orchestrationSkillInstalled: true,
+    gitRepoCount: 2,
+    worktreesByRepo: { repo1: [makeWorktree({ id: 'linked', repoId: 'repo1' })] },
+    hasSetupScript: true,
     ...overrides
   }
 }
 
 describe('browser milestone legacy setup guide progress', () => {
-  it('marks old profiles as legacy-complete when pre-browser steps were already done', () => {
-    expect(
-      shouldMarkBrowserMilestoneLegacyComplete({
-        stepDone: makePreBrowserDoneStepState(),
-        historicalSplitTerminalDone: true,
+  it.each([
+    ['blank', true, false, 7],
+    [null, false, false, 6],
+    ['claude', true, true, 8]
+  ] as const)(
+    'keeps the historical upgrade contract for default %s',
+    (defaultTuiAgent, done, legacy, count) => {
+      const input = makeLegacyInput()
+      if (input.settings) {
+        input.settings.defaultTuiAgent = defaultTuiAgent
+      }
+      const { rawProgress: raw, preBrowserSetupComplete } = getSetupGuideProgressSnapshot(input)
+      const legacyComplete = shouldMarkBrowserMilestoneLegacyComplete({
+        preBrowserSetupComplete,
         setupGuideSidebarDismissed: false
       })
-    ).toBe(true)
-  })
+      const progress = getSetupGuideBrowserMilestoneAwareProgress(raw, legacyComplete)
+
+      expect(progress.stepDone['default-agent']).toBe(done)
+      expect(progress.stepDone.browser).toBe(legacy)
+      expect(progress.coreDoneCount).toBe(count)
+      expect(legacyComplete).toBe(legacy)
+    }
+  )
 
   it('does not waive browser for old profiles missing historical split completion', () => {
-    expect(
-      shouldMarkBrowserMilestoneLegacyComplete({
-        stepDone: makePreBrowserDoneStepState(),
-        historicalSplitTerminalDone: false,
-        setupGuideSidebarDismissed: false
-      })
-    ).toBe(false)
+    expect(hasCompletedPreBrowserSetup(makeLegacyInput({ featureInteractions: {} }))).toBe(false)
   })
 
   it('marks old profiles as legacy-complete when the sidebar checklist was dismissed', () => {
     expect(
       shouldMarkBrowserMilestoneLegacyComplete({
-        stepDone: {},
-        historicalSplitTerminalDone: false,
+        preBrowserSetupComplete: hasCompletedPreBrowserSetup(makeLegacyInput({ gitRepoCount: 0 })),
         setupGuideSidebarDismissed: true
       })
     ).toBe(true)
   })
 
   it('does not mark old active incomplete profiles as legacy-complete', () => {
-    expect(
-      shouldMarkBrowserMilestoneLegacyComplete({
-        stepDone: {
-          'two-worktrees': true
-        },
-        historicalSplitTerminalDone: true,
-        setupGuideSidebarDismissed: false
-      })
-    ).toBe(false)
+    expect(hasCompletedPreBrowserSetup(makeLegacyInput({ gitRepoCount: 0 }))).toBe(false)
   })
 
   it('keeps legacy-complete setup guide progress complete across all surfaces', () => {
     const progress = getSetupGuideBrowserMilestoneAwareProgress(
-      makeProgress({
-        stepDone: makePreBrowserDoneStepState() as Record<FeatureWallSetupStepId, boolean>,
-        coreDoneCount: FEATURE_WALL_SETUP_STEPS.length - 1
-      }),
+      getFeatureWallSetupProgress(makeLegacyInput({ settings: null })),
       true
     )
 
-    expect(progress.coreDoneCount).toBe(FEATURE_WALL_SETUP_STEPS.length)
-    expect(progress.stepDone.browser).toBe(true)
+    expect(progress.coreDoneCount).toBe(progress.coreTotal)
     expect(Object.values(progress.stepDone).every(Boolean)).toBe(true)
   })
 
   it('leaves fresh setup guide progress unchanged when browser is incomplete', () => {
-    const original = makeProgress({
-      stepDone: makePreBrowserDoneStepState() as Record<FeatureWallSetupStepId, boolean>,
-      coreDoneCount: FEATURE_WALL_SETUP_STEPS.length - 1
-    })
+    const original = getFeatureWallSetupProgress(makeLegacyInput())
 
     expect(getSetupGuideBrowserMilestoneAwareProgress(original, false)).toBe(original)
   })
@@ -215,18 +211,15 @@ describe('getSetupGuideProgressReady', () => {
 })
 
 describe('setup script probe readiness', () => {
-  it('derives the probe signature from runtime and ordered git repo inputs', () => {
+  it('derives the probe signature from each repo host and order', () => {
     const localSignature = getSetupScriptProbeSignature({ activeRuntimeEnvironmentId: null }, [
       { id: 'repo-a', hookSettings: undefined },
       { id: 'repo-b', hookSettings: undefined }
     ])
-    const remoteSignature = getSetupScriptProbeSignature(
-      { activeRuntimeEnvironmentId: 'runtime-1' },
-      [
-        { id: 'repo-a', hookSettings: undefined },
-        { id: 'repo-b', hookSettings: undefined }
-      ]
-    )
+    const remoteSignature = getSetupScriptProbeSignature({ activeRuntimeEnvironmentId: null }, [
+      { id: 'repo-a', hookSettings: undefined, executionHostId: 'runtime:runtime-1' },
+      { id: 'repo-b', hookSettings: undefined }
+    ])
     const reorderedSignature = getSetupScriptProbeSignature({ activeRuntimeEnvironmentId: null }, [
       { id: 'repo-b', hookSettings: undefined },
       { id: 'repo-a', hookSettings: undefined }

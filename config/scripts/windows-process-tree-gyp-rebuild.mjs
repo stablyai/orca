@@ -1,18 +1,9 @@
-/**
- * Where and how `@vscode/windows-process-tree` is rebuilt from source.
- *
- * node-gyp must run from the package's physical directory, never the
- * `node_modules` symlink/junction pnpm installs there: gyp expands the
- * node-addon-api dependency by probing node (whose cwd resolves to the
- * physical path), gets back a store-relative `../../../../node-addon-api@…`
- * hop, then resolves that hop against the rebuild cwd. From the link path the
- * hop escapes the store and configure fails with "node_addon_api.gyp not
- * found" (run 32999886072).
- */
+// Run node-gyp from physical package dir: node-addon-api probe returns store-relative hop, which escapes store and fails configure from pnpm link cwd (32999886072).
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
+import { loadedNativeBuildDir } from './native-build-entry.cjs'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
 
@@ -39,9 +30,13 @@ const CREATION_TIME_PATCH_MARKERS = [
   ['src/process.cc', 'GetProcessCreationTime(pinfo)'],
   ['src/process.cc', 'GetProcessTimes(hProcess, &creationTime'],
   ['src/process_worker.cc', 'object.Set("creationTimeMs"'],
+  ['src/addon.cc', 'exports.Set("getProcessCreationTime"'],
   ['lib/index.js', '["CreationTime"] = 4'],
+  ['lib/index.js', 'exports.getProcessCreationTime'],
   ['lib/index.ts', 'CreationTime = 4'],
-  ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number']
+  ['lib/index.ts', 'export const getProcessCreationTime'],
+  ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number'],
+  ['typings/windows-process-tree.d.ts', 'export const getProcessCreationTime']
 ]
 
 export const WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS = [
@@ -50,20 +45,33 @@ export const WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS = [
   'napi-inl.deprecated.h'
 ]
 
-export function nodeGypRebuildInvocation(arch, packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR) {
+export function nodeGypRebuildInvocation(
+  arch,
+  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR,
+  nodeGypEntry = join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js')
+) {
   return {
-    args: [
-      join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'),
-      'rebuild',
-      `--arch=${arch}`
-    ],
+    args: [nodeGypEntry, 'rebuild', `--arch=${arch}`],
     cwd: realpathSync(packageDir)
   }
 }
 
-/** The binary the addon actually loads. */
+export function nodeGypRebuildTimeoutMs(
+  moduleName,
+  { platform = process.platform, arch = process.arch, ci = process.env.CI } = {}
+) {
+  // Cold headers and toolchain discovery consumed over four minutes on Windows ARM CI.
+  return moduleName === 'node-pty' && platform === 'win32' && arch === 'arm64' && ci === 'true'
+    ? 600_000
+    : 300_000
+}
+
+/** The binary the addon actually loads: the patched lib/index.js prefers a published entry. */
 export function windowsProcessTreeAddonPath(packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR) {
-  return join(packageDir, 'build', 'Release', 'windows_process_tree.node')
+  return join(
+    loadedNativeBuildDir(packageDir, '@vscode/windows-process-tree', { platform: 'win32' }),
+    'windows_process_tree.node'
+  )
 }
 
 /** The import whose absence tells the patched binary from the published prebuilt. */
@@ -92,6 +100,42 @@ export function inspectWindowsProcessTreeAddon(addonPath) {
     return 'missing'
   }
   return readFileSync(addonPath).includes(FLAGGED_IMPORT) ? 'unpatched' : 'clean'
+}
+
+/** Only an addon built with the relay launcher patch registers this export. */
+const RELAY_LAUNCHER_EXPORT = 'spawnOutsideJob'
+
+// Require relay-launcher export marker: otherwise clean/loadable stale binary falls back to WMI denied to standard users.
+export function windowsProcessTreeAddonHasBreakawayLauncher(addonPath) {
+  return readFileSync(addonPath).includes(RELAY_LAUNCHER_EXPORT)
+}
+
+/**
+ * Why this binary cannot ship as the `arch` relay addon, or null when it can.
+ *
+ * @param {string} addonPath
+ * @param {'x64' | 'arm64'} arch
+ * @returns {string | null}
+ */
+export function windowsProcessTreeAddonDefect(addonPath, arch) {
+  const state = inspectWindowsProcessTreeAddon(addonPath)
+  if (state === 'missing') {
+    return 'it is missing'
+  }
+  if (state === 'unpatched') {
+    return `it imports ${FLAGGED_IMPORT}, so it was built from the unpatched command-line reader`
+  }
+  const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(
+    './windows-pe-machine.cjs'
+  )
+  const machine = readPeMachine(addonPath)
+  if (machine !== PE_MACHINE[arch]) {
+    return `it is ${describePeMachine(machine)}, not ${arch} (0x${PE_MACHINE[arch].toString(16)})`
+  }
+  if (!windowsProcessTreeAddonHasBreakawayLauncher(addonPath)) {
+    return `it does not export ${RELAY_LAUNCHER_EXPORT}, so it predates the relay launcher patch`
+  }
+  return null
 }
 
 export function assertWindowsProcessTreeCreationTimePatch(
@@ -124,15 +168,7 @@ export function assertWindowsProcessTreeRuntimeCreationTime(windowsProcessTree) 
   }
 }
 
-/**
- * Refuse to compile or load the upstream command-line reader.
- *
- * Unpatched, it opens every process with `PROCESS_VM_READ` and walks the PEB to
- * recover the command line -- the primitive MDE scores as credential dumping,
- * and the reason this package is patched at all. pnpm has been seen
- * materializing this CRLF package with its patch missing, so repair the source
- * from the patch file, and drop any binary that predates the repair.
- */
+// Repair missing CRLF package patch and drop stale prebuilt: upstream reader walks PEB with PROCESS_VM_READ, the MDE-flagged primitive patch removes.
 export function ensureWindowsProcessTreeCommandLinePatch(
   packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
 ) {
@@ -149,16 +185,7 @@ export function ensureWindowsProcessTreeCommandLinePatch(
       execFileSync(
         'git',
         [
-          // Why force the line-ending mode: the patch is stored LF (a contract
-          // test forbids CR bytes in it), but upstream ships this source CRLF,
-          // so its pre-image lines and the file's differ by a CR. Under
-          // `core.autocrlf=false` -- Git's own built-in default, and what
-          // "checkout as-is" selects in the Git for Windows installer -- git
-          // compares them literally, the hunk does not match, and the repair
-          // throws. `input` normalizes line endings for that comparison and
-          // nothing else, so a hunk whose real content drifted is still
-          // rejected. Measured: without it, apply exits 1 at autocrlf=false and
-          // 0 at true/input; with it, 0 for CRLF and LF sources under all three.
+          // Force autocrlf=input to normalize LF patch against upstream CRLF under all host modes; default false fails literal matching. Real content drift still rejects hunk.
           '-c',
           'core.autocrlf=input',
           'apply',
@@ -168,11 +195,7 @@ export function ensureWindowsProcessTreeCommandLinePatch(
         {
           cwd: realpathSync(packageDir),
           stdio: 'pipe',
-          // Why blind git to the repo: run inside a work tree, `git apply`
-          // prefixes patch paths with the cwd-relative prefix, silently skips
-          // everything that does not match -- and still exits 0. The package
-          // dir is always under the project root, so without this the repair
-          // reports success and changes nothing.
+          // Hide repo from git apply: worktree cwd prefix can silently skip every patch path with exit 0 while changing nothing.
           env: { ...process.env, GIT_DIR: join(packageDir, '.orca-no-such-git-dir') }
         }
       )
@@ -191,11 +214,7 @@ export function ensureWindowsProcessTreeCommandLinePatch(
     repaired = true
   }
 
-  // A binary from before the repair -- or the tarball's own prebuilt -- would
-  // otherwise survive a skipped rebuild and load the flagged reader anyway.
-  // Deleting it can fail EPERM against a loaded (memory-mapped) addon, which
-  // `force: true` does not cover -- it only swallows ENOENT. That throw is the
-  // caller's to classify as a Windows file lock, so it must not be swallowed.
+  // Delete stale/tarball prebuilt or skipped rebuild loads unsafe reader. Propagate loaded-addon EPERM for caller’s lock classifier; force only suppresses ENOENT.
   if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath(packageDir)) === 'unpatched') {
     rmSync(windowsProcessTreeAddonPath(packageDir), { force: true })
     repaired = true
@@ -205,12 +224,13 @@ export function ensureWindowsProcessTreeCommandLinePatch(
   return repaired
 }
 
-// Patched binding.gyp includes deps/node-addon-api; the tarball does not ship those headers.
+// Stage node-addon-api headers absent from tarball; scratch package resolves them through installed resolveFromDir.
 export function stageWindowsProcessTreeNodeAddonApiHeaders(
-  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
+  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR,
+  resolveFromDir = packageDir
 ) {
   const nodeAddonApiDir = dirname(
-    createRequire(join(packageDir, 'package.json')).resolve('node-addon-api/package.json')
+    createRequire(join(resolveFromDir, 'package.json')).resolve('node-addon-api/package.json')
   )
   const stagedHeaderDir = join(packageDir, 'deps', 'node-addon-api')
   mkdirSync(stagedHeaderDir, { recursive: true })

@@ -1,9 +1,11 @@
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../../shared/source-control-ai-types'
+import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
 
 export type GitOperationApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
@@ -57,7 +59,7 @@ export type GitOperationApi = {
     agentCmdOverrides?: Partial<Record<TuiAgent, string>>
   }) => Promise<
     | { success: true; message: string; agentLabel?: string }
-    | { success: false; error: string; canceled?: boolean }
+    | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
   >
   cancelGenerateCommitMessage: (args: {
     worktreePath: string
@@ -85,12 +87,11 @@ export type GitOperationApi = {
         agentLabel?: string
         branchChangedByPreparation?: boolean
       }
-    | {
+    | ({
         success: false
-        error: string
         canceled?: boolean
         branchChangedByPreparation?: boolean
-      }
+      } & TextGenerationFailureFields)
   >
   cancelGeneratePullRequestFields: (args: {
     worktreePath: string
@@ -101,6 +102,7 @@ export type GitOperationApi = {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
+    scope?: GitStageWorktreeScope
   }) => Promise<void>
   unstage: (args: {
     worktreePath: string

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import { getConnectionId } from '@/lib/connection-context'
-import { commitRuntimeGit } from '@/runtime/runtime-git-client'
+import { commitRuntimeGit } from '@/runtime/runtime-git-sync-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -8,12 +9,9 @@ import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
 import { writeCommitDraftForWorktree } from './commit-drafts'
 
-/**
- * Commits the staged snapshot for a target worktree. Accepts an explicit target so a Create PR run
- * can keep committing to the worktree it started on after the user navigates away.
- */
+/** Explicit targets keep Create PR commits on their starting worktree after navigation. */
 export function useSourceControlCommitAction({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktree,
   activeWorktreeId,
   beginGitBranchCompareRequest,
@@ -30,7 +28,7 @@ export function useSourceControlCommitAction({
   updateCommitDrafts,
   worktreePath
 }: {
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktree: SourceControlWorktreeContext['activeWorktree']
   activeWorktreeId: string | null
   beginGitBranchCompareRequest: SourceControlStoreActions['beginGitBranchCompareRequest']
@@ -60,7 +58,7 @@ export function useSourceControlCommitAction({
         options?.target ??
         (activeWorktreeId && worktreePath
           ? {
-              settings: activeRepoSettings,
+              target: activeRepoTarget,
               worktreeId: activeWorktreeId,
               worktreePath,
               connectionId: getConnectionId(activeWorktreeId) ?? undefined,
@@ -89,8 +87,8 @@ export function useSourceControlCommitAction({
       try {
         const commitResult = await commitRuntimeGit(
           {
-            // Why: route the commit by the repo OWNER host, not the focused runtime.
-            settings: target.settings,
+            // Route commits through workspace ownership rather than focused runtime.
+            target: requireGitOwnerTarget(target.target),
             worktreeId: target.worktreeId,
             worktreePath: target.worktreePath,
             connectionId: target.connectionId
@@ -102,11 +100,10 @@ export function useSourceControlCommitAction({
           return false
         }
 
-        // Why: textarea stays editable during commit, so only clear the draft when it still matches what we committed — else we'd discard edits typed after Commit.
+        // Clear only an unchanged submitted draft so typing during commit cannot lose new edits.
         updateCommitDrafts((prev) => {
           const current = prev[target.worktreeId]
           if (current !== undefined && current.trim() !== message) {
-            // User typed more after submit — preserve their in-progress edits.
             return prev
           }
           return writeCommitDraftForWorktree(prev, target.worktreeId, '')
@@ -115,7 +112,7 @@ export function useSourceControlCommitAction({
         if (!options?.target) {
           void refreshActiveGitStatusAfterMutation()
         }
-        // Why: flip branchSummary to 'loading' synchronously so "No changes on this branch" doesn't flash before the branchCompare poll lands the commit.
+        // Set compare loading immediately so No changes cannot flash before the post-commit comparison arrives.
         if (!options?.target && compareBaseRef) {
           beginGitBranchCompareRequest(
             target.worktreeId,
@@ -140,7 +137,7 @@ export function useSourceControlCommitAction({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktree?.pushTarget,
       activeWorktreeId,
       beginGitBranchCompareRequest,

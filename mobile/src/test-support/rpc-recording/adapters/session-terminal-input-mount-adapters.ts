@@ -7,34 +7,20 @@ import type { TerminalModes } from '../../../terminal/terminal-webview-contract'
 const HANDLE = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
 const WORKTREE = 'repo-a::/tmp/repo-a'
-/** Bracketed paste is on and the alt screen is off, which is what wraps a pasted payload. */
 const PTY_MODES: TerminalModes = {
   bracketedPasteMode: true,
   altScreen: false,
   mouseTrackingMode: 'none',
   sgrMouseMode: false,
-  sgrMousePixelsMode: false
+  sgrMousePixelsMode: false,
+  applicationCursorKeysMode: false,
+  kittyKeyboardFlags: 0,
+  modifyOtherKeys: 0
 }
 
-/**
- * What the session screen's terminal input surface puts on the wire: the composed draft send, the
- * live keystroke send, the clipboard paste that rides on the same method, and the repo read that
- * resolves which connection a workspace's terminal lives on.
- *
- * The device state these hooks read is real rather than declared. The pasteboard is the engine's
- * per-recording fixture, so the bytes a paste reads are the bytes a recorded copy put there one
- * action earlier — the same sequence a phone performs. The draft store is the product's own
- * `useBufferedTerminalDrafts`, mounted in the same tree, so the text a send clears and a refusal
- * restores is state the recording drove rather than a stand-in.
- *
- * Only the clipboard's text path is driven. Its image path decodes a raster through
- * expo-image-manipulator and stages it on expo-file-system, and neither module is substituted:
- * recording it would mean inventing image and file-system behaviour, which is not what this oracle
- * is evidence of. The send both paths reach is the same expression, and the text path reaches it.
- *
- * Mounted through `hookScreenMount` for its crash boundary: a reply partition that takes a hook's
- * effect down is the recording, not a suite failure.
- */
+// Use the real draft store and per-recording pasteboard so refused sends restore recorded input.
+// Only clipboard text is driven; image/canvas/file-system behavior is outside this oracle.
+// The screen boundary records effect crashes as outcomes.
 export function sessionTerminalInputMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -195,6 +181,7 @@ function mountTerminalInputSend(
         connStateRef: { current: 'connected' },
         liveInputRef: { current: null },
         commandInputRef: { current: null },
+        ptyModesRef: { current: new Map([[HANDLE, PTY_MODES]]) },
         liveInputFocusTimerRef: { current: null },
         sendLiveTerminalInputRef: { current: null },
         sessionTabActionSheetKeyboardHideSubRef: { current: null },

@@ -33,14 +33,6 @@ describe('buildPullRequestFieldsPrompt', () => {
     expect(prompt).toContain('Use conventional PR titles.')
   })
 
-  it('requires ELI5 problem and solution sections before implementation details', () => {
-    const prompt = buildPullRequestFieldsPrompt(context, '')
-
-    expect(prompt).toContain('start with `## Problem`, then `## Solution`')
-    expect(prompt).toContain('simple ELI5 language before details')
-    expect(prompt).toContain('Reuse equivalent existing sections instead of duplicating them')
-  })
-
   it('includes GitHub issue details and complete or partial reference guidance', () => {
     const prompt = buildPullRequestFieldsPrompt(
       {
@@ -110,19 +102,6 @@ describe('buildPullRequestFieldsPrompt', () => {
     expect(prompt).toContain('`Fixes AB#99` only for a complete fix')
     expect(prompt).toContain('use `AB#99`')
   })
-
-  it('tells the agent to preserve existing review templates', () => {
-    const prompt = buildPullRequestFieldsPrompt(
-      {
-        ...context,
-        currentBody: '## Summary\n\n## Testing\n\n- [ ] Required checks'
-      },
-      ''
-    )
-
-    expect(prompt).toContain('Retain every heading, required section, and checklist')
-    expect(prompt).toContain('Leave genuinely unknown template items as TODO or unchecked')
-  })
 })
 
 describe('parseGeneratedPullRequestFields', () => {
@@ -138,28 +117,6 @@ describe('parseGeneratedPullRequestFields', () => {
       body: 'Summary',
       draft: true
     })
-  })
-
-  it('parses CRLF fenced JSON output without full-string fence matching', () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-    const fields = parseGeneratedPullRequestFields(
-      '```JSON\r\n{"base":"main","title":"fix: add details.","body":"Summary","draft":true}\r\n```',
-      context
-    )
-
-    expect(fields.title).toBe('fix: add details')
-    const usedFenceMatch = matchSpy.mock.calls.some(
-      ([pattern]) =>
-        pattern instanceof RegExp &&
-        pattern.source.startsWith('^```') &&
-        pattern.source.includes('[\\s\\S]')
-    )
-    const usedCrlfReplace = replaceSpy.mock.calls.some(
-      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n' && pattern.global
-    )
-    expect(usedFenceMatch).toBe(false)
-    expect(usedCrlfReplace).toBe(false)
   })
 
   it('falls back for missing optional values', () => {

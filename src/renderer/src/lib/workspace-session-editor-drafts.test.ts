@@ -37,7 +37,6 @@ function createSnapshot(
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
-    closedTerminalTabTombstonesByTabId: {},
     ...overrides
   }
 }
@@ -144,8 +143,7 @@ describe('workspace session editor drafts', () => {
         dirtyDraftContent: 'unsaved edits',
         lastKnownDiskSignature: 'abc123'
       }),
-      // Why: a clean tab has no draft to conflict-check on restore, and
-      // persisting the signature anyway would bloat every session write.
+      // Clean tabs need no restore-conflict signature; persisting it bloats every write.
       expect.not.objectContaining({
         lastKnownDiskSignature: expect.any(String)
       })
@@ -206,8 +204,8 @@ describe('workspace session editor drafts', () => {
       })
     )
 
-    expect(payload.openFilesByWorktree?.['wt-1']?.[0]).toEqual(
-      expect.not.objectContaining({ readOnly: expect.anything() })
-    )
+    const persisted = payload.openFilesByWorktree?.['wt-1']?.[0]
+    expect(persisted).toEqual(expect.objectContaining({ filePath: '/tmp/clean.md' }))
+    expect(persisted).not.toHaveProperty('readOnly')
   })
 })

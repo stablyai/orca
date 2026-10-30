@@ -1,21 +1,4 @@
-/**
- * Contract test for xterm's native user-scrolling ownership (vendored
- * 6.1.0-beta.303; @xterm/headless shares BufferService with @xterm/xterm).
- *
- * Orca's live PTY write path performs NO scroll-intent enforcement — it
- * relies on xterm core keeping a scrolled-up viewport stable and following
- * output at the bottom (BufferService.isUserScrolling, consumed atomically
- * inside scroll()). App-side enforcement is scoped to structural operations
- * (snapshot replay, remount, fit reflow) in terminal-scroll-intent.ts.
- *
- * If an xterm upgrade breaks any assertion here, the live write path loses
- * its follow/pin semantics silently — fix the write path before bumping.
- *
- * Since 6.1.0-beta.302 (upstream #6081) xterm clears isUserScrolling on a normal-buffer
- * CSI 3 J, so the erase itself releases a pinned reader to the bottom. Orca's pin still
- * works because its parser handler observes the erase before xterm's own handler runs,
- * capturing the reader's offset while the old viewport is still live.
- */
+/** Pin native follow/pin ownership through shared headless/core BufferService. Live writes rely on xterm; app enforcement handles structural replay/remount/reflow only. Upgrades must preserve this contract. Since beta.302 (#6081), CSI 3 J releases native pins; Orca observes before erase to capture and restore the live reading offset. */
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import headlessPackageJson from '@xterm/headless/package.json'
@@ -49,18 +32,15 @@ async function pinnedScrollbackTerminal(): Promise<TerminalWithBufferService> {
     scrollback: 1000,
     allowProposedApi: true
   }) as TerminalWithBufferService
-  await writeLines(term, 100, 'before')
+  await write(term, Array.from({ length: 100 }, (_, index) => `before${index}\r\n`).join(''))
   term.scrollLines(-30)
   markTerminalPinnedViewport(term)
   return term
 }
 
-describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () => {
+describe('xterm native user-scrolling contract', () => {
   it('builds headless and renderer xterm from the same upstream commit', () => {
-    // The shared code is BufferService/BufferLine, so what has to match is the source
-    // both were built from, not the version string. Upstream bumps each package only
-    // when its own output changes, so headless legitimately trails core by a beta or
-    // two while carrying identical code; publish.js stamps the commit on both.
+    // Compare source commits, not versions: headless/core may publish different betas with identical BufferService/BufferLine code; publish.js stamps both.
     expect(headlessPackageJson.commit).toBe(xtermPackageJson.commit)
     expect(xtermPackageJson.commit).toMatch(/^[0-9a-f]{40}$/)
   })
@@ -125,8 +105,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
 
     term.input('a', true)
 
-    // Why: Orca resyncs typing intent synchronously from onData, so this
-    // xterm ordering is part of the pinned-version contract.
+    // Typing-intent resync runs in onData, making this xterm event order part of the pinned contract.
     expect(viewportSeenByOnData).toBe(buffer.baseY)
     subscription.dispose()
   })
@@ -159,8 +138,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
     const fullBaseY = buffer.baseY
 
     await writeLines(term, 10, 'trim')
-    // Buffer is at capacity: baseY stays put while each trimmed line shifts
-    // the pinned viewport up by one so the visible content does not move.
+    // At capacity, fixed baseY plus trimming decrements viewportY to preserve content.
     expect(buffer.baseY).toBe(fullBaseY)
     expect(buffer.viewportY).toBe(Math.max(0, pinnedY - 10))
   })
@@ -176,8 +154,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
     const bufferService = term._core?._bufferService
     expect(typeof bufferService?.isUserScrolling).toBe('boolean')
 
-    // scrollLines/scrollToBottom self-manage the flag, so Orca's programmatic
-    // scroll restores inherit xterm's native live-output ownership.
+    // Public scroll APIs manage isUserScrolling; structural restores inherit native live-output ownership.
     expect(bufferService?.isUserScrolling).toBe(false)
     term.scrollLines(-5)
     expect(bufferService?.isUserScrolling).toBe(true)
@@ -206,11 +183,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
   })
 })
 
-/**
- * Drives the settle timer off a virtual clock so tests can prove the debounce
- * itself. Every schedule is its own live timer, as with setTimeout, so a
- * missing cancel shows up as an extra timer firing rather than being absorbed.
- */
+/** Give each virtual schedule its own cancellable timer so missing cancellation appears as an extra firing, not an absorbed debounce. */
 function manualSettleScheduler(): {
   now: () => number
   scheduleSettle: (run: () => void, delayMs: number) => () => void
@@ -239,8 +212,7 @@ function manualSettleScheduler(): {
     },
     advance: (ms) => {
       nowMs += ms
-      // A regression that re-arms with no delay would otherwise spin here and
-      // read as a stuck CI job rather than a failing assertion.
+      // Bound loops so zero-delay rearm fails instead of hanging CI.
       for (let fired = 0; ; fired += 1) {
         if (fired > 1_000) {
           throw new Error('settle scheduler livelocked: zero-delay re-arm loop')
@@ -297,8 +269,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
     await write(term, `\x1b[?2026h\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(50)}\x1b[?2026l`)
-    // xterm releases isUserScrolling on CSI 3 J, so the redraw carries the reader to
-    // the bottom. Landing them back at their offset is this module's whole job.
+    // CSI 3 J releases native isUserScrolling; Orca must restore the previous reading offset after redraw.
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
     settle()
 
@@ -333,7 +304,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     ]) {
       await write(term, sequence)
     }
-    // Grow the buffer so a spurious bottom-offset restore would be visible.
     await writeLines(term, 200, 'after')
     expect(scheduleCount()).toBe(0)
     settle()
@@ -344,7 +314,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('detects a clear split across writes', async () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
-    // xterm's parser carries the half-parsed sequence across the write boundary.
     await write(term, '\x1b[2J\x1b[H\x1b[')
     await write(term, `3J${'after\r\n'.repeat(50)}`)
     settle()
@@ -356,7 +325,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     const { term, advance, bottomOffset } = await pinnedTerminalWithRestore()
 
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(60)}`)
-    // Each frame lands inside the quiet period, so the pin must not fire yet.
     for (let frame = 0; frame < 5; frame += 1) {
       advance(SETTLE_MS - 60)
       expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
@@ -393,8 +361,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('spends the pin once even when the rebuild stays shorter than the old scrollback', async () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
-    // A rebuild shorter than the pre-erase buffer skips the intent re-latch, so
-    // only the single-shot disarm stops this from becoming a follow-at-offset.
+    // A short rebuild skips intent relatching; only single-shot disarm prevents follow-at-offset.
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(60)}`)
     settle()
     const restoredY = term.buffer.active.viewportY
@@ -413,7 +380,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     const restoredY = term.buffer.active.viewportY
     expect(restoredY).toBe(term.buffer.active.baseY - bottomOffset)
 
-    // The pin is spent: the reader holds position while the program keeps printing.
     await writeLines(term, 200, 'later')
     settle()
     expect(term.buffer.active.viewportY).toBe(restoredY)
@@ -423,8 +389,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
     const rowsBeforeErase = 20
 
-    // Those rows push the reader further from the bottom before the erase runs;
-    // capturing at the write boundary instead would undercount them.
+    // Capture at parser erase, not write boundary, to include rows preceding erase in the same chunk.
     await write(
       term,
       `${'pre\r\n'.repeat(rowsBeforeErase)}\x1b[2J\x1b[H\x1b[3J${'post\r\n'.repeat(120)}`
@@ -439,9 +404,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('keeps the original pin when a second erase lands inside the settle window', async () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
-    // The first erase already released the reader to the bottom, so re-measuring at
-    // the second one would read them as follow-output and drop the pin entirely.
-    // Only the pin armed by the first erase still knows where they were.
+    // The second erase sees native follow-output after the first; reuse the original pin rather than losing its prior coordinates.
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'first\r\n'.repeat(160)}`)
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
     expect(term.buffer.active.baseY).toBeGreaterThan(0)
@@ -458,8 +421,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'first\r\n'.repeat(300)}`)
     expect(scheduleCount()).toBeGreaterThan(0)
 
-    // The reader moves during the rebuild, so the armed pin is superseded and
-    // the next erase has to measure them where they are now.
     term.scrollLines(250)
     markTerminalPinnedViewport(term)
     const movedOffset = term.buffer.active.baseY - term.buffer.active.viewportY
@@ -473,9 +434,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('keeps one deadline across a repeating clear so the pin still lands', async () => {
     const { term, advance, bottomOffset } = await pinnedTerminalWithRestore()
 
-    // A clear loop re-arms faster than the settle, so the pin only ever lands
-    // because the deadline stays anchored to the first erase. Ten 100ms cycles
-    // reach MAX_PENDING_RESTORE_MS exactly.
+    // Repeated clears restore only because the first deadline stays fixed; ten 100ms cycles reach the cap.
     for (let cycle = 0; cycle < 10; cycle += 1) {
       await write(term, `\x1b[2J\x1b[H\x1b[3J${'redraw\r\n'.repeat(140)}`)
       expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
@@ -501,17 +460,14 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('gives up on a rebuild that never reaches the offset before the deadline', async () => {
     const { term, advance, bottomOffset, scheduleCount } = await pinnedTerminalWithRestore()
 
-    // Land inside 0 < baseY < bottomOffset, the band a partial rebuild sits in.
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'partial\r\n'.repeat(20)}`)
     expect(term.buffer.active.baseY).toBeGreaterThan(0)
     expect(term.buffer.active.baseY).toBeLessThan(bottomOffset)
 
     advance(2_000)
     const schedulesAfterGiveUp = scheduleCount()
-    // The erase already clamped the reader here; giving up must not move them.
     expect(term.buffer.active.viewportY).toBe(0)
 
-    // The pin is spent, so a later rebuild tall enough to honor it must not fire.
     await writeLines(term, 300, 'later')
     advance(2_000)
     expect(scheduleCount()).toBe(schedulesAfterGiveUp)
@@ -526,9 +482,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
       scheduleSettle: scheduler.scheduleSettle
     })
 
-    // A remount/replay leaves the live buffer shorter than the durable pin, so
-    // capture prefers the stored pre-remount coordinates even though the reader
-    // is now following live output at the bottom.
+    // Durable pre-remount pins can describe old geometry even after the live reader returned to follow-output.
     term.clear()
     term.scrollToBottom()
     await writeLines(term, 40, 'replayed')
@@ -536,7 +490,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     expect(term.buffer.active.baseY).toBeLessThan(91)
 
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(200)}`)
-    // No pin is armed at all, so nothing can later pull them off the bottom.
     expect(scheduler.scheduleCount()).toBe(0)
     scheduler.advance(SETTLE_MS)
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
@@ -550,8 +503,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
       scheduleSettle: scheduler.scheduleSettle
     })
 
-    // A remount/replay leaves the durable intent describing a taller buffer than
-    // the one on screen, so its offset no longer matches what the reader sees.
+    // Stored pre-remount intent can describe a taller buffer and the wrong live offset.
     term.clear()
     term.scrollToBottom()
     await writeLines(term, 40, 'replayed')
@@ -568,7 +520,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('restores after the private CSI ? 3 J erase', async () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
-    // xterm routes the private form to its own handler and it erases scrollback too.
     await write(term, `\x1b[2J\x1b[H\x1b[?3J${'after\r\n'.repeat(50)}`)
     settle()
 
@@ -595,7 +546,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     await writeLines(term, 60, 'after')
     settle()
 
-    // xterm carries the pin itself; a restore firing here would drag the reader.
     expect(term.buffer.active.viewportY).toBe(pinnedY)
   })
 
@@ -657,7 +607,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     const clampedY = term.buffer.active.viewportY
 
     restore.dispose()
-    // The live timer is released, not just neutered, so nothing survives the pane.
     expect(scheduler.cancelCount()).toBeGreaterThan(cancelsBeforeDispose)
     scheduler.advance(SETTLE_MS)
     expect(term.buffer.active.viewportY).toBe(clampedY)
@@ -669,8 +618,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
 
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(50)}`)
     settle()
-    // Without the pin the reader keeps xterm's own post-erase behaviour: the erase
-    // releases the scroll pin, so the redraw leaves them following output.
+    // Without Orca’s pin, xterm’s erase releases reading position and follows the redraw.
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
   })
 
@@ -750,8 +698,7 @@ describe('live scrollback-erase pin wiring', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     installTerminalLiveScrollbackRestore(stub.target)
 
-    // xterm has no try/catch around parser handlers, so a throw here would stop
-    // the pane's write pipeline for good.
+    // Parser handlers have no catch; one throw permanently wedges writes.
     for (const handler of stub.handlers) {
       expect(() => handler([3])).not.toThrow()
       expect(handler([3])).toBe(false)

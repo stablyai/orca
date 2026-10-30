@@ -1,6 +1,7 @@
 import React from 'react'
 import type { Editor } from '@tiptap/react'
 import EmojiPicker, { EmojiStyle, Theme, type EmojiClickData } from 'emoji-picker-react'
+import { translate } from '@/i18n/i18n'
 
 type RichMarkdownEmojiMenuProps = {
   editor: Editor | null
@@ -29,7 +30,10 @@ export function RichMarkdownEmojiMenu({
         lazyLoadEmojis
         onEmojiClick={insertEmoji}
         previewConfig={{ showPreview: false }}
-        searchPlaceHolder="Search emoji"
+        searchPlaceHolder={translate(
+          'auto.components.settings.RepositoryIconPicker.searchEmojiPlaceholder',
+          'Search emoji'
+        )}
         skinTonesDisabled
         theme={Theme.AUTO}
         width={320}

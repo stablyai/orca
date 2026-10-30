@@ -1,5 +1,10 @@
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser-guest-events'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import type { GrabModeHook } from '../annotate/useGrabMode'
+import type { BrowserOverlayViewport } from './browser-annotation-geometry'
 
 export type BrowserTabPageState = Partial<
   Pick<
@@ -16,14 +21,16 @@ export type BrowserPageUrlSetter = (
 
 export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
 
-export type GrabIntent = 'copy' | 'annotate'
+export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
-export type BrowserPageContextMenuState = {
+export type BrowserPageContextMenuState = Pick<
+  BrowserContextMenuRequestedEvent,
+  'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image' | 'extensionMenu'
+> & {
   x: number
   y: number
-  linkUrl: string | null
-  pageUrl: string
-  selectionText: string
+  /** Where the click landed in the guest's own viewport, for inspect and copy-image. */
+  pagePoint: { x: number; y: number }
 }
 
 export type BrowserPageGrabToastState = {
@@ -33,6 +40,21 @@ export type BrowserPageGrabToastState = {
   y: number
   below: boolean
   payload: BrowserGrabPayload | null
+}
+
+export type BrowserPageGrabAnnotationsOptions = {
+  /** Scopes the stored annotations. Stable for the life of the surface. */
+  browserTabId: string
+  /** Guest target ID defaults to the annotation scope; previews may remint it during recovery without orphaning stored annotations. */
+  toolTargetId?: string
+  isActive: boolean
+  grab: GrabModeHook
+  containerRef: MutableRefObject<HTMLDivElement | null>
+  trackingContainer?: HTMLDivElement | null
+  trackingScroller?: HTMLDivElement | null
+  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
+  browserAnnotationsLength: number
 }
 
 export type BrowserPageRecoveryNavigationValidation = {
@@ -51,4 +73,17 @@ export type BrowserPageFailLoadEvent = {
   errorDescription?: string
   validatedURL?: string
   isMainFrame?: boolean
+}
+
+export type ClientHostedBrowserPagePaneProps = {
+  browserTab: BrowserPageState
+  workspaceId: string
+  runtimeEnvironmentId: string
+  worktreeId: string
+  /** Null while the tab is still an optimistic stage: the host mints the placement, not this client. */
+  placement: RuntimeBrowserClientPlacement | null
+  isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: BrowserPageUrlSetter
 }

@@ -1,13 +1,9 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { mobileSessionRouteTarget } from './mobile-session-route'
 import {
-  hostStackHostRoute,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
-
-const homeSource = readFileSync(new URL('../home/MobileHomeScreen.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
@@ -54,14 +50,18 @@ describe('mobile session route', () => {
       mobileSessionRouteTarget({
         hostId: 'host/one',
         worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
+        name: 'Fix #1',
+        paneKey: 'pane/one',
+        executionHost: 'runtime:server-1'
       })
     ).toEqual({
       name: '[hostId]/session/[worktreeId]',
       params: {
         hostId: 'host/one',
         worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
+        name: 'Fix #1',
+        paneKey: 'pane/one',
+        executionHost: 'runtime:server-1'
       }
     })
   })
@@ -83,7 +83,7 @@ describe('mobile session route', () => {
 
     navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', target)
 
-    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
     harness.setState(mountedHostState('host/one'))
@@ -94,21 +94,5 @@ describe('mobile session route', () => {
       source: 'host-index',
       payload: target
     })
-  })
-
-  it('routes the home Resume card through the cold-navigator-safe transition', () => {
-    expect(homeSource).toContain('onOpenResume={openResume}')
-
-    // The tap handler itself must go through the coordinated transition; its only
-    // direct push is the shallow noticed host-index route for a proven-missing target.
-    const handlerStart = homeSource.indexOf('const openResume = useCallback(')
-    const handlerEnd = homeSource.indexOf('[data.router, openMobileSession]', handlerStart)
-    expect(handlerStart).toBeGreaterThanOrEqual(0)
-    expect(handlerEnd).toBeGreaterThan(handlerStart)
-
-    const openResume = homeSource.slice(handlerStart, handlerEnd)
-    expect(openResume).toContain('openMobileSession({')
-    expect(openResume.match(/router\.push\(/g)).toHaveLength(1)
-    expect(openResume).toContain('data.router.push(hostRouteWithNotice(')
   })
 })

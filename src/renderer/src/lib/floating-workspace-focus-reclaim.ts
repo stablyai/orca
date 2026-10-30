@@ -1,21 +1,39 @@
-// One-shot keyboard-reclaim intent for the floating workspace panel.
-// A sticky boolean, NOT a focus mirror: set at close-initiation while the panel owns keyboard
-// ownership *and only for a close that will empty the panel*, captured before the destructive DOM
-// removal (which blurs the pane and would flip a live focus mirror to false first). The panel's
-// visibleFloatingItemCount→0 effect consumes it to re-grab keyboard ownership for the next
-// Cmd/Ctrl+T. Genuine outside releases (outside pointer-down, window blur to another app) clear it.
+// Capture keyboard ownership before close removes DOM; if the panel empties, reclaim for the next Cmd/Ctrl+T. Clear on genuine outside release rather than mirroring transient blur.
 let floatingPanelReclaimIntent = false
+const listeners = new Set<() => void>()
+
+function setFloatingPanelReclaimIntent(next: boolean): void {
+  if (floatingPanelReclaimIntent === next) {
+    return
+  }
+  floatingPanelReclaimIntent = next
+  for (const listener of listeners) {
+    listener()
+  }
+}
 
 export function armFloatingPanelReclaimIntent(): void {
-  floatingPanelReclaimIntent = true
+  setFloatingPanelReclaimIntent(true)
 }
 
 export function consumeFloatingPanelReclaimIntent(): boolean {
   const armed = floatingPanelReclaimIntent
-  floatingPanelReclaimIntent = false
+  setFloatingPanelReclaimIntent(false)
   return armed
 }
 
 export function clearFloatingPanelReclaimIntent(): void {
-  floatingPanelReclaimIntent = false
+  setFloatingPanelReclaimIntent(false)
+}
+
+// Observe late close completion too: an awaited save can arm intent after the panel already rendered empty.
+export function subscribeFloatingPanelReclaimIntent(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+export function isFloatingPanelReclaimIntentArmed(): boolean {
+  return floatingPanelReclaimIntent
 }

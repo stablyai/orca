@@ -1,71 +1,69 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { EventEmitter } from 'node:events'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, openComputerUsePermissionsMock, getComputerUsePermissionStatusMock } =
-  vi.hoisted(() => ({
-    handleMock: vi.fn(),
-    openComputerUsePermissionsMock: vi.fn(),
-    getComputerUsePermissionStatusMock: vi.fn()
-  }))
+type HoistedMocks = {
+  app: EventEmitter | null
+  handlers: Map<string, (...args: unknown[]) => unknown>
+  focusedWindow: { current: object | null }
+  probe: ReturnType<typeof vi.fn>
+}
 
-vi.mock('electron', () => ({
-  ipcMain: {
-    handle: handleMock
-  }
+const mocks = vi.hoisted((): HoistedMocks => ({
+  app: null,
+  handlers: new Map(),
+  focusedWindow: { current: null },
+  probe: vi.fn()
 }))
+
+vi.mock('electron', async () => {
+  const { EventEmitter: Emitter } = await import('node:events')
+  mocks.app = new Emitter()
+  return {
+    app: mocks.app,
+    BrowserWindow: { getFocusedWindow: () => mocks.focusedWindow.current },
+    ipcMain: {
+      handle: (name: string, handler: (...args: unknown[]) => unknown) =>
+        mocks.handlers.set(name, handler)
+    }
+  }
+})
 
 vi.mock('../computer/macos-computer-use-permissions', () => ({
-  getComputerUsePermissionStatus: getComputerUsePermissionStatusMock,
-  openComputerUsePermissions: openComputerUsePermissionsMock
+  getComputerUsePermissionStatus: mocks.probe
 }))
 
-import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
-
 describe('registerComputerUsePermissionHandlers', () => {
-  beforeEach(() => {
-    handleMock.mockReset()
-    getComputerUsePermissionStatusMock.mockReset()
-    openComputerUsePermissionsMock.mockReset()
+  const originalPlatform = process.platform
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
   })
 
-  it('launches the computer-use helper setup', async () => {
-    const result = {
+  it('re-probes passive readers only after the app itself returns', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    mocks.probe.mockResolvedValue({
       platform: 'darwin',
       helperAppPath: '/Applications/Orca Computer Use.app',
-      permissionId: 'accessibility',
-      openedSettings: false,
-      launchedHelper: true
-    }
-    openComputerUsePermissionsMock.mockReturnValue(result)
-
-    registerComputerUsePermissionHandlers()
-
-    const registration = handleMock.mock.calls.find(
-      ([channel]) => channel === 'computerUsePermissions:openSetup'
-    )
-    expect(registration).toBeTruthy()
-
-    await expect(registration![1](null, { id: 'accessibility' })).resolves.toBe(result)
-    expect(openComputerUsePermissionsMock).toHaveBeenCalledWith('accessibility')
-  })
-
-  it('returns computer-use permission status', async () => {
-    const result = {
-      platform: 'darwin',
+      helperUnavailableReason: null,
       permissions: [
-        { id: 'accessibility', status: 'granted' },
-        { id: 'screenshots', status: 'not-granted' }
+        { id: 'accessibility', status: 'not-granted' },
+        { id: 'screenshots', status: 'granted' }
       ]
-    }
-    getComputerUsePermissionStatusMock.mockReturnValue(result)
-
+    })
+    const { registerComputerUsePermissionHandlers } = await import('./computer-use-permissions')
     registerComputerUsePermissionHandlers()
+    const app = mocks.app!
+    const readPassively = (): unknown =>
+      mocks.handlers.get('computerUsePermissions:getStatus')!({}, { background: true })
 
-    const registration = handleMock.mock.calls.find(
-      ([channel]) => channel === 'computerUsePermissions:getStatus'
-    )
-    expect(registration).toBeTruthy()
+    mocks.focusedWindow.current = {}
+    await readPassively()
+    await readPassively()
+    expect(mocks.probe).toHaveBeenCalledTimes(1)
 
-    await expect(registration![1]()).resolves.toBe(result)
-    expect(getComputerUsePermissionStatusMock).toHaveBeenCalledWith()
+    app.emit('did-resign-active')
+    app.emit('did-become-active')
+    await readPassively()
+    expect(mocks.probe).toHaveBeenCalledTimes(2)
   })
 })

@@ -4,7 +4,7 @@ import { AndroidEmulatorBackend } from './android-emulator-backend'
 import type { AndroidCommandResult, AndroidCommandRunner } from '../android/android-command-runner'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 
-// The AVD boot spawns the emulator detached (not via the command runner).
+// AVD boot spawns directly, bypassing the injected command runner.
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, spawn: vi.fn(() => ({ on: () => {}, unref: () => {} })) }
@@ -22,8 +22,6 @@ const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code
 const RUNNING_ADB =
   'List of devices attached\nemulator-5554\tdevice product:sdk_gphone64 model:Pixel_7 device:emu64a'
 
-// Default runner answering the standard discovery/query calls for a single
-// booted Pixel_7 emulator plus a shutdown Pixel_Tablet AVD.
 function defaultRunner(): ReturnType<typeof vi.fn> {
   return vi.fn(async (binary: string, args: readonly string[]) => {
     const a = args.join(' ')
@@ -270,7 +268,43 @@ describe('AndroidEmulatorBackend', () => {
     })
     const info = await android.startSession('emulator-5554')
     expect(info).toMatchObject({ deviceUdid: 'emulator-5554', streamCodec: 'h264' })
-    await android.stopHelperForDevice('emulator-5554')
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
     expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves all unowned forwards when stopping without a live session', async () => {
+    // adb forward listing/removal is server-wide, so unowned forwards must survive.
+    const forwards = [
+      'emulator-5554 tcp:41234 localabstract:scrcpy_1a2b3c4d',
+      'emulator-5554 tcp:8081 tcp:8081',
+      'emulator-5556 tcp:41235 localabstract:scrcpy_5e6f7a8b',
+      'R58M12345 tcp:9222 localabstract:chrome_devtools_remote'
+    ]
+    const before = [...forwards]
+    runner.mockImplementation(async (binary: string, args: readonly string[]) => {
+      if (binary === SDK.adb && args.join(' ') === 'devices -l') {
+        return ok(RUNNING_ADB)
+      }
+      const [flag, local] = args.includes('forward') ? args.slice(args.indexOf('forward') + 1) : []
+      if (flag === '--list') {
+        return ok(`${forwards.join('\n')}\n\n`)
+      }
+      if (flag === '--remove-all') {
+        forwards.length = 0
+      } else if (flag === '--remove') {
+        const index = forwards.findIndex((line) => line.split(' ')[1] === local)
+        if (index !== -1) {
+          forwards.splice(index, 1)
+        }
+      }
+      return ok('')
+    })
+
+    const android = backend(runner)
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
+
+    expect(forwards).toEqual(before)
   })
 })

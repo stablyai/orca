@@ -20,7 +20,6 @@ type UseFileExplorerNameFilterResult = {
   handleClearNameFilter: () => void
 }
 
-/** Files-view name-filter query state and the projection source derived from it. */
 export function useFileExplorerNameFilter({
   isFilesViewActive,
   activeWorktreeId
@@ -46,7 +45,8 @@ export function useFileExplorerNameFilter({
   const nameFilterFiles = useRuntimeFileListForWorktree({
     enabled: hasNameFilter && !nameFilterQueryTooLarge,
     worktreeId: activeWorktreeId,
-    query: nameFilterQuery
+    query: nameFilterQuery,
+    hostFilterWhenCapped: true
   })
   const nameFilterSource = useMemo(
     () =>

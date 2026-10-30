@@ -9,8 +9,7 @@ export type {
 
 export class RuntimeClientError extends Error {
   readonly code: string
-  // Why: optional structured recovery payload (e.g. did-you-mean suggestions,
-  // valid-flag enumeration) surfaced into both the human and --json error output.
+  // Structured recovery data is exposed in both human and JSON errors.
   readonly data?: unknown
 
   constructor(code: string, message: string, data?: unknown) {
@@ -24,7 +23,6 @@ export class RuntimeRpcFailureError extends RuntimeClientError {
   readonly response: RuntimeRpcFailure
 
   constructor(response: RuntimeRpcFailure) {
-    // Why: all client errors expose recovery through the same inherited channel.
     super(response.error.code, response.error.message, response.error.data)
     this.response = {
       ...response,

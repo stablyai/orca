@@ -3,6 +3,10 @@ import {
   subscribeWindowParkVisibility,
   WINDOW_HIDE_PARK_GRACE_MS
 } from '@/lib/window-park-visibility'
+import {
+  createWindowVisibilitySubscriptionEntry,
+  type SubscriptionEntry
+} from './window-visibility-subscription-entry'
 
 // Why: the same app-switch grace every park site uses; the backoff below is what makes this one adaptive.
 export const WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS = WINDOW_HIDE_PARK_GRACE_MS
@@ -14,6 +18,8 @@ const WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_JITTER_MS = 250
 
 export type WindowVisibilitySubscriptionContext = {
   visibilityGeneration: number
+  /** Resubscribe host-ended/error streams on backoff. Transport drops are reconnect replay’s responsibility; lost contact alone is no stream end. */
+  ended: () => void
 }
 
 export type WindowVisibilitySubscriptionSpec = {
@@ -35,21 +41,15 @@ export type WindowVisibilitySubscriptionParkingOptions = {
   }) => void
 }
 
-type SubscriptionEntry = {
-  desired: boolean
-  generation: number
-  visibilityGeneration: number
-  pending: Promise<void> | null
-  retryAttempt: number
-  retryTimer: ReturnType<typeof setTimeout> | null
-  startTimer: ReturnType<typeof setTimeout> | null
-  unsubscribe: (() => void) | null
+/** Disposes the installation; `restartEnded` skips the backoff for streams that already ended. */
+export type WindowVisibilitySubscriptionParking = (() => void) & {
+  restartEnded: () => void
 }
 
 export function installWindowVisibilitySubscriptionParking(
   specs: readonly WindowVisibilitySubscriptionSpec[],
   options: WindowVisibilitySubscriptionParkingOptions = {}
-): () => void {
+): WindowVisibilitySubscriptionParking {
   const parkDelayMs = options.parkDelayMs ?? WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS
   const maxParkDelayMs = parkDelayMs * WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_BACKOFF_LIMIT
   let disposed = false
@@ -58,16 +58,7 @@ export function installWindowVisibilitySubscriptionParking(
   let parkTimer: ReturnType<typeof setTimeout> | null = null
   let currentParkDelayMs = parkDelayMs
   let hiddenSinceMs: number | null = null
-  const entries: SubscriptionEntry[] = specs.map(() => ({
-    desired: false,
-    generation: 0,
-    visibilityGeneration: 0,
-    pending: null,
-    retryAttempt: 0,
-    retryTimer: null,
-    startTimer: null,
-    unsubscribe: null
-  }))
+  const entries = specs.map(createWindowVisibilitySubscriptionEntry)
 
   const clearRetry = (entry: SubscriptionEntry): void => {
     if (entry.retryTimer !== null) {
@@ -112,6 +103,25 @@ export function installWindowVisibilitySubscriptionParking(
     }, exponentialDelay + jitter)
   }
 
+  function endEntry(
+    entry: SubscriptionEntry,
+    spec: WindowVisibilitySubscriptionSpec,
+    generation: number
+  ): void {
+    if (disposed || !entry.desired || entry.generation !== generation) {
+      return
+    }
+    // Fence late frames with a new generation and unsubscribe failed streams so reconnect cannot replay both old and replacement subscriptions.
+    entry.generation += 1
+    unsubscribeEntry(entry, spec)
+    const livedMs = entry.establishedAt > 0 ? Date.now() - entry.establishedAt : 0
+    entry.establishedAt = 0
+    entry.endedStreak =
+      livedMs >= WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_MAX_MS ? 0 : entry.endedStreak + 1
+    entry.retryAttempt = Math.max(0, entry.endedStreak - 1)
+    scheduleRetry(entry, spec)
+  }
+
   function startEntry(entry: SubscriptionEntry, spec: WindowVisibilitySubscriptionSpec): void {
     if (
       disposed ||
@@ -128,7 +138,8 @@ export function installWindowVisibilitySubscriptionParking(
     let subscription: Promise<{ unsubscribe: () => void }>
     try {
       subscription = spec.subscribe(isCurrent, {
-        visibilityGeneration: entry.visibilityGeneration
+        visibilityGeneration: entry.visibilityGeneration,
+        ended: () => endEntry(entry, spec, generation)
       })
     } catch (error) {
       if (isCurrent()) {
@@ -150,6 +161,7 @@ export function installWindowVisibilitySubscriptionParking(
         entry.pending = null
         if (isCurrent()) {
           entry.retryAttempt = 0
+          entry.establishedAt = Date.now()
           entry.unsubscribe = handle.unsubscribe
           return
         }
@@ -278,11 +290,20 @@ export function installWindowVisibilitySubscriptionParking(
   }
   const unsubscribeVisibility = subscribeWindowParkVisibility(reconcileVisibility)
 
-  return () => {
+  // Why only retrying entries: a live stream needs nothing when the host answers again.
+  const restartEnded = (): void =>
+    entries.forEach((entry, index) => {
+      if (!disposed && entry.desired && entry.retryTimer !== null) {
+        clearRetry(entry)
+        startEntry(entry, specs[index])
+      }
+    })
+  const dispose = (): void => {
     disposed = true
     cancelPark()
     unsubscribeVisibility()
     effectiveVisible = false
     stopAll()
   }
+  return Object.assign(dispose, { restartEnded })
 }

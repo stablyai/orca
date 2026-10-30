@@ -1,4 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -9,6 +21,7 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 describe('remote runtime pty reattach after the bounded recovery window', () => {
   const runtimeCall = vi.fn()
@@ -149,7 +162,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
   beforeEach(() => {
     vi.resetModules()
     vi.doUnmock('../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session', () => ({
+    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
     vi.clearAllMocks()
@@ -184,9 +197,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   it('reattaches from a rotated host handle published after the recovery cutoff', async () => {
@@ -411,9 +422,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         hostListCalls += 1
         return { ok: true, result: hostSnapshot('terminal-stale', hostListCalls + 1, 'epoch-1') }
       })
-      // The stream drops and the resubscribe fails fatally with a stale handle: markDisconnected()
-      // latches the banner, then stale routing fences the handle with require-replacement.
-      // Only that one attempt fails, so a later reattach would succeed and be observable.
+      // Fail one stale-handle resubscribe fatally; any later same-handle retry would succeed and expose invalid reuse.
       runtimeSubscribe.mockImplementationOnce(async () => {
         throw new Error('terminal_handle_stale')
       })
@@ -430,6 +439,44 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
       // The recovery deadline never fired, so the fenced handle stays fenced.
       expect(subscribedTerminalHandles()).toHaveLength(subscribesBeforeRepublish)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // A second deadline during rebound subscribe must preserve online/resume revival (#9092).
+  it('parks a rebound subscribe whose stream open fails after its deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { transport } = await attachStalePane()
+      const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+      const { retryAllRemoteRuntimePtyRecoveriesNow } =
+        await import('./remote-runtime-pty-recovery-state')
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+
+      // The stream open for the rebound handle hangs through the whole new recovery window.
+      const streamOpen: { reject: ((error: Error) => void) | null } = { reject: null }
+      runtimeSubscribe.mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            streamOpen.reject = reject
+          })
+      )
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        hostSnapshot('terminal-rotated', 3, 'epoch-2'),
+        'env-1'
+      )
+      await vi.waitFor(() => expect(streamOpen.reject).not.toBeNull())
+      expect(transport.getRecoveryState?.().phase).toBe('recovering')
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+
+      streamOpen.reject?.(new Error('Could not connect to the remote Orca runtime.'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
       transport.destroy?.()
     } finally {
       vi.useRealTimers()

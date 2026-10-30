@@ -3,18 +3,18 @@ import type { AppState } from '@/store/types'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import type { DashboardAgentRow } from './useDashboardData'
 
-const storeState = vi.hoisted(() => ({
-  current: { settings: {}, tabsByWorktree: {} } as {
+const storeState = vi.hoisted(() => {
+  const current: {
     settings: Record<string, unknown>
     tabsByWorktree: Record<string, unknown[]>
+    unifiedTabsByWorktree?: Record<string, unknown[]>
     terminalLayoutsByTabId?: Record<string, unknown>
     runtimePaneTitlesByTabId?: Record<string, unknown>
-  }
-}))
+  } = { settings: {}, tabsByWorktree: {} }
+  return { current }
+})
 
-// Why: the mocked selector makes the hook a pure function, so tests can call it
-// directly without mounting a component. The pane maps default to empty so each
-// test declares only the ones it exercises.
+// Run selectors directly against declared slices so conversation-name cases need no mounted component.
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: AppState) => unknown) =>
     selector({
@@ -22,6 +22,13 @@ vi.mock('@/store', () => ({
       runtimePaneTitlesByTabId: {},
       ...storeState.current
     } as unknown as AppState)
+}))
+
+// The host's saved names by chat id, as the status feed would publish them.
+const savedNames = vi.hoisted(() => new Map<string, string>())
+vi.mock('@/runtime/structured-conversation-name', () => ({
+  useStructuredChatTabConversationName: (tab: { entityId: string } | undefined) =>
+    (tab && savedNames.get(tab.entityId)) ?? null
 }))
 
 function makeAgent(overrides: Partial<DashboardAgentRow> = {}): DashboardAgentRow {
@@ -38,11 +45,84 @@ function makeAgent(overrides: Partial<DashboardAgentRow> = {}): DashboardAgentRo
 
 beforeEach(() => {
   storeState.current = { settings: {}, tabsByWorktree: {} }
+  savedNames.clear()
 })
 
 describe('useAgentRowConversationName', () => {
   it('returns the conversation name by default', () => {
     expect(useAgentRowConversationName(makeAgent())).toBe('Patient sync spike')
+  })
+
+  it('uses a structured tab name, including a slash, and lets manual rename win', () => {
+    const agent = makeAgent()
+    agent.tab.customTitle = null
+    agent.tab.title = 'auth/login'
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-1',
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude',
+            label: 'auth/login',
+            customLabel: null
+          }
+        ]
+      }
+    }
+    expect(useAgentRowConversationName(agent)).toBe('auth/login')
+    storeState.current.unifiedTabsByWorktree!['wt-1'] = [
+      {
+        id: 'tab-1',
+        contentType: 'agent-session',
+        agentSessionAgent: 'claude',
+        label: 'auth/login',
+        customLabel: 'Manual name'
+      }
+    ]
+    expect(useAgentRowConversationName(agent)).toBe('Manual name')
+    storeState.current.unifiedTabsByWorktree!['wt-1'] = [
+      {
+        id: 'tab-1',
+        contentType: 'agent-session',
+        agentSessionAgent: 'claude',
+        label: 'auth/login',
+        customLabel: null
+      }
+    ]
+    expect(useAgentRowConversationName(agent)).toBe('auth/login')
+    storeState.current.unifiedTabsByWorktree!['wt-1'] = [
+      {
+        id: 'tab-1',
+        contentType: 'agent-session',
+        agentSessionAgent: 'claude',
+        label: 'Claude Chat',
+        customLabel: null
+      }
+    ]
+    expect(useAgentRowConversationName(agent)).toBe('Claude Chat')
+  })
+
+  it('reads the host-published name ahead of the tab label, under a manual rename', () => {
+    const tab: { customLabel: string | null } & Record<string, unknown> = {
+      id: 'tab-1',
+      entityId: 'native-session',
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: 'Claude Chat',
+      customLabel: null
+    }
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: { 'wt-1': [tab] }
+    }
+    savedNames.set('native-session', 'Explain the parser')
+    expect(useAgentRowConversationName(makeAgent())).toBe('Explain the parser')
+    tab.customLabel = 'Manual name'
+    expect(useAgentRowConversationName(makeAgent())).toBe('Manual name')
   })
 
   it('ignores a retired stored opt-out value', () => {
@@ -140,8 +220,7 @@ describe('useAgentRowConversationName', () => {
   it('prefers the live store tab over the stale row snapshot', () => {
     storeState.current = {
       settings: {},
-      // Why: row data patches entries in place and keeps the creation-time tab
-      // snapshot; a rename landing after that must still surface.
+      // Retained row tabs are creation-time snapshots; a later live rename must still surface.
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', worktreeId: 'wt-1', customTitle: 'Renamed later', title: '' }]
       }
@@ -149,8 +228,6 @@ describe('useAgentRowConversationName', () => {
     expect(useAgentRowConversationName(makeAgent())).toBe('Renamed later')
   })
 
-  // STA-2811 / #11069: both panes of a split tab showed one name that flipped to
-  // whichever pane was clicked last, because tab.title tracks only the focused pane.
   describe('split panes', () => {
     const LEAF_A = '11111111-1111-4111-8111-111111111111'
     const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -165,8 +242,7 @@ describe('useAgentRowConversationName', () => {
       expandedLeafId: null
     }
 
-    // Why: pty-connection syncs the FOCUSED pane's title onto the tab, so the tab
-    // snapshot every row carries names one pane and mislabels the other.
+    // The tab title tracks only the focused pane; a split row must resolve its own title.
     function splitRow(leafId: string, focusedPaneTitle: string): DashboardAgentRow {
       return makeAgent({
         paneKey: `tab-1:${leafId}`,

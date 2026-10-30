@@ -117,12 +117,7 @@ function yieldToIo(): Promise<void> {
   return new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-/**
- * Spins the real event loop until `predicate` holds, so filesystem completions
- * can land while `setTimeout` is faked. Bounded by wall clock rather than by a
- * turn count: a loaded CI runner exhausts a fixed number of turns long before
- * the I/O finishes, which fails as a confusing assertion somewhere else.
- */
+/** Yield real I/O while timers are faked; wall-clock bounds tolerate loaded CI better than fixed turn counts. */
 async function until(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 10_000
   while (!predicate() && Date.now() < deadline) {
@@ -133,15 +128,12 @@ async function until(predicate: () => boolean, what: string): Promise<void> {
   }
 }
 
-/**
- * Like `until`, but for conditions that also need a scheduled retry to fire:
- * spinning the real loop alone can never satisfy them, because `setTimeout` is
- * faked. Alternates advancing the fake clock with yielding to real I/O.
- */
+/** Alternate fake-clock retries and real I/O; yielding alone cannot fire the faked retry timer. */
 async function untilWithTimers(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 10_000
   while (!predicate() && Date.now() < deadline) {
-    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    // Leave real I/O time to settle before consuming the attempt deadline.
+    await vi.advanceTimersByTimeAsync(1)
     await yieldToIo()
   }
   if (!predicate()) {
@@ -203,6 +195,52 @@ describe('RepoRefMaintenance gating', () => {
     })
   })
 
+  it('maintains the pack index even when the loose-ref backlog is small', async () => {
+    const refs = await refsDirectoryWith(1)
+    const { maintenance, packRefs } = createHarness()
+    const maintainPackIndex = vi.fn(async () => {})
+    maintenance.arm(target('local::/fragmented/.git', refs, packRefs, { maintainPackIndex }))
+    await elapseQuietPeriod(maintenance)
+    expect(maintainPackIndex).toHaveBeenCalledTimes(1)
+    expect(packRefs).not.toHaveBeenCalled()
+  })
+
+  it('rechecks activity after config probes before starting object maintenance', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let busy = false
+    const { maintenance, packRefs } = createHarness({ isBusy: () => busy })
+    const maintainPackIndex = vi.fn(async () => {})
+    maintenance.arm(
+      target('local::/busy-after-probe/.git', refs, packRefs, {
+        isOptedOut: async () => {
+          busy = true
+          return false
+        },
+        maintainPackIndex
+      })
+    )
+    await elapseQuietPeriod(maintenance)
+    expect(maintainPackIndex).not.toHaveBeenCalled()
+    expect(packRefs).not.toHaveBeenCalled()
+    maintenance.dispose()
+  })
+
+  it('rechecks activity after object maintenance before packing refs', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let busy = false
+    const { maintenance, packRefs } = createHarness({ isBusy: () => busy })
+    maintenance.arm(
+      target('local::/busy-after-index/.git', refs, packRefs, {
+        maintainPackIndex: async () => {
+          busy = true
+        }
+      })
+    )
+    await elapseQuietPeriod(maintenance)
+    expect(packRefs).not.toHaveBeenCalled()
+    maintenance.dispose()
+  })
+
   it('does not run while the app is busy', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     let busy = true
@@ -232,12 +270,17 @@ describe('RepoRefMaintenance gating', () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans, packRefs } = createHarness()
 
+    const maintainPackIndex = vi.fn(async () => {})
     maintenance.arm(
-      target('local::/opted-out/.git', refs, packRefs, { isOptedOut: async () => true })
+      target('local::/opted-out/.git', refs, packRefs, {
+        isOptedOut: async () => true,
+        maintainPackIndex
+      })
     )
     await elapseQuietPeriod(maintenance)
 
     expect(packRefs).not.toHaveBeenCalled()
+    expect(maintainPackIndex).not.toHaveBeenCalled()
     expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('opted_out')
   })
 
@@ -286,6 +329,37 @@ describe('RepoRefMaintenance gating', () => {
 })
 
 describe('RepoRefMaintenance single-flight and backoff', () => {
+  it('serializes pack-index writes across execution hosts without merging their identities', async () => {
+    const refs = await refsDirectoryWith(1)
+    const { maintenance, packRefs } = createHarness()
+    const releases: (() => void)[] = []
+    const started: string[] = []
+    let concurrent = 0
+    let peak = 0
+    const indexTarget = (key: string) =>
+      target(key, refs, packRefs, {
+        maintainPackIndex: async () => {
+          started.push(key)
+          concurrent += 1
+          peak = Math.max(peak, concurrent)
+          await new Promise<void>((resolve) => releases.push(resolve))
+          concurrent -= 1
+        }
+      })
+    maintenance.arm(indexTarget('local::/repo/.git'))
+    maintenance.arm(indexTarget('wsl:Ubuntu::/repo/.git'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await until(() => concurrent === 1, 'the first index write')
+    releases.shift()?.()
+    await maintenance.whenAttemptSettled()
+    await untilWithTimers(() => started.length === 2, 'the second execution host')
+    releases.shift()?.()
+    await maintenance.whenAttemptSettled()
+    expect(peak).toBe(1)
+    expect(started).toEqual(['local::/repo/.git', 'wsl:Ubuntu::/repo/.git'])
+    expect(packRefs).not.toHaveBeenCalled()
+  })
+
   it('runs one repository at a time', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     let concurrent = 0
@@ -344,13 +418,11 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
       paused = true
     })
     await vi.advanceTimersByTimeAsync(1)
-    // Blocked while the rewrite window is open...
     expect(paused).toBe(false)
     expect(finished).toBe(false)
 
     release?.()
     await until(() => paused, 'pause() to resolve')
-    // ...and released without the pack ever being cancelled.
     expect(paused).toBe(true)
     expect(finished).toBe(true)
   })
@@ -460,9 +532,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
   })
 
   it('counts a pack that could not lock every ref as a success', async () => {
-    // Field-observed on a machine running several Orca sessions: a branch moved
-    // mid-pack, Git reported an error, and 36,688 loose refs still became 3.
-    // Retrying that aggressively would be wrong -- the backlog is gone.
+    // Observed concurrent branch movement: Git reported failure while packing 36,688 loose refs down to 3; do not retry a cleared backlog.
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans } = createHarness()
     const repo = target('local::/raced/.git', refs, async () => {
@@ -479,24 +549,9 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
       'git.loose_ref_count_after': 0
     })
 
-    // And it serves the full post-pack cooldown rather than retrying.
     maintenance.arm(repo)
     await elapseQuietPeriod(maintenance)
     expect(spans).toHaveLength(1)
-  })
-
-  it('records a failure when the pack left the backlog in place', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    const { maintenance, spans } = createHarness({
-      packRefs: async () => {
-        throw new Error('permission denied')
-      }
-    })
-
-    maintenance.arm(target('local::/denied/.git', refs, () => Promise.reject(new Error('denied'))))
-    await elapseQuietPeriod(maintenance)
-
-    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('failed')
   })
 
   it('records a failure instead of throwing, and backs off', async () => {

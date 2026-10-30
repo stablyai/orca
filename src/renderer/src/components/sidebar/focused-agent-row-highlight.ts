@@ -40,10 +40,7 @@ export function getFocusedAgentPaneKeyForWorktree(
   }
 
   const activePaneKey = makePaneKey(activeTabId, activeLeafId)
-  // Why: the inline card lists every agent attributed to this worktree, even
-  // after its status decays to idle. Highlight whichever displayed row matches
-  // the focused pane — gating on freshness left clicked-into stale rows with no
-  // selection coloring.
+  // Stale agents remain visible, so their focused rows must still highlight.
   if (state.agentStatusByPaneKey[activePaneKey]) {
     return activePaneKey
   }

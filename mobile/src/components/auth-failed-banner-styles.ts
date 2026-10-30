@@ -1,8 +1,8 @@
-import { StyleSheet } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-/** Shared with `AuthFailedBannerActions`, which is a sibling file so that the page can drop it. */
-export const authFailedBannerStyles = StyleSheet.create({
+/** Shared with `AuthFailedBannerActions`, a sibling file so that the page can offer Re-pair alone. */
+export const authFailedBannerStyles = themedStyleSheet(() => ({
   banner: {
     backgroundColor: colors.bgPanel,
     paddingVertical: spacing.sm,
@@ -26,5 +26,12 @@ export const authFailedBannerStyles = StyleSheet.create({
     color: colors.accentBlue,
     fontSize: 13,
     fontWeight: '600'
+  },
+  // Muted so the page's pointer to the app does not read as a second control.
+  note: {
+    flexShrink: 1,
+    paddingVertical: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: 13
   }
-})
+}))

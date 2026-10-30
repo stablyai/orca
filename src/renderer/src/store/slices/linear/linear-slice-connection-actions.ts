@@ -17,6 +17,7 @@ import {
 } from './linear-slice-request-state'
 import { isCurrentLinearRuntimeContext } from './linear-slice-scope'
 import { linearStatusScopeSignature } from './linear-cache'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function createLinearConnectionActions(
   set: LinearSliceSet,
@@ -34,16 +35,14 @@ export function createLinearConnectionActions(
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
       try {
-        const result = (await linearTestConnection(get().settings, workspaceId)) as
-          | { ok: true; viewer: LinearViewer }
-          | { ok: false; error: string }
+        const result = await linearTestConnection(defaultScopeSource(get().settings), workspaceId)
         if (
           !isCurrentLinearMutation(requestGeneration) ||
           !isCurrentLinearRuntimeContext(contextKey, get().settings)
         ) {
           return result
         }
-        const status = await linearStatus(get().settings)
+        const status = await linearStatus(defaultScopeSource(get().settings))
         if (
           isCurrentLinearMutation(requestGeneration) &&
           isCurrentLinearRuntimeContext(contextKey, get().settings)
@@ -83,7 +82,7 @@ export function createLinearConnectionActions(
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
       try {
-        const result = await linearConnect(get().settings, apiKey)
+        const result = await linearConnect(defaultScopeSource(get().settings), apiKey)
         if (
           result.ok &&
           isCurrentLinearMutation(requestGeneration) &&
@@ -103,7 +102,7 @@ export function createLinearConnectionActions(
             linearCustomViewIssueCache: {},
             linearCustomViewProjectCache: {}
           })
-          const status = await linearStatus(get().settings)
+          const status = await linearStatus(defaultScopeSource(get().settings))
           if (
             !isCurrentLinearMutation(requestGeneration) ||
             !isCurrentLinearRuntimeContext(contextKey, get().settings)
@@ -140,7 +139,7 @@ export function createLinearConnectionActions(
     selectLinearWorkspace: async (workspaceId) => {
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
-      const status = await linearSelectWorkspace(get().settings, workspaceId)
+      const status = await linearSelectWorkspace(defaultScopeSource(get().settings), workspaceId)
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)
@@ -169,7 +168,7 @@ export function createLinearConnectionActions(
     disconnectLinear: async () => {
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
-      await linearDisconnect(get().settings)
+      await linearDisconnect(defaultScopeSource(get().settings))
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)
@@ -198,14 +197,14 @@ export function createLinearConnectionActions(
     disconnectLinearWorkspace: async (workspaceId) => {
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
-      await linearDisconnectWorkspace(get().settings, workspaceId)
+      await linearDisconnectWorkspace(defaultScopeSource(get().settings), workspaceId)
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)
       ) {
         return
       }
-      const status = await linearStatus(get().settings)
+      const status = await linearStatus(defaultScopeSource(get().settings))
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)

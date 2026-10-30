@@ -1,5 +1,6 @@
+import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { isDefaultBranchWorkspace } from '../../../../shared/worktree/workspace-kinds'
 import { revealRepoInProjectFilter, type ProjectFilterRevealState } from './project-filter-reveal'
 
 export type AddRepoSkipFinalizationState = ProjectFilterRevealState & {
@@ -8,6 +9,7 @@ export type AddRepoSkipFinalizationState = ProjectFilterRevealState & {
   hideDefaultBranchWorkspace: boolean
   showSleepingWorkspaces: boolean
   alwaysShowDefaultBranchWorkspace: boolean
+  repos: readonly Pick<Repo, 'id' | 'kind'>[]
   worktreesByRepo: Record<string, Worktree[]>
   setActiveRepo: (repoId: string | null) => void
   setShowActiveOnly: (value: boolean) => void
@@ -19,10 +21,12 @@ export function finalizeImportedRepoAfterSkip(
   state: AddRepoSkipFinalizationState,
   importedRepoId: string
 ): void {
-  const importedWorktrees = state.worktreesByRepo[importedRepoId] ?? []
+  const importedWorktrees = (state.worktreesByRepo[importedRepoId] ?? []).filter(
+    (worktree) => !worktree.isArchived
+  )
+  const importedRepo = state.repos.find((repo) => repo.id === importedRepoId)
 
-  // Why: Skip means "do not open or create a worktree", not "hide the
-  // imported project behind sidebar filters so it looks like nothing landed."
+  // Skip avoids workspace creation/activation; it must still reveal the imported project through sidebar filters.
   if (state.activeRepoId !== importedRepoId) {
     state.setActiveRepo(importedRepoId)
   }
@@ -33,12 +37,11 @@ export function finalizeImportedRepoAfterSkip(
   if (
     importedWorktrees.length > 0 &&
     state.hideDefaultBranchWorkspace &&
-    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree))
+    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree, importedRepo))
   ) {
     state.setHideDefaultBranchWorkspace(false)
   }
-  // Why: with "Hide sleeping" on, a freshly imported project has no live PTY
-  // yet, so the opted-out exemption would leave it invisible on arrival.
+  // New imports have no live PTYs; Hide sleeping must not conceal the project on arrival.
   if (
     importedWorktrees.length > 0 &&
     state.alwaysShowDefaultBranchWorkspace === false &&

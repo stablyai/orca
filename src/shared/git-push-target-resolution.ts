@@ -1,6 +1,7 @@
 import type { GitCommandRunner } from './git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from './git-remote-branch-name'
 import { findGitRemoteNameByFetchUrl } from './git-remote-url-index'
+import { createGitConfigSnapshotRunner } from './git-config-snapshot-runner'
 
 export type ResolvedGitPushTarget = {
   remote: string
@@ -26,8 +27,7 @@ type ConfiguredPushRemote = {
   branchRemote: string | null
 }
 
-// One `git remote -v` instead of `git remote` plus a serial `git remote get-url`
-// per remote; both print the same insteadOf-expanded fetch URL.
+// remote -v replaces serial per-remote get-url calls while preserving insteadOf-expanded fetch URLs.
 async function findRemoteNameForUrl(
   runGit: GitCommandRunner,
   remoteUrl: string
@@ -95,36 +95,35 @@ function canPushConfiguredMergeBranch(
   if (branchRef === branch) {
     return true
   }
-  // Why: branch.merge belongs to branch.remote. A pushDefault fork must not
-  // inherit origin/main as its destination branch.
+  // branch.merge belongs to branch.remote; pushDefault forks cannot inherit origin/main as their destination.
   return pushRemote.remote !== 'origin' && pushRemote.branchRemote === pushRemote.remote
 }
 
-/**
- * Which remote and refspec a plain `git push` from this worktree should hit, or `null`
- * to fall back to first-publish (`origin HEAD`).
- *
- * Why shared: this decides where commits land, and a wrong answer is not recoverable by
- * retrying. The local runner and the SSH relay must never be able to answer differently
- * for the same repository — they differ only in how `runGit` reaches the Git binary.
- */
+/** Resolve plain-push remote/refspec, or null for first publish (origin HEAD).
+ * Share local/SSH routing: an incorrect destination cannot be repaired by retrying. */
 export async function resolveConfiguredGitPushTarget(
-  runGit: GitCommandRunner
+  execGit: GitCommandRunner
 ): Promise<ResolvedGitPushTarget | null> {
+  const runGit = createGitConfigSnapshotRunner(execGit)
   try {
     const { stdout: branchStdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
     const branch = branchStdout.trim()
     if (!branch) {
       return null
     }
-    const [pushRemote, { stdout: mergeStdout }] = await Promise.all([
+    const [pushRemote, mergeRef] = await Promise.all([
       getConfiguredPushRemote(runGit, branch),
-      runGit(['config', '--get', `branch.${branch}.merge`])
+      getConfigValue(runGit, `branch.${branch}.merge`)
     ])
     const remote = pushRemote?.remote
-    const mergeRef = mergeStdout.trim()
+    if (!remote || remote === '.') {
+      return null
+    }
+    if (!mergeRef) {
+      return { remote, refspec: 'HEAD' }
+    }
     const branchRef = mergeRef.replace(/^refs\/heads\//, '')
-    if (!remote || !branchRef || remote === '.' || branchRef === mergeRef) {
+    if (!branchRef || branchRef === mergeRef) {
       return null
     }
     if (await branchMergeTargetsConfiguredBase(runGit, branch, remote, branchRef)) {

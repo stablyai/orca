@@ -150,7 +150,7 @@ describe('AutomationHostStatusBadges', () => {
 })
 
 describe('AutomationHostLabel', () => {
-  it('keeps the full name in the accessible name while the visible label truncates', () => {
+  it('keeps the full accessible name on a label with truncation styling', () => {
     render(<AutomationHostLabel entry={entry({ label: 'a-very-long-host-name-that-truncates' })} />)
     const labelled = container.querySelector('[data-host-stable-key]')
     expect(labelled?.getAttribute('aria-label')).toBe('a-very-long-host-name-that-truncates')

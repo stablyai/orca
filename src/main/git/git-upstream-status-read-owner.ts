@@ -2,12 +2,7 @@ import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 
-/**
- * Why the exhaustive destructure: stableInFlightKey is JSON.stringify, which is not
- * key-order stable, so push-target fields must be listed in a fixed order. Spreading
- * the remainder into Record<string, never> makes a newly added GitPushTarget field a
- * compile error instead of a silently shared lease between two different targets.
- */
+/** Fix key order for JSON.stringify and make new push-target fields fail the exhaustive type check. */
 function pushTargetKeyParts(pushTarget: GitPushTarget): readonly unknown[] {
   const { remoteName, branchName, remoteUrl, remoteCreated, ...rest } = pushTarget
   const exhaustive: Record<string, never> = rest

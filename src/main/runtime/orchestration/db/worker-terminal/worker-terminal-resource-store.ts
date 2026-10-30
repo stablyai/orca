@@ -7,7 +7,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 
-// --- Worker terminal resources (schema v23) ---------------------------------------------------
+// Pre-v23 input and reuse cannot be proven; historical terminals remain external.
 
 // Historical renderer input and reuse cannot be proven, so pre-v23 terminals stay external.
 export function backfillWorkerTerminalResources(this: OrchestrationDb): void {
@@ -123,6 +123,20 @@ export function getWorkerTerminalResourceByHandle(
     .get(terminalHandle) as WorkerTerminalResourceRow | undefined
 }
 
+export function getWorkerTerminalResourceByProcessIncarnation(
+  this: OrchestrationDb,
+  processIncarnation: string
+): WorkerTerminalResourceRow | undefined {
+  const row = this.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources
+        WHERE process_incarnation = ? ORDER BY updated_at DESC LIMIT 1`
+    )
+    .get(processIncarnation)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  return row as WorkerTerminalResourceRow | undefined
+}
+
 export function getWorkerTerminalResourceFormerlyOwnedBy(
   this: OrchestrationDb,
   dispatchId: string
@@ -152,8 +166,7 @@ export function recordWorkerTerminalRecoveryAttempt(
   return this.getWorkerTerminalResource(resourceId)
 }
 
-// Reusable exact settled terminal: transfers cleanup ownership to the new Dispatch and fences
-// release through the old owner. No transaction: composes inside the authority transaction.
+// Transfer an exact settled resource and fence the prior owner; caller owns the transaction.
 export function transferWorkerTerminalResourceStatement(
   this: OrchestrationDb,
   params: {
@@ -230,14 +243,30 @@ export function retainReplacedWorkerTerminalResources(
   )
 }
 
-// Finds an owned, settled, exact-match resource for an explicitly reused terminal.
+/** A detached pane keeps its process, so the resources it owns follow its new pane key. */
+export function rekeyWorkerTerminalResourcePaneKey(
+  this: OrchestrationDb,
+  params: { fromPaneKey: string; toPaneKey: string }
+): number {
+  return Number(
+    this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+            SET pane_key = ?, updated_at = datetime('now')
+          WHERE pane_key = ? AND release_state != 'released'`
+      )
+      .run(params.toPaneKey, params.fromPaneKey).changes
+  )
+}
 
 export type WorkerTerminalResourceStoreMethods = {
   retainReplacedWorkerTerminalResources: typeof retainReplacedWorkerTerminalResources
+  rekeyWorkerTerminalResourcePaneKey: typeof rekeyWorkerTerminalResourcePaneKey
   backfillWorkerTerminalResources: typeof backfillWorkerTerminalResources
   createWorkerTerminalResourceStatement: typeof createWorkerTerminalResourceStatement
   getWorkerTerminalResource: typeof getWorkerTerminalResource
   getWorkerTerminalResourceByHandle: typeof getWorkerTerminalResourceByHandle
+  getWorkerTerminalResourceByProcessIncarnation: typeof getWorkerTerminalResourceByProcessIncarnation
   getWorkerTerminalResourceByOwner: typeof getWorkerTerminalResourceByOwner
   getWorkerTerminalResourceFormerlyOwnedBy: typeof getWorkerTerminalResourceFormerlyOwnedBy
   recordWorkerTerminalRecoveryAttempt: typeof recordWorkerTerminalRecoveryAttempt
@@ -247,10 +276,12 @@ export type WorkerTerminalResourceStoreMethods = {
 export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     retainReplacedWorkerTerminalResources,
+    rekeyWorkerTerminalResourcePaneKey,
     backfillWorkerTerminalResources,
     createWorkerTerminalResourceStatement,
     getWorkerTerminalResource,
     getWorkerTerminalResourceByHandle,
+    getWorkerTerminalResourceByProcessIncarnation,
     getWorkerTerminalResourceByOwner,
     getWorkerTerminalResourceFormerlyOwnedBy,
     recordWorkerTerminalRecoveryAttempt,

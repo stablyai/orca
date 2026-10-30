@@ -30,7 +30,6 @@ describe('dismissPresentedPushNotification', () => {
         orca: { hostFingerprint: 'fp0123456789abcd', notificationId: 'agent:two' }
       }),
       presented('other-host', { hostFingerprint: 'another-host', notificationId: 'agent:one' }),
-      // Flat FCM shape for the same notification, presented on Android.
       presented('tray-3', { hostFingerprint: 'fp0123456789abcd', notificationId: 'agent:one' })
     ] as never)
 

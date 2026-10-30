@@ -2,22 +2,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import { validate } from '../telemetry/validator'
 
-const { trackMock, opendirMock, existsSyncMock, readFileSyncMock, getVersionMock } = vi.hoisted(
-  () => ({
-    trackMock: vi.fn(),
-    opendirMock: vi.fn(),
-    existsSyncMock: vi.fn(() => true),
-    readFileSyncMock: vi.fn(),
-    getVersionMock: vi.fn(() => '1.4.191')
-  })
-)
+const {
+  trackMock,
+  opendirMock,
+  existsSyncMock,
+  readFileSyncMock,
+  getVersionMock,
+  getPathMock,
+  codeIdentityMock
+} = vi.hoisted(() => ({
+  trackMock: vi.fn(),
+  opendirMock: vi.fn(),
+  existsSyncMock: vi.fn(() => true),
+  readFileSyncMock: vi.fn(),
+  getVersionMock: vi.fn(() => '1.4.191'),
+  getPathMock: vi.fn((_name: string) => '/Users/alice/Library/Application Support/Orca'),
+  codeIdentityMock: vi.fn(async () => 'parked')
+}))
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+// Never spawn codesign from a unit test; the probe has its own suite.
+vi.mock('./daemon-mac-code-identity', () => ({ getDaemonMacCodeIdentity: codeIdentityMock }))
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock
 }))
-// The app-side read is async on purpose: it can sit on an unanswered macOS folder prompt.
+// Async directory reads can remain pending on an unanswered macOS folder prompt.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   opendir: opendirMock
@@ -27,7 +37,7 @@ vi.mock('node:os', async (importOriginal) => ({
   homedir: () => '/Users/alice'
 }))
 vi.mock('../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getVersion: getVersionMock })
+  getAppEnvironment: () => ({ getVersion: getVersionMock, getPath: getPathMock })
 }))
 
 import {
@@ -35,7 +45,7 @@ import {
   hasDaemonPtyCwdDenialDiverged,
   reportDaemonPtyCwdVerdict,
   trackDaemonAdopted,
-  trackDaemonPtyCwdDenied
+  trackDaemonPtyCwdVerdict
 } from './daemon-adoption-telemetry-event'
 import {
   getDaemonFolderAccessMismatch,
@@ -67,7 +77,11 @@ const stalePidRecord: ParsedDaemonPid = {
     '/Users/alice/Library/Caches/com.stablyai.orca.ShipIt/u/Orca.app/Contents/MacOS/Orca',
   cgroupUnit: null
 }
-const origin = { app_version_match: 'different', spawner_path_class: 'updater-cache' } as const
+const origin = {
+  app_version_match: 'different',
+  code_identity: 'parked',
+  spawner_path_class: 'updater-cache'
+} as const
 const PID_PATH = '/fake/daemon.pid'
 
 beforeEach(() => {
@@ -76,6 +90,7 @@ beforeEach(() => {
   opendirMock.mockReset().mockReturnValue(readableDir())
   existsSyncMock.mockReset().mockReturnValue(true)
   readFileSyncMock.mockReset().mockReturnValue(JSON.stringify(stalePidRecord))
+  codeIdentityMock.mockClear()
   vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
 })
 
@@ -84,22 +99,42 @@ afterEach(() => {
 })
 
 describe('classifyDaemonAdoptionOrigin', () => {
-  it('compares the recorded app version and classifies the spawner path', () => {
-    expect(classifyDaemonAdoptionOrigin(stalePidRecord)).toEqual(origin)
-    expect(classifyDaemonAdoptionOrigin({ ...stalePidRecord, appVersion: '1.4.191' })).toEqual({
-      app_version_match: 'same',
-      spawner_path_class: 'updater-cache'
-    })
-    expect(classifyDaemonAdoptionOrigin(null)).toEqual({
+  it('compares the recorded app version, the spawner path, and the daemon pid code identity', async () => {
+    expect(await classifyDaemonAdoptionOrigin(stalePidRecord)).toEqual(origin)
+    expect(codeIdentityMock).toHaveBeenCalledWith(stalePidRecord.pid)
+    expect(
+      await classifyDaemonAdoptionOrigin({ ...stalePidRecord, appVersion: '1.4.191' })
+    ).toEqual({ ...origin, app_version_match: 'same' })
+    expect(await classifyDaemonAdoptionOrigin(null)).toEqual({
       app_version_match: 'unknown',
+      code_identity: 'parked',
       spawner_path_class: 'unknown'
+    })
+    expect(codeIdentityMock).toHaveBeenLastCalledWith(undefined)
+  })
+
+  it('reports a daemon started from the private stable copy', async () => {
+    const copies = '/Users/alice/Library/Application Support/Orca/daemon-host/macos'
+    const stableCopy = {
+      ...stalePidRecord,
+      spawnerExecPath: `${copies}/terminal-host-0f3c/app.noindex/Orca Terminal Host.app/Contents/MacOS/orca-terminal-host`
+    }
+    expect(await classifyDaemonAdoptionOrigin(stableCopy)).toMatchObject({
+      spawner_path_class: 'stable-copy'
+    })
+    expect(getPathMock).toHaveBeenCalledWith('userData')
+    getPathMock.mockImplementationOnce(() => {
+      throw new Error('AppEnvironment not initialized')
+    })
+    expect(await classifyDaemonAdoptionOrigin(stableCopy)).toMatchObject({
+      spawner_path_class: 'other'
     })
   })
 })
 
 describe('trackDaemonAdopted', () => {
-  it('emits a validator-accepted payload', () => {
-    trackDaemonAdopted(stalePidRecord, 'intact', 7)
+  it('emits a validator-accepted payload', async () => {
+    await trackDaemonAdopted(stalePidRecord, 'intact', 7)
     expect(trackMock).toHaveBeenCalledTimes(1)
     const [name, props] = trackMock.mock.calls[0]
     expect(name).toBe('daemon_adopted')
@@ -111,11 +146,11 @@ describe('trackDaemonAdopted', () => {
     expect(validate('daemon_adopted', props).ok).toBe(true)
   })
 
-  it('swallows a throwing telemetry client', () => {
+  it('swallows a throwing telemetry client', async () => {
     trackMock.mockImplementationOnce(() => {
       throw new Error('posthog exploded')
     })
-    expect(() => trackDaemonAdopted(null, 'unknown', null)).not.toThrow()
+    await expect(trackDaemonAdopted(null, 'unknown', null)).resolves.toBeUndefined()
   })
 })
 
@@ -125,8 +160,6 @@ describe('hasDaemonPtyCwdDenialDiverged', () => {
     expect(opendirMock).toHaveBeenCalledWith(DENIED_CWD)
   })
 
-  // False positives would drown the signal this event exists to measure, so every
-  // non-divergent shape must stay silent — including daemons too old to report.
   it('is false when the daemon could read the cwd or did not report one', async () => {
     expect(await hasDaemonPtyCwdDenialDiverged(DENIED_CWD, true)).toBe(false)
     expect(await hasDaemonPtyCwdDenialDiverged(DENIED_CWD, undefined)).toBe(false)
@@ -151,17 +184,20 @@ describe('hasDaemonPtyCwdDenialDiverged', () => {
   })
 })
 
-describe('trackDaemonPtyCwdDenied', () => {
-  it('emits a validator-accepted payload', () => {
-    trackDaemonPtyCwdDenied(DENIED_CWD, PID_PATH)
-    expect(trackMock).toHaveBeenCalledTimes(1)
-    const [name, props] = trackMock.mock.calls[0]
-    expect(name).toBe('daemon_pty_cwd_denied')
-    expect(props).toEqual({ cwd_class: 'documents', ...origin })
-    expect(validate('daemon_pty_cwd_denied', props).ok).toBe(true)
-  })
+describe('trackDaemonPtyCwdVerdict', () => {
+  it.each(['daemon_pty_cwd_denied', 'daemon_pty_cwd_readable'] as const)(
+    'emits a validator-accepted %s payload',
+    async (event) => {
+      await trackDaemonPtyCwdVerdict(event, DENIED_CWD, PID_PATH)
+      expect(trackMock).toHaveBeenCalledTimes(1)
+      const [name, props] = trackMock.mock.calls[0]
+      expect(name).toBe(event)
+      expect(props).toEqual({ cwd_class: 'documents', ...origin })
+      expect(validate(event, props).ok).toBe(true)
+    }
+  )
 
-  it('attributes the denial to the daemon recorded right now, not a startup snapshot', () => {
+  it('attributes the denial to the daemon recorded right now, not a startup snapshot', async () => {
     readFileSyncMock.mockReturnValue(
       JSON.stringify({
         ...stalePidRecord,
@@ -169,32 +205,57 @@ describe('trackDaemonPtyCwdDenied', () => {
         spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
       })
     )
-    trackDaemonPtyCwdDenied(DENIED_CWD, PID_PATH)
+    await trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', DENIED_CWD, PID_PATH)
     expect(readFileSyncMock).toHaveBeenCalledWith(PID_PATH, 'utf8')
     expect(trackMock.mock.calls[0][1]).toEqual({
       cwd_class: 'documents',
       app_version_match: 'same',
+      code_identity: 'parked',
       spawner_path_class: 'applications'
     })
   })
 
-  it('swallows a throwing app environment or pid-record read instead of failing the spawn', () => {
+  it('swallows a throwing app environment or pid-record read instead of failing the spawn', async () => {
     getVersionMock.mockImplementationOnce(() => {
       throw new Error('AppEnvironment not initialized')
     })
-    expect(() => trackDaemonPtyCwdDenied(DENIED_CWD, PID_PATH)).not.toThrow()
+    await expect(
+      trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', DENIED_CWD, PID_PATH)
+    ).resolves.toBeUndefined()
     expect(trackMock).not.toHaveBeenCalled()
-  })
-
-  it('swallows a throwing telemetry client', () => {
-    trackMock.mockImplementationOnce(() => {
-      throw new Error('posthog exploded')
-    })
-    expect(() => trackDaemonPtyCwdDenied(DENIED_CWD, PID_PATH)).not.toThrow()
   })
 })
 
 describe('reportDaemonPtyCwdVerdict', () => {
+  it('reports a readable TCC-gated cwd as the control, without an app-side read', async () => {
+    await reportDaemonPtyCwdVerdict({
+      cwd: DENIED_CWD,
+      cwdReadableByDaemon: true,
+      pidPath: PID_PATH,
+      daemonIdentity: DAEMON
+    })
+
+    expect(opendirMock).not.toHaveBeenCalled()
+    expect(trackMock.mock.calls.map(([name]) => name)).toEqual(['daemon_pty_cwd_readable'])
+  })
+
+  it('reports every readable spawn, but only in a TCC-gated folder on macOS', async () => {
+    const readable = (cwd: string) =>
+      reportDaemonPtyCwdVerdict({
+        cwd,
+        cwdReadableByDaemon: true,
+        pidPath: PID_PATH,
+        daemonIdentity: DAEMON
+      })
+    await readable(DENIED_CWD)
+    await readable(DENIED_CWD)
+    await readable('/Users/alice/code/repo')
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    await readable(DENIED_CWD)
+
+    expect(trackMock).toHaveBeenCalledTimes(2)
+  })
+
   it('emits the event and records the notice evidence on one directory read', async () => {
     await reportDaemonPtyCwdVerdict({
       cwd: DENIED_CWD,
@@ -263,8 +324,6 @@ describe('reportDaemonPtyCwdVerdict', () => {
     ).resolves.toBeUndefined()
   })
 
-  // The read behind this can sit on an unanswered macOS folder prompt, and a spawn that waited
-  // for it would hold main's event loop for as long as the user leaves the sheet up.
   it('records nothing until the app-side read resolves, and the spawn need not wait', async () => {
     let release: (dir: ReturnType<typeof readableDir>) => void = () => {}
     opendirMock.mockReturnValue(

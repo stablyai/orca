@@ -1,29 +1,23 @@
+import { taskProviderFailure } from '../../shared/task-provider-failure'
 import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
   JiraIssueUpdate,
   JiraMutationResult,
   JiraSite
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
 import { issueUrl, toBodyText } from './jira-issue-mapping'
 import type { JiraRecord } from './jira-record-pages'
 
-/**
- * Wraps a user id in the reference object the site expects: `{accountId}` on
- * Cloud, `{name}` on Server/DC, which identifies users by username and whose
- * ids `mapUser` stores in the accountId slot.
- */
+/** Cloud uses accountId; Server/DC uses username, stored in mapUser's accountId slot. */
 export function userFieldRef(site: JiraSite, id: string | null): JiraRecord {
   return site.authType === 'server' ? { name: id } : { accountId: id }
 }
 
-/**
- * Shapes a user-typed create value (scalar or array) into Jira's user reference
- * objects. Jira rejects a bare string here and reports the field as missing.
- */
+/** User-picker fields require reference objects, including within arrays; Jira treats bare strings as missing. */
 function toUserFieldValue(site: JiraSite, value: unknown): unknown {
   if (typeof value === 'string') {
     return userFieldRef(site, value)
@@ -34,15 +28,15 @@ function toUserFieldValue(site: JiraSite, value: unknown): unknown {
   return value
 }
 
-/** Creates an issue, shaping the customFields keys named by `userFieldKeys`. */
+/** Shape customFields named by userFieldKeys into user references. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
   const entry = getClients(args.siteId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Jira.' }
+    return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
   const title = args.title.trim()
   if (!title) {
-    return { ok: false, error: 'Title is required.' }
+    return taskProviderFailure('jira.titleRequired', 'Title is required.')
   }
 
   await acquire()
@@ -76,13 +70,14 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
       clearToken(entry.site.id)
       throw error
     }
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to create issue.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.createFailed', 'Failed to create issue.')
   } finally {
     release()
   }
 }
 
-/** Applies field, assignee, and transition updates to an existing issue. */
 export async function updateIssue(
   key: string,
   updates: JiraIssueUpdate,
@@ -90,7 +85,10 @@ export async function updateIssue(
 ): Promise<JiraMutationResult> {
   const entry = getClients(siteId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Jira.' }
+    return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
+  }
+  if (updates.labels && updates.labelOperations) {
+    return taskProviderFailure('jira.labelsConflict', 'Pass labels or labelOperations, not both.')
   }
   await acquire()
   try {
@@ -105,10 +103,17 @@ export async function updateIssue(
       fields.priority = updates.priorityId ? { id: updates.priorityId } : null
     }
     const issueBase = `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}`
-    if (Object.keys(fields).length > 0) {
+    const labelOperations: ({ add: string } | { remove: string })[] = [
+      ...[...new Set(updates.labelOperations?.add ?? [])].map((add) => ({ add })),
+      ...[...new Set(updates.labelOperations?.remove ?? [])].map((remove) => ({ remove }))
+    ]
+    if (Object.keys(fields).length > 0 || labelOperations.length > 0) {
       await jiraRequest(entry, issueBase, {
         method: 'PUT',
-        body: JSON.stringify({ fields })
+        body: JSON.stringify({
+          fields,
+          ...(labelOperations.length ? { update: { labels: labelOperations } } : {})
+        })
       })
     }
     if (updates.assigneeAccountId !== undefined) {
@@ -119,9 +124,18 @@ export async function updateIssue(
       })
     }
     if (updates.transitionId) {
+      const transitionBody: JiraRecord = { transition: { id: updates.transitionId } }
+      if (updates.transitionFields && Object.keys(updates.transitionFields).length > 0) {
+        transitionBody.fields = updates.transitionFields
+      }
+      if (updates.transitionComment?.trim()) {
+        transitionBody.update = {
+          comment: [{ add: { body: toBodyText(entry.site, updates.transitionComment.trim()) } }]
+        }
+      }
       await jiraRequest(entry, `${issueBase}/transitions`, {
         method: 'POST',
-        body: JSON.stringify({ transition: { id: updates.transitionId } })
+        body: JSON.stringify(transitionBody)
       })
     }
     return { ok: true }
@@ -130,7 +144,9 @@ export async function updateIssue(
       clearToken(entry.site.id)
       throw error
     }
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to update issue.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.updateFailed', 'Failed to update issue.')
   } finally {
     release()
   }
@@ -143,7 +159,7 @@ export async function addIssueComment(
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const entry = getClients(siteId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Jira.' }
+    return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
   await acquire()
   try {
@@ -161,7 +177,9 @@ export async function addIssueComment(
       clearToken(entry.site.id)
       throw error
     }
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to add comment.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.commentFailed', 'Failed to add comment.')
   } finally {
     release()
   }

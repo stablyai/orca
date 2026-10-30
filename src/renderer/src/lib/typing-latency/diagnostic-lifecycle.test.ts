@@ -50,6 +50,7 @@ describe('typing latency diagnostic lifecycle', () => {
   afterEach(() => {
     delete (window as DiagnosticWindow).__orcaTypingDiagnostic
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('releases stopped pane state while preserving the instrumented count', () => {
@@ -206,5 +207,49 @@ describe('typing latency diagnostic lifecycle', () => {
       }
     })
     bridge.stop()
+  })
+
+  it('includes queued stalls in live reports and keeps observing until stop', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const pending: { startTime: number; duration: number }[] = []
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'PerformanceObserver',
+      class {
+        static supportedEntryTypes = ['long-animation-frame']
+        observe(): void {}
+        disconnect = disconnect
+        takeRecords(): typeof pending {
+          return pending.splice(0)
+        }
+      }
+    )
+    installTypingLatencyDiagnostic()
+    const bridge = (window as DiagnosticWindow).__orcaTypingDiagnostic
+    if (!bridge) {
+      throw new Error('Typing latency diagnostic bridge was not installed')
+    }
+
+    bridge.start()
+    pending.push({ startTime: 100, duration: 60 })
+    expect(bridge.report().longTaskOverlap).toMatchObject({
+      observedTasks: 1,
+      observedTaskMs: 60
+    })
+    expect(bridge.report().longTaskOverlap.observedTasks).toBe(1)
+    expect(disconnect).not.toHaveBeenCalled()
+
+    pending.push({ startTime: 200, duration: 80 })
+    expect(bridge.report().longTaskOverlap).toMatchObject({
+      observedTasks: 2,
+      observedTaskMs: 140
+    })
+    pending.push({ startTime: 300, duration: 70 })
+    bridge.stop()
+    expect(bridge.report().longTaskOverlap).toMatchObject({
+      observedTasks: 3,
+      observedTaskMs: 210
+    })
+    expect(disconnect).toHaveBeenCalledOnce()
   })
 })

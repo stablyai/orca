@@ -1,5 +1,7 @@
+import { pendingSelectionHandle, pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback } from 'react'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 
 export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitchingModel) {
@@ -15,16 +17,18 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     activeSessionTab,
     unsubscribeTerminal,
-    measureViewportOnce,
     subscribeToTerminal,
     nativeChatStream,
     readMarkdownTab,
-    readFileTab
+    readFileTab,
+    terminalFrameRef,
+    notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth
   } = scope
-  // Why: only store the ref; subscribe on web-ready to avoid the blank-terminal race (init queued before xterm.js loaded).
+  // Store the ref but subscribe only after web-ready so init cannot precede xterm loading.
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
     terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
     if (ref) {
@@ -52,28 +56,53 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         handle === activeHandleRef.current
       )
       if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
-        // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
+        // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
-        initializedHandlesRef.current.delete(handle)
         if (handle === activeHandleRef.current) {
           subscribeToTerminal(handle)
         }
         return
       }
-      // Why: first subscribe may skip (no WebView ref); await measure so it carries the viewport, else it races measureViewportOnce and skips.
-      // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
-      const isIntendedActive = () =>
-        handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
-      if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-        void (async () => {
-          await measureViewportOnce(handle)
-          if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-            subscribeToTerminal(handle)
-          }
-        })()
+      // Lagging snapshots can clear a new tab’s active handle; its pending marker still authorizes ready subscribe.
+      const isIntendedActive =
+        handle === activeHandleRef.current ||
+        pendingSelectionWantsHandle(pendingSelectionRef.current, handle)
+      if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
+        subscribeToTerminal(handle)
       }
     },
-    [measureViewportOnce, nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+  )
+
+  const subscribeIntendedActiveTerminal = useCallback(() => {
+    const handle = pendingSelectionHandle(pendingSelectionRef.current) ?? activeHandleRef.current
+    if (handle && !terminalUnsubsRef.current.has(handle)) {
+      subscribeToTerminal(handle)
+    }
+  }, [activeHandleRef, pendingSelectionRef, subscribeToTerminal, terminalUnsubsRef])
+
+  const notifyTerminalFrame = useCallback(
+    (frame: TerminalFrame) => {
+      // Imperative frame-height notification refits the PTY without rerendering SessionScreen.
+      notifyTerminalFrameHeight(Math.round(frame.height))
+      // Hidden pages report 0x0; preserve their last laid-out box.
+      if (frame.width <= 0) {
+        return
+      }
+      const previous = terminalFrameRef.current
+      terminalFrameRef.current = frame
+      if (!previous) {
+        subscribeIntendedActiveTerminal()
+      } else if (frame.width !== previous.width) {
+        notifyTerminalFrameWidth()
+      }
+    },
+    [
+      notifyTerminalFrameHeight,
+      notifyTerminalFrameWidth,
+      subscribeIntendedActiveTerminal,
+      terminalFrameRef
+    ]
   )
 
   useEffect(() => {
@@ -97,7 +126,8 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   }, [activeSessionTab, fileDocs, readFileTab])
   return {
     setTerminalWebViewRef,
-    handleTerminalWebReady
+    handleTerminalWebReady,
+    notifyTerminalFrame
   }
 }
 

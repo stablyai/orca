@@ -6,12 +6,23 @@ const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
   readFileMock: vi.fn()
 }))
 
+// Keep child-process assertions in this suite; worker transport is covered separately.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
+}))
+
+// Mock recovery so its process-table import does not require real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
@@ -27,8 +38,7 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
   child.exitCode = null
-  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
-  // the graceful shutdown path resolves only once the child reports exit.
+  // Graceful shutdown must wait for EOF/signal to produce exit, as real app-server does.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)

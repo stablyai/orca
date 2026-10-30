@@ -1,5 +1,4 @@
-// Why: the transport id cap trims a deduplicated facet row silently, and any surviving id
-// keeps that row checked — so the picker has to say how many per-team ids it really applies.
+// A capped row remains checked when any id survives; report the actual per-team coverage.
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 import { linearMetadataGroupCoverage } from './linear-issue-attribute-filter-team-ids'

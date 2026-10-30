@@ -39,7 +39,6 @@ function createSnapshot(
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
-    closedTerminalTabTombstonesByTabId: {},
     localOnlyScrollbackByTabId: {},
     ...overrides
   }

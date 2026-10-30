@@ -1,3 +1,4 @@
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -11,6 +12,7 @@ import {
 } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabDetailsEditing(
   item: GitLabWorkItem | null,
@@ -40,7 +42,7 @@ export function useGitLabDetailsEditing(
     }
     setLabelOptionsLoading(true)
     try {
-      const labels = await window.api.gl.listLabels(repoSelector)
+      const labels = await gitLabApiFor(repoSelector).listLabels(repoSelector)
       if (mountedRef.current) {
         setLabelOptions(normalizeGitLabLabels(labels))
       }
@@ -127,7 +129,11 @@ export function useGitLabDetailsEditing(
 
     setDetailsSaving(true)
     try {
-      const res = await window.api.gl.updateMR({ ...repoSelector, iid: item.number, updates })
+      const res = await gitLabApiFor(repoSelector).updateMR({
+        ...repoSelector,
+        iid: item.number,
+        updates
+      })
       if (res.ok) {
         if (mountedRef.current) {
           setDetails((current) =>
@@ -149,7 +155,7 @@ export function useGitLabDetailsEditing(
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         }
       } else if (mountedRef.current) {
-        toast.error(res.error)
+        toast.error(codeHostErrorText(res))
       }
     } catch (error) {
       if (mountedRef.current) {

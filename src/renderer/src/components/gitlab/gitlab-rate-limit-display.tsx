@@ -3,8 +3,8 @@ import { Gauge, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   GetGitLabRateLimitResult,
   GitLabRateLimitSnapshot
@@ -12,19 +12,19 @@ import type {
 import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
 import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 
 const REFRESH_INTERVAL_MS = 60_000
 
 export function formatGitLabRateLimitReset(resetAt: number | null): string {
   if (resetAt === null) {
-    return 'unknown'
+    return translate('auto.components.gitlab.gitlab.rate.limit.display.resetUnknown', 'unknown')
   }
   const deltaSec = Math.max(0, resetAt - Math.floor(Date.now() / 1000))
   if (deltaSec < 60) {
-    return `${deltaSec}s`
+    return formatUiNarrowDuration(deltaSec, 'second')
   }
-  const mins = Math.round(deltaSec / 60)
-  return `${mins}m`
+  return formatUiNarrowDuration(Math.round(deltaSec / 60), 'minute')
 }
 
 export function toneForGitLabBucket(remaining: number, limit: number): 'ok' | 'warn' | 'crit' {
@@ -41,7 +41,10 @@ export function toneForGitLabBucket(remaining: number, limit: number): 'ok' | 'w
   return 'ok'
 }
 
-export function useGitLabRateLimitSnapshot(options?: { autoRefresh?: boolean }): {
+export function useGitLabRateLimitSnapshot(
+  target: RuntimeClientTarget,
+  options?: { autoRefresh?: boolean }
+): {
   snapshot: GitLabRateLimitSnapshot | null
   hasError: boolean
   isFetching: boolean
@@ -50,7 +53,6 @@ export function useGitLabRateLimitSnapshot(options?: { autoRefresh?: boolean }):
   const [snapshot, setSnapshot] = useState<GitLabRateLimitSnapshot | null>(null)
   const [hasError, setHasError] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
-  const settings = useAppStore((s) => s.settings)
   const latestToken = useRef(0)
   const autoRefresh = options?.autoRefresh ?? true
 
@@ -59,7 +61,6 @@ export function useGitLabRateLimitSnapshot(options?: { autoRefresh?: boolean }):
       const token = ++latestToken.current
       setIsFetching(true)
       try {
-        const target = getActiveRuntimeTarget(settings)
         const params = force ? { force: true } : undefined
         const res =
           target.kind === 'environment'
@@ -89,7 +90,7 @@ export function useGitLabRateLimitSnapshot(options?: { autoRefresh?: boolean }):
         }
       }
     },
-    [settings]
+    [target]
   )
 
   useEffect(() => {
@@ -135,24 +136,31 @@ function GitLabRateLimitRows({
             tone === 'warn' && 'text-amber-700 dark:text-amber-300'
           )}
         >
-          {rest.remaining}{' '}
-          {translate('auto.components.gitlab.gitlab.rate.limit.display.ea8ad0bae8', 'of')}{' '}
-          {rest.limit}{' '}
           {translate(
-            'auto.components.gitlab.gitlab.rate.limit.display.3e2c982cfa',
-            'left, resets in'
-          )}{' '}
-          {formatGitLabRateLimitReset(rest.resetAt)}
+            'auto.components.gitlab.gitlab.rate.limit.display.remainingOfLimit',
+            '{{remaining}} of {{limit}} left, resets in {{reset}}',
+            {
+              remaining: rest.remaining,
+              limit: rest.limit,
+              reset: formatGitLabRateLimitReset(rest.resetAt)
+            }
+          )}
         </span>
       </div>
     </div>
   )
 }
 
-export function GitLabRateLimitPanel({ className }: { className?: string }): React.JSX.Element {
-  const { snapshot, hasError, isFetching, refresh } = useGitLabRateLimitSnapshot()
-  const settings = useAppStore((s) => s.settings)
-  const budgetScope = getProviderRateLimitScope(settings, 'GitLab')
+export function GitLabRateLimitPanel({
+  className,
+  target
+}: {
+  className?: string
+  /** The host chosen at the top of Settings. */
+  target: RuntimeClientTarget
+}): React.JSX.Element {
+  const { snapshot, hasError, isFetching, refresh } = useGitLabRateLimitSnapshot(target)
+  const budgetScope = getProviderRateLimitScope(target, 'GitLab')
 
   return (
     <div className={cn('space-y-3 rounded-md border border-border/60 p-3', className)}>

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -47,5 +48,16 @@ describe('runtime extraction regressions', () => {
     } finally {
       vi.unstubAllEnvs()
     }
+  })
+
+  it('reads a machine rename the same way status publishes it', () => {
+    const settings = { machineName: 'Build server' }
+    const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => settings }))
+    expect(runtime.readMachineName()).toBe('Build server')
+    expect(runtime.getStatus().hostPlatform).toBe(process.platform)
+    settings.machineName = 'Renamed desk'
+    expect(runtime.getStatus().machineName).toBe('Renamed desk')
+    // The remote-workspace client identity reads this same accessor at send time.
+    expect(runtime.readMachineName()).toBe('Renamed desk')
   })
 })

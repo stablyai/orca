@@ -6,11 +6,10 @@ import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
-  // Why: the stable facade owns app-visible RPC/subscription state while the
-  // direct socket remains a replaceable first physical generation.
+  // Keep app-visible RPC/subscription identity stable while replacing physical sockets.
   const logical = createStableLogicalRpcClient(
     connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
-    directPathForEndpoint(host, host.endpoint)
+    directPathForEndpoint(host.endpoint)
   )
   if (Platform.OS === 'web') {
     return logical
@@ -29,8 +28,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   }
   const notifyLogicalForeground = logical.notifyForeground
   logical.notifyForeground = (reason = 'focus') => {
-    // Why: a nudge while already foreground must not re-enter setForeground —
-    // that path suspended healthy relays; the supervisor probes or replaces instead.
+    // Foreground nudges probe/replace; re-entering setForeground would suspend healthy relays.
     endpointLifecycle.nudge(reason)
     notifyLogicalForeground(reason)
   }

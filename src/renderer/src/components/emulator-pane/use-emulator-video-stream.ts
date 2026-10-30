@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
-// Decodes the Android H.264 stream (scrcpy access units forwarded over the
-// emulator:videoStream* IPC) with WebCodecs and paints it to a <canvas>. The
-// Android sibling of use-emulator-frame-stream (MJPEG/<img>). Validated against
-// a real emulator; the byte framing is unit-tested in scrcpy-video-frame-parser.
+// Decode Android scrcpy H.264 access units from IPC onto a canvas; iOS uses the MJPEG hook.
 
 type VideoFrameMessage = {
   streamId: string
@@ -25,14 +23,13 @@ type EmulatorVideoApi = {
   onVideoStreamFrame?: (cb: (msg: VideoFrameMessage) => void) => () => void
 }
 
-// scrcpy emits Annex-B H.264; the decoder is configured without an avcC
-// description and the SPS/PPS config packet is prepended to the first keyframe.
+// Use Annex-B without avcC; prepend the SPS/PPS packet to the first keyframe.
 const H264_CODEC = 'avc1.640028'
 
 type StreamSize = { width: number; height: number }
 
 function newVideoStreamId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+  return createBrowserUuid()
 }
 
 export function useEmulatorVideoStream(
@@ -83,8 +80,6 @@ export function useEmulatorVideoStream(
       output: (frame) => {
         if (!disposed && ctx && canvas) {
           clearFirstFrameTimeout()
-          // Resizing the canvas reallocates its backing store and forces a
-          // reflow, so only do it when the frame dimensions actually change.
           if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
             canvas.width = frame.displayWidth
             canvas.height = frame.displayHeight

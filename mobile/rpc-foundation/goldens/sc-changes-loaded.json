@@ -1,137 +1,10 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "source-control.changes-load",
   "family": "git.changes-load",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
-  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
-  "scenarioSha256": "f2c4d64b3761fcd036d9538155037edc4e35492e67ce5eb158372ddc76e55cc9",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "02adc1911747": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "entries": [
-              {
-                "added": 2,
-                "path": "src/app.ts",
-                "removed": 1,
-                "status": "modified"
-              }
-            ],
-            "summary": {
-              "baseOid": "base-oid",
-              "baseRef": "origin/dev",
-              "changedFiles": 1,
-              "compareRef": "feature",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base",
-              "status": "ready"
-            }
-          }
-        }
-      }
-    },
-    "02d5719960a0": {
-      "name": "source-control.status-load-success",
-      "ordinal": 6,
-      "value": {}
-    },
-    "21b68b754dce": {
-      "name": "worktree.show#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "baseRef": "origin/dev"
-            }
-          }
-        }
-      }
-    },
-    "2673423361c6": {
-      "name": "repo.list#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "35fa5a183b27": {
+    "1d461278a0ae": {
       "branchCompareState": {
         "kind": "ready",
         "result": {
@@ -144,12 +17,12 @@
             }
           ],
           "summary": {
-            "baseOid": "base-oid",
+            "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
             "baseRef": "origin/dev",
             "changedFiles": 1,
             "compareRef": "feature",
-            "headOid": "head-oid",
-            "mergeBase": "merge-base",
+            "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+            "mergeBase": "0123456789abcdef0123456789abcdef01234567",
             "status": "ready"
           }
         }
@@ -183,9 +56,65 @@
         }
       }
     },
-    "586549d3cea5": {
-      "name": "repo.list#1",
+    "2bf960db8adf": {
+      "name": "git.status#1",
       "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\",\"includeLineStats\":false}}"
+    },
+    "35cc9e325d08": {
+      "name": "git.branchCompare#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 2,
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "baseRef": "origin/dev",
+              "changedFiles": 1,
+              "compareRef": "feature",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
+              "status": "ready"
+            }
+          }
+        }
+      }
+    },
+    "587de4c7f7fc": {
+      "name": "repo.list#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -205,25 +134,17 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "repos": []
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "8601995022f5": {
-      "name": "git.status#1",
-      "ordinal": 1,
+    "6d220bb7b42a": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
-          "value": "git.status"
+          "value": "worktree.show"
         },
         {
           "name": "params",
@@ -241,6 +162,42 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
+      }
+    },
+    "8c8e528ca222": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "baseRef": "origin/dev"
+            }
+          }
+        }
       }
     },
     "8fda864c66d6": {
@@ -276,17 +233,37 @@
         }
       }
     },
-    "92bee926780c": {
+    "9536c968b88a": {
       "name": "repo.list#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "995fa685a11d": {
-      "name": "source-control.action-error",
-      "ordinal": 5,
-      "value": {
-        "message": {
-          "$rpc": "null"
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "repos": []
+          }
         }
       }
     },
@@ -298,9 +275,14 @@
         "kind": "loading"
       }
     },
-    "d7f430c1de90": {
+    "a6482f604002": {
+      "name": "source-control.status-load-success",
+      "ordinal": 8,
+      "value": {}
+    },
+    "aa8c5813ba8a": {
       "name": "git.status#1",
-      "ordinal": 1,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -309,6 +291,7 @@
         {
           "name": "params",
           "value": {
+            "includeLineStats": false,
             "worktree": "id:repo42::/p"
           }
         },
@@ -324,7 +307,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "branch": "feature",
@@ -354,40 +337,23 @@
         }
       }
     },
-    "ddee63fd3bf5": {
+    "ad2a2a1df35b": {
+      "name": "worktree.show#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "ae602a492660": {
       "name": "git.status#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "e9aa1da11c9c": {
-      "name": "worktree.show#1",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "fbb97a8eabc3": {
-      "name": "git.branchCompare#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
-    },
-    "fbd755de2afd": {
-      "name": "worktree.show#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "worktree.show"
+          "value": "git.status"
         },
         {
           "name": "params",
           "value": {
+            "includeLineStats": false,
             "worktree": "id:repo42::/p"
           }
         },
@@ -402,6 +368,64 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "c2212473f0c1": {
+      "name": "repo.list#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "d11f484ecaf5": {
+      "name": "source-control.action-error",
+      "ordinal": 7,
+      "value": {
+        "message": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "e2d7409ece1c": {
+      "name": "git.branchCompare#1",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
+    },
+    "e3973bb12da1": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f648b042d810": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     }
   },
   "recording": {
@@ -410,8 +434,8 @@
       {
         "id": "status-pending",
         "observation": {
-          "sender": ["8601995022f5"],
-          "payloads": ["ddee63fd3bf5"],
+          "sender": ["e3973bb12da1", "ae602a492660"],
+          "payloads": ["f648b042d810", "2bf960db8adf"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -422,25 +446,37 @@
       {
         "id": "compare-pending",
         "observation": {
-          "sender": ["d7f430c1de90", "fbd755de2afd", "2673423361c6"],
-          "payloads": ["ddee63fd3bf5", "e9aa1da11c9c", "92bee926780c"],
+          "sender": ["e3973bb12da1", "aa8c5813ba8a", "6d220bb7b42a", "587de4c7f7fc"],
+          "payloads": ["f648b042d810", "2bf960db8adf", "ad2a2a1df35b", "c2212473f0c1"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["995fa685a11d", "02d5719960a0"]
+          "effects": ["d11f484ecaf5", "a6482f604002"]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["d7f430c1de90", "21b68b754dce", "586549d3cea5", "02adc1911747"],
-          "payloads": ["ddee63fd3bf5", "e9aa1da11c9c", "92bee926780c", "fbb97a8eabc3"],
+          "sender": [
+            "e3973bb12da1",
+            "aa8c5813ba8a",
+            "8c8e528ca222",
+            "9536c968b88a",
+            "35cc9e325d08"
+          ],
+          "payloads": [
+            "f648b042d810",
+            "2bf960db8adf",
+            "ad2a2a1df35b",
+            "c2212473f0c1",
+            "e2d7409ece1c"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "35fa5a183b27",
-          "effects": ["995fa685a11d", "02d5719960a0"]
+          "state": "1d461278a0ae",
+          "effects": ["d11f484ecaf5", "a6482f604002"]
         }
       }
     ]

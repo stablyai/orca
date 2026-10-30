@@ -6,6 +6,7 @@ import type { CommandHandler } from '../dispatch'
 import { formatTerminalClose, reportCliError, printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { getRequiredWorktreeSelector, getTerminalHandle } from '../selectors'
+import { describeUnconfirmedCloseStop } from '../../shared/pty-liveness-verdict'
 
 /** A false stop receipt is an error only when the host supplied a liveness verdict. */
 function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError | null {
@@ -13,14 +14,16 @@ function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError |
     return null
   }
 
-  const verdict = close.ptyStopVerdict
-  const detail =
-    verdict === 'live'
-      ? 'The PTY is live.'
-      : `The PTY was not confirmed stopped: ${close.ptyStopReason ?? 'its host could not be reached'}.`
+  if (close.ptyStopVerdict === 'live') {
+    return new RuntimeClientError(
+      'terminal_stop_live',
+      `Terminal ${close.handle} close failed to confirm the PTY stopped (live). The PTY is live.`,
+      { close }
+    )
+  }
   return new RuntimeClientError(
-    verdict === 'live' ? 'terminal_stop_live' : 'terminal_stop_unverifiable',
-    `Terminal ${close.handle} close failed to confirm the PTY stopped (${verdict}). ${detail}`,
+    'terminal_stop_unverifiable',
+    `Closed terminal ${close.handle}. ${describeUnconfirmedCloseStop(close)}`,
     { close }
   )
 }
@@ -87,12 +90,10 @@ export const terminalCloseHandler: CommandHandler = async ({ flags, client, cwd,
   const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
     terminal: await getTerminalHandle(flags, cwd, client)
   })
-  // Why: a transport-level success must not hide a live or unverifiable PTY. Keep the receipt in
-  // error.data so JSON callers retain the host's exact evidence while receiving a failing outcome.
+  // A successful RPC can leave a live or unverified PTY; retain the host receipt in error.data.
   const failure = terminalCloseFailure(result.result.close)
   if (failure) {
-    // Keep the established human receipt (including its liveness warning); JSON needs the
-    // standard failure envelope so callers do not mistake transport success for a stopped PTY.
+    // Keep human liveness warnings; JSON needs a failure envelope to distinguish an unconfirmed stop.
     if (json) {
       reportCliError(failure, true)
     } else {

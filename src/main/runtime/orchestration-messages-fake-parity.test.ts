@@ -5,7 +5,6 @@ import type { MessageType } from './orchestration/types'
 
 type PointerTarget = { ptyId: string; processIncarnation: string }
 
-// The slice of the mailbox store the pointer batch selector depends on.
 type PointerStore = {
   insertMessage(message: {
     runId: string
@@ -23,8 +22,7 @@ type PointerStore = {
   ): { id: string }[]
 }
 
-// Why: runtime tests drive the in-memory fake, so a reservation race it cannot lose is a race
-// those tests can never cover. Both stores must answer the same question the same way.
+// The in-memory fake must reproduce SQLite reservation races for runtime tests to cover them.
 const STORES: [string, () => PointerStore][] = [
   ['real sqlite', () => new OrchestrationDb(':memory:')],
   ['in-memory fake', () => new InMemoryOrchestrationMessages()]
@@ -65,7 +63,7 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
     expect(store.stageMailboxPointerEnter([taken.id], rival)).toBe(true)
 
     expect(store.stageMailboxPointerEnter([free.id, taken.id], mine)).toBe(false)
-    // The partial claim must not survive: the free row stays available to the next flight.
+    // A failed partial claim must leave the free row available to another flight.
     expect(store.stageMailboxPointerEnter([free.id], mine)).toBe(true)
   })
 

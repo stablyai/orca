@@ -1,110 +1,99 @@
 import type { Worktree } from './workspace-list-types'
-import type { MobileSortMode } from './workspace-view-settings'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+import type { WorkspaceSortBy } from '../../../src/shared/workspace-view/workspace-view-options'
+import {
+  buildWorkspaceRowComparator,
+  recentActivityWithCreateGrace
+} from '../../../src/shared/workspace-view/workspace-row-sort'
+import { compareCodePoints, compareSidebarText } from '../../../src/shared/sidebar-list/text-order'
+import { getWorktreeRowIdentity } from './worktree-host-row-identity'
+import {
+  compareSmartStamps,
+  recentStamp,
+  type StampOrderRow
+} from '../../../src/shared/sidebar-list/stamp-order'
 
-export const CREATE_GRACE_MS = 5 * 60 * 1000
+function finiteOr(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) ? value : fallback
+}
 
 function getManualSortRank(worktree: Worktree): number | null {
   const rank = worktree.manualOrder ?? worktree.sortOrder
   return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
 }
 
-function compareDisplayName(a: Worktree, b: Worktree): number {
-  return a.displayName.localeCompare(b.displayName)
-}
-
-function getRecentActivity(worktree: Worktree): number {
-  const lastActivityAt = worktree.lastActivityAt ?? 0
-  const lastOutputAt = worktree.lastOutputAt ?? 0
-  // Why: headless serve hosts only stamp lastActivityAt at creation, so live
-  // terminal output must still count as recency for mobile-only pairings.
-  return Math.max(
-    Number.isFinite(lastActivityAt) ? lastActivityAt : 0,
-    Number.isFinite(lastOutputAt) ? lastOutputAt : 0
-  )
-}
-
-function effectiveRecentActivity(worktree: Worktree, now: number): number {
-  const lastActivityAt = getRecentActivity(worktree)
-  const { createdAt } = worktree
-  if (
-    createdAt === undefined ||
-    !Number.isFinite(createdAt) ||
-    now >= createdAt + CREATE_GRACE_MS
-  ) {
-    return lastActivityAt
+function stampRow(worktree: Worktree): StampOrderRow {
+  return {
+    lastActivityAt: worktree.lastActivityAt,
+    smartTier: worktree.smartTier,
+    smartAt: worktree.smartAt,
+    isUnread: worktree.unread
   }
-  return Math.max(lastActivityAt, createdAt + CREATE_GRACE_MS)
 }
 
-function compareByRecent(a: Worktree, b: Worktree, now: number): number {
-  return (
-    effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now) || compareDisplayName(a, b)
-  )
+export function hostSortsByStamps(worktrees: readonly Worktree[]): boolean {
+  return worktrees.some((worktree) => worktree.sortedByStamps)
 }
 
 const AGENT_ATTENTION_STATUS_ORDER = { permission: 0, working: 1, done: 2, active: 3, inactive: 4 }
 
-function compareByAgentAttention(a: Worktree, b: Worktree, now: number): number {
-  return (
-    AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(a)] -
-      AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(b)] || compareByRecent(a, b, now)
-  )
-}
-
 export function sortWorktrees(
   worktrees: Worktree[],
-  mode: MobileSortMode,
-  now = Date.now()
+  mode: WorkspaceSortBy,
+  now = Date.now(),
+  // Read from the unfiltered list, so a filter never switches the algorithm.
+  byStamps = hostSortsByStamps(worktrees)
 ): Worktree[] {
-  if (mode === 'manual') {
-    return [...worktrees].sort((a, b) => {
-      const aRank = getManualSortRank(a)
-      const bRank = getManualSortRank(b)
-      if (aRank !== null && bRank !== null && aRank !== bRank) {
-        // Why: desktop assigns higher sort/manual ranks to earlier list positions.
-        return bRank - aRank
-      }
-      if (aRank !== null && bRank === null) {
-        return -1
-      }
-      if (aRank === null && bRank !== null) {
-        return 1
-      }
-      return compareDisplayName(a, b)
-    })
+  // A stamping host decides the order; rows from an older one rest by Recent among them.
+  if (byStamps) {
+    return [...worktrees].sort(
+      buildWorkspaceRowComparator<Worktree>(mode, {
+        label: (w) => w.displayName,
+        identity: getWorktreeRowIdentity,
+        repoLabel: (w) => w.repo,
+        recentActivity: recentStamp,
+        manualRank: getManualSortRank,
+        compareSmart: (a, b) => compareSmartStamps(stampRow(a), stampRow(b))
+      })
+    )
   }
-  return [...worktrees].sort((a, b) => {
-    if (mode === 'name') {
-      return compareDisplayName(a, b)
-    }
-    if (mode === 'recent') {
-      return compareByRecent(a, b, now)
-    }
-    if (mode === 'repo') {
-      const repoComparison = a.repo.localeCompare(b.repo)
-      return repoComparison || compareDisplayName(a, b)
-    }
-    const aRank = typeof a.sortOrder === 'number' && Number.isFinite(a.sortOrder) ? a.sortOrder : 0
-    const bRank = typeof b.sortOrder === 'number' && Number.isFinite(b.sortOrder) ? b.sortOrder : 0
-    if (aRank !== bRank) {
-      // Why: desktop persists its computed Agent activity order into sortOrder;
-      // mobile should render that source-of-truth before local fallback signals.
-      return bRank - aRank
-    }
-    if (aRank === 0) {
-      // Why: headless serve hosts never persist desktop smart ranks; unranked
-      // rows fall back to agent attention order instead of a frozen A-Z list.
-      return compareByAgentAttention(a, b, now)
-    }
-    return compareDisplayName(a, b)
-  })
+  // Match desktop's effectiveRecentActivity: terminal output never counts as activity.
+  const recentActivity = (w: Worktree): number =>
+    recentActivityWithCreateGrace(finiteOr(w.lastActivityAt, 0), w.createdAt, now)
+  const compareRecent = (a: Worktree, b: Worktree): number =>
+    recentActivity(b) - recentActivity(a) ||
+    compareSidebarText(a.displayName, b.displayName) ||
+    compareCodePoints(getWorktreeRowIdentity(a), getWorktreeRowIdentity(b))
+  return [...worktrees].sort(
+    buildWorkspaceRowComparator<Worktree>(mode, {
+      label: (w) => w.displayName,
+      identity: getWorktreeRowIdentity,
+      repoLabel: (w) => w.repo,
+      recentActivity,
+      manualRank: getManualSortRank,
+      compareSmart: (a, b) => {
+        const aRank = finiteOr(a.sortOrder, 0)
+        const bRank = finiteOr(b.sortOrder, 0)
+        if (aRank !== bRank) {
+          return bRank - aRank
+        }
+        if (aRank !== 0) {
+          return 0
+        }
+        // Headless hosts lack desktop smart ranks; fall back to attention then recency.
+        return (
+          AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(a)] -
+            AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(b)] || compareRecent(a, b)
+        )
+      }
+    })
+  )
 }
 
 export function getWorktreeStatus(
   w: Worktree
 ): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
-  // Why: desktop's sidebar activity is the parity source. Runtime status may
-  // still report retained/background PTYs as active after desktop hides them.
+  // Match desktop sidebar activity; retained/background PTYs alone must not imply an active workspace.
   if (w.hasHostSidebarActivity === false) {
     return 'inactive'
   }
@@ -121,4 +110,23 @@ export function getWorktreeStatus(
     return 'active'
   }
   return 'inactive'
+}
+
+// Only the host sees agent verdicts; older hosts omit sidebarStatus, and activity stays the phone's rule above.
+const HOST_VERDICT_DOT_STATUSES: ReadonlySet<string> = new Set<WorktreeStatus>([
+  'permission',
+  'failed',
+  'working',
+  'monitoring',
+  'unconfirmed',
+  'interrupted',
+  'done'
+])
+
+function isHostVerdictDotStatus(value: string | undefined): value is WorktreeStatus {
+  return value !== undefined && HOST_VERDICT_DOT_STATUSES.has(value)
+}
+
+export function getWorktreeDotStatus(w: Worktree): WorktreeStatus {
+  return isHostVerdictDotStatus(w.sidebarStatus) ? w.sidebarStatus : getWorktreeStatus(w)
 }

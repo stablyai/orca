@@ -1,4 +1,9 @@
 import React, { useCallback } from 'react'
+import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { buildWorkspaceAttachmentEdits } from './worktree-attachment-editing'
+import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -38,9 +43,9 @@ export function useWorktreeCardSecondaryDetails({
   linkedBitbucketPR,
   linkedAzureDevOpsPR,
   linkedGiteaPR,
-  cardProps,
   newCardStyle,
   compactCards,
+  cardDetails,
   agentActivityDisplayMode,
   workspacePorts,
   openTaskPage,
@@ -49,9 +54,9 @@ export function useWorktreeCardSecondaryDetails({
 }: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'statusPrDisplay'> &
   Pick<
     Foundation,
-    | 'cardProps'
     | 'newCardStyle'
     | 'compactCards'
+    | 'cardDetails'
     | 'agentActivityDisplayMode'
     | 'workspacePorts'
     | 'openTaskPage'
@@ -88,7 +93,7 @@ export function useWorktreeCardSecondaryDetails({
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
-  const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
+  const showInlineAgentList = cardDetails.inlineAgents
   const compactInlineAgentRows = useWorktreeAgentRows(
     worktree.id,
     showInlineAgentList && agentActivityDisplayMode === 'compact'
@@ -122,22 +127,22 @@ export function useWorktreeCardSecondaryDetails({
     [hoverIssue, openTaskPage, repo]
   )
   const handleOpenReviewInOrca = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent, review: WorktreeCardPrDisplay | null = hoverReview) => {
       e.stopPropagation()
-      if (!repo || !hoverReview?.url || hoverReview.provider !== 'github') {
+      if (!repo || !review?.url || review.provider !== 'github') {
         return
       }
       const item: GitHubWorkItem = {
-        id: hoverReview.url,
+        id: review.url,
         type: 'pr',
-        number: hoverReview.number,
-        title: hoverReview.title,
-        state: hoverReview.state ?? 'open',
-        url: hoverReview.url,
+        number: review.number,
+        title: review.title,
+        state: review.state ?? 'open',
+        url: review.url,
         labels: [],
-        updatedAt: 'updatedAt' in hoverReview ? hoverReview.updatedAt : new Date().toISOString(),
+        updatedAt: 'updatedAt' in review ? review.updatedAt : new Date().toISOString(),
         author: null,
-        headSha: 'headSha' in hoverReview ? hoverReview.headSha : undefined,
+        headSha: 'headSha' in review ? review.headSha : undefined,
         repoId: repo.id
       }
       openTaskPage({ taskSource: 'github', preselectedRepoId: repo.id, openGitHubWorkItem: item })
@@ -185,38 +190,63 @@ export function useWorktreeCardSecondaryDetails({
     (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
     (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
     (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
-  const handleUnlinkReview = useCallback(async () => {
-    const options = { executionHostId: worktree.hostId ?? 'local' }
-    switch (hoverReviewProvider) {
-      case 'github':
-        if (hoverReview) {
-          const result = await updateWorktreeMeta(
-            worktree.id,
-            { linkedPR: null, suppressedGitHubPR: hoverReview.number },
-            options
-          )
-          if (!result.ok) {
-            toast.error(result.error)
-          }
+  const handleUnlinkReview = useCallback(
+    async (item?: WorkspaceAttachment) => {
+      const options = { executionHostId: worktree.hostId ?? 'local' }
+      if (item) {
+        const initial = getWorkspaceAttachments(worktree)
+        const key = getWorkspaceAttachmentKey(item)
+        const draft = initial.filter((entry) => getWorkspaceAttachmentKey(entry) !== key)
+        const result = await updateWorktreeMeta(
+          worktree.id,
+          {
+            ...buildWorkspaceAttachmentEdits({ initial, draft }),
+            ...(item.provider === 'github' &&
+            hoverReview?.provider === 'github' &&
+            hoverReview.number === item.number &&
+            (!item.url || item.url === hoverReview.url)
+              ? { suppressedGitHubPR: item.number }
+              : {})
+          },
+          options
+        )
+        if (!result.ok) {
+          toast.error(result.error)
         }
         return
-      case 'gitlab':
-        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null }, options)
-        return
-      case 'bitbucket':
-        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null }, options)
-        return
-      case 'azure-devops':
-        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null }, options)
-        return
-      case 'gitea':
-        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
-        break
-      case 'unsupported':
-      case undefined:
-        break
-    }
-  }, [hoverReview, hoverReviewProvider, updateWorktreeMeta, worktree.hostId, worktree.id])
+      }
+      switch (hoverReviewProvider) {
+        case 'github':
+          if (hoverReview) {
+            const result = await updateWorktreeMeta(
+              worktree.id,
+              { linkedPR: null, suppressedGitHubPR: hoverReview.number },
+              options
+            )
+            if (!result.ok) {
+              toast.error(result.error)
+            }
+          }
+          return
+        case 'gitlab':
+          void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null }, options)
+          return
+        case 'bitbucket':
+          void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null }, options)
+          return
+        case 'azure-devops':
+          void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null }, options)
+          return
+        case 'gitea':
+          void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
+          break
+        case 'unsupported':
+        case undefined:
+          break
+      }
+    },
+    [hoverReview, hoverReviewProvider, updateWorktreeMeta, worktree]
+  )
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -227,19 +257,20 @@ export function useWorktreeCardSecondaryDetails({
     },
     [linearIssue, openTaskPage]
   )
-  const hasDetails = hasWorktreeCardDetails({
-    issue: metaIssue,
-    linearIssue: metaLinearIssue,
-    jiraIssue: metaJiraIssue,
-    review: newCardStyle ? null : metaReview,
-    comment: metaComment,
-    automationProvenance: metaAutomationProvenance,
-    cliProvenance: metaCliProvenance
-  })
+  const hasDetails =
+    getWorkspaceAttachments(worktree).length > 0 ||
+    hasWorktreeCardDetails({
+      issue: metaIssue,
+      linearIssue: metaLinearIssue,
+      jiraIssue: metaJiraIssue,
+      review: newCardStyle ? null : metaReview,
+      comment: metaComment,
+      automationProvenance: metaAutomationProvenance,
+      cliProvenance: metaCliProvenance
+    })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
-  // Why: derived from the settings the card already subscribes to — a third store
-  // subscription for this one field costs a listener per card on every store write.
+  // Reuse subscribed card settings to avoid another per-card listener on every store write.
   const cacheTtlMs = showAggregateCacheTimer ? (settings?.promptCacheTtlMs ?? 0) : 0
 
   return {

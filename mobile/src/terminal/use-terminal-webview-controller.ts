@@ -1,43 +1,27 @@
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
-import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
+import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
+import { fitDimensionsFromCell } from './terminal-grid-fit'
+import type {
+  TerminalInit,
+  TerminalWebViewHandle,
+  TerminalWebViewProps
+} from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
-import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import type { TerminalFrame, TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { isTerminalGestureInput } from './terminal-gesture-input'
 
-/**
- * Everything `TerminalWebView` does that is not about `react-native-webview`.
- *
- * The document is the same program on both platforms — inside the WebView it is the generated
- * script, on the page it is the modules that script is generated from — so the readiness
- * handshake, the pending queue, the write coalescer, the ready and measure promises and the whole
- * imperative handle are the same too. What differs is only how a command reaches the document and
- * how a notify comes back: a `postMessage` across the WebView bridge, or a direct call.
- *
- * So that difference is the two arguments, and both components are the small part that is left.
- * Writing the page's half as a second copy of this would be the fork the series exists to avoid:
- * the handle is the contract every consumer above it holds, and two implementations of it drift.
- */
+// Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
 
 export type TerminalWebViewTransport = {
-  /** Hands one command, with its id already assigned, to the document. */
   post: (command: TerminalWebViewCommand & { id: number }) => void
-  /**
-   * Whether returning to the foreground has to re-prove the document is alive.
-   *
-   * iOS can keep the native view while discarding the WebView's JS state, so the native side
-   * pings and replays nothing until that exact document answers. The page has no second content
-   * process to lose: its document is the page's own modules, and if they were gone so was the
-   * component holding this handle.
-   *
-   * Asked at the moment of recovery rather than at render, because the platform the native
-   * component reads is the running one and a handle built once must not cache it.
-   */
+  // Native recovery must ping the exact retained document because iOS can lose its JS state; embedded pages have no separate process.
   pingsOnForegroundRecovery: () => boolean
 }
 
@@ -47,12 +31,14 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    interactionActive = true,
     textScale = 1,
     onWebReady,
     onEngineError,
     onSelectionMode,
     onSelectionCopy,
     onSelectionEvicted,
+    onClipboardWrite,
     onModesChanged,
     onKeyboardAvoidanceMetrics,
     onHaptic,
@@ -61,7 +47,8 @@ export function useTerminalWebViewController(
     onTerminalTap,
     onFileTap,
     onOpenUrl,
-    onTextScaleChange
+    onTextScaleChange,
+    onCellBoxChange
   } = props
   const { pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
@@ -69,10 +56,9 @@ export function useTerminalWebViewController(
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
-  // Why: each init() call posts 'init' to the document and arms a fresh ready promise. The
-  // document's init() rAF chain ends with a 'ready' notify that resolves it. measureFitDimensions
-  // awaits this so it doesn't race ahead of term.open() / renderService population.
+  // Await init’s ready after its render chain so follow-up fit uses its measured cell box.
   const promises = useTerminalWebViewReadyPromises()
+  const cellBoxRef = useRef<TerminalCellBox | null>(null)
   const { clearEngineError, engineError, reportEngineError, reportNativeEngineError } =
     useTerminalWebViewEngineErrorState(onEngineError)
   const { armWebReadyWatchdog, clearWebReadyWatchdog } = useTerminalWebReadyWatchdog(
@@ -105,8 +91,7 @@ export function useTerminalWebViewController(
     [pendingMessages, sendToDocument]
   )
 
-  // Why: a busy PTY delivers ~200 stream frames/s; coalescing here collapses the
-  // per-frame bridge + WebKit IPC + paint cost that runs the phone hot (#9302).
+  // Coalesce busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
   const writeCoalescer = useMemo(
     () => createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data })),
     [postMessage]
@@ -127,12 +112,13 @@ export function useTerminalWebViewController(
       if (notifyParent) {
         onWebReady?.()
       }
-      // Why: reload clears queued commands, so readiness must always restore the
-      // native-selected theme even when its value did not change in React.
+      // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
       flushPendingMessages()
     },
     [
+      interactionActive,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,
@@ -142,12 +128,26 @@ export function useTerminalWebViewController(
     ]
   )
 
-  /** One notify from the document, already parsed. */
+  useEffect(() => {
+    if (isWebReadyRef.current) {
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
+    }
+  }, [sendToDocument, interactionActive])
+
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
       routeTerminalQueryReply(msg, onTerminalQueryReply)
+      if (
+        interactionActive &&
+        msg.type === 'terminal-input' &&
+        typeof msg.bytes === 'string' &&
+        isTerminalGestureInput(msg.bytes)
+      ) {
+        writeCoalescer.markInteractive()
+      }
 
       if (msg.type === 'web-ready') {
+        cellBoxRef.current = readTerminalCellBox(msg)
         confirmWebReady(true)
       } else if (
         msg.type === 'pong' &&
@@ -156,36 +156,39 @@ export function useTerminalWebViewController(
       ) {
         confirmWebReady(false)
       } else if (msg.type === 'ready') {
-        // Why: the document's init() rAF chain has run — term is open, renderService is
-        // populated, first paint has happened. Resolve any pending awaitReady() so a queued
-        // measure can now safely read cell dims.
         promises.resolveReady()
-      } else if (msg.type === 'measure-result') {
-        promises.resolveMeasure(msg)
+      } else if (msg.type === 'cell-box') {
+        cellBoxRef.current = readTerminalCellBox(msg)
+        if (msg.refit === true) {
+          onCellBoxChange?.()
+        }
       } else {
         dispatchTerminalWebViewNotification(msg, {
           reportEngineError,
           onSelectionMode,
           onSelectionCopy,
           onSelectionEvicted,
+          onClipboardWrite,
           onModesChanged,
           onKeyboardAvoidanceMetrics,
           onHaptic,
-          onTerminalInput,
-          onTerminalTap,
-          onFileTap,
-          onOpenUrl,
+          onTerminalInput: interactionActive ? onTerminalInput : undefined,
+          onTerminalTap: interactionActive ? onTerminalTap : undefined,
+          onFileTap: interactionActive ? onFileTap : undefined,
+          onOpenUrl: interactionActive ? onOpenUrl : undefined,
           onTextScaleChange
         })
       }
     },
     [
       confirmWebReady,
+      interactionActive,
       promises,
       reportEngineError,
       onSelectionMode,
       onSelectionCopy,
       onSelectionEvicted,
+      onClipboardWrite,
       onModesChanged,
       onKeyboardAvoidanceMetrics,
       onHaptic,
@@ -194,21 +197,19 @@ export function useTerminalWebViewController(
       onTerminalTap,
       onFileTap,
       onOpenUrl,
-      onTextScaleChange
+      onTextScaleChange,
+      onCellBoxChange,
+      writeCoalescer
     ]
   )
 
-  /**
-   * The document is gone or about to be replaced: nothing queued belongs to the next one.
-   *
-   * Why: messages queued for a previous generation are stale after a reload; dropping them avoids
-   * replaying terminal chunks before the next init snapshot.
-   */
+  // Drop the old generation’s queue; its pre-snapshot chunks would corrupt the replacement buffer.
   const resetReadiness = useCallback(() => {
     isWebReadyRef.current = false
     pendingPingIdRef.current = null
     pendingMessages.clear()
     writeCoalescer.clear()
+    cellBoxRef.current = null
     armWebReadyWatchdog()
   }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
@@ -216,11 +217,20 @@ export function useTerminalWebViewController(
     postMessage({ type: 'set-theme', terminalTheme })
   }, [postMessage, terminalThemeKey, terminalTheme])
 
-  // Why: live-apply text-size changes to an already-mounted terminal (the pane
-  // stays alive while the user visits Settings), so no terminal reload is needed.
   useEffect(() => {
     postMessage({ type: 'set-font-scale', fontScale: textScale })
   }, [postMessage, textScale])
+
+  const fitDimensions = useCallback(
+    (frame: TerminalFrame) => {
+      const cell = cellBoxRef.current
+      // A cell box measured at another text scale cannot authorize this grid’s fit.
+      return cell && cell.fontScale === textScale && frame.width > 0 && frame.height > 0
+        ? fitDimensionsFromCell(cell, frame.width, frame.height)
+        : null
+    },
+    [textScale]
+  )
 
   const handle = useMemo<TerminalWebViewHandle>(
     () => ({
@@ -228,8 +238,7 @@ export function useTerminalWebViewController(
         if (!pingsOnForegroundRecovery()) {
           return
         }
-        // Why: direct ping is the only command allowed through while readiness is
-        // invalid; init/write commands queue until this exact document answers.
+        // Only direct ping bypasses invalid readiness; queue init/write until this exact document proves liveness.
         isWebReadyRef.current = false
         armWebReadyWatchdog()
         pendingPingIdRef.current = sendToDocument({ type: 'ping' })
@@ -237,18 +246,10 @@ export function useTerminalWebViewController(
       write(data: string) {
         writeCoalescer.write(data)
       },
-      init(
-        cols: number,
-        rows: number,
-        initialData?: string,
-        preserveScroll?: boolean,
-        oscLinks?: TerminalOscLinkRange[]
-      ) {
-        // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
-        // 'ready' notify at the end of its rAF chain.
+      init({ cols, rows, initialData, preserveScroll, oscLinks, kittyFlags, frame }: TerminalInit) {
+        // Arm ready before posting init so a synchronous reply cannot be lost.
         promises.armReady()
-        // Why: pending chunks are pre-snapshot data; the init snapshot supersedes
-        // them, and writing them after init would corrupt the fresh buffer.
+        // The init snapshot supersedes buffered chunks; replaying them afterward would duplicate old output.
         writeCoalescer.clear()
         postMessage({
           type: 'init',
@@ -256,30 +257,27 @@ export function useTerminalWebViewController(
           rows,
           initialData,
           oscLinks,
+          kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
           terminalTheme,
           fontScale: textScale,
-          preserveScroll
+          preserveScroll,
+          frame
         })
       },
-      resize(cols: number, rows: number) {
-        // Why: resize/reflow must observe all prior writes or bytes reorder.
+      resize(cols: number, rows: number, frame: TerminalFrame | null) {
+        // Flush prior writes before resize/reflow so terminal bytes stay ordered.
         writeCoalescer.flushNow()
-        postMessage({ type: 'resize', cols, rows })
+        postMessage({ type: 'resize', cols, rows, frame })
       },
-      reflow(cols: number, rows: number) {
+      reflow(cols: number, rows: number, frame: TerminalFrame | null) {
         writeCoalescer.flushNow()
-        postMessage({ type: 'reflow', cols, rows })
+        postMessage({ type: 'reflow', cols, rows, frame })
       },
       clear() {
         writeCoalescer.clear()
         postMessage({ type: 'clear' })
       },
-      measureFitDimensions(containerHeight?: number) {
-        if (!isWebReadyRef.current) {
-          return Promise.resolve(null)
-        }
-        return promises.measure(sendToDocument, containerHeight)
-      },
+      fitDimensions,
       resetZoom() {
         postMessage({ type: 'reset-zoom' })
       },
@@ -289,12 +287,11 @@ export function useTerminalWebViewController(
       doSelectAll() {
         postMessage({ type: 'do-select-all' })
       },
-      // Why: waits on the in-flight ready promise (set by init); resolves immediately if no init
-      // is pending, and is capped so a stuck document doesn't hang the caller.
       awaitReady: promises.awaitReady
     }),
     [
       armWebReadyWatchdog,
+      fitDimensions,
       pingsOnForegroundRecovery,
       postMessage,
       promises,

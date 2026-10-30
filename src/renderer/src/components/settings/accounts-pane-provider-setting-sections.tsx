@@ -5,6 +5,7 @@ import { Switch } from '../ui/switch'
 import { GeminiIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import { OpenCodeGoCredentials } from './accounts-pane-opencode-credentials'
 import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
 
 export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
@@ -15,12 +16,12 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
       <div className="space-y-1">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <GeminiIcon size={16} />
-          {translate('auto.components.settings.AccountsPane.0c64dc2a64', 'Gemini')}
+          {translate('auto.components.settings.AccountsPane.0c64dc2a64', 'Gemini CLI (legacy)')}
         </h3>
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.AccountsPane.973741a871',
-            'Configure Gemini provider settings.'
+            'Keep existing Gemini CLI sessions available. Gemini credentials do not sign you into Antigravity.'
           )}
         </p>
       </div>
@@ -94,6 +95,8 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
           )}
         </p>
       </div>
+
+      <OpenCodeGoCredentials onSaved={() => recordOpenCodeSettingEdit('apiKey')} />
 
       <SearchableSetting
         title={translate(

@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NotificationDisplayTest } from './notification-display-test'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({
   loadHosts: vi.fn(),
@@ -27,7 +28,7 @@ async function send() {
   await act(async () => {
     renderer = create(createElement(NotificationDisplayTest, { onTroubleshoot: vi.fn() }))
   })
-  await act(async () => renderer.root.findAllByType('Pressable')[0].props.onPress())
+  await act(async () => findAllByHostType(renderer.root, 'Pressable')[0].props.onPress())
 }
 
 it.each([

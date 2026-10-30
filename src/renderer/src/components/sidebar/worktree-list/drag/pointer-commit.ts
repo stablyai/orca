@@ -48,8 +48,6 @@ function commitStatusOrPinDrop(
   })
 }
 
-// Resolve where a released pointer drag lands: workspace board lane, lineage parent,
-// status/pin section, or a reorder slot inside the source group.
 export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
   const { event, drag, ctx } = args
   if (!ctx.refreshWorktreeDragSession()) {
@@ -70,9 +68,9 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
   } else if (boardDropTarget.status) {
     args.onDropWorktreesOnWorkspaceBoard({
       worktreeIds: drag.reorderDraggedIds,
+      draggedCopies: drag.draggedCopies,
       status: boardDropTarget.status,
-      // Why: the target counts rendered cards, but the groups are the full
-      // lane. Board search can make those two differ.
+      // Board search separates the rendered drop-index space from full-lane membership.
       dropIndex: resolveWorkspaceKanbanSidebarFullLaneDropIndex(
         boardDropTarget.status,
         boardDropTarget.dropIndex

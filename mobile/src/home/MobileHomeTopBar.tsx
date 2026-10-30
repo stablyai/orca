@@ -1,9 +1,14 @@
 import { Settings } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { OrcaLogo } from '../components/OrcaLogo'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <View style={styles.topBar}>
       <View style={styles.brandLockup}>
@@ -15,6 +20,9 @@ export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => voi
       <Pressable
         style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
         onPress={onOpenSettings}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.settings', 'Settings')}
       >
         <Settings size={18} color={colors.textSecondary} />
       </Pressable>
@@ -22,7 +30,7 @@ export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => voi
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -42,4 +50,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   iconButtonPressed: { backgroundColor: colors.bgRaised }
-})
+}))

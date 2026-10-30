@@ -15,12 +15,11 @@ export type CodexSettingsConflict = {
 export type CodexSettingsBaseline = {
   settings: ReadonlyMap<string, string | null>
   conflicts: ReadonlyMap<string, CodexSettingsConflict>
-  /**
-   * Plugin/marketplace tables the last mirror made canonical, with the fields a
-   * three-way needs. An absent entry means "never mirrored", so a runtime-only
-   * table reads as an addition rather than as a canonical removal.
-   */
+  /** Absent registrations were never mirrored, so runtime-only tables count as additions. */
   registrations: ReadonlyMap<string, ReadonlyMap<string, string>>
+  /** MCP server names the last mirror copied from the canonical source. */
+  mcpServers: ReadonlySet<string>
+  mcpServerRoot: boolean
 }
 
 type StoredSettingsBaseline = {
@@ -28,14 +27,11 @@ type StoredSettingsBaseline = {
   settings: Record<string, string | null>
   conflicts?: Record<string, CodexSettingsConflict>
   registrations?: Record<string, Record<string, string>>
+  mcpServers?: string[]
+  mcpServerRoot?: boolean
 }
 
-/**
- * Why callers need three answers, not two: without a readable baseline,
- * promotion cannot distinguish an in-Codex edit from Orca's last mirror. An
- * unreadable baseline must stall that mirror; absent and unparseable still map
- * to `absent` because rebuilding those is the intent.
- */
+/** Unreadable baselines stall the mirror; absent or invalid baselines can be rebuilt. */
 export type CodexSettingsBaselineObservation =
   | { kind: 'present'; baseline: CodexSettingsBaseline }
   | { kind: 'absent' }
@@ -81,12 +77,21 @@ function readParsedCodexSettingsBaseline(
         conflicts.set(key, conflict)
       }
     }
-    return { settings, conflicts, registrations: readStoredRegistrations(parsed.registrations) }
+    return {
+      settings,
+      conflicts,
+      registrations: readStoredRegistrations(parsed.registrations),
+      mcpServers: readStoredMcpServers(parsed.mcpServers),
+      // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
+      mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
+    }
   } catch (error) {
-    // Why: invalid baseline state is still `null` — resetting it is the intent,
-    // and only a read that FAILED must be preserved.
     return isDefinitiveAbsence(error) || isRebuildableBaselineError(error) ? null : 'unreadable'
   }
+}
+
+function readStoredMcpServers(stored: string[] | undefined): ReadonlySet<string> {
+  return new Set((stored ?? []).filter((name): name is string => typeof name === 'string'))
 }
 
 function readStoredRegistrations(
@@ -109,7 +114,7 @@ function readStoredRegistrations(
   return registrations
 }
 
-/** Why: known-present baseline state outside its parse/capacity contract is rebuildable, not unreadable. */
+/** Invalid or oversized derived state can be rebuilt after a successful read. */
 function isRebuildableBaselineError(error: unknown): boolean {
   return (
     error instanceof SyntaxError ||
@@ -124,7 +129,8 @@ export function writeCodexSettingsBaseline(
 ): void {
   const file: StoredSettingsBaseline = {
     version: 3,
-    settings: Object.fromEntries(baseline.settings)
+    settings: Object.fromEntries(baseline.settings),
+    mcpServers: [...baseline.mcpServers]
   }
   if (baseline.conflicts.size > 0) {
     file.conflicts = Object.fromEntries(baseline.conflicts)
@@ -134,18 +140,21 @@ export function writeCodexSettingsBaseline(
       [...baseline.registrations].map(([key, fields]) => [key, Object.fromEntries(fields)])
     )
   }
+  if (baseline.mcpServerRoot) {
+    file.mcpServerRoot = true
+  }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`
   let existing: string | null = null
   try {
     existing = readAgentStateFileSync(baselinePath)
   } catch (error) {
-    // Why: only absence or known-invalid derived state may authorize replacement.
+    // Preserve state that could not be read; only absent or invalid state can be replaced.
     if (!isDefinitiveAbsence(error) && !isRebuildableBaselineError(error)) {
       throw error
     }
   }
-  // Why: launch prep runs repeatedly; byte-identical baselines should not churn disk metadata.
+  // Avoid disk metadata churn during repeated launch preparation.
   if (existing === serialized) {
     return
   }

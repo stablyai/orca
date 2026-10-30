@@ -1,22 +1,11 @@
-import { colors } from '../../theme/mobile-theme'
+import { colors, getMobileColorScheme } from '../../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
-/**
- * The editor document's stylesheet: the theme variables and every rule that reads them.
- *
- * A function rather than a constant because the variables are the app's own theme values, read
- * when the document is built. The native host wraps it in the document's `<style>`; a page mounting
- * these modules scopes it to the host element it planted the markup in.
- *
- * The surface's size comes from the text-input seam rather than from a number here, and that is
- * where the two hosts differ: the phone keeps the app's body size because a WebView has no page to
- * zoom, and the page gets the seam's raise because iOS zooms on focus of any editable under 16 px,
- * never zooms back, and `keyboard-occlusion.web.ts` reads that scale as "no keyboard" for the rest
- * of the session. One binding, so a floor that moved would move both halves together.
- */
+// Read theme at build time; native embeds sheet, page scopes it to editor host.
+// Bind size to text-input seam: native body size, web>=16px floor prevents iOS focus zoom that keyboard seam mistakes for no keyboard; one binding keeps both hosts aligned.
 export function richMarkdownEditorStyle(): string {
   return `    :root {
-      color-scheme: dark;
+      color-scheme: ${getMobileColorScheme()};
       --background: ${colors.bgBase};
       --editor-surface: ${colors.bgBase};
       --foreground: ${colors.textPrimary};

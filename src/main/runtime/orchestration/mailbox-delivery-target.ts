@@ -5,8 +5,8 @@ type OrchestrationMailboxDeliveryTargetDependencies = {
   getDb: () => OrchestrationDb | null
   getTerminalHandleForPaneKey: (paneKey: string) => string | null
   hasTerminalHandle: (handle: string) => boolean
-  /** A structured worker has no PTY handle; its own lane delivers, so this must not claim it. */
-  isStructuredWorkerHandle: (handle: string) => boolean
+  /** A structured worker or a chat has no PTY handle; its own lane delivers, so this must not claim it. */
+  isStructuredSessionOwner: (handle: string) => boolean
   canProbePtyLiveness: () => boolean
   controllerKnowsPtyIsLive: (ptyId: string) => boolean
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
@@ -21,7 +21,7 @@ export class OrchestrationMailboxDeliveryTarget {
     if (this.deps.hasTerminalHandle(handle)) {
       return handle
     }
-    if (this.deps.isStructuredWorkerHandle(handle)) {
+    if (this.deps.isStructuredSessionOwner(handle)) {
       return null
     }
     const db = this.deps.getDb()
@@ -39,13 +39,11 @@ export class OrchestrationMailboxDeliveryTarget {
     if (!ownerHandle) {
       return null
     }
-    if (this.deps.isStructuredWorkerHandle(ownerHandle)) {
-      // The structured lane owns this mailbox; nothing here can type into it.
+    if (this.deps.isStructuredSessionOwner(ownerHandle)) {
       return null
     }
     if (!this.deps.hasTerminalHandle(ownerHandle)) {
-      // Why logged rather than silent: an unroutable owner is the shape of a lost mailbox, and a
-      // silent null is indistinguishable from "no mail".
+      // Log unresolved owners: silent null looks identical to no mail and hides lost routing.
       console.warn('[orchestration] mailbox owner resolved to an unknown terminal', {
         mailboxHandle: handle,
         ownerHandle

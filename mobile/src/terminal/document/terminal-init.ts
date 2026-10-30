@@ -1,9 +1,14 @@
+import { parseTerminalKittyKeyboardFlags } from '../../../../src/shared/terminal-kitty-keyboard-flags'
+import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
+import { stopSurfaceTouchGestures } from './surface-touch-gestures'
+import { clearLongPress } from './tap-dispatch'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { MOBILE_TERMINAL_CARET_OPTIONS } from '../terminal-webview-html/theme'
 import { ESC } from './escape-introducers'
 import { notify } from './host-notify'
+import { reportLaidOutCellBox } from './laid-out-cell-box'
 import { fontPxForScale } from './text-scaling'
-import type { TerminalDocumentScope } from './document-scope'
+import type { TerminalDocumentScope, TerminalDocumentTerminal } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
 import { applyFitScale } from './fit-scale'
 import {
@@ -12,14 +17,73 @@ import {
   updateMouseModeFromData
 } from './mouse-mode-decset-scan'
 import { captureInitialOscLinkTexts } from './osc-link-tap'
-import { attachTerminalQueryReplyBridge, resetTerminalDataReplyAuthority } from './query-reply'
-import { cancelSelect } from './selection-range'
+import { attachOsc52ClipboardBridge } from './osc52-clipboard-bridge'
+import {
+  attachProgramStatusQueryReplies,
+  attachTerminalQueryReplyBridge,
+  resetTerminalDataReplyAuthority
+} from './query-reply'
+import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
 import { beginTerminalSurfaceSwap, commitTerminalSurfaceSwap } from './surface-swap'
 import { attachTermObservers } from './term-observers'
 import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal-scrollback-policy'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../src/shared/terminal-unicode-provider'
+
+function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) {
+  const term = scope.createTerminal({
+    cols: cols,
+    rows: rows,
+    theme: scope.terminalTheme,
+    minimumContrastRatio: scope.terminalMinimumContrastRatio,
+    fontFamily: scope.terminalFontFamily,
+    fontSize: fontPxForScale(scope.currentTextScale),
+    fontWeight: '300',
+    fontWeightBold: '500',
+    scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
+    // Parser query replies need stdin enabled; native still validates their grammar.
+    disableStdin: false,
+    cursorBlink: MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink,
+    cursorStyle: MOBILE_TERMINAL_CARET_OPTIONS.cursorStyle,
+    showCursorImmediately: MOBILE_TERMINAL_CARET_OPTIONS.showCursorImmediately,
+    cursorInactiveStyle: MOBILE_TERMINAL_CARET_OPTIONS.cursorInactiveStyle,
+    convertEol: false,
+    allowProposedApi: true
+  })
+  scope.term = term
+  attachOsc52ClipboardBridge(scope, term)
+  attachProgramStatusQueryReplies(scope, term)
+  term.open(scope.surface!)
+  attachWebglAddon(scope, true)
+  try {
+    const unicodeAddon = scope.createUnicode11Addon()
+    if (unicodeAddon) {
+      term.loadAddon(unicodeAddon)
+      activateOrcaTerminalUnicodeProvider(term)
+    }
+  } catch {}
+  return term
+}
+
+// Build before ready to report measured cells at the app’s text scale; first init resizes and reuses the engine.
+export function prepareTerminal(scope: TerminalDocumentScope) {
+  // Measure without showing the temporary empty grid/caret.
+  scope.surface!.style.visibility = 'hidden'
+  try {
+    scope.committedTerm = openTerminal(scope, 80, 24)
+    scope.provisionalTerm = scope.committedTerm
+  } catch {
+    // Let init retry and report failure through its normal error path.
+    scope.surface!.style.visibility = ''
+    try {
+      scope.term?.dispose()
+    } catch {}
+    scope.term = null
+  }
+}
 
 export function init(
   scope: TerminalDocumentScope,
@@ -29,26 +93,38 @@ export function init(
   nextTheme: Parameters<typeof applyTerminalTheme>[1],
   nextFontScale: unknown,
   preserveScroll: boolean,
-  nextOscLinks: unknown
+  nextOscLinks: unknown,
+  kittyKeyboardFlags: unknown
 ) {
+  // Replay replaces the scroll target; retire momentum and pending drags belonging to the old one.
+  stopSurfaceTouchGestures(scope)
+  resetSmoothScrollOffset(scope)
+  clearLongPress(scope)
+  scope.tapCandidate = null
   if (typeof nextFontScale === 'number' && nextFontScale > 0) {
     scope.currentTextScale = nextFontScale
   }
-  // Why: a width-reflow re-stream rewraps the same content at new cols.
-  // Distance-from-bottom (rows) is the only stable anchor across reflow,
-  // since line counts and cell positions change. null = stay pinned to bottom.
+  // Use distance from bottom across width reflow because row counts/cell positions change; null remains bottom-pinned.
   const prevB =
     preserveScroll && scope.term && scope.term.buffer && scope.term.buffer.active
       ? scope.term.buffer.active
       : null
-  const scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1
+  // A hidden replay never moved what the reader sees, so one that overtakes it keeps its anchor.
+  const supersededAnchorRows = scope.pendingTerm ? scope.pendingReplayScrollAnchorRows : null
+  const scrollAnchorRows = !preserveScroll
+    ? -1
+    : (supersededAnchorRows ??
+      (prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1))
   scope.terminalGeneration++
   const gen = scope.terminalGeneration
-  // Why: snapshot replay can contain old queries whose replies must never
-  // re-enter the live PTY. Each replacement terminal earns authority anew.
+  const reused = scope.provisionalTerm
+  scope.provisionalTerm = null
+  // Snapshot queries must never reach live PTY input; each replacement earns reply authority anew.
   resetTerminalDataReplyAuthority(scope)
-  cancelWebglContextRecovery(scope)
-  scope.webglAddon = null
+  if (!reused) {
+    cancelWebglContextRecovery(scope)
+    scope.webglAddon = null
+  }
   scope.ready = false
   resetWriteQueue(scope)
   scope.statusDotPendingSelector = false
@@ -60,71 +136,50 @@ export function init(
   scope.wheelAccumDeltaY = 0
   scope.mouseModeScanTail = ''
   scope.trackedMouseTrackingMode = 'none'
+  scope.mouseEncodingKnown = false
   scope.sgrMouseMode = false
   scope.sgrMousePixelsMode = false
-  scope.lastEmittedModes = {
-    bracketedPasteMode: false,
-    altScreen: false,
-    mouseTrackingMode: 'none',
-    sgrMouseMode: false,
-    sgrMousePixelsMode: false
-  }
+  // lastEmittedModes stays what native last received, so a cleared snapshot still publishes its modes.
+  scope.keyboardModes.adoptSnapshot(
+    typeof initialData === 'string' ? initialData : '',
+    parseTerminalKittyKeyboardFlags(kittyKeyboardFlags)
+  )
   const replayData = normalizeInitialData(initialData)
-  // Why: normalizeInitialData can discard pre-alt-screen bytes. Keep the
-  // mirrored modes aligned with exactly what this mobile xterm replays.
+  // Mirror only replayed modes after normal-buffer prefixes are discarded.
   updateMouseModeFromData(scope, replayData)
   scope.activeAltScreenSnapshot = isAltScreenActive(replayData)
+  scope.pendingReplayScrollAnchorRows = scope.activeAltScreenSnapshot ? null : scrollAnchorRows
   scope.initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : []
   scope.initialOscLinkRowOffset = 0
   scope.initialOscLinkEvictionReady = false
-  const surfaceSwap = beginTerminalSurfaceSwap(scope)
-  // oxlint-disable-next-line no-unused-vars -- the document declares it here; removing it is a different program
-  const nextSurface = surfaceSwap.nextSurface
+  // Pre-ready engines already occupy the committed surface; only replacements need hidden replay.
+  const surfaceSwap = reused ? null : beginTerminalSurfaceSwap(scope)
 
   applyTerminalTheme(scope, nextTheme)
-  scope.term = scope.createTerminal({
-    cols: cols || 80,
-    rows: rows || 24,
-    theme: scope.terminalTheme,
-    minimumContrastRatio: scope.terminalMinimumContrastRatio,
-    fontFamily: scope.terminalFontFamily,
-    fontSize: fontPxForScale(scope.currentTextScale),
-    fontWeight: '300',
-    fontWeightBold: '500',
-    scrollback: 5000,
-    // Why: xterm suppresses parser-generated query replies when disableStdin
-    // is true. Native accepts only validated reply grammars from onData.
-    disableStdin: false,
-    cursorBlink: MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink,
-    cursorStyle: MOBILE_TERMINAL_CARET_OPTIONS.cursorStyle,
-    // Native TextInput owns focus; initialize xterm's otherwise-gated main-buffer caret.
-    showCursorImmediately: MOBILE_TERMINAL_CARET_OPTIONS.showCursorImmediately,
-    // A full inactive cell remains visible under the terminal's phone-fit scale.
-    cursorInactiveStyle: MOBILE_TERMINAL_CARET_OPTIONS.cursorInactiveStyle,
-    convertEol: false,
-    allowProposedApi: true
-  })
-  const nextTerm = scope.term
-  scope.pendingTerm = nextTerm
-  scope.term.open(scope.surface!)
-  attachWebglAddon(scope, true)
-  try {
-    const unicodeAddon = scope.createUnicode11Addon()
-    if (unicodeAddon) {
-      scope.term.loadAddon(unicodeAddon)
-      scope.term.unicode.activeVersion = '11'
+  let nextTerm: TerminalDocumentTerminal
+  if (reused) {
+    nextTerm = reused
+    scope.term = reused
+    reused.reset()
+    reused.options.fontSize = fontPxForScale(scope.currentTextScale)
+    reused.resize(cols || 80, rows || 24)
+    // Seed the reported grid so its first box change can trigger one DOM-column refit.
+    if (scope.reportedCellBox) {
+      scope.reportedCellBox = { ...scope.reportedCellBox, cols: reused.cols, rows: reused.rows }
     }
-  } catch {}
+  } else {
+    nextTerm = openTerminal(scope, cols || 80, rows || 24)
+    scope.pendingTerm = nextTerm
+  }
   if (typeof replayData === 'string' && replayData.length > 0) {
-    // Why no trailing reset: the snapshot pen belongs to the live host TUI receiving later output.
+    // Do not reset the pen after replay; later live output continues the host TUI’s attributes.
     enqueueWrite(scope, ESC + '[0m' + replayData)
   }
 
-  // Why: reset eviction tracking + attach observers for the new term.
   resetEvictionCounter(scope)
   cancelSelect(scope)
   attachTermObservers(scope)
-  attachTerminalQueryReplyBridge(scope, scope.term, gen)
+  attachTerminalQueryReplyBridge(scope, nextTerm, gen)
 
   scheduleDocumentFrame(scope, function () {
     if (gen !== scope.terminalGeneration) {
@@ -136,9 +191,12 @@ export function init(
       if (gen !== scope.terminalGeneration) {
         return
       }
-      commitTerminalSurfaceSwap(scope, surfaceSwap, nextTerm)
-      // Why: restore the reader's place after the rewrapped buffer replays.
-      // Replay lands at bottom, so only act when they were scrolled up (rows>0).
+      if (surfaceSwap) {
+        commitTerminalSurfaceSwap(scope, surfaceSwap, nextTerm)
+      } else {
+        scope.surface!.style.visibility = ''
+      }
+      // Replay lands at bottom; restore only readers who had scrolled upward before reflow.
       if (scrollAnchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
         try {
           scope.term.scrollToLine(
@@ -150,19 +208,19 @@ export function init(
       scope.initialOscLinkRowOffset = 0
       scope.initialOscLinkEvictionReady = true
       applyFitScale(scope, 'init-replay')
+      // Hidden renderers may not paint yet; report the available box at ready too.
+      reportLaidOutCellBox(scope)
       notify(scope, { type: 'ready', cols: cols, rows: rows })
     })
   })
 }
 
 export function write(scope: TerminalDocumentScope, data: string) {
-  updateMouseModeFromData(scope, data)
+  updateMouseModeFromData(scope, data, true)
+  scope.keyboardModes.scan(data)
   enqueueWrite(scope, data)
   pumpWrites(scope, scope.terminalGeneration)
-  // Why: first live data chunk after init may widen the buffer past
-  // what the post-replay applyFitScale measured. Re-fit once after this
-  // chunk drains to catch the wider line. Subsequent chunks don't re-fit
-  // (the user's manual zoom is sticky after that).
+  // Refit once after first live output reveals a wider line; later chunks preserve manual zoom.
   if (scope.firstDataPending) {
     scope.firstDataPending = false
     const gen = scope.terminalGeneration
@@ -186,18 +244,7 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
   notify(scope, { type: 'ready', cols: cols, rows: rows })
 }
 
-// reflow(): see reflow.ts.
-
-/**
- * Ruling 21: init's own frames carry the generation they were scheduled under, so bumping it is
- * what abandons them — the same guard a re-init already uses against its predecessor.
- *
- * The engine goes too, because a stopped document's terminal is a WebGL context and a row buffer
- * that nothing will read again. Both terminals, since a swap that never committed leaves two:
- * `beginTerminalSurfaceSwap` opens a hidden replacement and `commitTerminalSurfaceSwap` disposes
- * the one it replaced, so a stop in between leaves the committed one live with nothing pointing at
- * it. They are the same object whenever no swap is open, which is what the set deduplicates.
- */
+// Invalidate queued init frames by generation and dispose both committed and pending-swap engines, deduping identical instances.
 export function stopTerminalInit(scope: TerminalDocumentScope) {
   scope.terminalGeneration++
   for (const terminal of new Set([scope.term, scope.committedTerm])) {
@@ -207,4 +254,5 @@ export function stopTerminalInit(scope: TerminalDocumentScope) {
   }
   scope.term = null
   scope.committedTerm = null
+  scope.provisionalTerm = null
 }

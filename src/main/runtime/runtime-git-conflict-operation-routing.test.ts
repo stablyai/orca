@@ -10,8 +10,7 @@ vi.mock('../git/status', async () => ({
 
 import { RuntimeGitStatusCommands } from './runtime-git-status-commands'
 
-// Why: the conflict badge the runtime RPC serves is read from the worktree's `.git` pointer, so it
-// must run in the same host namespace as the target's git — a WSL target's paths are guest-spelled.
+// Read the .git pointer in Git's execution-host namespace; WSL paths must be guest-spelled.
 describe('getRuntimeGitConflictOperation', () => {
   beforeEach(() => {
     detectConflictOperationMock.mockReset()

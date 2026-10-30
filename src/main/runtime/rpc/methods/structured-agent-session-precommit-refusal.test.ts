@@ -1,11 +1,13 @@
-// The create route's pre-commit boundary: a failure before `attach` must reach the client as a
-// refusal it can classify, and a failure at or after `attach` must not.
+import '../unused-default-rpc-methods.test-fixture'
+// Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
@@ -49,7 +51,14 @@ function hostStub(): StructuredAgentSessionHost {
     cursor: { epoch: 'epoch-a', sequence: 0 },
     value: { sessionId: SESSION, fence: 1, page: {}, unconfirmedClientMessageIds: [] }
   }))
-  return { attach } as unknown as StructuredAgentSessionHost
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: legacy create reads the empty ledger, calls attach and logs failures.
+  return {
+    attach,
+    deps: {
+      logger: recordingStructuredAgentSessionLogger().logger,
+      store: { getOperationRow: vi.fn(() => null) }
+    }
+  } as unknown as StructuredAgentSessionHost
 }
 
 const resolvedIntent = {
@@ -71,9 +80,8 @@ async function create(
 ): Promise<RpcResponse> {
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    // The structured surface is settings-gated for every caller; these fixtures probe the
-    // pre-commit boundary, which only runs once the gate admits the call.
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    // Fixtures pass capability admission so they exercise the pre-commit refusal boundary.
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
@@ -121,18 +129,22 @@ afterEach(() => {
 })
 
 describe('a create refused before it commits', () => {
-  it('answers a code-carrying refusal as a definitive envelope', async () => {
+  it('answers an ownership refusal before commit as a definite failed attempt', async () => {
+    const code = 'agent_session_conflict'
+    const details = {
+      reason: 'conversationHeldElsewhere' as const,
+      owner: { sessionId: 'owner', workspaceId: 'workspace' }
+    }
     const response = await create({
       resolveStructuredAgentSessionCreateIntent: vi.fn(async () => {
-        throw new Error('structured_agent_session_unsupported')
+        throw agentSessionRefusalError(code, details)
       })
     })
-
-    const refusal = refusalOf(response)
-    expect(refusal?.code).toBe('structured_agent_session_unsupported')
-    expect(refusal?.message).toContain('structured agent chat')
-    expect(refusal?.message).not.toContain('Codex')
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
+    expect(refusalOf(response)).toMatchObject({
+      code,
+      details,
+      createAttemptRefusedBeforeCommit: true
+    })
     expect(attach).not.toHaveBeenCalled()
   })
 
@@ -195,6 +207,7 @@ describe('the boundary the envelope stops at', () => {
 
     expect(response).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
     expect(refusalOf(response)).toBeNull()
+    expect(attach).toHaveBeenCalledOnce()
   })
 
   it('leaves a committed create whose tab could not be published unknown', async () => {
@@ -207,6 +220,7 @@ describe('the boundary the envelope stops at', () => {
     const refusal = refusalOf(response)
     expect(refusal?.code).toBe('agent_session_operation_unknown')
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(false)
+    expect(attach).toHaveBeenCalledOnce()
   })
 
   it('keeps hiding the surface from a client that never advertised it', async () => {

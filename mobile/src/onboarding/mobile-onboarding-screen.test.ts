@@ -2,10 +2,12 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MobileOnboardingScreen from '../../app/mobile-onboarding'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({
   params: { hostId: 'paired-host', steps: 'session-view,notifications' },
   replace: vi.fn(),
+  windowWidth: 390,
   reducedMotionEnabled: false,
   animatedTiming: vi.fn(),
   ensureNotificationPermissions: vi.fn(),
@@ -19,9 +21,12 @@ vi.mock('react-native', () => ({
     isReduceMotionEnabled: vi.fn(() => Promise.resolve(mocks.reducedMotionEnabled))
   },
   Animated: {
-    Value: class {},
+    Value: class {
+      constructor(public current: number) {}
+    },
     View: 'AnimatedView',
-    multiply: vi.fn(() => 0),
+    // Keep Animated values lazy so later timing updates reach translateX.
+    multiply: (value: { current: number }, factor: number) => ({ value, factor }),
     timing: mocks.animatedTiming
   },
   BackHandler: {
@@ -30,7 +35,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles },
   Text: 'Text',
   View: 'View',
-  useWindowDimensions: () => ({ width: 390, height: 844 })
+  useWindowDimensions: () => ({ width: mocks.windowWidth, height: 844 })
 }))
 
 vi.mock('expo-router', () => ({
@@ -58,10 +63,16 @@ describe('MobileOnboardingScreen', () => {
   beforeEach(() => {
     mocks.params = { hostId: 'paired-host', steps: 'session-view,notifications' }
     mocks.replace.mockReset()
+    mocks.windowWidth = 390
     mocks.reducedMotionEnabled = false
-    mocks.animatedTiming.mockReset().mockReturnValue({
-      start: (callback: (result: { finished: boolean }) => void) => callback({ finished: true })
-    })
+    mocks.animatedTiming
+      .mockReset()
+      .mockImplementation((value: { current: number }, config: { toValue: number }) => ({
+        start: (callback: (result: { finished: boolean }) => void) => {
+          value.current = config.toValue
+          callback({ finished: true })
+        }
+      }))
     mocks.ensureNotificationPermissions.mockReset().mockResolvedValue(true)
     mocks.saveDefaultSessionView.mockReset().mockResolvedValue(undefined)
     mocks.setRemotePushEnabled.mockReset().mockResolvedValue(undefined)
@@ -73,7 +84,7 @@ describe('MobileOnboardingScreen', () => {
     vi.restoreAllMocks()
   })
 
-  async function renderScreen() {
+  async function renderScreen(viewportWidth = 390) {
     const consoleError = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] !== 'string' || !args[0].includes('react-test-renderer is deprecated')) {
         throw new Error(String(args[0]))
@@ -82,11 +93,30 @@ describe('MobileOnboardingScreen', () => {
     await act(async () => {
       renderer = create(createElement(MobileOnboardingScreen))
     })
+    await layoutViewport(viewportWidth)
     consoleError.mockRestore()
   }
 
+  async function layoutViewport(width: number) {
+    const viewport = renderer!.root.findAll((node) => node.props.onLayout !== undefined)[0]
+    await act(async () => viewport?.props.onLayout({ nativeEvent: { layout: { width } } }))
+  }
+
+  function trackStyle() {
+    return findByHostType(renderer!.root, 'AnimatedView').props.style[1]
+  }
+
+  function trackWidth(): number {
+    return trackStyle().width
+  }
+
+  function translateX(): number {
+    const { value, factor } = trackStyle().transform[0].translateX
+    return value.current * factor + 0
+  }
+
   function pages() {
-    return renderer!.root.findAllByType('MobileOnboardingPage')
+    return findAllByHostType(renderer!.root, 'MobileOnboardingPage')
   }
 
   it('advances from session view to notifications before opening the paired host', async () => {
@@ -159,6 +189,7 @@ describe('MobileOnboardingScreen', () => {
 
     mocks.params = { hostId: 'paired-host', steps: 'notifications' }
     await act(async () => renderer!.update(createElement(MobileOnboardingScreen)))
+    await layoutViewport(390)
 
     expect(pages()).toHaveLength(1)
     expect(pages()[0].props).toMatchObject({ step: 'notifications', active: true })
@@ -185,5 +216,30 @@ describe('MobileOnboardingScreen', () => {
     await act(async () => pages()[0].props.onSessionChoice('chat'))
 
     expect(pages()[1].props).toMatchObject({ active: true, busyChoice: null })
+  })
+
+  it('sizes slides from the modal viewport rather than the wider window', async () => {
+    mocks.windowWidth = 1024
+    await renderScreen(540)
+
+    expect(pages().map((page) => page.props.width)).toEqual([540, 540])
+    expect(trackWidth()).toBe(1080)
+    expect(translateX()).toBe(0)
+
+    await act(async () => pages()[0].props.onSessionChoice('chat'))
+    expect(translateX()).toBe(-540)
+
+    await layoutViewport(700)
+    expect(pages().map((page) => page.props.width)).toEqual([700, 700])
+    expect(trackWidth()).toBe(1400)
+    expect(translateX()).toBe(-700)
+  })
+
+  it('keeps the pager unrendered until the viewport reports a real width', async () => {
+    await renderScreen(0)
+    expect(pages()).toHaveLength(0)
+
+    await layoutViewport(540)
+    expect(pages().map((page) => page.props.width)).toEqual([540, 540])
   })
 })

@@ -48,9 +48,11 @@ export function getTuiAgentDetectionProbeCommands(
 ): string[] {
   return [
     ...new Set(
-      commands
-        .filter((command) => !isDetectionUnsupportedInRuntime(command, runtime))
-        .flatMap((command) => [command.cmd, ...(command.requiredCommands ?? [])])
+      commands.flatMap((command) =>
+        isDetectionUnsupportedInRuntime(command, runtime)
+          ? []
+          : [command.cmd, ...(command.requiredCommands ?? [])]
+      )
     )
   ]
 }

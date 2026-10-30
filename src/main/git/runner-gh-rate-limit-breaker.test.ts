@@ -12,7 +12,7 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { fakeSpawnReturning } from '../../shared/child-process/__fixtures__/fake-spawned-child'
+import { fakeSpawnReturning } from '../../shared/__fixtures__/fake-spawned-child'
 import { ghExecFileAsync } from './runner'
 import {
   _resetGhRateLimitBreaker,
@@ -48,8 +48,6 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     ).rejects.toThrow('rate limit')
     expect(spawnMock).toHaveBeenCalledTimes(1)
 
-    // The 90-repo storm case: every further search-bucket call must fail fast
-    // without a subprocess.
     await expect(
       ghExecFileAsync(['api', '--cache', '120s', 'search/issues?q=repo:c/d&per_page=1'])
     ).rejects.toMatchObject({ ghRateLimitBlocked: true })
@@ -71,8 +69,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     mockGhFailure(PRIMARY_RATE_LIMIT_STDERR)
     await expect(ghExecFileAsync(['api', 'repos/a/b/pulls'])).rejects.toThrow()
 
-    // The breaker scope now comes from options.host / GH_HOST / wslDistro, not
-    // from sniffing argv — so an Enterprise host must be routed via options.host.
+    // Route this request to an independent Enterprise host.
     mockGhSuccess('[]')
     await expect(
       ghExecFileAsync(['api', 'repos/a/b/pulls'], { host: 'github.acme-corp.com' })
@@ -142,15 +139,33 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     ).rejects.toThrow('rate limit')
 
     expect(
-      getGhRateLimitBlockedUntilMs('core', Date.now(), 'native:github.acme-corp.com')
+      getGhRateLimitBlockedUntilMs('graphql', Date.now(), 'native:github.acme-corp.com')
     ).not.toBeNull()
-    expect(getGhRateLimitBlockedUntilMs('core', Date.now(), 'native:github.com')).toBeNull()
+    expect(getGhRateLimitBlockedUntilMs('graphql', Date.now(), 'native:github.com')).toBeNull()
+  })
+
+  it('trips the graphql bucket on a GraphQL rate limit and leaves REST calls running', async () => {
+    mockGhFailure('GraphQL: API rate limit already exceeded for user ID 1775218.')
+    await expect(
+      ghExecFileAsync(['pr', 'view', '12', '--repo', 'a/b', '--json', 'number'])
+    ).rejects.toThrow('rate limit')
+    expect(getGhRateLimitBlockedUntilMs('graphql')).not.toBeNull()
+    expect(getGhRateLimitBlockedUntilMs('core')).toBeNull()
+
+    await expect(
+      ghExecFileAsync(['issue', 'close', '5', '--repo', 'a/b'], { idempotent: false })
+    ).rejects.toMatchObject({ ghRateLimitBlocked: true })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+
+    mockGhSuccess('[]')
+    await expect(ghExecFileAsync(['api', 'repos/a/b/pulls'])).resolves.toMatchObject({
+      stdout: '[]'
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(2)
   })
 
   it('scopes a WSL UNC-cwd 403 to the distro runtime and probes that scope', async () => {
-    // Why: a \\wsl.localhost\... cwd routes gh through wsl.exe, so the 403
-    // belongs to the distro's account — the native scope must stay usable and
-    // the reset probe must be told which scope tripped.
+    // WSL-cwd failures belong to the distro account; keep native quotas usable and probe the blocked scope.
     const probe = vi.fn()
     registerGhRateLimitResetProbe(probe)
     const originalPlatform = process.platform

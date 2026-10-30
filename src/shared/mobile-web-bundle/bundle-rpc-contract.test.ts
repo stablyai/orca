@@ -11,15 +11,11 @@ import {
   MobileWebBundleChunkResultSchema,
   MobileWebBundleErrorCodeSchema,
   MobileWebBundleManifestResultSchema,
-  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-  MOBILE_WEB_BUNDLE_CHUNK_METHOD,
-  MOBILE_WEB_BUNDLE_ERROR_CODES,
-  MOBILE_WEB_BUNDLE_MANIFEST_METHOD
+  MOBILE_WEB_BUNDLE_CHUNK_BYTES
 } from './bundle-rpc-contract'
-import { MOBILE_WEB_BUNDLE_CAPABILITY } from './mobile-web-bundle-capability'
 
 const BUILD_ID = 'a'.repeat(64)
-const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
+const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4
 
 function hexDigest(input: string): string {
   return Array.from(sha256(new TextEncoder().encode(input)), (byte) =>
@@ -59,19 +55,16 @@ function chunkResult(overrides: Record<string, unknown> = {}): Record<string, un
   }
 }
 
-describe('names and sizes', () => {
-  it('pins the wire constants', () => {
-    expect(MOBILE_WEB_BUNDLE_CHUNK_BYTES).toBe(49152)
-    expect(MOBILE_WEB_BUNDLE_MANIFEST_METHOD).toBe('mobileWeb.bundle.manifest')
-    expect(MOBILE_WEB_BUNDLE_CHUNK_METHOD).toBe('mobileWeb.bundle.chunk')
-    expect(MOBILE_WEB_BUNDLE_CAPABILITY).toBe('mobileWeb.bundle.v1')
-  })
-})
-
 describe('MobileWebBundleErrorCodeSchema', () => {
   it('round-trips every code', () => {
-    expect(MOBILE_WEB_BUNDLE_ERROR_CODES).toHaveLength(6)
-    for (const code of MOBILE_WEB_BUNDLE_ERROR_CODES) {
+    for (const code of [
+      'mobile_web_bundle_unavailable',
+      'mobile_web_bundle_build_changed',
+      'mobile_web_bundle_asset_unknown',
+      'mobile_web_bundle_asset_changed',
+      'mobile_web_bundle_offset_invalid',
+      'mobile_web_bundle_read_limited'
+    ]) {
       expect(MobileWebBundleErrorCodeSchema.parse(code)).toBe(code)
     }
   })
@@ -168,12 +161,11 @@ describe('mobileWeb.bundle.chunk result', () => {
     ).toBe(false)
   })
 
-  it('leaves the padding slack the +8 term buys, so the host enforces the chunk size', () => {
+  it('is exact: base64 of one byte past a full chunk is refused', () => {
+    expect(MAX_DATA_BASE64_LENGTH).toBe(65536)
     const overshoot = Buffer.alloc(MOBILE_WEB_BUNDLE_CHUNK_BYTES + 1).toString('base64')
-    expect(overshoot.length).toBeLessThanOrEqual(MAX_DATA_BASE64_LENGTH)
-    const wellPast = Buffer.alloc(MOBILE_WEB_BUNDLE_CHUNK_BYTES + 64).toString('base64')
     expect(
-      MobileWebBundleChunkResultSchema.safeParse(chunkResult({ dataBase64: wellPast })).success
+      MobileWebBundleChunkResultSchema.safeParse(chunkResult({ dataBase64: overshoot })).success
     ).toBe(false)
   })
 

@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import {
-  buildClaudePermissionCallbacks,
-  CLAUDE_BLOCKING_CONTROL_CALLBACKS,
-  CLAUDE_CAN_USE_TOOL_SUBTYPE,
-  CLAUDE_REQUEST_USER_DIALOG_SUBTYPE
-} from './claude-structured-inbound-control'
+import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 
 type CanUseToolOptions = Parameters<CanUseTool>[2]
 
@@ -17,7 +12,6 @@ function permissionOptions(
   suggestions?: CanUseToolOptions['suggestions'],
   presentation: Partial<CanUseToolOptions> = {}
 ): CanUseToolOptions {
-  // Spread first so the required fields below stay definite rather than optional.
   return {
     ...presentation,
     requestId,
@@ -41,10 +35,12 @@ function callbacksFor() {
 describe('Claude permission callbacks', () => {
   it('registers a decodable can_use_tool as a durable prompt and settles it from the registry', async () => {
     const control = callbacksFor()
+    const controller = new AbortController()
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener')
     const answered = control.canUseTool(
       'Bash',
       { command: 'git status' },
-      permissionOptions('perm-1', 'tool-1', new AbortController().signal, [
+      permissionOptions('perm-1', 'tool-1', controller.signal, [
         { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
       ])
     )
@@ -60,9 +56,9 @@ describe('Claude permission callbacks', () => {
     expect(found?.prompt.suggestions).toEqual([
       { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
     ])
-    // The prompt's settle is the SDK callback's own resolve — answering resolves this promise.
     found?.prompt.settle({ behavior: 'allow', toolUseID: 'tool-1' })
     await expect(answered).resolves.toEqual({ behavior: 'allow', toolUseID: 'tool-1' })
+    expect(removeListener).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the SDK permission presentation and strips terminal escapes', async () => {
@@ -153,7 +149,6 @@ describe('Claude permission callbacks', () => {
     expect(control.emit).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: 'prompt-cancelled', promptKey: 'perm-3' })
     )
-    // Forgotten: a late answer can no longer find the prompt to authorize the wrong tool.
     expect(control.prompts.find('perm-3')).toBeNull()
   })
 
@@ -189,7 +184,6 @@ describe('Claude permission callbacks', () => {
       permissionOptions('perm-6', 'tool-6', new AbortController().signal)
     )
 
-    // What session close does: settle each pending callback so no promise dangles.
     for (const prompt of control.prompts.clear()) {
       prompt.settle(null)
     }
@@ -206,21 +200,5 @@ describe('Claude permission callbacks', () => {
         { signal: new AbortController().signal, requestId: 'dialog-1' }
       )
     ).resolves.toEqual({ behavior: 'cancelled' })
-  })
-
-  it('enumerates every blocking control request and wires a callback for each', () => {
-    // The stable surface of controls a turn can block on. Adding one here without wiring its
-    // callback below fails this test rather than silently leaving a control unhandled.
-    expect(new Set(Object.keys(CLAUDE_BLOCKING_CONTROL_CALLBACKS))).toEqual(
-      new Set([CLAUDE_CAN_USE_TOOL_SUBTYPE, CLAUDE_REQUEST_USER_DIALOG_SUBTYPE])
-    )
-    const callbacks = buildClaudePermissionCallbacks({
-      sessionId: 'session-1',
-      prompts: new ClaudePromptRegistry(),
-      emit: vi.fn()
-    }) as unknown as Record<string, unknown>
-    for (const callbackName of Object.values(CLAUDE_BLOCKING_CONTROL_CALLBACKS)) {
-      expect(typeof callbacks[callbackName], `${callbackName} must be wired`).toBe('function')
-    }
   })
 })

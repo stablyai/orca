@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import {
+  fetchLatestStableReleaseTag,
   fetchNewerReleaseTagsWithReadiness,
   getReleaseDownloadUrl
 } from '../updater-prerelease-feed'
@@ -9,7 +10,6 @@ import type { UpdateCheckVariant } from './updater-types'
 import { ReleaseFeedPreflightError } from './updater-state'
 import { UpdaterInstallExecution } from './updater-install-execution'
 
-/** Owns concrete release-feed pinning and the one-shot prerelease fallback. */
 export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
   protected clearPrereleaseFallbackContextIfSettled(): void {
     if (
@@ -83,7 +83,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     const primaryEventSuppression = this.pendingPrereleaseFallback.suppressedPrimaryEventFailure
     if (primaryEventSuppression?.failureKey === failureKey) {
       const isPrimaryPromisePair = primaryEventSuppression.error === error
-      // Why: after fallback checking starts, same-message errors may be the fallback's, so message matching alone isn't safe.
+      // After fallback starts, identical messages may be its own errors; message matching alone is unsafe.
       if (isPrimaryPromisePair || !this.pendingPrereleaseFallback.fallbackCheckingForUpdateSeen) {
         this.pendingPrereleaseFallback.suppressedPrimaryEventFailure = null
         this.clearPrereleaseFallbackContextIfSettled()
@@ -114,8 +114,9 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
   protected async pinDefaultReleaseFeed(
     variant: UpdateCheckVariant = 'default'
   ): Promise<'ready' | 'not-available'> {
+    const attemptId = this.activeUpdateCheckAttemptId
     const autoUpdater = this.getAutoUpdater()
-    // Why: the latest/download redirect can move between check and download, so pin the concrete tag (prerelease users resolve any channel, stable only stable).
+    // Pin the concrete tag because latest/download can move between check and download; stable checks exclude prereleases.
     const currentVersion = app.getVersion()
     const isPerfCheck = variant === 'perf'
     const includePrerelease =
@@ -128,6 +129,10 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
         ...(isPerfCheck ? { releaseFilter: 'perf' as const } : {})
       }
     )
+    // Timed-out preflight must never replace a newer attempt's feed.
+    if (attemptId === null || !this.isActiveUpdateCheckAttempt(attemptId)) {
+      return 'not-available'
+    }
     const newerTag = releaseTagsResult.tags[0] ?? null
     const fallbackTag = includePrerelease ? (releaseTagsResult.tags[1] ?? null) : null
     this.pendingPrereleaseFallback =
@@ -145,7 +150,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
             retryLaunched: false
           }
         : null
-    // Why: console.info is captured by Console.app/--enable-logging — our only field visibility into the updater.
+    // Console.app/--enable-logging captures console.info for field diagnostics.
     if (newerTag) {
       this.clearPublishingWindowLastGoodCheck()
       const url = getReleaseDownloadUrl(newerTag)
@@ -158,7 +163,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     if (releaseTagsResult.state === 'not-ready') {
       this.clearPrereleaseFallbackContext()
       if (releaseTagsResult.lastGoodTag) {
-        // Why: during a publish window the newest tag is unsafe; a verified last-good concrete feed lets electron-updater emit a real result.
+        // While the newest tag publishes, a verified last-good feed lets electron-updater emit a real result.
         const url = getReleaseDownloadUrl(releaseTagsResult.lastGoodTag)
         console.info(
           `[updater] release feed pinned to last-good: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
@@ -203,10 +208,19 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     }
     this.clearPrereleaseFallbackContext()
     this.clearPublishingWindowLastGoodCheck()
-    const url = 'https://github.com/stablyai/orca/releases/latest/download'
-    console.info(
-      `[updater] release feed fallback: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
-    )
+    const stableTag = await fetchLatestStableReleaseTag()
+    if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+      return 'not-available'
+    }
+    if (!stableTag) {
+      throw new ReleaseFeedPreflightError(
+        'manifest-unavailable',
+        'default',
+        'Unable to resolve a ready stable release on GitHub'
+      )
+    }
+    const url = getReleaseDownloadUrl(stableTag)
+    console.info(`[updater] stable fallback feed pinned: current=${currentVersion} → ${url}`)
     autoUpdater.setFeedURL({ provider: 'generic', url })
     return 'ready'
   }
@@ -229,7 +243,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     if (attemptId === null) {
       return false
     }
-    // Why: a published tag can briefly lack its platform manifest mid-release; walk back once to the previous feed for a normal not-available result.
+    // A published tag may lack its manifest briefly; retry once on the previous feed for normal not-available handling.
     this.pendingPrereleaseFallback.retryLaunched = true
     this.pendingPrereleaseFallback.userInitiated = Boolean(userInitiated)
     this.pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey =

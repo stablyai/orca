@@ -66,13 +66,30 @@ describe('selectSleepingRecordParkExemptTabIds', () => {
     expect([...selectSleepingRecordParkExemptTabIds(grown, 'wt-1')]).toEqual(['tab-1', 'tab-2'])
   })
 
-  // Why: a memo that serves a stale generation after the workspace's records are
-  // dropped would pin a hidden pane mounted for the rest of the session.
+  // A stale memo after records are dropped would pin the hidden pane mounted indefinitely.
   it('drops a worktree exemption once its records leave the map', () => {
     const paneKey = `tab-1:${LEAF_ID}`
     const populated = stateWith({ [paneKey]: sleepingRecord({ paneKey }) })
     expect([...selectSleepingRecordParkExemptTabIds(populated, 'wt-1')]).toEqual(['tab-1'])
 
     expect([...selectSleepingRecordParkExemptTabIds(stateWith({}), 'wt-1')]).toEqual([])
+  })
+
+  // Finished-turn idle anchors must not pin hidden tabs mounted (#16308).
+  it('lets a finished turn park but keeps running and interrupted turns mounted', () => {
+    const note = (tabId: string, overrides: Partial<SleepingAgentSessionRecord>) =>
+      sleepingRecord({ paneKey: `${tabId}:${LEAF_ID}`, origin: 'live', ...overrides })
+    const records = {
+      a: note('tab-idle-anchor', { state: 'done' }),
+      b: note('tab-running', { state: 'working' }),
+      c: note('tab-interrupted', { state: 'done', interrupted: true }),
+      d: note('tab-quit', { state: 'done', origin: 'quit' })
+    }
+
+    expect([...selectSleepingRecordParkExemptTabIds(stateWith(records), 'wt-1')]).toEqual([
+      'tab-running',
+      'tab-interrupted',
+      'tab-quit'
+    ])
   })
 })

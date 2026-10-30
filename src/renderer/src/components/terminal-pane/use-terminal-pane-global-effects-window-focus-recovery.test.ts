@@ -96,11 +96,7 @@ vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
-// Why: this suite invokes the hook outside a real React render (the react mock
-// above runs effects synchronously and manages refs by hand), so a reactive
-// useAppStore(selector) call would throw an "Invalid hook call". Read the
-// current snapshot synchronously instead; getState/setState stay real so tests
-// can seed terminalLayoutsByTabId.
+// This harness runs hooks without React rendering; synchronous store snapshots avoid invalid-hook-call errors while retaining real layout state.
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
@@ -138,16 +134,11 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null)
     }
 
-    // Why: deliberate reversal of the #6354 focus-clear. A refocus atlas wipe
-    // forces every pane to re-rasterize at once, and xterm's page-merge
-    // clear-model flag is consumed by a single renderer (#4480), so panes that
-    // lose the race paint garbled glyphs while an agent streams. Focus must
-    // stay a WebGL-retry + pane-scoped repaint boundary only.
+    // Refocus atlas wipes race xterm page merging across streaming panes (#4480); reserve full atlas recovery for OS resume.
     registerManagerForReset(manager)
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       isActive: true,
       isVisible: true,
       isSyncFitEnabled: true,
@@ -176,9 +167,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     listener(new Event('focus'))
     listener(new Event('focus'))
 
-    // Count proof: repeated refocus performs zero shared-atlas wipes. It routes
-    // to the atlas-preserving present (scheduleRevealPresent), never the
-    // atlas-clearing reveal repaint, which would clear each pane's shared atlas.
+    // Refocus must use atlas-preserving present, never shared-atlas clearing.
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
     expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(3)
@@ -202,7 +191,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       isActive: true,
       isVisible: true,
       isSyncFitEnabled: true,
@@ -227,8 +215,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
     manager.refreshAllPanes.mockClear()
-    // Clear the mount-time reveal spies so the assertions measure only the
-    // focus event, not the initial visibility resume.
+    // Exclude mount-time visibility recovery from the focus-event assertions.
     manager.scheduleRevealRepaint.mockClear()
     manager.scheduleRevealPresent.mockClear()
     manager.fitAllRevealedPanes.mockClear()
@@ -242,13 +229,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith(terminal)
     expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, { maxChars: 64 * 1024 })
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
-    // Refocus recovery uses the same wobble-resistant reveal fit path.
     expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
     expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
-    // Why: refocus recovery is atlas-preserving — no shared-atlas reset, no
-    // registry-wide repaint, and no atlas-clearing reveal repaint; the
-    // atlas-preserving present covers stale pixels.
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(manager.refreshAllPanes).not.toHaveBeenCalled()
     expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
@@ -280,7 +263,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       isActive: true,
       isVisible: true,
       isSyncFitEnabled: true,
@@ -298,8 +280,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     manager.refreshAllPanes.mockClear()
     captured.onSystemResumed?.()
 
-    // Why: OS resume is a genuine wake — GPU state may be stale without a
-    // context-loss event, so the shared-atlas clear and full repaint still run.
+    // OS resume can leave stale GPU state without context loss, requiring atlas clear and full repaint.
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
   })
@@ -335,7 +316,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       isActive: true,
       isVisible: true,
       isSyncFitEnabled: true,
@@ -393,7 +373,6 @@ describe('useTerminalPaneGlobalEffects', () => {
       beginHookRender()
       useTerminalPaneGlobalEffects({
         tabId: 'tab-1',
-        worktreeId: 'wt-1',
         isActive: options.isActive,
         isVisible: options.isVisible,
         isSyncFitEnabled: options.isVisible,

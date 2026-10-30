@@ -88,8 +88,11 @@ export function UpdateAvailableRichContent({
               className="text-xs text-muted-foreground/70 underline hover:text-foreground inline"
               onClick={() => void window.api.shell.openUrl(release.releaseNotesUrl)}
             >
-              +{releasesBehind - 1}{' '}
-              {translate('auto.components.UpdateCard.ccd8b0a793', 'more since your last update')}
+              {translate(
+                'auto.components.UpdateCard.moreSinceLastUpdate',
+                '+{{count}} more since your last update',
+                { count: releasesBehind - 1 }
+              )}
             </button>
           </>
         )}

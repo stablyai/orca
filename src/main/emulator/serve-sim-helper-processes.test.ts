@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { parseServeSimHelperProcesses } from './serve-sim-helper-processes'
 
 describe('parseServeSimHelperProcesses', () => {
-  it('returns exact serve-sim-bin helper processes from ps output', () => {
+  it('returns legacy serve-sim-bin helper processes from ps output', () => {
     const psOutput = `
       101 /Applications/serve-sim/bin/serve-sim-bin UDID-1 --port 3100
       102 /Applications/serve-sim/bin/serve-sim UDID-1 --port 3100
@@ -18,6 +18,29 @@ describe('parseServeSimHelperProcesses', () => {
       {
         pid: 104,
         command: 'node /Applications/serve-sim/bin/serve-sim-bin UDID-2 --port 3101'
+      }
+    ])
+  })
+
+  it('returns node-hosted serve-sim helpers and skips one-shot serve-sim commands', () => {
+    const runtime = '/Users/me/Library/Application Support/Orca/serve-sim-runtime/1.4.0'
+    const psOutput = `
+      301 /Applications/Orca.app/Contents/MacOS/Orca ${runtime}/dist/serve-sim.js UDID-1 --port 3100 --host 127.0.0.1 --exit-on-simulator-shutdown
+      302 /Applications/Orca.app/Contents/MacOS/Orca ${runtime}/dist/serve-sim.js tap 0.5 0.5 -d UDID-1
+      303 /Applications/Orca.app/Contents/MacOS/Orca ${runtime}/dist/serve-sim.js --detach -q UDID-1
+      304 /usr/local/bin/serve-sim UDID-2 --port 3101 --host 127.0.0.1 --exit-on-simulator-shutdown
+      305 node /tmp/not-serve-sim.js UDID-3 --exit-on-simulator-shutdown
+    `
+
+    expect(parseServeSimHelperProcesses(psOutput)).toEqual([
+      {
+        pid: 301,
+        command: `/Applications/Orca.app/Contents/MacOS/Orca ${runtime}/dist/serve-sim.js UDID-1 --port 3100 --host 127.0.0.1 --exit-on-simulator-shutdown`
+      },
+      {
+        pid: 304,
+        command:
+          '/usr/local/bin/serve-sim UDID-2 --port 3101 --host 127.0.0.1 --exit-on-simulator-shutdown'
       }
     ])
   })

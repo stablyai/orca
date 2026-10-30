@@ -34,6 +34,7 @@ describe('agent prompt receipt correlation', () => {
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
 
     const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
+      inputKind: 'driving',
       acceptQueued: true,
       requestId: 'historical-first',
       observationTimeoutMs: 0
@@ -41,6 +42,7 @@ describe('agent prompt receipt correlation', () => {
     await vi.runAllTimersAsync()
     const first = await firstPromise
     const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
+      inputKind: 'driving',
       acceptQueued: true,
       requestId: 'historical-second',
       observationTimeoutMs: 0
@@ -62,7 +64,6 @@ describe('agent prompt receipt correlation', () => {
     await expect(
       runtime.observeTerminalAgentPrompt(handle, first.prompt!, 0)
     ).resolves.toMatchObject({ stages: ['input_accepted', 'turn_started'] })
-    // Observing a queued receipt must never write to the PTY again.
     expect(writes).toHaveLength(writesAfterSubmission)
   })
 })

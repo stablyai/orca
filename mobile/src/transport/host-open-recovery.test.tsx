@@ -11,6 +11,12 @@ const openHostLogicalClientMock = vi.fn()
 const loadHostsMock = vi.fn()
 const revival = vi.hoisted(() => ({ callback: null as null | ((reason: 'focus') => void) }))
 
+// Descriptor probes need RPC methods these clients do not provide.
+const descriptorProbe = vi.hoisted(() => ({ start: vi.fn((..._args: unknown[]) => vi.fn()) }))
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (...args: unknown[]) => descriptorProbe.start(...args)
+}))
+
 vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => openHostLogicalClientMock(...args)
 }))
@@ -25,15 +31,18 @@ vi.mock('./connection-revival-triggers', () => ({
     }
   }
 }))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
+}))
 
+import { RpcClientProvider } from './client-context'
 import {
   useDisconnectHostClient,
-  RpcClientProvider,
   useForgetHostClient,
   useForceReconnect,
   useHostClient,
   useRefreshHostClient
-} from './client-context'
+} from './host-client-hooks'
 
 const HOST = {
   id: 'host-1',

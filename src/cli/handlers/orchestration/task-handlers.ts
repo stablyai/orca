@@ -4,7 +4,7 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
 import { callOrchestrationMutation } from './mutation-request'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { resolveCoordinatorTerminalHandle, runScopedSessionCaller } from './terminal-identity'
 
 const TASK_STATUS_VALUES = [
   'pending',
@@ -39,7 +39,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
     const brief = flags.has('brief')
     const run = getOptionalStringFlag(flags, 'run')
     const callerTerminalHandle = run
-      ? undefined
+      ? runScopedSessionCaller(flags)
       : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       tasks: {
@@ -62,7 +62,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       run,
       callerTerminalHandle
     })
-    // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.
+    // Only hosts that omit spec_truncated need client-side abbreviation.
     const needsClientAbbreviation =
       brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
     const output = needsClientAbbreviation

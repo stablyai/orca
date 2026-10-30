@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import {
   LinearProjectTable,
@@ -56,7 +56,7 @@ export function TaskPageLinearProjectList({
         errors={linearProjectsResult.errors}
         hasMore={linearProjectsResult.hasMore}
         count={linearProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )

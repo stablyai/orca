@@ -1,19 +1,23 @@
-import { agentChildWorkBelongsTo, type AgentChildWorkRecord } from './agent-status-child-work'
+import type { AgentChildWorkRecord } from './agent-status-child-work'
 import {
   serializeAgentChildWorkAliasKey,
   type AgentChildWorkAliasIdentity,
   type AgentChildWorkAliasInput,
   type AgentChildWorkAliasRecord
 } from './agent-status-child-work-alias'
-import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
-import { resolveAgentStatusChildBindings } from './agent-status-store-child-queries'
+import {
+  agentStatusStoreAliasesOf,
+  agentStatusStoreChildrenOf,
+  resolveAgentStatusChildBindings
+} from './agent-status-store-child-queries'
+import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
 import type { AgentStatusStoreSnapshot } from './agent-status-store-contract'
 import {
   isAgentStatusStoreEpoch,
   parseAgentStatusStoreMutation,
   parseAgentStatusStoreSnapshot
 } from './agent-status-store-codec'
-import { applyAgentStatusStoreMutation } from './agent-status-store-mutation'
+import { indexAgentStatusStoreState } from './agent-status-store-indexes'
 import type { AgentStatusRunAliasIndex } from './agent-status-run-alias-index'
 import {
   parseAgentStatusParentRecord,
@@ -40,6 +44,9 @@ export type AgentStatusStoreMode = 'authority' | 'replica'
 
 export type AgentStatusStore = {
   getParent(subject: AgentStatusSubject): AgentStatusParentRecord | null
+  /** Every parent in insertion order, without materializing the child records a snapshot holds. */
+  getParents(): AgentStatusParentRecord[]
+  getRevision(): { epoch: string; revision: number }
   getChildren(subject: AgentStatusSubject): AgentChildWorkRecord[]
   getChild(childWorkId: string): AgentChildWorkRecord | null
   getAlias(identity: AgentChildWorkAliasIdentity): AgentChildWorkAliasRecord | null
@@ -62,11 +69,17 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
     throw new Error('Invalid agent status store epoch')
   }
   let state = createEmptyAgentStatusStoreState(options.epoch)
+  let indexes = indexAgentStatusStoreState(state)
   let snapshotApplied = options.mode === 'authority'
+  const restore = (restored: typeof state) => {
+    state = restored
+    indexes = indexAgentStatusStoreState(restored)
+    snapshotApplied = true
+  }
 
   const store: AgentStatusStore = {
     resolveChildAliases(aliases) {
-      return resolveAgentStatusChildBindings(state, aliases)
+      return resolveAgentStatusChildBindings(state, indexes, aliases)
     },
     getParent(subject) {
       const parsed = parseAgentStatusSubject(subject)
@@ -76,16 +89,20 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
       const record = state.parents.get(serializeAgentStatusSubject(parsed))
       return record ? deepFreezeAgentStatusStoreValue(parseAgentStatusParentRecord(record)) : null
     },
+    getParents() {
+      return [...state.parents.values()]
+    },
+    getRevision() {
+      return { epoch: state.epoch, revision: state.revision }
+    },
     getChildren(subject) {
       const parsed = parseAgentStatusSubject(subject)
       if (!parsed) {
         return []
       }
-      const children = [...state.children.values()]
-        .filter((child) => agentChildWorkBelongsTo(child, parsed))
-        .map((child) => parseAgentChildWorkRecord(child))
-        .filter((child): child is AgentChildWorkRecord => child !== null)
-      return deepFreezeAgentStatusStoreValue(children)
+      return deepFreezeAgentStatusStoreValue(
+        agentStatusStoreChildrenOf(state, indexes, serializeAgentStatusSubject(parsed))
+      )
     },
     getChild(childWorkId) {
       return state.children.get(childWorkId) ?? null
@@ -94,9 +111,7 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
       return state.aliases.get(serializeAgentChildWorkAliasKey(identity)) ?? null
     },
     getAliasesForChild(childWorkId) {
-      return deepFreezeAgentStatusStoreValue(
-        [...state.aliases.values()].filter((alias) => alias.childWorkId === childWorkId)
-      )
+      return deepFreezeAgentStatusStoreValue(agentStatusStoreAliasesOf(state, indexes, childWorkId))
     },
     getRunAliasIndex() {
       return deriveAgentStatusStoreRunAliasIndex(state.parents.values())
@@ -113,11 +128,9 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
         return null
       }
       const previousRevision = state.revision
-      const next = applyAgentStatusStoreMutation(state, mutation, previousRevision + 1)
-      if (!next) {
+      if (!commitAgentStatusStoreMutation(state, indexes, mutation, previousRevision + 1)) {
         return null
       }
-      state = next
       return deepFreezeAgentStatusStoreValue({
         type: 'mutation',
         epoch: state.epoch,
@@ -139,8 +152,7 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
         if (!restored) {
           return false
         }
-        state = restored
-        snapshotApplied = true
+        restore(restored)
         return true
       }
       if (
@@ -154,8 +166,7 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
       if (!mirrored) {
         return false
       }
-      state = mirrored
-      snapshotApplied = true
+      restore(mirrored)
       return true
     },
     applyTransportEnvelope(value) {
@@ -177,12 +188,7 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
       ) {
         return false
       }
-      const next = applyAgentStatusStoreMutation(state, envelope.mutation, envelope.revision)
-      if (!next) {
-        return false
-      }
-      state = next
-      return true
+      return commitAgentStatusStoreMutation(state, indexes, envelope.mutation, envelope.revision)
     }
   }
   return store

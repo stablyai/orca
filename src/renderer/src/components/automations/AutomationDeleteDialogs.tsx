@@ -16,7 +16,8 @@ import type {
 } from '../../../../shared/automations-types'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalProviderLabel } from './external-automation-display'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 
 export function AutomationDeleteDialog({
   deleteTarget,
@@ -52,12 +53,20 @@ export function AutomationDeleteDialog({
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}{' '}
-            <span className="break-all font-medium text-foreground">{deleteTarget?.name}</span>{' '}
-            {translate(
-              'auto.components.automations.AutomationsPage.b264564427',
-              'and its run history. Workspaces created by previous runs are not deleted.'
-            )}
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.automations.AutomationsPage.deleteAutomationDescription',
+                'Delete <name/> and its run history. Workspaces created by previous runs are not deleted.'
+              )}
+              components={{
+                name: (
+                  <span className="break-all font-medium text-foreground">
+                    {deleteTarget?.name}
+                  </span>
+                )
+              }}
+            />
           </DialogDescription>
         </DialogHeader>
         {deleteTarget ? (
@@ -141,19 +150,31 @@ export function ExternalAutomationDeleteDialog({
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}{' '}
-            <span className="break-all font-medium text-foreground">
-              {externalDeleteTarget?.job.name}
-            </span>{' '}
-            {translate('auto.components.automations.AutomationsPage.02a33e3204', 'from')}{' '}
-            {externalDeleteTarget
-              ? getExternalProviderLabel(externalDeleteTarget.manager)
-              : translate(
-                  'auto.components.automations.AutomationsPage.8500baacb4',
-                  'external source'
-                )}{' '}
-            {translate('auto.components.automations.AutomationsPage.1b586f0e2b', 'on')}{' '}
-            {externalDeleteTarget?.manager.targetLabel}.
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.automations.AutomationsPage.deleteExternalAutomationDescription',
+                'Delete <name/> from <provider/> on <host/>.'
+              )}
+              components={{
+                name: (
+                  <span className="break-all font-medium text-foreground">
+                    {externalDeleteTarget?.job.name}
+                  </span>
+                ),
+                provider: (
+                  <>
+                    {externalDeleteTarget
+                      ? getExternalProviderLabel(externalDeleteTarget.manager)
+                      : translate(
+                          'auto.components.automations.AutomationsPage.8500baacb4',
+                          'external source'
+                        )}
+                  </>
+                ),
+                host: <>{externalDeleteTarget?.manager.targetLabel}</>
+              }}
+            />
           </DialogDescription>
         </DialogHeader>
         {externalDeleteTarget ? (

@@ -1,33 +1,34 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
+import {
+  isAccountRestartReady,
+  selectReadyAccountRestartPtyIds
+} from './pane-account-restart-readiness'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
+import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
 import { clearPaneTerminalError } from './terminal-error-accumulation'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
+import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
-/** Owns the restart/close actions for panes whose PTY process has exited. */
 export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseController) {
   const {
     clearCodexRestartNotice,
     clearExitedPanePtyLayoutBinding,
     clearRuntimePaneTitle,
     clearTabPtyId,
-    clearTerminalPaneUnread,
-    clearTerminalTabUnread,
-    clearWorktreeUnread,
-    consumePendingCodexPaneRestart,
+    consumePendingPaneAccountRestart,
     cwd,
     dispatchNotification,
     executeClosePane,
     isActiveRef,
     isVisibleRef,
-    markTerminalPaneUnread,
-    markTerminalTabUnread,
-    markWorktreeUnread,
+    markTerminalBell,
     handlePaneProcessDied,
     managerRef,
     onAgentExitedRef,
@@ -40,7 +41,6 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     paneMode2031Ref,
     panePtyBindingsRef,
     paneTransportsRef,
-    pendingCodexPaneRestartIds,
     replayingPanesRef,
     savedLayout,
     setCacheTimerStartedAt,
@@ -57,11 +57,21 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     worktreeId
   } = controller
 
-  const handleRestartCodexPane = useCallback(
-    (
-      paneId: number,
-      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP
-    ) => {
+  const buildAccountRestartStartup = useCallback(
+    (agent: AccountRestartAgent, leafId: string) =>
+      buildPaneAccountRestartStartup(agent, {
+        tabId,
+        worktreeId,
+        leafId,
+        shellOverride: useAppStore
+          .getState()
+          .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.shellOverride
+      }),
+    [tabId, worktreeId]
+  )
+
+  const handleRestartPane = useCallback(
+    (paneId: number, startup: PtyConnectionDeps['startup'], options: { focus: boolean }) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
@@ -78,7 +88,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
       syncPanePtyLayoutBinding(paneId, null)
-      transport?.destroy?.()
+      const replacesPtyId = releasePaneTransportForRestart(transport)
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
@@ -87,7 +97,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         tabId,
         worktreeId,
         cwd,
-        startup: restartStartup,
+        startup,
+        ...(replacesPtyId ? { replacesPtyId } : {}),
         mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,
@@ -109,12 +120,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         setRuntimePaneTitle,
         clearRuntimePaneTitle,
         updateTabPtyId,
-        markWorktreeUnread,
-        markTerminalTabUnread,
-        markTerminalPaneUnread,
-        clearWorktreeUnread,
-        clearTerminalTabUnread,
-        clearTerminalPaneUnread,
+        markTerminalBell,
         onShowSessionRestoredBanner: showRestoredSessionBanner,
         dispatchNotification,
         setCacheTimerStartedAt,
@@ -122,25 +128,21 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         clearExitedPanePtyLayoutBinding
       })
       panePtyBindingsRef.current.set(paneId, newPaneBinding)
-      manager.setActivePane(paneId, { focus: true })
+      if (options.focus) {
+        manager.setActivePane(paneId, { focus: true })
+      }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
       clearCodexRestartNotice,
       clearExitedPanePtyLayoutBinding,
       clearRuntimePaneTitle,
       clearTabPtyId,
-      clearTerminalPaneUnread,
-      clearTerminalTabUnread,
-      clearWorktreeUnread,
       cwd,
       dispatchNotification,
       handlePaneProcessDied,
       isActiveRef,
       isVisibleRef,
-      markWorktreeUnread,
-      markTerminalTabUnread,
-      markTerminalPaneUnread,
+      markTerminalBell,
       managerRef,
       onAgentExitedRef,
       onPtyErrorClearedRef,
@@ -162,7 +164,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       tabId,
       updateTabPtyId,
       updateTabTitle,
-      worktreeId
+      worktreeId,
+      setTerminalErrorsByPaneId
     ]
   )
 
@@ -183,12 +186,12 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleRestartExitedPane = useCallback(
     (processExit: PaneProcessExit) => {
       clearPaneProcessExit(processExit.paneId)
-      handleRestartCodexPane(
-        processExit.paneId,
-        resolveTerminalProcessExitRestartStartup(processExit)
-      )
+      // Why no agent fallback: a null startup means a plain shell; account switches restart via their own path.
+      handleRestartPane(processExit.paneId, resolveTerminalProcessExitRestartStartup(processExit), {
+        focus: true
+      })
     },
-    [clearPaneProcessExit, handleRestartCodexPane]
+    [clearPaneProcessExit, handleRestartPane]
   )
 
   const handleCloseExitedPane = useCallback(
@@ -206,9 +209,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       return
     }
 
-    // A replacement can commit tab/layout ownership while a remounted xterm
-    // is still carrying the previous DOM marker. Allow an unbound transport to
-    // catch up, but never let a live mismatched transport overwrite its owner.
+    // Unbound remounts may catch up to replacement ownership; a live mismatched transport must never overwrite it.
     for (const pane of manager.getPanes()) {
       const expectedPtyId = panePtyLayoutBindings?.[pane.leafId]
       if (!expectedPtyId) {
@@ -226,26 +227,40 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     }
   }, [managerRef, panePtyLayoutBindings, paneTransportsRef, tabId])
 
+  // Why primitive ids: unrelated status updates stay shallow-equal and skip this pane.
+  const readyRestartPtyIds = useAppStore(
+    useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
+  )
   useEffect(() => {
     const manager = managerRef.current
-    if (!manager) {
+    if (!manager || readyRestartPtyIds.length === 0) {
       return
     }
     for (const pane of manager.getPanes()) {
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (!ptyId || !pendingCodexPaneRestartIds[ptyId]) {
+      if (
+        !ptyId ||
+        !readyRestartPtyIds.includes(ptyId) ||
+        !isAccountRestartReady(useAppStore.getState(), tabId, pane.leafId, ptyId)
+      ) {
         continue
       }
-      if (consumePendingCodexPaneRestart(ptyId)) {
-        handleRestartCodexPane(pane.id)
+      const agent = consumePendingPaneAccountRestart(ptyId)
+      const startup = agent ? buildAccountRestartStartup(agent, pane.leafId) : null
+      if (agent && startup) {
+        // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
+        handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
-    consumePendingCodexPaneRestart,
-    handleRestartCodexPane,
+    buildAccountRestartStartup,
+    consumePendingPaneAccountRestart,
+    handleRestartPane,
     panePtyLayoutBindings,
-    pendingCodexPaneRestartIds
+    readyRestartPtyIds,
+    managerRef,
+    paneTransportsRef,
+    tabId
   ])
 
   return { handleRestartExitedPane, handleCloseExitedPane }

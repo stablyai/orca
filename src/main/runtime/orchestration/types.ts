@@ -1,4 +1,5 @@
 import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+import type { OrcaSessionId } from '../../../shared/orca-session-address'
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -46,6 +47,10 @@ export type RunRow = {
   home_database: string
   coordinator_handle: string | null
   coordinator_pane_key: string | null
+  /** Bare coordinator session id; cleared chats use their lineage root. */
+  coordinator_orca_session_id: OrcaSessionId | null
+  /** The consumer_generation the id was written at; see currentRunCoordinatorOrcaSessionId. */
+  coordinator_orca_session_id_generation: number | null
   consumer_generation: number
   legacy: number
   created_at: string
@@ -196,6 +201,7 @@ export type RemoteDispatchAttachmentRow = {
   home_peer_fingerprint: string
   protocol_version: number
   runtime_epoch: string
+  /** Written only by hosts that minted a per-Dispatch capability; never read for authority. */
   capability_hash: string | null
   pane_key: string | null
   process_incarnation: string | null
@@ -278,8 +284,12 @@ export type DispatchContextRow = {
   launch_token_hash: string | null
   assignee_handle: string | null
   assignee_pane_key: string | null
+  /** Bare assignee session id; cleared chats use their lineage root. */
+  assignee_orca_session_id: OrcaSessionId | null
+  /** Written only by hosts that minted a per-Dispatch capability; never read for authority. */
   capability_hash: string | null
   process_incarnation: string | null
+  /** When the Dispatch's lifecycle closed (settled, stopping, abandoned); the name predates that. */
   capability_revoked_at: string | null
   /** Dispatch ID is the Attempt identity; retries point to the prior Attempt. */
   retry_of_dispatch_id: string | null
@@ -287,12 +297,13 @@ export type DispatchContextRow = {
   /** Creator identity; equal to the assignee means a self-dispatch, which adds no nesting depth. */
   creator_handle: string | null
   creator_pane_key: string | null
+  /** Bare creator session id; cleared chats use their lineage root. */
+  creator_orca_session_id: OrcaSessionId | null
   host_scope: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
-  /** Why the dispatch ended, when Orca could establish it — `operator_close`,
-   *  `signaled`, `exited`, `unknown`. Null on rows written before STA-4603. */
+  /** Proven termination cause; null for rows predating STA-4603. */
   termination_reason: TerminalExitCause['kind'] | null
   /** Nesting depth; a root coordinator's worker is 1. Never 0 on a persisted row. */
   depth: number

@@ -4,6 +4,7 @@ import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeRawProcess } from './agent-browser-bridge-raw-process'
 import type { AgentBrowserCleanupOptions } from './agent-browser-bridge-types'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
+import { runOutsideRemoteCliBrowserScope } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawProcess {
   async onTabClosed(webContentsId: number): Promise<void> {
@@ -30,13 +31,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     this.options.onTabsChanged?.(owningWorktreeId)
   }
 
-  /**
-   * Retire a page's daemon by page id.
-   *
-   * The headless offscreen backend owns pages by id and unregisters the guest
-   * itself, so `onTabClosed`'s webContentsId lookup can never resolve one — it
-   * has to say which page closed (#16367).
-   */
+  /** Offscreen backends unregister guests before cleanup, so close by page ID. */
   async onPageClosed(browserPageId: string): Promise<void> {
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     await this.destroySession(sessionName)
@@ -48,12 +43,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     newWebContentsId: number,
     previousWebContentsId?: number
   ): Promise<void> {
-    // Why: an Electron process swap keeps browserPageId but gives a new webContentsId — destroy the session so the next command recreates it.
+    // Process swaps preserve page IDs but replace the guest and its session.
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     const session = this.sessions.get(sessionName)
     const oldWebContentsId = previousWebContentsId ?? session?.webContentsId
     const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
-    // Why: save intercept patterns before destroy so the new session can restore them after init.
     if (session && session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
@@ -85,7 +79,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       return
     }
 
-    // Why: without this lock, two concurrent calls both create proxies and the second leaks the first's server/debugger.
+    // Coalesce creation to avoid leaking duplicate proxies and debugger connections.
     const pending = this.pendingSessionCreation.get(sessionName)
     if (pending) {
       await pending
@@ -96,17 +90,21 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     const createSession = async (): Promise<void> => {
       const wc = this.getWebContents(webContentsId)
       if (!wc) {
-        // Why: the webview can be destroyed between target resolution and session creation — keep the same closed-tab error shape.
         throw new BrowserError(
           'browser_tab_not_found',
           `Browser page ${browserPageId} is no longer available`
         )
       }
 
-      // Why: the daemon persists sessions (incl. CDP port) across restarts; close the stale one first or it ignores --cdp and hits the dead port.
+      // Reset daemon sessions that may retain a CDP port from an earlier Orca process.
       await this.closeStaleAgentBrowserSession(sessionName)
 
-      const proxy = new CdpWsProxy(wc)
+      const proxy = new CdpWsProxy(
+        wc,
+        () => this.browserManager.holdPaintForCapture(webContentsId),
+        () => this.browserManager.guardUserFocusForAgentInput(webContentsId),
+        (input) => this.browserManager.showAgentPointer(wc, input)
+      )
       const cdpEndpoint = await proxy.start()
 
       this.sessions.set(sessionName, {
@@ -122,63 +120,13 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       })
     }
 
-    const promise = createSession()
+    // Proxy sockets outlive individual remote requests and must not inherit their revocable scope.
+    const promise = runOutsideRemoteCliBrowserScope(createSession)
     this.pendingSessionCreation.set(sessionName, promise)
     try {
       await promise
     } finally {
       this.pendingSessionCreation.delete(sessionName)
-    }
-  }
-
-  protected async restartSessionForTarget(
-    sessionName: string,
-    browserPageId: string,
-    webContentsId: number,
-    options: { recreate: boolean } = { recreate: true }
-  ): Promise<void> {
-    const pendingCreation = this.pendingSessionCreation.get(sessionName)
-    if (pendingCreation) {
-      await pendingCreation.catch(() => {})
-    }
-
-    const session = this.sessions.get(sessionName)
-    if (session) {
-      if (session.activeInterceptPatterns.length > 0) {
-        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
-      }
-      this.sessions.delete(sessionName)
-      this.pendingSessionCreation.delete(sessionName)
-      if (session.activeProcess) {
-        this.cancelledProcesses.add(session.activeProcess)
-        try {
-          session.activeProcess.kill()
-        } catch {
-          // Process may already be exiting.
-        }
-        session.activeProcess = null
-      }
-
-      const destroy = (async (): Promise<void> => {
-        try {
-          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'], {
-            timeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS
-          })
-        } catch {
-          // Session may already be dead.
-        }
-        await session.proxy.stop()
-      })()
-      this.pendingSessionDestruction.set(sessionName, destroy)
-      try {
-        await destroy
-      } finally {
-        this.pendingSessionDestruction.delete(sessionName)
-      }
-    }
-
-    if (options.recreate) {
-      await this.ensureSession(sessionName, browserPageId, webContentsId)
     }
   }
 
@@ -194,49 +142,51 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
     const pendingCreation = this.pendingSessionCreation.get(sessionName)
     if (pendingCreation) {
-      // Why: tab close can race session creation before sessions.set(); await it so no late proxy survives the close.
+      // Wait for creation so a late proxy cannot survive teardown.
       try {
         await pendingCreation
       } catch {
-        // Creation failures are handled by the original caller; teardown still rejects queued work below.
+        // The creating caller handles its error; teardown still rejects queued commands.
       }
     }
 
     const session = this.sessions.get(sessionName)
     if (!session) {
-      this.rejectQueuedCommandsForClosedSession(sessionName)
+      if (!options.keepQueuedCommands) {
+        this.rejectQueuedCommandsForClosedSession(sessionName)
+      }
       return
     }
 
     this.sessions.delete(sessionName)
     this.pendingSessionCreation.delete(sessionName)
+    // Retirement preserves the live page's routes for its replacement session.
+    if (options.keepQueuedCommands && session.activeInterceptPatterns.length > 0) {
+      this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+    }
 
-    // Why: queued commands would hang forever if we just delete the queue — drain and reject them.
-    this.rejectQueuedCommandsForClosedSession(sessionName)
+    if (!options.keepQueuedCommands) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
+    }
 
     if (session.activeProcess) {
-      // Why: rejecting the queue isn't enough for an in-flight command — kill the process so callers don't wait out the exec timeout.
+      // Cancel running work immediately instead of waiting for its exec timeout.
       this.cancelledProcesses.add(session.activeProcess)
       try {
         session.activeProcess.kill()
-      } catch {
-        // Process may already be exiting.
-      }
+      } catch {}
       session.activeProcess = null
     }
 
     const destroy = (async (): Promise<void> => {
       try {
-        // Why: each tab has its own named session — close without --session leaves this tab's daemon running.
-        // Why bounded: this runs inside the 20s will-quit barrier, so it cannot inherit the 90s exec timeout.
+        // Close the named daemon within the quit barrier's budget.
         await this.runAgentBrowserRaw(
           sessionName,
           ['--session', sessionName, 'close'],
           options.closeTimeoutMs === undefined ? undefined : { timeoutMs: options.closeTimeoutMs }
         )
-      } catch {
-        // Session may already be dead
-      }
+      } catch {}
 
       await session.proxy.stop()
     })()

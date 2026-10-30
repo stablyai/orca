@@ -1,6 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import pg from 'pg'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayConfig } from './config.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
+import { createRelayServer } from './relay-server.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
@@ -16,10 +19,7 @@ const userId = 'accept-lock-postgres-user'
 const first = { userId, relayHostId: 'acceptlockhost01' }
 const second = { userId, relayHostId: 'acceptlockhost02' }
 
-// Why: the accept path now enforces the capacity ceiling inside its single
-// conditional cell-row write instead of behind a SELECT ... FOR UPDATE it held
-// for the rest of the transaction. Two accepts reaching for the same last slot
-// are what would expose a lost update if that check were no longer atomic.
+// Race accepts for the last slot: the final conditional cell UPDATE must enforce capacity atomically without an earlier held SELECT lock.
 describePostgres('PostgreSQL control accept without a held cell row', () => {
   const databases: RelayDatabase[] = []
 
@@ -148,10 +148,7 @@ describePostgres('PostgreSQL control accept without a held cell row', () => {
     })
     await heldPromise
 
-    // Retiring generation 1 and installing generation 2 leaves the cell's
-    // reservation where it was, so the accept has no reason to wait on the row
-    // at all. Reading it up front is what used to make it wait, and then fail
-    // at the request-path lock bound.
+    // Same-cell generation replacement changes no reservation; reading the shared row would needlessly wait and hit the request bound.
     try {
       await expect(
         store.activateControl(first, {
@@ -177,6 +174,41 @@ describePostgres('PostgreSQL control accept without a held cell row', () => {
     expect(Number(cells[0]!.reserved_requests)).toBe(Number(units[0]!.units))
   }, 20_000)
 
+  // Drive the production store: wrappers can omit optional fused commit and silently restore a separate COMMIT round trip.
+  it('commits every counter write in one message through the production store', async () => {
+    await removeTestRows(databases[0]!)
+    const store = new RelayAssignmentStore(databases[0]!, () => 100)
+    await prepareCell(store)
+    const { assignments } = createRelayServer(cellConfig(), databases[0]!, { now: () => 100 })
+    const assignment = await store.assign(first)
+    const firstControl = await assignments.activateControl(first, {
+      cellId: cell.id,
+      assignmentEpoch: assignment.assignmentEpoch,
+      generation: 1
+    })
+
+    const sent = vi.spyOn(pg.Client.prototype, 'query')
+    let texts: string[] = []
+    try {
+      await assignments.releaseActivity(first, firstControl)
+      await assignments.activateControl(first, {
+        cellId: cell.id,
+        assignmentEpoch: assignment.assignmentEpoch,
+        generation: 2
+      })
+      await assignments.acquireActivity(first, {
+        activityId: 'invite:fused',
+        kind: 'invite',
+        cellId: cell.id
+      })
+    } finally {
+      texts = sent.mock.calls.map(([text]) => String(text))
+      sent.mockRestore()
+    }
+    expect(texts.filter((text) => text.endsWith('; COMMIT'))).toHaveLength(3)
+    expect(texts.filter((text) => text === 'COMMIT')).toEqual([])
+  })
+
   async function prepareCell(store: RelayAssignmentStore): Promise<void> {
     await store.reconcileCells([cell])
     await store.recordCellHeartbeat({
@@ -197,3 +229,31 @@ describePostgres('PostgreSQL control accept without a held cell row', () => {
   }
 
 })
+
+function cellConfig(): RelayConfig {
+  return {
+    port: 0,
+    publicUrl: cell.url,
+    cellUrl: cell.url,
+    authIssuer: 'https://auth.example.test',
+    authAudience: 'orca-relay',
+    jwksUrl: 'https://auth.example.test/jwks',
+    assignmentSigningKey: new Uint8Array(32),
+    role: 'cell',
+    cellId: cell.id,
+    cells: [],
+    adminAudience: 'https://relay.example.test/v1/admin/drain',
+    deployServiceAccount: 'deploy@example.test',
+    runtimeServiceAccount: 'relay-cell@example.test',
+    adminJwksUrl: 'https://auth.example.test/jwks',
+    databasePoolMax: 10,
+    publicAssignmentsEnabled: true,
+    publicAssignmentConcurrency: 2,
+    publicAssignmentQueueMax: 128,
+    publicAssignmentWaitMs: 4_000,
+    publicResolveConcurrency: 1,
+    publicResolveWaitMs: 5_000,
+    publicAssignmentRetryAfterSeconds: 5,
+    dataDir: './data'
+  }
+}

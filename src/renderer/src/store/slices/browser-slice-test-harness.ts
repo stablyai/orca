@@ -2,6 +2,7 @@ import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import { createBrowserSlice } from './browser'
 import type { AppState } from '../types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -14,6 +15,7 @@ export type BrowserMockApi = {
     sessionCreateProfile: Mock
     sessionDeleteProfile: Mock
     sessionImportCookies: Mock
+    sessionImportCookiesForClientHost: Mock
     sessionDetectBrowsers: Mock
     sessionDetectBrowsersForClientHost: Mock
     sessionImportFromBrowser: Mock
@@ -31,6 +33,7 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
       sessionCreateProfile: vi.fn().mockResolvedValue(null),
       sessionDeleteProfile: vi.fn().mockResolvedValue(false),
       sessionImportCookies: vi.fn().mockResolvedValue({ ok: false, reason: 'canceled' }),
+      sessionImportCookiesForClientHost: vi.fn().mockResolvedValue(null),
       sessionDetectBrowsers: vi.fn().mockResolvedValue([]),
       // Why: null means this desktop hosts no pages for the server, so the RPC path runs.
       sessionDetectBrowsersForClientHost: vi.fn().mockResolvedValue(null),
@@ -49,11 +52,15 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
 export function createTestStore() {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store; browser actions touch only the fields seeded here.
       ({
         settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
         activeWorktreeId: 'wt-1',
         browserDefaultUrl: 'about:blank',
         unifiedTabsByWorktree: {},
+        groupsByWorktree: {},
+        layoutByWorktree: {},
+        activeGroupIdByWorktree: {},
         tabBarOrderByWorktree: {},
         tabsByWorktree: {},
         openFiles: [],
@@ -65,6 +72,9 @@ export function createTestStore() {
         activateTab: vi.fn(),
         setTabLabel: vi.fn(),
         recordFeatureInteraction: vi.fn(),
+        updateSettings: vi.fn(async (updates: Partial<GlobalSettings>) =>
+          a[0]((s) => ({ settings: { ...s.settings!, ...updates } }))
+        ),
         ...createBrowserSlice(...a)
       }) as unknown as AppState
   )

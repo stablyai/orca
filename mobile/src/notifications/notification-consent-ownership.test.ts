@@ -13,6 +13,7 @@ import {
   startPushTokenSync
 } from './push-registration'
 import { getDevicePushToken } from './push-token'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({ storage: new Map<string, string>(), replace: vi.fn() }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -117,24 +118,30 @@ async function connectedHost() {
   client.sendRequest.mockClear()
   return client
 }
+function layoutOnboarding() {
+  renderer!.root
+    .findAll((node) => node.props.onLayout !== undefined)[0]
+    ?.props.onLayout({ nativeEvent: { layout: { width: 390 } } })
+}
 async function choose(entry: string) {
   await act(async () => {
     renderer = create(
       createElement(entry === 'settings' ? NotificationsScreen : MobileOnboardingScreen)
     )
   })
+  await act(async () => layoutOnboarding())
   await act(async () => {
     if (entry === 'settings') {
-      renderer!.root.findByType('Switch').props.onValueChange(true)
+      findByHostType(renderer!.root, 'Switch').props.onValueChange(true)
     } else {
-      renderer!.root.findByType('Page').props.onNotificationChoice('enable')
+      findByHostType(renderer!.root, 'Page').props.onNotificationChoice('enable')
     }
   })
 }
 function expectChoiceComplete(entry: string) {
   expect(mocks.storage.get('orca:pushServiceNotificationsEnabled')).toBe('true')
   if (entry === 'settings') {
-    expect(renderer!.root.findByType('Switch').props).toMatchObject({
+    expect(findByHostType(renderer!.root, 'Switch').props).toMatchObject({
       value: true,
       disabled: false
     })
@@ -183,8 +190,9 @@ it('remembers Not now without registering and does not ask again', async () => {
   await act(async () => {
     renderer = create(createElement(MobileOnboardingScreen))
   })
+  await act(async () => layoutOnboarding())
   await act(async () => {
-    renderer!.root.findByType('Page').props.onNotificationChoice('skip')
+    findByHostType(renderer!.root, 'Page').props.onNotificationChoice('skip')
   })
   await drain()
   await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)

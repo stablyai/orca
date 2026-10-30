@@ -1,3 +1,5 @@
+import { jiraCredentialStorageCopy } from './jira-credential-storage-copy'
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useId, useLayoutEffect, useState } from 'react'
 import { LoaderCircle, Lock } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -15,9 +17,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  isEnvironmentRuntimeContextKey
+} from '@/lib/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { translate } from '@/i18n/i18n'
+import { JiraConnectCredentialGuide } from './jira-connect-credential-guide'
 
 type JiraConnectDialogProps = {
   open: boolean
@@ -29,13 +35,9 @@ type JiraConnectDialogProps = {
 
 type ConnectState = 'idle' | 'connecting' | 'error'
 type JiraInstanceType = 'cloud' | 'server'
-// Self-hosted Jira accepts either a personal access token (Bearer) or classic
-// username + password (Basic); older Server/DC instances predate PATs.
+// Support Basic auth for older Server/DC instances that predate personal access tokens.
 type ServerAuthMethod = 'pat' | 'basic'
 
-// Why: mirrors the inline Jira connect dialog in TaskPage so the onboarding
-// "Connect integrations" step can reuse the same site URL + email + API token
-// flow without depending on TaskPage's local state.
 export function JiraConnectDialog({
   open,
   onOpenChange,
@@ -45,6 +47,13 @@ export function JiraConnectDialog({
 }: JiraConnectDialogProps): React.JSX.Element {
   const connectJira = useAppStore((s) => s.connectJira)
   const settings = useAppStore((s) => s.settings)
+  const hostSupportsScopedTokens = useAppStore((s) => s.jiraStatus?.supportsScopedTokens === true)
+  const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const remoteRuntime = isEnvironmentRuntimeContextKey(providerRuntimeContextKey)
+  const supportsScopedTokens =
+    !remoteRuntime ||
+    (jiraStatusContextKey === providerRuntimeContextKey && hostSupportsScopedTokens)
   const mountedRef = useMountedRef()
   const siteUrlId = useId()
   const emailId = useId()
@@ -59,9 +68,7 @@ export function JiraConnectDialog({
   const [connectState, setConnectState] = useState<ConnectState>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
 
-  // Start every open with a clean slate so a previously-typed secret, stale
-  // instance/auth-method selection, or old error can't linger across reopens.
-  // Runs before paint so a stale credential never renders for a frame.
+  // Clear secrets, modes and errors before paint on each open so prior credentials cannot flash or persist.
   useLayoutEffect(() => {
     if (!open) {
       return
@@ -76,19 +83,16 @@ export function JiraConnectDialog({
   }, [open])
 
   const isServer = instanceType === 'server'
-  // `needsIdentity` folds "Cloud Atlassian email" and "self-hosted Basic
-  // username" — the identity slot that keys/labels the stored site. PAT auth
-  // uses no identity, so the email field is hidden and left empty.
+  // Cloud email and Server Basic username share the identity slot; PAT auth has no identity.
   const isServerBasic = isServer && serverAuthMethod === 'basic'
   const needsIdentity = !isServer || isServerBasic
+  const requiresIdentity = isServerBasic || (!isServer && !supportsScopedTokens)
   const canSubmit =
     Boolean(siteUrl.trim()) &&
-    (!needsIdentity || Boolean(email.trim())) &&
+    (!requiresIdentity || Boolean(email.trim())) &&
     Boolean(apiToken.trim()) &&
     connectState !== 'connecting'
-  const credentialStorageCopy = hasRemoteProviderRuntime(settings)
-    ? 'Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
-    : 'Your token is stored locally and encrypted when local runtime storage supports it.'
+  const credentialStorageCopy = jiraCredentialStorageCopy(remoteRuntime)
 
   const clearErrorOnEdit = (): void => {
     if (connectState === 'error') {
@@ -97,10 +101,7 @@ export function JiraConnectDialog({
     }
   }
 
-  // A Cloud email, a Server username, a PAT, and an account password are
-  // different secrets; drop the credential fields when the deployment or auth
-  // method changes so one can't be submitted as another (e.g. a password
-  // silently riding along as a Bearer PAT).
+  // Clear credentials on auth/deployment changes so passwords cannot be submitted as PATs or other secret types.
   const clearCredentialsOnModeSwitch = (): void => {
     setEmail('')
     setApiToken('')
@@ -113,8 +114,7 @@ export function JiraConnectDialog({
     }
   }
 
-  // Why: a stray backdrop click must not discard typed credentials. Mode switches clear the
-  // credential fields, so a toggle alone is not dirty. Escape / Cancel / × stay explicit.
+  // Keep typed credentials on backdrop clicks; mode switches clear them, while explicit dismissal remains available.
   const isDraftDirty = (): boolean => siteUrl !== '' || email !== '' || apiToken !== ''
   const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
@@ -124,7 +124,7 @@ export function JiraConnectDialog({
     const trimmedToken = apiToken.trim()
     if (
       !trimmedSite ||
-      (needsIdentity && !trimmedEmail) ||
+      (requiresIdentity && !trimmedEmail) ||
       !trimmedToken ||
       connectState === 'connecting'
     ) {
@@ -135,8 +135,7 @@ export function JiraConnectDialog({
     try {
       const result = await connectJira({
         siteUrl: trimmedSite,
-        // Cloud sends the Atlassian email; self-hosted Basic sends the username;
-        // PAT sends nothing, so a stale email can't key/label the stored site.
+        // PAT auth must not inherit a stale identity used to key or label the stored site.
         email: needsIdentity ? trimmedEmail : '',
         apiToken: trimmedToken,
         authType: instanceType
@@ -156,11 +155,15 @@ export function JiraConnectDialog({
         return
       }
       setConnectState('error')
-      setConnectError(result.error)
+      setConnectError(taskProviderErrorMessage(result))
     } catch (error) {
       if (mountedRef.current) {
         setConnectState('error')
-        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+        setConnectError(
+          error instanceof Error
+            ? taskProviderErrorText(error.message)
+            : translate('taskProviders.jira.connectionFailed', 'Connection failed')
+        )
       }
     }
   }
@@ -179,10 +182,15 @@ export function JiraConnectDialog({
           </DialogTitle>
           <DialogDescription>
             {!isServer
-              ? translate(
-                  'auto.components.jira.connect.dialog.d785c42b8b',
-                  'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
-                )
+              ? supportsScopedTokens
+                ? translate(
+                    'jira.connect.scopedDescription',
+                    'Use a Jira Cloud site URL and API token to browse issues. Scoped tokens can omit the email.'
+                  )
+                : translate(
+                    'auto.components.jira.connect.dialog.d785c42b8b',
+                    'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
+                  )
               : isServerBasic
                 ? translate(
                     'auto.components.jira.connect.dialog.1d947a07ab',
@@ -295,10 +303,15 @@ export function JiraConnectDialog({
                 <Label htmlFor={emailId} className="text-xs">
                   {isServerBasic
                     ? translate('auto.components.jira.connect.dialog.8d1223fa5c', 'Username')
-                    : translate(
-                        'auto.components.jira.connect.dialog.2849ddb295',
-                        'Atlassian email'
-                      )}
+                    : supportsScopedTokens
+                      ? translate(
+                          'jira.connect.optionalEmail',
+                          'Atlassian email (optional for scoped tokens)'
+                        )
+                      : translate(
+                          'auto.components.jira.connect.dialog.2849ddb295',
+                          'Atlassian email'
+                        )}
                 </Label>
                 <Input
                   id={emailId}
@@ -356,49 +369,19 @@ export function JiraConnectDialog({
                   clearErrorOnEdit()
                 }}
                 disabled={connectState === 'connecting'}
-                aria-invalid={connectState === 'error'}
                 aria-describedby={connectState === 'error' ? errorId : undefined}
               />
             </div>
             {connectState === 'error' && connectError ? (
-              <p id={errorId} className="text-xs text-destructive">
+              <p id={errorId} role="alert" className="text-xs text-destructive">
                 {connectError}
               </p>
             ) : null}
-            {isServerBasic ? (
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.jira.connect.dialog.d8737db691',
-                  'Use your Jira Server or Data Center account username and password.'
-                )}
-              </p>
-            ) : isServer ? (
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.jira.connect.dialog.ccfb086d3e',
-                  'Create a personal access token in your Jira profile under Personal Access Tokens.'
-                )}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {translate('auto.components.jira.connect.dialog.8090504a3e', 'Create a token in')}{' '}
-                <button
-                  type="button"
-                  className="text-primary underline-offset-2 hover:underline"
-                  onClick={() =>
-                    window.api.shell.openUrl(
-                      'https://id.atlassian.com/manage-profile/security/api-tokens'
-                    )
-                  }
-                >
-                  {translate(
-                    'auto.components.jira.connect.dialog.fdd26d81cc',
-                    'Atlassian account settings'
-                  )}
-                </button>
-                .
-              </p>
-            )}
+            <JiraConnectCredentialGuide
+              isServer={isServer}
+              isServerBasic={isServerBasic}
+              supportsScopedTokens={supportsScopedTokens}
+            />
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />
               {credentialStorageCopy}

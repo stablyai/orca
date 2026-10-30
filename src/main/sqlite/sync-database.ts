@@ -1,5 +1,8 @@
 import { existsSync } from 'node:fs'
-import type { DatabaseSync, StatementSync, SQLInputValue } from 'node:sqlite'
+import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
+import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
+import { NodeSqliteStatement } from './node-sqlite-statement'
+import type { SqliteStatement } from './sqlite-statement'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
 
@@ -13,41 +16,65 @@ type PragmaOptions = {
   simple?: boolean
 }
 
-export type SqliteStatement = StatementSync
+export type { SqliteStatement } from './sqlite-statement'
 
-// Why: dynamic `IN (?,?,…)` clauses mint a new SQL string per arity, so the cache must stay bounded.
+// Dynamic IN arity creates unique SQL strings; bound the statement cache.
 const STATEMENT_CACHE_LIMIT = 256
 const AGGREGATE_STAR = /\(\s*\*\s*\)/g
 const PRAGMA_STATEMENT = /^\s*PRAGMA\b/i
 const SCHEMA_CHANGING_SQL = /\b(?:ALTER|CREATE|DROP|REINDEX|VACUUM|ATTACH|DETACH)\b/i
 
-// Why: node:sqlite builds the first post-schema-change row from stale column names, so a reused
-// wildcard SELECT can drop a freshly added column; PRAGMAs are one-shot config, never hot-path.
+// Reused wildcard rows can retain stale column names after DDL; PRAGMAs are one-shot settings.
 function isStatementCacheable(sql: string): boolean {
   return !PRAGMA_STATEMENT.test(sql) && !sql.replace(AGGREGATE_STAR, '').includes('*')
 }
 
-// Why: SSH companions target Node 18 and import this adapter without opening SQLite.
+// Node 18 SSH companions import this module without opening SQLite; load the builtin lazily.
 function loadDatabaseSync(): typeof DatabaseSync {
   if (typeof process.getBuiltinModule !== 'function') {
     throw new Error('node:sqlite is unavailable in this Node.js runtime')
   }
-  return (process.getBuiltinModule('node:sqlite') as { DatabaseSync: typeof DatabaseSync })
-    .DatabaseSync
+  const sqlite: unknown = process.getBuiltinModule('node:sqlite')
+  if (!hasDatabaseSync(sqlite)) {
+    throw new Error('node:sqlite is unavailable in this Node.js runtime')
+  }
+  return sqlite.DatabaseSync
+}
+
+function hasDatabaseSync(value: unknown): value is { DatabaseSync: typeof DatabaseSync } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'DatabaseSync' in value &&
+    typeof value.DatabaseSync === 'function'
+  )
+}
+
+function hasBackup(value: unknown): value is { backup: typeof backup } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'backup' in value &&
+    typeof value.backup === 'function'
+  )
+}
+
+export function isSqliteAvailable(): boolean {
+  try {
+    const sqlite: unknown = process.getBuiltinModule?.('node:sqlite')
+    return hasNodeSqliteReaderApi(sqlite)
+  } catch {
+    return false
+  }
 }
 
 class SyncDatabase {
   private readonly db: DatabaseSync
-  private readonly statementCache = new Map<string, StatementSync>()
+  private readonly statementCache = new Map<string, SqliteStatement>()
 
   constructor(path: SqlitePath, options: SyncDatabaseOptions = {}) {
-    if (
-      options.fileMustExist &&
-      typeof path === 'string' &&
-      path !== ':memory:' &&
-      !existsSync(path)
-    ) {
-      throw new Error(`SQLite database does not exist: ${path}`)
+    if (options.fileMustExist && path !== ':memory:' && !existsSync(path)) {
+      throw new Error(`SQLite database does not exist: ${String(path)}`)
     }
     const DatabaseSync = loadDatabaseSync()
     this.db = new DatabaseSync(path, {
@@ -57,21 +84,21 @@ class SyncDatabase {
   }
 
   exec(sql: string): void {
-    // Why: drop cached statements before DDL lands so a partially applied batch cannot leave stale ones.
+    // Invalidate before DDL so partially applied batches cannot retain stale statements.
     if (SCHEMA_CHANGING_SQL.test(sql)) {
       this.statementCache.clear()
     }
     this.db.exec(sql)
   }
 
-  prepare(sql: string): StatementSync {
+  prepare(sql: string): SqliteStatement {
     const cached = this.statementCache.get(sql)
     if (cached) {
       this.statementCache.delete(sql)
       this.statementCache.set(sql, cached)
       return cached
     }
-    const statement = this.db.prepare(sql)
+    const statement = new NodeSqliteStatement(this.db.prepare(sql))
     if (isStatementCacheable(sql)) {
       if (this.statementCache.size >= STATEMENT_CACHE_LIMIT) {
         const oldest = this.statementCache.keys().next().value
@@ -85,7 +112,7 @@ class SyncDatabase {
   }
 
   pragma(sql: string, options?: PragmaOptions): unknown {
-    const statement = this.db.prepare(`PRAGMA ${sql}`)
+    const statement = this.prepare(`PRAGMA ${sql}`)
     if (options?.simple) {
       const row = statement.get()
       if (!row) {
@@ -98,6 +125,21 @@ class SyncDatabase {
 
   get isTransaction(): boolean {
     return this.db.isTransaction
+  }
+
+  /** Keep the source open until completion. */
+  async backup(path: string, options?: BackupOptions): Promise<void> {
+    if (this.db.isTransaction) {
+      throw new Error('SQLite backup requires an idle database connection')
+    }
+    const sqlite: unknown =
+      typeof process.getBuiltinModule === 'function'
+        ? process.getBuiltinModule('node:sqlite')
+        : undefined
+    if (!hasBackup(sqlite)) {
+      throw new Error('Asynchronous SQLite backup is unavailable in this Node.js runtime')
+    }
+    await sqlite.backup(this.db, path, options ?? {})
   }
 
   close(): void {

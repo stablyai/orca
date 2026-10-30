@@ -7,11 +7,16 @@ import {
   compareWorktreeSortLabel,
   getWorktreeSortLabel,
   type SortBy
-} from './smart-sort'
+} from '../../../../shared/sidebar-list/smart-sort'
+import { compareCodePoints, compareSidebarText } from '../../../../shared/sidebar-list/text-order'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
-/** The comparator as it read before labels were precomputed. */
+/** The comparator with labels derived per comparison instead of precomputed. */
 function legacyCompareWorktreeSortLabel(a: Worktree, b: Worktree): number {
-  return getWorktreeSortLabel(a).localeCompare(getWorktreeSortLabel(b))
+  return (
+    compareSidebarText(getWorktreeSortLabel(a), getWorktreeSortLabel(b)) ||
+    compareCodePoints(getWorktreeHostIdentity(a), getWorktreeHostIdentity(b))
+  )
 }
 
 const TRICKY_LABELS: readonly (string | null)[] = [
@@ -56,8 +61,7 @@ const TRICKY_LABELS: readonly (string | null)[] = [
 ]
 
 function makeWorktree(index: number, displayName: string | null): Worktree {
-  // Trailing separators and Windows separators exercise `basename()`'s
-  // normalisation on the rows whose displayName is blank.
+  // Blank names must normalize trailing and Windows path separators consistently.
   const suffixes = ['', '/', '//', '\\']
   return {
     id: `w${index}`,
@@ -147,5 +151,14 @@ describe('worktree sort label ordering', () => {
     expect(Math.sign(compareWorktreeSortLabel(local, remote, labels))).toBe(
       Math.sign(legacyCompareWorktreeSortLabel(local, remote))
     )
+  })
+
+  it('breaks an equal-label tie by host-qualified id, independent of input order', () => {
+    const local: Worktree = { ...makeWorktree(0, 'same'), id: 'shared', hostId: 'local' }
+    const remote: Worktree = { ...makeWorktree(1, 'same'), id: 'shared', hostId: 'ssh:box' }
+    const labels = buildWorktreeSortLabels([local, remote])
+    const compare = (a: Worktree, b: Worktree): number => compareWorktreeSortLabel(a, b, labels)
+    expect([remote, local].sort(compare)).toEqual([local, remote])
+    expect([local, remote].sort(compare)).toEqual([local, remote])
   })
 })

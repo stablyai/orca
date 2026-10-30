@@ -11,8 +11,7 @@ import {
 } from './rich-markdown-list-continuation'
 
 function createEditor(content: JSONContent): Editor {
-  // Why: each Editor needs its own marked registry; sharing one module-scoped
-  // extension accumulates tokenizer state across tests.
+  // Isolate each editor’s marked registry so tokenizer state cannot accumulate across tests.
   return new Editor({
     element: null,
     extensions: [StarterKit, createIsolatedMarkdownExtensionForTests()],

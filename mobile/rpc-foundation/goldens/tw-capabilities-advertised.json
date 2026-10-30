@@ -1,30 +1,9 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.worktree-capabilities",
   "family": "worktree.runtime-capabilities",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
-  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
-  "scenarioSha256": "9d79bcfd6957d11d5ce8c3296f1038a3cfab81eedad7f990b44071104dfd0f91",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "120979f40a68": {
-      "capabilities": {
-        "agentLaunch": false,
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
     "216adda2100c": {
       "name": "status.get#1",
       "ordinal": 1,
@@ -63,12 +42,28 @@
         }
       }
     },
-    "3a7704ccec26": {
+    "456a1f9383e3": {
+      "capabilities": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "b62568733b13": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -93,9 +88,9 @@
           "sender": ["216adda2100c"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "3a7704ccec26"
+            "probe": "b62568733b13"
           },
-          "state": "120979f40a68",
+          "state": "456a1f9383e3",
           "effects": []
         }
       }

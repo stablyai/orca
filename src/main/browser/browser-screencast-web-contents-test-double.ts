@@ -10,10 +10,10 @@ export type MockScreencastDebugger = EventEmitter & {
 
 export type MockScreencastWebContents = {
   isDestroyed: ReturnType<typeof vi.fn>
+  isCrashed: ReturnType<typeof vi.fn>
   debugger: MockScreencastDebugger
 }
 
-/** A webContents whose debugger records every CDP command and replays events on demand. */
 export function createMockScreencastWebContents(): MockScreencastWebContents {
   let attached = false
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the four fields are assigned on the next lines, before the value escapes.
@@ -29,6 +29,7 @@ export function createMockScreencastWebContents(): MockScreencastWebContents {
 
   return {
     isDestroyed: vi.fn(() => false),
+    isCrashed: vi.fn(() => false),
     debugger: dbg
   }
 }

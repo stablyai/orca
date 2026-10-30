@@ -1,15 +1,14 @@
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
 
-// Codex names threads lazily in <CODEX_HOME>/session_index.jsonl; transcripts
-// carry no title of their own, so parsers look the thread name up here.
+// Thread names may arrive here after the transcript was written.
 
 const CODEX_SESSION_INDEX_FILE = 'session_index.jsonl'
-// Why: custom and WSL Codex homes can vary over a long-lived main process;
-// each cached home can retain a full session_index title map.
+// Bound full title maps retained for custom and WSL homes across a long-lived process.
 const CODEX_SESSION_INDEX_TITLE_CACHE_MAX = 64
 
 type CodexSessionIndexTitleCacheEntry = {
@@ -18,9 +17,14 @@ type CodexSessionIndexTitleCacheEntry = {
 }
 
 const codexSessionIndexTitleCache = new Map<string, Promise<CodexSessionIndexTitleCacheEntry>>()
+const inFlightTitleReads = new InFlightPromiseDedupe<Map<string, string>>(
+  0,
+  CODEX_SESSION_INDEX_TITLE_CACHE_MAX
+)
 
 export function resetCodexSessionIndexTitleCacheForTests(): void {
   codexSessionIndexTitleCache.clear()
+  inFlightTitleReads.clear()
 }
 
 export function _getCodexSessionIndexTitleCacheSizeForTest(): number {
@@ -88,9 +92,24 @@ async function readCodexSessionIndexTitles(codexHome: string): Promise<Map<strin
     return cachedTitles
   }
 
+  // A shared WSL stat resumes cache misses together; share the reload before opening the index.
+  return inFlightTitleReads.run(stableInFlightKey([codexHome, signature]), () =>
+    loadCodexSessionIndexTitles(codexHome, indexPath, signature)
+  )
+}
+
+async function loadCodexSessionIndexTitles(
+  codexHome: string,
+  indexPath: string,
+  signature: string
+): Promise<Map<string, string>> {
+  const cachedTitles = await readCachedCodexSessionIndexTitles(codexHome, signature)
+  if (cachedTitles) {
+    return cachedTitles
+  }
+
   const pending = readCodexSessionIndexTitlesFromDisk(indexPath).then(({ titles, refused }) => {
-    // Why: a gate refusal is a stalled distro, not a title-less index — caching
-    // it would pin "no titles" until the index's size or mtime changes.
+    // Evict refused WSL reads so retries do not require an index signature change.
     if (refused && codexSessionIndexTitleCache.get(codexHome) === pending) {
       codexSessionIndexTitleCache.delete(codexHome)
     }
@@ -112,8 +131,7 @@ async function readCachedCodexSessionIndexTitles(
   if (entry.signature !== signature) {
     return undefined
   }
-  // Why: another scan can evict or replace this Promise while it resolves;
-  // only the still-current entry may refresh recency without bypassing the cap.
+  // Refresh recency only for the still-current promise; resurrecting an evicted one bypasses the cap.
   if (codexSessionIndexTitleCache.get(codexHome) === cached) {
     codexSessionIndexTitleCache.delete(codexHome)
     codexSessionIndexTitleCache.set(codexHome, cached)

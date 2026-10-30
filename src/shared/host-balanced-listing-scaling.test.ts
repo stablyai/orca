@@ -8,26 +8,26 @@ it('retires exhausted host buckets from subsequent listing rounds', () => {
   ]
   const original = Map.prototype.values
   let reads = 0
-  const spy = vi
-    .spyOn(Map.prototype, 'values')
-    .mockImplementation(function (this: Map<string, number[]>) {
-      const iterator = original.call(this)
-      if (!this.has('large-host')) {
-        return iterator
-      }
-      return iterator.map(
-        (bucket: number[]) =>
-          new Proxy(bucket, {
-            get(target, key, receiver) {
-              if (typeof key === 'string' && /^\d+$/.test(key)) {
-                reads += 1
-              }
-              // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
-              return Reflect.get(target, key, receiver)
+  const spy = vi.spyOn(Map.prototype, 'values').mockImplementation(function (
+    this: Map<string, number[]>
+  ) {
+    const iterator = original.call(this)
+    if (!this.has('large-host')) {
+      return iterator
+    }
+    return iterator.map(
+      (bucket: number[]) =>
+        new Proxy(bucket, {
+          get(target, key, receiver) {
+            if (typeof key === 'string' && /^\d+$/.test(key)) {
+              reads += 1
             }
-          })
-      )
-    })
+            // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
+            return Reflect.get(target, key, receiver)
+          }
+        })
+    )
+  })
   let result: typeof rows
   try {
     result = selectHostBalancedPage(rows, 2000, (row) => row.host)
@@ -38,8 +38,7 @@ it('retires exhausted host buckets from subsequent listing rounds', () => {
   expect(reads).toBeLessThanOrEqual(2000)
 })
 
-// Retirement is only safe while every retained bucket outlives the round it is read at. If that
-// predicate drifts, `bucket[round]` yields undefined and the page grows blank rows.
+// Retained buckets must outlive their round index or undefined rows enter the page.
 it('fills every cap exactly, without undefined or duplicate rows', () => {
   const rows = [
     ...Array.from({ length: 3 }, (_, index) => ({ host: 'a', id: index })),
@@ -52,7 +51,6 @@ it('fills every cap exactly, without undefined or duplicate rows', () => {
     expect(page).toHaveLength(limit)
     expect(page.every((row) => row !== undefined)).toBe(true)
     expect(new Set(pageIds).size).toBe(limit)
-    // the page must stay a subsequence of the caller's original order
     expect(pageIds).toEqual([...pageIds].sort((left, right) => left - right))
   }
 })
