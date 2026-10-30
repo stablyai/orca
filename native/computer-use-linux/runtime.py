@@ -1023,15 +1023,16 @@ def hotkey(raw):
 
 def type_text(value):
     text = str(value)
-    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+    xdotool = shutil.which("xdotool")
+    if (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+            or (not xdotool and text.isascii())):
         Atspi.generate_keyboard_event(0, text, Atspi.KeySynthType.STRING)
         return
-    xdotool = shutil.which("xdotool")
     if not xdotool:
-        raise RuntimeError("unsupported capability: synthetic text requires xdotool on X11")
+        raise RuntimeError("unsupported capability: synthetic Unicode text requires xdotool on X11")
     # Keep normal typing below both the child and provider watchdogs.
-    if len(text) > 1000:
-        raise RuntimeError("unsupported capability: synthetic text is limited to 1000 characters; split the text or use paste_text")
+    if len(text) > 600:
+        raise RuntimeError("unsupported capability: synthetic text is limited to 600 characters; split the text or use paste_text")
     try:
         # AT-SPI STRING reuses one key mapping before Chromium consumes earlier Unicode events.
         subprocess.run(

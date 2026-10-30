@@ -52,6 +52,18 @@ class RuntimeKeyboardTest(unittest.TestCase):
             runtime.press_key(raw)
             self.assertEqual(self.events, [(keysym, None, FakeKeySynthType.SYM)], raw)
 
+    def test_missing_xdotool_preserves_ascii_and_refuses_unicode(self):
+        with mock.patch.object(runtime.shutil, "which", return_value=None), mock.patch.dict(
+            runtime.os.environ, {"XDG_SESSION_TYPE": "x11"}
+        ):
+            runtime.type_text("Hello")
+            runtime.press_key("a")
+            self.assertEqual(self.events, [(0, "Hello", FakeKeySynthType.STRING), (0, "a", FakeKeySynthType.STRING)])
+            self.events.clear()
+            with self.assertRaisesRegex(RuntimeError, "unsupported capability"):
+                runtime.type_text("café Ω")
+            self.assertEqual(self.events, [])
+
     def run_hotkey(self, raw):
         with mock.patch.object(runtime.shutil, "which", return_value="/usr/bin/xdotool"), mock.patch.object(
             runtime.subprocess, "run"

@@ -25,12 +25,28 @@ def main():
     args.out.mkdir(parents=True)
     sources = args.out / "sources"
     evidence = {"source": bench.pin_source(args.source, sources / "candidate"), "rows": []}
-    markers = ("- café Ω 漢字 🙂 e\u0301 ΩéΩé", "éΩ" * 500, "éΩ" * 500 + "é")
+    markers = ("- café Ω 漢字 🙂 e\u0301 ΩéΩé", "éΩ" * 300, "éΩ" * 300 + "é")
+    class TypingTrial(bench.Trial):
+        def engine(self, name, sources):
+            engine = super().engine(name, sources)
+
+            def ready():
+                elements = engine.snapshot()
+                bench.write_json(self.directory / "readiness-snapshot.json", engine.last_snapshot)
+                try:
+                    trial_contract.select_unique(elements, trial_contract.SELECTORS["field"])
+                except trial_contract.DiscoveryError:
+                    return False
+                return True
+
+            bench.wait_for(ready, 10)
+            return engine
+
     with (args.out / "engines.log").open("ab") as log:
         for marker in markers:
             bench.MARKER = trial_contract.MARKER = marker
             cell = {"engine": "candidate", "task": "replace_submit", "profile": "foreground", "round": 0}
-            trial = bench.Trial(args, args.out / f"trial-{len(evidence['rows'])}", log)
+            trial = TypingTrial(args, args.out / f"trial-{len(evidence['rows'])}", log)
             try:
                 row = trial.run(cell, sources)
                 evidence["rows"].append(row)
@@ -41,8 +57,8 @@ def main():
                     or row.get("observer_error")):
                 raise AssertionError("typing observation failed")
             state = row["final_state"]
-            if len(marker) > 1000:
-                if (not row["api_errors"] or "limited to 1000" not in str(row["api_errors"])
+            if len(marker) > 600:
+                if (not row["api_errors"] or "limited to 600" not in str(row["api_errors"])
                         or state["text"] != "hello" or state["returns"] != 0
                         or state["submittedText"] is not None or state["decoyText"] != "untouched"):
                     raise AssertionError("oversized synthetic typing mutated the fixture or was not refused")
