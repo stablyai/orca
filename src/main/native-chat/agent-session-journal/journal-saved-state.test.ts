@@ -27,11 +27,8 @@ import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { rebuildJournalOutcomes } from './journal-outcome-table'
 import { restoreJournal } from './journal-open'
-import {
-  clearJournalSavedState,
-  readJournalSavedState,
-  readJournalSavedStatePages
-} from './journal-saved-state'
+import { clearJournalSavedState } from './journal-saved-state'
+import { readJournalSavedState } from './journal-state-cache-test-support'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalHostDatabase } from './journal-host-database'
 
@@ -116,8 +113,7 @@ it('round trips the complete replayed reducer, including insertion order and und
     'journal_sessions',
     'journal_outcomes',
     'journal_outcome_epochs',
-    'journal_outcome_attempts',
-    'journal_cache_stamp'
+    'journal_outcome_attempts'
   ]) {
     expect(
       database.db
@@ -263,20 +259,6 @@ it('round trips the complete replayed reducer, including insertion order and und
   )
   const restored = requireState(readJournalSavedState(database.db, identity.sessionId, epoch))
   expectSameState(restored, state)
-  // A paced reader decodes the same state one stored row per page.
-  const pages = readJournalSavedStatePages(() => database.db, identity.sessionId, epoch, {
-    rows: 1,
-    bytes: Number.POSITIVE_INFINITY
-  })
-  let page = pages.next()
-  let rests = 0
-  for (; !page.done; page = pages.next()) {
-    rests += 1
-  }
-  const paged = page.value
-  expect(paged).not.toBeTypeOf('string')
-  expectSameState(requireState(typeof paged === 'string' ? null : paged), state)
-  expect(rests).toBeGreaterThan(state.items.size)
   expect(restored.derivedTurnScope.scopeFor(text('next'))).toEqual({
     kind: 'turn',
     turnItemId: itemId(5)

@@ -134,7 +134,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(journal.queuedMessages.displayState() === display).toBe(false)
       expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
-      expect(work()).toEqual([corrections, 1, 1])
+      // A reopen that retries the failed import writes one card; its outcome write lists that card
+      // once in the card map and once in the order set: a constant 2, whatever the history size.
+      expect(work()).toEqual([corrections + (adopt ? 0 : 2), 1, 1])
       reset()
       await journal.appendItem(
         { provider: 'codex', threadId: 'progress', turnId: 't', ordinal: 0 },

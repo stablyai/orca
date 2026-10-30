@@ -19,7 +19,8 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { clearJournalSavedState, readJournalSavedState } from './journal-saved-state'
+import { clearJournalSavedState } from './journal-saved-state'
+import { readJournalSavedState } from './journal-state-cache-test-support'
 import { restoreJournal } from './journal-open'
 import { applyJournalRow, renderJournalState } from './journal-reducer'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'

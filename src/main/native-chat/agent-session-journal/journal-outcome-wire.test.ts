@@ -70,7 +70,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
   if (!source) {
     throw new Error('conversion did not publish')
   }
-  const sparse = readJournalOutcomeGroups(database.db, sessionId, epoch, source, 1)
+  const sparse = readJournalOutcomeGroups(database.db, epoch, source, 1)
   expect(sparse.length).toBeLessThan(old.rows.length)
   expect(
     projectJournalBatch({ rows: sparse, snapshot: journal.snapshot(), afterSequence: 1 })

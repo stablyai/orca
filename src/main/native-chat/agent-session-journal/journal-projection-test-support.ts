@@ -10,7 +10,6 @@ import {
 } from './journal-reducer'
 import { restoreJournal } from './journal-open'
 import { encodeJournalState } from './journal-state-codec'
-import { readJournalSavedState } from './journal-saved-state'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { rebuildJournalOutcomes } from './journal-outcome-table'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
@@ -65,15 +64,11 @@ export function projectionWriter(database: JournalHostDatabase, initial: Journal
   const queue = new JournalWriteQueue(state.sessionId)
   const projection = new JournalWriteProjection({
     database,
-    queue,
     state: () => state,
     adopt: (next) => {
       state = next
     }
   })
-  projection.opened(
-    readJournalSavedState(database.db, state.sessionId, state.epoch)?.lastSequence ?? 0
-  )
   const writer = new JournalRowWriter({
     database: () => database,
     sessionId: state.sessionId,

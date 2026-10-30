@@ -216,10 +216,12 @@ it('refuses a damaged journal as unloadable at subscribe and send, and keeps its
   await foundRestTestChat(fixture.rig)
   await fixture.rig.host.flushAllStreamedEvents()
   openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare("UPDATE journal_outcomes SET value_json = '}{' WHERE session_id = ? AND seq = 2")
+    .db.prepare(
+      "UPDATE journal_outcomes SET value_json = '}{' WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?) AND seq = 2"
+    )
     .run(SESSION)
   openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare('DELETE FROM journal_cache_stamp WHERE session_id = ?')
+    .db.prepare('UPDATE journal_state SET generation = 0 WHERE session_id = ?')
     .run(SESSION)
   await fixture.rig.restart()
   setStructuredAgentSessionHost(fixture.rig.host)
@@ -245,7 +247,7 @@ it('refuses a damaged journal as unloadable at subscribe and send, and keeps its
   expect(
     openTestJournalHostDatabase(fixture.rig.root)
       .db.prepare(
-        'SELECT value_json FROM journal_outcomes WHERE session_id = ? AND seq = 2 LIMIT 1'
+        'SELECT value_json FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?) AND seq = 2 LIMIT 1'
       )
       .get(SESSION)?.value_json
   ).toBe('}{')

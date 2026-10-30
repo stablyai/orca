@@ -38,7 +38,7 @@ import { selectStructuredAgentSettledTurns } from '../../src/shared/structured-a
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
 import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import { readJournalSavedState } from '../../src/main/native-chat/agent-session-journal/journal-saved-state'
+import { readJournalSavedState } from '../../src/main/native-chat/agent-session-journal/journal-state-cache-test-support'
 import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import {
   createRestTestRig,

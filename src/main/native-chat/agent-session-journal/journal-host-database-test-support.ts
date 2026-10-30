@@ -234,8 +234,8 @@ export function readTestJournalOutcomes(
   }
   return db
     .prepare(`SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes
-    WHERE session_id = ? AND epoch = ? AND generation = ? ORDER BY seq, field, entry_key`)
-    .all(sessionId, epoch, source.generation)
+    WHERE generation = ? ORDER BY seq, field, entry_key`)
+    .all(source.generation)
     .map(decodeJournalOutcome)
 }
 

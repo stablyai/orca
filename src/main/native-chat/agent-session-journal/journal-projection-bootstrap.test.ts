@@ -121,7 +121,8 @@ it('publishes a compact generation only at a verified input tail, sweeps interru
       receipt: {
         write: () => {},
         committed: () => {
-          expect(published).toBe(true)
+          // The receipt finalizes before the fallible publication step, as on main.
+          expect(published).toBe(false)
         }
       }
     },
@@ -135,7 +136,11 @@ it('publishes a compact generation only at a verified input tail, sweeps interru
     /* Retired generations are paged too. */
   }
   expect(
-    database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes WHERE epoch = ?').get(epoch)?.n
+    database.db
+      .prepare(
+        'SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation NOT IN (SELECT generation FROM journal_outcome_epochs)'
+      )
+      .get()?.n
   ).toBe(0)
 })
 

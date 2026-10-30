@@ -32,7 +32,7 @@ const db = () => openTestJournalHostDatabase(rig.root).db
 const canonicalPrefix = (sequence: number) =>
   db()
     .prepare(
-      'SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes WHERE session_id = ? AND epoch = ? AND seq <= ? ORDER BY seq, field, entry_key'
+      'SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ? AND epoch = ?) AND seq <= ? ORDER BY seq, field, entry_key'
     )
     .all(SESSION, journal().cursor().epoch, sequence)
 
