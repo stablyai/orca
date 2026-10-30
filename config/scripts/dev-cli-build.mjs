@@ -12,8 +12,8 @@ export async function buildDevCli() {
       sourceCommit: resolveBuildSourceCommit()
     })
   } catch (error) {
-    console.error(
-      `[orca-dev] CLI build failed; orca-dev keeps its previous build: ${error.message}`
+    console.warn(
+      `[orca-dev] CLI build failed (orca-dev may run a stale build): ${error?.message ?? error}`
     )
   }
 }
