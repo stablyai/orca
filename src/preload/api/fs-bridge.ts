@@ -49,6 +49,7 @@ export const fsApi = {
     connectionId?: string
     followSymlinks?: boolean
     wakeWslDistro?: boolean
+    access?: LocalFileAccess
   }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
     ipcRenderer.invoke('fs:readDir', args),
   readFile: (args: {

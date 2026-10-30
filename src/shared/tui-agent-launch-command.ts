@@ -14,7 +14,22 @@ import type { TuiAgent } from './tui-agent'
 
 // Why: Enter on Codex's "Update available" screen picks "Update now", which installs and exits.
 const STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
-  codex: ['-c', 'check_for_update_on_startup=false']
+  codex: ['-c', 'check_for_update_on_startup=false'],
+  aider: ['--no-check-update', '--no-show-release-notes'],
+  cursor: ['--disable-auto-update']
+}
+
+const STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV: Partial<
+  Record<TuiAgent, Readonly<Record<string, string>>>
+> = {
+  claude: { DISABLE_AUTOUPDATER: '1' },
+  'claude-agent-teams': { DISABLE_AUTOUPDATER: '1' },
+  opencode: { OPENCODE_DISABLE_AUTOUPDATE: 'true' },
+  opencode2: { OPENCODE_DISABLE_AUTOUPDATE: 'true' },
+  antigravity: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
+  grok: { GROK_DISABLE_AUTOUPDATER: '1' },
+  pi: { PI_SKIP_VERSION_CHECK: '1' },
+  kimi: { KIMI_CODE_NO_AUTO_UPDATE: '1', KIMI_CLI_NO_AUTO_UPDATE: '1' }
 }
 
 // Why not win32: Codex there reads console input records and needs its burst for pastes (windowsInputRecordPasteNewline).
@@ -61,6 +76,7 @@ export type ResolvedAgentLaunchCommand =
       command: string
       resumeLaunch: { agentCommand: string; agentArgs?: string }
       appliedSessionOptions: Record<string, SessionOptionValue>
+      startupEnv?: Readonly<Record<string, string>>
     }
   | { ok: false; error: string }
 
@@ -87,9 +103,10 @@ export function resolveAgentLaunchCommand(args: {
   const suppressionArgs = args.suppressStartupUpdatePrompt
     ? (STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS[args.agent] ?? [])
     : []
+  const prefixSuppressionArgs = args.agent === 'aider' ? [] : suppressionArgs
   const launchHead = withAgentTerminalInputArgs(
-    suppressionArgs.length
-      ? `${command} ${suppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
+    prefixSuppressionArgs.length
+      ? `${command} ${prefixSuppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
       : command,
     args.agent,
     args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
@@ -141,20 +158,30 @@ export function resolveAgentLaunchCommand(args: {
   const initialTokens = args.sessionOptionsOverrideAgentArgs
     ? insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.args)
     : [...resolvedOptions.args, ...keptTokens]
+  // Aider's last boolean flag wins, even over configured --check-update.
+  const launchTokens =
+    args.agent === 'aider'
+      ? insertBeforeTerminator(args.agent, initialTokens, suppressionArgs)
+      : initialTokens
   // Restart retains explicit policy and surviving raw pins, while providers restore model seeds.
   const resumeArgs = render(
     insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.permissionArgs ?? [])
   )
   return {
     ok: true,
-    command: withArgs(render(initialTokens), launchHead),
+    command: withArgs(render(launchTokens), launchHead),
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
-      ...(keptTokens.length !== rawTokens.length || resolvedOptions.permissionArgs
+      ...(keptTokens.length !== rawTokens.length ||
+      keptTokens.some((token, index) => token !== rawTokens[index]) ||
+      resolvedOptions.permissionArgs
         ? { agentArgs: resumeArgs }
         : {})
     },
-    appliedSessionOptions: resolvedOptions.appliedValues
+    appliedSessionOptions: resolvedOptions.appliedValues,
+    ...(args.suppressStartupUpdatePrompt && STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent]
+      ? { startupEnv: STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent] }
+      : {})
   }
 }
 

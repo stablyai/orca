@@ -448,7 +448,8 @@ describe('registerPtyHandlers', () => {
           // Orca terminals must resolve this CLI before the GNOME screen reader (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
-          expect(env.ORCA_CLI_COMMAND).toBeUndefined()
+          expect(env.ORCA_CLI_COMMAND).toBe(join(shimDir, 'orca'))
+          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,

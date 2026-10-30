@@ -102,6 +102,7 @@ function renderNewChat(args: {
   seedOptions?: Record<string, string>
   explicitOptions?: Record<string, string>
   sessionId?: string
+  restored?: boolean
 }) {
   const frames: Pill[] = []
   const view = renderHook(() => {
@@ -117,7 +118,7 @@ function renderNewChat(args: {
       unloadedTurnRevisions: undefined,
       mutate: vi.fn(),
       launch: {
-        kind: 'new',
+        kind: args.restored ? 'resume' : 'new',
         worktree: 'id:wt-1',
         ...(args.explicitOptions ? { explicitOptions: args.explicitOptions } : {}),
         ...(args.seedOptions ? { seedOptions: args.seedOptions } : {})
@@ -150,6 +151,37 @@ describe('a new chat picker’s first frame', () => {
     mocks.call.mockReset()
     mocks.coherent = false
     resetHostModelCatalogSnapshotsForTests()
+  })
+
+  it('Pi cached first paint and late precise catalog keep the supported remembered composer value', async () => {
+    const row = {
+      id: 'openai/gpt-5',
+      label: 'GPT-5',
+      isDefault: false,
+      efforts: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map((value) => ({
+        value,
+        label: value
+      }))
+    }
+    const list: Listed = { origin: 'probe', models: [row], fetchedAt: 1 }
+    catalogAnswers(() => Promise.resolve(list))
+    await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['pi'])
+    const remembered = { model: row.id, effort: 'off' }
+    const first = renderNewChat({ agent: 'pi', seedOptions: remembered })
+    expect(first.frames[0]).toMatchObject({ model: row.id, effort: 'minimal' })
+    expect(
+      first.result.current.optionSnapshot.find((option) => option.id === 'effort')
+    ).toMatchObject({ kind: { currentValue: 'minimal', choices: row.efforts } })
+    first.unmount()
+    resetHostModelCatalogSnapshotsForTests()
+    const next = deferred<AgentSessionModelCatalogResult>()
+    catalogAnswers(() => next.promise)
+    const late = renderNewChat({ agent: 'pi', seedOptions: remembered, restored: true })
+    expect(late.frames[0]).toEqual(PLACEHOLDER)
+    await act(async () => next.resolve(list))
+    await waitFor(() => expect(late.frames.at(-1)?.effort).toBe('minimal'))
+    expect(remembered.effort).toBe('off')
+    late.unmount()
   })
 
   it('shows the unlisted action model rather than a saved or listed replacement on every pending frame', async () => {

@@ -19,6 +19,10 @@ export function installWindowsIsolatedSpawner(platform: NodeJS.Platform = proces
       console.warn('[startup] detached spawns inherit handles; the addon build is stale')
       return
     }
+    if (!security.addon.hasNativeExport('isolatedSpawnBreaksAwayFromJob')) {
+      // Still isolates handles; only a kill-on-close job Orca runs in can take the holder down.
+      console.warn('[startup] detached spawns stay in our jobs; the addon build predates breakaway')
+    }
     setIsolatedSpawner(security.addon.spawnDetachedIsolated)
   } catch (error) {
     console.warn('[startup] detached spawns inherit handles:', error)

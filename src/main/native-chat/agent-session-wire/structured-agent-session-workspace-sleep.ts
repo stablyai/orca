@@ -9,6 +9,10 @@ import type { StructuredAgentSessionConversationLifetime } from './structured-ag
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 
+import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+import type { StructuredAgentSessionConversationDelivery } from './structured-agent-session-host-delivery'
+import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+
 type WorkspaceSleepHost = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'hasOpenDispatch' | 'now'>
   tasks: StructuredAgentSessionTaskQueue
@@ -17,6 +21,36 @@ type WorkspaceSleepHost = {
   deliveryRunning: (sessionId: string) => boolean
   childWorkIncomplete: (sessionId: string) => boolean
   publishRecordNotes: (sessionId: string) => void
+}
+
+export function createStructuredAgentSessionWorkspaceSleeper(
+  readHost: () => Pick<WorkspaceSleepHost, 'deps' | 'tasks' | 'lifetime' | 'sessions'> & {
+    clientDelivery: Pick<
+      StructuredAgentSessionClientDelivery,
+      'childWorkIncomplete' | 'publishRecordNotes'
+    >
+    conversationDelivery: Pick<StructuredAgentSessionConversationDelivery, 'loop'>
+    runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
+  }
+) {
+  return (workspaceId: string, markAsleep?: boolean) => {
+    const host = readHost()
+    return sleepStructuredAgentSessionWorkspace(
+      {
+        deps: host.deps,
+        tasks: host.tasks,
+        lifetime: host.lifetime,
+        sessions: host.sessions,
+        // Starts registered after Stop are newer work.
+        deliveryRunning: (id) =>
+          host.conversationDelivery.loop.isRunning(id) || host.runtimeState.startFlights.has(id),
+        childWorkIncomplete: host.clientDelivery.childWorkIncomplete,
+        publishRecordNotes: host.clientDelivery.publishRecordNotes
+      },
+      workspaceId,
+      markAsleep
+    )
+  }
 }
 
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null

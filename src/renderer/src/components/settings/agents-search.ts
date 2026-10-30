@@ -84,12 +84,17 @@ function expandAgentSearchText(value: string): string[] {
 
 type AgentsPaneSearchOptions = {
   includeAgentAwake?: boolean
+  /** Chat UI's per-agent Chat | CLI choice, shown in the Installed list. */
+  includeAgentChatChoice?: boolean
   includeAgentRuntime?: boolean
   includeAgentWorkspaceTrust?: boolean
   includeCodexTerminalServerIsolation?: boolean
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
+const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
+/** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
+export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
 const AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID = 'agent-workspace-trust'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 const CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID = 'codex-terminal-server-isolation'
@@ -128,6 +133,24 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
         'installed agents in wsl'
       ),
       ...translateSearchKeyword('auto.components.settings.agents.search.719f53350c', 'path')
+    ]
+  },
+  {
+    id: AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID,
+    targetSectionId: AGENTS_INSTALLED_SECTION_ID,
+    title: translate('settings.agents.chatChoiceTitle', 'Open as chat or CLI'),
+    description: translate(
+      'settings.agents.chatChoiceDescription',
+      'Choose whether each agent opens as a chat or in its CLI.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI'),
+      ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
+      ...translateSearchKeyword('settings.chat.providers.title', 'Providers', {
+        aliases: ['provider']
+      }),
+      ...translateSearchKeyword('settings.chat.providers.searchAgents', 'agents')
     ]
   },
   {
@@ -201,6 +224,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
 
 export function getAgentsPaneSearchEntries({
   includeAgentAwake = true,
+  includeAgentChatChoice = false,
   includeAgentRuntime = true,
   includeAgentWorkspaceTrust = true,
   includeCodexTerminalServerIsolation = true
@@ -208,6 +232,9 @@ export function getAgentsPaneSearchEntries({
   const hiddenIds = new Set<string>()
   if (!includeAgentAwake) {
     hiddenIds.add(AGENT_AWAKE_SEARCH_ENTRY_ID)
+  }
+  if (!includeAgentChatChoice) {
+    hiddenIds.add(AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID)
   }
   if (!includeAgentRuntime) {
     hiddenIds.add(AGENT_RUNTIME_SEARCH_ENTRY_ID)

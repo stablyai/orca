@@ -9,7 +9,7 @@ import {
   Pressable,
   Linking,
   ExternalLink,
-  TextInput
+  TextField
 } from './mobile-tasks-dependencies'
 import { styles, getGitLabPipelineStatusStyle } from './mobile-tasks-legacy-styles'
 import {
@@ -285,12 +285,11 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
               </Pressable>
             ))
           )}
-          <TextInput
-            style={[styles.input, styles.stackedInput]}
+          <TextField
+            style={styles.stackedInput}
             value={linearSubIssueTitle}
             onChangeText={setLinearSubIssueTitle}
             placeholder={translate('tasks.itemDetailContent.subIssueTitle', 'Sub-issue title')}
-            placeholderTextColor={colors.textMuted}
           />
           <Pressable
             style={styles.inlineSaveButton}

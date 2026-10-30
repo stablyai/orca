@@ -8,6 +8,7 @@ import { useMobileSourceControlCommitRunners } from './use-mobile-source-control
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
 import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
+import { useMobileConflictRunners } from './use-mobile-conflict-runners'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -289,17 +290,7 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet
   })
 
-  const abortConflictOperation = useCallback(
-    async (operation: string) => {
-      const method =
-        operation === 'merge' ? 'git.abortMerge' : operation === 'rebase' ? 'git.abortRebase' : null
-      if (!method) {
-        return
-      }
-      await runGitAction(`abort-${operation}`, method, {})
-    },
-    [runGitAction]
-  )
+  const conflictRunners = useMobileConflictRunners({ sendGitRequest, runGitAction, runGitWorkflow })
 
   return {
     runGitAction,
@@ -312,7 +303,7 @@ export function useMobileSourceControlRunners(params: Params) {
     openBranchPicker,
     openHistory,
     checkoutBranch,
-    abortConflictOperation,
+    ...conflictRunners,
     ...actionSheetRunners
   }
 }

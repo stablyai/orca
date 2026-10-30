@@ -4,7 +4,13 @@ import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisit
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { closeAcpSessionJournal, endAcpStructuredSession } from './acp-structured-session'
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic,
+  type SubmissionRejectionFact
+} from '../../shared/agent-session-failure'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
@@ -14,6 +20,18 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { windDownAcpTurn } from './acp-structured-stop'
+
+/** An agent that never ran names its missing CLI or folder; any other end while starting is its exit. */
+function acpStartupEndFailure(session: AcpStructuredChild): SubmissionRejectionFact {
+  const stderr = session.connection.stderrTail()
+  if (session.closeRequested) {
+    return agentSessionFailureFact('hostStopped', { detail: providerDiagnostic(stderr, 'person') })
+  }
+  const absence = session.connection.spawnAbsence
+  return absence
+    ? providerStartupFailureFact(withProviderSpawnAbsence(new Error(stderr), absence))
+    : agentSessionFailureFact('providerExited', { detail: providerDiagnostic(stderr, 'person') })
+}
 
 export class AcpStructuredChildren {
   readonly sessions = new Map<string, AcpStructuredChild>()
@@ -156,12 +174,7 @@ export class AcpStructuredChildren {
         cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
         reason:
           session.connection.stderrTail() || `${session.spec.agent} ACP agent ended while starting`,
-        failure: agentSessionFailureFact(
-          session.closeRequested ? 'hostStopped' : 'providerExited',
-          {
-            detail: providerDiagnostic(session.connection.stderrTail(), 'person')
-          }
-        )
+        failure: acpStartupEndFailure(session)
       })
     }
     if (this.sessions.get(session.sessionId) === session) {

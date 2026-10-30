@@ -51,7 +51,7 @@ export function useSmartWorkspaceSecondarySearches({
     setBranchResultsSource,
     setBranchesLoading,
     linearStatus,
-    linearSourceContext,
+    linearSourceContext: linearSource,
     linearWorkspaceIdOverride,
     linearIssueResult: { read: consumeLinearRead },
     setLinearIssues,
@@ -72,6 +72,8 @@ export function useSmartWorkspaceSecondarySearches({
   const linearScopeSignature = linearUrlIntent
     ? linearWorkspaceScopeSignature(linearStatus)
     : getSelectedWorkspaceId(linearStatus, { workspaceId: linearWorkspaceIdOverride })
+  const readScope = JSON.stringify([linearSource, linearWorkspaceIdOverride, linearScopeSignature])
+  const previousLinearReadScope = useRef(readScope)
   const branchSearchRequest = useMemo(
     () =>
       getBranchSearchRequest({
@@ -137,7 +139,7 @@ export function useSmartWorkspaceSecondarySearches({
   ])
 
   useEffect(() => {
-    const readKey = [linearQuery, linearSourceContext, linearWorkspaceIdOverride] as const
+    const readKey = [linearQuery, linearSource, linearWorkspaceIdOverride] as const
     const rereadOfFailure =
       failedLinearReadRef.current?.every((part, index) => part === readKey[index]) === true
     const canQuery = !disabled && shouldQueryLinear && linearStatus.connected === true
@@ -157,11 +159,13 @@ export function useSmartWorkspaceSecondarySearches({
       setLinearLoading(true)
       setSettledLinearUrlQuery(null)
     }
-    if (trimmed === '') {
+    // Retain rows while typing within a scope, never across workspace or source changes.
+    if (trimmed === '' || previousLinearReadScope.current !== readScope) {
       setLinearIssues([])
     }
+    previousLinearReadScope.current = readScope
     const readOptions = {
-      sourceContext: linearSourceContext,
+      sourceContext: linearSource,
       workspaceId: linearWorkspaceIdOverride
     }
     const observe = <T extends LinearIssue[] | LinearCollectionResult<LinearIssue>>(
@@ -177,23 +181,21 @@ export function useSmartWorkspaceSecondarySearches({
             }
             return
           }
-          const terminal = view.kind === 'data' || view.kind === 'error'
-          if (terminal) {
+          if (view.kind === 'data' || view.kind === 'error') {
             failedLinearReadRef.current =
               view.kind === 'error' && isIntegrationCredentialDecryptionError(view.error)
                 ? readKey
                 : null
           }
-          const data = view.data
           void linearReadMethodsRef.current.refreshLinearSourceConnection(
             view,
             linearWorkspaceIdOverride
           )
           consumeLinearRead(lease, view, {
-            ...(data
-              ? { data: Array.isArray(data) ? data : data.items }
-              : view.kind !== 'error' && { data: [] }),
-            ...(terminal && {
+            ...(view.data
+              ? { data: Array.isArray(view.data) ? view.data : view.data.items }
+              : view.kind === 'data' && { data: [] }),
+            ...((view.kind === 'data' || view.kind === 'error') && {
               error: linearIssueViewError(view),
               settledUrl: linearUrlIntent ? trimmed : null
             }),
@@ -208,7 +210,7 @@ export function useSmartWorkspaceSecondarySearches({
             lookupLinearIssueUrl({
               intent: linearUrlIntent,
               knownStatus: linearReadMethodsRef.current.linearStatus,
-              sourceContext: linearSourceContext,
+              sourceContext: linearSource,
               fetchLinearIssue: (identifier, workspaceId, options) =>
                 linearReadMethodsRef.current.fetchLinearIssue(identifier, workspaceId, {
                   ...options,
@@ -235,8 +237,8 @@ export function useSmartWorkspaceSecondarySearches({
     disabled,
     linearStatus.connected,
     linearQuery,
-    linearScopeSignature,
-    linearSourceContext,
+    readScope,
+    linearSource,
     linearWorkspaceIdOverride,
     linearUrlIntent,
     setLinearIssues,

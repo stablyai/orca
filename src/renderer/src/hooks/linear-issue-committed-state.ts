@@ -23,8 +23,22 @@ type Saved<T> = {
 type Committed<T> = { target: string; saved: Saved<T>; live: boolean }
 
 // React may replay an action after its read retires; only its current committed contribution survives.
-export function useLinearCommittedState<T>(target: string, seed: T, scope: LinearReadScope) {
+export function useLinearCommittedState<T>(
+  target: string,
+  seed: T,
+  scope: LinearReadScope,
+  projectSeed?: (previous: { target: string; value: T }) => T
+) {
   const committed = useRef<Committed<T> | null>(null)
+  const snapshot = committed.current
+  const deliveredSeed =
+    snapshot?.live &&
+    snapshot.saved.target === snapshot.target &&
+    snapshot.target !== target &&
+    scope.isCurrentRuntime() &&
+    projectSeed
+      ? projectSeed(snapshot.saved)
+      : seed
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- Why: this lifetime is renewed only by the complete semantic target.
   const lifetime = useMemo(() => ({ live: false }), [target])
   const [saved, dispatch] = useReducer(
@@ -66,7 +80,7 @@ export function useLinearCommittedState<T>(target: string, seed: T, scope: Linea
         origins: {}
       }
     },
-    { target, value: seed, whole: null, origins: {} }
+    { target, value: deliveredSeed, whole: null, origins: {} }
   )
 
   useLayoutEffect(() => {
@@ -101,7 +115,7 @@ export function useLinearCommittedState<T>(target: string, seed: T, scope: Linea
   )
   useLayoutEffect(() => {
     if (saved.target !== target) {
-      publish(() => seed)
+      publish(() => deliveredSeed)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Why: a real target change resets its seed, field edits do not.
   }, [target, publish])
@@ -119,7 +133,7 @@ export function useLinearCommittedState<T>(target: string, seed: T, scope: Linea
       ),
     [publish]
   )
-  const value = saved.target === target ? saved.value : seed
+  const value = saved.target === target ? saved.value : deliveredSeed
   return { value, publish, read, isCurrent, committed }
 }
 
@@ -133,12 +147,21 @@ type IssueResult<T> = {
 export function useLinearIssueResult<T extends object | null>(
   target: string,
   data: T,
-  scope: LinearReadScope
+  scope: LinearReadScope,
+  projectDataSeed?: (data: T, previousTarget: string) => T
 ) {
   const saved = useLinearCommittedState<IssueResult<T>>(
     target,
     { data, loading: false, error: null, hasMore: false, settledUrl: null },
-    scope
+    scope,
+    projectDataSeed &&
+      ((previous) => ({
+        data: projectDataSeed(previous.value.data, previous.target),
+        loading: false,
+        error: null,
+        hasMore: false,
+        settledUrl: null
+      }))
   )
   const { publish, read: consumeRead } = saved
   const setData = useCallback(
