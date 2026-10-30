@@ -21,6 +21,7 @@ import {
   SAVED_BY_NEWER_ORCA
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
+import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/journal-read-row'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -59,6 +60,15 @@ const OLDER_IDENTITY: OlderJournalIdentity = {
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
+// Old builds fold input rows; an outcome row here means the probe opened a converted chat by mistake.
+function inputRows(rows: readonly JournalReadRow[]): JournalRow[] {
+  return rows.map((row) => {
+    if (row.kind === 'outcome') {
+      throw new Error('expected input rows')
+    }
+    return row
+  })
+}
 test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
   '%s replays current raw rows with the unconfirmed failure intact',
   async (ref) => {
@@ -103,10 +113,10 @@ test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
         'applyJournalRow'
       )
       const old = create(IDENTITY.sessionId, journal.epoch)
-      since.rows.forEach((row) => fold(old, row))
+      inputRows(since.rows).forEach((row) => fold(old, row))
       expect(old.items.get(agentJournalItemKey(note))).toMatchObject({ body: unconfirmed })
       const current = createJournalReducerState(IDENTITY.sessionId, journal.epoch)
-      since.rows.forEach((row) => applyJournalRow(current, row))
+      inputRows(since.rows).forEach((row) => applyJournalRow(current, row))
       expect(current.items.get(agentJournalItemKey(note))?.body).toEqual(unconfirmed)
       expect(
         renderJournalState(current).items.find((item) => item.itemId === agentJournalItemKey(note))
