@@ -33,7 +33,9 @@ export function hostWorktreeActionMountAdapters(
         lastKnownWorktrees: [ROW],
         confirmRemoveHost: false,
         optimisticActiveWorktreeIdentity: null,
-        serverWorkspaces: { hosts: [], worktrees: [] }
+        serverWorkspaces: { hosts: [], worktrees: [] },
+        desktopRepos: [{ id: 'repo-1' }],
+        actionError: ''
       })
       let actions: ReturnType<typeof useActions>
       const hook = hookMount(() => {
@@ -68,15 +70,23 @@ export function hostWorktreeActionMountAdapters(
           if (name === 'delete') {
             return performHookAction(() => actions.handleDeleteWorktree(ROW))
           }
+          if (name === 'approve-archive-trust') {
+            return performHookAction(() => actions.approveArchiveTrust(false))
+          }
+          if (name === 'delete-anyway') {
+            return performHookAction(() => actions.deleteDespiteArchiveHookFailure())
+          }
           if (name === 'open-session') {
             return performHookAction(() => actions.openWorktreeSession(ROW))
           }
           throw new Error(`Unknown worktree action: ${name}`)
         },
         state: () =>
-          projectObservable(
-            Object.fromEntries(Object.entries(state).filter(([key]) => !key.endsWith('Ref')))
-          ),
+          projectObservable({
+            ...Object.fromEntries(Object.entries(state).filter(([key]) => !key.endsWith('Ref'))),
+            archiveTrustPrompt: actions?.archiveTrustRequest?.prompt ?? null,
+            archiveHookFailure: actions?.archiveHookFailure?.message ?? null
+          }),
         dispose: hook.unmount
       }
     }

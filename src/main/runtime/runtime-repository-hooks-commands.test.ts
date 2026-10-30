@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
+import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
+import { hashOrcaHookScript } from '../../renderer/src/lib/orca-hook-trust'
 
 const mocks = vi.hoisted(() => ({
   blocked: vi.fn(async (): Promise<{ distro: string; state: string } | null> => null),
-  hasHooksFile: vi.fn(() => false)
+  hasHooksFile: vi.fn(() => false),
+  loadHooks: vi.fn((): OrcaHooks | null => null)
 }))
 
 vi.mock('../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: mocks.blocked }))
 vi.mock('../hooks', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  hasHooksFile: mocks.hasHooksFile
+  hasHooksFile: mocks.hasHooksFile,
+  loadHooks: mocks.loadHooks
 }))
 
 import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
@@ -51,5 +55,34 @@ describe('repo.hooksCheck on the host', () => {
     await expect(commands.checkRepoHooks('repo-1')).resolves.toMatchObject({ status: 'ok' })
     expect(mocks.blocked).not.toHaveBeenCalled()
     expect(mocks.hasHooksFile).toHaveBeenCalledWith(repo.path)
+  })
+})
+
+// Phones compare this hash with the archive approval desktop records for the trimmed orca.yaml script.
+describe('repo.hooks archive trust', () => {
+  const localRepo: Repo = { ...repo, path: '/repos/repo' }
+  const hooksFor = (hookSettings?: Repo['hookSettings']) =>
+    new RuntimeRepositoryHooksCommands({
+      resolveRepo: async () => ({ ...localRepo, ...(hookSettings ? { hookSettings } : {}) })
+    }).getRepoHooks('repo-1')
+
+  beforeEach(() => {
+    mocks.hasHooksFile.mockReturnValue(true)
+    mocks.loadHooks.mockReset().mockReturnValue({ scripts: { archive: '  make clean\n' } })
+  })
+
+  it('reports the shared archive script in the hash desktop records', async () => {
+    await expect(hooksFor()).resolves.toMatchObject({
+      archiveTrust: {
+        contentHash: await hashOrcaHookScript('make clean'),
+        scriptContent: 'make clean'
+      }
+    })
+  })
+
+  it('needs no trust for a local-only archive script', async () => {
+    await expect(
+      hooksFor({ mode: 'auto', scripts: { setup: '', archive: 'echo mine' } })
+    ).resolves.toMatchObject({ archiveTrust: null })
   })
 })

@@ -7,6 +7,7 @@ import { useWorkspaceServer } from '../transport/workspace-server'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
@@ -169,6 +170,29 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           </ActionSheetContent>
         )}
       </BottomDrawer>
+
+      <OrcaHookTrustDrawer
+        visible={actions.archiveTrustRequest != null}
+        prompt={actions.archiveTrustRequest?.prompt ?? null}
+        busy={actions.archiveTrustBusy}
+        onRunOnce={() => void actions.approveArchiveTrust(false)}
+        onAlwaysTrust={() => void actions.approveArchiveTrust(true)}
+        onDontRun={actions.skipArchiveHook}
+        onClose={actions.cancelArchiveTrust}
+      />
+
+      <ConfirmModal
+        visible={actions.archiveHookFailure != null}
+        title={t('hostScreen.hostScreenOverlays.deleteFailed', 'Failed to delete "{{name}}"', {
+          name:
+            actions.archiveHookFailure?.item.displayName || actions.archiveHookFailure?.item.repo
+        })}
+        message={actions.archiveHookFailure?.message}
+        confirmLabel={t('hostScreen.hostScreenOverlays.deleteAnyway', 'Delete Anyway')}
+        destructive
+        onConfirm={actions.deleteDespiteArchiveHookFailure}
+        onCancel={actions.dismissArchiveHookFailure}
+      />
 
       <ConfirmModal
         visible={state.confirmRemoveHost}
