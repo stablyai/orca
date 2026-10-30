@@ -64,7 +64,9 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
         })
     const providerSession = 'providerSession' in startup ? startup.providerSession : undefined
     const namespace = this.getAgentSessionExecutionNamespace(workspace, args.agent)
-    // No claim on routes that cannot attest one (SSH): a lost reply there may leave a stray, never a fork of saved data.
+    // No claim when nothing can adopt by one: a chat that never saved a turn (no provider session
+    // to name), a route that cannot attest one (SSH), or an execution owner too old to adopt. A
+    // retry after a lost reply there starts a second CLI, which the user can close.
     const claim =
       providerSession &&
       namespace &&

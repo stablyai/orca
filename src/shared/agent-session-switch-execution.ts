@@ -2,7 +2,11 @@ import type { AgentSessionWireRefusal } from './agent-session-wire'
 import { agentSessionRefusalError } from './agent-session-wire-refusals'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
 
-/** Stop (≤15 s) + at-rest prepare + one layout replace; the client allows one IPC round trip more. */
+/**
+ * The whole switch: stop (≤15 s), the at-rest prepare (transcript import, or the terminal spawn,
+ * which the daemon request bounds at 30 s), and one layout replace. The client allows one IPC
+ * round trip more.
+ */
 export const AGENT_SESSION_SWITCH_HOST_MS = 90_000
 export const AGENT_SESSION_SWITCH_CLIENT_MS = 105_000
 

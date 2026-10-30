@@ -20102,7 +20102,9 @@
           "terminalStartFailed": "{{agent}} could not start in a terminal. Check its setup and try again.",
           "writerUnconfirmed": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.",
           "sourceExitUnconfirmed": "Orca could not confirm {{agent}} stopped in this terminal. Quit {{agent}} here, then try this action again.",
-          "sourceKept": "{{agent}} opened successfully. The original tab was kept; continue in the new tab."
+          "sourceKept": "{{agent}} opened successfully. The original tab was kept; continue in the new tab.",
+          "changeInProgress": "{{agent}} is still finishing another change to this conversation. Try again in a moment.",
+          "conversationMissing": "Orca could not find this {{agent}} conversation. Open it from Session History, then try again."
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

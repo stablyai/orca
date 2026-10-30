@@ -54,6 +54,20 @@ export function conversationSwitchFailureText(
       values
     )
   }
+  if (reason === 'messagesUnsettled' || reason === 'handoffInFlight') {
+    return translate(
+      'components.tab.bar.switch.changeInProgress',
+      '{{agent}} is still finishing another change to this conversation. Try again in a moment.',
+      values
+    )
+  }
+  if (reason === 'recordMissing') {
+    return translate(
+      'components.tab.bar.switch.conversationMissing',
+      'Orca could not find this {{agent}} conversation. Open it from Session History, then try again.',
+      values
+    )
+  }
   if (reason === 'transcriptNotFound') {
     return translate(
       'components.native-chat.resumeInNewChat.notSavedYet',
