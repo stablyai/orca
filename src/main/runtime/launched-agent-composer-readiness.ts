@@ -1,6 +1,5 @@
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
-import { terminalExitError } from '../../shared/terminal-start-failure'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import {
   waitForWorktreeStartupDraft,
@@ -8,7 +7,8 @@ import {
 } from './runtime-worktree-startup-readiness'
 import {
   classifyTerminalCreationFailure,
-  readTerminalStartFailure
+  readTerminalStartFailure,
+  terminalExitError
 } from '../../shared/terminal-start-failure'
 /** Fresh-launch signals require shell handoff plus dialog/provisional-header vetoes; shells also enable bracketed paste.
  * Captured-marker agents wait for their marker; others may fall back to tui-idle within the remaining budget.
