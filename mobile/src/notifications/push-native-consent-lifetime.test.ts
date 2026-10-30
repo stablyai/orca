@@ -27,6 +27,19 @@ vi.mock('../transport/rpc-client', () => ({
     return ports.session
   }
 }))
+vi.mock('expo-file-system', () => ({
+  Directory: class {
+    readonly exists = false
+    readonly uri: string
+    constructor(...paths: string[]) {
+      this.uri = paths.join('/')
+    }
+  },
+  File: class {
+    readonly exists = false
+  },
+  Paths: { cache: 'file:///native-lifetime-cache' }
+}))
 const T2 = { platform: 'ios', token: 'c'.repeat(64), apnsEnvironment: 'production' } as const
 let stop: (() => void) | undefined
 const detach: (() => void)[] = []
@@ -273,7 +286,7 @@ it('lets fresh host consent join a retired pending native phase without starting
   ports.nativeHold = Promise.withResolvers<string>()
   stop = registration.startPushTokenSync()
   await drain()
-  ports.consentResults.push('false')
+  ports.storage.set('orca:pushServiceNotificationsEnabled', 'false')
   const off = client()
   detach.push(registration.attachPushRegistration('off-observation', off))
   await drain()
@@ -281,7 +294,7 @@ it('lets fresh host consent join a retired pending native phase without starting
   expect(
     off.sendRequest.mock.calls.filter(([method]) => method === 'notifications.unregisterPush')
   ).toHaveLength(1)
-  ports.consentResults.push('true')
+  ports.storage.set('orca:pushServiceNotificationsEnabled', 'true')
   const current = client()
   detach.push(registration.attachPushRegistration('fresh-observation', current))
   await drain()
@@ -713,102 +726,116 @@ it.each(['native', 'consent'] as const)(
         const context = `${kind}/${stage}/${action}`
         ports.storage.set('orca:pushServiceNotificationsEnabled', 'true')
         if (kind === 'saved') {
-          stop = registration.startPushTokenSync()
-          await drain()
+          const { mobilePushRouteKey } = await import('./push-route-declaration')
+          const saved = mobilePushRouteKey(() => true)
+          try {
+            await drain()
+            await expect(saved.result, context).resolves.toMatchObject({ status: 'ready' })
+          } finally {
+            saved.release()
+          }
           expect(ports.keys.size, context).toBeGreaterThan(0)
-          stop()
         } else {
           ports.keys.clear()
         }
         registration.resetPushRegistrationForTests()
-        ports.keyRead = Promise.withResolvers<void>()
-        if (stage === 'native') {
-          ports.nativeHold = Promise.withResolvers<string>()
-        }
-        stop = registration.startPushTokenSync()
-        await drain()
-        if (stage === 'consent') {
-          ports.consentHold = { mode: 'reply', gate: Promise.withResolvers<void>() }
-        }
-        const connection = client()
-        const release = registration.attachPushRegistration('actions', connection)
-        detach.push(release)
-        await drain()
-        expect(registration.pushRegistrationSnapshotForTests().preparations, context).toBe(1)
-        let rollback: (() => void) | undefined
-        if (action === 'disable') {
-          await registration.setRemotePushEnabled(false)
-        } else if (action === 'stop' || action === 'restart') {
+        const keyRead = (ports.keyRead = Promise.withResolvers<void>())
+        let release: (() => void) | undefined
+        try {
+          if (stage === 'native') {
+            ports.nativeHold = Promise.withResolvers<string>()
+          }
+          stop = registration.startPushTokenSync()
+          await drain()
+          if (stage === 'consent') {
+            ports.consentHold = { mode: 'reply', gate: Promise.withResolvers<void>() }
+          }
+          const connection = client()
+          release = registration.attachPushRegistration('actions', connection)
+          detach.push(release)
+          await drain()
+          expect(registration.pushRegistrationSnapshotForTests().preparations, context).toBe(1)
+          let rollback: (() => void) | undefined
+          if (action === 'disable') {
+            await registration.setRemotePushEnabled(false)
+          } else if (action === 'stop' || action === 'restart') {
+            stop()
+            if (action === 'restart') {
+              stop = registration.startPushTokenSync()
+            }
+          } else if (action === 'detach') {
+            release()
+          } else if (action === 'remove' || action === 're-pair') {
+            rollback = await registration.unregisterPushForRemovedHost('actions')
+            if (action === 're-pair') {
+              rollback()
+            }
+          } else if (action === 'token') {
+            ports.native = T2
+            ports.listener?.(T2)
+          } else if (action === 'renewal') {
+            ports.foreground?.('active')
+          } else if (action === 'background') {
+            AppState.currentState = 'background'
+            ports.foreground?.('background')
+          } else {
+            const storage = (await import('@react-native-async-storage/async-storage')).default
+            const save = vi
+              .spyOn(storage, 'setItem')
+              .mockRejectedValueOnce(new Error('local persistence failed'))
+            const local =
+              action === 'consent-failure'
+                ? registration.setRemotePushEnabled(false)
+                : registration.setNotificationDeliveryPreferences({
+                    onlyWhenDesktopAway: false,
+                    sound: false,
+                    suppressWhileViewing: true
+                  })
+            await expect(local, context).rejects.toThrow('local persistence failed')
+            save.mockRestore()
+          }
+          await drain()
+          expect(
+            connection.sendRequest.mock.calls.filter(
+              ([method]) => method === 'notifications.registerPush'
+            ),
+            context
+          ).toHaveLength(0)
+          expect(
+            registration.pushRegistrationSnapshotForTests().preparations,
+            context
+          ).toBeLessThanOrEqual(1)
           stop()
-          if (action === 'restart') {
-            stop = registration.startPushTokenSync()
-          }
-        } else if (action === 'detach') {
           release()
-        } else if (action === 'remove' || action === 're-pair') {
-          rollback = await registration.unregisterPushForRemovedHost('actions')
-          if (action === 're-pair') {
-            rollback()
-          }
-        } else if (action === 'token') {
-          ports.native = T2
-          ports.listener?.(T2)
-        } else if (action === 'renewal') {
-          ports.foreground?.('active')
-        } else if (action === 'background') {
-          AppState.currentState = 'background'
-          ports.foreground?.('background')
-        } else {
-          const storage = (await import('@react-native-async-storage/async-storage')).default
-          const save = vi
-            .spyOn(storage, 'setItem')
-            .mockRejectedValueOnce(new Error('local persistence failed'))
-          const local =
-            action === 'consent-failure'
-              ? registration.setRemotePushEnabled(false)
-              : registration.setNotificationDeliveryPreferences({
-                  onlyWhenDesktopAway: false,
-                  sound: false,
-                  suppressWhileViewing: true
-                })
-          await expect(local, context).rejects.toThrow('local persistence failed')
-          save.mockRestore()
+          expect(native.pushNativeSnapshotForTests(), context).toMatchObject({
+            entries: 0,
+            timers: 0,
+            assignment: 0,
+            callables: 0
+          })
+          expect(consent.pushConsentSnapshotForTests(), context).toMatchObject({
+            selected: 0,
+            queued: 0,
+            root: 0,
+            hosts: 0,
+            callables: 0
+          })
+        } finally {
+          stop?.()
+          release?.()
+          ports.consentHold?.gate.resolve()
+          ports.nativeHold?.resolve(ports.native.token)
+          keyRead.resolve()
+          await keyRead.promise
+          await ports.consentHold?.gate.promise
+          await ports.nativeHold?.promise
+          ports.consentHold = undefined
+          ports.nativeHold = undefined
+          ports.keyRead = undefined
+          await drain()
+          registration.resetPushRegistrationForTests()
+          AppState.currentState = 'active'
         }
-        await drain()
-        expect(
-          connection.sendRequest.mock.calls.filter(
-            ([method]) => method === 'notifications.registerPush'
-          ),
-          context
-        ).toHaveLength(0)
-        expect(
-          registration.pushRegistrationSnapshotForTests().preparations,
-          context
-        ).toBeLessThanOrEqual(1)
-        stop()
-        release()
-        expect(native.pushNativeSnapshotForTests(), context).toMatchObject({
-          entries: 0,
-          timers: 0,
-          assignment: 0,
-          callables: 0
-        })
-        expect(consent.pushConsentSnapshotForTests(), context).toMatchObject({
-          selected: 0,
-          queued: 0,
-          root: 0,
-          hosts: 0,
-          callables: 0
-        })
-        ports.consentHold?.gate.resolve()
-        ports.nativeHold?.resolve(ports.native.token)
-        ports.keyRead.resolve()
-        ports.consentHold = undefined
-        ports.nativeHold = undefined
-        ports.keyRead = undefined
-        await drain()
-        registration.resetPushRegistrationForTests()
-        AppState.currentState = 'active'
       }
     }
   }

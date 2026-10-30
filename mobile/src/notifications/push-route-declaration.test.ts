@@ -21,6 +21,7 @@ import { pushRouteDeclarationContent } from '../../../cloud/packages/push-contra
 it('persists signed replacements before issue, retries lost commit bytes, and withdraws only genuine empty', async () => {
   const { bodies, operations, send, respond } = requests()
   let lost = false
+  let firstBytes: string | undefined
   send.mockImplementation(async (_url, init) => {
     const response = respond(init)
     if (
@@ -28,6 +29,7 @@ it('persists signed replacements before issue, retries lost commit bytes, and wi
       PushRouteDeclarationSchema.parse(JSON.parse(String(init?.body))).action === 'replace'
     ) {
       lost = true
+      firstBytes = String(init?.body)
       throw new Error('committed response lost')
     }
     return response
@@ -40,7 +42,7 @@ it('persists signed replacements before issue, retries lost commit bytes, and wi
   expect(operations.filter((body) => body.action === 'read')).toHaveLength(1)
   expect(bodies).toHaveLength(2)
   const first = bodies.at(0)
-  if (!first) {
+  if (!first || firstBytes === undefined) {
     throw new Error('Missing signed replace')
   }
   expect(bodies[1]).toEqual(first)
@@ -50,7 +52,8 @@ it('persists signed replacements before issue, retries lost commit bytes, and wi
         PushRouteDeclarationSchema.parse(JSON.parse(String(init?.body))).action === 'replace'
     )
     .map(([, init]) => init?.body)
-  expect(immutableBytes).toEqual([JSON.stringify(first), JSON.stringify(first)])
+  expect(PushRouteDeclarationSchema.parse(JSON.parse(firstBytes))).toEqual(first)
+  expect(immutableBytes).toEqual([firstBytes, firstBytes])
   expect(Number(state.storage.get('orca:push-route-version'))).toBe(first.version)
   expect(
     nacl.sign.detached.verify(

@@ -25,12 +25,13 @@ export function routeCatalogIdentity(): Set<string> | undefined {
     const keys = new Map<string, string | null>()
     const hosts = new Set<string>()
     for (const profile of latest.profiles) {
-      let fingerprint = keys.get(profile.publicKeyB64)
+      const publicKey = profile.publicKeyB64
+      let fingerprint = keys.get(publicKey)
       if (fingerprint === undefined) {
-        fingerprint = projection?.keys.has(profile.publicKeyB64)
-          ? (projection.keys.get(profile.publicKeyB64) ?? null)
-          : deriveHostFingerprint(profile.publicKeyB64)
-        keys.set(profile.publicKeyB64, fingerprint)
+        fingerprint = projection?.keys.has(publicKey)
+          ? (projection.keys.get(publicKey) ?? null)
+          : deriveHostFingerprint(publicKey)
+        keys.set(publicKey, fingerprint)
       }
       if (fingerprint) {
         hosts.add(fingerprint)

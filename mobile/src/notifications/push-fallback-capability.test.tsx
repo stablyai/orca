@@ -16,8 +16,24 @@ import type { MobilePushToken } from './push-token'
 
 const native = vi.hoisted(() => {
   const clients: { hostId: string; state: string; client: RpcClient }[] = []
-  return { token: vi.fn(), schedule: vi.fn(), eligible: vi.fn(), clients }
+  return {
+    token: vi.fn(),
+    schedule: vi.fn(),
+    eligible: vi.fn(),
+    clients,
+    keys: new Map<string, string>()
+  }
 })
+vi.mock('expo-secure-store', () => ({
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'device-only',
+  getItemAsync: async (key: string) => native.keys.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => {
+    native.keys.set(key, value)
+  },
+  deleteItemAsync: async (key: string) => {
+    native.keys.delete(key)
+  }
+}))
 vi.mock('react-native', () => ({
   AppState: { currentState: 'background' },
   Platform: { OS: 'ios' },
@@ -123,6 +139,7 @@ let stop: (() => void) | undefined
 beforeEach(() => {
   vi.clearAllMocks()
   resetPushRegistrationForTests()
+  native.keys.clear()
   native.token.mockReturnValue(new Promise(() => {}))
   native.schedule.mockResolvedValue('local')
   native.eligible.mockResolvedValue(true)

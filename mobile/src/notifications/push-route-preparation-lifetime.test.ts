@@ -43,187 +43,233 @@ it.each(['saved', 'missing'] as const)(
         state.keys.clear()
       }
       const pending = Promise.withResolvers<string | null>()
-      vi.mocked(SecureStore.getItemAsync).mockImplementationOnce(() => pending.promise)
-      fixture.publisher = await import('./push-route-declaration')
-      const source = await import('./push-route-declaration-build')
-      const prepare = fixture.publisher.mobilePushRouteKey
-      const held: {
-        result: ReturnType<typeof prepare>['result']
-        predicate: ReturnType<typeof vi.fn<() => boolean>>
-        retired: boolean
-        calls: number
-      }[] = []
-      vi.spyOn(fixture.publisher, 'mobilePushRouteKey').mockImplementation((current) => {
-        const predicate = vi.fn(current)
-        const handle = prepare(predicate)
-        const entry = { result: handle.result, predicate, retired: false, calls: 0 }
-        held.push(entry)
-        void handle.result.then((result) => {
-          if (result.status === 'retired') {
-            entry.retired = true
-            entry.calls = predicate.mock.calls.length
-          }
+      try {
+        vi.mocked(SecureStore.getItemAsync).mockImplementationOnce(() => pending.promise)
+        fixture.publisher = await import('./push-route-declaration')
+        const source = await import('./push-route-declaration-build')
+        const prepare = fixture.publisher.mobilePushRouteKey
+        const held: {
+          result: ReturnType<typeof prepare>['result']
+          predicate: ReturnType<typeof vi.fn<() => boolean>>
+          retired: boolean
+          calls: number
+        }[] = []
+        vi.spyOn(fixture.publisher, 'mobilePushRouteKey').mockImplementation((current) => {
+          const predicate = vi.fn(current)
+          const handle = prepare(predicate)
+          const entry = { result: handle.result, predicate, retired: false, calls: 0 }
+          held.push(entry)
+          void handle.result.then((result) => {
+            if (result.status === 'retired') {
+              entry.retired = true
+              entry.calls = predicate.mock.calls.length
+            }
+          })
+          return handle
         })
-        return handle
-      })
-      const { send } = requests()
-      const registration = await import('./push-registration')
-      const client = () => ({
-        sendRequest: vi.fn(async (method: string) => ({
-          id: 'key-race',
-          ok: true as const,
-          result:
-            method === 'status.get'
+        const { send, respond, operations, current } = requests()
+        const receipts: {
+          action: 'read' | 'replace'
+          status: number
+          version: number | null
+          expectedVersion?: number | null
+        }[] = []
+        send.mockImplementation(async (_url, init) => {
+          const response = respond(init)
+          const operation = operations.at(-1)
+          if (!operation) {
+            throw new Error('Missing actual route operation')
+          }
+          const q = JSON.stringify([
+            operation.platform,
+            operation.apnsEnvironment,
+            operation.token,
+            operation.routeKey
+          ])
+          receipts.push(
+            operation.action === 'replace'
               ? {
-                  capabilities: [
-                    registration.NOTIFICATIONS_REMOTE_PUSH_CAPABILITY,
-                    'notifications.push-route-key.v1'
-                  ]
+                  action: operation.action,
+                  status: response.status,
+                  version: operation.version,
+                  expectedVersion: operation.expectedVersion
                 }
-              : { registered: true, gatewayOrigin: 'https://push.onorca.dev', unregistered: true }
-        }))
-      })
-      const old = client()
-      fixture.stop = registration.startPushTokenSync()
-      const detach = registration.attachPushRegistration('host-0', old)
-      await settle()
-      const registerCalls = () =>
-        old.sendRequest.mock.calls.filter(([method]) => method === 'notifications.registerPush')
-      expect(registerCalls(), context).toHaveLength(0)
-      const replacement = client()
-      let recover: (() => void) | undefined
-      if (action === 'disable') {
-        await registration.setRemotePushEnabled(false)
-      } else if (action === 'restart' || action === 'stop') {
-        fixture.stop()
-        if (action === 'restart') {
-          fixture.stop = registration.startPushTokenSync()
-        }
-      } else if (action === 'detach') {
-        detach()
-        registration.attachPushRegistration('host-0', replacement)
-      } else if (action === 're-pair' || action === 'remove') {
-        // Removal and its real unregister finish before the physical read is released.
-        recover = await registration.unregisterPushForRemovedHost('host-0')
-        if (action === 're-pair') {
+              : {
+                  action: operation.action,
+                  status: response.status,
+                  version: current.get(q)?.version ?? null
+                }
+          )
+          return response
+        })
+        const registration = await import('./push-registration')
+        const client = () => ({
+          sendRequest: vi.fn(async (method: string) => ({
+            id: 'key-race',
+            ok: true as const,
+            result:
+              method === 'status.get'
+                ? {
+                    capabilities: [
+                      registration.NOTIFICATIONS_REMOTE_PUSH_CAPABILITY,
+                      'notifications.push-route-key.v1'
+                    ]
+                  }
+                : { registered: true, gatewayOrigin: 'https://push.onorca.dev', unregistered: true }
+          }))
+        })
+        const old = client()
+        fixture.stop = registration.startPushTokenSync()
+        const detach = registration.attachPushRegistration('host-0', old)
+        await settle()
+        const registerCalls = () =>
+          old.sendRequest.mock.calls.filter(([method]) => method === 'notifications.registerPush')
+        expect(registerCalls(), context).toHaveLength(0)
+        const replacement = client()
+        let recover: (() => void) | undefined
+        if (action === 'disable') {
+          await registration.setRemotePushEnabled(false)
+        } else if (action === 'restart' || action === 'stop') {
+          fixture.stop()
+          if (action === 'restart') {
+            fixture.stop = registration.startPushTokenSync()
+          }
+        } else if (action === 'detach') {
+          detach()
           registration.attachPushRegistration('host-0', replacement)
+        } else if (action === 're-pair' || action === 'remove') {
+          // Removal and its real unregister finish before the physical read is released.
+          recover = await registration.unregisterPushForRemovedHost('host-0')
+          if (action === 're-pair') {
+            registration.attachPushRegistration('host-0', replacement)
+          }
+        } else if (action === 'token') {
+          state.callbacks.listener?.({ ...token, token: 'cd'.repeat(32) })
+        } else if (action === 'renewal') {
+          state.callbacks.appState?.('active')
+        } else if (action === 'background') {
+          AppState.currentState = 'background'
+          state.callbacks.appState?.('background')
+        } else {
+          const storage = (await import('@react-native-async-storage/async-storage')).default
+          const save = vi
+            .spyOn(storage, 'setItem')
+            .mockRejectedValueOnce(new Error('local persistence failed'))
+          const result =
+            action === 'consent-failure'
+              ? registration.setRemotePushEnabled(false)
+              : registration.setNotificationDeliveryPreferences({
+                  onlyWhenDesktopAway: false,
+                  sound: false,
+                  suppressWhileViewing: true
+                })
+          await expect(result).rejects.toThrow('local persistence failed')
+          save.mockRestore()
         }
-      } else if (action === 'token') {
-        state.callbacks.listener?.({ ...token, token: 'cd'.repeat(32) })
-      } else if (action === 'renewal') {
-        state.callbacks.appState?.('active')
-      } else if (action === 'background') {
-        AppState.currentState = 'background'
-        state.callbacks.appState?.('background')
-      } else {
-        const storage = (await import('@react-native-async-storage/async-storage')).default
-        const save = vi
-          .spyOn(storage, 'setItem')
-          .mockRejectedValueOnce(new Error('local persistence failed'))
-        const result =
-          action === 'consent-failure'
-            ? registration.setRemotePushEnabled(false)
-            : registration.setNotificationDeliveryPreferences({
-                onlyWhenDesktopAway: false,
-                sound: false,
-                suppressWhileViewing: true
-              })
-        await expect(result).rejects.toThrow('local persistence failed')
-        save.mockRestore()
-      }
-      await settle()
-      expect(registerCalls(), context).toHaveLength(0)
-      if (action === 'disable' || action === 'remove' || action === 're-pair') {
+        await settle()
+        expect(registerCalls(), context).toHaveLength(0)
+        if (action === 'disable' || action === 'remove' || action === 're-pair') {
+          expect(
+            old.sendRequest.mock.calls.some(([method]) => method === 'notifications.unregisterPush')
+          ).toBe(true)
+        }
+        expect(held[0]?.retired, context).toBe(true)
         expect(
-          old.sendRequest.mock.calls.some(([method]) => method === 'notifications.unregisterPush')
-        ).toBe(true)
-      }
-      expect(held[0]?.retired, context).toBe(true)
-      expect(source.pushRoutePreparationSnapshotForTests().keyEntries, context).toBeLessThanOrEqual(
-        2
-      )
-      if (action === 'disable' || action === 'stop') {
+          source.pushRoutePreparationSnapshotForTests().keyEntries,
+          context
+        ).toBeLessThanOrEqual(2)
+        if (action === 'disable' || action === 'stop') {
+          expect(
+            source.pushRoutePreparationSnapshotForTests(),
+            `${context}: all owners retired`
+          ).toMatchObject({
+            keyEntries: 0,
+            creator: 0,
+            builderCallables: 0,
+            builderPayloads: 0,
+            builderBodies: 0
+          })
+        }
+        if (action === 'background' || action === 'remove') {
+          expect(
+            held.every((entry) => entry.retired),
+            `${context}: exact host results retired`
+          ).toBe(true)
+          expect(
+            registration.pushRegistrationSnapshotForTests(),
+            `${context}: no host interest`
+          ).toEqual({
+            preparations: 0,
+            runners: 0
+          })
+          // Installation publication survives host retirement for saved disconnected recovery.
+          expect(
+            source.pushRoutePreparationSnapshotForTests(),
+            `${context}: current publisher only`
+          ).toMatchObject({
+            keyEntries: 1,
+            keyCallables: 1,
+            keyTask: 1,
+            creator: 0,
+            builder: 1,
+            latest: 0,
+            builderCallables: 1,
+            builderPayloads: 1,
+            builderBodies: 0
+          })
+        }
+        pending.resolve(kind === 'saved' ? (state.keys.get('orca.push-route-key') ?? null) : null)
+        await settle()
+        for (const entry of held.filter((entry) => entry.retired)) {
+          expect(entry.predicate, context).toHaveBeenCalledTimes(entry.calls)
+        }
+        expect(source.pushRoutePreparationSnapshotForTests().keyEntries, context).toBe(0)
+        const absent =
+          action === 'disable' ||
+          action === 'stop' ||
+          action === 'background' ||
+          action === 'remove'
+        expect(registerCalls(), context).toHaveLength(
+          absent || action === 're-pair' || action === 'detach' ? 0 : 1
+        )
+        expect(
+          replacement.sendRequest.mock.calls.filter(
+            ([method]) => method === 'notifications.registerPush'
+          )
+        ).toHaveLength(action === 're-pair' || action === 'detach' ? 1 : 0)
+        expect(SecureStore.setItemAsync, context).toHaveBeenCalledTimes(
+          kind === 'missing' && !absent ? 1 : 0
+        )
+        const publisherLive = kind === 'saved' && (action === 'background' || action === 'remove')
+        expect(
+          send,
+          `${context}: independent authenticated publisher; actual operations ${JSON.stringify(receipts)}`
+        ).toHaveBeenCalledTimes(publisherLive || !absent ? 2 : 0)
+        if (action === 'remove') {
+          recover?.()
+          await settle()
+          expect(registerCalls(), context).toHaveLength(1)
+        }
+        fixture.stop?.()
+        fixture.stop = undefined
+        await settle()
         expect(
           source.pushRoutePreparationSnapshotForTests(),
-          `${context}: all owners retired`
+          `${context}: all owners stopped`
         ).toMatchObject({
           keyEntries: 0,
+          keyCallables: 0,
           creator: 0,
           builderCallables: 0,
           builderPayloads: 0,
           builderBodies: 0
         })
-      }
-      if (action === 'background' || action === 'remove') {
-        expect(
-          held.every((entry) => entry.retired),
-          `${context}: exact host results retired`
-        ).toBe(true)
-        expect(
-          registration.pushRegistrationSnapshotForTests(),
-          `${context}: no host interest`
-        ).toEqual({
-          preparations: 0,
-          runners: 0
-        })
-        // Installation publication survives host retirement for saved disconnected recovery.
-        expect(
-          source.pushRoutePreparationSnapshotForTests(),
-          `${context}: current publisher only`
-        ).toMatchObject({
-          keyEntries: 1,
-          keyCallables: 1,
-          keyTask: 1,
-          creator: 0,
-          builder: 1,
-          latest: 0,
-          builderCallables: 1,
-          builderPayloads: 1,
-          builderBodies: 0
-        })
-      }
-      pending.resolve(kind === 'saved' ? (state.keys.get('orca.push-route-key') ?? null) : null)
-      await settle()
-      for (const entry of held.filter((entry) => entry.retired)) {
-        expect(entry.predicate, context).toHaveBeenCalledTimes(entry.calls)
-      }
-      expect(source.pushRoutePreparationSnapshotForTests().keyEntries, context).toBe(0)
-      const absent =
-        action === 'disable' || action === 'stop' || action === 'background' || action === 'remove'
-      expect(registerCalls(), context).toHaveLength(
-        absent || action === 're-pair' || action === 'detach' ? 0 : 1
-      )
-      expect(
-        replacement.sendRequest.mock.calls.filter(
-          ([method]) => method === 'notifications.registerPush'
-        )
-      ).toHaveLength(action === 're-pair' || action === 'detach' ? 1 : 0)
-      expect(SecureStore.setItemAsync, context).toHaveBeenCalledTimes(
-        kind === 'missing' && !absent ? 1 : 0
-      )
-      const publisherLive = kind === 'saved' && (action === 'background' || action === 'remove')
-      expect(send, `${context}: independent authenticated publisher`).toHaveBeenCalledTimes(
-        publisherLive || !absent ? 2 : 0
-      )
-      if (action === 'remove') {
-        recover?.()
+      } finally {
+        fixture.stop?.()
+        fixture.stop = undefined
+        pending.resolve(null)
         await settle()
-        expect(registerCalls(), context).toHaveLength(1)
       }
-      fixture.stop?.()
-      fixture.stop = undefined
-      await settle()
-      expect(
-        source.pushRoutePreparationSnapshotForTests(),
-        `${context}: all owners stopped`
-      ).toMatchObject({
-        keyEntries: 0,
-        keyCallables: 0,
-        creator: 0,
-        builderCallables: 0,
-        builderPayloads: 0,
-        builderBodies: 0
-      })
     }
   }
 )

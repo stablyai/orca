@@ -72,6 +72,15 @@ function deferred<T>() {
   })
   return { promise, resolve }
 }
+const heldSources: (() => Promise<void>)[] = []
+function ownedDeferred<T>(cleanupValue: T) {
+  const pending = deferred<T>()
+  heldSources.push(async () => {
+    pending.resolve(cleanupValue)
+    await pending.promise
+  })
+  return pending
+}
 function client(
   register: () => Promise<unknown> = async () => ({ ok: true, result: { registered: true } })
 ) {
@@ -103,13 +112,26 @@ beforeEach(() => {
   vi.mocked(removeHost).mockReset()
 })
 
-afterEach(() => {
-  resetPushRegistrationForTests()
-  vi.useRealTimers()
+afterEach(async () => {
+  try {
+    for (const release of heldSources.splice(0)) {
+      await release()
+    }
+    if (vi.isFakeTimers()) {
+      await vi.advanceTimersByTimeAsync(0)
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    const { pushNativeSnapshotForTests } = await import('./push-native-preparation')
+    expect(pushNativeSnapshotForTests().physical).toBe(0)
+  } finally {
+    resetPushRegistrationForTests()
+    vi.useRealTimers()
+  }
 })
 
 it('does not resurrect a removed host when its registration response arrives late', async () => {
-  const pending = deferred<unknown>()
+  const pending = ownedDeferred<unknown>({ ok: true, result: { registered: true } })
   const connection = client(() => pending.promise)
   attachPushRegistration('host', connection as never)
   await vi.waitFor(() =>
@@ -131,7 +153,7 @@ it('does not resurrect a removed host when its registration response arrives lat
 })
 
 it('does not start registration after removal while native token lookup was pending', async () => {
-  const pending = deferred<MobilePushToken | null>()
+  const pending = ownedDeferred<MobilePushToken | null>(token)
   vi.mocked(getDevicePushToken).mockReturnValueOnce(pending.promise)
   const connection = client()
   attachPushRegistration('host', connection as never)
@@ -145,7 +167,7 @@ it('does not start registration after removal while native token lookup was pend
 })
 
 it('does not register with stale consent after the user disables notifications during token lookup', async () => {
-  const pending = deferred<MobilePushToken | null>()
+  const pending = ownedDeferred<MobilePushToken | null>(token)
   vi.mocked(getDevicePushToken).mockReturnValueOnce(pending.promise)
   const connection = client()
   attachPushRegistration('host', connection as never)
@@ -164,7 +186,7 @@ it('does not register with stale consent after the user disables notifications d
 })
 
 it('waits for notification channel readiness before requesting a token', async () => {
-  const pending = deferred<void>()
+  const pending = ownedDeferred<void>(undefined)
   vi.mocked(ensureDesktopNotificationChannel).mockReturnValueOnce(pending.promise)
   const connection = client()
   attachPushRegistration('host', connection as never)
@@ -190,7 +212,7 @@ it('completes disable while native token acquisition remains unresolved, and rej
       pendingUnregisterHostIds: []
     })
   )
-  const pending = deferred<MobilePushToken | null>()
+  const pending = ownedDeferred<MobilePushToken | null>(token)
   vi.mocked(getDevicePushToken).mockReturnValueOnce(pending.promise)
   const connection = client()
   const stop = startPushTokenSync()
@@ -198,9 +220,9 @@ it('completes disable while native token acquisition remains unresolved, and rej
   await vi.advanceTimersByTimeAsync(0)
   expect(getDevicePushToken).toHaveBeenCalledOnce()
   await setRemotePushEnabled(false)
-  expect(records().pendingUnregisterHostIds).toEqual(['host'])
+  expect(storage.get('orca:pushServiceNotificationsEnabled')).toBe('false')
   expect(connection.sendRequest.mock.calls.map(([method]) => method)).not.toContain(
-    'notifications.unregisterPush'
+    'notifications.registerPush'
   )
   await vi.advanceTimersByTimeAsync(2_000)
   expect(storage.get('orca:pushServiceNotificationsEnabled')).toBe('false')
@@ -244,7 +266,7 @@ it('does not revive a connection detached while metadata removal was pending', a
   const connection = client()
   const detach = attachPushRegistration('host', connection as never)
   await vi.waitFor(() => expect(records().registeredHostIds).toEqual(['host']))
-  const commit = deferred<void>()
+  const commit = ownedDeferred<void>(undefined)
   vi.mocked(removeHost).mockImplementationOnce(async () => {
     await commit.promise
     throw new Error('metadata failure')
@@ -263,8 +285,8 @@ it('does not revive a connection detached while metadata removal was pending', a
 })
 
 it('retires late registration ownership before a failed removal restores a fresh registration', async () => {
-  const oldRegister = deferred<unknown>()
-  const newRegister = deferred<unknown>()
+  const oldRegister = ownedDeferred<unknown>({ ok: true, result: { registered: true } })
+  const newRegister = ownedDeferred<unknown>({ ok: true, result: { registered: true } })
   const register = vi
     .fn()
     .mockReturnValueOnce(oldRegister.promise)
@@ -301,7 +323,7 @@ it('still commits removal when unregister and cleanup storage fail', async () =>
 
 it('shares a timed-out native acquisition, keeps listener T2 over late T1 and retires callbacks at restart', async () => {
   vi.useFakeTimers()
-  const pending = deferred<MobilePushToken | null>()
+  const pending = ownedDeferred<MobilePushToken | null>(token)
   vi.mocked(getDevicePushToken).mockReturnValueOnce(pending.promise)
   const first = client()
   const second = client()
@@ -332,7 +354,7 @@ it('shares a timed-out native acquisition, keeps listener T2 over late T1 and re
     throw new Error('Missing actual native listener')
   }
   const next = { ...token, token: 'b'.repeat(64) }
-  const consentWrite = deferred<void>()
+  const consentWrite = ownedDeferred<void>(undefined)
   vi.mocked(AsyncStorage.setItem).mockImplementationOnce(async (key, value) => {
     await consentWrite.promise
     storage.set(key, value)
