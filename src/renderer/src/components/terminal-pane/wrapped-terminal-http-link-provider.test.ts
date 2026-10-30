@@ -426,84 +426,49 @@ describe('wrapped terminal HTTP link provider', () => {
     }
   })
 
-  it('links a URL wrapped inside a table cell without cutting it at the cell edge', async () => {
-    const url = 'https://example.com/a/very/long/path/that/keeps/going/and/going'
-    const cellWidth = 20
-    const fragments = url.match(new RegExp(`.{1,${cellWidth}}`, 'g'))!
-    const row = (left: string, cell: string) => `│ ${left.padEnd(3)} │ ${cell.padEnd(cellWidth)} │`
-    const { terminal, linksAt } = await terminalWithRows(
+  it.each([
+    [
+      'the last',
       [
-        '┌─────┬──────────────────────┐',
-        row('Key', 'URL'),
-        '├─────┼──────────────────────┤',
-        ...fragments.map((fragment, index) => row(index === 0 ? 'doc' : '', fragment)),
-        '└─────┴──────────────────────┘'
-      ],
-      60
-    )
-    try {
-      for (const [index] of fragments.entries()) {
-        expect((await linksAt(4 + index))?.[0]).toMatchObject({
-          text: url,
-          range: { start: { x: 9, y: 4 + index } }
-        })
-      }
-    } finally {
-      terminal.dispose()
-    }
-  })
-
-  it('links a URL wrapped inside a non-final table cell', async () => {
-    const url = 'https://example.com/a/very/long/path/that/keeps/going'
-    const cellWidth = 18
-    const fragments = url.match(new RegExp(`.{1,${cellWidth}}`, 'g'))!
-    const row = (cells: string[]) =>
-      `│ ${cells.map((cell, index) => cell.padEnd(index === 1 ? cellWidth : 3)).join(' │ ')} │`
-    const { terminal, linksAt } = await terminalWithRows(
+        '│ 1  │ doc  │ https://example.com/a/very/lon │',
+        '│    │      │ g/path/that/keeps/going/and/go │',
+        '│    │      │ ing                            │',
+        '│ 2  │ api  │ https://example.com/docs/refer │',
+        '│    │      │ ence/terminal-links?v=2#anchor │'
+      ]
+    ],
+    [
+      'a middle',
       [
-        '┌─────┬────────────────────┬───────┐',
-        row(['ID', 'URL', 'State']),
-        '├─────┼────────────────────┼───────┤',
-        ...fragments.map((fragment, index) =>
-          row([index === 0 ? '1' : '', fragment, index === 0 ? 'done' : ''])
-        ),
-        '└─────┴────────────────────┴───────┘'
-      ],
-      60
-    )
-    try {
-      for (const [index] of fragments.entries()) {
-        expect((await linksAt(4 + index))?.[0]).toMatchObject({
-          text: url,
-          range: { start: { x: 9, y: 4 + index } }
-        })
-      }
-    } finally {
-      terminal.dispose()
-    }
-  })
-
-  it('links a two-row URL wrapped inside the first table column', async () => {
-    const url = `https://example.com/${'a'.repeat(20)}`
-    const cellWidth = 28
-    const fragments = url.match(new RegExp(`.{1,${cellWidth}}`, 'g'))!
-    const row = (cells: [string, string]) =>
-      `│ ${cells[0].padEnd(cellWidth)} │ ${cells[1].padEnd(4)} │`
-    const { terminal, linksAt } = await terminalWithRows(
+        '│ 1  │ https://example.com/a/very/lon │ done │',
+        '│    │ g/path/that/keeps/going/and/go │      │',
+        '│    │ ing                            │      │',
+        '│ 2  │ https://example.com/docs/refer │ todo │',
+        '│    │ ence/terminal-links?v=2#anchor │      │'
+      ]
+    ],
+    [
+      'the first',
       [
-        '┌──────────────────────────────┬──────┐',
-        row(['URL', 'note']),
-        '├──────────────────────────────┼──────┤',
-        ...fragments.map((fragment, index) => row([fragment, index === 0 ? '1' : ''])),
-        '└──────────────────────────────┴──────┘'
-      ],
-      60
-    )
+        '│ https://example.com/a/very/lon │ done │',
+        '│ g/path/that/keeps/going/and/go │      │',
+        '│ ing                            │      │',
+        '│ https://example.com/docs/refer │ todo │',
+        '│ ence/terminal-links?v=2#anchor │      │'
+      ]
+    ]
+  ])('links a URL wrapped inside %s table column on every row of its cell', async (_, rows) => {
+    const urls = [
+      'https://example.com/a/very/long/path/that/keeps/going/and/going',
+      'https://example.com/docs/reference/terminal-links?v=2#anchor'
+    ]
+    const x = rows[0]!.indexOf('https') + 1
+    const { terminal, linksAt } = await terminalWithRows(rows, 60)
     try {
-      for (const [index] of fragments.entries()) {
-        expect((await linksAt(4 + index))?.[0]).toMatchObject({
-          text: url,
-          range: { start: { x: 3, y: 4 + index } }
+      for (const [index] of rows.entries()) {
+        expect((await linksAt(index + 1))?.[0]).toMatchObject({
+          text: urls[index < 3 ? 0 : 1],
+          range: { start: { x, y: index + 1 } }
         })
       }
     } finally {

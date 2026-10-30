@@ -163,91 +163,26 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     )
   })
 
-  it('joins a URL wrapped onto a second row of the same table cell', () => {
-    const first = 'https://example.com/a/very/long/path/t'
-    const second = 'hat/keeps/going'
-    const rows = [`│ doc │ ${first} │`, `│     │ ${second.padEnd(first.length)} │`].map(
-      bufferLineWithCellColumns
-    )
-
-    expect(
-      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)[0]?.text
-    ).toBe(`${first}${second}`)
-  })
-
-  it('joins a two-row URL that starts in the first table column', () => {
-    const first = 'https://example.com/aaaaaaaaaa'
-    const second = 'bbbb'
-    const rows = [`│ ${first} │ ok │`, `│ ${second.padEnd(first.length)} │    │`].map(
-      bufferLineWithCellColumns
-    )
-
-    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)[0]?.text).toBe(
-      `${first}${second}`
-    )
-  })
-
-  it('keeps a single-column two-row URL unjoined without a blank neighbour cell', () => {
-    const first = 'https://example.com/aaaaaaaaaa'
-    const rows = [`│ ${first} │`, `│ ${'bbbb'.padEnd(first.length)} │`].map(
-      bufferLineWithCellColumns
-    )
+  it.each([
+    [
+      'a single-column table',
+      ['│ https://example.com/aaaaaaaaaa │', '│ README.md                      │']
+    ],
+    [
+      'a row with a filled cell right of it',
+      ['│ https://example.com/aaaaaaaaaa │ ok   │', '│ unrelated-value                │ todo │']
+    ],
+    [
+      'a row labelled further left',
+      [
+        '│ 1 │ doc │ https://example.com/aaaaaaaaaa │',
+        '│ 2 │     │ notes                          │'
+      ]
+    ]
+  ])('does not join a URL that fills its cell onto the next table row in %s', (_, rowTexts) => {
+    const rows = rowTexts.map(bufferLineWithCellColumns)
 
     expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)).toEqual([])
-  })
-
-  it('does not glue the next table row onto a left-column URL', () => {
-    const first = 'https://example.com/aaaaaaaaaa'
-    const rows = [`│ ${first} │ ok   │`, `│ unrelated-value │ todo │`].map(
-      bufferLineWithCellColumns
-    )
-
-    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)).toEqual([])
-  })
-
-  it('joins a URL wrapped inside one cell of a multi-column table', () => {
-    const first = 'https://example.com/aaaaaaaaaaaaaaaaaa/'
-    const second = 'tail'
-    const rows = [`│ a │ ${first} │ x │`, `│   │ ${second.padEnd(first.length)} │   │`].map(
-      bufferLineWithCellColumns
-    )
-
-    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 1)[0]?.text).toBe(
-      `${first}${second}`
-    )
-  })
-
-  it('joins a wrapped cell URL that a populated sibling cell follows', () => {
-    const first = 'https://example.com/aaaaaaaaaaaaaaaaaa'
-    const second = 'bbb'
-    const rows = [`│ 1 │ ${first} │ done  │`, `│   │ ${second.padEnd(first.length)} │       │`].map(
-      bufferLineWithCellColumns
-    )
-
-    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)[0]?.text).toBe(
-      `${first}${second}`
-    )
-  })
-
-  it('does not join a wrapped cell row whose sibling cell holds its own content', () => {
-    const first = 'https://example.com/a/very/long/path/t'
-    const rows = [`│ doc │ ${first} │`, `│ more│ ${'hat/keeps/going'.padEnd(first.length)} │`].map(
-      bufferLineWithCellColumns
-    )
-
-    expect(
-      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)
-    ).toEqual([])
-  })
-
-  it('does not join two complete blank-sibling cell URLs across table rows', () => {
-    const rows = [`│   │ https://example.com/aaaaaaa │`, `│   │ https://example.com/bbbbbbb │`].map(
-      bufferLineWithCellColumns
-    )
-
-    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)[0]?.text).toBe(
-      'https://example.com/bbbbbbb'
-    )
   })
 
   it('does not join adjacent cells from a shared framed table', () => {
