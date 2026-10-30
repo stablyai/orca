@@ -1025,7 +1025,7 @@ def hotkey(raw, window=None):
 
 
 @contextmanager
-def temporary_x11_keymap(value, readable):
+def temporary_x11_keymap(value, read_receipt):
     import fcntl
 
     if Gdk is None and not value.isascii():
@@ -1036,14 +1036,14 @@ def temporary_x11_keymap(value, readable):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise RuntimeError("unsupported capability: another keyboard operation is active; retry after it finishes") from error
-        with locked_x11_keymap(value, readable) as changed:
-            yield changed
+        with locked_x11_keymap(value, read_receipt) as receipt:
+            yield receipt
     finally:
         lock.close()
 
 
 @contextmanager
-def locked_x11_keymap(value, readable):
+def locked_x11_keymap(value, read_receipt):
     x = ctypes.CDLL("libX11.so.6")
     pointer, integer, symbol = ctypes.c_void_p, ctypes.c_int, ctypes.c_ulong
 
@@ -1055,6 +1055,7 @@ def locked_x11_keymap(value, readable):
         ("XDisplayKeycodes", integer, [pointer, ctypes.POINTER(integer), ctypes.POINTER(integer)]),
         ("XGetKeyboardMapping", ctypes.POINTER(symbol), [pointer, ctypes.c_ubyte, integer, ctypes.POINTER(integer)]),
         ("XGetModifierMapping", ctypes.POINTER(ModifierMap), [pointer]),
+        ("XQueryKeymap", integer, [pointer, ctypes.POINTER(ctypes.c_char)]),
         ("XChangeKeyboardMapping", integer, [pointer, integer, integer, ctypes.POINTER(symbol), integer]),
         ("XFree", integer, [pointer]),
         ("XFreeModifiermap", integer, [ctypes.POINTER(ModifierMap)]),
@@ -1067,6 +1068,38 @@ def locked_x11_keymap(value, readable):
     if not display:
         raise RuntimeError("unsupported capability: cannot open X11 display for synthetic Unicode text")
     changed = []
+    held_before = None
+    completed = False
+
+    def held_keys():
+        keys = (ctypes.c_char * 32)()
+        x.XQueryKeymap(display, keys)
+        return bytes(keys)
+
+    def restore():
+        nonlocal display
+        if display is None:
+            return
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            if not completed and held_before is not None:
+                held_after = held_keys()
+                newly_down = [code for code in range(256)
+                              if held_after[code // 8] & (1 << (code % 8))
+                              and not held_before[code // 8] & (1 << (code % 8))]
+                if newly_down:
+                    xtest = ctypes.CDLL("libXtst.so.6")
+                    xtest.XTestFakeKeyEvent.argtypes = [pointer, ctypes.c_uint, integer, ctypes.c_ulong]
+                    for code in newly_down:
+                        xtest.XTestFakeKeyEvent(display, code, 0, 0)
+            for code in changed:
+                x.XChangeKeyboardMapping(display, code, width.value, (symbol * width.value)(*rows[code]), 1)
+            x.XSync(display, 0)
+            x.XCloseDisplay(display)
+            display = None
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
     try:
         low, high, width = integer(), integer(), integer()
         x.XDisplayKeycodes(display, ctypes.byref(low), ctypes.byref(high))
@@ -1087,32 +1120,36 @@ def locked_x11_keymap(value, readable):
             x.XFreeModifiermap(modifiers)
         available = {key for row in rows.values() for key in row}
         needed = list(dict.fromkeys((ord(char) if ord(char) < 128 else Gdk.unicode_to_keyval(ord(char)))
-                                    for char in value if char.isprintable()))
+                                    for char in value if is_literal_text_character(char)))
         missing = [key for key in needed if key not in available]
         free = [code for code, row in rows.items() if not any(row) and code not in modifier_codes]
         if len(missing) > len(free) or 0 in missing:
             raise RuntimeError("unsupported capability: insufficient unused X11 keycodes; split the text or use paste_text")
-        if missing and not readable:
+        receipt = read_receipt() if missing else None
+        if missing and receipt is None:
             raise RuntimeError("unsupported capability: synthetic Unicode mapping requires readable focused text; use paste_text")
         for code, key in zip(free, missing):
             changed.append(code)
             binding = (symbol * width.value)(key)
             x.XChangeKeyboardMapping(display, code, width.value, binding, 1)
         x.XSync(display, 0)
-        yield bool(changed)
+        held_before = held_keys()
+        yield receipt
+        completed = True
     finally:
-        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
         try:
-            for code in changed:
-                x.XChangeKeyboardMapping(display, code, width.value, (symbol * width.value)(*rows[code]), 1)
-            x.XSync(display, 0)
-            x.XCloseDisplay(display)
-        finally:
-            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+            restore()
+        except SystemExit:
+            restore()
+            raise
+
+
+def is_literal_text_character(char):
+    return ord(char) >= 32 and ord(char) != 127
 
 
 def synthetic_text_receipt(window, value):
-    if not value.isprintable():
+    if not all(is_literal_text_character(char) for char in value):
         return None
     node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED)) if window is not None else None
     if node is None or is_secure_node(node) or not has_state(node, Atspi.StateType.EDITABLE):
@@ -1183,19 +1220,18 @@ def type_text(value, window=None):
     if len(text) > 600:
         raise RuntimeError("unsupported capability: synthetic text is limited to 600 characters; split the text or use paste_text")
     Atspi.set_timeout(ATSPI_METHOD_TIMEOUT_MS, ATSPI_STARTUP_TIMEOUT_MS)
-    receipt = synthetic_text_receipt(window, text)
-    try:
-        with temporary_x11_keymap(text, receipt is not None) as owns_mapping:
+    with temporary_x11_keymap(text, lambda: synthetic_text_receipt(window, text)) as receipt:
+        try:
             # A fresh xdotool reads the stable mappings, held until the target consumes its keys.
             subprocess.run(
                 [xdotool, "type", "--clearmodifiers", "--delay", "12", "--file", "-"],
                 input=text, encoding="utf-8", env={**os.environ, "LC_ALL": "C.UTF-8"},
                 check=True, capture_output=True, timeout=10,
             )
-            if owns_mapping:
-                wait_for_typed_text(receipt)
-    except (subprocess.SubprocessError, OSError) as error:
-        raise RuntimeError("text_input_incomplete: text may be partially typed and keyboard modifiers may have changed; inspect state before retrying") from error
+        except (subprocess.SubprocessError, OSError) as error:
+            raise RuntimeError("text_input_incomplete: text may be partially typed and keyboard modifiers may have changed; inspect state before retrying") from error
+        if receipt is not None:
+            wait_for_typed_text(receipt)
 
 
 def text_selection(text):

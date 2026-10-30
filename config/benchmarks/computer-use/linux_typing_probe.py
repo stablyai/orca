@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Require exact synthetic Unicode typing and preflight refusal on isolated X11."""
 import argparse
+import ctypes
 from contextlib import nullcontext
 import fcntl
 import os
 from pathlib import Path
 import subprocess
 import signal
+import shutil
 import sys
 import time
 
@@ -32,6 +34,7 @@ def main():
     evidence = {"source": bench.pin_source(args.source, sources / "candidate"), "rows": []}
     mixed = "- café Ω 漢字 🙂 e\u0301 ΩéΩé"
     cases = [("mixed", mixed, None)] * 3 + [
+        ("format", "a\u00a0\u200b\u200d\u00adb \U0001fae0", None),
         ("long", "éΩ" * 300, None),
         ("oversized", "éΩ" * 300 + "é", "limited to 600"),
         ("slots", "".join(chr(0x4E00 + i) for i in range(256)), "insufficient unused X11 keycodes"),
@@ -45,6 +48,12 @@ def main():
 
     def keymap():
         return {flag: subprocess.check_output(["xmodmap", flag], text=True) for flag in ("-pke", "-pm")}
+
+    def held_keys():
+        obs.X.XQueryKeymap.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_char)]
+        result = (ctypes.c_char * 32)()
+        obs.X.XQueryKeymap(obs.main_display().d, result)
+        return bytes(result)
 
     class TypingTrial(bench.Trial):
         def engine(self, name, sources):
@@ -116,37 +125,58 @@ def main():
                 raise AssertionError("synthetic typing changed the clipboard")
             print(f"confirmed synthetic typing contract for {len(marker)} characters", flush=True)
 
-        trial = TypingTrial(args, args.out / "cancelled", log)
-        try:
-            trial.launch()
-            trial.prepare("replace_submit")
-            engine = trial.engine("candidate", sources)
-            field = trial_contract.select_unique(engine.snapshot(), trial_contract.SELECTORS["field"])
-            for action in ("click", "ctrl_a"):
-                if engine.act(action, field, True).get("error"):
-                    raise AssertionError("cancellation fixture could not focus and select the field")
-            before = keymap()
-            operation = trial.directory / "cancel.json"
-            bench.write_json(operation, engine._req("type_text", field, True, text="éΩ" * 300))
-            process = trial.engines.spawn([sys.executable, engine.o.script, str(operation)],
-                                          stdout=subprocess.PIPE, stderr=log)
-            bench.wait_for(lambda: keymap() != before, 5)
-            bench.wait_for(lambda: trial.state()["text"] != "hello", 5)
-            process.send_signal(signal.SIGTERM)
-            process.communicate(timeout=3)
-            if process.returncode != 143 or keymap() != before:
-                raise AssertionError("cancelled typing did not restore its owned mappings")
-            time.sleep(0.4)
-            first = trial.state()
-            time.sleep(0.4)
-            last = trial.state()
-            if (first["text"] != last["text"] or last["returns"] != 0
-                    or last["decoyText"] != "untouched"):
-                raise AssertionError("typing continued after the bridge was terminated")
-            evidence["cancelled"] = {"before": first, "after": last, "exit_code": process.returncode}
-            bench.write_json(args.out / "results.json", evidence)
-        finally:
-            trial.close()
+        for mode in ("typing", "held-key"):
+            trial = TypingTrial(args, args.out / ("cancelled-" + mode), log)
+            try:
+                trial.launch()
+                trial.prepare("replace_submit")
+                engine = trial.engine("candidate", sources)
+                field = trial_contract.select_unique(engine.snapshot(), trial_contract.SELECTORS["field"])
+                for action in ("click", "ctrl_a"):
+                    if engine.act(action, field, True).get("error"):
+                        raise AssertionError("cancellation fixture could not focus and select the field")
+                before = keymap()
+                operation = trial.directory / "cancel.json"
+                bench.write_json(operation, engine._req("type_text", field, True, text="éΩAa" * 150))
+                held_before = held_keys()
+                env = dict(os.environ)
+                ready = trial.directory / "held-ready"
+                if mode == "held-key":
+                    directory = trial.directory / "bin"
+                    directory.mkdir()
+                    stand_in = directory / "xdotool"
+                    stand_in.write_text(
+                        f"#!{sys.executable}\nimport subprocess, time\nfrom pathlib import Path\n"
+                        f"subprocess.run([{shutil.which('xdotool')!r}, 'keydown', 'Shift_L'], check=True)\n"
+                        f"Path({str(ready)!r}).touch()\ntime.sleep(60)\n"
+                    )
+                    stand_in.chmod(0o700)
+                    env["PATH"] = str(directory) + os.pathsep + env["PATH"]
+                process = trial.engines.spawn([sys.executable, engine.o.script, str(operation)],
+                                              stdout=subprocess.PIPE, stderr=log, env=env)
+                bench.wait_for(lambda: keymap() != before, 5)
+                if mode == "held-key":
+                    bench.wait_for(ready.exists, 5)
+                    if held_keys() == held_before:
+                        raise AssertionError("held-key cancellation control did not press a key")
+                else:
+                    bench.wait_for(lambda: trial.state()["text"] != "hello", 5)
+                process.send_signal(signal.SIGTERM)
+                process.communicate(timeout=3)
+                if process.returncode != 143 or keymap() != before or held_keys() != held_before:
+                    raise AssertionError("cancelled typing did not restore its owned mappings and release keys")
+                time.sleep(0.4)
+                first = trial.state()
+                time.sleep(0.4)
+                last = trial.state()
+                if (first["text"] != last["text"] or last["returns"] != 0
+                        or last["decoyText"] != "untouched"):
+                    raise AssertionError("typing continued after the bridge was terminated")
+                evidence.setdefault("cancelled", {})[mode] = {
+                    "before": first, "after": last, "exit_code": process.returncode}
+                bench.write_json(args.out / "results.json", evidence)
+            finally:
+                trial.close()
 
 
 if __name__ == "__main__":
