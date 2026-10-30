@@ -90,7 +90,27 @@ export async function runRfp1Observation() {
   const retentionErrors: unknown[] = []
   let ownerHead: string | undefined
   let primary: { failed: true; error: unknown } | undefined
-  let completed = false
+  const cases = {
+    E1: 'UNRUN',
+    E2: 'UNRUN',
+    E3: 'UNRUN',
+    E4: 'UNRUN',
+    E5: 'UNRUN',
+    E6: 'UNRUN',
+    E7: 'UNRUN',
+    E8: 'UNRUN',
+    E9: 'UNRUN',
+    E10: 'UNRUN',
+    E11: 'UNRUN',
+    E12: 'UNRUN',
+    E13: 'UNRUN',
+    E14: 'UNRUN',
+    E15: 'UNRUN',
+    E16: 'UNRUN',
+    oldCMarkerless: 'UNRUN',
+    capableC: 'UNRUN',
+    Android: 'UNRUN'
+  }
   let failed = false
   const capture = (value: Record<string, unknown>) => {
     captures.push({ leg, ...value })
@@ -103,12 +123,8 @@ export async function runRfp1Observation() {
           captures,
           cleanupFailed: failed || !!primary || retentionErrors.length > 0,
           coverage: {
-            E1: completed ? 'initial-cut both C legs' : 'see finite captures; no pass claim',
-            E2: completed ? 'initial-cut both C legs' : 'see finite captures; no pass claim',
-            E6: completed ? 'initial-cut' : 'see finite captures; no pass claim',
-            E8: completed ? 'initial-cut' : 'see finite captures; no pass claim',
+            ...cases,
             others: 'UNRUN',
-            Android: 'UNRUN',
             completeObservationSufficiency: 'NOT ESTABLISHED'
           }
         },
@@ -486,6 +502,8 @@ export async function runRfp1Observation() {
             ? 'initial pair meets viewing requirement; full coverage UNRUN'
             : 'OPEN: observed V does not meet quiet requirement'
       })
+      cases.E1 = 'captured old-C leg: admitted A iOS V observation; quiet remains required'
+      cases.E2 = 'captured old-C leg: admitted A iOS U alert'
       checkpoint('E1/E2 baseline', 'settled')
       holdC.resolve()
       await at('independent C send', () =>
@@ -523,6 +541,7 @@ export async function runRfp1Observation() {
         expect(record(oldV.behavior).shouldShowBanner).toBe(false)
         expect(record(oldU.behavior).shouldShowBanner).toBe(true)
         capture({ boundary: 'old-C-real-markerless-presentation', V: oldV, U: oldU })
+        cases.oldCMarkerless = 'captured actual independent provider copy: iOS V quiet / U alert'
       }
       capture({ boundary: 'fenced-settlement', snapshot: settled })
       {
@@ -577,7 +596,19 @@ export async function runRfp1Observation() {
           boundary: 'E8-original-queued-payload-presentation',
           result: await mobile('present', { payload, workspace: RFP1_WORKSPACE, case: 'E8' })
         })
+        cases.E8 = 'captured old-C leg: queued A / same saved B restart / descriptor read failure'
         checkpoint('E8 same-B restart schedule', 'settled')
+        if (!capable) {
+          capture({
+            boundary: 'finite-missing-observation-witness',
+            case: 'E8',
+            missingObservation:
+              'The queued A payload and current old-C status/catalog do not supply a complete comparable current source-owner binding after the actual descriptor read failure.',
+            observationSufficiency: 'NOT ESTABLISHED; bounded development HOLD for panel',
+            limit: 'No universal impossibility or production identity choice established'
+          })
+          break
+        }
         checkpoint('E6 same-RC different-D schedule', 'entered')
         const D = await start('D', RFP1_OLD, path)
         const held = cRelay.holdStatus()
@@ -613,21 +644,15 @@ export async function runRfp1Observation() {
     }
     capture({
       boundary: 'finite-experiment-result',
-      execution: 'completed-initial-cut',
+      execution: 'bounded-old-C-E8-witness',
       observationSufficiency:
-        'HOLD-FOR-PANEL: initial observations only; no complete join selected or universal impossibility proved',
+        'NOT ESTABLISHED; HOLD-FOR-PANEL: bounded missing observation only, not full E1-E16 closure',
       observations,
-      cases: {
-        E1: 'captured-both-C-legs',
-        E2: 'captured-both-C-legs',
-        E6: 'captured',
-        E8: 'captured',
-        remaining: 'UNRUN; no full E1-E16 closure'
-      },
+      cases,
+      wrongV: 'OPEN; V quiet / U alert remains required',
       production: 'HELD'
     })
-    completed = true
-    checkpoint('initial cut completed', 'settled')
+    checkpoint('bounded witness body completed; cleanup still required', 'settled')
   } catch (error) {
     primary = { failed: true, error }
     capture({
@@ -671,7 +696,7 @@ export async function runRfp1Observation() {
   )
   if (digest) {
     console.log(
-      `RFP1 finite capture ${digest}: ${cleanup.failed || retentionErrors.length ? 'execution FAIL, observation UNRUN' : 'execution complete, observation HOLD; production HELD'}; ${captureRoot}`
+      `RFP1 finite capture ${digest}: ${cleanup.failed || retentionErrors.length ? 'execution FAIL, observation UNRUN' : 'bounded body complete, observation NOT ESTABLISHED; development HOLD; production HELD'}; ${captureRoot}`
     )
   }
   for (const root of [scratch, archiveRoot]) {
