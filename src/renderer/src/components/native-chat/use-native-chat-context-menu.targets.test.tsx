@@ -95,22 +95,12 @@ async function rightClick(text: string): Promise<void> {
   await screen.findByRole('menu')
 }
 
-const rangeClientRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects')
-
 beforeEach(() => {
   vi.stubGlobal('api', { ui: { writeClipboardText: mocks.writeClipboardText } })
   mocks.writeClipboardText.mockResolvedValue(undefined)
-  // happy-dom lays out no text; selections sit in a box at the default menu point.
-  Object.defineProperty(Range.prototype, 'getClientRects', {
-    configurable: true,
-    value: () => [new DOMRect(0, 0, 20, 10)]
-  })
 })
 
 afterEach(() => {
-  if (rangeClientRects) {
-    Object.defineProperty(Range.prototype, 'getClientRects', rangeClientRects)
-  }
   cleanup()
   window.getSelection()?.removeAllRanges()
   vi.unstubAllGlobals()

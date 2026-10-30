@@ -218,20 +218,11 @@ it('updates nominal toggle labels, including an unassigned binding', () => {
 })
 
 describe('useNativeChatContextMenu', () => {
-  const rangeClientRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects')
   beforeEach(() => {
     items.list = []
-    // happy-dom lays out no text; selections sit in a box at the default menu point.
-    Object.defineProperty(Range.prototype, 'getClientRects', {
-      configurable: true,
-      value: () => [new DOMRect(0, 0, 20, 10)]
-    })
   })
 
   afterEach(() => {
-    if (rangeClientRects) {
-      Object.defineProperty(Range.prototype, 'getClientRects', rangeClientRects)
-    }
     cleanup()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -336,20 +327,39 @@ describe('useNativeChatContextMenu', () => {
   )
 
   it.each([
-    ['on it', 5, 'text'],
-    ['away from it', 50, undefined]
-  ])('offers the selection only to a menu opened %s', (_where, clientX, copied) => {
+    ['a reply selection right-clicked on', 'text', () => screen.getByText('text'), 'text', true],
+    [
+      'a reply selection right-clicked away from',
+      'text',
+      () => screen.getByRole('button'),
+      undefined,
+      false
+    ],
+    [
+      'a composer selection right-clicked away from',
+      'typo',
+      () => screen.getByText('text'),
+      undefined,
+      true
+    ]
+  ])('offers %s only when the press lands on it', (_case, selected, pressed, copied, kept) => {
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('api', { ui: { writeClipboardText } })
     render(<ImageHarness />)
     const selection = window.getSelection()
-    selection?.selectAllChildren(screen.getByText('text'))
-    fireEvent.contextMenu(screen.getByText('text'), { clientX, clientY: 5 })
+    selection?.selectAllChildren(screen.getByText(selected))
+    // happy-dom lays out no text, so map the press to the pressed element directly.
+    Object.defineProperty(document, 'caretPositionFromPoint', {
+      configurable: true,
+      value: () => ({ offsetNode: pressed(), offset: 0 })
+    })
+    fireEvent.contextMenu(pressed())
+    Reflect.deleteProperty(document, 'caretPositionFromPoint')
 
     copyTextItem()?.onSelect?.()
 
     expect(writeClipboardText.mock.calls[0]?.[0]).toBe(copied)
-    expect(selection?.isCollapsed).toBe(copied === undefined)
+    expect(selection?.isCollapsed).toBe(!kept)
   })
 
   it('offers no image copy when the right-click is not on an image', () => {

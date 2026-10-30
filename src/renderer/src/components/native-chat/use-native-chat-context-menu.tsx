@@ -196,11 +196,14 @@ export function useNativeChatContextMenu({
         return
       }
       menuOpenedAtRef.current = Date.now()
-      dropSelectionAwayFromPoint(rootRef.current, event.clientX, event.clientY)
+      const missesSelection = menuPointMissesSelection(event.clientX, event.clientY)
+      if (missesSelection) {
+        dropTranscriptSelection(rootRef.current)
+      }
       setState({
         open: true,
         point: { x: event.clientX, y: event.clientY },
-        selectedText: getNativeChatSelectedText(rootRef.current),
+        selectedText: missesSelection ? '' : getNativeChatSelectedText(rootRef.current),
         canPaste: isEditableTarget(event.target),
         returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
         image: readNativeChatCopyImage(event.target),
@@ -353,29 +356,34 @@ function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): 
   }
 }
 
-// Native menus move the selection to what was pressed; a menu away from it must not offer it.
-// Editors own their selection state, so a composer selection is left to the composer.
-function dropSelectionAwayFromPoint(root: HTMLElement | null, x: number, y: number): void {
+// Native menus act on what was pressed, so a selection the press missed is not offered.
+function menuPointMissesSelection(x: number, y: number): boolean {
   const selection = window.getSelection()
-  const anchor = selection?.anchorNode
-  if (
-    !root ||
-    !selection ||
-    selection.isCollapsed ||
-    !nodeBelongsToRoot(anchor ?? null, root) ||
-    !nodeBelongsToRoot(selection.focusNode, root) ||
-    isEditableTarget(anchor instanceof Element ? anchor : (anchor?.parentElement ?? null))
-  ) {
-    return
+  const caret = document.caretPositionFromPoint?.(x, y)
+  if (!selection || selection.isCollapsed || !caret) {
+    return false
   }
   for (let index = 0; index < selection.rangeCount; index += 1) {
-    for (const rect of selection.getRangeAt(index).getClientRects()) {
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        return
-      }
+    if (selection.getRangeAt(index).isPointInRange(caret.offsetNode, caret.offset)) {
+      return false
     }
   }
-  selection.removeAllRanges()
+  return true
+}
+
+// Editors own their selection state, so only a transcript selection is dropped.
+function dropTranscriptSelection(root: HTMLElement | null): void {
+  const selection = window.getSelection()
+  const anchor = selection?.anchorNode ?? null
+  if (
+    root &&
+    selection &&
+    nodeBelongsToRoot(anchor, root) &&
+    nodeBelongsToRoot(selection.focusNode, root) &&
+    !isEditableTarget(anchor instanceof Element ? anchor : (anchor?.parentElement ?? null))
+  ) {
+    selection.removeAllRanges()
+  }
 }
 
 // Why: only Chromium's own menu for a typing target carries the OS spellchecker's suggestions.
