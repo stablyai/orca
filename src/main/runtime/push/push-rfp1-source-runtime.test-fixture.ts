@@ -136,6 +136,7 @@ export async function observationRuntime(options: {
       {
         id: 'observation',
         path: '/observation',
+        importedExternalWorktreePaths: ['/observation/w1'],
         displayName: 'Observation',
         badgeColor: 'blue',
         addedAt: 1
