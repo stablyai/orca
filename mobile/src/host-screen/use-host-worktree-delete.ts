@@ -6,8 +6,8 @@ import {
 } from '../../../src/shared/worktree/archive-hook-removal-gate'
 import type { OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
 import { newWorkspaceUiStateRead } from '../components/new-workspace-operations'
+import { canUseRepoWideTrust } from '../../../src/shared/orca-hook-trust-entries'
 import {
-  isOrcaHookTrusted,
   persistOrcaHookTrustApproval,
   wasOrcaHookPreviouslyApproved
 } from '../tasks/setup-hook-trust'
@@ -60,10 +60,10 @@ async function decideArchiveHookRun(
       return { kind: 'skip' }
     }
     const trust = ui.value?.trustedOrcaHooks ?? {}
-    const trusted = args.repos
-      ? isOrcaHookTrusted(trust, args.repos, repoId, 'archive', archiveTrust.contentHash)
-      : trust[repoId]?.archive?.contentHash === archiveTrust.contentHash
-    if (trusted) {
+    if (
+      trust[repoId]?.archive?.contentHash === archiveTrust.contentHash ||
+      (args.repos && canUseRepoWideTrust(trust, args.repos, repoId))
+    ) {
       return { kind: 'run' }
     }
     return {
