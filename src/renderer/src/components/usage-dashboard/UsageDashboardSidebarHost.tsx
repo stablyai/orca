@@ -1,5 +1,6 @@
 import { useEffect, type CSSProperties } from 'react'
 import { useAppStore } from '@/store'
+import { useDrawerCloseLingering } from '@/hooks/use-drawer-close-lingering'
 import UsageDashboardDrawer from './UsageDashboardDrawer'
 
 type UsageDashboardSidebarHostProps = {
@@ -19,6 +20,8 @@ export default function UsageDashboardSidebarHost({
 }: UsageDashboardSidebarHostProps): React.JSX.Element | null {
   const drawerOpen = useAppStore((s) => s.usageDrawerOpen)
   const setDrawerOpen = useAppStore((s) => s.setUsageDrawerOpen)
+  // The Sheet owns its close transition; unmounting on the same tick would cut it.
+  const renderedOpen = useDrawerCloseLingering(drawerOpen)
 
   useEffect(() => {
     if (!sidebarOpen && drawerOpen) {
@@ -36,7 +39,7 @@ export default function UsageDashboardSidebarHost({
     }
   }, [setDrawerOpen, workspaceBoardOpen])
 
-  return sidebarOpen && drawerOpen ? (
+  return sidebarOpen && renderedOpen ? (
     <UsageDashboardDrawer leftSidebarStyle={leftSidebarStyle} statusBarVisible={statusBarVisible} />
   ) : null
 }

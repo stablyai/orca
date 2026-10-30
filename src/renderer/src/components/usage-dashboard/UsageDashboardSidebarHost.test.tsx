@@ -66,6 +66,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   useAppStore.setState(initialState, true)
 })
@@ -80,6 +81,20 @@ describe('UsageDashboardSidebarHost', () => {
     useAppStore.setState({ usageDrawerOpen: false })
     const closed = renderHost()
     expect(closed.queryByTestId('usage-dashboard-drawer')).toBeNull()
+  })
+
+  it('keeps the drawer mounted until its exit animation finishes', () => {
+    vi.useFakeTimers()
+    useAppStore.setState({ usageDrawerOpen: true })
+    const view = renderHost()
+    expect(view.queryByTestId('usage-dashboard-drawer')).not.toBeNull()
+
+    act(() => useAppStore.setState({ usageDrawerOpen: false }))
+    // Unmounting on the same tick would cut the Sheet's close transition.
+    expect(view.queryByTestId('usage-dashboard-drawer')).not.toBeNull()
+
+    act(() => vi.advanceTimersByTime(300))
+    expect(view.queryByTestId('usage-dashboard-drawer')).toBeNull()
   })
 
   it('does not render the drawer when the sidebar is closed', () => {

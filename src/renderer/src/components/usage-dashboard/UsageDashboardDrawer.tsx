@@ -16,7 +16,7 @@ type UsageDashboardDrawerProps = {
   statusBarVisible: boolean
 }
 
-/** Companion sheet beside the workspace sidebar; the host unmounts it whenever it is closed. */
+/** Companion sheet beside the workspace sidebar; the host keeps it mounted through its close transition. */
 export default function UsageDashboardDrawer({
   leftSidebarStyle,
   statusBarVisible
