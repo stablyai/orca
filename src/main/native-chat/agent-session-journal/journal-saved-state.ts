@@ -65,7 +65,10 @@ export function* readJournalSavedStatePages(
     )
     for (const item of items.rows) {
       const next = decoding(sessionId, () => {
-        if ((typeof item.ordinal !== 'number' && typeof item.ordinal !== 'string') || typeof item.item_json !== 'string') {
+        if (
+          (typeof item.ordinal !== 'number' && typeof item.ordinal !== 'string') ||
+          typeof item.item_json !== 'string'
+        ) {
           throw new Error('invalid saved journal item')
         }
         decode.item(item.item_json)
@@ -161,11 +164,18 @@ function readTextPage(
 /** Old epochs leave only disposable rows; retire one bounded page between maintenance rests. */
 export function sweepJournalSavedState(database: JournalHostDatabase): boolean {
   return database.transaction((db) => {
-    for (const table of ['journal_items', 'journal_entries', 'journal_cache_stamp', 'journal_state']) {
-      const removed = db.prepare(`DELETE FROM ${table} WHERE rowid IN (
+    for (const table of [
+      'journal_items',
+      'journal_entries',
+      'journal_cache_stamp',
+      'journal_state'
+    ]) {
+      const removed = db
+        .prepare(`DELETE FROM ${table} WHERE rowid IN (
         SELECT c.rowid FROM ${table} c LEFT JOIN journal_sessions s
         ON s.session_id = c.session_id AND s.epoch = c.epoch
-        WHERE s.session_id IS NULL LIMIT 32)`).run()
+        WHERE s.session_id IS NULL LIMIT 32)`)
+        .run()
       if (removed.changes > 0) {
         return true
       }

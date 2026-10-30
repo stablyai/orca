@@ -3,9 +3,19 @@ import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
-import { runningTurnLifecycleRevisions, turnVerdictFromDeathEvidence, UNVERIFIABLE_TURN_VERDICT } from './structured-agent-session-stale-turn-verdict'
+import {
+  runningTurnLifecycleRevisions,
+  turnVerdictFromDeathEvidence,
+  UNVERIFIABLE_TURN_VERDICT
+} from './structured-agent-session-stale-turn-verdict'
 
-import { RUNNING_IDENTITY, journalWith, legacyLifecycleItem, lifecycleItem, verdictForTurn } from './structured-agent-session-stale-verdict-contract-test-fixture'
+import {
+  RUNNING_IDENTITY,
+  journalWith,
+  legacyLifecycleItem,
+  lifecycleItem,
+  verdictForTurn
+} from './structured-agent-session-stale-verdict-contract-test-fixture'
 
 it('ends a watched exit at the exit', () => {
   expect(verdictForTurn({ kind: 'exit-observed', detail: 'exit', observedAt: 500 })).toEqual({
@@ -89,22 +99,20 @@ it('revises only running rows in place and carries an end time only for an obser
     lifecycleItem('turn-1', 'completed', 1, { startedAt: 10, completedAt: 20 }),
     lifecycleItem('turn-2', 'running', 2, { startedAt: 30, completedAt: 99 })
   ]
-  expect(runningTurnLifecycleRevisions(items, { state: 'interrupted', completedAt: 40 })).toEqual(
-    [
-      {
-        kind: 'item',
-        itemId: agentJournalItemKey(RUNNING_IDENTITY),
-        body: {
-          kind: 'turn',
-          turnId: 'turn-2',
-          state: 'interrupted',
-          startedAt: 30,
-          completedAt: 40
-        },
-        turnScope: { kind: 'thread' }
-      }
-    ]
-  )
+  expect(runningTurnLifecycleRevisions(items, { state: 'interrupted', completedAt: 40 })).toEqual([
+    {
+      kind: 'item',
+      itemId: agentJournalItemKey(RUNNING_IDENTITY),
+      body: {
+        kind: 'turn',
+        turnId: 'turn-2',
+        state: 'interrupted',
+        startedAt: 30,
+        completedAt: 40
+      },
+      turnScope: { kind: 'thread' }
+    }
+  ])
   expect(runningTurnLifecycleRevisions(items, { state: 'unverifiable' })).toEqual([
     expect.objectContaining({
       body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }

@@ -6,7 +6,13 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
 
-import { fixture, commitLevels, openJournal, text, uploadedInput } from './journal-streamed-revision-contract-test-fixture'
+import {
+  fixture,
+  commitLevels,
+  openJournal,
+  text,
+  uploadedInput
+} from './journal-streamed-revision-contract-test-fixture'
 
 it('resolves/builds once after preceding writes and preserves actual output and external receipt durability', async () => {
   const journal = await openJournal()

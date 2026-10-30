@@ -28,7 +28,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import {
   closeTestJournalHostDatabase,
-  openTestJournalHostDatabase, pinTestJournalInputMode
+  openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -102,9 +102,11 @@ export async function createQueuedMessageTestRig(
         } as const)
       : {})
   })
-  if (options.legacyInputs) { seedQueuedRigLegacyJournal(root, SESSION, options.agent) }
+  const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
-  if (options.legacyInputs) { pinTestJournalInputMode(host.collaboratorsForTests().sessions.get(SESSION)!.journal) }
+  if (pinLegacy) {
+    pinLegacy(host)
+  }
 
   function envelope(
     fields: Record<string, unknown>,

@@ -195,36 +195,44 @@ export function replaceJournalEpoch(input: {
   const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
   const claimsCommitted: (() => void)[] = []
   state.oldestSequence = 1
-  input.database.transaction((db) => {
-    const retired = readJournalSessionEpoch(db, sessionId)
-    if (retired !== null) {
-      journalOutcomeSource(db, sessionId, retired)
-    }
-    clearJournalSavedState(db, sessionId)
-    if (retired !== null) {
-      deleteJournalEpochRows(db, sessionId, retired)
-    }
-    for (const row of rows) {
-      const body = row.kind === 'item' || row.kind === 'submission' ? row.body : null
-      if (
-        body?.kind === 'message' &&
-        body.role === 'user' &&
-        !(row.kind === 'item' && input.isLiveGoal?.(row.itemId))
-      ) {
-        const commit = input.claimAttachments?.(db, body, false)
-        if (commit) {
-          claimsCommitted.push(commit)
+  input.database.transaction(
+    (db) => {
+      const retired = readJournalSessionEpoch(db, sessionId)
+      if (retired !== null) {
+        journalOutcomeSource(db, sessionId, retired)
+      }
+      clearJournalSavedState(db, sessionId)
+      if (retired !== null) {
+        deleteJournalEpochRows(db, sessionId, retired)
+      }
+      for (const row of rows) {
+        const body = row.kind === 'item' || row.kind === 'submission' ? row.body : null
+        if (
+          body?.kind === 'message' &&
+          body.role === 'user' &&
+          !(row.kind === 'item' && input.isLiveGoal?.(row.itemId))
+        ) {
+          const commit = input.claimAttachments?.(db, body, false)
+          if (commit) {
+            claimsCommitted.push(commit)
+          }
         }
       }
+      input.queue.receipt.write(db)
+      publishJournalSessionEpoch(db, input.identity, epoch)
+      receipt?.write(db)
+      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
+    },
+    false,
+    (publication) => {
+      input.onPublished({
+        state: publication.adopt(),
+        newer: null,
+        damage: null,
+        projectionThrough: publication.through
+      })
     }
-    input.queue.receipt.write(db)
-    publishJournalSessionEpoch(db, input.identity, epoch)
-    receipt?.write(db)
-    return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
-  }, false, (publication) => {
-    input.onPublished({ state: publication.adopt(), newer: null, damage: null,
-      projectionThrough: publication.through })
-  })
+  )
   claimsCommitted.forEach((commit) => commit())
   input.queue.receipt.committed()
 

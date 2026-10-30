@@ -3,10 +3,23 @@ import { expect, it, vi } from 'vitest'
 import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { createQueuedMessageTestRig, eventually, QUEUED_RIG_CALLER } from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { hostTestAttachParams, hostTestOperationId } from '../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AGENT_JOURNAL_THREAD_SCOPE, type AgentJournalItemBody } from '../../../../../shared/agent-session-journal-types'
-import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY, ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
+import {
+  createQueuedMessageTestRig,
+  eventually,
+  QUEUED_RIG_CALLER
+} from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import {
+  hostTestAttachParams,
+  hostTestOperationId
+} from '../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../../../shared/agent-session-journal-types'
+import {
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+} from '../../../../../shared/protocol-version'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
 

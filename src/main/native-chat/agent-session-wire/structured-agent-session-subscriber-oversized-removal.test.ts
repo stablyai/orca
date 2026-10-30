@@ -2,13 +2,23 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES, serializeRemoteRuntimePayload } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import {
+  REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
+  serializeRemoteRuntimePayload
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
-import { openTestJournalHostDatabase, insertTestJournalRow } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  insertTestJournalRow
+} from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
-import { fixture, SESSION, journals } from './structured-agent-session-subscriber-contract-test-fixture'
+import {
+  fixture,
+  SESSION,
+  journals
+} from './structured-agent-session-subscriber-contract-test-fixture'
 
 it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {
   const journalDir = join(fixture.root, 'oversized-removal-journal')

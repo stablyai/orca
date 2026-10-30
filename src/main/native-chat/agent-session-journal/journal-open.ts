@@ -56,7 +56,8 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
 }
 
 export function* restoreJournalPages(
-  database: () => Database.Database, sessionId: string
+  database: () => Database.Database,
+  sessionId: string
 ): Generator<void, JournalLoad | null> {
   const epoch = readJournalSessionEpoch(database(), sessionId)
   if (epoch === null) {
@@ -76,8 +77,10 @@ export function* restoreJournalPages(
     return foldJournalFromState(database(), empty)
   }
   if (journalCacheMatches(database(), sessionId, epoch, source)) {
-    const saved = yield* readJournalSavedStatePages(database, sessionId, epoch,
-      { rows: 32, bytes: 1 << 19 })
+    const saved = yield* readJournalSavedStatePages(database, sessionId, epoch, {
+      rows: 32,
+      bytes: 1 << 19
+    })
     if (typeof saved !== 'string' && saved.lastSequence === source.through) {
       // A paced read may have crossed an epoch publication. Never adopt a mixed generation.
       if (readJournalSessionEpoch(database(), sessionId) !== epoch) {
@@ -97,16 +100,23 @@ export function* restoreJournalPages(
   }
   const release = protectJournalOutcomeRead(database(), sessionId, epoch)
   try {
-    const state = yield* rebuildJournalOutcomePages(database, sessionId, epoch,
-      source.generation, source.through)
+    const state = yield* rebuildJournalOutcomePages(
+      database,
+      sessionId,
+      epoch,
+      source.generation,
+      source.through
+    )
     const current = journalOutcomeSource(database(), sessionId, epoch)
     if (current?.generation !== source.generation || current.through !== source.through) {
       return yield* restoreJournalPages(database, sessionId)
     }
     return { state, newer: null, damage: null, projectionThrough: 0 }
   } catch (error) {
-    if (readJournalSessionEpoch(database(), sessionId) !== epoch ||
-      (error instanceof AgentSessionJournalError && error.code === 'journal_read_only')) {
+    if (
+      readJournalSessionEpoch(database(), sessionId) !== epoch ||
+      (error instanceof AgentSessionJournalError && error.code === 'journal_read_only')
+    ) {
       return yield* restoreJournalPages(database, sessionId)
     }
     return { state: empty, newer: null, damage: { sequence: 1, cause: 'unparseable-row' } }

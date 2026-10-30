@@ -1,11 +1,16 @@
 import type { createFixture } from './journal-atomic-settlement-contract-test-fixture'
 import { expect, it } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE, type AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalSnapshot
+} from '../../../shared/agent-session-journal-types'
 import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'
 
-export function registerJournalAtomicSettlementOversizedTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalAtomicSettlementOversizedTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   it('uses an ordinary recovered tombstone when the settlement namespace exceeds the batch cap', async () => {
     const identity = { provider: 'orca' as const, clientMessageId: 'remove-item' }
     await fixture.journal.appendItem(

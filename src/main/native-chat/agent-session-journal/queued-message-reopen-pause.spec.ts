@@ -7,7 +7,9 @@ import type { AgentSessionJournal } from './journal-store'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 
-export function registerQueuedMessageReopenPauseTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerQueuedMessageReopenPauseTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   describe('which cards a pause holds', () => {
     it('only cards queued before the Stop event: one queued after it is a new instruction', async () => {
       let journal = await fixture.open()

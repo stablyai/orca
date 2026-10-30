@@ -6,8 +6,10 @@ import type { JournalHostDatabase } from '../../../../native-chat/agent-session-
 import { COORD } from './worker-start-card-contract-test-fixture'
 
 export function expectWorkerStartPopulation(input: {
-  journal: AgentSessionJournal; count: number; connection: JournalHostDatabase['db'];
-  facts: { dispatchId: string; workerAddress: string; task: string; name: string }[];
+  journal: AgentSessionJournal
+  count: number
+  connection: JournalHostDatabase['db']
+  facts: { dispatchId: string; workerAddress: string; task: string; name: string }[]
   before: AgentJournalSnapshot
 }): void {
   const { journal, facts, count, connection, before } = input
@@ -28,15 +30,16 @@ export function expectWorkerStartPopulation(input: {
     }))
   )
   expect(
-    connection
-      .prepare('SELECT COUNT(*) AS count FROM journal_rows WHERE session_id = ?')
-      .get(COORD)?.count
+    connection.prepare('SELECT COUNT(*) AS count FROM journal_rows WHERE session_id = ?').get(COORD)
+      ?.count
   ).toBe(before.cursor.sequence + count)
 }
 
 export function expectWorkerStartSourcePlans(
   queries: readonly (readonly [string])[],
-  prepareSource: ReturnType<ReturnType<typeof createOrchestrationRpcHarness>['setup']>['db']['db']['prepare']
+  prepareSource: ReturnType<
+    ReturnType<typeof createOrchestrationRpcHarness>['setup']
+  >['db']['db']['prepare']
 ): void {
   for (const [query] of queries.slice(0, 2)) {
     const plan = prepareSource(`EXPLAIN QUERY PLAN ${query}`)

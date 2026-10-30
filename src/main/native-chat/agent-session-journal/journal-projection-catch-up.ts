@@ -23,22 +23,34 @@ export class JournalProjectionCatchUp {
   private disposed = false
   private coverage = 0
 
-  constructor(private readonly database: JournalHostDatabase,
-    readonly sessionId: string, readonly epoch: string,
-    _pageRows?: number) {}
+  constructor(
+    private readonly database: JournalHostDatabase,
+    readonly sessionId: string,
+    readonly epoch: string,
+    _pageRows?: number
+  ) {}
 
-  get through(): number { return this.coverage }
+  get through(): number {
+    return this.coverage
+  }
 
   async load(pacing: JournalCatchUpPacing): Promise<'ready' | 'stopped' | 'parked'> {
     if (this.disposed || this.database.isClosed) {
       return 'stopped'
     }
     if (!this.owner) {
-      const source = pacing.work(() => journalOutcomeSource(this.database.db, this.sessionId, this.epoch))
+      const source = pacing.work(() =>
+        journalOutcomeSource(this.database.db, this.sessionId, this.epoch)
+      )
       if (pacing.work(() => sweepJournalOutcomePage(this.database))) {
         return 'ready'
       }
-      this.owner = ownJournalMaintenance(this.database.db, this.sessionId, this.epoch, source?.through ?? 0)
+      this.owner = ownJournalMaintenance(
+        this.database.db,
+        this.sessionId,
+        this.epoch,
+        source?.through ?? 0
+      )
       if (!this.owner) {
         return 'stopped'
       }

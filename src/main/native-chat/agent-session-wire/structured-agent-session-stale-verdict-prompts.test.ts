@@ -9,7 +9,13 @@ import { createTrackedJournalOpener } from '../agent-session-journal/journal-hos
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
-import { RUNNING_IDENTITY, THREAD, journalWith, promptItem, turnScopeOf } from './structured-agent-session-stale-verdict-contract-test-fixture'
+import {
+  RUNNING_IDENTITY,
+  THREAD,
+  journalWith,
+  promptItem,
+  turnScopeOf
+} from './structured-agent-session-stale-verdict-contract-test-fixture'
 
 it('cancels only prompts whose callbacks were lost with the prior owner', async () => {
   const pending = promptItem('pending', 1)
@@ -164,9 +170,7 @@ it('uses provider output after a renewal, excluding a later client message', asy
       state: 'interrupted',
       completedAt: 700
     })
-    expect(
-      items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
-    ).toEqual([
+    expect(items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))).toEqual([
       'The agent stopped while this response was in progress. You can continue in this conversation.'
     ])
   } finally {

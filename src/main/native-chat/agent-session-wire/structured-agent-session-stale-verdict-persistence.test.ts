@@ -4,11 +4,21 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { createTrackedJournalOpener, openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
-import { PROVEN, RUNNING_IDENTITY, THREAD, journalWith, lifecycleItem, turnScopeOf } from './structured-agent-session-stale-verdict-contract-test-fixture'
+import {
+  PROVEN,
+  RUNNING_IDENTITY,
+  THREAD,
+  journalWith,
+  lifecycleItem,
+  turnScopeOf
+} from './structured-agent-session-stale-verdict-contract-test-fixture'
 
 it('revises an unverifiable turn only from a proof naming its own owner, and only once', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
@@ -104,8 +114,7 @@ it('adds one row for a death however many attempts its settle takes to write', a
       })
     const turns = () =>
       journal.snapshot().items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
-    const statusRows = () =>
-      journal.snapshot().items.filter((item) => item.body.kind === 'status')
+    const statusRows = () => journal.snapshot().items.filter((item) => item.body.kind === 'status')
     const database = openTestJournalHostDatabase(root)
     const cursor = journal.cursor()
     database.db.exec(`CREATE TEMP TRIGGER reject_later_stale_settlement

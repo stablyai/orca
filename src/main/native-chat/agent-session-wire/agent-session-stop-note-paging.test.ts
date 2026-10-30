@@ -7,7 +7,16 @@ import { structuredAgentSessionStopNoteIdentity } from './structured-agent-sessi
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 
-import { fixture, note, noteId, ordinary, rows, scope, turn, unconfirmed } from './agent-session-stop-note-contract-test-fixture'
+import {
+  fixture,
+  note,
+  noteId,
+  ordinary,
+  rows,
+  scope,
+  turn,
+  unconfirmed
+} from './agent-session-stop-note-contract-test-fixture'
 
 it('shrinks the triggering row window without dropping the dependent note', async () => {
   await turn('running')
@@ -56,10 +65,14 @@ it('shrinks the triggering row window without dropping the dependent note', asyn
 it('refreshes at the exact tip using bounded frames and no durable writes', async () => {
   await turn('interrupted')
   for (let index = 0; index < 205; index += 1) {
-    await fixture.journal.appendItem(structuredAgentSessionStopNoteIdentity(`op-${index}`), unconfirmed, {
-      fence: 1,
-      turnScope: scope
-    })
+    await fixture.journal.appendItem(
+      structuredAgentSessionStopNoteIdentity(`op-${index}`),
+      unconfirmed,
+      {
+        fence: 1,
+        turnScope: scope
+      }
+    )
   }
   const stored = rows()
   const events: AgentSessionSubscribeEvent[] = []
@@ -95,10 +108,14 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
 it('refreshes a phone within its frames, in bounded pages', async () => {
   await turn('interrupted')
   for (let index = 0; index < 205; index += 1) {
-    await fixture.journal.appendItem(structuredAgentSessionStopNoteIdentity(`op-${index}`), unconfirmed, {
-      fence: 1,
-      turnScope: scope
-    })
+    await fixture.journal.appendItem(
+      structuredAgentSessionStopNoteIdentity(`op-${index}`),
+      unconfirmed,
+      {
+        fence: 1,
+        turnScope: scope
+      }
+    )
   }
   const events: AgentSessionSubscribeEvent[] = []
   new AgentSessionSubscribers().open({

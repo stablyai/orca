@@ -1,4 +1,3 @@
-
 import { mkdir, realpath, writeFile, rm, symlink, readFile } from 'node:fs/promises'
 vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
   const query = await import('../transcript-opencode-sqlite-query')
@@ -12,8 +11,14 @@ vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (or
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
-import { createTestParams, CREATE_TEST_CALLER as CALLER } from './structured-agent-session-create-test-fixture'
-import { HOST_TEST_SESSION as SESSION, HOST_TEST_THREAD as THREAD } from './structured-agent-session-host-test-data'
+import {
+  createTestParams,
+  CREATE_TEST_CALLER as CALLER
+} from './structured-agent-session-create-test-fixture'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD
+} from './structured-agent-session-host-test-data'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../agent-session-journal/adopted-directory-probe'
 import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
@@ -67,7 +72,9 @@ it.each([100, 1000])(
     })
     const probe = vi.spyOn(adoptedDirectoryProbes, 'matches')
     const publishTab = vi.fn(async () => {
-      expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain[0].handle.nativeId).toBe(THREAD)
+      expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain[0].handle.nativeId).toBe(
+        THREAD
+      )
     })
     const result = await fixture.rig.host.create(CALLER, params, { publishTab })
     expect(result).toMatchObject({
@@ -139,7 +146,10 @@ it.each([100, 1000])(
     await fixture.rig.host.flushAllStreamedEvents()
     await fixture.rig.restart()
     await rm(transcriptPath)
-    expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
     expect(probe).toHaveBeenCalledOnce()
   }
 )
@@ -201,7 +211,9 @@ it.each(['opencode', 'opencode2'] as const)(
   async (agent) => {
     const definition = structuredAgentRuntimeRegistration(agent)!.definition
     await fixture.rig.dispose()
-    fixture.rig = await createRestTestRig({ agents: structuredAgentsDeclaringNothing([definition]) })
+    fixture.rig = await createRestTestRig({
+      agents: structuredAgentsDeclaringNothing([definition])
+    })
     const physical = await realpath(fixture.rig.root)
     const registered = join(fixture.rig.root, 'registered')
     await symlink(physical, registered, process.platform === 'win32' ? 'junction' : 'dir')
@@ -220,7 +232,9 @@ it.each(['opencode', 'opencode2'] as const)(
       }
     })
     expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true })
-    expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain[0].handle.nativeId).toBe(THREAD)
+    expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain[0].handle.nativeId).toBe(
+      THREAD
+    )
     expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
   }
 )

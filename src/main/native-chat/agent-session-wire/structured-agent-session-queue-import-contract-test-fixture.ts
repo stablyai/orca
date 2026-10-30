@@ -1,13 +1,23 @@
 import { afterEach, beforeEach, expect } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE, type AgentJournalAnsweredTurnIdentity, type AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalAnsweredTurnIdentity,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import { openTestJournalHostDatabase, readTestQueueChanges } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  readTestQueueChanges
+} from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
-import { createQueuedMessageTestRig, type QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
+import {
+  createQueuedMessageTestRig,
+  type QueuedMessageTestRig
+} from './structured-agent-session-queued-message-rig.test-fixture'
 
 let rig: QueuedMessageTestRig
 
@@ -83,7 +93,13 @@ export async function handOff(
   )
 }
 
-export type Legacy = [id: string, state: string, text: string | null, consumedAs?: string, hold?: string]
+export type Legacy = [
+  id: string,
+  state: string,
+  text: string | null,
+  consumedAs?: string,
+  hold?: string
+]
 
 export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
   const insert = db().prepare(
@@ -116,8 +132,9 @@ export const legacyIds = (sessionId = SESSION) =>
     .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
 
 export function queueRows(sessionId = SESSION): string[] {
-  return readTestQueueChanges(db(), sessionId).map(({ messageId, op, returned }) =>
-    `${messageId}:${op}${returned ? '+refusal' : ''}`)
+  return readTestQueueChanges(db(), sessionId).map(
+    ({ messageId, op, returned }) => `${messageId}:${op}${returned ? '+refusal' : ''}`
+  )
 }
 
 export async function nothingSentTo(...cards: string[]): Promise<void> {
@@ -135,5 +152,10 @@ export const retainedHistoryCases = [
 ]
 
 export const fixture = {
-  get rig() { return rig }, set rig(value: typeof rig) { rig = value },
+  get rig() {
+    return rig
+  },
+  set rig(value: typeof rig) {
+    rig = value
+  }
 }

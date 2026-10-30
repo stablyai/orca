@@ -40,25 +40,43 @@ export function journalOutcomeSource(
   if (readJournalSessionEpoch(db, sessionId) !== epoch) {
     throw new AgentSessionJournalError('journal_row_rejected', 'the chat epoch changed')
   }
-  const source = db.prepare(`SELECT generation, format, through_seq FROM journal_outcome_epochs
-    WHERE session_id = ? AND epoch = ?`).get(sessionId, epoch)
-  const anchor = db.prepare(`SELECT row_json FROM journal_rows
-    WHERE session_id = ? AND epoch = ? AND seq = 1`).get(sessionId, epoch)
-  const founding: unknown = typeof anchor?.row_json === 'string' ? JSON.parse(anchor.row_json) : null
-  const marked = typeof founding === 'object' && founding !== null &&
-    'outcomeFormat' in founding
+  const source = db
+    .prepare(`SELECT generation, format, through_seq FROM journal_outcome_epochs
+    WHERE session_id = ? AND epoch = ?`)
+    .get(sessionId, epoch)
+  const anchor = db
+    .prepare(`SELECT row_json FROM journal_rows
+    WHERE session_id = ? AND epoch = ? AND seq = 1`)
+    .get(sessionId, epoch)
+  const founding: unknown =
+    typeof anchor?.row_json === 'string' ? JSON.parse(anchor.row_json) : null
+  const marked = typeof founding === 'object' && founding !== null && 'outcomeFormat' in founding
   if (!source && !marked) {
-    if (typeof founding === 'object' && founding !== null && 'v' in founding &&
-      typeof founding.v === 'number' && founding.v > AGENT_SESSION_JOURNAL_SCHEMA_VERSION) {
+    if (
+      typeof founding === 'object' &&
+      founding !== null &&
+      'v' in founding &&
+      typeof founding.v === 'number' &&
+      founding.v > AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+    ) {
       throw new AgentSessionJournalError('journal_read_only', 'the chat uses a newer row format')
     }
     return null
   }
-  if (!source || typeof source.generation !== 'string' ||
-    source.format !== JOURNAL_OUTCOME_FORMAT || typeof source.through_seq !== 'number' ||
-    !marked || !('v' in founding) || founding.v !== JOURNAL_OUTCOME_SENTINEL_VERSION ||
-    founding.outcomeFormat !== source.format) {
-    throw new AgentSessionJournalError('journal_read_only', 'the chat uses an unsupported outcome format')
+  if (
+    !source ||
+    typeof source.generation !== 'string' ||
+    source.format !== JOURNAL_OUTCOME_FORMAT ||
+    typeof source.through_seq !== 'number' ||
+    !marked ||
+    !('v' in founding) ||
+    founding.v !== JOURNAL_OUTCOME_SENTINEL_VERSION ||
+    founding.outcomeFormat !== source.format
+  ) {
+    throw new AgentSessionJournalError(
+      'journal_read_only',
+      'the chat uses an unsupported outcome format'
+    )
   }
   return { generation: source.generation, format: source.format, through: source.through_seq }
 }
@@ -70,8 +88,10 @@ export function publishJournalOutcomeSource(
   generation: string,
   through: number
 ): void {
-  const row = db.prepare(`SELECT row_json FROM journal_rows
-    WHERE session_id = ? AND epoch = ? AND seq = 1`).get(sessionId, epoch)
+  const row = db
+    .prepare(`SELECT row_json FROM journal_rows
+    WHERE session_id = ? AND epoch = ? AND seq = 1`)
+    .get(sessionId, epoch)
   if (typeof row?.row_json !== 'string') {
     throw new Error('missing founding journal row')
   }
@@ -80,13 +100,27 @@ export function publishJournalOutcomeSource(
     throw new Error('invalid founding journal row')
   }
   db.prepare(`UPDATE journal_rows SET row_json = ?
-    WHERE session_id = ? AND epoch = ? AND seq = 1`).run(JSON.stringify({
-      ...founding, v: JOURNAL_OUTCOME_SENTINEL_VERSION, outcomeFormat: JOURNAL_OUTCOME_FORMAT
-    }), sessionId, epoch)
-  db.prepare('INSERT OR IGNORE INTO journal_outcome_attempts VALUES (?, ?, ?)')
-    .run(sessionId, epoch, generation)
+    WHERE session_id = ? AND epoch = ? AND seq = 1`).run(
+    JSON.stringify({
+      ...founding,
+      v: JOURNAL_OUTCOME_SENTINEL_VERSION,
+      outcomeFormat: JOURNAL_OUTCOME_FORMAT
+    }),
+    sessionId,
+    epoch
+  )
+  db.prepare('INSERT OR IGNORE INTO journal_outcome_attempts VALUES (?, ?, ?)').run(
+    sessionId,
+    epoch,
+    generation
+  )
   db.prepare(`INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch,
-    generation = excluded.generation, format = excluded.format, through_seq = excluded.through_seq`)
-    .run(sessionId, epoch, generation, JOURNAL_OUTCOME_FORMAT, through)
+    generation = excluded.generation, format = excluded.format, through_seq = excluded.through_seq`).run(
+    sessionId,
+    epoch,
+    generation,
+    JOURNAL_OUTCOME_FORMAT,
+    through
+  )
 }

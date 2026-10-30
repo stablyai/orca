@@ -2,9 +2,18 @@ import '../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
-import { hostTestAttachParams, hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import {
+  hostTestAttachParams,
+  hostTestMessage
+} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { foundRestTestChat, REST_TEST_CALLER as CALLER, REST_TEST_SESSION as SESSION, REST_TEST_THREAD, restTestSend } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+import {
+  foundRestTestChat,
+  REST_TEST_CALLER as CALLER,
+  REST_TEST_SESSION as SESSION,
+  REST_TEST_THREAD,
+  restTestSend
+} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import type { RpcResponse } from '../core'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 
@@ -32,10 +41,7 @@ it('reads, subscribes and answers everything without starting an agent', async (
   })
   // Absent, never an empty list: the composer keeps its own menu.
   expect(commands).toMatchObject({ ok: true, result: {} })
-  expect(commands?.ok && 'result' in commands && commands.result).not.toHaveProperty(
-    'commands',
-    []
-  )
+  expect(commands?.ok && 'result' in commands && commands.result).not.toHaveProperty('commands', [])
   expect(outline).toMatchObject({ ok: true })
   expect(status).toMatchObject({ ok: true })
   expect(held).toMatchObject({ ok: true, result: { held: true } })
@@ -84,9 +90,7 @@ it('opens a closed conversation once, however many readers arrive together (P2-0
     ),
     call('agentSession.subscribe', { sessionId: SESSION })
   ])
-  const openedJournals = new Set(
-    await Promise.all(open.mock.results.map((result) => result.value))
-  )
+  const openedJournals = new Set(await Promise.all(open.mock.results.map((result) => result.value)))
   expect(openedJournals.size).toBe(1)
   expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
 })
@@ -211,10 +215,12 @@ it('logs a reader reconnecting to a journal that will not open once per failure'
 it('refuses a damaged journal as unloadable at subscribe and send, and keeps its rows (P2-03)', async () => {
   await foundRestTestChat(fixture.rig)
   await fixture.rig.host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(fixture.rig.root).db.prepare(
-    "UPDATE journal_outcomes SET value_json = '}{' WHERE session_id = ? AND seq = 2"
-  ).run(SESSION)
-  openTestJournalHostDatabase(fixture.rig.root).db.prepare('DELETE FROM journal_cache_stamp WHERE session_id = ?').run(SESSION)
+  openTestJournalHostDatabase(fixture.rig.root)
+    .db.prepare("UPDATE journal_outcomes SET value_json = '}{' WHERE session_id = ? AND seq = 2")
+    .run(SESSION)
+  openTestJournalHostDatabase(fixture.rig.root)
+    .db.prepare('DELETE FROM journal_cache_stamp WHERE session_id = ?')
+    .run(SESSION)
   await fixture.rig.restart()
   setStructuredAgentSessionHost(fixture.rig.host)
 
@@ -230,14 +236,18 @@ it('refuses a damaged journal as unloadable at subscribe and send, and keeps its
     }
   })
   const fence = fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence
-  expect(await fixture.rig.host.send(CALLER, restTestSend('after the damage', fence))).toMatchObject({
+  expect(
+    await fixture.rig.host.send(CALLER, restTestSend('after the damage', fence))
+  ).toMatchObject({
     ok: false,
     refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
   })
   expect(
-    openTestJournalHostDatabase(fixture.rig.root).db.prepare(
-      'SELECT value_json FROM journal_outcomes WHERE session_id = ? AND seq = 2 LIMIT 1'
-    ).get(SESSION)?.value_json
+    openTestJournalHostDatabase(fixture.rig.root)
+      .db.prepare(
+        'SELECT value_json FROM journal_outcomes WHERE session_id = ? AND seq = 2 LIMIT 1'
+      )
+      .get(SESSION)?.value_json
   ).toBe('}{')
 })
 

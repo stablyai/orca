@@ -11,9 +11,12 @@ import '../../../../native-chat/agent-session-wire/structured-agent-session-queu
 import { COORD } from './worker-start-card-contract-test-fixture'
 
 export async function verifyWorkerStartCardScenario(input: {
-  current: QueuedMessageTestRig; scenario: string; before: AgentJournalSnapshot;
-  task: string; federated: boolean;
-  db: ReturnType<ReturnType<typeof createOrchestrationRpcHarness>['setup']>['db'];
+  current: QueuedMessageTestRig
+  scenario: string
+  before: AgentJournalSnapshot
+  task: string
+  federated: boolean
+  db: ReturnType<ReturnType<typeof createOrchestrationRpcHarness>['setup']>['db']
   append: MockInstance<QueuedMessageTestRig['host']['appendAgentStart']>
 }): Promise<void> {
   const { current, scenario, before, task, federated, db, append } = input
@@ -62,9 +65,9 @@ export async function verifyWorkerStartCardScenario(input: {
     timestamp: card.observedAt,
     blocks: [{ type: 'text', text: task }]
   })
-  expect(
-    projectStructuredAgentSessionStatusSummary(snapshot.items, snapshot.submissions)
-  ).toEqual(projectStructuredAgentSessionStatusSummary(before.items, before.submissions))
+  expect(projectStructuredAgentSessionStatusSummary(snapshot.items, snapshot.submissions)).toEqual(
+    projectStructuredAgentSessionStatusSummary(before.items, before.submissions)
+  )
   // Full task survives removal of the orchestration rows it came from.
   db.resetAll()
   expect(

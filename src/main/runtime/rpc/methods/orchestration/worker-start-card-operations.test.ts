@@ -1,9 +1,15 @@
-import { expectWorkerStartPopulation, expectWorkerStartSourcePlans } from './worker-start-card-population.test-fixture'
+import {
+  expectWorkerStartPopulation,
+  expectWorkerStartSourcePlans
+} from './worker-start-card-population.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { createQueuedMessageTestRig, eventually } from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import {
+  createQueuedMessageTestRig,
+  eventually
+} from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session-journal-types'
 import { openTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionJournalProjections } from '../../../../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'
@@ -278,9 +284,11 @@ it.each([10, 100])(
     expect(scan).not.toHaveBeenCalled()
     expect(snapshot).toHaveBeenCalledTimes(1)
     expect(snapshotSources).toEqual(['status-projection'])
-    expect(journalQueries.mock.calls.filter(([query]) => /FROM journal_rows/.test(query) && !/seq = 1/.test(query))).toEqual(
-      []
-    )
+    expect(
+      journalQueries.mock.calls.filter(
+        ([query]) => /FROM journal_rows/.test(query) && !/seq = 1/.test(query)
+      )
+    ).toEqual([])
     expect(warn).not.toHaveBeenCalled()
     expectWorkerStartSourcePlans(sourceQueries.mock.calls, prepareSource)
     expectWorkerStartPopulation({ journal, facts, count, connection, before })

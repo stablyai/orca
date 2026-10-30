@@ -59,7 +59,9 @@ export type TrackedJournalOpener = {
   closeAll: () => Promise<void>
 }
 
-export function createTrackedJournalOpener(fixture: { legacyInputs?: boolean } = {}): TrackedJournalOpener {
+export function createTrackedJournalOpener(
+  fixture: { legacyInputs?: boolean } = {}
+): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
   return {
     open: async ({ stateDirectory, ...options }) => {
@@ -71,7 +73,9 @@ export function createTrackedJournalOpener(fixture: { legacyInputs?: boolean } =
         ...options,
         database: openTestJournalHostDatabase(stateDirectory)
       })
-      if (fixture.legacyInputs) { pinTestJournalInputMode(journal) }
+      if (fixture.legacyInputs) {
+        pinTestJournalInputMode(journal)
+      }
       journals.push(journal)
       return journal
     },
@@ -87,16 +91,29 @@ export function createTrackedJournalOpener(fixture: { legacyInputs?: boolean } =
 }
 
 /** Input-parser fixtures explicitly found an epoch in the shipped input format. */
-export function seedLegacyTestJournal(database: JournalHostDatabase, options: Omit<TestJournalOptions, 'stateDirectory'>): void {
-  if (database.readOnly || readJournalSessionEpoch(database.db, options.identity.sessionId) !== null) {
+export function seedLegacyTestJournal(
+  database: JournalHostDatabase,
+  options: Omit<TestJournalOptions, 'stateDirectory'>
+): void {
+  if (
+    database.readOnly ||
+    readJournalSessionEpoch(database.db, options.identity.sessionId) !== null
+  ) {
     return
   }
   const epoch = options.mintEpoch?.() ?? randomUUID()
   database.transaction((db) => {
     publishJournalSessionEpoch(db, options.identity, epoch)
-    insertTestJournalRow(db, options.identity.sessionId, { kind: 'epoch', v: journalRowSchemaVersion([]),
-      epoch, seq: 1, fence: 0, ts: options.now?.() ?? Date.now(), reason: 'session_created',
-      providerHandle: agentSessionJournalProviderHandle(options.identity) })
+    insertTestJournalRow(db, options.identity.sessionId, {
+      kind: 'epoch',
+      v: journalRowSchemaVersion([]),
+      epoch,
+      seq: 1,
+      fence: 0,
+      ts: options.now?.() ?? Date.now(),
+      reason: 'session_created',
+      providerHandle: agentSessionJournalProviderHandle(options.identity)
+    })
   })
 }
 
@@ -206,31 +223,44 @@ function invalidateEditedJournalPrefix(
 }
 
 /** Read current canonical contributions in commit order for persisted-outcome assertions. */
-export function readTestJournalOutcomes(db: Database.Database, sessionId: string): JournalOutcome[] {
+export function readTestJournalOutcomes(
+  db: Database.Database,
+  sessionId: string
+): JournalOutcome[] {
   const epoch = readJournalSessionEpoch(db, sessionId)
   const source = epoch && journalOutcomeSource(db, sessionId, epoch)
   if (!source) {
     return []
   }
-  return db.prepare(`SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes
+  return db
+    .prepare(`SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes
     WHERE session_id = ? AND epoch = ? AND generation = ? ORDER BY seq, field, entry_key`)
-    .all(sessionId, epoch, source.generation).map(decodeJournalOutcome)
+    .all(sessionId, epoch, source.generation)
+    .map(decodeJournalOutcome)
 }
 
-export function readTestQueueChanges(db: Database.Database, sessionId: string): {
-  messageId: string; op: string; returned: boolean
+export function readTestQueueChanges(
+  db: Database.Database,
+  sessionId: string
+): {
+  messageId: string
+  op: string
+  returned: boolean
 }[] {
   const seen = new Set<string>()
   return readTestJournalOutcomes(db, sessionId).flatMap((value) => {
-    if (value.field !== 'queue.cards') { return [] }
+    if (value.field !== 'queue.cards') {
+      return []
+    }
     if (value.deleted) {
       return [{ messageId: String(JSON.parse(value.key)), op: 'withdrawn', returned: false }]
     }
     const [messageId, card] = fields.queue.shape.cards.element.parse(JSON.parse(value.json))
     const first = !seen.has(messageId)
     seen.add(messageId)
-    return [{ messageId, op: first ? 'queued' : card.state,
-      returned: first && card.state === 'returned' }]
+    return [
+      { messageId, op: first ? 'queued' : card.state, returned: first && card.state === 'returned' }
+    ]
   })
 }
 

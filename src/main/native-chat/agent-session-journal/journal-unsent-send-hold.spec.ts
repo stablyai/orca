@@ -3,7 +3,7 @@ import { registerJournalUnsentSendHoldRecoveryTests } from './journal-unsent-sen
 import { registerJournalUnsentSendHoldQueueTests } from './journal-unsent-send-hold-queue.spec'
 
 export function registerJournalUnsentSendHoldTests(): void {
-    const fixture = createFixture()
-    registerJournalUnsentSendHoldRecoveryTests(fixture)
-    registerJournalUnsentSendHoldQueueTests(fixture)
+  const fixture = createFixture()
+  registerJournalUnsentSendHoldRecoveryTests(fixture)
+  registerJournalUnsentSendHoldQueueTests(fixture)
 }

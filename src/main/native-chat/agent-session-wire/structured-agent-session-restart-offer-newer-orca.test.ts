@@ -31,7 +31,12 @@ function newerOrcaRow(root: string, sessionId: string = SESSION): void {
   }
   const anchor = JSON.parse(first.rowJson)
   db.prepare('UPDATE journal_outcome_epochs SET format = 99 WHERE session_id = ?').run(sessionId)
-  updateTestJournalRowJson(db, sessionId, 1, JSON.stringify({ ...anchor, v: 99, outcomeFormat: 99 }))
+  updateTestJournalRowJson(
+    db,
+    sessionId,
+    1,
+    JSON.stringify({ ...anchor, v: 99, outcomeFormat: 99 })
+  )
 }
 
 function offersFile(root: string): Promise<Buffer> {

@@ -244,8 +244,9 @@ describe('a waiting card when the generation ahead of it ends', () => {
       expect(journal.queuedMessages.get(card?.messageId ?? '')?.state).toBe('dispatched')
     )
     // Generation-end publication alone must wake delivery without an intervening journal write.
-    const first = readTestJournalOutcomes(database.db, SESSION).find((row) =>
-      row.seq > before && row.field === 'submissions')
+    const first = readTestJournalOutcomes(database.db, SESSION).find(
+      (row) => row.seq > before && row.field === 'submissions'
+    )
     expect(JSON.parse(first?.json ?? '[null, {}]')[1]).toMatchObject({
       queuedMessageId: card?.messageId
     })

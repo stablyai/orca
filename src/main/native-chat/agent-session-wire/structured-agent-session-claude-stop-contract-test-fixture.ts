@@ -7,20 +7,35 @@ import { AgentHookServer } from '../../agent-hooks/server'
 import { runClaudeControl } from '../../claude/claude-agent-sdk-control-requests'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
-import { fakeClaude, PROVIDER_SESSION_ID } from '../../claude/claude-structured-session-test-support'
+import {
+  fakeClaude,
+  PROVIDER_SESSION_ID
+} from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { closeTestJournalHostDatabases, openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { HOST_TEST_NOW as NOW, HOST_TEST_SESSION as SESSION, hostTestAttachParams, resetHostTestOperationIds } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  hostTestAttachParams,
+  resetHostTestOperationIds
+} from './structured-agent-session-host-test-data'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 export const CALLER = { callerKey: 'client-1' }
 // Claude Code 2.1.280 system/init capabilities.
 
-export const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
+export const CAPABILITIES = [
+  'interrupt_receipt_v1',
+  'interrupt_cancel_queued_v1',
+  'msg_lifecycle_v1'
+]
 
 let root: string
 
@@ -129,7 +144,6 @@ afterEach(async () => {
 
 export const laneDrained = (): Promise<void> => host['tasks'].serialize(SESSION, async () => {})
 
-
 export const INTERRUPTED_RESULT = {
   type: 'result',
   subtype: 'error_during_execution',
@@ -158,14 +172,64 @@ export const BRANCH_QUESTION = {
   ]
 }
 export const fixture = {
-  get adapter() { return adapter }, set adapter(value: typeof adapter) { adapter = value },
-  get claude() { return claude }, set claude(value: typeof claude) { claude = value },
-  get events() { return events }, set events(value: typeof events) { events = value },
-  get host() { return host }, set host(value: typeof host) { host = value },
-  get logs() { return logs }, set logs(value: typeof logs) { logs = value },
-  get queued() { return queued }, set queued(value: typeof queued) { queued = value },
-  get root() { return root }, set root(value: typeof root) { root = value },
-  get server() { return server }, set server(value: typeof server) { server = value },
-  get statusSubject() { return statusSubject }, set statusSubject(value: typeof statusSubject) { statusSubject = value },
-  get store() { return store }, set store(value: typeof store) { store = value },
+  get adapter() {
+    return adapter
+  },
+  set adapter(value: typeof adapter) {
+    adapter = value
+  },
+  get claude() {
+    return claude
+  },
+  set claude(value: typeof claude) {
+    claude = value
+  },
+  get events() {
+    return events
+  },
+  set events(value: typeof events) {
+    events = value
+  },
+  get host() {
+    return host
+  },
+  set host(value: typeof host) {
+    host = value
+  },
+  get logs() {
+    return logs
+  },
+  set logs(value: typeof logs) {
+    logs = value
+  },
+  get queued() {
+    return queued
+  },
+  set queued(value: typeof queued) {
+    queued = value
+  },
+  get root() {
+    return root
+  },
+  set root(value: typeof root) {
+    root = value
+  },
+  get server() {
+    return server
+  },
+  set server(value: typeof server) {
+    server = value
+  },
+  get statusSubject() {
+    return statusSubject
+  },
+  set statusSubject(value: typeof statusSubject) {
+    statusSubject = value
+  },
+  get store() {
+    return store
+  },
+  set store(value: typeof store) {
+    store = value
+  }
 }

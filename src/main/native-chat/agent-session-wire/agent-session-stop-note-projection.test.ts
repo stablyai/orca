@@ -2,7 +2,10 @@ import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE, type AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session-journal-types'
 import { restoreJournal } from '../agent-session-journal/journal-open'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'
@@ -10,7 +13,20 @@ import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 
-import { fixture, note, noteId, noteIdentity, ordinary, readNote, rows, scope, turn, turnIdentity, turnItemId, unconfirmed } from './agent-session-stop-note-contract-test-fixture'
+import {
+  fixture,
+  note,
+  noteId,
+  noteIdentity,
+  ordinary,
+  readNote,
+  rows,
+  scope,
+  turn,
+  turnIdentity,
+  turnItemId,
+  unconfirmed
+} from './agent-session-stop-note-contract-test-fixture'
 
 it.each([false, true])(
   'derives an interrupted turn note without changing any stored row (legacy=%s)',
@@ -29,7 +45,9 @@ it.each([false, true])(
     expect(readNote()).toBe(projected)
     expect(fixture.journal.itemBody(noteId)).toBe(raw)
     expect(rows()).toEqual(stored)
-    expect(stored.filter((row) => row.kind === 'outcome' && row.itemIds.includes(noteId))).toHaveLength(1)
+    expect(
+      stored.filter((row) => row.kind === 'outcome' && row.itemIds.includes(noteId))
+    ).toHaveLength(1)
     const replay = restoreJournal(openTestJournalHostDatabase(fixture.root).db, 'session-1')!.state
     expect(replay.items.get(noteId)?.body).toEqual(unconfirmed)
     expect(renderJournalState(replay).items.find((item) => item.itemId === noteId)?.body).toEqual(
@@ -82,7 +100,10 @@ it('leaves unrelated failures and non-Stop notes unchanged', async () => {
 
 it('derives the op-keyed note after the retained association write re-keys it onto the turn', async () => {
   const op = structuredAgentSessionStopNoteIdentity('operation-1')
-  await fixture.journal.appendItem(op, unconfirmed, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+  await fixture.journal.appendItem(op, unconfirmed, {
+    fence: 1,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
   await turn('running')
   const held = fixture.journal.cursor()
   await fixture.journal.appendLifecycleBatch({

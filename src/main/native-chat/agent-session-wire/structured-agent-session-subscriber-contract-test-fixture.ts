@@ -20,5 +20,10 @@ afterEach(async () => {
 })
 
 export const fixture = {
-  get root() { return root }, set root(value: typeof root) { root = value },
+  get root() {
+    return root
+  },
+  set root(value: typeof root) {
+    root = value
+  }
 }

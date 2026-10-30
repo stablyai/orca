@@ -5,11 +5,24 @@ import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
-import { claudeFrame as frame, claudeWasSent as wrote, type FakeConnection } from '../../claude/claude-structured-session-test-support'
+import {
+  claudeFrame as frame,
+  claudeWasSent as wrote,
+  type FakeConnection
+} from '../../claude/claude-structured-session-test-support'
 import { invokeCanUseTool } from '../../claude/claude-can-use-tool-test-support'
-import { HOST_TEST_SESSION as SESSION, hostTestMessage, hostTestOperationId } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestMessage,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data'
 
-import { fixture, CALLER, CAPABILITIES, laneDrained } from './structured-agent-session-claude-stop-contract-test-fixture'
+import {
+  fixture,
+  CALLER,
+  CAPABILITIES,
+  laneDrained
+} from './structured-agent-session-claude-stop-contract-test-fixture'
 export function eventually<T>(assertion: () => T | Promise<T>): Promise<T> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
@@ -50,7 +63,10 @@ export async function dispatch(clientMessageId: string) {
   return { state: submission?.dispatchState, reason: submission?.reason }
 }
 
-export async function openTurn(connection: FakeConnection, text = 'Write a long reply.'): Promise<string> {
+export async function openTurn(
+  connection: FakeConnection,
+  text = 'Write a long reply.'
+): Promise<string> {
   const clientMessageId = await send(text)
   await eventually(() =>
     expect(connection.sent.some((message) => JSON.stringify(message).includes(text))).toBe(true)
@@ -71,14 +87,19 @@ export async function openTurn(connection: FakeConnection, text = 'Write a long 
     message: { id: 'msg-1', role: 'assistant', content: [{ type: 'text', text: 'Working on' }] }
   })
   await eventually(async () => expect((await dispatch(clientMessageId)).state).toBe('accepted'))
-  const turnId = activeStructuredAgentSessionTurnId((await fixture.host.journalSnapshot(SESSION)).items)
+  const turnId = activeStructuredAgentSessionTurnId(
+    (await fixture.host.journalSnapshot(SESSION)).items
+  )
   expect(turnId).not.toBeNull()
   return turnId!
 }
 
 export function stop(turnId?: string) {
   const fields = turnId === undefined ? {} : { turnId }
-  return fixture.host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
+  return fixture.host.cancel(CALLER, {
+    envelope: envelope('agentSession.cancel', fields),
+    ...fields
+  })
 }
 
 /** Drain through Stop’s queued second step. */
@@ -121,7 +142,9 @@ export async function sendUnechoed(connection: FakeConnection): Promise<string> 
 }
 
 export function childRecords() {
-  return fixture.statusSubject ? fixture.server.getStructuredChildWorkViews(fixture.statusSubject) : []
+  return fixture.statusSubject
+    ? fixture.server.getStructuredChildWorkViews(fixture.statusSubject)
+    : []
 }
 
 export async function agentStatus() {
@@ -167,7 +190,10 @@ export async function ask(
 
 export function cancelCard(turnId: string, prompt: { itemId: string; expectedRevision: number }) {
   const fields = { turnId, prompt }
-  return fixture.host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
+  return fixture.host.cancel(CALLER, {
+    envelope: envelope('agentSession.cancel', fields),
+    ...fields
+  })
 }
 
 export async function cardResolution(itemId: string): Promise<unknown> {

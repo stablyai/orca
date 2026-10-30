@@ -3,7 +3,11 @@ vi.mock('node:fs/promises', { spy: true })
 import { readFile, rm } from 'node:fs/promises'
 import { piRpcDialogPresentation } from '../../../pi/rpc-extension-dialogs'
 import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session-question-answer'
-import type { AgentJournalItemBody, AgentJournalResolution, AgentJournalQuestionItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalResolution,
+  AgentJournalQuestionItem
+} from '../../../../shared/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -12,7 +16,12 @@ import { REST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session
 import * as fileOperations from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
 
-import { fixture, actualFiles, call, restingChat } from './structured-agent-session-rest-contract-test-fixture'
+import {
+  fixture,
+  actualFiles,
+  call,
+  restingChat
+} from './structured-agent-session-rest-contract-test-fixture'
 
 it('hands off the reduced saved chat after clear and rewind, budgets only the starter and overwrites its file', async () => {
   await restingChat()
@@ -267,9 +276,11 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
       }
     ])
     expect(await readFile(path, 'utf8')).toContain('LATER_SAVED_MARKER')
-    expect(await fixture.rig.host.continuationContext({ ...params, workspaceId: 'other' })).toEqual({
-      status: 'superseded'
-    })
+    expect(await fixture.rig.host.continuationContext({ ...params, workspaceId: 'other' })).toEqual(
+      {
+        status: 'superseded'
+      }
+    )
     expect(
       await fixture.rig.host.continuationContext({
         ...params,

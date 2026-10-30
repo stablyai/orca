@@ -1,6 +1,9 @@
 import type { createFixture } from './journal-atomic-settlement-contract-test-fixture'
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE, type AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalSnapshot
+} from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
 import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
@@ -8,7 +11,9 @@ import { openTestJournalHostDatabase } from './journal-host-database-test-suppor
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'
 
-export function registerJournalAtomicSettlementRollbackTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalAtomicSettlementRollbackTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   it.each(['item', 'lifecycle-batch'] as const)(
     'rolls back a later %s rejection, publishes nothing, then retries exactly once',
     async (kind) => {
@@ -40,21 +45,25 @@ export function registerJournalAtomicSettlementRollbackTests(fixture: ReturnType
       const sawEarlierInserts: number[] = []
       const transaction = database.transaction.bind(database)
       vi.spyOn(database, 'transaction').mockImplementation((run, streamed, committed) =>
-        transaction((db) => {
-          try {
-            const result = run(db)
-            expect(fixture.journal.snapshot()).toEqual(before)
-            expect(published).toEqual([])
-            expect(frames).toEqual([])
-            return result
-          } catch (error) {
-            sawEarlierInserts.push(fixture.rows().length - diskBefore.length)
-            expect(fixture.journal.snapshot()).toEqual(before)
-            expect(published).toEqual([])
-            expect(frames).toEqual([])
-            throw error
-          }
-        }, streamed, committed)
+        transaction(
+          (db) => {
+            try {
+              const result = run(db)
+              expect(fixture.journal.snapshot()).toEqual(before)
+              expect(published).toEqual([])
+              expect(frames).toEqual([])
+              return result
+            } catch (error) {
+              sawEarlierInserts.push(fixture.rows().length - diskBefore.length)
+              expect(fixture.journal.snapshot()).toEqual(before)
+              expect(published).toEqual([])
+              expect(frames).toEqual([])
+              throw error
+            }
+          },
+          streamed,
+          committed
+        )
       )
       database.db.exec(`CREATE TEMP TRIGGER reject_later_settlement BEFORE INSERT ON journal_rows
       WHEN NEW.session_id = '${fixture.SESSION}' AND json_extract(NEW.row_json, '$.recovered') = 1
@@ -84,13 +93,17 @@ export function registerJournalAtomicSettlementRollbackTests(fixture: ReturnType
 
       database.db.exec('DROP TRIGGER reject_later_settlement')
       vi.spyOn(database, 'transaction').mockImplementation((run, streamed, committed) =>
-        transaction((db) => {
-          const result = run(db)
-          expect(fixture.journal.snapshot()).toEqual(before)
-          expect(published).toEqual([])
-          expect(frames).toEqual([])
-          return result
-        }, streamed, committed)
+        transaction(
+          (db) => {
+            const result = run(db)
+            expect(fixture.journal.snapshot()).toEqual(before)
+            expect(published).toEqual([])
+            expect(frames).toEqual([])
+            return result
+          },
+          streamed,
+          committed
+        )
       )
       expect(await fixture.settle()).toMatchObject({ ok: true })
       vi.restoreAllMocks()
@@ -173,7 +186,8 @@ export function registerJournalAtomicSettlementRollbackTests(fixture: ReturnType
     const settled = fixture.journal.snapshot()
     expect(fixture.journal.cursor().sequence).toBe(before.sequence + 2)
     expect(
-      fixture.rows()
+      fixture
+        .rows()
         .slice(-2)
         .map((row) => row.kind)
     ).toEqual(['item', 'item'])
@@ -181,14 +195,13 @@ export function registerJournalAtomicSettlementRollbackTests(fixture: ReturnType
       settled.items.filter((item) => item.body.kind === 'tool-call').map((item) => item.body)
     ).toEqual(mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : [])))
     expect(
-      fixture.rows()
+      fixture
+        .rows()
         .slice(-2)
         .map((row) => row.ts)
     ).toEqual([1, 2])
     expect(
-      settled.items
-        .filter((item) => item.body.kind === 'tool-call')
-        .map((item) => item.observedAt)
+      settled.items.filter((item) => item.body.kind === 'tool-call').map((item) => item.observedAt)
     ).toEqual(calls.map((item) => item.observedAt))
     expect(published).toEqual([settled])
     await fixture.journal.appendLifecycleBatch(input)

@@ -5,7 +5,11 @@ import { afterEach, beforeEach } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE, type AgentJournalItemBody, type AgentJournalTurnLifecycle } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
+  type AgentJournalTurnLifecycle
+} from '../../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -83,6 +87,16 @@ export function rows() {
 }
 
 export const fixture = {
-  get journal() { return journal }, set journal(value: typeof journal) { journal = value },
-  get root() { return root }, set root(value: typeof root) { root = value },
+  get journal() {
+    return journal
+  },
+  set journal(value: typeof journal) {
+    journal = value
+  },
+  get root() {
+    return root
+  },
+  set root(value: typeof root) {
+    root = value
+  }
 }

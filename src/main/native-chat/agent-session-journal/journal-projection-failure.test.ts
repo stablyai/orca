@@ -4,15 +4,25 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { closeTestJournalHostDatabases, openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import { encodeJournalState } from './journal-state-codec'
 import { JournalStopMarks } from './journal-stop-marks'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
-import { projectionBase as base, projectionEpoch as epoch, projectionEpochRow,
-  projectionSessionId as sessionId, projectionWriter, seedOutcomeRows,
-  finishCatchUp, expectProjectionMatches } from './journal-projection-test-support'
+import {
+  projectionBase as base,
+  projectionEpoch as epoch,
+  projectionEpochRow,
+  projectionSessionId as sessionId,
+  projectionWriter,
+  seedOutcomeRows,
+  finishCatchUp,
+  expectProjectionMatches
+} from './journal-projection-test-support'
 
 let root: string
 let database: JournalHostDatabase
@@ -32,24 +42,43 @@ afterEach(async () => {
 })
 
 it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, recovery, outer-abort or COMMIT failure', async () => {
-  const user: AgentJournalMessageItem = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue' }] }
-  const state = seedOutcomeRows(database, [projectionEpochRow, {
-    ...base(2), kind: 'tombstone', itemId: 'stop', revision: 1,
-    stopEvent: { reason: 'user-stop', at: 1_002 }
-  }])
+  const user: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'Continue' }]
+  }
+  const state = seedOutcomeRows(database, [
+    projectionEpochRow,
+    {
+      ...base(2),
+      kind: 'tombstone',
+      itemId: 'stop',
+      revision: 1,
+      stopEvent: { reason: 'user-stop', at: 1_002 }
+    }
+  ])
   rig = projectionWriter(database, state)
   const writer = rig.writer
   const stops = new JournalStopMarks({ state: rig.state })
   const settle = stops.beginSettle(true)
-  const send = (id: string) => (seq: number, ts: number): JournalRow => ({
-    ...base(seq), ts, kind: 'submission', clientMessageId: id, body: user,
-    providerHandle: { kind: 'codex', threadId: 'thread-1' },
-    payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, user)
-  })
+  const send =
+    (id: string) =>
+    (seq: number, ts: number): JournalRow => ({
+      ...base(seq),
+      ts,
+      kind: 'submission',
+      clientMessageId: id,
+      body: user,
+      providerHandle: { kind: 'codex', threadId: 'thread-1' },
+      payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, user)
+    })
   database.db.exec('CREATE TABLE test_receipts (seq INTEGER)')
-  const receipt = { write: (db: JournalHostDatabase['db'], row?: JournalRow) => {
-    db.prepare('INSERT INTO test_receipts VALUES (?)').run(row?.seq ?? 0)
-  }, committed: vi.fn() }
+  const receipt = {
+    write: (db: JournalHostDatabase['db'], row?: JournalRow) => {
+      db.prepare('INSERT INTO test_receipts VALUES (?)').run(row?.seq ?? 0)
+    },
+    committed: vi.fn()
+  }
   database.db.exec(`CREATE TRIGGER cache_failure BEFORE INSERT ON journal_state
     BEGIN SELECT RAISE(ABORT, 'cache failure'); END`)
   await expect(writer.enqueue(send('preserved'), receipt)).resolves.toMatchObject({ seq: 3 })
@@ -63,9 +92,18 @@ it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, 
   const saved = encodeJournalState(rig.state())
   const live = rig.state()
   const scenarios = [
-    ['outcome', `CREATE TRIGGER failure BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'failure'); END`],
-    ['receipt', `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ABORT, 'failure'); END`],
-    ['outer', `CREATE TRIGGER failure BEFORE INSERT ON journal_state BEGIN SELECT RAISE(ROLLBACK, 'failure'); END`]
+    [
+      'outcome',
+      `CREATE TRIGGER failure BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'failure'); END`
+    ],
+    [
+      'receipt',
+      `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ABORT, 'failure'); END`
+    ],
+    [
+      'outer',
+      `CREATE TRIGGER failure BEFORE INSERT ON journal_state BEGIN SELECT RAISE(ROLLBACK, 'failure'); END`
+    ]
   ] as const
   for (const [name, sql] of scenarios) {
     database.db.exec(sql)
@@ -84,12 +122,16 @@ it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, 
         BEGIN SELECT RAISE(ABORT, 'cache failure'); END`)
     }
     const spy = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
-      if (sql === broken) { throw new Error('injected boundary failure') }
+      if (sql === broken) {
+        throw new Error('injected boundary failure')
+      }
       exec(sql)
     })
     await expect(writer.enqueue(send(broken), receipt)).rejects.toThrow('injected boundary failure')
     spy.mockRestore()
-    if (broken !== 'COMMIT') { database.db.exec('DROP TRIGGER failure') }
+    if (broken !== 'COMMIT') {
+      database.db.exec('DROP TRIGGER failure')
+    }
     expect(rig.state()).toBe(live)
     expect(encodeJournalState(live)).toEqual(saved)
     expect(stops.latest()?.settle).toBe(settle)
@@ -99,15 +141,29 @@ it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, 
   }
   const first = rig.state().lastSequence + 1
   await writer.enqueueRows(() => [
-    (seq, ts) => ({ ...base(seq), ts, kind: 'queue', messageId: 'frozen',
-      change: { op: 'queued', body: user, position: 1, queuedAt: { epoch, sequence: seq } } }),
-    (seq, ts) => ({ ...base(seq), ts, kind: 'queue', messageId: 'frozen',
-      change: { op: 'held', holdReason: 'edited' } })
+    (seq, ts) => ({
+      ...base(seq),
+      ts,
+      kind: 'queue',
+      messageId: 'frozen',
+      change: { op: 'queued', body: user, position: 1, queuedAt: { epoch, sequence: seq } }
+    }),
+    (seq, ts) => ({
+      ...base(seq),
+      ts,
+      kind: 'queue',
+      messageId: 'frozen',
+      change: { op: 'held', holdReason: 'edited' }
+    })
   ])
-  const contributions = database.db.prepare(`SELECT seq, value_json FROM journal_outcomes
-    WHERE field = 'queue.cards' AND seq >= ? ORDER BY seq`).all(first)
-  expect(contributions.map((entry) => typeof entry.value_json === 'string'
-    ? JSON.parse(entry.value_json)[1].holdReason : undefined)).toEqual([null, 'edited'])
+  const contributions = database.db
+    .prepare(`SELECT seq, value_json FROM journal_outcomes
+    WHERE field = 'queue.cards' AND seq >= ? ORDER BY seq`)
+    .all(first)
+  expect(
+    contributions.map((entry) =>
+      typeof entry.value_json === 'string' ? JSON.parse(entry.value_json)[1].holdReason : undefined
+    )
+  ).toEqual([null, 'edited'])
   expectProjectionMatches(database, rig.state())
-
 })

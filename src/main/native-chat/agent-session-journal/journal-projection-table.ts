@@ -24,7 +24,10 @@ export function ensureJournalSavedStateTables(db: Database.Database): void {
   CREATE INDEX IF NOT EXISTS journal_entries_order ON journal_entries (session_id, epoch, field, ordinal)`)
 }
 
-export function writeJournalProjectionScalars(db: Database.Database, state: JournalReducerState): void {
+export function writeJournalProjectionScalars(
+  db: Database.Database,
+  state: JournalReducerState
+): void {
   db.prepare(`INSERT INTO journal_state (session_id, epoch, through_seq, version, state_json)
     VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET
     epoch = excluded.epoch, through_seq = excluded.through_seq,
@@ -39,7 +42,12 @@ export function writeJournalProjectionScalars(db: Database.Database, state: Jour
 
 /** Epoch publishers call this inside their row/epoch transaction. */
 export function clearJournalSavedState(db: Database.Database, sessionId: string): void {
-  for (const table of ['journal_items', 'journal_entries', 'journal_state', 'journal_cache_stamp']) {
+  for (const table of [
+    'journal_items',
+    'journal_entries',
+    'journal_state',
+    'journal_cache_stamp'
+  ]) {
     db.prepare(`DELETE FROM ${table} WHERE session_id = ?`).run(sessionId)
   }
 }

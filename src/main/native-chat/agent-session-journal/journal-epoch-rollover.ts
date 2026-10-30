@@ -53,22 +53,30 @@ export function publishNewEpoch(input: {
     }
   }
   state.oldestSequence = 1
-  input.database.transaction((db) => {
-    const retired = readJournalSessionEpoch(db, sessionId)
-    if (retired !== null) {
-      journalOutcomeSource(db, sessionId, retired)
+  input.database.transaction(
+    (db) => {
+      const retired = readJournalSessionEpoch(db, sessionId)
+      if (retired !== null) {
+        journalOutcomeSource(db, sessionId, retired)
+      }
+      clearJournalSavedState(db, sessionId)
+      if (retired !== null) {
+        deleteJournalEpochRows(db, sessionId, retired)
+      }
+      input.queue.receipt.write(db)
+      publishJournalSessionEpoch(db, input.identity, input.epoch)
+      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
+    },
+    false,
+    (publication) => {
+      input.onPublished({
+        state: publication.adopt(),
+        newer: null,
+        damage: null,
+        projectionThrough: publication.through
+      })
     }
-    clearJournalSavedState(db, sessionId)
-    if (retired !== null) {
-      deleteJournalEpochRows(db, sessionId, retired)
-    }
-    input.queue.receipt.write(db)
-    publishJournalSessionEpoch(db, input.identity, input.epoch)
-    return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
-  }, false, (publication) => {
-    input.onPublished({ state: publication.adopt(), newer: null, damage: null,
-      projectionThrough: publication.through })
-  })
+  )
 
   input.queue.receipt.committed()
 }

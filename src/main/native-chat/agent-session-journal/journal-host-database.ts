@@ -60,7 +60,11 @@ export class JournalHostDatabase {
   }
 
   /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */
-  transaction<T>(run: (db: Database.Database) => T, streamed = false, committed?: (result: T) => void): T {
+  transaction<T>(
+    run: (db: Database.Database) => T,
+    streamed = false,
+    committed?: (result: T) => void
+  ): T {
     const db = this.db
     if (!streamed) {
       const result = runJournalTransaction(db, run, () => {

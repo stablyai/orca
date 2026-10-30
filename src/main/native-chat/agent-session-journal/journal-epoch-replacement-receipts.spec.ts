@@ -10,14 +10,20 @@ import { markUnclaimedUploadForSweep } from '../agent-session-attachments/agent-
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
 
-export function registerJournalEpochReplacementReceiptsTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalEpochReplacementReceiptsTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   describe('journal epoch replacement', () => {
     it('publishes one observable replacement', () => {
       const published: JournalLoad[] = []
 
       fixture.replace({
         items: [
-          { identity: fixture.item(1), body: { kind: 'status', text: 'republished' }, ownerFence: 1 }
+          {
+            identity: fixture.item(1),
+            body: { kind: 'status', text: 'republished' },
+            ownerFence: 1
+          }
         ],
         onPublished: (loaded) => published.push(loaded)
       })
@@ -34,13 +40,23 @@ export function registerJournalEpochReplacementReceiptsTests(fixture: ReturnType
         'a replace',
         (journal: AgentSessionJournal) =>
           journal.replaceEpochItems('legacy_import', 1, [
-            { identity: fixture.item(9), body: { kind: 'status', text: 'republished' }, ownerFence: 1 }
+            {
+              identity: fixture.item(9),
+              body: { kind: 'status', text: 'republished' },
+              ownerFence: 1
+            }
           ])
       ],
       ['a rollover', (journal: AgentSessionJournal) => journal.rollEpoch('handle_forked', 1)]
     ])('discards every superseded row in the same transaction as %s', async (_name, retire) => {
-      const journal = await fixture.journals.open({ identity: fixture.IDENTITY, stateDirectory: fixture.root })
-      const peer = await fixture.journals.open({ identity: fixture.PEER, stateDirectory: fixture.root })
+      const journal = await fixture.journals.open({
+        identity: fixture.IDENTITY,
+        stateDirectory: fixture.root
+      })
+      const peer = await fixture.journals.open({
+        identity: fixture.PEER,
+        stateDirectory: fixture.root
+      })
       const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       await journal.appendItem(fixture.item(1), { kind: 'status', text: 'old' }, scope)
       await journal.appendItem(fixture.item(2), { kind: 'status', text: 'older' }, scope)
@@ -65,7 +81,10 @@ export function registerJournalEpochReplacementReceiptsTests(fixture: ReturnType
     'claims each actual carried card once through %s at Q=%i, with no prior claim and after reopen',
     async (mode, count) => {
       const files = await fixture.legacyInputs(count)
-      const journal = await fixture.journals.open({ identity: fixture.IDENTITY, stateDirectory: fixture.root })
+      const journal = await fixture.journals.open({
+        identity: fixture.IDENTITY,
+        stateDirectory: fixture.root
+      })
       const { db } = fixture.database
       expect(
         db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()
@@ -149,7 +168,10 @@ export function registerJournalEpochReplacementReceiptsTests(fixture: ReturnType
         )
       }
       await fixture.journals.closeAll()
-      const reopened = await fixture.journals.open({ identity: fixture.IDENTITY, stateDirectory: fixture.root })
+      const reopened = await fixture.journals.open({
+        identity: fixture.IDENTITY,
+        stateDirectory: fixture.root
+      })
       fixture.database = openTestJournalHostDatabase(fixture.root)
       expect(reopened.queuedMessages.list().map((card) => card.body)).toEqual(
         before.map((card) => card.body)
@@ -165,7 +187,10 @@ export function registerJournalEpochReplacementReceiptsTests(fixture: ReturnType
     'finalizes %s queue ownership only after COMMIT and before fallible publication',
     async (mode) => {
       const [file] = await fixture.legacyInputs(1)
-      const journal = await fixture.journals.open({ identity: fixture.IDENTITY, stateDirectory: fixture.root })
+      const journal = await fixture.journals.open({
+        identity: fixture.IDENTITY,
+        stateDirectory: fixture.root
+      })
       for (const phase of ['rollback', 'publication'] as const) {
         const goal = { provider: 'orca' as const, clientMessageId: `goal-${phase}` }
         await journal.appendClaimingAttachments(

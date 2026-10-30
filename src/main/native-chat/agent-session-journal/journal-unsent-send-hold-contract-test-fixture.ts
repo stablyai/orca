@@ -2,15 +2,27 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
-import type { AgentJournalMessageItem, AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentMessageSource, AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type {
+  AgentJournalMessageItem,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-types'
+import type {
+  AgentMessageSource,
+  AgentSessionMessageSource
+} from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import { holdUnsentSends, type UnsentSendHold } from './journal-unsent-send-hold'
 import type { AgentSessionJournal } from './journal-store'
-import { closeTestJournalHostDatabases, createTrackedJournalOpener, liveTestJournalRows, openTestJournalHostDatabase, updateTestJournalRowJson } from './journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  createTrackedJournalOpener,
+  liveTestJournalRows,
+  openTestJournalHostDatabase,
+  updateTestJournalRowJson
+} from './journal-host-database-test-support'
 
 export function createFixture() {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -155,14 +167,29 @@ export function createFixture() {
     accept,
     afterRestart,
     cardOrder,
-    get clock() { return clock }, set clock(value: typeof clock) { clock = value },
-    get epochs() { return epochs }, set epochs(value: typeof epochs) { epochs = value },
+    get clock() {
+      return clock
+    },
+    set clock(value: typeof clock) {
+      clock = value
+    },
+    get epochs() {
+      return epochs
+    },
+    set epochs(value: typeof epochs) {
+      epochs = value
+    },
     fingerprint,
     hold,
     journals,
     message,
     open,
-    get root() { return root }, set root(value: typeof root) { root = value },
-    storeSubmissionSourceAs,
+    get root() {
+      return root
+    },
+    set root(value: typeof root) {
+      root = value
+    },
+    storeSubmissionSourceAs
   }
 }

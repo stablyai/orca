@@ -3,7 +3,7 @@ import { registerJournalSequenceReplayTests } from './journal-sequence-replay.sp
 import { registerJournalLifecycleBoundaryTests } from './journal-lifecycle-boundaries.spec'
 
 export function registerJournalStoreTests(): void {
-    const fixture = createFixture()
-    registerJournalSequenceReplayTests(fixture)
-    registerJournalLifecycleBoundaryTests(fixture)
+  const fixture = createFixture()
+  registerJournalSequenceReplayTests(fixture)
+  registerJournalLifecycleBoundaryTests(fixture)
 }

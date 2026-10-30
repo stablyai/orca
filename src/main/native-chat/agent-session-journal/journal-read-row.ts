@@ -4,25 +4,36 @@ import type { JournalOutcomeSource } from './journal-outcome-format'
 
 /** In-process change index only; the public wire still contains items and submissions. */
 export type JournalOutcomeReadRow = {
-  kind: 'outcome'; epoch: string; seq: number; itemIds: string[]; submissionIds: string[]
+  kind: 'outcome'
+  epoch: string
+  seq: number
+  itemIds: string[]
+  submissionIds: string[]
 }
 export type JournalReadRow = JournalRow | JournalOutcomeReadRow
 
 /** LIMIT counts logical sequences, never the independently compactable physical contributions. */
 export function readJournalOutcomeGroups(
-  db: Database.Database, sessionId: string, epoch: string, source: JournalOutcomeSource,
-  after: number, limit?: number
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  source: JournalOutcomeSource,
+  after: number,
+  limit?: number
 ): JournalOutcomeReadRow[] {
-  const groups = db.prepare(`SELECT DISTINCT seq FROM journal_outcomes
+  const groups = db
+    .prepare(`SELECT DISTINCT seq FROM journal_outcomes
     WHERE session_id = ? AND epoch = ? AND generation = ? AND seq > ? AND seq <= ?
-    ORDER BY seq LIMIT ?`).all(sessionId, epoch, source.generation, after, source.through, limit ?? -1)
+    ORDER BY seq LIMIT ?`)
+    .all(sessionId, epoch, source.generation, after, source.through, limit ?? -1)
   return groups.map(({ seq }) => {
     if (typeof seq !== 'number') {
       throw new Error('invalid journal outcome group')
     }
     const itemIds: string[] = []
     const submissionIds: string[] = []
-    for (const entry of db.prepare(`SELECT field, entry_key FROM journal_outcomes
+    for (const entry of db
+      .prepare(`SELECT field, entry_key FROM journal_outcomes
       WHERE session_id = ? AND epoch = ? AND generation = ? AND seq = ?
       AND field IN ('items', 'submissions') ORDER BY field, entry_key`)
       .iterate(sessionId, epoch, source.generation, seq)) {

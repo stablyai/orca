@@ -5,13 +5,23 @@ import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-w
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { clearJournalSavedState } from '../agent-session-journal/journal-saved-state'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
-import { createAgentSessionCatchUpReader, readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
+import {
+  createAgentSessionCatchUpReader,
+  readAgentSessionHistory,
+  resolveHistoryLimit
+} from './agent-session-history-page'
 import { readAgentSessionConversationOutline } from './agent-session-conversation-outline'
 import { shortenedAgentJournalItem } from './agent-session-item-wire-form'
 import { firstStructuredChatNamingPrompt } from '../../../shared/structured-chat-naming-eligibility'
 import { structuredSessionGateFacts } from '../../runtime/orchestration/structured-session-pointer-delivery'
 
-import { fixture, IDENTITY, appendItems, body, item } from './agent-session-history-contract-test-fixture'
+import {
+  fixture,
+  IDENTITY,
+  appendItems,
+  body,
+  item
+} from './agent-session-history-contract-test-fixture'
 
 describe('resolveHistoryLimit', () => {
   it('clamps rather than rejecting so a mid-scroll client keeps paging', () => {
@@ -26,7 +36,11 @@ describe('resolveHistoryLimit', () => {
 describe('readAgentSessionHistory', () => {
   it('refreshes a retained catch-up reader after a same-cursor disk reload', async () => {
     const options = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    await fixture.journal.appendItem(item(0), { kind: 'turn', turnId: 'turn-1', state: 'running' }, options)
+    await fixture.journal.appendItem(
+      item(0),
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      options
+    )
     const view = fixture.journal.publicRead()
     expect(view.snapshot.items).toHaveLength(1)
     const cursor = fixture.journal.cursor()
@@ -185,7 +199,11 @@ describe('readAgentSessionHistory', () => {
     await fixture.journal.rollEpoch('legacy_import', 2)
     for (const direction of ['before', 'after'] as const) {
       expect(
-        readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction, cursor: stale })
+        readAgentSessionHistory(fixture.journal, {
+          sessionId: 'session-1',
+          direction,
+          cursor: stale
+        })
       ).toMatchObject({ ok: false, reset: 'epoch_changed' })
     }
   })
@@ -209,7 +227,10 @@ describe('readAgentSessionHistory', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       fence: 1
     })
-    const page = readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'tail' })
+    const page = readAgentSessionHistory(fixture.journal, {
+      sessionId: 'session-1',
+      direction: 'tail'
+    })
     if (!page.ok) {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }

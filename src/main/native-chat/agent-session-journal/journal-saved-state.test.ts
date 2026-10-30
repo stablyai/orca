@@ -245,9 +245,19 @@ it('round trips the complete replayed reducer, including insertion order and und
   expect([...state.appliedSettlementIds][0]).toBe('settlement-2')
   expect(state.derivedTurnScope.snapshot()).toBe(itemId(5))
   const source = journalOutcomeSource(database.db, identity.sessionId, epoch)
-  if (!source) { throw new Error('missing outcomes') }
-  expectSameState(rebuildJournalOutcomes(database.db, identity.sessionId, epoch,
-    source.generation, source.through), state)
+  if (!source) {
+    throw new Error('missing outcomes')
+  }
+  expectSameState(
+    rebuildJournalOutcomes(
+      database.db,
+      identity.sessionId,
+      epoch,
+      source.generation,
+      source.through
+    ),
+    state
+  )
   const restored = requireState(readJournalSavedState(database.db, identity.sessionId, epoch))
   expectSameState(restored, state)
   // A paced reader decodes the same state one stored row per page.

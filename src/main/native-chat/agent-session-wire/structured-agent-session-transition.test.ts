@@ -4,7 +4,13 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionTransition } from './structured-agent-session-transition'
 
-import { failedTool, identity, itemStep, rig, tool } from './structured-agent-session-transition-contract-test-fixture'
+import {
+  failedTool,
+  identity,
+  itemStep,
+  rig,
+  tool
+} from './structured-agent-session-transition-contract-test-fixture'
 
 it('lands its steps back to back, each resolved after the one before it', async () => {
   const { journal, deferred, sink, publishes, bind } = await rig()

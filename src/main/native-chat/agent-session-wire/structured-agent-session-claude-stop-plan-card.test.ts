@@ -1,8 +1,18 @@
 import { expect, it } from 'vitest'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
-import { fixture, CALLER, laneDrained } from './structured-agent-session-claude-stop-contract-test-fixture'
-import { ask, cancelCard, cardResolution, openTurn, statusTexts } from './structured-agent-session-claude-stop-contract-test-actions'
+import {
+  fixture,
+  CALLER,
+  laneDrained
+} from './structured-agent-session-claude-stop-contract-test-fixture'
+import {
+  ask,
+  cancelCard,
+  cardResolution,
+  openTurn,
+  statusTexts
+} from './structured-agent-session-claude-stop-contract-test-actions'
 
 it('dismisses a plan card on its Cancel: Claude is told to wait for the user, and keeps running', async () => {
   const connection = fixture.claude.connections[0]!

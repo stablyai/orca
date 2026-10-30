@@ -4,7 +4,13 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createAgentSessionDeltaCoalescer } from './agent-session-delta-coalescer'
 
-import { failedTool, identity, itemStep, rig, tool } from './structured-agent-session-transition-contract-test-fixture'
+import {
+  failedTool,
+  identity,
+  itemStep,
+  rig,
+  tool
+} from './structured-agent-session-transition-contract-test-fixture'
 
 it('leaves no row of a settlement durable when a later one of its rows fails to write', async () => {
   const { root, journal, deferred, sink, bind } = await rig()

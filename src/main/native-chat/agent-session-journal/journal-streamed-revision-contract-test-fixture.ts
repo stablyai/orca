@@ -5,7 +5,11 @@ import { join, dirname } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { journalPragmaNumber } from './journal-database'
-import { closeTestJournalHostDatabases, createTrackedJournalOpener, openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
 
@@ -65,5 +69,10 @@ export async function uploadedInput() {
 }
 
 export const fixture = {
-  get root() { return root }, set root(value: typeof root) { root = value },
+  get root() {
+    return root
+  },
+  set root(value: typeof root) {
+    root = value
+  }
 }

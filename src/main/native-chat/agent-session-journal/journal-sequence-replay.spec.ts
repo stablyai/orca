@@ -2,12 +2,23 @@ import type { createFixture } from './journal-store-contract-test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey, boundJournalKeyComponent, MAX_JOURNAL_KEY_COMPONENT_CHARS } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  boundJournalKeyComponent,
+  MAX_JOURNAL_KEY_COMPONENT_CHARS
+} from '../../../shared/agent-session-journal-item-key'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { AgentSessionJournalError } from './journal-store'
-import { openTestJournalHostDatabase, liveTestJournalRows, deleteTestJournalRow, seedLegacyTestJournal } from './journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  liveTestJournalRows,
+  deleteTestJournalRow,
+  seedLegacyTestJournal
+} from './journal-host-database-test-support'
 
-export function registerJournalSequenceReplayTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalSequenceReplayTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   describe('sequences', () => {
     it('assigns a contiguous sequence with no gaps or reuse under concurrent appends', async () => {
       const journal = await fixture.open()
@@ -29,9 +40,18 @@ export function registerJournalSequenceReplayTests(fixture: ReturnType<typeof cr
     it('serializes revisions of one item so the last write wins deterministically', async () => {
       const journal = await fixture.open()
       const results = await Promise.all([
-        journal.appendItem(fixture.item(0), fixture.body('a'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
-        journal.appendItem(fixture.item(0), fixture.body('b'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
-        journal.appendItem(fixture.item(0), fixture.body('c'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+        journal.appendItem(fixture.item(0), fixture.body('a'), {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }),
+        journal.appendItem(fixture.item(0), fixture.body('b'), {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }),
+        journal.appendItem(fixture.item(0), fixture.body('c'), {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
       ])
       expect(results.map((result) => result.revision)).toEqual([1, 2, 3])
       expect(journal.snapshot().items).toHaveLength(1)
@@ -150,7 +170,10 @@ export function registerJournalSequenceReplayTests(fixture: ReturnType<typeof cr
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
       await expect(
-        journal.appendItem(fixture.item(1), fixture.body('b'), { fence: 6, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+        journal.appendItem(fixture.item(1), fixture.body('b'), {
+          fence: 6,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
       ).rejects.toBeInstanceOf(AgentSessionJournalError)
     })
 
@@ -161,13 +184,19 @@ export function registerJournalSequenceReplayTests(fixture: ReturnType<typeof cr
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
       await journal
-        .appendItem(fixture.item(1), fixture.body('b'), { fence: 6, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+        .appendItem(fixture.item(1), fixture.body('b'), {
+          fence: 6,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
         .catch(() => undefined)
       await journal.appendItem(fixture.item(2), fixture.body('c'), {
         fence: 7,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
-      expect(journal.snapshot().items.map((entry) => entry.body)).toEqual([fixture.body('a'), fixture.body('c')])
+      expect(journal.snapshot().items.map((entry) => entry.body)).toEqual([
+        fixture.body('a'),
+        fixture.body('c')
+      ])
     })
   })
 
@@ -227,7 +256,10 @@ export function registerJournalSequenceReplayTests(fixture: ReturnType<typeof cr
     })
 
     it('refuses a journal with a gap and keeps every row', async () => {
-      seedLegacyTestJournal(openTestJournalHostDatabase(fixture.root), { identity: fixture.IDENTITY, now: fixture.tick })
+      seedLegacyTestJournal(openTestJournalHostDatabase(fixture.root), {
+        identity: fixture.IDENTITY,
+        now: fixture.tick
+      })
       const journal = await fixture.open()
       for (let index = 0; index < 4; index += 1) {
         await journal.appendItem(fixture.item(index), fixture.body(`m${index}`), {

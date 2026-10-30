@@ -1,4 +1,3 @@
-
 import { mkdir, realpath, rename, writeFile } from 'node:fs/promises'
 vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
   const query = await import('../transcript-opencode-sqlite-query')
@@ -11,11 +10,23 @@ vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (or
 })
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { createTestParams, CREATE_TEST_CALLER as CALLER } from './structured-agent-session-create-test-fixture'
-import { HOST_TEST_SESSION as SESSION, HOST_TEST_THREAD as THREAD } from './structured-agent-session-host-test-data'
-import { codexLegacyMirrorRecords, writeCodexHistoryFixture } from '../agent-session-journal/codex-history-test-fixture'
+import {
+  createTestParams,
+  CREATE_TEST_CALLER as CALLER
+} from './structured-agent-session-create-test-fixture'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD
+} from './structured-agent-session-host-test-data'
+import {
+  codexLegacyMirrorRecords,
+  writeCodexHistoryFixture
+} from '../agent-session-journal/codex-history-test-fixture'
 import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
-import { resolveStructuredAgentSessionAdoptionForCreate, structuredAgentSessionAdoptAttach } from '../../runtime/structured-agent-session-create-adoption'
+import {
+  resolveStructuredAgentSessionAdoptionForCreate,
+  structuredAgentSessionAdoptAttach
+} from '../../runtime/structured-agent-session-create-adoption'
 import { prepareCodexAiVaultSessionResume } from '../../codex/codex-ai-vault-session-resume'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'

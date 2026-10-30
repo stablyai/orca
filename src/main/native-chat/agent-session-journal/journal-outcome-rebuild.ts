@@ -17,10 +17,16 @@ export class JournalOutcomeRebuild {
   private disposed = false
   private throughSequence = 0
 
-  constructor(private readonly database: JournalHostDatabase,
-    readonly sessionId: string, readonly epoch: string, private source: JournalOutcomeSource) {}
+  constructor(
+    private readonly database: JournalHostDatabase,
+    readonly sessionId: string,
+    readonly epoch: string,
+    private source: JournalOutcomeSource
+  ) {}
 
-  get through(): number { return this.throughSequence }
+  get through(): number {
+    return this.throughSequence
+  }
 
   async load(pacing: JournalCatchUpPacing): Promise<'ready' | 'stopped'> {
     if (!this.needsDecode) {
@@ -29,8 +35,11 @@ export class JournalOutcomeRebuild {
     const pages = this.fold.finishPages(this.sessionId, this.epoch, this.source.through)
     let step = pacing.work(() => pages.next())
     while (!step.done) {
-      if (!(await pacing.rest()) || this.disposed ||
-        readJournalSessionEpoch(this.database.db, this.sessionId) !== this.epoch) {
+      if (
+        !(await pacing.rest()) ||
+        this.disposed ||
+        readJournalSessionEpoch(this.database.db, this.sessionId) !== this.epoch
+      ) {
         return 'stopped'
       }
       step = pacing.work(() => pages.next())
@@ -57,16 +66,24 @@ export class JournalOutcomeRebuild {
       }
       if (this.clearing) {
         for (const table of ['journal_items', 'journal_entries']) {
-          const result = db.prepare(`DELETE FROM ${table} WHERE rowid IN (
-            SELECT rowid FROM ${table} WHERE session_id = ? LIMIT 32)`).run(sessionId)
+          const result = db
+            .prepare(`DELETE FROM ${table} WHERE rowid IN (
+            SELECT rowid FROM ${table} WHERE session_id = ? LIMIT 32)`)
+            .run(sessionId)
           if (result.changes > 0) {
             return 'advanced'
           }
         }
         this.clearing = false
       }
-      const values = readJournalOutcomePage(db, sessionId, epoch,
-        source.generation, this.after, this.source.through)
+      const values = readJournalOutcomePage(
+        db,
+        sessionId,
+        epoch,
+        source.generation,
+        this.after,
+        this.source.through
+      )
       const last = values.at(-1)
       if (last) {
         const identity = createJournalReducerState(sessionId, epoch)

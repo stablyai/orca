@@ -1,4 +1,3 @@
-
 import { writeFile, rm } from 'node:fs/promises'
 vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
   const query = await import('../transcript-opencode-sqlite-query')
@@ -12,13 +11,26 @@ vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (or
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { restTestSend } from './structured-agent-session-rest-test-rig'
-import { createTestParams, stopCreatedChat, CREATE_TEST_CALLER as CALLER } from './structured-agent-session-create-test-fixture'
-import { HOST_TEST_SESSION as SESSION, HOST_TEST_THREAD as THREAD, hostTestOperationId, hostTestMessage } from './structured-agent-session-host-test-data'
+import {
+  createTestParams,
+  stopCreatedChat,
+  CREATE_TEST_CALLER as CALLER
+} from './structured-agent-session-create-test-fixture'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD,
+  hostTestOperationId,
+  hostTestMessage
+} from './structured-agent-session-host-test-data'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
-import { fixture, adoptedParams, anotherSession } from './structured-agent-session-create-adoption-contract-test-fixture'
+import {
+  fixture,
+  adoptedParams,
+  anotherSession
+} from './structured-agent-session-create-adoption-contract-test-fixture'
 
 it('imports adoption at rest and resumes its original provider identity after its source disappears', async () => {
   const params = await adoptedParams()
@@ -102,7 +114,10 @@ it.each(['missing', 'empty', 'malformed'] as const)(
     const params = await adoptedParams()
     await (source === 'missing'
       ? rm(join(fixture.rig.root, 'rollout.jsonl'))
-      : writeFile(join(fixture.rig.root, 'rollout.jsonl'), source === 'empty' ? '' : '{broken json}\n'))
+      : writeFile(
+          join(fixture.rig.root, 'rollout.jsonl'),
+          source === 'empty' ? '' : '{broken json}\n'
+        ))
     expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({
       ok: false,
       refusal: {
@@ -154,7 +169,9 @@ it('pins the host-resolved directory of a floating chat before any acquire', asy
       workspaceKind: 'folder'
     }
   })
-  expect(await fixture.rig.host.create(CALLER, params, { hostLaunchDirectory: fixture.rig.root })).toMatchObject({
+  expect(
+    await fixture.rig.host.create(CALLER, params, { hostLaunchDirectory: fixture.rig.root })
+  ).toMatchObject({
     ok: true
   })
   expect(fixture.rig.store.getRecord(SESSION)?.launchDirectory).toBe(fixture.rig.root)
@@ -171,7 +188,9 @@ it.each(['adopted', 'blank'] as const)(
       `CREATE TRIGGER refuse_first BEFORE INSERT ON journal_outcomes WHEN NEW.field = 'submissions' BEGIN SELECT RAISE(ABORT, 'simulated first write failure'); END`
     )
     expect(
-      await fixture.rig.host.create(CALLER, createTestParams(first, adopted), { firstMessage: first })
+      await fixture.rig.host.create(CALLER, createTestParams(first, adopted), {
+        firstMessage: first
+      })
     ).toMatchObject({ ok: false })
     expect(fixture.rig.store.getRecord(SESSION)).toBeNull()
     expect(fixture.rig.store.listOperationRows()).toEqual([])

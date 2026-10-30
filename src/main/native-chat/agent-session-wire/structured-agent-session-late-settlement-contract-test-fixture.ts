@@ -7,10 +7,24 @@ import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { AgentSessionDispatchOutcome, StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type {
+  AgentSessionDispatchOutcome,
+  StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { HOST_TEST_NOW as NOW, HOST_TEST_SESSION as SESSION, HOST_TEST_THREAD as THREAD, hostTestAttachParams, hostTestMessage, hostTestOperationId, resetHostTestOperationIds } from './structured-agent-session-host-test-data'
-import { closeTestJournalHostDatabases, openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD,
+  hostTestAttachParams,
+  hostTestMessage,
+  hostTestOperationId,
+  resetHostTestOperationIds
+} from './structured-agent-session-host-test-data'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -133,9 +147,34 @@ afterEach(async () => {
 })
 
 export const fixture = {
-  get closeSession() { return closeSession }, set closeSession(value: typeof closeSession) { closeSession = value },
-  get dispatch() { return dispatch }, set dispatch(value: typeof dispatch) { dispatch = value },
-  get host() { return host }, set host(value: typeof host) { host = value },
-  get root() { return root }, set root(value: typeof root) { root = value },
-  get store() { return store }, set store(value: typeof store) { store = value },
+  get closeSession() {
+    return closeSession
+  },
+  set closeSession(value: typeof closeSession) {
+    closeSession = value
+  },
+  get dispatch() {
+    return dispatch
+  },
+  set dispatch(value: typeof dispatch) {
+    dispatch = value
+  },
+  get host() {
+    return host
+  },
+  set host(value: typeof host) {
+    host = value
+  },
+  get root() {
+    return root
+  },
+  set root(value: typeof root) {
+    root = value
+  },
+  get store() {
+    return store
+  },
+  set store(value: typeof store) {
+    store = value
+  }
 }

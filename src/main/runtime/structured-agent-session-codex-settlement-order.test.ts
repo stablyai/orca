@@ -80,15 +80,21 @@ async function send(text: string): Promise<string> {
 }
 
 /** A stored row, or one mutation of a lifecycle batch: what a settlement or a frame lands as. */
-type JournalEntry = { kind: 'item'; body: AgentJournalItemBody } |
-  { kind: 'dispatch'; clientMessageId: string; state: AgentJournalDispatchState }
+type JournalEntry =
+  | { kind: 'item'; body: AgentJournalItemBody }
+  | { kind: 'dispatch'; clientMessageId: string; state: AgentJournalDispatchState }
 
 /** Outcomes preserve the sequence at which a verdict or whole item committed. */
 function seqOf(matches: (entry: JournalEntry) => boolean): number | undefined {
   return readTestJournalOutcomes(openTestJournalHostDatabase(root).db, SESSION).find((value) => {
-    if (value.deleted) { return false }
+    if (value.deleted) {
+      return false
+    }
     if (value.field === 'items') {
-      return matches({ kind: 'item', body: fields.items.element.parse(JSON.parse(value.json)).body })
+      return matches({
+        kind: 'item',
+        body: fields.items.element.parse(JSON.parse(value.json)).body
+      })
     }
     if (value.field === 'submissions') {
       const [id, submission] = fields.submissions.element.parse(JSON.parse(value.json))

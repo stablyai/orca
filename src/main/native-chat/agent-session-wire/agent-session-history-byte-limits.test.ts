@@ -30,7 +30,11 @@ describe('history page byte ceiling', () => {
     await appendLargeItems(20)
 
     const tail = pageOf(
-      readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
+      readAgentSessionHistory(fixture.journal, {
+        sessionId: 'session-1',
+        direction: 'tail',
+        limit: 40
+      })
     )
     expect(tail.items.length).toBeGreaterThan(0)
     expect(tail.hasOlder).toBe(true)
@@ -103,7 +107,11 @@ describe('history page byte ceiling', () => {
     })
 
     const tail = pageOf(
-      readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
+      readAgentSessionHistory(fixture.journal, {
+        sessionId: 'session-1',
+        direction: 'tail',
+        limit: 40
+      })
     )
     expect(tail.items).toHaveLength(1)
     const sent = tail.items[0]

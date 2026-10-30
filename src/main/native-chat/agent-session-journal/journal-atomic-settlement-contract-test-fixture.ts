@@ -5,7 +5,11 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
-import { createTrackedJournalOpener, openTestJournalHostDatabase, readTestJournalRows } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  readTestJournalRows
+} from './journal-host-database-test-support'
 import { parseJournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 
@@ -100,12 +104,22 @@ export function createFixture() {
 
   return {
     SESSION,
-    get journal() { return journal }, set journal(value: typeof journal) { journal = value },
+    get journal() {
+      return journal
+    },
+    set journal(value: typeof journal) {
+      journal = value
+    },
     journals,
     open,
-    get root() { return root }, set root(value: typeof root) { root = value },
+    get root() {
+      return root
+    },
+    set root(value: typeof root) {
+      root = value
+    },
     rows,
     seedWork,
-    settle,
+    settle
   }
 }

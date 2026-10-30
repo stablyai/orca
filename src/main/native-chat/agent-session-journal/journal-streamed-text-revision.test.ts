@@ -11,7 +11,13 @@ import { providerTimelineSink } from '../agent-session-timeline/provider-timelin
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
 
-import { fixture, commitLevels, openJournal, text, uploadedInput } from './journal-streamed-revision-contract-test-fixture'
+import {
+  fixture,
+  commitLevels,
+  openJournal,
+  text,
+  uploadedInput
+} from './journal-streamed-revision-contract-test-fixture'
 
 it('keeps image and goal transitions FULL, streams text at NORMAL, and restores FULL', async () => {
   const database = openTestJournalHostDatabase(fixture.root)
@@ -170,7 +176,9 @@ it.each([1, 10])(
       expect(journal.snapshot().items[0]?.body).toEqual(
         text('assistant', 'hello '.repeat(count + 1))
       )
-      expect(journalPragmaNumber(openTestJournalHostDatabase(fixture.root).db, 'synchronous')).toBe(2)
+      expect(journalPragmaNumber(openTestJournalHostDatabase(fixture.root).db, 'synchronous')).toBe(
+        2
+      )
       process.stdout.write(
         `pr34654-stream-contract ${JSON.stringify({ count, levels, extractions: extraction.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
       )

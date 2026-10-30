@@ -12,10 +12,7 @@ import {
   JournalProjectionCatchUp,
   type JournalCatchUpStep
 } from './journal-projection-catch-up'
-import {
-  logJournalProjectionFailure,
-  unrefJournalProjectionTimer
-} from './journal-saved-state'
+import { logJournalProjectionFailure, unrefJournalProjectionTimer } from './journal-saved-state'
 
 // Each failed page or savepoint quadruples the wait, so a full disk is not retried on a short fixed
 // timer; a committed page, a healthy incremental write or a reopen resets it.
@@ -240,5 +237,4 @@ export class JournalWriteProjection {
     }, delay)
     unrefJournalProjectionTimer(this.timer)
   }
-
 }

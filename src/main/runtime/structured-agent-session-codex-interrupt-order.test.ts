@@ -99,9 +99,13 @@ async function stop(turnId?: string): Promise<void> {
 /** Every end row written for turn-1, as a row or a lifecycle batch's mutation, in order. */
 function turnEndRows(): AgentJournalTurnItem[] {
   return readTestJournalOutcomes(openTestJournalHostDatabase(root).db, SESSION).flatMap((value) => {
-    if (value.field !== 'items' || value.deleted) { return [] }
+    if (value.field !== 'items' || value.deleted) {
+      return []
+    }
     const { body } = fields.items.element.parse(JSON.parse(value.json))
-    return body.kind === 'turn' && body.turnId === 'turn-1' && body.state !== 'running' ? [body] : []
+    return body.kind === 'turn' && body.turnId === 'turn-1' && body.state !== 'running'
+      ? [body]
+      : []
   })
 }
 

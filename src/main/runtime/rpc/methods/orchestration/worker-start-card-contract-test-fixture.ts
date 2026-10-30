@@ -21,5 +21,10 @@ afterEach(async () => {
 })
 
 export const fixture = {
-  get rig() { return rig }, set rig(value: typeof rig) { rig = value },
+  get rig() {
+    return rig
+  },
+  set rig(value: typeof rig) {
+    rig = value
+  }
 }

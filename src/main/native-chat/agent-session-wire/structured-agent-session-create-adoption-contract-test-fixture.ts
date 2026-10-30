@@ -1,4 +1,3 @@
-
 import { writeFile } from 'node:fs/promises'
 vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
   const query = await import('../transcript-opencode-sqlite-query')
@@ -13,7 +12,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { createRestTestRig, type RestTestRig } from './structured-agent-session-rest-test-rig'
 import { createTestParams } from './structured-agent-session-create-test-fixture'
-import { HOST_TEST_THREAD as THREAD, hostTestOperationId } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_THREAD as THREAD,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -62,5 +64,10 @@ export function anotherSession(params: AgentSessionAttachParams): AgentSessionAt
 }
 
 export const fixture = {
-  get rig() { return rig }, set rig(value: typeof rig) { rig = value },
+  get rig() {
+    return rig
+  },
+  set rig(value: typeof rig) {
+    rig = value
+  }
 }

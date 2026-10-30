@@ -3,10 +3,16 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 import { readdir } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
-import { boundInlineText, boundPayload, JOURNAL_RUNNING_PREVIEW_LIMITS } from './journal-payload-bounds'
+import {
+  boundInlineText,
+  boundPayload,
+  JOURNAL_RUNNING_PREVIEW_LIMITS
+} from './journal-payload-bounds'
 import type { AgentSessionJournal } from './journal-store'
 
-export function registerJournalLifecycleBoundaryTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalLifecycleBoundaryTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   describe('bounds', () => {
     it('marks a clipped payload instead of dropping bytes silently', () => {
       const limits = { inlineHeadBytes: 16 }
@@ -141,8 +147,10 @@ export function registerJournalLifecycleBoundaryTests(fixture: ReturnType<typeof
       expect(await readdir(fixture.root)).not.toContain('agent-session-journal')
       await journal.close()
       await fixture.withJournalDatabase(fixture.root, (db) => {
-        expect(db.prepare("SELECT value_json FROM journal_outcomes WHERE field = 'items'").get()?.value_json)
-          .toContain('"kind":"message"')
+        expect(
+          db.prepare("SELECT value_json FROM journal_outcomes WHERE field = 'items'").get()
+            ?.value_json
+        ).toContain('"kind":"message"')
         expect(db.prepare('SELECT epoch FROM journal_sessions').get()).toMatchObject({
           epoch: journal.epoch
         })

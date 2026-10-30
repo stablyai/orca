@@ -24,8 +24,13 @@ export function projectJournalBatch(input: {
   afterSequence: number
   canonicalItemId?: (itemId: string) => string
 }): JournalBatchProjection {
-  if (input.rows.every((row) => row.kind !== 'outcome') &&
-    findSequenceGap(input.rows.map((row) => row.seq), input.afterSequence + 1)) {
+  if (
+    input.rows.every((row) => row.kind !== 'outcome') &&
+    findSequenceGap(
+      input.rows.map((row) => row.seq),
+      input.afterSequence + 1
+    )
+  ) {
     return { ok: false, reset: 'journal_gap' }
   }
   const aliases = submissionAliases(input.snapshot.submissions)

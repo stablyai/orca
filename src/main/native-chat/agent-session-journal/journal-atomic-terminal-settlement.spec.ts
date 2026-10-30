@@ -3,7 +3,7 @@ import { registerJournalAtomicSettlementRollbackTests } from './journal-atomic-s
 import { registerJournalAtomicSettlementOversizedTests } from './journal-atomic-settlement-oversized.spec'
 
 export function registerJournalAtomicTerminalSettlementTests(): void {
-    const fixture = createFixture()
-    registerJournalAtomicSettlementRollbackTests(fixture)
-    registerJournalAtomicSettlementOversizedTests(fixture)
+  const fixture = createFixture()
+  registerJournalAtomicSettlementRollbackTests(fixture)
+  registerJournalAtomicSettlementOversizedTests(fixture)
 }

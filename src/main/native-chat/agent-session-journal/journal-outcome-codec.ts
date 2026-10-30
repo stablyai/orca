@@ -7,7 +7,12 @@ import { journalEntryJson, journalStateScalars } from './journal-state-layout'
 import { JOURNAL_STATE_CODEC_VERSION, startJournalStateDecode } from './journal-state-codec'
 
 export type JournalOutcome = {
-  seq: number; field: string; key: string; ordinal: string; json: string; deleted: boolean
+  seq: number
+  field: string
+  key: string
+  ordinal: string
+  json: string
+  deleted: boolean
 }
 const scalarSchemas = new Map<string, z.ZodType>(Object.entries(scalarsV2.shape))
 const collectionSchemas = new Map<string, z.ZodType>([
@@ -25,15 +30,25 @@ export function encodeJournalOutcomes(
 ): { values: Omit<JournalOutcome, 'ordinal'>[]; scalars: Record<string, unknown> } {
   const next = scalars(state)
   const values = changes.map((entry) => ({
-    seq: state.lastSequence, field: entry.path, key: JSON.stringify(entry.key),
-    json: entry.deleted ? 'null' : entry.path === 'items'
-      ? JSON.stringify(entry.value) : journalEntryJson(entry.key, entry.value),
+    seq: state.lastSequence,
+    field: entry.path,
+    key: JSON.stringify(entry.key),
+    json: entry.deleted
+      ? 'null'
+      : entry.path === 'items'
+        ? JSON.stringify(entry.value)
+        : journalEntryJson(entry.key, entry.value),
     deleted: entry.deleted
   }))
   for (const [key, value] of Object.entries(next)) {
     if (JSON.stringify(value) !== JSON.stringify(before[key])) {
-      values.push({ seq: state.lastSequence, field: '$', key: JSON.stringify(key),
-        json: JSON.stringify(value), deleted: false })
+      values.push({
+        seq: state.lastSequence,
+        field: '$',
+        key: JSON.stringify(key),
+        json: JSON.stringify(value),
+        deleted: false
+      })
     }
   }
   for (const value of values) {
@@ -47,14 +62,27 @@ export function journalOutcomeScalars(state: JournalReducerState): Record<string
 }
 
 export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
-  if (typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq) || row.seq < 1 ||
-    typeof row.field !== 'string' || typeof row.entry_key !== 'string' ||
-    typeof row.ordinal !== 'string' || !/^s\d{16}:\d{16}$/.test(row.ordinal) ||
-    typeof row.value_json !== 'string' || (row.deleted !== 0 && row.deleted !== 1)) {
+  if (
+    typeof row.seq !== 'number' ||
+    !Number.isSafeInteger(row.seq) ||
+    row.seq < 1 ||
+    typeof row.field !== 'string' ||
+    typeof row.entry_key !== 'string' ||
+    typeof row.ordinal !== 'string' ||
+    !/^s\d{16}:\d{16}$/.test(row.ordinal) ||
+    typeof row.value_json !== 'string' ||
+    (row.deleted !== 0 && row.deleted !== 1)
+  ) {
     throw new Error('invalid journal outcome')
   }
-  const value = { seq: row.seq, field: row.field, key: row.entry_key,
-    ordinal: row.ordinal, json: row.value_json, deleted: row.deleted === 1 }
+  const value = {
+    seq: row.seq,
+    field: row.field,
+    key: row.entry_key,
+    ordinal: row.ordinal,
+    json: row.value_json,
+    deleted: row.deleted === 1
+  }
   validateOutcome(value)
   return value
 }
@@ -87,7 +115,9 @@ function validateOutcome(value: Omit<JournalOutcome, 'ordinal'>): void {
       }
     } else {
       const tuple = z.array(z.unknown()).parse(decoded)
-      const set = ['removedTurnIds', 'appliedSettlementIds', 'normalizedHandOffs'].includes(value.field)
+      const set = ['removedTurnIds', 'appliedSettlementIds', 'normalizedHandOffs'].includes(
+        value.field
+      )
       schema.parse([set ? tuple[0] : tuple])
       if (JSON.stringify(tuple[0]) !== value.key) {
         throw new Error('mismatched journal keyed outcome')
@@ -111,9 +141,17 @@ export class JournalOutcomeFold {
       field.set(value.key, value)
     }
   }
-  *finishPages(sessionId: string, epoch: string, through: number): Generator<void, JournalReducerState> {
-    const scalar = Object.fromEntries([...(this.values.get('$')?.values() ?? [])]
-      .map((value) => [JSON.parse(value.key), JSON.parse(value.json)]))
+  *finishPages(
+    sessionId: string,
+    epoch: string,
+    through: number
+  ): Generator<void, JournalReducerState> {
+    const scalar = Object.fromEntries(
+      [...(this.values.get('$')?.values() ?? [])].map((value) => [
+        JSON.parse(value.key),
+        JSON.parse(value.json)
+      ])
+    )
     const decode = startJournalStateDecode(JOURNAL_STATE_CODEC_VERSION, JSON.stringify(scalar))
     if (!decode) {
       throw new Error('unsupported journal outcome state')

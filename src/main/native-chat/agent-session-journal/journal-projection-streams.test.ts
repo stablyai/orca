@@ -23,10 +23,7 @@ import { clearJournalSavedState, readJournalSavedState } from './journal-saved-s
 import { restoreJournal } from './journal-open'
 import { applyJournalRow, renderJournalState } from './journal-reducer'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import {
-  expectProjectionMatches,
-  finishCatchUp
-} from './journal-projection-test-support'
+import { expectProjectionMatches, finishCatchUp } from './journal-projection-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 
 const sessionId = 'session-1'
@@ -84,7 +81,9 @@ it.each(['claude', 'codex'] as const)(
       if (!rows?.length) {
         return
       }
-      for (const row of rows) { applyJournalRow(expected, row, at) }
+      for (const row of rows) {
+        applyJournalRow(expected, row, at)
+      }
       commits++
       planRevisions += rows.filter(
         (row) =>
@@ -221,7 +220,8 @@ it.each(['claude', 'codex'] as const)(
     }
     expectProjectionMatches(database, source.state)
     await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, journal.epoch))
-    expect(readJournalSavedState(database.db, sessionId, journal.epoch)?.lastSequence)
-      .toBe(journal.cursor().sequence)
+    expect(readJournalSavedState(database.db, sessionId, journal.epoch)?.lastSequence).toBe(
+      journal.cursor().sequence
+    )
   }
 )

@@ -5,7 +5,10 @@ import { readFile } from 'node:fs/promises'
 import { expect, it } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { REST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { editPersistedTestAgentSessionStore, readPersistedTestAgentSessionStore } from '../../agent-session-record-store-test-harness'
+import {
+  editPersistedTestAgentSessionStore,
+  readPersistedTestAgentSessionStore
+} from '../../agent-session-record-store-test-harness'
 
 import { fixture, call, restingChat } from './structured-agent-session-rest-contract-test-fixture'
 
@@ -42,7 +45,9 @@ it('hands off a readable saved conversation without granting its invalid executi
     expect(await fixture.rig.host.continuationContext(stale)).toEqual({ status: 'superseded' })
   }
   expect(fixture.rig.store.getRecord(SESSION)).toBeNull()
-  expect((await readPersistedTestAgentSessionStore(fixture.rig.root)).records[SESSION]).toEqual(saved)
+  expect((await readPersistedTestAgentSessionStore(fixture.rig.root)).records[SESSION]).toEqual(
+    saved
+  )
   expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
   expect(fixture.rig.adapter.dispatch).not.toHaveBeenCalled()
 })

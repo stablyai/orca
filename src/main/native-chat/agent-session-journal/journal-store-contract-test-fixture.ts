@@ -2,9 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
-import type { AgentJournalItemBody, AgentJournalItemIdentity, AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-types'
 import type { openAgentSessionJournal } from './journal-store-factory'
-import { createTrackedJournalOpener, openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -71,12 +78,22 @@ export function createFixture() {
   return {
     IDENTITY,
     body,
-    get clock() { return clock }, set clock(value: typeof clock) { clock = value },
+    get clock() {
+      return clock
+    },
+    set clock(value: typeof clock) {
+      clock = value
+    },
     item,
     journals,
     open,
-    get root() { return root }, set root(value: typeof root) { root = value },
+    get root() {
+      return root
+    },
+    set root(value: typeof root) {
+      root = value
+    },
     tick,
-    withJournalDatabase,
+    withJournalDatabase
   }
 }

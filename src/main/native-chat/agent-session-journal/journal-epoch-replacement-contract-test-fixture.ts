@@ -3,11 +3,18 @@ import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
-import type { AgentJournalItemIdentity, AgentJournalMessageItem, AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch } from './journal-epoch-replacement'
 import type { JournalLoad } from './journal-open'
-import { createTrackedJournalOpener, openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
@@ -126,14 +133,29 @@ export function createFixture() {
   return {
     IDENTITY,
     PEER,
-    get clock() { return clock }, set clock(value: typeof clock) { clock = value },
-    get database() { return database }, set database(value: typeof database) { database = value },
+    get clock() {
+      return clock
+    },
+    set clock(value: typeof clock) {
+      clock = value
+    },
+    get database() {
+      return database
+    },
+    set database(value: typeof database) {
+      database = value
+    },
     item,
     journals,
     legacyInputs,
     now,
     replace,
-    get root() { return root }, set root(value: typeof root) { root = value },
-    storedRows,
+    get root() {
+      return root
+    },
+    set root(value: typeof root) {
+      root = value
+    },
+    storedRows
   }
 }

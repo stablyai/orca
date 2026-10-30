@@ -1,13 +1,20 @@
 import type Database from '../../sqlite/sync-database'
 import { unrefJournalProjectionTimer } from './journal-saved-state'
 
-export type JournalMaintenanceOwner = { through: number; canCompact: () => boolean; release: () => void }
+export type JournalMaintenanceOwner = {
+  through: number
+  canCompact: () => boolean
+  release: () => void
+}
 const owners = new WeakMap<Database.Database, Map<string, JournalMaintenanceOwner>>()
 export const activeJournalGenerations = new Set<string>()
 
 /** Rebuild and retention share this lease; user appends never acquire it. */
 export function ownJournalMaintenance(
-  database: Database.Database, sessionId: string, epoch: string, through: number
+  database: Database.Database,
+  sessionId: string,
+  epoch: string,
+  through: number
 ): JournalMaintenanceOwner | null {
   let held = owners.get(database)
   if (!held) {
@@ -19,11 +26,15 @@ export function ownJournalMaintenance(
     return null
   }
   const registry = held
-  const owner = { through, canCompact: () => (readers.get(database)?.get(key) ?? 0) === 0, release: () => {
-    if (registry.get(key) === owner) {
-      registry.delete(key)
+  const owner = {
+    through,
+    canCompact: () => (readers.get(database)?.get(key) ?? 0) === 0,
+    release: () => {
+      if (registry.get(key) === owner) {
+        registry.delete(key)
+      }
     }
-  } }
+  }
   held.set(key, owner)
   return owner
 }
@@ -32,7 +43,9 @@ const readers = new WeakMap<Database.Database, Map<string, number>>()
 
 /** A cacheless read can join a repair; a compactor must recheck canCompact on every page. */
 export function protectJournalOutcomeRead(
-  db: Database.Database, sessionId: string, epoch: string
+  db: Database.Database,
+  sessionId: string,
+  epoch: string
 ): () => void {
   let held = readers.get(db)
   if (!held) {
@@ -53,7 +66,8 @@ export function protectJournalOutcomeRead(
 }
 
 function createPace(
-  now: () => number, delay: (ms: number) => Promise<void>
+  now: () => number,
+  delay: (ms: number) => Promise<void>
 ): { work: <T>(unit: () => T) => T; rest: () => Promise<void> } {
   let worked = 0
   let resting: Promise<void> | null = null
@@ -72,7 +86,9 @@ function createPace(
       } else if (worked >= 25) {
         const ms = worked * 9
         worked = 0
-        resting = delay(ms).finally(() => { resting = null })
+        resting = delay(ms).finally(() => {
+          resting = null
+        })
         await resting
       } else {
         await delay(0)
@@ -81,12 +97,15 @@ function createPace(
   }
 }
 
-const processPace = createPace(() => performance.now(), (ms) =>
-  new Promise<void>((resolve) => unrefJournalProjectionTimer(setTimeout(resolve, ms))))
+const processPace = createPace(
+  () => performance.now(),
+  (ms) => new Promise<void>((resolve) => unrefJournalProjectionTimer(setTimeout(resolve, ms)))
+)
 
 /** Conversion, cache rebuild, catch-up and reclamation charge one process-wide duty budget. */
 export function journalCatchUpPace(
-  now?: () => number, delay?: (ms: number) => Promise<void>
+  now?: () => number,
+  delay?: (ms: number) => Promise<void>
 ): ReturnType<typeof createPace> {
   return now && delay ? createPace(now, delay) : processPace
 }

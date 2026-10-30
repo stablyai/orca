@@ -35,9 +35,7 @@ import {
   type StructuredAgentSessionState
 } from '../../src/shared/structured-agent-session-reducer'
 import { selectStructuredAgentSettledTurns } from '../../src/shared/structured-agent-session-turn-timing'
-import {
-  openTestJournalHostDatabase
-} from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
 import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import { readJournalSavedState } from '../../src/main/native-chat/agent-session-journal/journal-saved-state'
@@ -289,36 +287,42 @@ it.each(clients)(
     }
     const prefix = { epoch: saved.epoch, sequence: saved.lastSequence }
     expect(prefix.sequence).toBeGreaterThanOrEqual(resumeCursor.sequence)
-    database.transaction((db) => {
-      const rows: JournalRow[] = []
-      for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
+    database.transaction(
+      (db) => {
+        const rows: JournalRow[] = []
+        for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
+          rows.push({
+            v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+            epoch: prefix.epoch,
+            seq: prefix.sequence + offset,
+            fence: attached.fence,
+            ts: active.clock.now + offset,
+            kind: 'item',
+            itemId: response.itemId,
+            revision: response.revision + offset,
+            body: message(
+              offset === AGENT_SESSION_HISTORY_MAX_LIMIT ? ANSWER : `Answer revision ${offset}`
+            ),
+            turnScope
+          })
+        }
         rows.push({
           v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
           epoch: prefix.epoch,
-          seq: prefix.sequence + offset,
+          seq: prefix.sequence + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
           fence: attached.fence,
-          ts: active.clock.now + offset,
-          kind: 'item',
-          itemId: response.itemId,
-          revision: response.revision + offset,
-          body: message(
-            offset === AGENT_SESSION_HISTORY_MAX_LIMIT ? ANSWER : `Answer revision ${offset}`
-          ),
-          turnScope
+          ts: active.clock.now + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
+          kind: 'tombstone',
+          itemId: disposable.itemId,
+          revision: disposable.revision + 1
         })
+        return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
+      },
+      false,
+      (result) => {
+        result.adopt()
       }
-      rows.push({
-        v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-        epoch: prefix.epoch,
-        seq: prefix.sequence + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
-        fence: attached.fence,
-        ts: active.clock.now + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
-        kind: 'tombstone',
-        itemId: disposable.itemId,
-        revision: disposable.revision + 1
-      })
-      return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
-    }, false, (result) => { result.adopt() })
+    )
     const restoredPage = await history({ direction: 'tail' })
     expect(restoredPage.liveCursor?.sequence).toBeGreaterThan(prefix.sequence)
     expect(active.adapter.acquire).toHaveBeenCalledTimes(1)

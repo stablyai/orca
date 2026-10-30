@@ -67,14 +67,18 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
       const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
       const streamed = !receipt && this.streamed([row])
-      this.deps.database().transaction((db) => {
-        if (!this.deps.prepare) {
-          insertJournalRow(db, this.deps.sessionId, row, savedAt)
-        }
-        const adopt = this.deps.prepare?.(db, [row], savedAt)
-        receipt?.write(db, row)
-        return adopt
-      }, streamed, (adopt) => adopt?.())
+      this.deps.database().transaction(
+        (db) => {
+          if (!this.deps.prepare) {
+            insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          }
+          const adopt = this.deps.prepare?.(db, [row], savedAt)
+          receipt?.write(db, row)
+          return adopt
+        },
+        streamed,
+        (adopt) => adopt?.()
+      )
       receipt?.committed()
       this.deps.commit([row], savedAt)
       return row
@@ -108,16 +112,20 @@ export class JournalRowWriter {
     }
     const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
     const streamed = !receipt && this.streamed(rows)
-    this.deps.database().transaction((db) => {
-      if (!this.deps.prepare) {
-        for (const row of rows) {
-          insertJournalRow(db, this.deps.sessionId, row, ts)
+    this.deps.database().transaction(
+      (db) => {
+        if (!this.deps.prepare) {
+          for (const row of rows) {
+            insertJournalRow(db, this.deps.sessionId, row, ts)
+          }
         }
-      }
-      const adopt = this.deps.prepare?.(db, rows, ts)
-      receipt?.write(db, receiptRow?.(rows))
-      return adopt
-    }, streamed, (adopt) => adopt?.())
+        const adopt = this.deps.prepare?.(db, rows, ts)
+        receipt?.write(db, receiptRow?.(rows))
+        return adopt
+      },
+      streamed,
+      (adopt) => adopt?.()
+    )
     receipt?.committed()
     this.deps.commit(rows, ts)
     return rows
