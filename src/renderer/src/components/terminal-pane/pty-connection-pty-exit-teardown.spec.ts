@@ -469,11 +469,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
       await flushAsyncTicks(20)
-      // SAFETY: the transport factory captures this production fresh-spawn callback.
-      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
-        | ((id: string) => void)
-        | undefined
-      onPtySpawn?.('resume-pty')
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn
+      if (typeof onPtySpawn !== 'function') {
+        throw new Error('Missing production PTY spawn callback')
+      }
+      onPtySpawn('resume-pty')
       callbacks[0]?.onData?.('too many consoles in use, max consoles is 128')
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)

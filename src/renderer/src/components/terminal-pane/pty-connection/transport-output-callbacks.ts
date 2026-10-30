@@ -28,7 +28,10 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     session.pendingReattachFit?.cancel()
     session.pendingReattachFit = null
     const generation = (session.transportStreamGeneration += 1)
-    const processExitState = session.createProcessExitState(startup)
+    // Pre-connect input already targets the first process; later streams need independent facts.
+    const processExitState =
+      generation === 1 ? session.currentProcessExitState : session.createProcessExitState(startup)
+    processExitState.startup = startup
     session.currentProcessExitState = processExitState
     const isCurrent = (): boolean =>
       !session.disposed &&
