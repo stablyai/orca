@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
+import { joinPath } from '@/lib/path'
 import { openUncommittedEntry } from './open-uncommitted-entry'
 import { useAppStore } from '@/store'
 import type {
@@ -8,6 +9,7 @@ import type {
 } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
+import { canOpenWorkingTreeStatusEntry } from '../../../../../../shared/source-control-entry-actions'
 import type { FlatEntry } from './use-selection'
 import {
   isSourceControlSplitOpenModifier,
@@ -107,6 +109,22 @@ export function useSourceControlRowOpening({
     ]
   )
 
+  const handleOpenWorkingTreeFile = useCallback(
+    (entry: GitStatusEntry) => {
+      if (!activeWorktreeId || !worktreePath || !canOpenWorkingTreeStatusEntry(entry)) {
+        return
+      }
+      openFile({
+        filePath: joinPath(worktreePath, entry.path),
+        relativePath: entry.path,
+        worktreeId: activeWorktreeId,
+        language: detectLanguage(entry.path),
+        mode: 'edit'
+      })
+    },
+    [activeWorktreeId, openFile, worktreePath]
+  )
+
   const openCommittedDiff = useCallback(
     (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => {
       if (
@@ -130,5 +148,11 @@ export function useSourceControlRowOpening({
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
 
-  return { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff }
+  return {
+    resolveSplitTargetGroupId,
+    activeOpenRowKeys,
+    handleOpenDiff,
+    handleOpenWorkingTreeFile,
+    openCommittedDiff
+  }
 }

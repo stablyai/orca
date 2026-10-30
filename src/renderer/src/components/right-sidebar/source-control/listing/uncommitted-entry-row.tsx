@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { ChevronDown, FileText, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ import { reviewNoteCountTitle } from './review-note-count-title'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
 import {
   canDiscardStatusEntry,
+  canOpenWorkingTreeStatusEntry,
   canStageStatusEntry,
   canUnstageStatusEntry
 } from '../../../../../../shared/source-control-entry-actions'
@@ -43,6 +44,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onRevealInExplorer,
   connectionId,
   onOpen,
+  onOpenFile,
   onStage,
   onUnstage,
   onDiscard,
@@ -62,6 +64,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  onOpenFile: (entry: GitStatusEntry) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string, oldPath?: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
@@ -84,6 +87,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const canStage = canStageStatusEntry(entry)
   // Parent Git cannot unstage submodule-internal files; match bulk gating.
   const canUnstage = canUnstageStatusEntry(entry)
+  const canOpenFile = canOpenWorkingTreeStatusEntry(entry)
 
   return (
     <SourceControlEntryContextMenu
@@ -93,6 +97,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
       hasWorkingTreeFile={entry.status !== 'deleted'}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
+      onOpenFile={canOpenFile ? () => onOpenFile(entry) : undefined}
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {
@@ -203,6 +208,16 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           </>
         )}
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
+          {canOpenFile && (
+            <ActionButton
+              icon={FileText}
+              title={translate('auto.components.right.sidebar.SourceControl.openFile', 'Open file')}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenFile(entry)
+              }}
+            />
+          )}
           {canDiscard && (
             <ActionButton
               icon={entry.area === 'untracked' ? Trash : Undo2}

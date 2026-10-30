@@ -238,4 +238,31 @@ describe('SourceControlEntryContextMenu', () => {
     expect(revealItem?.disabled).toBe(true)
     expect(showsLocalOnlyHint(revealItem)).toBe(true)
   })
+
+  it('opens the working-tree file from the Open file menu item', () => {
+    const onOpenFile = vi.fn()
+    renderToStaticMarkup(
+      <SourceControlEntryContextMenu
+        currentWorktreeId="worktree-1"
+        absolutePath="/repo/src/example.ts"
+        relativePath="src/example.ts"
+        hasWorkingTreeFile
+        onOpenFile={onOpenFile}
+        onRevealInExplorer={vi.fn()}
+      >
+        <div />
+      </SourceControlEntryContextMenu>
+    )
+
+    const openFileItem = items.list.find((item) => childrenText(item.children) === 'Open file')
+    expect(openFileItem).toBeDefined()
+    openFileItem?.onSelect?.()
+    expect(onOpenFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the Open file menu item when the row cannot open a working-tree file', () => {
+    renderMenu()
+
+    expect(items.list.find((item) => childrenText(item.children) === 'Open file')).toBeUndefined()
+  })
 })
