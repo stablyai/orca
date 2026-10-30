@@ -97,7 +97,6 @@ export function createClaudeSessionPublication(input: {
       appliedInputOptions: new Map(
         [...(input.options ?? [])].filter(([key]) => key === 'model' || key === 'effort')
       ),
-      launchedModel: null,
       fastModeAtStart: false,
       translator: input.translator,
       events: input.events,

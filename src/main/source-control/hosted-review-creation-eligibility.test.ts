@@ -246,29 +246,31 @@ describe('getHostedReviewCreationEligibility', () => {
     })
   })
 
-  it('uses exact remote-ref probes instead of a wildcard ref scan', async () => {
+  it('probes every remote candidate in one exact for-each-ref call', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\nfork\n', stderr: '' }
       }
-      if (args[0] === 'show-ref') {
-        return args.at(-1) === 'refs/remotes/fork/main'
-          ? { stdout: '', stderr: '' }
-          : Promise.reject(Object.assign(new Error('missing ref'), { code: 1 }))
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/fork/main\n', stderr: '' }
       }
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
 
     await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
-      'show-ref',
-      '--verify',
-      '--quiet',
-      '--',
-      'refs/remotes/fork/main'
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['remote'],
+      [
+        'for-each-ref',
+        '--format=%(refname)',
+        '--',
+        'refs/remotes/origin/main',
+        'refs/remotes/upstream/main',
+        'refs/remotes/fork/main'
+      ]
     ])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/fork/main'],
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      expect.any(Array),
       expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 })
     )
   })

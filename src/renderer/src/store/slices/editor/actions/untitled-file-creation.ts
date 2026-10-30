@@ -76,20 +76,49 @@ export async function createUntitledFileInActiveWorkspace(
   }
 }
 
+/** Creates `untitled<extension>` at the active workspace root, seeded with `readContent`. */
+function openSeededUntitledFile(
+  get: EditorGet,
+  extension: string,
+  readContent: () => Promise<string>,
+  groupId?: string
+): Promise<boolean> {
+  return createUntitledFileInActiveWorkspace(
+    get,
+    groupId,
+    async (context) =>
+      createUntitledMarkdownFile(
+        context.worktreePath,
+        context.worktreeId,
+        context.connectionId,
+        context.target,
+        {
+          newFile: { extension, content: await readContent() },
+          operationProvenance: context.operationProvenance,
+          expectedSshTargetId: context.expectedSshTargetId,
+          expectedSshConnectionGeneration: context.expectedSshConnectionGeneration,
+          expectedExecutionHostId: context.expectedExecutionHostId,
+          assertOperationCurrent: context.assertOperationCurrent
+        }
+      ),
+    translate('auto.store.pluginNewFile.failed', "Couldn't create the file.")
+  )
+}
+
 export function createPluginNewFileActions(
   _set: EditorSet,
   get: EditorGet
-): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace'> {
+): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace' | 'openSampleFileInActiveWorkspace'> {
   return {
     openNewPluginFileInActiveWorkspace: async (newFile, groupId) => {
       const readTemplate = window.api?.plugins?.readNewFileTemplate
       if (!readTemplate) {
         return
       }
-      await createUntitledFileInActiveWorkspace(
+      await openSeededUntitledFile(
         get,
-        groupId,
-        async (context) => {
+        newFile.extension,
+        async () => {
           const content = await readTemplate({
             pluginKey: newFile.pluginKey,
             newFileId: newFile.id
@@ -103,23 +132,13 @@ export function createPluginNewFileActions(
               )
             )
           }
-          return createUntitledMarkdownFile(
-            context.worktreePath,
-            context.worktreeId,
-            context.connectionId,
-            context.target,
-            {
-              newFile: { extension: newFile.extension, content },
-              operationProvenance: context.operationProvenance,
-              expectedSshTargetId: context.expectedSshTargetId,
-              expectedSshConnectionGeneration: context.expectedSshConnectionGeneration,
-              expectedExecutionHostId: context.expectedExecutionHostId,
-              assertOperationCurrent: context.assertOperationCurrent
-            }
-          )
+          return content
         },
-        translate('auto.store.pluginNewFile.failed', "Couldn't create the file.")
+        groupId
       )
+    },
+    openSampleFileInActiveWorkspace: async (sample) => {
+      await openSeededUntitledFile(get, sample.extension, async () => sample.content)
     }
   }
 }

@@ -41,7 +41,13 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'Icon',
+  Play: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  X: 'Icon'
+}))
 const notifications = vi.hoisted(() => ({
   error: vi.fn(),
   success: vi.fn(),

@@ -1,9 +1,16 @@
+import {
+  canonicalSourceControlActionSelection,
+  commitSourceControlActionArguments,
+  editSourceControlActionArguments,
+  pickSourceControlActionAgent,
+  selectSourceControlActionRecipe,
+  type CurrentActionSelection
+} from '../../../../shared/source-control-action-selection'
+import { captureSourceControlActionSelection } from '../../../../shared/source-control-ai-operation-policy'
 import { useCallback, useMemo, useState } from 'react'
 import { resolveSourceControlLaunchAgentScope } from '../../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
@@ -23,11 +30,10 @@ const DEFAULT_SAVE_TARGET_VALUE = 'global'
 export function useSourceControlAgentActionDialog({
   open,
   initialRecipe: capturedRecipe,
+  initialSelection,
   onOpenChange,
   actionId,
   baseCommandInput,
-  savedCommandInputTemplate,
-  savedAgentArgs,
   worktreeId,
   groupId,
   connectionId,
@@ -36,7 +42,6 @@ export function useSourceControlAgentActionDialog({
   launchPlatform,
   launchSource,
   recoveryContext,
-  savedAgentId,
   onSaveAgentDefault,
   onLaunchAccepted,
   onLaunchAborted,
@@ -45,30 +50,18 @@ export function useSourceControlAgentActionDialog({
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
   const repo = useRepoById(repoId ?? null)
-  const initialRecipe = useCallback((): SourceControlActionRecipe => {
-    if (capturedRecipe) {
-      return capturedRecipe
-    }
-    const { surface, ...resolved } = resolveSourceControlActionRecipe({ settings, repo, actionId })
-    const agentId = savedAgentId ?? null
-    return {
-      ...resolved,
-      // A saved chat-or-CLI pick belongs to the saved agent, like its model.
-      ...(surface && resolved.agentId === agentId ? { surface } : {}),
-      agentId,
-      commandInputTemplate: savedCommandInputTemplate ?? '{basePrompt}',
-      ...(savedAgentArgs != null ? { agentArgs: savedAgentArgs } : {})
-    }
-  }, [
-    capturedRecipe,
-    settings,
-    repo,
-    actionId,
-    savedAgentId,
-    savedCommandInputTemplate,
-    savedAgentArgs
-  ])
-  const [recipe, setRecipe] = useState(initialRecipe)
+  const [currentSelection, setCurrentSelection] = useState<CurrentActionSelection>(
+    () =>
+      initialSelection ??
+      (capturedRecipe
+        ? canonicalSourceControlActionSelection(capturedRecipe)
+        : captureSourceControlActionSelection({ settings, repo, actionId }))
+  )
+  const recipe = useMemo(
+    () => selectSourceControlActionRecipe(currentSelection),
+    [currentSelection]
+  )
+  const [argumentsEdited, setArgumentsEdited] = useState(false)
   const [livePick, setLivePick] = useState<AgentLaunchSurface | undefined>(undefined)
   const commandTemplate = recipe.commandInputTemplate ?? '{basePrompt}'
   const agentArgs = recipe.agentArgs ?? ''
@@ -113,9 +106,16 @@ export function useSourceControlAgentActionDialog({
       selectedAgent,
       commandInput,
       trimmedCommandInput,
-      agentArgs: recipe.agentArgs,
       agentArgsApply: choice.launchAppliesAgentArgs,
       recipe: choice.canSaveSurface ? recipe : (({ surface: _surface, ...rest }) => rest)(recipe),
+      prepareRecipe: (agent) => {
+        const submitted = argumentsEdited
+          ? commitSourceControlActionArguments(currentSelection, agent).recipe
+          : recipe
+        return choice.canSaveSurface
+          ? submitted
+          : (({ surface: _surface, ...rest }) => rest)(submitted)
+      },
       saveLaunchRecipe,
       saveTargetValue,
       actionId,
@@ -173,19 +173,30 @@ export function useSourceControlAgentActionDialog({
   const onAgentPick = (agent: TuiAgent, surface?: AgentLaunchSurface): void => {
     const saved = savedSurfaceForPick(choice.observation.model, agent, surface)
     setLivePick(surface)
-    setRecipe(({ launchPreferences, surface: _previous, ...current }) => ({
-      ...current,
-      agentId: agent,
-      ...(launchPreferences?.agentId === agent ? { launchPreferences } : {}),
-      ...(saved ? { surface: saved } : {})
-    }))
+    setCurrentSelection((previous) =>
+      pickSourceControlActionAgent(
+        argumentsEdited && selectedAgent !== agent
+          ? commitSourceControlActionArguments(previous, selectedAgent ?? agent).selection
+          : previous,
+        agent,
+        selectedAgent,
+        saved
+      )
+    )
+    if (selectedAgent !== agent) {
+      setArgumentsEdited(false)
+    }
     resetDeliveryPlan()
   }
-  const onAgentArgsChange = resetPlanAfter((agentArgs: string) =>
-    setRecipe((current) => ({ ...current, agentArgs }))
-  )
+  const onAgentArgsChange = resetPlanAfter((agentArgs: string) => {
+    setArgumentsEdited(true)
+    setCurrentSelection((current) => editSourceControlActionArguments(current, agentArgs))
+  })
   const onCommandTemplateChange = resetPlanAfter((commandInputTemplate: string) =>
-    setRecipe((current) => ({ ...current, commandInputTemplate }))
+    setCurrentSelection((selection) => ({
+      ...selection,
+      current: { ...selection.current, commandInputTemplate }
+    }))
   )
   const onSaveLaunchRecipeChange = useMemo(
     () => resetPlanAfter(setSaveLaunchRecipe),

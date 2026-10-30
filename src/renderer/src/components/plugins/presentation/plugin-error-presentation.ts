@@ -48,8 +48,16 @@ export function pluginInstallErrorMessage(cause: unknown): string {
   )
 }
 
-export function invalidPluginErrorMessage(detailValue: string): string {
+/** `installed`: a copy Orca installed, so its user can't edit the manifest; dev folders can. */
+export function invalidPluginErrorMessage(detailValue: string, installed = false): string {
   const detail = detailValue.toLowerCase()
+  // Why everything but a version gap: the user of an installed copy can't fix its files.
+  if (installed && !detail.includes('requires orca')) {
+    return translate(
+      'auto.components.settings.pluginError.installedManifestUnloadable',
+      "This version can't load in this Orca. Update or reinstall it."
+    )
+  }
   if (detail.includes('missing orca-plugin.json')) {
     return translate(
       'auto.components.settings.pluginError.invalidManifestMissing',

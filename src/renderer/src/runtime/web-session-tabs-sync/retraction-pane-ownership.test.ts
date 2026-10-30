@@ -10,7 +10,7 @@ import {
 } from '../web-session-tabs-sync-test-harness'
 import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
 import { buildRetractedMirroredTabSweepPatch } from './agent-status-primitives'
-import type { WebSessionTabsBatchContext } from './state'
+import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import {
   getForegroundTerminalTabLastSeenAtById,
   resetForegroundTerminalTabIdsForTests,
@@ -28,7 +28,18 @@ it.each([true, false])('cleans unrelated tabs when a collision is mirrored=%s', 
   const owned = makePaneKey(collision, LEAF_ID)
   const foreign = makePaneKey(collision, SECOND_LEAF_ID)
   const normal = makePaneKey(ordinary, LEAF_ID)
+  const conversations: WebSessionTabsSyncState['agentConversationsByPaneKey'] = {
+    [owned]: {
+      paneKey: owned,
+      worktreeId: 'folder:own',
+      executionHostId: 'local',
+      connectionId: 'host-a',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: '019fd532-7c11-7a90-b6de-4e1a2c3d5f60' }
+    }
+  }
   const state = makeState({
+    agentConversationsByPaneKey: conversations,
     acknowledgedAgentsByPaneKey: { [foreign]: 2 },
     agentStatusByPaneKey: Object.fromEntries(
       [owned, normal].map((paneKey) => [
@@ -57,6 +68,8 @@ it.each([true, false])('cleans unrelated tabs when a collision is mirrored=%s', 
     )
     const patch = buildRetractedMirroredTabSweepPatch(state, {}, null, [collision, ordinary], scope)
     const after = { ...state, ...patch }
+    expect(after.agentConversationsByPaneKey).toBe(conversations)
+    expect(patch).not.toHaveProperty('agentConversationsByPaneKey')
     expect(after.acknowledgedAgentsByPaneKey?.[foreign]).toBe(2)
     expect(after.agentStatusByPaneKey[normal]).toBeUndefined()
     expect(after.recentlyClosedAgentStatusTabIds?.[ordinary]).toBeDefined()

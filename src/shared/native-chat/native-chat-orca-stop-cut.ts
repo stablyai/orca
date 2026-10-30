@@ -10,7 +10,10 @@ import { STALE_SESSION_ROW_PREFIX } from '../agent-session-stop-row-identity'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../agent-session-turn-record'
 import { agentTurnVerdict, type AgentTurnOutcome } from '../agent-turn-outcome'
 import { structuredAgentSessionCommandTurnItemIds } from '../structured-agent-session-command-entry'
-import { isStructuredAgentSessionNonRequestRow } from '../structured-agent-session-latest-request'
+import {
+  isStructuredAgentSessionNonRequestRow,
+  type StructuredAgentSessionLatestRequest
+} from '../structured-agent-session-latest-request'
 
 // Dedupe shutdown rows by stopped child; preserve the legacy prefix so older clients add no duplicate notice.
 export function orcaShutdownRowClientMessageId(
@@ -89,4 +92,17 @@ export function latestNativeChatOrcaStopCut(
   const turnItemId = latest.turnItem.itemId
   const cause = findInNativeChatTurn(items, turnItemId, orcaStopCauseOfRow)
   return cause ? { turnItemId, cause } : null
+}
+
+/** Intentional shutdown is cancellation in status; retain raw cut verdicts for Continue. */
+export function nativeChatStatusTurnOutcome(
+  request: StructuredAgentSessionLatestRequest | null,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+): AgentTurnOutcome | null {
+  const verdict = request
+    ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
+    : null
+  const stop = verdict === 'interruption' ? latestNativeChatOrcaStopCut(items, submissions) : null
+  return stop && stop.cause !== 'crash' ? 'cancellation' : verdict
 }

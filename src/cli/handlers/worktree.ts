@@ -76,14 +76,11 @@ function getOptionalSetupDecision(
   if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
     throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
   }
-  if (flags.get('run-hooks') === true) {
-    if (setup !== undefined && setup !== 'run') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Choose either --run-hooks or --setup run, not contradictory setup flags.'
-      )
-    }
-    return setup
+  if (flags.get('run-hooks') === true && setup !== undefined && setup !== 'run') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Choose either --run-hooks or --setup run, not contradictory setup flags.'
+    )
   }
   return setup
 }
@@ -294,6 +291,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       worktree,
       hostId,
       force: flags.get('force') === true,
+      deleteBranch: flags.get('delete-branch') === true,
       runHooks: flags.get('run-hooks') === true,
       // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
@@ -304,7 +302,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       // Hosts that predate waiting answer on acceptance.
       value.removing
         ? 'removed: false\nOrca is still deleting the checkout in the background.'
-        : `removed: ${value.removed}`
+        : value.removed === true
+          ? 'removed: true'
+          : 'Removal is not confirmed.'
     )
   }
 }

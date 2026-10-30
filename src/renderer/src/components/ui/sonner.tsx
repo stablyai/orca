@@ -9,6 +9,8 @@ import type { SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
 import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
+import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
+import { NOTIFICATION_CARD_STACK_BOTTOM } from '@/lib/notification-card-composer-clearance'
 
 // Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
 export const INLINE_ACTION_CLASS_NAMES = {
@@ -32,6 +34,12 @@ function blockModalToastInteraction(event: SyntheticEvent): void {
     event.preventDefault()
     event.stopPropagation()
   }
+}
+
+const TOASTER_OFFSET = {
+  bottom: `calc(${NOTIFICATION_CARD_STACK_BOTTOM} + env(safe-area-inset-bottom, 0px) + var(${NOTIFICATION_CARD_STACK_HEIGHT_VAR}, 0px))`,
+  // Why 1rem: the cards' right edge, so a toast above them lines up instead of jutting left.
+  right: '1rem'
 }
 
 const Toaster = ({ ...props }: ToasterProps) => {
@@ -59,9 +67,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       <Sonner
         theme={theme as ToasterProps['theme']}
         position="bottom-right"
-        // Reserve status-bar clearance at both normal and sub-600px mobileOffset breakpoints.
-        offset={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
-        mobileOffset={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
+        // Clear the status bar, then any notification cards in this corner, at both breakpoints.
+        offset={TOASTER_OFFSET}
+        mobileOffset={TOASTER_OFFSET}
         className="toaster group"
         icons={{
           success: <CircleCheckIcon className="size-4" />,

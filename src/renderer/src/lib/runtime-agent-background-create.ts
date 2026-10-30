@@ -6,7 +6,7 @@ import type { SessionOptionValue } from '../../../shared/native-chat/input/nativ
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
-  agentPermissionNeedsPreparedCommand,
+  agentLaunchNeedsPreparedCommand,
   toAgentLaunchPreferences
 } from '../../../shared/agent-launch-preferences'
 import {
@@ -40,7 +40,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions, args.agent)
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
-    hostAuthority: agentPermissionNeedsPreparedCommand(args.agent, args.sessionOptions)
+    hostAuthority: agentLaunchNeedsPreparedCommand(args.agent, args.sessionOptions)
       ? undefined
       : () =>
           operation.run(async (clientOperationId) =>
@@ -52,9 +52,9 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
                   ...(await keyboardOptions(args.environmentId)),
                   worktree: toRuntimeWorktreeSelector(args.worktreeId),
                   agent: args.agent,
-                  ...(args.prompt
-                    ? { prompt: args.prompt, promptDelivery: 'auto-submit' as const }
-                    : {}),
+                  ...(args.prompt ? { prompt: args.prompt } : {}),
+                  // Follow-up prompts arrive after startup but still need an unattended launch.
+                  promptDelivery: 'auto-submit',
                   ...(launchPreferences ? { launchPreferences } : {}),
                   placement: { tabId: args.tabId, leafId: args.leafId },
                   // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.

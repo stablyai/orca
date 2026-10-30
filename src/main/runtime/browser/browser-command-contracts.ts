@@ -55,6 +55,6 @@ export type RuntimeBrowserCommandHost = {
   ): void
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
-  /** Persist/start only when no host window exists. */
-  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start'>
+  /** Persist/start only when no host window exists; hasStartable reads saved tabs either way. */
+  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start' | 'hasStartable'>
 }

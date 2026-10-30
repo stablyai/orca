@@ -10,6 +10,9 @@ import {
 } from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
+import { useAppStore } from '@/store'
 import {
   clearActivityThread,
   clearCompletedActivity,
@@ -40,6 +43,18 @@ export function getActivityThreadCopyTargets(
   }
   // Same order as the workspace menu: Copy Path, then the name.
   return [path, title]
+}
+
+function formatCopyTarget(thread: AgentPaneThread, target: CopyTarget): string {
+  if (target.key !== 'path') {
+    return target.value
+  }
+  const owner = getWorktreeRowLocalPathOpenOwner(
+    useAppStore.getState(),
+    thread.worktree,
+    thread.repo?.connectionId
+  )
+  return formatClipboardFilePath(target.value, owner)
 }
 
 /** Right-click actions for an activity row; mirrors the row's own click and hover actions. */
@@ -158,7 +173,7 @@ function ActivityThreadSingleMenuItems({
       {getActivityThreadCopyTargets(thread, canJump).map((target) => (
         <ContextMenuItem
           key={target.key}
-          onSelect={() => void window.api.ui.writeClipboardText(target.value)}
+          onSelect={() => void window.api.ui.writeClipboardText(formatCopyTarget(thread, target))}
         >
           <Copy className="size-3.5" />
           {target.label}

@@ -40,6 +40,7 @@ export function TroubleshootView({
   rootRef,
   diagnosticStatus,
   checks,
+  hostEndpoints,
   runDiagnostics,
   onBack,
   onConnectionLog,
@@ -48,6 +49,7 @@ export function TroubleshootView({
   rootRef?: (node: View | null) => void
   diagnosticStatus: DiagnosticStatus
   checks: CheckResult[]
+  hostEndpoints: readonly string[]
   runDiagnostics: () => void
   onBack: () => void
   onConnectionLog: () => void
@@ -146,7 +148,7 @@ export function TroubleshootView({
         </Text>
 
         <View style={styles.section}>
-          {troubleshootCommonIssues(t).map((section, i) => (
+          {troubleshootCommonIssues(t, hostEndpoints).map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable

@@ -376,7 +376,6 @@
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-cap.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-offer-withdrawal.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-ownership.test.ts
-1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-restore.test.ts
 2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-start-admission.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-stop-aborts-start.test.ts
@@ -435,7 +434,6 @@
 1 test-no-real-time-wait:src/main/runtime/runtime-rpc-dispatch-inject-long-poll.test.ts
 6 test-no-real-time-wait:src/main/runtime/runtime-rpc-long-poll-transport.test.ts
 1 test-no-real-time-wait:src/main/runtime/sidebar-inputs/paired-server-rows-producer.test.ts
-1 test-no-real-time-wait:src/main/runtime/sidebar-inputs/workspace-rows-producer.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-legacy-send-behind-command.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-provider-operations-while-starting.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-runtime-exit.test.ts
@@ -771,7 +769,6 @@
 4 test-no-wall-clock:src/cli/runtime/serve-bundle-park.test.ts
 5 test-no-wall-clock:src/cli/runtime/serve-pid1-init-reaper.test.ts
 1 test-no-wall-clock:src/cli/runtime/status-caller.test.ts
-2 test-no-wall-clock:src/cli/runtime/status.test.ts
 1 test-no-wall-clock:src/main/acp/acp-structured-mail-admission.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/managed-hook-timeout.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/manual-compact-hook-stream.test.ts
@@ -1132,7 +1129,7 @@
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/tab-bar/cli-chat-resume-run.test.ts
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/open-tab-search.test.ts
-4 test-no-wall-clock:src/renderer/src/components/task-page-jira-cache-selectors.test.ts
+4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 1 test-no-wall-clock:src/renderer/src/components/task-page-jira-saved-filter-load-failure.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/cache-timer-seeding.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
@@ -1147,7 +1144,6 @@
 6 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/workspace-cleanup-confirm-remove.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/worktree-creation/WorktreeCreationPanel.test.tsx
 2 test-no-wall-clock:src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts
-1 test-no-wall-clock:src/renderer/src/hooks/ipc-events/worktree-event-lineage-refresh.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 1 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-agent-status-hook-titles.test.ts
 1 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts
@@ -1231,7 +1227,6 @@
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/recorded-request-params.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/rpc-recording-through-bridge.test.ts
 1 test-timeout-needs-reason:mobile/src/transport/mobile-web-bundle-host-slow-link.test.ts
-1 test-timeout-needs-reason:mobile/src/transport/rpc-client-live-recovery.test.ts
 3 test-timeout-needs-reason:mobile/src/transport/rpc-client-reconnect-wait.test.ts
 1 test-timeout-needs-reason:src/cli/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/launch-serve-replaced-app-restart.test.ts

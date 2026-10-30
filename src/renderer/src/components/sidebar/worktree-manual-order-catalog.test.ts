@@ -3,6 +3,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { worktree } from './worktree-list-groups-test-fixtures'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
+import { getWorktreeIdFromHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 function row(id: string, overrides: Partial<Worktree> = {}): Worktree {
   return { ...worktree, id, displayName: id, ...overrides }
@@ -34,29 +35,33 @@ describe('buildWorktreeManualOrderCatalog', () => {
       folderWorkspaces: [folder()]
     })
 
-    expect(catalog.orderedIds).toEqual(['high', 'folder:folder-1', 'low'])
-    expect(catalog.rankByWorktreeId.size).toBe(0)
+    expect(catalog.orderedKeys.map(getWorktreeIdFromHostIdentity)).toEqual([
+      'high',
+      'folder:folder-1',
+      'low'
+    ])
+    expect(catalog.rankByKey.size).toBe(0)
   })
 
-  it('treats a same-id host cluster as durable only when every owner agrees', () => {
+  it('ranks each same-id copy on its own host', () => {
     const sameId = 'repo::/same'
-    const complete = buildWorktreeManualOrderCatalog({
+    const catalog = buildWorktreeManualOrderCatalog({
       worktrees: [
-        row(sameId, { hostId: 'local', manualOrder: 900 }),
-        row(sameId, { hostId: 'ssh:openclaw', manualOrder: 900 })
-      ],
-      folderWorkspaces: []
-    })
-    const incomplete = buildWorktreeManualOrderCatalog({
-      worktrees: [
-        row(sameId, { hostId: 'local', manualOrder: 900 }),
-        row(sameId, { hostId: 'ssh:openclaw', manualOrder: undefined })
+        row(sameId, { hostId: 'ssh:vm-a', manualOrder: 100 }),
+        row(sameId, { hostId: 'ssh:vm-b', manualOrder: 900 }),
+        row(sameId, { hostId: 'ssh:vm-c', manualOrder: undefined })
       ],
       folderWorkspaces: []
     })
 
-    expect(complete.orderedIds).toEqual([sameId])
-    expect(complete.rankByWorktreeId.get(sameId)).toBe(900)
-    expect(incomplete.rankByWorktreeId.has(sameId)).toBe(false)
+    expect(catalog.orderedKeys).toEqual([
+      `ssh:vm-b|${sameId}`,
+      `ssh:vm-a|${sameId}`,
+      `ssh:vm-c|${sameId}`
+    ])
+    expect([...catalog.rankByKey]).toEqual([
+      [`ssh:vm-b|${sameId}`, 900],
+      [`ssh:vm-a|${sameId}`, 100]
+    ])
   })
 })

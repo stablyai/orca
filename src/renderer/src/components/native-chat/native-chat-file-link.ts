@@ -94,7 +94,7 @@ export function resolveNativeChatFileLinkContext(
 type FileLinkContextInputState = WorktreeRuntimeOwnerState & NativeChatTabDirectoryState
 
 // Every field the directory and owner resolvers read.
-const FILE_LINK_CONTEXT_INPUT_KEYS = [
+export const FILE_LINK_CONTEXT_INPUT_KEYS = [
   'repos',
   'settings',
   'worktreesByRepo',
@@ -107,12 +107,13 @@ const FILE_LINK_CONTEXT_INPUT_KEYS = [
   'runtimeEnvironments',
   'runtimeEnvironmentCatalogHydrated',
   'removedRuntimeEnvironmentIds',
-  'floatingWorkspacePath',
-  'structuredSessionLaunchDirectoryByTabId'
+  'floatingWorkspacePath'
 ] as const satisfies readonly (keyof FileLinkContextInputState)[]
 type UnlistedInput = Exclude<
   keyof FileLinkContextInputState,
-  (typeof FILE_LINK_CONTEXT_INPUT_KEYS)[number] | 'unifiedTabsByWorktree'
+  | (typeof FILE_LINK_CONTEXT_INPUT_KEYS)[number]
+  | 'unifiedTabsByWorktree'
+  | 'structuredSessionLaunchDirectoryByTabId'
 >
 // Fails to compile when either state type gains a key not listed above; deeper resolver types are not checked.
 const allInputsListed: [UnlistedInput] extends [never] ? true : UnlistedInput = true
@@ -128,6 +129,8 @@ export function createNativeChatFileLinkContextSelector(tabId: string) {
     const next = [
       owner,
       state.unifiedTabsByWorktree,
+      // Why: only this tab's pin; the bridge publishes one pin per write across every chat.
+      state.structuredSessionLaunchDirectoryByTabId?.[tabId],
       ...FILE_LINK_CONTEXT_INPUT_KEYS.map((key) => state[key])
     ]
     if (!inputs || next.some((input, index) => input !== inputs?.[index])) {

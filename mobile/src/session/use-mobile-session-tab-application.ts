@@ -9,6 +9,7 @@ import { useCallback, useRef } from 'react'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalRecordsByCurrentOrder,
+  mobileFileTabsReadSameDocument,
   mobileSessionTabsEqual,
   terminalRecordsEqual
 } from './mobile-terminal-records'
@@ -39,6 +40,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     setTerminals,
     terminalsRef,
     setSessionTabs,
+    setFileDocs,
     sessionTabsRef,
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
@@ -127,6 +129,27 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           ...phoneOwnedTabIds,
           ...selectionClaims
         ])
+      }
+      const previousTabsById = new Map(currentSessionTabs.map((tab) => [tab.id, tab]))
+      const changedFileTabIds: string[] = []
+      for (const tab of nextTabs) {
+        const previous = previousTabsById.get(tab.id)
+        if (
+          tab.type === 'file' &&
+          previous?.type === 'file' &&
+          !mobileFileTabsReadSameDocument(previous, tab)
+        ) {
+          changedFileTabIds.push(tab.id)
+        }
+      }
+      if (changedFileTabIds.length > 0) {
+        setFileDocs((prev) => {
+          const next = new Map(prev)
+          for (const id of changedFileTabIds) {
+            next.delete(id)
+          }
+          return next
+        })
       }
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0

@@ -68,7 +68,7 @@ it.each(['success', 'budget'] as const)(
       .map((row) => JSON.stringify(row))
       .join('\n')
     const probe = createClaudeModelCatalogProbe({
-      resolveCommand: () => process.execPath,
+      resolveCommand: () => ({ command: process.execPath, prefixArgs: [] }),
       resolveEnv: () => ({}),
       resolveInheritedEnv: async () => ({}),
       resolveAuthPolicy: () => ({ account: 'system' }),

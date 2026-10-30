@@ -5,6 +5,17 @@ import { Button } from '../../ui/button'
 import { pluginPanelUnavailableReason } from './plugin-contribution-action-availability'
 
 /** Leaves Settings for the workspace it came from and reveals the panel there. */
+export function openPluginPanelFromSettings(panel: Pick<PluginHostPanel, 'tabKey'>): void {
+  const state = useAppStore.getState()
+  // Why re-check: the store may have moved on since this rendered.
+  if (pluginPanelUnavailableReason(state)) {
+    return
+  }
+  state.closeSettingsPage()
+  state.setRightSidebarTab(panel.tabKey)
+  state.setRightSidebarOpen(true)
+}
+
 export function PluginContributionActionPanel({
   panel
 }: {
@@ -25,16 +36,7 @@ export function PluginContributionActionPanel({
           'Open panel: {{value0}}',
           { value0: panel.title }
         )}
-        onClick={() => {
-          const state = useAppStore.getState()
-          // Why re-check: the store may have moved on since this rendered.
-          if (pluginPanelUnavailableReason(state)) {
-            return
-          }
-          state.closeSettingsPage()
-          state.setRightSidebarTab(panel.tabKey)
-          state.setRightSidebarOpen(true)
-        }}
+        onClick={() => openPluginPanelFromSettings(panel)}
       >
         {translate('auto.components.settings.PluginContributionActionPanel.open', 'Open panel')}
       </Button>

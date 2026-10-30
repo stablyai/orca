@@ -111,7 +111,7 @@ function renderNewChat(agent: string) {
       turnId: null,
       unloadedTurnRevisions: undefined,
       mutate: vi.fn(),
-      launch: { kind: 'new', heldOptions: {}, worktree: 'id:wt-1' }
+      launch: { kind: 'new', worktree: 'id:wt-1' }
     })
     frames.push(pill(options.optionSnapshot))
     return options

@@ -115,6 +115,7 @@ async function replayCapture(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     openConnection: claude.openConnection,

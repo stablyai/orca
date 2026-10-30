@@ -118,6 +118,7 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  deathEvidenceKind?: 'kill-delivered'
   /** Execution-host observations from a requested provider close, when available. */
   processExit?: {
     root: 'live' | 'unverifiable' | 'exited'
@@ -276,6 +277,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
+  /** Opt in only when setOption can update idle metadata without a provider turn. */
+  canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
   /** Applied inputs for this exact child; observations never decide message admission. */
   readAppliedInputOptions?(input: {
     sessionId: string
@@ -293,7 +296,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
-  readOptionRestoreFailures?(sessionId: string): readonly string[]
+  /** A fresh independent text task; never acquires or writes a turn in the chat. */
+  generateText?(input: {
+    agent: string
+    accountHome: AgentSessionAccountHome
+    prompt: string
+    shouldExecute?: () => boolean
+  }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(input: {
     identity: AgentSessionJournalIdentity

@@ -28,7 +28,6 @@ export function handleCodexSessionExit(input: {
     return false
   }
   session.exitObservedAt ??= Date.now()
-  session.events?.observeExit?.(session.dispatchEchoes.heldSends(), session.exitObservedAt)
   // Release waits even if terminal journal rows are refused.
   session.turnOpenWaits.releaseAll()
   const event: StructuredAgentSessionEndedEvent = {
@@ -36,7 +35,8 @@ export function handleCodexSessionExit(input: {
     sessionId: input.sessionId,
     // Preserve the initiating close reason when its exit arrives.
     reason: ((input.closedByOrca && session.orcaClose?.reason) || input.error).message,
-    // Orca-initiated closes are host faults, regardless of the exit report.
+    // Orca-initiated closes are host faults, regardless of the exit report. No spawn ENOENT reaches
+    // here: a session registers only after the CLI answered thread/start, so the acquire path owns it.
     failure: input.closedByOrca
       ? agentSessionFailureFact('hostFault')
       : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(input.error) }),
@@ -49,10 +49,15 @@ export function handleCodexSessionExit(input: {
           }
         }
       : {}),
+    ...(input.connection?.closeResult?.killDelivered &&
+    input.connection.closeResult.root !== 'exited'
+      ? { deathEvidenceKind: 'kill-delivered' as const }
+      : {}),
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt: session.exitObservedAt
   } as const
+  session.events?.observeExit?.(session.dispatchEchoes.heldSends(), session.exitObservedAt, event)
   // Refused terminal rows use host settlement fallback; the observed child exit remains proven.
   const admission = session.translator?.handle(event) ?? { accepted: true }
   if (!admission.accepted) {

@@ -51,7 +51,7 @@ function harness(deps: Partial<CodexAtRestSkillsDeps> = {}) {
   const catalog = createCodexAtRestSkillCatalog({
     resolveWorkspacePath: async () => '/work/one',
     resolveLaunchArgs: () => [],
-    resolveCommand: () => '/bin/codex',
+    resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
     runSession: async (invocation, body) => {
       calls.push(invocation)
       peak = Math.max(peak, ++live)
@@ -100,6 +100,7 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
   it('answers every pinned folder from one probe before it settles, which then ends the whole tree', async () => {
     const invocations: CodexAppServerInvocation[] = []
     const settling: (() => void)[] = []
+    let prefixArgs = ['run', '--', 'codex']
     const catalog = createCodexAtRestSkillCatalog({
       resolveWorkspacePath: async () => '/unused',
       resolveLaunchArgs: () => [
@@ -111,7 +112,7 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
         'read-only'
       ],
       resolveEnvironment: async () => ({ PATH: '/bin', CUSTOM_AGENT_ENV: 'configured' }),
-      resolveCommand: () => '/bin/codex',
+      resolveCommand: () => ({ command: '/bin/launcher', prefixArgs }),
       sleep: () => new Promise((resolve) => settling.push(resolve)),
       runSession: async (invocation, body) => {
         invocations.push(invocation)
@@ -132,7 +133,7 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
       { name: 'two-skill', kind: 'skill', path: '/work/two/two-skill/SKILL.md' }
     ])
     expect(invocations.map((invocation) => invocation.args)).toEqual([
-      ['--disable', 'plugins', '-c', 'features.test=true', 'app-server']
+      ['run', '--', 'codex', '--disable', 'plugins', '-c', 'features.test=true', 'app-server']
     ])
     // A settling probe must not hold the folder open, or Windows cannot remove the worktree.
     expect(invocations[0]?.cwd?.startsWith('/work')).toBe(false)
@@ -143,7 +144,21 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
     })
     expect(invocations[0]?.envToDelete).toEqual(['ORCA_CHAT_SCRATCH_DIR', 'ORCA_CHAT_VISUALS_DIR'])
     expect(settling).toHaveLength(1)
+    prefixArgs = ['run', '--profile', 'other', '--', 'codex']
+    catalog.retireContext()
+    await catalog.settled(one, 1_000)
+    expect(catalog.read(one)?.some((row) => row.name === 'one-skill')).toBe(true)
+    expect(invocations).toHaveLength(2)
+    expect(invocations[1]?.args).toEqual([
+      ...prefixArgs,
+      '--disable',
+      'plugins',
+      '-c',
+      'features.test=true',
+      'app-server'
+    ])
     settling.forEach((resolve) => resolve())
+    catalog.dispose()
   })
 
   it.each(['method not found', 'temporary failure'])(
@@ -155,7 +170,7 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
       const catalog = createCodexAtRestSkillCatalog({
         resolveWorkspacePath: async () => '/work',
         resolveLaunchArgs: () => [],
-        resolveCommand: () => '/bin/codex',
+        resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
         now: () => 0,
         sleep,
         runSession: async (_invocation, body) => {

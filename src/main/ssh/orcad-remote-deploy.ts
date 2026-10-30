@@ -21,9 +21,9 @@ import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import { readOrcadBundleTarget } from './orcad-deployment-target'
 import { resolveOrcadRuntimeTarget } from '../managed-server/lifecycle/orcad-runtime-target'
 import {
-  materializeNodeRuntimeArchive,
-  nodeRuntimeArchiveCachePath
-} from '../node-runtime/pinned-runtime-materializer'
+  orcadNodeRuntimeInstallOptions,
+  type NodeRuntimeDownloadBudget
+} from './orcad-node-runtime-install-options'
 import {
   orcadActivationFenceExists,
   resolveOrcadActivationReadinessTimeout,
@@ -66,6 +66,8 @@ export type OrcadDeployOptions = {
   readinessTimeoutMs?: number
   /** WSL only; SSH hosts always re-hash the runtime (see `installOrcadBundle`). */
   recordedNodeRuntimeProbe?: boolean
+  /** WSL only: bounded Node runtime downloads; SSH keeps the default timing. */
+  nodeRuntimeDownload?: NodeRuntimeDownloadBudget
   now?: () => Date
   sleep?: (ms: number) => Promise<void>
   signal?: AbortSignal
@@ -94,9 +96,7 @@ export async function deployOrcad(
       input.readinessTimeoutMs,
       ORCAD_STARTUP_READINESS_TIMEOUT_MS
     ),
-    nodeRuntimeArchive: () =>
-      materializeNodeRuntimeArchive(target, runtimeCacheRoot, { signal: input.signal }),
-    nodeRuntimeOfflineArchivePath: nodeRuntimeArchiveCachePath(target, runtimeCacheRoot),
+    ...orcadNodeRuntimeInstallOptions(target, runtimeCacheRoot, input),
     localOrcadDir:
       input.localOrcadDir ?? (await materializeOrcadArtifact(target, { signal: input.signal }))
   }

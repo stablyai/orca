@@ -136,7 +136,8 @@ describe('orca computer action CLI validation', () => {
       session: 'manual',
       app: 'Finder',
       key: '+',
-      noScreenshot: true
+      noScreenshot: true,
+      treeDiff: true
     })
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
     expect(process.exitCode).toBeUndefined()
@@ -415,7 +416,8 @@ describe('orca computer action CLI validation', () => {
       app: 'Finder',
       elementIndex: 1,
       value: '',
-      noScreenshot: true
+      noScreenshot: true,
+      treeDiff: true
     })
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
     expect(process.exitCode).toBeUndefined()

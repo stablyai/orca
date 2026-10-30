@@ -46,7 +46,7 @@ function showStatusHoverWithoutInsertionLine(
     ? ctx.computeWorktreeStatusDrop({
         pointerY: drag.currentY,
         status: target.status,
-        draggedIds: drag.reorderDraggedIds
+        draggedKeys: drag.reorderDraggedKeys
       })
     : null
   updateLatestWorktreeStatusDropTarget(drag, target, statusDrop)

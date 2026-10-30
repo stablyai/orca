@@ -77,7 +77,7 @@ describe('real phone inline composer from More through picker pruning and host b
     agent = 'codex',
     sessionId = SESSION_ID,
     catalog: {
-      reported: { name: string; kind: 'skill' | 'command'; path?: string }[]
+      reported: { name: string; kind: 'skill' | 'command'; path?: string }[] | undefined
       discovery?: NativeChatSkillDiscoverySnapshot
     } = {
       reported: []
@@ -101,7 +101,7 @@ describe('real phone inline composer from More through picker pruning and host b
             },
             skillDiscovery: catalog.discovery ?? {
               status: 'ready',
-              skills: catalog.reported
+              skills: (catalog.reported ?? [])
                 .filter((entry) => entry.kind === 'skill' && entry.path)
                 .map((entry) => ({
                   id: entry.name,
@@ -279,6 +279,44 @@ describe('real phone inline composer from More through picker pruning and host b
         )
       ).toBe(false)
       host.leases.dispose()
+    }
+  )
+  it.each([undefined, [], [{ name: 'fast', kind: 'command' as const }]])(
+    'saves provider text under inventory %j and keeps refused edits',
+    async (reported) => {
+      for (const text of ['/fast', '/permissions']) {
+        const message = queuedDraft({
+          messageId: 'provider-edit',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'seed' }] }
+        })
+        const host = queuedEditHost(SESSION_ID, message)
+        try {
+          const { button, field } = await rows(message, 'codex', SESSION_ID, { reported })
+          sendRequest.mockImplementation(async (method, params) =>
+            method === 'agentSession.queuedMessageUpdate'
+              ? { id: 'refused', ok: false, error: { code: 'UNAVAILABLE', message: 'Try again' } }
+              : readOrHoldReply(method, params)
+          )
+          act(() => field().props.onChangeText(text))
+          await act(async () => button('Save edited message').props.onPress())
+          expect(state.hook!.queued.editor?.text).toBe(text)
+          sendRequest.mockImplementation(async (method, params) =>
+            method === 'agentSession.queuedMessageUpdate'
+              ? mutationOk(host.update(QueuedMessageUpdateParams.parse(params)))
+              : readOrHoldReply(method, params)
+          )
+          await act(async () => button('Save edited message').props.onPress())
+          expect(host.row!.body.blocks).toEqual([{ type: 'text', text }])
+          expect(
+            sendRequest.mock.calls.some(
+              ([method]) =>
+                method === 'agentSession.send' || method === 'agentSession.conversationCommand'
+            )
+          ).toBe(false)
+        } finally {
+          host.leases.dispose()
+        }
+      }
     }
   )
   it('keeps both saved files on clean Save and projects the phone picked list after an argument edit', async () => {

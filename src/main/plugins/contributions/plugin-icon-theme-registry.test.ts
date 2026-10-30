@@ -60,7 +60,8 @@ it('lists metadata and reads a theme only when it is loaded', async () => {
     {
       id: 'plugin:samples.minimal-icons/minimal',
       pluginKey: 'samples.minimal-icons',
-      label: 'Minimal'
+      label: 'Minimal',
+      revision: expect.stringMatching(/^[0-9a-f]{32}$/)
     }
   ])
   const theme = await registry.load('plugin:samples.minimal-icons/minimal')
@@ -68,6 +69,11 @@ it('lists metadata and reads a theme only when it is loaded', async () => {
   expect(theme?.svgs[theme.icons.folder ?? -1]).toContain('currentColor')
   expect(theme?.svgs[theme.fileExtensions.ts ?? -1]).toContain('#3178c6')
   await expect(registry.load('plugin:samples.other/x')).resolves.toBeNull()
+
+  // An update that changes only SVG bytes keeps id and title but installs a new tree hash.
+  const revision = registry.list()[0]?.revision
+  await registry.reconcile([{ ...plugin, contentHash: 'a'.repeat(64) }], () => true)
+  expect(registry.list()[0]?.revision).not.toBe(revision)
 })
 
 it('fails a load whose file is not an SVG document and forgets themes once disabled', async () => {

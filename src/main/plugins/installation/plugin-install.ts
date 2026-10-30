@@ -10,7 +10,8 @@ import {
 import {
   isAllowedPluginGitUrl,
   PLUGIN_COMMIT_PATTERN,
-  pluginInstallSourceSchema
+  pluginInstallSourceSchema,
+  type PluginLockEntry
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import { readPluginLockfile } from './plugin-install-lockfile-store'
@@ -24,6 +25,15 @@ import { checkoutPluginGitSource } from './plugin-git-repository'
 import { findPluginRollbackCandidate } from './plugin-rollback-candidate'
 import { readPluginInstallProvenance } from './plugin-install-provenance'
 import { publishPluginInstall } from './plugin-install-publication'
+import {
+  gitUrlPluginPublisher,
+  localPluginPublisher
+} from '../../../shared/plugins/installation/plugin-publisher-derivation'
+import {
+  isSameGitRepository,
+  splitQualifiedPluginKey
+} from '../../../shared/plugins/catalog/plugin-marketplace'
+import { readPluginManifestText } from '../plugin-manifest-file'
 
 export type { PluginInstallResult } from './plugin-install-staging'
 
@@ -47,12 +57,19 @@ export async function installPluginFromLocalPath(input: {
     if (!existsSync(join(input.sourcePath, PLUGIN_MANIFEST_FILENAME))) {
       return { ok: false, error: `no ${PLUGIN_MANIFEST_FILENAME} found in ${input.sourcePath}` }
     }
+    const reinstall = await installedPublisherFor(
+      input.pluginsDir,
+      (source) => source.kind === 'local-path' && source.path === input.sourcePath
+    )
     return installStagedPluginTree({
       pluginsDir: input.pluginsDir,
       stagingDir: input.sourcePath,
       hostVersion: input.hostVersion,
       source: { kind: 'local-path', path: input.sourcePath },
       resolvedCommit: null,
+      identity: {
+        publisher: reinstall ?? localPluginPublisher(await declaredPublisher(input.sourcePath))
+      },
       blockedPluginReason: input.blockedPluginReason
     })
   })
@@ -72,7 +89,7 @@ export async function installBundledPlugin(input: {
       hostVersion: input.hostVersion,
       source: { kind: 'bundled', bundleId: input.expectedPluginKey },
       resolvedCommit: null,
-      expectedPluginKey: input.expectedPluginKey,
+      identity: { pluginKey: input.expectedPluginKey },
       repairCorruptedVersion: true,
       blockedPluginReason: input.blockedPluginReason
     })
@@ -91,6 +108,11 @@ export async function installPluginFromGit(input: {
     return { ok: false, error: 'plugin Git URL must use HTTPS or SSH' }
   }
   return serializePluginMutation(input.pluginsDir, async () => {
+    // Why reuse: an install from before derived publishers keeps the key its data is stored under.
+    const reinstall = await installedPublisherFor(
+      input.pluginsDir,
+      (source) => source.kind === 'git' && isSameGitRepository(source.url, input.url)
+    )
     const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-install-'))
     try {
       const ref = input.ref.trim()
@@ -100,12 +122,22 @@ export async function installPluginFromGit(input: {
         destination: stagingDir,
         workingDirectory: tmpdir()
       })
+      // Why the declared one last: a URL with no owner segment (`host/repo.git`) names nobody.
+      const publisher =
+        reinstall ?? gitUrlPluginPublisher(input.url) ?? (await declaredPublisher(stagingDir))
+      if (!publisher) {
+        return {
+          ok: false,
+          error: 'cannot name a publisher for this Git URL; use one with an owner (host/owner/repo)'
+        }
+      }
       return await installStagedPluginTree({
         pluginsDir: input.pluginsDir,
         stagingDir,
         hostVersion: input.hostVersion,
         source: { kind: 'git', url: input.url, ref },
         resolvedCommit,
+        identity: { publisher },
         blockedPluginReason: input.blockedPluginReason
       })
     } catch (error) {
@@ -174,7 +206,7 @@ export async function installPluginFromMarketplace(input: {
         hostVersion: input.hostVersion,
         source,
         resolvedCommit,
-        expectedPluginKey: input.expectedPluginKey,
+        identity: { pluginKey: input.expectedPluginKey },
         ...(input.release ? { release: input.release } : {}),
         blockedPluginReason: input.blockedPluginReason,
         manifestError: input.manifestError
@@ -219,7 +251,7 @@ export async function rollbackInstalledPlugin(input: {
     const inspection = await inspectPluginInstallTree({
       rootDir: join(pluginDir, contentHash),
       hostVersion: input.hostVersion,
-      expectedPluginKey: input.pluginKey
+      identity: { pluginKey: input.pluginKey }
     })
     if (!inspection.ok || inspection.contentHash !== contentHash) {
       return {
@@ -241,4 +273,26 @@ export async function rollbackInstalledPlugin(input: {
       resolvedCommit: provenance.resolvedCommit
     }
   })
+}
+
+/** Publisher of an existing install from the same source, so reinstalling keeps its key. */
+async function installedPublisherFor(
+  pluginsDir: string,
+  sameSource: (source: PluginLockEntry['source']) => boolean
+): Promise<string | null> {
+  const entries = Object.values((await readPluginLockfile(pluginsDir)).plugins)
+  const entry = entries.find((candidate) => sameSource(candidate.source))
+  return entry ? (splitQualifiedPluginKey(entry.pluginKey)?.publisher ?? null) : null
+}
+
+async function declaredPublisher(rootDir: string): Promise<string | undefined> {
+  try {
+    const raw: unknown = JSON.parse(await readPluginManifestText(rootDir))
+    const publisher =
+      typeof raw === 'object' && raw !== null && 'publisher' in raw ? raw.publisher : undefined
+    return typeof publisher === 'string' ? publisher : undefined
+  } catch {
+    // Why undefined: staging reports the unreadable manifest with its real error.
+    return undefined
+  }
 }

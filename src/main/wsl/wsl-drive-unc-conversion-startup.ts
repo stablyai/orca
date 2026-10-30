@@ -24,6 +24,7 @@ import {
   type WslDriveUncConversionStore
 } from './wsl-drive-unc-conversion-stores'
 import { wslHostsGateOpen } from './wsl-host-gate'
+import { isWslDriveUncConversionComplete } from './wsl-drive-unc-conversion-renderer'
 import { getHistoryRoot, listWslHistoryRoots } from '../terminal-history-paths'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
@@ -91,7 +92,10 @@ function runOne(
     }
     record = update(deps, record, { rewrittenStores: [...record.rewrittenStores, store.id] })
   }
-  removeWslDriveUncConversion(deps.userDataPath, migrationId)
+  // The window's stores record themselves once it opens (wsl-drive-unc-conversion-renderer.ts).
+  if (isWslDriveUncConversionComplete(record)) {
+    removeWslDriveUncConversion(deps.userDataPath, migrationId)
+  }
   return {
     migrationId,
     outcome: 'converted',
@@ -170,14 +174,15 @@ export function lastWslDriveUncConversionOutcomes(): WslDriveUncConversionOutcom
 
 /**
  * Startup, before the profile store opens: with nothing journaled it only lists one directory.
- * Never throws; a conversion it can't finish stays journaled for the next startup.
+ * Never throws; a conversion it can't finish stays journaled for the next startup. Only Windows
+ * starts a conversion, but the journal alone says one is due, so this runs on any platform.
  */
 export function runPendingWslDriveUncConversions(paths: {
   userDataPath: string
   profileUserDataPath: string
   profileId: string
 }): void {
-  if (process.platform !== 'win32' || !wslHostsGateOpen()) {
+  if (!wslHostsGateOpen()) {
     return
   }
   try {

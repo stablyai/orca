@@ -31,20 +31,11 @@ function executable() {
 }
 
 describe('structured agent executable resolution', () => {
-  it.each(['claude', 'codex'] as const)(
-    'uses the configured %s executable on the execution host',
-    (agent) => {
-      const { command } = executable()
-      const settings = { agentCmdOverrides: { [agent]: `"${command}"` } }
-      expect(resolveStructuredAgentCommand(agent, settings)).toBe(command)
-    }
-  )
-
   it('reads the Command setting of any agent, and its stock binary by the name it is given', () => {
     const { command } = executable()
     expect(
       resolveStructuredAgentCommand('opencode', { agentCmdOverrides: { opencode: `"${command}"` } })
-    ).toBe(command)
+    ).toEqual({ command: command, prefixArgs: [] })
     expect(
       resolveStructuredAgentCommand(
         'opencode',
@@ -52,7 +43,7 @@ describe('structured agent executable resolution', () => {
         { pathEnv: '/nowhere' },
         { command: 'opencode', resolve: (name) => `/stock/${name}` }
       )
-    ).toBe('/stock/opencode')
+    ).toEqual({ command: '/stock/opencode', prefixArgs: [] })
   })
 
   it('resolves a basename through the configured PATH and a home-relative path through the host home', () => {
@@ -65,7 +56,7 @@ describe('structured agent executable resolution', () => {
         agentCmdOverrides: { codex: 'agent-custom' },
         agentDefaultEnv: { codex: { PATH: directory } }
       })
-    ).toBe(basenameCommand)
+    ).toEqual({ command: basenameCommand, prefixArgs: [] })
     expect(
       resolveStructuredAgentCommand(
         'claude',
@@ -74,7 +65,7 @@ describe('structured agent executable resolution', () => {
         },
         { homePath: directory }
       )
-    ).toBe(command)
+    ).toEqual({ command: command, prefixArgs: [] })
   })
 
   it('resolves folder-relative PATH to each effective Codex executable before pooling', async () => {
@@ -83,7 +74,10 @@ describe('structured agent executable resolution', () => {
       const invocation = await resolveCodexStructuredInvocation({
         resolveEnvironment: async () => ({ PATH: '.' }),
         resolveWorkingDirectory: () => directory,
-        resolveCommand: (options) => resolveCliCommand('agent custom', options)
+        resolveCommand: (options) => ({
+          command: resolveCliCommand('agent custom', options),
+          prefixArgs: []
+        })
       })
       expect(invocation.command).toBe(command)
     }
@@ -93,14 +87,23 @@ describe('structured agent executable resolution', () => {
     const first = executable()
     const second = executable()
     const settings = { agentCmdOverrides: { claude: `"${first.command}"` } }
-    expect(resolveStructuredAgentCommand('claude', settings)).toBe(first.command)
+    expect(resolveStructuredAgentCommand('claude', settings)).toEqual({
+      command: first.command,
+      prefixArgs: []
+    })
     settings.agentCmdOverrides.claude = `"${second.command}"`
-    expect(resolveStructuredAgentCommand('claude', settings)).toBe(second.command)
+    expect(resolveStructuredAgentCommand('claude', settings)).toEqual({
+      command: second.command,
+      prefixArgs: []
+    })
   })
 
   it.each(['', '   ', undefined])('uses the stock executable when the Command is %j', (command) => {
     const settings = command === undefined ? {} : { agentCmdOverrides: { claude: command } }
-    expect(resolveStructuredAgentCommand('claude', settings)).toBe(resolveCliCommand('claude'))
+    expect(resolveStructuredAgentCommand('claude', settings)).toEqual({
+      command: resolveCliCommand('claude'),
+      prefixArgs: []
+    })
   })
 
   it('refuses missing files, directories, relative paths and command lines instead of the stock executable', () => {
@@ -111,7 +114,7 @@ describe('structured agent executable resolution', () => {
       join(directory, 'missing'),
       folder,
       './claude',
-      'npx claude',
+      'missing-launcher-fixture claude',
       'wrapper --flag',
       'FOO=1 claude',
       '$HOME/bin/claude'
@@ -180,9 +183,35 @@ describe('structured agent executable resolution', () => {
             { agentCmdOverrides: { claude: `"${command}"` } },
             { platform: 'win32' }
           )
-        ).toBe(command)
+        ).toEqual({ command: command, prefixArgs: [] })
       }
     )
+
+    it('uses the execution host grammar for native paths after a PATH launcher', () => {
+      const { directory } = executable()
+      const command = fileIn(directory, 'op.exe')
+      expect(
+        resolveStructuredAgentCommand(
+          'codex',
+          {
+            agentCmdOverrides: {
+              codex: String.raw`op.exe run --env-file="C:\Users\dev\work env.env" -- node C:\Tools\launcher.mjs codex`
+            }
+          },
+          { platform: 'win32', pathEnv: directory, homePath: directory }
+        )
+      ).toEqual({
+        command,
+        prefixArgs: [
+          'run',
+          String.raw`--env-file=C:\Users\dev\work env.env`,
+          '--',
+          'node',
+          String.raw`C:\Tools\launcher.mjs`,
+          'codex'
+        ]
+      })
+    })
 
     it('finds the .cmd shim for a bare name, as the stock lookup does', () => {
       const { directory } = executable()
@@ -194,7 +223,7 @@ describe('structured agent executable resolution', () => {
           { agentCmdOverrides: { claude: 'my-claude' } },
           { platform: 'win32', pathEnv: directory, homePath: directory }
         )
-      ).toBe(shim)
+      ).toEqual({ command: shim, prefixArgs: [] })
     })
   })
 })
@@ -226,4 +255,20 @@ it('does not refresh or look up again after an expired async missing-program che
   expect(await result).toBeInstanceOf(Error)
   expect(refresh).not.toHaveBeenCalled()
   expect(resolve).toHaveBeenCalledOnce()
+})
+
+it('expands home-relative prefix words without changing other tildes', () => {
+  const { command, directory } = executable()
+  expect(
+    resolveStructuredAgentCommand(
+      'codex',
+      {
+        agentCmdOverrides: { codex: `"${command}" --config ~/work.json name~file` }
+      },
+      { homePath: directory }
+    )
+  ).toEqual({
+    command,
+    prefixArgs: ['--config', join(directory, 'work.json'), 'name~file']
+  })
 })

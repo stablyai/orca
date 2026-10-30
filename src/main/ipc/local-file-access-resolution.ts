@@ -17,6 +17,7 @@ import {
 } from './automatic-load-path-text'
 import { NOT_A_REGULAR_FILE_MESSAGE } from './filesystem/local-regular-file-read'
 import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { resolveProjectFolderLinkPath } from './project-folder-link-path'
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a file opened by name needs an absolute path.'
@@ -182,6 +183,9 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   ) {
     return { kind: 'document-folder', documentPath: access.documentPath }
   }
+  if (access.kind === 'project-folder-link') {
+    return { kind: 'project-folder-link' }
+  }
   if (
     access.kind === 'document-resource' &&
     'documentPath' in access &&
@@ -192,7 +196,13 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   return undefined
 }
 
-export type LocalRequestOperation = 'read' | 'write' | 'rename-from' | 'rename-to' | 'import-into'
+export type LocalRequestOperation =
+  | 'read'
+  | 'list'
+  | 'write'
+  | 'rename-from'
+  | 'rename-to'
+  | 'import-into'
 
 type KindRule = (targetPath: string) => Promise<string>
 
@@ -203,8 +213,8 @@ function declaredKindRule(
 ): KindRule | undefined {
   switch (fileAccess.kind) {
     case 'user-file':
-      // Only the opened document itself receives this rename access.
-      return operation !== 'import-into'
+      // Only the opened document itself receives rename access; listings need a project folder link.
+      return operation !== 'import-into' && operation !== 'list'
         ? async (targetPath) => resolveUserNamedLocalPath(targetPath)
         : undefined
     case 'document-resource':
@@ -218,6 +228,12 @@ function declaredKindRule(
     case 'document-folder':
       return operation === 'import-into'
         ? (targetPath) => resolveDocumentFolderPath(targetPath, fileAccess.documentPath)
+        : undefined
+    case 'project-folder-link':
+      return operation === 'list'
+        ? (targetPath) =>
+            // Why project roots only: Orca's floating folder is not a project a link can lead out of.
+            resolveProjectFolderLinkPath(targetPath, (path) => resolveAuthorizedPath(path, store))
         : undefined
   }
 }
@@ -281,6 +297,15 @@ export function resolveLocalFileRequestPath(
   store: RuntimeStore
 ): Promise<string> {
   return resolveLocalRequestPath(targetPath, access, store, 'read')
+}
+
+/** Folder listings accept only project-folder-link access beyond project roots. */
+export function resolveLocalListRequestPath(
+  targetPath: string,
+  access: unknown,
+  store: RuntimeStore
+): Promise<string> {
+  return resolveLocalRequestPath(targetPath, access, store, 'list')
 }
 
 export function resolveLocalWriteRequestPath(

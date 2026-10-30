@@ -2,6 +2,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
+import { AgentSessionAcquisitionRootExitObservedError } from './structured-agent-session-adapter'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 
 import { readFile } from 'node:fs/promises'
@@ -61,7 +62,8 @@ export async function interruptedRestart(
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']> = async () => ({
     outcome: 'pid-absent'
   }),
-  agents: StructuredAgentRegistry = claudeAndCodexDeclared()
+  agents: StructuredAgentRegistry = claudeAndCodexDeclared(),
+  closeEvidence?: 'kill-delivered'
 ) {
   const previous = hostTestState()
   let children: AgentChildWorkView[] = []
@@ -134,6 +136,14 @@ export async function interruptedRestart(
         ...fields
       })
       expect(queued).toMatchObject({ ok: true, value: { queued: expect.anything() } })
+    }
+  }
+  if (closeEvidence) {
+    previous.host.deps.adapter.closeSession = async () => {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('writer killed'),
+        closeEvidence
+      )
     }
   }
   await previous.host.flushAllStreamedEvents()

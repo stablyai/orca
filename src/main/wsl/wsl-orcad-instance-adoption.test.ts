@@ -248,6 +248,26 @@ describe('adopting an orcad the activation record does not name', () => {
     expect(host.writes).toEqual([])
   })
 
+  it("takes the connect snapshot's holder identity only for the pid the lock names", async () => {
+    const guest = { distroInstance: `${BOOT_ID}:1`, orcad: null }
+    // The snapshot saw that pid gone: no identity exec, and nothing to adopt.
+    const gone = { state: 'present' as const, raw: lockFor(540, OLD), holder: { pid: 540, guest } }
+    host.lock = lockFor(540, OLD)
+    host.alive.add(540)
+    await expect(adoptUnrecordedWslOrcad(slot, record(), () => NOW, gone)).resolves.toEqual({
+      outcome: 'none'
+    })
+    expect(host.commands.some((command) => command.includes('/proc/'))).toBe(false)
+    // An identity read for another pid is ignored; the guest is asked about this one.
+    const other = { ...gone, holder: { pid: 541, guest } }
+    host.stopTarget = stopTargetFor(540, OLD)
+    await expect(adoptUnrecordedWslOrcad(slot, record(), () => NOW, other)).resolves.toMatchObject({
+      outcome: 'adopted',
+      pid: 540
+    })
+    expect(host.commands.some((command) => command.includes('/proc/540/stat'))).toBe(true)
+  })
+
   it('matches a lock that recorded its boot id in upper case', async () => {
     host.lock = JSON.stringify({ ...JSON.parse(lockFor(530, OLD)), bootId: BOOT_ID.toUpperCase() })
     host.alive.add(530)

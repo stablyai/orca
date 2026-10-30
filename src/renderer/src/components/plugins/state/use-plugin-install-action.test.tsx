@@ -60,17 +60,16 @@ const codePreview: PluginMarketplaceHostInstallPreview = {
   })
 }
 
-function setup() {
-  const onTryPlugin = vi.fn()
+function setup(isFromInstallLink?: (pluginKey: string) => boolean) {
   const onInstalled = vi.fn().mockResolvedValue(undefined)
   const fetchPreview = vi.fn().mockResolvedValue({ ok: true, preview })
   const hook: { current: ReturnType<typeof usePluginInstallAction> | null } = { current: null }
   function Probe(): null {
-    hook.current = usePluginInstallAction({ fetchPreview, onInstalled, onTryPlugin })
+    hook.current = usePluginInstallAction({ fetchPreview, onInstalled, isFromInstallLink })
     return null
   }
   act(() => createRoot(document.createElement('div')).render(<Probe />))
-  return { hook, onInstalled, onTryPlugin, fetchPreview }
+  return { hook, onInstalled, fetchPreview }
 }
 
 function installResult(on: boolean) {
@@ -100,6 +99,19 @@ beforeEach(() => {
 })
 
 describe('usePluginInstallAction', () => {
+  it('labels an install from a page an install link opened, and only that one', async () => {
+    const { hook } = setup((pluginKey) => pluginKey === listing.pluginKey)
+    await act(async () => hook.current?.install(listing))
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenCalledWith(
+      expect.objectContaining({ fromInstallLink: true })
+    )
+    const plain = setup()
+    await act(async () => plain.hook.current?.install(listing))
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ fromInstallLink: true })
+    )
+  })
+
   it('asks main to turn on a content-only release and leaves nothing pending after', async () => {
     const { hook, onInstalled } = setup()
     await act(async () => hook.current?.install(listing))
@@ -121,7 +133,22 @@ describe('usePluginInstallAction', () => {
   })
 
   it('keeps the Try it toast up long enough to click', async () => {
-    const { hook } = setup()
+    const { hook, fetchPreview } = setup()
+    const manifest = pluginManifestSchema.parse({
+      ...preview.manifest,
+      contributes: {
+        syntaxes: [
+          {
+            id: 'gleam',
+            title: 'Gleam',
+            scopeName: 'source.gleam',
+            path: 'g.json',
+            extensions: ['.gleam']
+          }
+        ]
+      }
+    })
+    fetchPreview.mockResolvedValue({ ok: true, preview: { ...preview, manifest } })
     await act(async () => hook.current?.install(listing))
     expect(toast.success).toHaveBeenCalledWith(
       expect.any(String),
@@ -129,6 +156,15 @@ describe('usePluginInstallAction', () => {
         duration: 10_000,
         action: expect.objectContaining({ label: 'Try it' })
       })
+    )
+  })
+
+  it('offers no Try it when nothing shows the plugin off directly', async () => {
+    const { hook } = setup()
+    await act(async () => hook.current?.install(listing))
+    expect(toast.success).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ action: undefined })
     )
   })
 

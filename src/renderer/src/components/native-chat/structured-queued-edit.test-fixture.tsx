@@ -7,6 +7,9 @@ import { queuedMessageWithEdit } from '../../../../shared/queued-message-edit'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { toast } from 'sonner'
+import type * as SonnerModule from 'sonner'
+import type * as StructuredSessionClient from '@/runtime/structured-agent-session-client'
+import type * as RendererI18n from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
@@ -44,11 +47,28 @@ const hoistedRpc = vi.hoisted(() =>
   )
 )
 export const rpc = hoistedRpc
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+const toastError = vi.hoisted(() => vi.fn<typeof SonnerModule.toast.error>())
+vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof StructuredSessionClient>()),
   callStructuredAgentSession: hoistedRpc
 }))
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('sonner', async (importOriginal) => {
+  const original = await importOriginal<typeof SonnerModule>()
+  return {
+    ...original,
+    toast: Object.assign(
+      function (this: unknown, ...args: Parameters<typeof original.toast>) {
+        return original.toast.apply(this, args)
+      },
+      original.toast,
+      { error: toastError }
+    )
+  }
+})
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof RendererI18n>()),
+  translate: (_key: string, fallback: string) => fallback
+}))
 
 export const SESSION = 'folder-session'
 export const SCOPE = 'pane-draft'

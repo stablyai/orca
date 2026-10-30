@@ -22,9 +22,10 @@ import {
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isDshTerminalTitle,
-  isGeminiTerminalTitle,
   isPiAgentTitle,
   isPiTerminalTitle,
+  isGeminiTerminalTitle,
+  isGrokRotatingWorkingTitle,
   titleHasAgentName
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
@@ -35,7 +36,7 @@ import {
 } from './pi-compatible-synthetic-title'
 import { clearPiStateWorkingMarker, getPiStateTitleStatus } from './pi-state-title-marker'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
-import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /**
@@ -157,13 +158,42 @@ export function createAgentStatusTracker(
  * Normalize high-churn agent titles into stable display labels before storage.
  */
 export function normalizeTerminalTitle(title: string): string {
+  const proposal = proposeTerminalTitle(title)
+  return proposal === title ||
+    resolveExplicitTerminalTitleAgentType(title) === resolveExplicitTerminalTitleAgentType(proposal)
+    ? proposal
+    : title
+}
+
+const GEMINI_DISPLAY_LABEL = 'Gemini CLI'
+const QODER_DISPLAY_LABEL = 'Qoder CLI'
+const QODER_CN_DISPLAY_LABEL = 'Qoder CLI CN'
+const GROK_WORKING_TITLE = '\u280b Grok'
+const QODER_TITLE_GLYPHS = { working: GEMINI_WORKING, permission: '▲', idle: GEMINI_IDLE } as const
+const DESTRUCTIVE_TITLE_STAMPS: ReadonlySet<string> = new Set([
+  ...[GEMINI_WORKING, GEMINI_PERMISSION, GEMINI_IDLE].map(
+    (glyph) => `${glyph} ${GEMINI_DISPLAY_LABEL}`
+  ),
+  ...Object.values(QODER_TITLE_GLYPHS).flatMap((glyph) =>
+    [QODER_DISPLAY_LABEL, QODER_CN_DISPLAY_LABEL].map((label) => `${glyph} ${label}`)
+  ),
+  GROK_WORKING_TITLE
+])
+
+export function isNormalizedAgentTitleStamp(title: string): boolean {
+  return DESTRUCTIVE_TITLE_STAMPS.has(title)
+}
+
+function proposeTerminalTitle(title: string): string {
   if (getDeepSeekBuildTitleStatus(title)) {
     return title
   }
   const qoderStatus = qoderTitleStatus(title)
   if (qoderStatus) {
-    const label = title.includes('Qoder CLI CN') ? 'Qoder CLI CN' : 'Qoder CLI'
-    return `${qoderStatus === 'working' ? '✦' : qoderStatus === 'permission' ? '▲' : '◇'} ${label}`
+    const label = title.includes(QODER_CN_DISPLAY_LABEL)
+      ? QODER_CN_DISPLAY_LABEL
+      : QODER_DISPLAY_LABEL
+    return `${QODER_TITLE_GLYPHS[qoderStatus]} ${label}`
   }
   if (!title) {
     return title
@@ -173,14 +203,14 @@ export function normalizeTerminalTitle(title: string): string {
   if (!getPiStateTitleStatus(title) && isGeminiTerminalTitle(title)) {
     const status = detectAgentStatusFromTitle(title)
     if (status === 'permission') {
-      return `${GEMINI_PERMISSION} Gemini CLI`
+      return `${GEMINI_PERMISSION} ${GEMINI_DISPLAY_LABEL}`
     }
     if (status === 'working') {
-      return `${GEMINI_WORKING} Gemini CLI`
+      return `${GEMINI_WORKING} ${GEMINI_DISPLAY_LABEL}`
     }
     // Require a glyph before stamping Gemini rest state; a bare shell auto-title is not readiness evidence.
     if (status === 'idle' && title.includes(GEMINI_IDLE)) {
-      return `${GEMINI_IDLE} Gemini CLI`
+      return `${GEMINI_IDLE} ${GEMINI_DISPLAY_LABEL}`
     }
   }
 
@@ -191,7 +221,7 @@ export function normalizeTerminalTitle(title: string): string {
 
   // Collapse Grok spinner/status churn to one label; idle titles pass through so the final semantic title remains (#7863).
   if (isGrokRotatingWorkingTitle(title)) {
-    return '\u280b Grok'
+    return GROK_WORKING_TITLE
   }
 
   return title

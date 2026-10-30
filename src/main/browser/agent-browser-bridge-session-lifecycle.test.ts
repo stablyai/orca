@@ -328,6 +328,51 @@ describe('AgentBrowserBridge', () => {
     )
   })
 
+  it('moves a reload-replaced page to a new daemon only after the old one exits', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
+    Object.assign(b, {
+      ownsAgentBrowserSocketDirectory: true,
+      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
+    })
+    let daemon: 'none' | 'up' | 'exiting' = 'none'
+    const commandsSentToExitingDaemon: string[] = []
+    lstatSyncMock.mockImplementation(() => {
+      if (daemon === 'none') {
+        throw Object.assign(new Error('No socket'), { code: 'ENOENT' })
+      }
+      return {}
+    })
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'close') {
+        // agent-browser answers close, then exits and removes its socket about 100 ms later.
+        daemon = 'exiting'
+        setTimeout(() => (daemon = 'none'), 50)
+      } else {
+        if (daemon === 'exiting') {
+          commandsSentToExitingDaemon.push(command[0])
+        }
+        daemon = 'up'
+      }
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+    })
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 100 ? mockWebContents(100) : null
+    )
+    await b.snapshot(undefined, 'tab-1')
+
+    // The reload destroyed guest 100 and unregistered it, so the new guest has nothing to swap from.
+    tabs.set('tab-1', 200)
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 200 ? mockWebContents(200) : null
+    )
+    await b.snapshot(undefined, 'tab-1')
+
+    expect(CdpWsProxyMock.mock.lastCall?.[0]).toMatchObject({ id: 200 })
+    expect(closeCallCount()).toBe(1)
+    expect(commandsSentToExitingDaemon).toEqual([])
+  })
+
   it('rejects commands queued behind a running command when the page swaps guests', async () => {
     const tabs = new Map([['tab-1', 100]])
     const b = new AgentBrowserBridge(mockBrowserManager(tabs))

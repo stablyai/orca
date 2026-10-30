@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { sourceKindLabel } from './skill-display-labels'
 import { skillAgentLabel } from './skill-agent-filter'
@@ -60,7 +62,8 @@ export function SkillDetailDialog({
   onOpenChange,
   onShare,
   onDelete,
-  onReveal
+  onReveal,
+  ownerHostId
 }: {
   skill: DiscoveredSkill | null
   agentByRootPath: ReadonlyMap<string, string>
@@ -72,13 +75,17 @@ export function SkillDetailDialog({
   onShare: () => void
   onDelete: () => void
   onReveal: () => void
+  /** Host the skill file lives on. */
+  ownerHostId: ExecutionHostId
 }): React.JSX.Element | null {
   if (!skill) {
     return null
   }
 
   const copyPath = async (): Promise<void> => {
-    await window.api.ui.writeClipboardText(skill.skillFilePath)
+    await window.api.ui.writeClipboardText(
+      formatClipboardFilePath(skill.skillFilePath, ownerHostId)
+    )
     toast.success(translate('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
   }
 

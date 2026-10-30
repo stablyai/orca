@@ -1,6 +1,6 @@
 import { useQueuedMessageEditTransport } from './use-queued-message-edit-transport'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
-import { refreshStructuredAgentSessionCommands } from './structured-agent-session-command-refresh'
+import { useStructuredAgentSessionCommandMenu } from './structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
@@ -72,6 +72,11 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     enabled: transportEnabled,
     agentName: structuredAgentLabel(agent)
   })
+  const commandMenu = useStructuredAgentSessionCommandMenu(
+    target,
+    sessionId,
+    transportEnabled && args.isVisible !== false
+  )
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
@@ -102,6 +107,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     turnId: transportState.turnId,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     mutate,
+    capturePresentation,
     ...(launch ? { launch } : {})
   })
   const sendOptions = useStructuredAgentSessionSendOptions(sessionId, launch, sendSource)
@@ -132,7 +138,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     historyLoaded: transportEnabled && state.status === 'ready',
     isWorking: transportState.isWorking,
     stopping: stopControl.stopping,
-    sendOptions
+    sendSelection: sendOptions
   })
 
   const usage = useStructuredAgentSessionContextUsage(journalItems, usageSupport, state.epoch)
@@ -285,7 +291,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
-    refreshCommands: () => refreshStructuredAgentSessionCommands(target, sessionId),
+    refreshCommands: commandMenu.refresh,
+    setCommandsMenuOpen: commandMenu.setOpen,
     setStructuredOption,
     /** Why the host's catalog probe says no chat can start here; the chat shows it as a notice. */
     unavailable,

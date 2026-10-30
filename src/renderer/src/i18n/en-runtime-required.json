@@ -9,6 +9,12 @@
         "reviewBody_one": "{{count}} other Claude session wasn't moved to {{next}}.",
         "reviewBody_other": "{{count}} other Claude sessions weren't moved to {{next}}."
       }
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "The device that started this sign-in stopped answering.",
+        "superseded": "An account change on this host stopped the sign-in. Start it again."
+      }
     }
   },
   "agentLaunch": {
@@ -16,6 +22,35 @@
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
       "unsupportedLaunch": "OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice.",
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice."
+    }
+  },
+  "aiVault": {
+    "scanIssues": {
+      "invalidResultsSkipped_one": "Skipped {{count}} invalid Agent Session History result entry.",
+      "invalidResultsSkipped_other": "Skipped {{count}} invalid Agent Session History result entries.",
+      "issuesOmitted": "Additional scan issues were omitted.",
+      "openCodeDatabaseBusy": "{{label}} is writing to {{name}} right now, so its history was skipped. It is read again on the next refresh.",
+      "openCodeDatabaseUnreadable": "{{label}} history in {{name}} could not be read: {{detail}}",
+      "openCodeScanIncomplete": "OpenCode history scan did not complete: {{detail}}",
+      "openCodeScannerUnavailable": "OpenCode history was skipped because its background scanner could not start; the app remains responsive.",
+      "openCodeWriteAheadLogUnreadable": "{{label}} history in {{name}} could not be read. Its write-ahead log cannot be opened read-only on this filesystem. Exit {{label}} cleanly to flush the log.",
+      "openCodeWslDatabaseUnsupported": "{{label}} sessions inside WSL can't be searched from Windows yet.",
+      "openCodeWslReaderNotPrepared": "The WSL SQLite reader is not prepared. Refresh Vault to retry.",
+      "openCodeWslReaderPreparing": "Preparing the WSL SQLite reader. Refresh Vault after setup finishes.",
+      "scanTimedOut": "Session scan timed out after {{seconds}}s — the machine may be busy. Refresh to try again.",
+      "scanTimedOutOnSshHost": "Session scan timed out after {{seconds}}s on this SSH host. Refresh to try again.",
+      "scannerBusy": "Too many session scans in flight. Wait a moment, then refresh.",
+      "scannerMissing": "The session scanner is missing from this Orca install. Reinstalling Orca restores it.",
+      "scannerPaused": "Session scanning paused after repeated failures. Refresh to try again.",
+      "scannerStopped": "The session scanner stopped unexpectedly. Refresh to try again.",
+      "scopePathsTruncated": "Only the first {{limit}} project paths were scanned.",
+      "sessionMetadataUnreadable": "Session metadata could not be read this scan.",
+      "wslDistroNotRunning": "WSL transcript files are unavailable because WSL distro '{{distro}}' is not running. Open a terminal in it to start it.",
+      "wslDistroUnverifiable": "WSL transcript files are unavailable because WSL didn't answer whether '{{distro}}' is running. Try again shortly.",
+      "wslSessionsFromLastScan": "WSL could not be checked; its sessions are from the last scan.",
+      "wslTranscriptFsCapacity": "WSL transcript discovery is temporarily unavailable because too many filesystem requests are already waiting. Try again shortly or restart Orca if the issue continues.",
+      "wslTranscriptFsProcessFailed": "WSL transcript files are temporarily unavailable because the filesystem helper process failed ({{detail}}). Try again shortly or restart Orca if the issue continues.",
+      "wslTranscriptFsSlow": "WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues."
     }
   },
   "auto": {
@@ -83,6 +118,12 @@
         "resultsFound_other": "{{count}} results found."
       },
       "activity": {
+        "ActivityPrototypePage": {
+          "activityOptionsFilterCount_one": "Activity options ({{count}} filter)",
+          "activityOptionsFilterCount_other": "Activity options ({{count}} filters)",
+          "threadListOptionsActiveFilters_one": "Thread list options ({{count}} filter active)",
+          "threadListOptionsActiveFilters_other": "Thread list options ({{count}} filters active)"
+        },
         "ActivityThreadContextMenu": {
           "clearMany_one": "Clear {{count}} Agent from List",
           "clearMany_other": "Clear {{count}} Agents from List",
@@ -110,6 +151,8 @@
           "usageCoverageRuns_other": "{{known}}/{{count}} runs"
         },
         "AutomationRunsDashboard": {
+          "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
+          "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
           "local": "Local",
           "remote": "Remote"
         },
@@ -136,6 +179,13 @@
         "externalScope": {
           "uncheckedHostCount_one": "External automation managers on {{count}} host could not be checked.",
           "uncheckedHostCount_other": "External automation managers on {{count}} hosts could not be checked."
+        },
+        "extraAgentArgs": {
+          "unsupported": "Extra arguments aren't supported for this agent yet."
+        },
+        "hostSummary": {
+          "partialFailureOfHosts_one": "{{failed}} of {{count}} host could not be loaded",
+          "partialFailureOfHosts_other": "{{failed}} of {{count}} hosts could not be loaded"
         },
         "runHistory": {
           "occurrencesCount_one": "{{count}} time",
@@ -247,6 +297,13 @@
             },
             "stale": {
               "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+            }
+          }
+        },
+        "export": {
+          "active": {
+            "markdown": {
+              "eda2cea3ad": "Failed to export PDF"
             }
           }
         }
@@ -840,9 +897,23 @@
           "removeContainedProjects_one": "Remove {{count}} contained project",
           "removeContainedProjects_other": "Remove {{count}} contained projects"
         },
+        "RemoveFolderDialog": {
+          "openTerminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "openTerminalWarning_other": "{{count}} open terminals in this project will be closed."
+        },
         "SetupScriptPromptCard": {
           "savedWithSkippedFields_one": "{{count}} unsupported field skipped. Saved the setup command.",
           "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command."
+        },
+        "SidebarRepositoryFilterSection": {
+          "selectedProjects_one": "{{count}} project",
+          "selectedProjects_other": "{{count}} projects"
+        },
+        "SidebarWorkspaceOptionsMenu": {
+          "optionsActiveFilters_one": "Workspace options ({{count}} filter active)",
+          "optionsActiveFilters_other": "Workspace options ({{count}} filters active)",
+          "optionsFilterCount_one": "Workspace options ({{count}} filter)",
+          "optionsFilterCount_other": "Workspace options ({{count}} filters)"
         },
         "WorkspaceKanbanDrawerHeader": {
           "selectedCount_one": "{{count}} selected",
@@ -1189,6 +1260,22 @@
     }
   },
   "automations": {
+    "extraAgentArgs": {
+      "errors": {
+        "controlCharacters": "Extra arguments cannot contain control characters or line breaks.",
+        "effortRepeated": "Extra arguments set the effort more than once.",
+        "invalid": "Extra arguments are invalid: {{detail}}",
+        "missingValue": "\"{{option}}\" needs a value.",
+        "modelRepeated": "Extra arguments set the model more than once.",
+        "notAnOption": "\"{{token}}\" isn't an option. Extra arguments for {{agent}} accept only: {{allowed}}.",
+        "optionNotAllowed": "\"{{option}}\" isn't allowed in extra arguments for {{agent}}. Allowed: {{allowed}}.",
+        "shellSyntax": "{{text}} uses shell syntax that extra arguments don't allow.",
+        "terminator": "\"--\" isn't allowed in extra arguments.",
+        "tooLarge": "Extra arguments must be 4 KB or less.",
+        "valueNotAllowed": "\"{{option}} {{value}}\" isn't allowed. {{agent}} extra arguments accept only \"{{option}} {{prefix}}<level>\"."
+      },
+      "hostUpdateRequired": "Update Orca on this host to use extra arguments."
+    },
     "runFailures": {
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
@@ -1211,11 +1298,46 @@
       "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",
       "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
       "workspaceHostAmbiguous": "The automation workspace spans more than one host, so Orca cannot tell which one to run it on.",
+      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
     }
   },
   "browser": {
+    "cookieImport": {
+      "errors": {
+        "allCookiesExpired": "All {{browser}} cookies are expired.",
+        "browserNotFound": "Browser not found on this system.",
+        "browserProfileDatabaseMissing": "No cookies database found for profile \"{{profile}}\".",
+        "connectionEnded": "The connection to this server ended during the import. Reconnect and try again.",
+        "databaseCopyFailed": "Could not copy {{browser}} cookies database. Try closing {{browser}} first.",
+        "databaseNotFound": "{{browser}} cookies database not found.",
+        "encryptionKeyDenied": "Could not access {{browser}} encryption key. The OS may have denied access.",
+        "fileEmpty": "Cookie file is empty.",
+        "fileInvalidJson": "File is not valid JSON.",
+        "fileNoValidCookies_one": "No valid cookies found. {{count}} entry was skipped due to missing or invalid fields.",
+        "fileNoValidCookies_other": "No valid cookies found. {{count}} entries were skipped due to missing or invalid fields.",
+        "fileNotArray": "Expected a JSON array of cookie objects.",
+        "fileUnreadable": "Could not read the selected file.",
+        "importFailed": "Could not import cookies from {{browser}}.",
+        "importFailedTryClosing": "Could not import cookies from {{browser}}. Try closing {{browser}} first.",
+        "importFailedWithLog": "Could not import cookies from {{browser}}: {{detail}}. Details were written to {{logPath}}.",
+        "invalidBrowserProfile": "Invalid browser profile name.",
+        "noCookies": "No cookies found in {{browser}}.",
+        "noValidCookies": "No valid cookies found in {{browser}}.",
+        "notAuthorized": "Not authorized",
+        "profileNotFound": "Session profile not found.",
+        "readFailed": "Could not read {{browser}} cookies.",
+        "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
+        "serverRepaired": "This server was re-paired during the import. Try again."
+      },
+      "notice": {
+        "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
+        "importedMore_other": "Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.",
+        "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
+        "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them."
+      }
+    },
     "loadFailure": {
       "blockedDescription": "An extension blocked this page. To open it, allow this site in the extension, then retry.",
       "blockedTitle": "{{host}} is blocked",
@@ -1245,6 +1367,13 @@
     }
   },
   "codeHost": {
+    "bitbucketConnect": {
+      "accessTokenRequired": "Enter an access token.",
+      "emailAndApiTokenRequired": "Enter both an email and an API token.",
+      "invalidInput": "Invalid Bitbucket credentials",
+      "rejected": "Bitbucket rejected these credentials. Check the email and token, then try again.",
+      "unreachable": "Could not reach Bitbucket. Check your connection or the API base URL, then try again."
+    },
     "errors": {
       "github": {
         "autoMergeAlreadyMergeable": "This pull request can already be merged. Use Merge instead of auto-merge.",
@@ -1384,9 +1513,19 @@
       "composer": {
         "placeholder": "Ask anything, @ to mention files, / for commands"
       },
+      "composerErrors": {
+        "commandTakesNoArguments": "Use /{{name}} without arguments.",
+        "commandUnavailable": "/{{name}} is not available in chat sessions. Use the slash menu to see available commands.",
+        "commandUnsupportedByHost": "/{{name}} is not supported by this chat host.",
+        "effortApplyFailed": "Could not apply effort {{value}}.",
+        "effortPickerFailed": "Could not open the effort picker.",
+        "goalObjectiveMissing": "Describe the goal after /goal.",
+        "modelApplyFailed": "Could not apply model {{value}}.",
+        "modelPickerFailed": "Could not open the model picker."
+      },
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
-        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
         "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
@@ -1421,6 +1560,7 @@
         "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+        "cliMissingInWslDistro": "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
         "cliTooOld": "{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
@@ -1451,6 +1591,7 @@
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
+        "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
@@ -1537,6 +1678,17 @@
         "resolved": "Resolved",
         "resolver": "Answered on {{device}}",
         "unavailable": "Selected answer unavailable"
+      },
+      "sessionOptionErrors": {
+        "afterStartOnly": "This option is only available after the session starts.",
+        "agentPickerOnly": "This option must be changed in the agent picker.",
+        "modelRejected": "Claude kept the current model.",
+        "modelUnverified": "Could not verify the model change; open the terminal to check.",
+        "startOnly": "This option can only be set when the session starts.",
+        "toggleBaselineUnknown": "Current value is unknown; use the Toggle action instead.",
+        "toggleValueKnown": "This option has a known value; choose On or Off instead.",
+        "unknownOption": "Unknown session option: {{id}}",
+        "valueRequired": "This option requires a value."
       },
       "state": {
         "empty": {
@@ -1798,6 +1950,66 @@
       "subagents_other": "{{count}} subagents"
     }
   },
+  "editor": {
+    "pdfExport": {
+      "errors": {
+        "noContent": "No content to export",
+        "timedOut": "Export timed out"
+      }
+    }
+  },
+  "emulator": {
+    "errors": {
+      "adbUnavailable": "adb is unavailable.",
+      "androidDeviceNotRunning": "Android device \"{{device}}\" is not running. Boot it first.",
+      "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
+      "avdBootTimeout": "AVD \"{{avdName}}\" did not finish booting in time.",
+      "disabled": "Mobile Emulator is disabled in Settings.",
+      "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",
+      "noDeviceSpecified": "No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.",
+      "noIosSimulators": "No iOS simulators found. Add one in Xcode Settings > Platforms.",
+      "noSession": "No emulator session is active",
+      "notAvailable": "Mobile Emulator is not available.",
+      "requiresMacosXcode": "iOS Simulator requires macOS with Xcode Command Line Tools.",
+      "scrcpyDownloadFailed": "Could not download scrcpy server: {{detail}}",
+      "scrcpyServerInvalid": "Downloaded scrcpy server was invalid or truncated.",
+      "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
+      "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
+      "serveSimUnavailable": "serve-sim is unavailable.",
+      "simctlUnavailable": "xcrun simctl is unavailable.",
+      "simulatorNotFound": "Simulator {{udid}} not found. Create one via Xcode > Window > Devices and Simulators.",
+      "simulatorToolsUnavailable": "Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.",
+      "unknownDeviceOrAvd": "\"{{device}}\" is not a running device or a known AVD.",
+      "workspaceChanged": "The workspace changed while the emulator was starting. Reattach the emulator."
+    }
+  },
+  "ephemeralVm": {
+    "errors": {
+      "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
+      "cleanupStopped": "Cleanup stopped by user.",
+      "defaultStartRefUnresolved": "Could not resolve a default provisioned-root start ref.",
+      "destroyDisabled": "Destroy is disabled for this recipe.",
+      "destroyExited": "Destroy exited with code {{exitCode}}.",
+      "destroyExitedWithoutCode": "Destroy exited with code unknown.",
+      "destroyFailed": "Destroy failed.",
+      "provisionCancelled": "Provisioning cancelled.",
+      "provisionedRootNotConfigured": "Recipe result requests provisioned-root checkout, but the recipe is not configured for it.",
+      "provisionedRootResultRequired": "Provisioned-root recipes must return schemaVersion 2 with checkoutMode \"provisioned-root\".",
+      "recipeExited": "Recipe exited with code {{exitCode}}.",
+      "recipeExitedWithoutCode": "Recipe exited with code unknown.",
+      "recipeNotFound": "Recipe not found: {{recipeId}}",
+      "recipeResultMissing": "Recipe produced no JSON result.",
+      "recipeResultNotJsonObject": "Recipe stdout must be one JSON object.",
+      "recipeResultPairingCodeInvalid": "Recipe result pairingCode is not a valid Orca pairing code.",
+      "recipeResultProjectRootNotAbsolute": "Recipe result projectRoot must be an absolute runtime path.",
+      "remoteRepoUnsupported": "Ephemeral VM recipes run on the local desktop host in v1.",
+      "repoNotFound": "Repo not found: {{repoId}}",
+      "runtimeNotFound": "Unknown ephemeral VM runtime: {{runtimeId}}",
+      "runtimeRepoMissing": "Ephemeral VM runtime has no repo id: {{runtimeId}}",
+      "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
+      "startRefUnresolved": "Could not resolve provisioned-root start ref: {{ref}}"
+    }
+  },
   "jira": {
     "workspace": {
       "linkedCount_one": "{{count}} workspace linked to {{key}}",
@@ -1811,6 +2023,40 @@
   "menu": {
     "quitApp": "Quit {{appName}}"
   },
+  "pet": {
+    "defaultLabels": {
+      "bundle": "Pet bundle",
+      "image": "Custom pet"
+    },
+    "importErrors": {
+      "animationDurationMismatch": "Animation \"{{name}}\" declares {{durations}} frame durations but {{frames}} frames.",
+      "animationRowOutOfRange": "Animation \"{{name}}\" references row {{row}} but sheet has {{rows}}.",
+      "animationTooManyFrames": "Animation \"{{name}}\" has {{frames}} frames but sheet only has {{columns}} columns.",
+      "bundleSaveFailed": "Could not save the pet bundle.",
+      "defaultAnimationMissing": "defaultAnimation \"{{name}}\" not in animations.",
+      "fileTooLarge": "File is too large ({{size}} MB). Max is {{max}} MB.",
+      "fileUnreadable": "Could not read the selected file.",
+      "manifestInvalid": "pet.json is invalid.",
+      "manifestMissing": "Bundle is missing pet.json.",
+      "manifestParseFailed": "Invalid pet.json: {{detail}}",
+      "manifestSymlink": "pet.json must not be a symlink.",
+      "notAFile": "Selected path is not a file",
+      "pathUnreadable": "Could not read the selected path.",
+      "saveFailed": "Could not save the pet.",
+      "sheetFrameMismatch": "Spritesheet {{sheetWidth}}×{{sheetHeight}} is not a clean multiple of frame {{frameWidth}}×{{frameHeight}}.",
+      "sheetNotAFile": "Spritesheet path is not a file.",
+      "sheetNotFound": "Spritesheet file not found.",
+      "sheetPathEscapes": "spritesheetPath escapes the bundle.",
+      "sheetPathIsRoot": "spritesheetPath must point to a file, not the bundle root.",
+      "sheetPathNotRelative": "spritesheetPath must be relative to the bundle.",
+      "sheetSizeLimitExceeded": "Spritesheet exceeded the size limit.",
+      "sheetSymlink": "spritesheet must not be a symlink.",
+      "sheetTooLarge": "Spritesheet is too large ({{size}} MB).",
+      "sheetUndecodable": "Could not decode the spritesheet image.",
+      "sheetUnsupportedType": "Spritesheet must be a PNG, APNG, JPG, GIF, or WebP.",
+      "unsupportedFile": "Unsupported file. Pick a PNG, APNG, JPG, GIF, WebP, or SVG."
+    }
+  },
   "projectViews": {
     "error": {
       "tooLargeCount_one": "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub.",
@@ -1821,6 +2067,28 @@
     "pty": {
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",
       "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
+    }
+  },
+  "runtime": {
+    "remoteServerPairingErrors": {
+      "alreadyPairedAddAgain": "This server is already paired as \"{{name}}\". To update its connection, add it again under Settings > Remote Orca Servers.",
+      "alreadyPairedCloudIdentity": "This server is already paired as \"{{name}}\". The cloud workspace's server reuses that server's identity, so it was not saved.",
+      "alreadyPairedCloudWorkspace": "This server is already paired as \"{{name}}\". It belongs to a cloud workspace, which pairs it again when it resumes.",
+      "alreadyPairedManagedDeployment": "This server is already paired as \"{{name}}\". Orca runs this server on an SSH host for you; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Orca on your SSH hosts; for a host that is gone, run `orca environment forget --environment <name> --yes`.",
+      "alreadyPairedSshAccessChangePending": "This server is already paired as \"{{name}}\". This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
+      "alreadyPairedSshAccessLinked": "This server is already paired as \"{{name}}\". Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
+      "alreadyPairedUnreadable": "This server is already paired as \"{{name}}\", whose saved settings this version of Orca cannot read.",
+      "alreadyPairedWslHost": "This server is already paired as \"{{name}}\". Orca manages it as a WSL host, so its pairing cannot be replaced here.",
+      "hostSaveFailed": "Orca verified the host but could not save it. Check local settings storage and try again.",
+      "idNeedsNewerOrca": "A server with this id already exists in a format that needs a newer version of Orca.",
+      "invalidPairingCode": "Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.",
+      "managedDeployment": "Orca runs this server on an SSH host for you; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Orca on your SSH hosts; for a host that is gone, run `orca environment forget --environment <name> --yes`.",
+      "nameTaken": "A server named \"{{name}}\" already exists.",
+      "repairCloudWorkspace": "This server belongs to a cloud workspace, which pairs it again when it resumes.",
+      "repairSaveFailed": "Orca verified the server but could not save the new pairing. Check local settings storage and try again.",
+      "selfPairingCode": "This pairing code is for this Orca itself. Generate the code on the other computer instead.",
+      "sshAccessChangePending": "This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
+      "sshAccessLinked": "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it."
     }
   },
   "runtimeRpc": {
@@ -1846,7 +2114,6 @@
   },
   "settings": {
     "agents": {
-      "approveForMe": "approve for me",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
@@ -1854,9 +2121,35 @@
       "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
       "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:"
     },
+    "diagnostics": {
+      "errors": {
+        "creatingDisabled": "creating review files is disabled",
+        "deleteNotConfigured": "diagnostic upload endpoint is not configured for this build",
+        "expiredBeforeOpening": "review file has expired; create a new one before opening",
+        "expiredBeforeSending": "review file has expired; create a new one before sending",
+        "previewNotOpened": "open the review file before sending",
+        "previewOpenFailed": "could not open review file",
+        "sendingDisabled": "sending diagnostics is disabled",
+        "sendingNotConfigured": "sending diagnostics is not configured for this build"
+      }
+    },
     "mcp": {
       "serverCount_one": "{{count}} server",
       "serverCount_other": "{{count}} servers"
+    },
+    "network": {
+      "proxyUrlErrors": {
+        "invalid": "Enter a valid proxy URL.",
+        "missingHost": "Proxy URL must include a host.",
+        "tooLong": "Proxy URL is too long.",
+        "unsupportedProtocol": "Use an http, https, socks, socks4, or socks5 proxy URL."
+      }
+    },
+    "repository": {
+      "iconPickErrors": {
+        "notPng": "Repo icons must be PNG files.",
+        "tooLarge": "Repo icon image must be 256KB or smaller."
+      }
     },
     "shortcuts": {
       "diagnostics": {
@@ -1881,6 +2174,58 @@
     }
   },
   "sidebar": {
+    "agentSummary": {
+      "agentCount_one": "{{count}} agent",
+      "agentCount_other": "{{count}} agents",
+      "allInState": {
+        "blocked_one": "{{count}} agent blocked",
+        "blocked_other": "All {{count}} agents blocked",
+        "done_one": "{{count}} agent done",
+        "done_other": "All {{count}} agents done",
+        "failed_one": "{{count}} agent failed",
+        "failed_other": "All {{count}} agents failed",
+        "idle_one": "{{count}} agent idle",
+        "idle_other": "All {{count}} agents idle",
+        "interrupted_one": "{{count}} agent interrupted",
+        "interrupted_other": "All {{count}} agents interrupted",
+        "monitoring_one": "{{count}} agent monitoring",
+        "monitoring_other": "All {{count}} agents monitoring",
+        "needsAttention_one": "{{count}} agent needs attention",
+        "needsAttention_other": "All {{count}} agents needs attention",
+        "notReporting_one": "{{count}} agent not reporting",
+        "notReporting_other": "All {{count}} agents not reporting",
+        "unconfirmed_one": "{{count}} agent unconfirmed",
+        "unconfirmed_other": "All {{count}} agents unconfirmed",
+        "waiting_one": "{{count}} agent waiting",
+        "waiting_other": "All {{count}} agents waiting",
+        "working_one": "{{count}} agent working",
+        "working_other": "All {{count}} agents working"
+      },
+      "stateCount": {
+        "blocked_one": "{{count}} blocked",
+        "blocked_other": "{{count}} blocked",
+        "done_one": "{{count}} done",
+        "done_other": "{{count}} done",
+        "failed_one": "{{count}} failed",
+        "failed_other": "{{count}} failed",
+        "idle_one": "{{count}} idle",
+        "idle_other": "{{count}} idle",
+        "interrupted_one": "{{count}} interrupted",
+        "interrupted_other": "{{count}} interrupted",
+        "monitoring_one": "{{count}} monitoring",
+        "monitoring_other": "{{count}} monitoring",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} needs attention",
+        "notReporting_one": "{{count}} not reporting",
+        "notReporting_other": "{{count}} not reporting",
+        "unconfirmed_one": "{{count}} unconfirmed",
+        "unconfirmed_other": "{{count}} unconfirmed",
+        "waiting_one": "{{count}} waiting",
+        "waiting_other": "{{count}} waiting",
+        "working_one": "{{count}} working",
+        "working_other": "{{count}} working"
+      }
+    },
     "createProject": {
       "errors": {
         "createDirectoryFailed": "Failed to create directory: {{detail}}",
@@ -1957,6 +2302,9 @@
         "agentCouldNotStart": "{{label}} could not be started. Check the agent command in Settings and try again.",
         "agentFailedToStart": "{{label}} failed to start. Check the agent command in Settings and try again.",
         "agentReportedError": "{{label}} reported an error.",
+        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+        "antigravityInvalidResult": "Antigravity returned an invalid result.",
+        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "chatNameAgentUnsupported": "Choose a supported chat name agent for this action in Settings -> Chat -> Chat names. Supported agents: {{agents}}, or Custom command.",
         "chatNameCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Chat -> Chat names.",
         "cliFailed": "{{label}} CLI command failed with code {{exitCode}}.",
@@ -1978,9 +2326,38 @@
         "jiraDescriptionRequired": "Description is required.",
         "jiraSummaryBusyInOtherDraft": "A Jira title is already being generated in another draft.",
         "jiraSummaryEmptyAfterSanitization": "Generated summary was empty after sanitization.",
+        "kimiAgentChangeOnResume": "Kimi cannot change the agent when resuming a session. Remove the agent override or start a new session in the generation recipe or CLI arguments.",
+        "kimiAgentOptionsConflict": "Kimi received conflicting or repeated agent options. Keep a single --agent or --agent-file option in the generation recipe or CLI arguments, then retry.",
+        "kimiAuthFailed": "Kimi could not authenticate. Sign in or correct provider credentials on the execution host, then retry.",
+        "kimiCancelled": "Kimi cancelled the request before it finished generating text. Try again.",
+        "kimiConfigInvalid": "Kimi has invalid configuration. Check the model and provider configuration on the execution host before retrying.",
+        "kimiConflictingOptions": "Kimi received conflicting options: {{option}} with {{otherOption}}. Correct the generation recipe or CLI arguments before retrying.",
+        "kimiConnectionFailed": "Kimi could not connect to its provider. Check the network on the execution host, then retry.",
+        "kimiContextOverflow": "Kimi ran out of context. Shorten the prompt or start a new session, then retry.",
+        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying.",
+        "kimiCredentialVariableMissing": "Kimi is missing a configured credential environment variable. Set it on the execution host before retrying.",
+        "kimiCredentialsRequired": "Kimi needs provider credentials. Open Kimi on the execution host to configure a provider or sign in, then retry.",
+        "kimiEmptyAgent": "Kimi received an empty agent. Correct that input in the generation recipe or CLI arguments, then retry.",
+        "kimiEmptyAgentFilePath": "Kimi received an empty agent file path. Correct that input in the generation recipe or CLI arguments, then retry.",
+        "kimiEmptyModel": "Kimi received an empty model. Correct that input in the generation recipe or CLI arguments, then retry.",
+        "kimiEmptyPrompt": "Kimi received an empty prompt. Correct that input in the generation recipe or CLI arguments, then retry.",
+        "kimiFailed": "Kimi couldn't finish generating text. Open Kimi on the execution host to check the failure before retrying.",
+        "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
+        "kimiModelMissing": "Kimi has no usable model configured. Open Kimi on the execution host to configure or select a model, then retry.",
+        "kimiOptionRejected": "Kimi rejected an option or argument. Correct the generation recipe or CLI arguments, then retry.",
+        "kimiOutputFormatInvalid": "Kimi output format requires prompt mode and a supported text or stream-json value. Correct the generation recipe or CLI arguments before retrying.",
+        "kimiPromptHookBlocked": "A Kimi prompt hook blocked the request or the turn couldn't start. Review Kimi hooks and configuration before retrying.",
+        "kimiProviderLimited": "Kimi reached a provider limit or the provider is busy. Wait before retrying or reduce request frequency.",
+        "kimiResponseBlocked": "Kimi could not return a response because it was blocked. Revise the prompt or model configuration before retrying.",
+        "kimiSessionIdRequired": "Kimi needs a session id to resume in prompt mode. Correct the generation recipe or CLI arguments, then retry.",
+        "kimiSessionNotFound": "Kimi couldn't find the requested session. Use an existing session or start a new one.",
+        "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
+        "kimiSessionOtherDirectory": "This Kimi session belongs to another directory. Resume it there or use a session created for this workspace.",
+        "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
         "noBranchChanges": "No branch changes to summarize.",
         "noModelForAgent": "No model is available for {{label}}.",
         "noStagedChanges": "No staged changes to summarize.",
+        "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
         "outputTooLarge": "{{label}} CLI command produced too much output. Check the agent CLI configuration and try again.",
         "planAgentUnsupported": "Agent \"{{agent}}\" does not support AI commit messages.",
         "planCustomCommandEmpty": "Custom command is empty. Add one in Settings → Git → AI Commit Messages.",
@@ -2006,6 +2383,17 @@
       "sessions_other": "{{count}} sessions",
       "turns_one": "{{count}} turn",
       "turns_other": "{{count}} turns"
+    }
+  },
+  "tabHoverCard": {
+    "namingFailure": {
+      "errors": {
+        "agentNotRun": "Orca could not run the chat-name agent.",
+        "antigravityFailed": "Antigravity could not name this chat. Try generating the name again.",
+        "grokFailed": "Grok could not name this chat. Try generating the name again.",
+        "noAgentAvailable": "No chat-name agent can run in this workspace.",
+        "noName": "The chat-name agent returned no name."
+      }
     }
   },
   "taskProviders": {
@@ -2038,6 +2426,38 @@
       "count_other": "{{count}} running terminals"
     }
   },
+  "updates": {
+    "failure": {
+      "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
+      "invalidReleaseTag": "\"{{tag}}\" is not a valid release tag.",
+      "linuxPackageExternallyManaged": "This copy of Orca is managed by your system package manager, so Orca cannot install updates itself. Update Orca through your distribution instead.",
+      "linuxPackageHashMismatch": "The downloaded package no longer matches the verified release, so Orca will not hand it to a package manager. Download the update again, or get it from the official release page.",
+      "linuxPackageInvalidPath": "The downloaded package is not at a usable path, so Orca cannot build a safe install command. Show the package and install it with your package manager.",
+      "linuxPackageManualInstall": "Quit Orca before running the system package install command.",
+      "linuxPackageMarkerUnusable": "Orca could not verify the installed Linux package format, so it will not install this update automatically. Download the update from the official release page and install it manually.",
+      "linuxPackageMetadataUnusable": "The downloaded package metadata could not be verified. Quit Orca before downloading and installing the update from the official release page.",
+      "linuxPackageMissing": "The downloaded package is no longer in the update cache. Download the update again, or get it from the official release page.",
+      "linuxPackageNoPackageManager": "No supported package manager was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.",
+      "linuxPackageNoSudo": "No sudo command was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.",
+      "linuxPackageNotRegular": "The downloaded package is no longer a valid file in the update cache. Download the update again, or get it from the official release page.",
+      "linuxPackageReadFailed": "Orca could not read the downloaded package. Download the update again, or get it from the official release page.",
+      "rateLimitedInMinute": "GitHub rate limit reached. Try again in about a minute.",
+      "rateLimitedInMinuteSignedOut": "GitHub rate limit reached. Try again in about a minute, or run `gh auth login` so Orca can use your account's higher limit.",
+      "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",
+      "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit.",
+      "rateLimitedInMinutes_one": "GitHub rate limit reached. Try again in about {{count}} minute.",
+      "rateLimitedInMinutes_other": "GitHub rate limit reached. Try again in about {{count}} minutes.",
+      "rateLimitedSoon": "GitHub rate limit reached. Try again in a few minutes.",
+      "rateLimitedSoonSignedOut": "GitHub rate limit reached. Try again in a few minutes, or run `gh auth login` so Orca can use your account's higher limit.",
+      "releaseListFailed": "Could not list {{channel}} builds (HTTP {{status}}).",
+      "releaseListUnreadable": "Could not read the {{channel}} release list.",
+      "releaseNotReady": "A newer release isn't available for this device yet. Check again later.",
+      "releaseRepoNotFound": "No releases repository found at {{repo}}.",
+      "unknownReleaseChannel": "Unknown release channel \"{{channel}}\".",
+      "unsignedDevChannel": "{{channel}} builds are unsigned, and this signed build only installs updates signed by Orca's publisher. Download the installer from the release page and run it once — updates work normally from there, including back to Stable.",
+      "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes."
+    }
+  },
   "workspace": {
     "links": {
       "linkedCount_one": "{{count}} linked",
@@ -2046,14 +2466,16 @@
       "showLinked_other": "Show {{count}} linked reviews and tasks"
     }
   },
-  "workspaceOptions": {
-    "activeFilterCount_one": "{{count}} filter",
-    "activeFilterCount_other": "{{count}} filters"
-  },
   "workspaceSpace": {
     "compact": {
       "linkedAndScannedCount_one": "{{size}} in linked worktrees · {{count}} workspace",
       "linkedAndScannedCount_other": "{{size}} in linked worktrees · {{count}} workspaces"
+    }
+  },
+  "worktreeJumpPalette": {
+    "filter": {
+      "ariaActiveCount_one": "Filter: {{count}} active.",
+      "ariaActiveCount_other": "Filter: {{count}} active."
     }
   }
 }

@@ -133,7 +133,9 @@ describe('sleep → quit → resume', () => {
       expect(heldForPane(relaunched)).toEqual(expected)
       relaunched.setWorkspaceSession(structuredClone(relaunched.getWorkspaceSession()))
       expect(heldForPane(relaunched)).toEqual(expected)
-      expect(resumeCommand(heldForPane(relaunched).record)).toBe("codex 'resume' 'session-2'")
+      expect(resumeCommand(heldForPane(relaunched).record)).toBe(
+        "codex '-c' 'disable_paste_burst=true' 'resume' 'session-2'"
+      )
     } finally {
       await relaunched.freezeWritesAsync()
     }
@@ -152,7 +154,9 @@ describe('sleep → quit → resume', () => {
         tabs: [TAB],
         binding: PTY
       })
-      expect(resumeCommand(heldForPane(relaunched).record)).toBe("codex 'resume' 'session-3'")
+      expect(resumeCommand(heldForPane(relaunched).record)).toBe(
+        "codex '-c' 'disable_paste_burst=true' 'resume' 'session-3'"
+      )
     } finally {
       await relaunched.freezeWritesAsync()
     }

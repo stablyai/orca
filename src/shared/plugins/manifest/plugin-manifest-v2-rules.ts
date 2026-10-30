@@ -5,6 +5,8 @@ import {
   type PluginExecutionProfile
 } from '../contributions/plugin-execution-profile'
 import { pluginCapabilityReachable } from '../capabilities/plugin-capability-reach'
+import { orcaEngineRangeSchema, satisfiesOrcaEngineRange } from './plugin-manifest-engine-range'
+import { PLUGIN_DERIVED_PUBLISHER_SINCE } from './plugin-schema-field-docs'
 
 type V2RuleSubject = {
   execution: PluginExecutionProfile
@@ -32,5 +34,25 @@ export function validatePluginManifestV2Rules(manifest: V2RuleSubject, ctx: Refi
         message: `${capability.kind} needs the trusted-worker execution profile; ${manifest.execution} plugins can't use it, so remove it or add a worker`
       })
     }
+  })
+}
+
+/** Why authoring only: Orca before PLUGIN_DERIVED_PUBLISHER_SINCE requires `publisher`, so a
+ *  manifest without it must say "requires Orca X" there instead of failing to parse. */
+export function validateOmittedPublisherFloor(
+  manifest: { publisher?: string; engines: { orca: string } },
+  ctx: RefinementCtx
+): void {
+  if (
+    manifest.publisher !== undefined ||
+    !orcaEngineRangeSchema.safeParse(manifest.engines.orca).success ||
+    satisfiesOrcaEngineRange(manifest.engines.orca.slice(2), `>=${PLUGIN_DERIVED_PUBLISHER_SINCE}`)
+  ) {
+    return
+  }
+  ctx.addIssue({
+    code: 'custom',
+    path: ['engines', 'orca'],
+    message: `must be at least >=${PLUGIN_DERIVED_PUBLISHER_SINCE} when publisher is left out, because older Orca requires publisher`
   })
 }

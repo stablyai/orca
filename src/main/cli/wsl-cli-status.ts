@@ -119,6 +119,24 @@ export function unsupportedWslCliStatus(
   }
 }
 
+/** The distro was deleted (`wsl --unregister`), so nothing of Orca's is left in it. */
+export function deletedDistroWslCliStatus(distro: string): CliInstallStatus {
+  return {
+    platform: 'linux',
+    commandName: WSL_COMMAND_NAME,
+    commandPath: null,
+    pathDirectory: null,
+    pathConfigured: false,
+    launcherPath: null,
+    installMethod: null,
+    supported: false,
+    state: 'not_installed',
+    currentTarget: null,
+    unsupportedReason: null,
+    detail: `${distro} is no longer an installed WSL distro, so nothing is registered in it.`
+  }
+}
+
 /** Settings shows this instead of a raw IPC timeout; the row stays refreshable. */
 export function unreachableWslCliStatus(distro: string): CliInstallStatus {
   return unsupportedWslCliStatus(

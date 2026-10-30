@@ -1,6 +1,7 @@
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { RuntimeFileReadChunkResult } from '../../shared/runtime-types'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { PdfExportResult } from '../../shared/pdf-export-failure-copy'
 import type {
   DirEntry,
   FsChangedPayload,
@@ -43,12 +44,7 @@ import type {
 } from '../../shared/native-file-drop-preparation'
 
 export type ExportApi = {
-  htmlToPdf: (args: {
-    html: string
-    title: string
-  }) => Promise<
-    { success: true; filePath: string } | { success: false; cancelled?: boolean; error?: string }
-  >
+  htmlToPdf: (args: { html: string; title: string }) => Promise<PdfExportResult>
 }
 
 export type FilesystemApi = {
@@ -69,6 +65,7 @@ export type FilesystemApi = {
       followSymlinks?: boolean
       /** A user act (open or Retry); may start a stopped WSL distro. */
       wakeWslDistro?: boolean
+      access?: LocalFileAccess
     }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string

@@ -9,6 +9,7 @@ import type { TerminalModes, TerminalWebViewHandle } from '../terminal/terminal-
 import { useTerminalLiveInputFocus } from '../terminal/use-terminal-live-input-focus'
 import { reopensFocusedInputWhenKeyboardHidden } from '../terminal/terminal-live-input-keyboard-reopen'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
+import type { TerminalLiveInputFailure } from '../terminal/terminal-live-pending-flush-state'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-connection-gate'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
@@ -62,6 +63,10 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
+  const onLiveInputSendFailureRef = useRef<(failure: TerminalLiveInputFailure) => void>(() => {})
+  const handleLiveInputSendFailure = useCallback((failure: TerminalLiveInputFailure) => {
+    onLiveInputSendFailureRef.current(failure)
+  }, [])
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -141,6 +146,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     activeSessionTabType: activeSessionTab?.type,
     activeSessionTabTypeRef,
     framesLivePaste,
+    onSendFailure: handleLiveInputSendFailure,
     connected: connState === 'connected',
     liveInputRef,
     liveInputTerminalHandles,
@@ -159,6 +165,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
+    commandInputRef,
     inputRef: liveInputRef,
     keyboardHeight,
     lifecycleIdentity: client,
@@ -192,6 +199,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     commandInputRef,
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
+    onLiveInputSendFailureRef,
     sessionTabActionSheetKeyboardHideSubRef,
     sessionTabActionSheetRequestSeqRef,
     dictationRouteContextRef,

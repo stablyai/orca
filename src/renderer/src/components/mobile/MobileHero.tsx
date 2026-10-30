@@ -134,12 +134,12 @@ export function HeroFlow({
                 </span>
               </div>
               <h2 className="mp-h2">
-                {translate('auto.components.mobile.MobileHero.0d9b33299e', 'Get the app.')}
+                {translate('auto.components.mobile.MobileHero.0d9b33299e', 'Download the app.')}
               </h2>
               <p className="mp-lead-sm">
                 {translate(
                   'auto.components.mobile.MobileHero.e75647ace0',
-                  'Scan the QR with your phone or open the install link to grab Orca Mobile.'
+                  "Scan this download QR with your phone's camera. Already have Orca Mobile? Continue to step 2 for the pairing QR."
                 )}
               </p>
               <div className="mp-tab-toggle">

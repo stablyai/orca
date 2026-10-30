@@ -13,9 +13,7 @@ import { orcadBoundPort } from '../managed-server/lifecycle/orcad-managed-bound-
 import {
   isForceableOrcadDeferral,
   managedOrcadDeployPolicy,
-  managedOrcadInstallDir,
-  managedOrcadSlot,
-  probeManagedOrcadReadiness
+  managedOrcadSlot
 } from '../managed-server/lifecycle/orcad-managed-runtime-context'
 import { isWaitingOrcadUpdateDeferral } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import { clearOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
@@ -28,10 +26,6 @@ import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { deployOrcad, type OrcadDeployOptions } from '../ssh/orcad-remote-deploy'
 import { isWslMoveUnderwayOnHost } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
-import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { execCommand } from '../ssh/remote-exec/remote-exec-command'
-import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { readLocalFullVersion } from '../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -40,6 +34,7 @@ import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
 import { deployWslOrcadWithOneFence } from './wsl-orcad-one-fence-deploy'
+import { probeWslActiveOrcad, readWslOrcadPid } from './wsl-orcad-active-probe'
 import { wslOrcadConnectStateHints } from './wsl-orcad-connect-state-snapshot'
 import { readWslOrcadIncumbent, type WslOrcadIncumbent } from './wsl-orcad-incumbent'
 import { adoptUnrecordedWslOrcad } from './wsl-orcad-instance-adoption'
@@ -51,6 +46,7 @@ import {
   wslOrcadDeferralFailure
 } from './wsl-orcad-update-admission'
 import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
+import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from './wsl-node-runtime-download-budget'
 
 /** An update this app carries that the host may not take yet; the incumbent keeps serving. */
 export type WslOrcadDeferredUpdate = WslHostDeferredUpdate
@@ -129,6 +125,8 @@ async function launchOverTransport(
 ): Promise<WslOrcadLaunch> {
   const { signal } = options
   let ownBuildVersion: string | null = null
+  // Set by the serving probe; readyLaunch reads the pid itself for any other version.
+  let probed: { fullVersion: string; pid: number | null } | null = null
   const conn = withOwnBuildLaunchEnv(transport, () => ownBuildVersion)
   // Acquire a holder before launch or WSL can idle-stop orcad's distro.
   const holder = options.holder ?? createWslDistroHolder({ userDataPath: userDataPath() })
@@ -212,6 +210,7 @@ async function launchOverTransport(
       force: intent === 'force',
       appVersion,
       recordedNodeRuntimeProbe: true,
+      nodeRuntimeDownload: WSL_NODE_RUNTIME_DOWNLOAD_BUDGET,
       ...extra
     }).catch((error: unknown) => {
       if (!signal?.aborted) {
@@ -264,8 +263,11 @@ async function launchOverTransport(
     return { outcome: 'deferred', distro: name, ...deferredUpdate }
   }
   clearOrcadUpdateFailedThisLaunch(failureHost)
-  const probe = () =>
-    probeManagedOrcadReadiness(context, localOrcadDir, deployed.fullVersion, signal)
+  const probe = async () => {
+    const answer = await probeWslActiveOrcad(context, localOrcadDir, deployed.fullVersion, signal)
+    probed = { fullVersion: deployed.fullVersion, pid: answer.pid }
+    return answer.readiness
+  }
   let readiness: ServeReadiness
   if (deployed.outcome === 'already-active') {
     // A stopped distro ended the active slot with it; the one-fence deploy already woke it.
@@ -298,22 +300,18 @@ async function launchOverTransport(
     fullVersion: string
     readiness: ServeReadiness
   }): Promise<Extract<WslOrcadLaunch, { outcome: 'ready' }>> {
-    const pidFile = joinRemotePath(
-      context.host,
-      managedOrcadInstallDir(context, serving.fullVersion),
-      ORCAD_PID_FILENAME
-    )
-    const pid = Number.parseInt(
-      await execCommand(conn, `cat ${quotePosixShell(pidFile)} 2>/dev/null || true`, { signal }),
-      10
-    )
+    // The serving probe already read it; an admission that serves an incumbent did not.
+    const pid =
+      probed?.fullVersion === serving.fullVersion
+        ? probed.pid
+        : await readWslOrcadPid(context, serving.fullVersion, signal)
     return {
       outcome: 'ready',
       distro: name,
       distroId: await distroId,
       port: orcadBoundPort(serving.readiness) ?? ORCAD_MANAGED_REMOTE_PORT,
       fullVersion: serving.fullVersion,
-      pid: Number.isSafeInteger(pid) && pid > 0 ? pid : null,
+      pid,
       readiness: serving.readiness,
       holder: held.outcome,
       ...(adoption.outcome === 'adopted'

@@ -11,7 +11,8 @@ import {
   colors,
   Pressable,
   Check,
-  TextInput,
+  MessageBox,
+  TextField,
   MobileMarkdown
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
@@ -204,12 +205,10 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
         <Text style={styles.detailSectionTitle}>
           {translate('tasks.projectMetadataEditors.title', 'Title')}
         </Text>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={projectTitleDraft}
           onChangeText={setProjectTitleDraft}
           placeholder={translate('tasks.projectMetadataEditors.title', 'Title')}
-          placeholderTextColor={colors.textMuted}
         />
         <Pressable
           style={styles.inlineSaveButton}
@@ -229,34 +228,27 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
         <Text style={styles.detailSectionTitle}>
           {translate('tasks.projectMetadataEditors.description', 'Description')}
         </Text>
-        <TextInput
-          style={[styles.input, styles.bodyInput]}
+        <MessageBox
           value={projectBodyDraft}
           onChangeText={setProjectBodyDraft}
           placeholder={translate('tasks.projectMetadataEditors.description', 'Description')}
-          placeholderTextColor={colors.textMuted}
-          multiline
-          textAlignVertical="top"
-        />
-        <Pressable
-          style={styles.inlineSaveButton}
-          disabled={
-            projectMutating ||
-            projectBodyDraft ===
+          canSend={
+            !projectMutating &&
+            projectBodyDraft !==
               (projectRowDetail?.provider === 'github'
                 ? projectRowDetail.body
                 : (projectRowItem.content.body ?? ''))
           }
-          onPress={() =>
+          sendAccessibilityLabel={translate(
+            'tasks.projectMetadataEditors.saveDescription',
+            'Save description'
+          )}
+          onSend={() =>
             void mutateProjectRowIssueOrPr(projectRowItem, {
               body: projectBodyDraft
             })
           }
-        >
-          <Text style={styles.inlineSaveText}>
-            {translate('tasks.projectMetadataEditors.saveDescription', 'Save description')}
-          </Text>
-        </Pressable>
+        />
         <MobileMarkdown
           content={projectBodyDraft}
           fallback={translate('tasks.projectMetadataEditors.noDescription', 'No description.')}

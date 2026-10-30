@@ -37,6 +37,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     clientRef,
     connStateRef,
     liveInputRef,
+    commandInputRef,
+    keyboardHeight,
     liveInputFocusTimerRef,
     terminalUnsubsRef,
     activeHandleRef,
@@ -55,15 +57,22 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     if (!activeHandle) {
       return
     }
+    const keepKeyboard =
+      keyboardHeight > 0 ||
+      liveInputRef.current?.isFocused() === true ||
+      commandInputRef.current?.isFocused() === true
+    clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
     const nextEnabled = toggleTerminalLiveInput(activeHandle)
     clearPendingLiveInputCommit()
-    if (nextEnabled) {
+    if (keepKeyboard) {
+      const target = nextEnabled ? liveInputRef : commandInputRef
+      target.current?.focus()
+    } else if (nextEnabled) {
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
-      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
-  }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])
+  }, [activeHandle, clearPendingLiveInputCommit, keyboardHeight, toggleTerminalLiveInput])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -216,7 +225,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         // A deliberate click must survive wheel limits and follow text queued for the old cursor.
         void (liveInputTerminalHandlesRef.current.has(handle)
           ? sendLiveInputClick(handle, bytes)
-          : sendLiveTerminalInputRef.current(handle, bytes))
+          : sendLiveTerminalInputRef.current(handle, bytes, 'pointer'))
         return
       }
       if (!allowTerminalGestureInput(handle, sequenceCount)) {

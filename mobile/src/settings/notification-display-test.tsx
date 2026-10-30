@@ -7,11 +7,26 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import * as Notifications from 'expo-notifications'
+import { waitForPushFallback } from '../notifications/push-fallback'
+import {
+  getHostPushSupported,
+  getHostPushSupportCompletion
+} from '../notifications/push-registration'
+import { getNotificationPermissionState } from '../notifications/notification-permissions'
+import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { loadNotificationDeliveryPreferences } from '../notifications/notification-delivery-preferences'
+import {
+  DESKTOP_NOTIFICATION_CHANNEL_ID,
+  ensureDesktopNotificationChannel
+} from '../notifications/desktop-notification-channel'
 
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const busy = useRef(false)
+  const pending = useRef<AbortController | null>(null)
+  useEffect(() => () => pending.current?.abort(), [])
   const [hostIds, setHostIds] = useState<string[]>([])
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -30,25 +45,110 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       return
     }
     busy.current = true
+    const controller = new AbortController()
+    pending.current = controller
+    const connected = clients
+      .filter((entry) => entry.state === 'connected')
+      .map((entry) => ({
+        ...entry,
+        support: getHostPushSupportCompletion(entry.hostId, entry.client)
+      }))
+    const isCurrent = () =>
+      !controller.signal.aborted &&
+      connected.every(
+        ({ hostId, client, support }) =>
+          !support?.signal.aborted && getHostPushSupportCompletion(hostId, client) === support
+      )
     setSending(true)
     setMessage(null)
+    const localTest = async (reason: string, liveFallback = false) => {
+      const { sound } = await loadNotificationDeliveryPreferences()
+      await ensureDesktopNotificationChannel()
+      if (!isCurrent()) {
+        return
+      }
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: t('settings.notificationDisplayTest.localTitle', 'Test notification'),
+          body: t(
+            'settings.notificationDisplayTest.localBody',
+            'Local notification test from this phone.'
+          ),
+          sound: sound ? 'default' : false
+        },
+        trigger: { channelId: `${DESKTOP_NOTIFICATION_CHANNEL_ID}${sound ? '' : '-silent'}` }
+      })
+      setMessage(
+        liveFallback
+          ? t(
+              'settings.notificationDisplayTest.liveFallbackScheduled',
+              '{{reason}} Local test scheduled. Check for the notification. Live alerts are available while Orca is running and connected.',
+              { reason }
+            )
+          : t(
+              'settings.notificationDisplayTest.localScheduled',
+              '{{reason}} Local test scheduled. Check for the notification. This checks display only; it does not verify agent alert delivery.',
+              { reason }
+            )
+      )
+    }
     try {
+      if (!(await loadPushNotificationsEnabled())) {
+        throw new Error(
+          t(
+            'settings.notificationDisplayTest.disabled',
+            'Notifications are turned off in Orca. Enable notifications and try again.'
+          )
+        )
+      }
+      if (!(await getNotificationPermissionState()).granted) {
+        throw new Error(
+          t(
+            'settings.notificationDisplayTest.osDisabled',
+            'Notifications are turned off in system settings. Allow notifications and try again.'
+          )
+        )
+      }
       if (hostIds.length === 0) {
         throw new Error(
           t('settings.notificationDisplayTest.pairDesktop', 'Pair a desktop and try again.')
         )
       }
-      const connected = clients.filter((entry) => entry.state === 'connected')
       if (connected.length === 0) {
         throw new Error(
           t('settings.notificationDisplayTest.connectDesktop', 'Connect a desktop and try again.')
         )
       }
-      let unavailable = t(
-        'settings.notificationDisplayTest.updateDesktop',
-        'Update your desktop to run this test.'
+      const unsupportedHost = t(
+        'settings.notificationDisplayTest.unsupportedHost',
+        'This desktop does not support push notifications. Update it to receive push.'
       )
-      for (const { client } of connected) {
+      const fallback = connected.every(({ hostId }) => getHostPushSupported(hostId) === false)
+        ? 'unsupported-host'
+        : await waitForPushFallback(
+            connected.map(({ support }) => support),
+            controller.signal
+          )
+      if (!isCurrent()) {
+        return
+      }
+      if (fallback === 'unsupported-host') {
+        await localTest(unsupportedHost, true)
+        return
+      }
+      if (fallback === 'no-token') {
+        await localTest(
+          t(
+            'settings.notificationDisplayTest.noToken',
+            'No push token is available on this phone.'
+          ),
+          true
+        )
+        return
+      }
+      const pushHosts = connected.filter(({ hostId }) => getHostPushSupported(hostId) !== false)
+      let unavailable = unsupportedHost
+      for (const { client } of pushHosts) {
         const reply = await pushDeliveryTest.request(client, null, {
           timeoutMs: 20000,
           failWhenDisconnected: true
@@ -78,8 +178,8 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         }
         if (result?.reason === 'not_registered') {
           unavailable = t(
-            'settings.notificationDisplayTest.reconnectPhone',
-            'Reconnect to register this phone for notifications.'
+            'settings.notificationDisplayTest.registrationPending',
+            'Push registration is not ready on this desktop. Try again shortly.'
           )
           continue
         }
@@ -95,14 +195,21 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
               )
         )
       }
-      throw new Error(unavailable)
+      await localTest(unavailable)
     } catch (error) {
+      if (!isCurrent()) {
+        return
+      }
       setMessage(
         error instanceof Error
           ? error.message
           : t('settings.notificationDisplayTest.sendFailed', 'Could not send push test.')
       )
     } finally {
+      controller.abort()
+      if (pending.current === controller) {
+        pending.current = null
+      }
       busy.current = false
       setSending(false)
     }
@@ -118,7 +225,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       <Text style={styles.detail}>
         {t(
           'settings.notificationDisplayTest.description',
-          'Send a test through Orca’s push service.'
+          'Test push delivery, or a local notification when push is unavailable.'
         )}
       </Text>
       <Pressable

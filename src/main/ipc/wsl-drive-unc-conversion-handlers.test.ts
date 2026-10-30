@@ -46,18 +46,25 @@ afterEach(() => {
 })
 
 describe('WSL drive UNC conversion IPC', () => {
-  it.each([
-    ['with the gate closed', 'win32', ''],
-    ['off Windows', 'darwin', '1']
-  ] as const)('refuses %s, before reading anything', async (_case, platform, gate) => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, gate)
-    setPlatform(platform)
+  it('refuses with the gate closed, before reading anything', async () => {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
     await expect(
       invoke('wslDriveUnc:convert', { distro: 'Ubuntu', repoIds: ['repo-a'] })
     ).rejects.toThrow('wsl_drive_unc_unavailable')
     expect(await invoke('wslDriveUnc:lastOutcomes')).toEqual([])
     expect(conversion.startWslDriveUncConversion).not.toHaveBeenCalled()
     expect(startup.lastWslDriveUncConversionOutcomes).not.toHaveBeenCalled()
+  })
+
+  it("refuses a conversion off Windows, but still reports startup's outcomes", async () => {
+    setPlatform('darwin')
+    await expect(
+      invoke('wslDriveUnc:convert', { distro: 'Ubuntu', repoIds: ['repo-a'] })
+    ).rejects.toThrow('wsl_drive_unc_unavailable')
+    expect(conversion.startWslDriveUncConversion).not.toHaveBeenCalled()
+    expect(await invoke('wslDriveUnc:lastOutcomes')).toEqual([
+      { migrationId: 'conv-1', outcome: 'converted' }
+    ])
   })
 
   it("converts the parsed request for the active profile, and reports startup's outcomes", async () => {

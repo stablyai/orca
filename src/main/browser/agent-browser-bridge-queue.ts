@@ -10,10 +10,50 @@ import { runWithRemoteCliPageAdmission } from './remote-cli-page-admission'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 import { releaseHeldPageInput } from './guest-direct-key-input'
 import {
+  getBrowserJavaScriptDialog,
+  onBrowserJavaScriptDialogOpened
+} from './browser-javascript-dialogs'
+import type { BrowserJavaScriptDialog } from '../../shared/browser-javascript-dialog'
+import {
   captureRemoteCliBrowserRevocation,
   captureRemoteCliBrowserScope,
   runOutsideRemoteCliBrowserScope
 } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+
+const DIALOG_MESSAGE_QUOTE_MAX_CHARS = 500
+
+// Page-controlled text, so quote it and keep it short.
+function quoteDialogMessage({ message }: BrowserJavaScriptDialog): string {
+  return JSON.stringify(
+    message.length > DIALOG_MESSAGE_QUOTE_MAX_CHARS
+      ? `${message.slice(0, DIALOG_MESSAGE_QUOTE_MAX_CHARS)}…`
+      : message
+  )
+}
+
+function dialogAnswerHint(dialog: BrowserJavaScriptDialog, browserPageId: string): string {
+  const page = `--page ${browserPageId}`
+  return dialog.type === 'prompt'
+    ? `Answer it with \`orca dialog accept ${page} --text <answer>\` or \`orca dialog dismiss ${page}\``
+    : `Answer it with \`orca dialog accept ${page}\` or \`orca dialog dismiss ${page}\``
+}
+
+// Commands block until the page's dialog closes, so agents must answer it first.
+function assertNoJavaScriptDialog(
+  webContentsId: number,
+  browserPageId: string,
+  admit: (id: number) => void
+): void {
+  const open = getBrowserJavaScriptDialog(webContentsId)
+  if (open) {
+    // A host must not read a dialog on a page it may not drive.
+    admit(webContentsId)
+    throw new BrowserError(
+      'browser_dialog_open',
+      `A JavaScript ${open.type} is open on this page: ${quoteDialogMessage(open)}. ${dialogAnswerHint(open, browserPageId)}, then retry.`
+    )
+  }
+}
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
   // Serialize tab switches behind commands targeting the current tab.
@@ -40,12 +80,9 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         )
       }
       const [tabId, wcId] = liveEntries[switchedIndex]
-      this.activeWebContentsId = wcId
       const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(tabId)
       // Page-only switches must also update the owning workspace for later scoped commands.
-      if (owningWorktreeId) {
-        this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
-      }
+      this.pointAgentAt(wcId, owningWorktreeId ?? undefined)
       this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
       return { switched: switchedIndex, browserPageId: tabId }
     })
@@ -68,22 +105,34 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     const assertNotRevoked = captureRemoteCliBrowserRevocation()
     const origin = captureRemoteCliBrowserScope()
     assertNotRevoked()
-    const { browserPageId: pageId } = this.resolveCommandTarget(
+    const { browserPageId: pageId, webContentsId } = this.resolveCommandTarget(
       worktreeId,
       browserPageId,
       options.requireScopedTarget
     )
+    if (!browserPageId && options.elements) {
+      this.assertRefsFromPage(pageId, options.elements)
+    }
+    // Fail before queueing: the turn ahead may be a command waiting on this very dialog.
+    assertNoJavaScriptDialog(webContentsId, pageId, assertNotRevoked)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
     const agentCommand = this.browserManager.beginAgentCommand(pageId)
 
-    // Dropped commands never execute, so settling also ends the lease; ending twice is harmless.
+    // A dialog blocks the page until it is answered. A command still waiting never runs; one
+    // already running answers its caller now and keeps its turn until it ends, so nothing overtakes it.
+    let running = false
+    let interrupted = false
+    // A started command ends the lease when it finishes; a dropped one when it settles.
+    let started = false
+    let stopWatching = (): void => {}
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
       if (!queue) {
         queue = []
         this.commandQueues.set(sessionName, queue)
       }
-      queue.push({
+      const pageQueue = queue
+      const entry = {
         execute: () => {
           assertNotRevoked()
           const run = (): Promise<T> =>
@@ -93,6 +142,23 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
               (session, target) => {
                 const gate = (): void => assertNotRevoked(target.webContentsId)
                 gate()
+                if (interrupted) {
+                  throw new BrowserError(
+                    'browser_dialog_opened',
+                    'A dialog interrupted this command'
+                  )
+                }
+                assertNoJavaScriptDialog(target.webContentsId, pageId, gate)
+                if (target.webContentsId !== webContentsId) {
+                  // The page got a replacement guest while this command waited.
+                  const stopWatchingQueued = stopWatching
+                  const stopWatchingTarget = watch(target.webContentsId)
+                  stopWatching = () => {
+                    stopWatchingQueued()
+                    stopWatchingTarget()
+                  }
+                }
+                running = true
                 return origin.bridged
                   ? this.runHostCommand(session, target.webContentsId, gate, origin, () =>
                       execute(session, target)
@@ -101,13 +167,47 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
               },
               options
             )
-          return origin.run(() => agentCommand.run(run))
+          return origin.run(() => {
+            started = true
+            return agentCommand.run(run)
+          })
         },
         resolve: resolve as (value: unknown) => void,
         reject
-      })
+      }
+      const watch = (guestId: number): (() => void) =>
+        onBrowserJavaScriptDialogOpened(guestId, (dialog) => {
+          const waitingAt = pageQueue.indexOf(entry)
+          if (waitingAt !== -1) {
+            pageQueue.splice(waitingAt, 1)
+          }
+          interrupted = true
+          try {
+            assertNotRevoked(guestId)
+          } catch (error) {
+            reject(error)
+            return
+          }
+          const opened = `The page opened a JavaScript ${dialog.type}: ${quoteDialogMessage(dialog)}.`
+          const effect = running
+            ? "The command may already have taken effect, so don't repeat it."
+            : 'The command did not run.'
+          reject(
+            new BrowserError(
+              'browser_dialog_opened',
+              `${opened} ${effect} ${dialogAnswerHint(dialog, pageId)}.`
+            )
+          )
+        })
+      pageQueue.push(entry)
+      stopWatching = watch(webContentsId)
       this.processQueue(sessionName)
-    }).finally(agentCommand.end)
+    }).finally(() => {
+      stopWatching()
+      if (!started) {
+        agentCommand.end()
+      }
+    })
   }
 
   protected async executeQueuedCommand<T>(

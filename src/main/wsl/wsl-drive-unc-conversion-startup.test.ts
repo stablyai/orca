@@ -3,6 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
 import { getHistorySessionDirName } from '../daemon/history-paths'
@@ -11,6 +16,8 @@ import { getOrcaProfileStateDatabaseFile } from '../orca-profiles/profile-storag
 import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import { importProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import Database from '../sqlite/sync-database'
+import { loadAgentSessionStoreRows } from '../runtime/agent-session-record-rows'
+import { getAgentSessionConversation } from '../runtime/agent-session-store-state'
 import { hashWorktreeId } from '../terminal-history-id'
 import type * as Journal from './wsl-drive-unc-conversion-journal'
 import {
@@ -155,6 +162,27 @@ function run(stores = realStores()) {
   })
 }
 
+function stoppedChat(workspaceId = OLD_ID) {
+  const record = agentSessionRecordFixture(
+    agentSessionLeaseFixture({
+      sessionId: 'chat-alpha-1',
+      runtimeFence: 8,
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      deathEvidence: {
+        kind: 'kill-delivered',
+        detail: 'killed',
+        observedAt: 40_000,
+        ownerFence: 7,
+        lastProvenAliveAt: 30_000,
+        runtimeEnd: 'quit'
+      }
+    })
+  )
+  return { ...record, location: { ...record.location, workspaceId, wslDistro: 'Ubuntu' } }
+}
+
 function seedOutside(): void {
   const session = join(root, 'terminal-history', getHistorySessionDirName(OLD_SESSION))
   mkdirSync(session, { recursive: true })
@@ -165,11 +193,15 @@ function seedOutside(): void {
   writeFileSync(join(shell, '.bash_history'), 'make test\n')
   const db = new Database(join(root, 'agent-session-journal.db'))
   db.exec(`CREATE TABLE journal_sessions (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, epoch TEXT NOT NULL);
-CREATE TABLE agent_session_records (session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL);`)
-  db.prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)').run('chat-1', OLD_ID, 'e1')
+CREATE TABLE agent_session_records (session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL);
+CREATE TABLE agent_session_operations (operation_key TEXT PRIMARY KEY, row_json TEXT);
+CREATE TABLE agent_session_retired_claim_keys (key_id TEXT PRIMARY KEY, retired_at INTEGER);
+CREATE TABLE agent_session_tabs (tab_id TEXT PRIMARY KEY, session_id TEXT, position INTEGER);
+CREATE TABLE agent_session_store_meta (key TEXT PRIMARY KEY, value TEXT);`)
+  db.prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)').run('chat-alpha-1', OLD_ID, 'e1')
   db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run(
-    'chat-1',
-    JSON.stringify({ id: 'chat-1', location: { workspaceId: OLD_ID, wslDistro: 'Ubuntu' } })
+    'chat-alpha-1',
+    JSON.stringify(encodeAgentSessionRecord(stoppedChat()))
   )
   db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('chat-2', '{not json')
   db.close()
@@ -240,15 +272,40 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     })
     expect(chatRows()).toEqual([
       { workspace_id: NEW_ID },
+      { record_json: '{not json' },
       {
-        record_json: JSON.stringify({
-          id: 'chat-1',
-          location: { workspaceId: NEW_ID, wslDistro: 'Ubuntu' }
-        })
-      },
-      { record_json: '{not json' }
+        record_json: JSON.stringify(encodeAgentSessionRecord(stoppedChat(NEW_ID)))
+      }
     ])
-    expect(listWslDriveUncConversions(root)).toEqual([])
+    const db = new Database(join(root, 'agent-session-journal.db'))
+    try {
+      const loaded = loadAgentSessionStoreRows(db)
+      expect(loaded.records.get('chat-alpha-1')?.lease.deathEvidence).toEqual(
+        stoppedChat().lease.deathEvidence
+      )
+      expect(getAgentSessionConversation(loaded, 'chat-alpha-1')).toMatchObject({
+        location: { workspaceId: NEW_ID, wslDistro: 'Ubuntu' },
+        currentFence: 8,
+        ownerObservation: {
+          claimStatus: 'released',
+          deathEvidence: { kind: 'kill-delivered', ownerFence: 7 }
+        }
+      })
+    } finally {
+      db.close()
+    }
+    // The window's stores record themselves once it opens.
+    expect(listWslDriveUncConversions(root)).toEqual([
+      expect.objectContaining({
+        phase: 'profile-rewritten',
+        rewrittenStores: [
+          'terminal-history',
+          'shell-history',
+          'orchestration-history',
+          'chat-journal'
+        ]
+      })
+    ])
   })
 
   it('rolls back, changing nothing, when the profile cannot be re-keyed', () => {
@@ -284,7 +341,18 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     expect(readFileSync(join(moved, '.bash_history'), 'utf8')).toBe('make test\n')
     // The chats re-key after the history store, so a torn meta.json no longer leaves them behind.
     expect(chatRows()[0]).toEqual({ workspace_id: NEW_ID })
-    expect(listWslDriveUncConversions(root)).toEqual([])
+    // Every main-process store finished; the journal waits only for the window's stores.
+    expect(listWslDriveUncConversions(root)).toEqual([
+      expect.objectContaining({
+        phase: 'profile-rewritten',
+        rewrittenStores: [
+          'terminal-history',
+          'shell-history',
+          'orchestration-history',
+          'chat-journal'
+        ]
+      })
+    ])
   })
 
   it('keeps the profile converted and resumes a failed store at the next startup', () => {
@@ -370,25 +438,29 @@ describe('runPendingWslDriveUncConversions', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   })
 
+  // Any platform finishes a journaled conversion once the gate is open; only the gate stops it.
   it.each([
-    ['with the WSL hosts gate closed', 'win32', ''],
-    ['off Windows', 'linux', '1']
-  ])('leaves a journaled conversion untouched %s', (_case, platform, gate) => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, gate)
-    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-    seedProfile(profileState())
-    journal()
+    ['on Windows', 'win32', ''],
+    ['off Windows', 'linux', '']
+  ])(
+    'leaves a journaled conversion untouched with the gate closed, %s',
+    (_case, platform, gate) => {
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, gate)
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+      seedProfile(profileState())
+      journal()
 
-    runPendingWslDriveUncConversions({
-      userDataPath: root,
-      profileUserDataPath: root,
-      profileId: PROFILE
-    })
+      runPendingWslDriveUncConversions({
+        userDataPath: root,
+        profileUserDataPath: root,
+        profileId: PROFILE
+      })
 
-    expect(lastWslDriveUncConversionOutcomes()).toEqual([])
-    expect(listWslDriveUncConversions(root)).toEqual([
-      expect.objectContaining({ phase: 'prepared' })
-    ])
-    expect(readProfile().repos[0].path).toBe(UNC)
-  })
+      expect(lastWslDriveUncConversionOutcomes()).toEqual([])
+      expect(listWslDriveUncConversions(root)).toEqual([
+        expect.objectContaining({ phase: 'prepared' })
+      ])
+      expect(readProfile().repos[0].path).toBe(UNC)
+    }
+  )
 })

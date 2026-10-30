@@ -15,6 +15,7 @@ import {
   resolveSourceControlDisplayedBaseRef,
   type SourceControlBranchContextStat
 } from './branch-context-stats'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function BaseRefButton({
   baseRef,
@@ -81,7 +82,7 @@ function ManualReviewLinkButton({
         'Open review page in browser'
       )}
       onClick={() => {
-        void window.api.shell.openUrl(url)
+        openAppHttpLink(url)
       }}
     />
   )

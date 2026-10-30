@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -24,6 +23,7 @@ import { hostOs } from '../../../src/platform/host-os'
 import { SideSafeArea } from '../../../src/layout/side-safe-area'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
+import { TextField } from '../../../src/components/composer-input/TextField'
 
 // The host group leaves the Duo's status-bar rail to its pages; this native screen pads it.
 export default function EditHostRoute() {
@@ -237,8 +237,7 @@ function EditHostScreen() {
             </Text>
 
             <Text style={styles.label}>{t('host.edit.name', 'Name')}</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
               accessibilityLabel={t('host.edit.name', 'Name')}
               value={name}
               onChangeText={(value) => {
@@ -248,15 +247,13 @@ function EditHostScreen() {
               placeholder={
                 host.lastKnownMachineName ?? t('host.edit.hostNamePlaceholder', 'Host name')
               }
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="next"
             />
 
             <Text style={styles.label}>{t('host.edit.address', 'Address')}</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
               accessibilityLabel={t('host.edit.address', 'Address')}
               value={address}
               onChangeText={(value) => {
@@ -264,7 +261,6 @@ function EditHostScreen() {
                 setSaveError(null)
               }}
               placeholder="192.168.1.10:6768"
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
@@ -362,16 +358,6 @@ const styles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.4
-  },
-  input: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 10
   },
   hint: {
     color: colors.textMuted,

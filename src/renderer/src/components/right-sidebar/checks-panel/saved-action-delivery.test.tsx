@@ -370,7 +370,7 @@ it.each([false, true])(
     await act(async () => f.inventory.resolve(['claude']))
     await waitFor(() => expect(f.composer).toHaveBeenCalledOnce())
     expect(launch).not.toHaveBeenCalled()
-    expect(f.composer.mock.calls[0]?.[0]?.launchContext?.initialRecipe?.agentId).toBe(
+    expect(f.composer.mock.calls[0]?.[0]?.launchContext?.initialSelection?.current.agentId).toBe(
       saved ? 'codex' : undefined
     )
   }
