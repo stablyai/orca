@@ -5,9 +5,12 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-
 import type { PreloadApi } from '../api-types'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
+import type { CodexComputerUseRuntimeStatus } from '../../shared/codex-computer-use-runtime'
 import type { NewerDaemonHeldScreen, NewerDaemonReopenResult } from '../../shared/newer-daemon-hold'
 
 export const ptyStreamAndSerializationApi = {
+  inspectCodexComputerUseRuntime: (id: string): Promise<CodexComputerUseRuntimeStatus> =>
+    ipcRenderer.invoke('pty:inspectCodexComputerUseRuntime', { id }),
   inspectProcess: (
     id: string,
     options?: {

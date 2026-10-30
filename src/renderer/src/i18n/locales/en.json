@@ -20811,6 +20811,13 @@
       "title": "Codex in Orca now uses ~/.codex",
       "description": "Codex may ask again to trust folders or approve commands. Re-add any MCP servers you added only in Orca."
     },
+    "codexCuaRuntime": {
+      "title": "Computer Use is still using an older app runtime",
+      "body": "Restart this Codex to load the current Computer Use runtime. Your conversation is kept; active work waits until idle.",
+      "explicitBody": "Restart this Codex to load the current Computer Use runtime. Supply an explicit resume command to keep your conversation.",
+      "command": "Restart with command…",
+      "restart": "Restart this Codex"
+    },
     "codexSharedServerBanner": {
       "title": "This Codex is sharing a server with your other Codex tabs",
       "body": "Sessions may end unexpectedly, and agent status may be wrong.",

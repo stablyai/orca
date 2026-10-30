@@ -38,6 +38,7 @@ import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-requ
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
+import type { CodexComputerUseRuntimeStatus } from '../../shared/codex-computer-use-runtime'
 import type { NewerDaemonHeldScreen, NewerDaemonReopenResult } from '../../shared/newer-daemon-hold'
 
 export type PtyApi = {
@@ -166,6 +167,7 @@ export type PtyApi = {
   confirmForegroundProcess: (id: string) => Promise<string | null>
   /** Local panes only; never joined for any other pane. */
   isCodexOnSharedServer: (id: string) => Promise<CodexSharedServerStatus>
+  inspectCodexComputerUseRuntime?: (id: string) => Promise<CodexComputerUseRuntimeStatus>
   /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */
   disableCodexSharedServerAutoStart: (id: string) => Promise<boolean>
   stopCodexSharedServer: (id: string) => Promise<boolean>

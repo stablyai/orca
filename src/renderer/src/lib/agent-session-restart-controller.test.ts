@@ -42,6 +42,33 @@ function outcome(
 }
 
 describe('createAgentSessionRestartController', () => {
+  it('scopes a runtime recovery to the selected Codex and keeps its queued fence', async () => {
+    let busy = true
+    const run = vi.fn(async (targets) =>
+      targets.map((target) =>
+        outcome(target.pane.ptyId, target.kind === 'queued' ? 'queued' : 'succeeded')
+      )
+    )
+    const controller = createAgentSessionRestartController({
+      plan: () =>
+        planAgentSessionRestarts({
+          enabledCatalog: ['codex'],
+          panes: [
+            pane({ agent: 'codex', state: busy ? 'working' : 'done' }),
+            pane({ agent: 'codex', ptyId: 'other-codex' })
+          ]
+        }),
+      run
+    })
+    await controller.request('codex', ['pty-1'])
+    expect(controller.getSnapshot().outcomes.map((entry) => entry.ptyId)).toEqual(['pty-1'])
+    busy = false
+    await controller.promote()
+    expect(controller.getSnapshot().outcomes.map((entry) => entry.status)).toEqual(['succeeded'])
+    expect(
+      run.mock.calls.flatMap(([targets]) => targets.map((target) => target.pane.ptyId))
+    ).toEqual(['pty-1', 'pty-1'])
+  })
   it('replaces completed results on each request and dismisses them', async () => {
     let ptyId = 'old-pty'
     const controller = createAgentSessionRestartController({

@@ -18,6 +18,7 @@ import type { CodexSharedServerStatus } from '../../../../shared/codex-shared-se
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, hasPtyProviderForInspection } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { inspectPaneCodexComputerUseRuntime } from '../../../codex/codex-computer-use-runtime'
 
 // Wrapper availability depends on shell and daemon version; cmd.exe and unknown shells have none.
 const CODEX_SHELL_FUNCTION_PROTOCOL_BY_SHELL: ReadonlyMap<string, number> = new Map([
@@ -94,6 +95,12 @@ function runForPaneHome(fix: (codexHome: string) => Promise<boolean>) {
 
 // Only visible Codex panes request this argv read; keep it off cadence polling.
 export function installPtyCodexSharedServerIpcHandler(deps: Deps): void {
+  handleLocalPane(
+    deps,
+    'pty:inspectCodexComputerUseRuntime',
+    (_id, rootPid) => inspectPaneCodexComputerUseRuntime(rootPid),
+    { status: 'unavailable' as const }
+  )
   handleLocalPane(deps, 'pty:isCodexOnSharedServer', readPaneSharedServerStatus, { joined: false })
   handleLocalPane(
     deps,

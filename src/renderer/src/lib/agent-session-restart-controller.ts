@@ -20,7 +20,7 @@ export type AgentSessionRestartControllerSnapshot = {
 export type AgentSessionRestartController = {
   getSnapshot: () => AgentSessionRestartControllerSnapshot
   subscribe: (listener: () => void) => () => void
-  request: (agent: TuiAgent | 'all') => Promise<void>
+  request: (agent: TuiAgent | 'all', ptyIds?: readonly string[]) => Promise<void>
   dismiss: () => void
   promote: () => Promise<void>
   hasWaiting: () => boolean
@@ -120,7 +120,7 @@ export function createAgentSessionRestartController(deps: {
     await promote()
   }
 
-  async function request(agent: TuiAgent | 'all'): Promise<void> {
+  async function request(agent: TuiAgent | 'all', ptyIds?: readonly string[]): Promise<void> {
     if (running) {
       promoteAgain = true
       return
@@ -129,9 +129,9 @@ export function createAgentSessionRestartController(deps: {
     running = true
     publish()
     try {
-      const selected = selectAgentSessionRestartTargets(deps.plan().targets, agent).map(
-        keepOriginalFence
-      )
+      const selected = selectAgentSessionRestartTargets(deps.plan().targets, agent)
+        .filter((target) => ptyIds === undefined || ptyIds.includes(target.pane.ptyId))
+        .map(keepOriginalFence)
       seedWaiting(selected)
       mergeOutcomes(selected, await deps.run(selected))
     } catch (err) {

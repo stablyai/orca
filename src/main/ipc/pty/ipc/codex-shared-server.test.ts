@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   resolveCodexPaneHome: vi.fn<(id: string) => string | null>(),
   disable: vi.fn<(home: string) => Promise<boolean>>(),
   stop: vi.fn<(home: string) => Promise<boolean>>(),
+  inspectCua: vi.fn<(pid: number) => Promise<{ status: 'stale' | 'unavailable' }>>(),
   legacyAdapters: new Array<{ protocolVersion: number; hasPty: (id: string) => boolean }>()
 }))
 vi.mock('../pty-host-bindings', () => ({
@@ -29,6 +30,9 @@ vi.mock('../../../codex/codex-shared-server-fix', () => ({
   disableCodexSharedServerAutoStart: mocks.disable,
   stopCodexSharedServer: mocks.stop
 }))
+vi.mock('../../../codex/codex-computer-use-runtime', () => ({
+  inspectPaneCodexComputerUseRuntime: mocks.inspectCua
+}))
 vi.mock('../../../daemon/daemon-provider-routing', () => ({
   getLegacyDaemonAdapters: () => mocks.legacyAdapters
 }))
@@ -42,6 +46,7 @@ import { ptyOwnership } from '../provider/ownership-state'
 import { installPtyCodexSharedServerIpcHandler } from './codex-shared-server'
 
 const CHANNELS = [
+  ['pty:inspectCodexComputerUseRuntime', { status: 'stale' }, { status: 'unavailable' }],
   ['pty:isCodexOnSharedServer', { joined: true, openedBeforeWrapper: false }, { joined: false }],
   ['pty:disableCodexSharedServerAutoStart', true, false],
   ['pty:stopCodexSharedServer', true, false]
@@ -65,6 +70,7 @@ beforeEach(() => {
   mocks.resolveCodexPaneHome.mockReturnValue('/home/me/.codex')
   mocks.disable.mockResolvedValue(true)
   mocks.stop.mockResolvedValue(true)
+  mocks.inspectCua.mockResolvedValue({ status: 'stale' })
   mocks.legacyAdapters = []
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise: () => undefined })
 })
@@ -140,9 +146,10 @@ describe('Codex shared-server IPC', () => {
     expect(mocks.findPaneCodexOnSharedServer).not.toHaveBeenCalled()
     expect(mocks.disable).not.toHaveBeenCalled()
     expect(mocks.stop).not.toHaveBeenCalled()
+    expect(mocks.inspectCua).not.toHaveBeenCalled()
   })
 
-  it.each(CHANNELS.slice(1))('%s runs nothing when the pane has no Codex home', async (channel) => {
+  it.each(CHANNELS.slice(2))('%s runs nothing when the pane has no Codex home', async (channel) => {
     mocks.resolveCodexPaneHome.mockReturnValue(null)
     expect(await invoke(channel, 'local-1')).toBe(false)
     expect(mocks.disable).not.toHaveBeenCalled()
