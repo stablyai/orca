@@ -11401,7 +11401,6 @@
         },
         "PluginThemeUseNow": {
           "label": "지금 사용:",
-          "useName": "지금 사용: {{value0}}",
           "useForLight": "라이트에 사용:",
           "useForDark": "다크에 사용:"
         },

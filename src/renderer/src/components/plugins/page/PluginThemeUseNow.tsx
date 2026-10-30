@@ -1,7 +1,9 @@
 import { Check, SquareTerminal } from 'lucide-react'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { usePluginIconThemes } from '@/store/plugin-icon-themes'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { selectTerminalTheme } from '../../../../../shared/terminal-theme-selection'
 import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useAppStore } from '@/store'
@@ -10,20 +12,14 @@ import { Button } from '../../ui/button'
 import {
   isPluginAppThemeSelected,
   isPluginTerminalThemeSelected,
-  showThemeAppliedToast,
-  terminalThemeSlot,
-  terminalThemeUpdate,
-  themeSettingsSnapshot
+  terminalThemeUpdate
 } from '../state/plugin-theme-apply'
 import { PluginThemeSwatch } from './PluginThemeSwatch'
-
-type Mode = 'light' | 'dark'
 
 type Chip = {
   key: string
   label: string
-  /** The app mode that shows this chip's theme. */
-  mode: Mode
+  showsNow: boolean
   selected: boolean
   icon: React.ReactNode
   update: Partial<GlobalSettings>
@@ -43,13 +39,14 @@ export function PluginThemeUseNow({
   const terminalThemes = usePluginTerminalThemes()
   const terminals = terminalThemes.filter((theme) => theme.pluginKey === pluginKey)
   const settings = useAppStore((state) => state.settings)
-  const updateSettings = useAppStore((state) => state.updateSettings)
+  const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
+  const dark = useDocumentDarkTheme()
   if (themes.length + icons.length + terminals.length === 0 || !settings) {
     return <>{fallback}</>
   }
-  const dark = resolveDocumentTheme(settings.theme)
-  const mode: Mode = dark ? 'dark' : 'light'
-  const otherMode: Mode = dark ? 'light' : 'dark'
+  const mode = dark ? 'dark' : 'light'
+  const otherMode = dark ? 'light' : 'dark'
+  const shownTerminal = selectTerminalTheme(settings, dark)
   const prefixes = {
     now: translate('auto.components.settings.PluginThemeUseNow.label', 'Use now:'),
     light: translate('auto.components.settings.PluginThemeUseNow.useForLight', 'Use for light:'),
@@ -59,7 +56,7 @@ export function PluginThemeUseNow({
     ...themes.map((theme) => ({
       key: theme.id,
       label: theme.label,
-      mode: theme.base,
+      showsNow: theme.base === mode,
       selected: isPluginAppThemeSelected(settings, theme),
       icon: <PluginThemeSwatch theme={theme} />,
       update: pluginAppThemeSlotUpdate(theme.base, theme.id)
@@ -67,52 +64,58 @@ export function PluginThemeUseNow({
     ...icons.map((theme) => ({
       key: `icon:${theme.id}`,
       label: theme.label,
-      mode,
+      showsNow: true,
       selected: settings.pluginIconTheme === theme.id,
       icon: null,
       update: { pluginIconTheme: theme.id }
     })),
     ...terminals.map((stored): Chip => {
-      // Why: light mode shows the dark slot unless it uses separate light themes.
-      const shownSlot =
-        dark || !settings.terminalUseSeparateLightTheme ? 'terminalThemeDark' : 'terminalThemeLight'
-      // Why: a theme already on screen (e.g. a lone other-mode one an install put there) is "now".
-      const shownNow = settings[shownSlot] === stored.id
-      const theme = shownNow
-        ? {
-            ...stored,
-            mode: shownSlot === 'terminalThemeDark' ? ('dark' as const) : ('light' as const)
-          }
-        : stored
+      // Installation can place a theme in the displayed slot despite its declared mode.
+      const theme =
+        shownTerminal.themeName === stored.id
+          ? {
+              ...stored,
+              mode: shownTerminal.useLightVariant ? ('light' as const) : ('dark' as const)
+            }
+          : stored
+      const update = terminalThemeUpdate(settings, theme, dark, terminalThemes)
       return {
         key: `terminal:${theme.id}`,
         label: theme.label,
-        mode: shownNow
-          ? mode
-          : terminalThemeSlot(theme.mode, dark) === 'terminalThemeDark'
-            ? 'dark'
-            : 'light',
+        showsNow: selectTerminalTheme({ ...settings, ...update }, dark).themeName === theme.id,
         selected: isPluginTerminalThemeSelected(settings, theme, dark),
         // Why an icon: a plugin's terminal themes often share their app themes' names.
         icon: <SquareTerminal aria-hidden="true" />,
-        update: terminalThemeUpdate(settings, theme, dark, terminalThemes)
+        update
       }
     })
   ]
-  const choose = (chip: Chip): void => {
-    if (chip.mode === mode) {
-      void updateSettings(chip.update)
-      return
+  const choose = async (chip: Chip): Promise<void> => {
+    try {
+      await updateSettingsOrThrow(chip.update)
+      if (!chip.showsNow) {
+        toast.success(
+          otherMode === 'light'
+            ? translate(
+                'auto.components.settings.PluginThemeUseNow.assignedLight',
+                '{{value0}} set as your light theme',
+                { value0: chip.label }
+              )
+            : translate(
+                'auto.components.settings.PluginThemeUseNow.assignedDark',
+                '{{value0}} set as your dark theme',
+                { value0: chip.label }
+              )
+        )
+      }
+    } catch {
+      toast.error(
+        translate(
+          'auto.components.settings.PluginThemeUseNow.saveFailed',
+          'Could not save the theme. Try again.'
+        )
+      )
     }
-    // Why switch modes: a theme for the other mode would otherwise change nothing on screen.
-    const next: Partial<GlobalSettings> = { ...chip.update, theme: chip.mode }
-    const snapshot: Readonly<Record<string, unknown>> = themeSettingsSnapshot(settings)
-    // Why only these keys: Switch back must not undo picks made while the toast is still up.
-    const previous: Partial<GlobalSettings> = Object.fromEntries(
-      Object.keys(next).map((key) => [key, snapshot[key]])
-    )
-    void updateSettings(next)
-    showThemeAppliedToast(chip.label, previous)
   }
   const renderChip = (chip: Chip): React.JSX.Element => (
     <Button
@@ -120,15 +123,16 @@ export function PluginThemeUseNow({
       variant={chip.selected ? 'default' : 'outline'}
       size="xs"
       aria-pressed={chip.selected}
-      aria-label={`${chip.mode === mode ? prefixes.now : prefixes[chip.mode]} ${chip.label}`}
-      onClick={() => choose(chip)}
+      aria-label={`${chip.showsNow ? prefixes.now : prefixes[otherMode]} ${chip.label}`}
+      onClick={() => void choose(chip)}
     >
-      {chip.selected ? <Check aria-hidden="true" /> : chip.icon}
+      {chip.icon}
+      {chip.selected ? <Check aria-hidden="true" /> : null}
       {chip.label}
     </Button>
   )
-  const now = chips.filter((chip) => chip.mode === mode)
-  const later = chips.filter((chip) => chip.mode === otherMode)
+  const now = chips.filter((chip) => chip.showsNow)
+  const later = chips.filter((chip) => !chip.showsNow)
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {now.length > 0 ? (

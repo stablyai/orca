@@ -11684,7 +11684,6 @@
         },
         "PluginThemeUseNow": {
           "label": "Usar ahora:",
-          "useName": "Usar ahora: {{value0}}",
           "useForLight": "Usar en claro:",
           "useForDark": "Usar en oscuro:"
         },

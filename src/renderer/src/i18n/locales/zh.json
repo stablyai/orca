@@ -11401,7 +11401,6 @@
         },
         "PluginThemeUseNow": {
           "label": "立即使用：",
-          "useName": "立即使用：{{value0}}",
           "useForLight": "用于浅色：",
           "useForDark": "用于深色："
         },

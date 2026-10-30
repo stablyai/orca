@@ -21,7 +21,7 @@ export function isPluginAppThemeSelected(
   )
 }
 
-export function terminalThemeSlot(
+function terminalSlot(
   mode: PluginTerminalThemeRegistration['mode'],
   dark: boolean
 ): 'terminalThemeDark' | 'terminalThemeLight' {
@@ -36,7 +36,7 @@ export function isPluginTerminalThemeSelected(
   dark: boolean
 ): boolean {
   // Why the showing slot too: a lone theme for the other mode is applied where it can be seen.
-  return [terminalThemeSlot(theme.mode, dark), terminalThemeSlot('unknown', dark)].some(
+  return [terminalSlot(theme.mode, dark), terminalSlot('unknown', dark)].some(
     (slot) =>
       settings[slot] === theme.id &&
       (slot === 'terminalThemeDark' || settings.terminalUseSeparateLightTheme)
@@ -49,7 +49,7 @@ export function terminalThemeUpdate(
   dark: boolean,
   terminalThemes: readonly PluginTerminalThemeRegistration[]
 ): Partial<GlobalSettings> {
-  const slot = terminalThemeSlot(theme.mode, dark)
+  const slot = terminalSlot(theme.mode, dark)
   return withTerminalPluginPalettes(
     settings,
     {
@@ -61,37 +61,6 @@ export function terminalThemeUpdate(
         : {})
     },
     terminalThemes
-  )
-}
-
-/** The theme settings a "Switch back" restores. */
-export function themeSettingsSnapshot(settings: GlobalSettings): Partial<GlobalSettings> {
-  // Why null, not undefined: an absent key would not overwrite what an apply set.
-  return {
-    theme: settings.theme,
-    pluginAppThemeLight: settings.pluginAppThemeLight ?? null,
-    pluginAppThemeDark: settings.pluginAppThemeDark ?? null,
-    pluginIconTheme: settings.pluginIconTheme ?? null,
-    terminalThemeDark: settings.terminalThemeDark,
-    terminalThemeLight: settings.terminalThemeLight,
-    terminalUseSeparateLightTheme: settings.terminalUseSeparateLightTheme,
-    terminalColorOverrides: settings.terminalColorOverrides,
-    terminalPluginPalettes: settings.terminalPluginPalettes ?? []
-  }
-}
-
-export function showThemeAppliedToast(label: string, previous: Partial<GlobalSettings>): void {
-  toast.success(
-    translate('auto.components.settings.pluginThemeApply.nowUsing', 'Now using {{value0}}', {
-      value0: label
-    }),
-    {
-      duration: PLUGIN_ACTION_TOAST_DURATION_MS,
-      action: {
-        label: translate('auto.components.settings.pluginThemeApply.switchBack', 'Switch back'),
-        onClick: () => void useAppStore.getState().updateSettings(previous)
-      }
-    }
   )
 }
 
@@ -135,7 +104,18 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
     // Why: a lone terminal theme for the other mode would fill a slot nobody sees right now.
     terminalPicks[0] = { ...terminalPicks[0], mode: 'unknown' }
   }
-  const previous = themeSettingsSnapshot(settings)
+  // Why null, not undefined: an absent key would not overwrite what this apply set.
+  const previous: Partial<GlobalSettings> = {
+    theme: settings.theme,
+    pluginAppThemeLight: settings.pluginAppThemeLight ?? null,
+    pluginAppThemeDark: settings.pluginAppThemeDark ?? null,
+    pluginIconTheme: settings.pluginIconTheme ?? null,
+    terminalThemeDark: settings.terminalThemeDark,
+    terminalThemeLight: settings.terminalThemeLight,
+    terminalUseSeparateLightTheme: settings.terminalUseSeparateLightTheme,
+    terminalColorOverrides: settings.terminalColorOverrides,
+    terminalPluginPalettes: settings.terminalPluginPalettes ?? []
+  }
   let next: Partial<GlobalSettings> = {}
   for (const theme of appSlots) {
     next = { ...next, ...pluginAppThemeSlotUpdate(theme.base, theme.id) }
@@ -150,6 +130,17 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
   await updateSettings(next)
   const shown = appSlots.find((theme) => (theme.base === 'dark') === dark)
   const label = (shown ?? icon ?? terminalPicks[0])?.label ?? ''
-  showThemeAppliedToast(label, previous)
+  toast.success(
+    translate('auto.components.settings.pluginThemeApply.nowUsing', 'Now using {{value0}}', {
+      value0: label
+    }),
+    {
+      duration: PLUGIN_ACTION_TOAST_DURATION_MS,
+      action: {
+        label: translate('auto.components.settings.pluginThemeApply.switchBack', 'Switch back'),
+        onClick: () => void useAppStore.getState().updateSettings(previous)
+      }
+    }
+  )
   return true
 }
