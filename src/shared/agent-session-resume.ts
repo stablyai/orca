@@ -1,4 +1,4 @@
-import { readAgentEffortLevel } from './agent-effort-level'
+import { readProviderSessionLiveSettings } from './agent-provider-session-live-settings'
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusCacheIdentity, RefusedPaneResume } from './agent-status-ipc-payload'
 import type { AgentStatusState } from './agent-status-types'
@@ -47,6 +47,8 @@ export type AgentProviderSessionMetadata = {
   cwd?: string
   /** Claude's live effort level; resume replays it because Claude restores only its saved per-model default. */
   effort?: string
+  /** Claude's live permission mode from its hooks; a resume never restores it on its own. */
+  permissionMode?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -184,13 +186,12 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   // Persisted/relay paths cross trust boundaries too; reject controls as for hook paths.
   const transcriptPath = readPathFromKeys(record, ['transcriptPath'])
   const cwd = readPathFromKeys(record, ['cwd'])
-  const effort = readAgentEffortLevel(record.effort)
   return {
     key,
     id,
     ...(transcriptPath ? { transcriptPath } : {}),
     ...(cwd ? { cwd } : {}),
-    ...(effort ? { effort } : {})
+    ...readProviderSessionLiveSettings(record)
   }
 }
 

@@ -16,8 +16,10 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
   resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
+  resolveTuiAgentLaunchEnv,
+  tuiAgentArgsBypassPermissions
 } from '../../../shared/tui-agent-launch-defaults'
+import { agentPermissionArgs } from '../../../shared/tui-agent-permission-choice'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -25,7 +27,10 @@ import type {
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
-import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import {
+  resolveStartupShell,
+  type AgentStartupShell
+} from '../../../shared/tui-agent-startup-shell'
 
 export type AgentAccountRestartStartup = {
   command: string
@@ -86,12 +91,16 @@ export function resolveAgentAccountRestartResumeStartup(
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
+    agentArgs: keepLiveClaudeBypass(
+      agent,
+      providerSession,
       launchConfig !== undefined
         ? launchConfig.agentArgs
         : unrecordedLaunchUsesDefaults
           ? resolveTuiAgentLaunchArgs(agent, state.settings)
           : null,
+      resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+    ),
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
@@ -125,6 +134,23 @@ export function resolveAgentAccountRestartResumeStartup(
     // Main repins launch home only when the spawn names its resumed session; keep that identity with the account move.
     resumeProviderSession: providerSession
   }
+}
+
+/** Claude enters bypass only when its own launch allowed it, so keeping the mode grants nothing new; hand-started sessions record no flags. */
+function keepLiveClaudeBypass(
+  agent: AccountRestartAgent,
+  providerSession: AgentProviderSessionMetadata,
+  agentArgs: string | null,
+  shell: AgentStartupShell
+): string | null {
+  if (
+    agent !== 'claude' ||
+    providerSession.permissionMode !== 'bypassPermissions' ||
+    tuiAgentArgsBypassPermissions('claude', agentArgs, shell)
+  ) {
+    return agentArgs
+  }
+  return [agentPermissionArgs('claude', 'full-access'), agentArgs].filter(Boolean).join(' ')
 }
 
 /** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
