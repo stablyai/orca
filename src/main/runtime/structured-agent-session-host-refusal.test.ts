@@ -384,7 +384,7 @@ describe('stopping', () => {
         connectionClose ??= vi.spyOn(this.db, 'close').mockImplementationOnce(() => {
           throw new Error('unable to close due to unfinalized statements')
         })
-        close.call(this)
+        return close.call(this)
       })
     const journal = () => journalClose.mock.contexts[0]
 

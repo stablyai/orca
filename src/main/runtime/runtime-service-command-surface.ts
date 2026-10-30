@@ -86,6 +86,7 @@ export type RuntimeServiceCommandSurface = {
   reclaimBrowserForDesktop: RuntimeBrowserDriverController['reclaimForDesktop']
   notifyMessageArrived(handle: string, messageType?: string): void
   waitForMessage: RuntimeMessageWaiters['wait']
+  notifyMessageWaiters: RuntimeMessageWaiters['notify']
   cancelMessageWaiters: RuntimeMessageWaiters['cancel']
 }
 
@@ -197,6 +198,7 @@ export function installRuntimeServiceCommandSurface(
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),
     waitForMessage: waiters.wait.bind(waiters),
+    notifyMessageWaiters: waiters.notify.bind(waiters),
     cancelMessageWaiters: waiters.cancel.bind(waiters)
   })
 }

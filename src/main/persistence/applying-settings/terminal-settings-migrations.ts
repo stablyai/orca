@@ -77,6 +77,8 @@ type RetiredGlobalSettings = {
   opencodeGoApiKey?: unknown
   experimentalStructuredNativeChat?: unknown
   openAgentTabsInChatByDefault?: unknown
+  orchestrationHeartbeatsEnabled?: unknown
+  orchestrationHeartbeatIntervalMinutes?: unknown
   // Full-access plugins now need only their own approval.
   pluginFullAccessEnabled?: unknown
 }
@@ -94,6 +96,8 @@ export function stripRetiredGlobalSettings(
     opencodeGoApiKey: _legacyOpenCodeGoApiKey,
     experimentalStructuredNativeChat: _legacyStructuredNativeChat,
     openAgentTabsInChatByDefault: _legacyChatDefaultView,
+    orchestrationHeartbeatsEnabled: _retiredHeartbeatsEnabled,
+    orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
@@ -106,6 +110,8 @@ export function stripRetiredGlobalSettings(
   void _legacyOpenCodeGoApiKey
   void _legacyStructuredNativeChat
   void _legacyChatDefaultView
+  void _retiredHeartbeatsEnabled
+  void _retiredHeartbeatInterval
   void _retiredPluginFullAccessSwitch
   return rest
 }

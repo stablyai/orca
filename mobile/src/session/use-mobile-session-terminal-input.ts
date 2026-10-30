@@ -1,4 +1,3 @@
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { terminalBufferClear, terminalInputSend } from '../terminal/mobile-terminal-operations'
@@ -127,7 +126,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     terminalGestureInputInFlightRef.current.add(handle)
     try {
       // Drop queued gesture arrows on disconnect so reconnect cannot move the TUI long after the swipe.
-      const response = await terminalInputSend.request(
+      await terminalInputSend.request(
         rpc,
         buildTerminalSendParams({
           terminal: handle,
@@ -137,9 +136,6 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
-      if (terminalInputSend.interpret(response) === true) {
-        reportWorkerTerminalUserInput(rpc, handle)
-      }
     } catch {
       // Transient failure
     } finally {

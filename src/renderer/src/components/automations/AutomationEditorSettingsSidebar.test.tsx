@@ -41,6 +41,8 @@ const DRAFT: AutomationDraft = {
 function renderSidebar(onDraftChange: (updater: (d: AutomationDraft) => AutomationDraft) => void) {
   return render(
     <AutomationEditorSettingsSidebar
+      surface="terminal"
+      chatSupported={false}
       repos={[]}
       projectHostSetups={[]}
       automationYamlHooksByRepoKey={{}}

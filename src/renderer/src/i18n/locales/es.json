@@ -7995,19 +7995,6 @@
           "191ac34567": "Orquestación de agentes",
           "nestedWorkerDepthTitle": "Profundidad del trabajador anidado",
           "nestedWorkerDepthDescription": "¿Cuántas generaciones de trabajadores despedidos pueden engendrar sus propios trabajadores? 1 mantiene el árbol de agentes plano: un coordinador envía trabajadores y esos trabajadores no envían.",
-          "chatErrorEscalationTitle": "Avisar al coordinador de los errores del chat",
-          "chatErrorEscalationDescription": "Cuando un agente asignado encuentra un error que termina su turno, envía el error exacto al coordinador que lo asignó. La tarea sigue asignada al agente. Solo funciona con agentes que se ejecutan en la interfaz de chat.",
-          "chatErrorEscalationNeedsChat": "Activa la interfaz de chat en la configuración experimental para usarlo.",
-          "chatErrorEscalationKeywordError": "error",
-          "chatErrorEscalationKeywordChat": "chat",
-          "heartbeatTitle": "Latidos de los trabajadores",
-          "heartbeatDescription": "Los trabajadores asignados se reportan cada pocos minutos para que el coordinador distinga un agente que trabaja de uno colgado. Si lo desactivas, el coordinador recibe menos mensajes, pero pierde esa señal de actividad. Se aplica a los trabajadores asignados después del cambio.",
-          "heartbeatKeywordHeartbeat": "latido",
-          "heartbeatKeywordStalled": "atascado",
-          "heartbeatKeywordInterval": "intervalo",
-          "heartbeatIntervalTitle": "Intervalo de latidos",
-          "heartbeatIntervalDescription": "Un intervalo más corto le da al coordinador reportes más frecuentes, pero le envía más mensajes. Un intervalo más largo envía menos mensajes, pero deja más tiempo entre reportes. Se aplica a los trabajadores asignados después del cambio.",
-          "heartbeatIntervalSuffix": "minutos",
           "7bc082f4de": "Copiar comando de instalación"
         },
         "OrchestrationSetupCard": {
@@ -20172,6 +20159,10 @@
       "caution": "Precaución"
     },
     "automations": {
+      "openIn": "Abrir en",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "El chat de la ejecución no está disponible. Se muestra su espacio de trabajo; la salida guardada sigue en Detalles de la ejecución.",
       "runTerminalUnavailable": "La terminal de ejecución no está disponible."
     },
     "jiraIssueTitleField": {

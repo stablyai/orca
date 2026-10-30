@@ -121,16 +121,16 @@ describe('retrying a failed worker-start', () => {
     expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
   })
 
-  it('keeps a pane the user typed into', async () => {
+  it('keeps a pane the user kept open', async () => {
     h.setup()
     const failed = await failFirstStart()
-    await h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
+    await h.call('orchestration.workerKeepOpen', { paneKey: h.workerPaneKey, keep: true })
 
     await retry(failed)
 
     expect(h.db.getWorkerTerminalResourceByOwner(failed.dispatchId)).toMatchObject({
-      ownership_state: 'user_owned',
-      retained_reason: 'user_takeover'
+      ownership_state: 'owned',
+      retained_reason: 'user_kept'
     })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
