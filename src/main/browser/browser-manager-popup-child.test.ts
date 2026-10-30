@@ -329,6 +329,9 @@ describe('browserManager popup child policies', () => {
     didCreateWindow({ webContents: popup })
 
     const claim = browserManager.claimNextDownload(popup.id, '/work/out/receipt.pdf')
+    expect(() => browserManager.claimNextDownload(opener.id, '/work/out/other.pdf')).toThrow(
+      'Another download is already waiting'
+    )
     const item = createDownloadItem()
     browserManager.handleGuestWillDownload({ guestWebContentsId: popup.id, item })
 

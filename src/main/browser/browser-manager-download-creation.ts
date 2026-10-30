@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { BrowserError } from './browser-error'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
 import { routeBrowserClientDownload } from './browser-client-download-routing'
 import {
@@ -61,6 +62,13 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     const rootGuestWebContentsId =
       this.resolvePopupOwnerContext(guestWebContentsId)?.rootGuestWebContentsId ??
       guestWebContentsId
+    // The tab and its popups share one claim; a second would take the first one's download.
+    if (this.downloadClaimsByGuestId.has(rootGuestWebContentsId)) {
+      throw new BrowserError(
+        'browser_download_busy',
+        'Another download is already waiting on this tab or its popups.'
+      )
+    }
     const started = Promise.withResolvers<boolean>()
     const finished = Promise.withResolvers<BrowserDownloadFinishedEvent>()
     const claim: PendingDownloadClaim = {
