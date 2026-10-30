@@ -53,15 +53,6 @@ export function createRemoteRuntimeInputJournal(deps: {
     codeUnits = 0
   }
 
-  const withdraw = (entry: Entry): void => {
-    const index = entries.indexOf(entry)
-    if (index === -1) {
-      return
-    }
-    codeUnits -= entry.text.length
-    entries.splice(index, 1)
-    settle(entry.seq, false)
-  }
   const retireEntry = (entry: Entry): void => {
     codeUnits -= entry.text.length
     entry.text = ''
@@ -160,13 +151,26 @@ export function createRemoteRuntimeInputJournal(deps: {
     resumedStream = null
   }
   const discardUnscoped = (): void => {
-    for (const entry of [...entries]) {
+    const retained: Entry[] = []
+    const dropped: Entry[] = []
+    let retainedCodeUnits = 0
+    for (const entry of entries) {
       if (!entry.source || !entry.source.isCurrent()) {
-        withdraw(entry)
+        dropped.push(entry)
+      } else {
+        retained.push(entry)
+        retainedCodeUnits += entry.text.length
       }
     }
-    if (entries.length === 0) {
-      discard()
+    entries = retained
+    codeUnits = retainedCodeUnits
+    if (retained.length === 0) {
+      refusalRounds = 0
+      clearTimer()
+      resumedStream = null
+    }
+    for (const entry of dropped) {
+      settle(entry.seq, false)
     }
   }
 

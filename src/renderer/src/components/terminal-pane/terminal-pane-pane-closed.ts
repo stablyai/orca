@@ -17,7 +17,7 @@ import {
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
 
 export function createTerminalPaneClosedHandler(
-  context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
+  context: Pick<PaneClosedHandlerContext, 'deps' | 'refs' | 'deferredSplitHandoffs'>
 ): (paneId: number, closedPane?: PaneClosedHandlerContext['closedPane']) => void {
   return (paneId, closedPane) => {
     const { deps, refs } = context

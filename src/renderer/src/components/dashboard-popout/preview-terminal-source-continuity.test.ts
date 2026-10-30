@@ -137,7 +137,10 @@ it.each([10, 100])(
       }
       const { value, bytes } = session(history + 1)
       const binding = createPreviewInputBinding('preview')
+      const recordsBeforeAttach = allocation.sources
       binding.attach(value)
+      const recordsBeforeInput = allocation.sources
+      expect(recordsBeforeInput - recordsBeforeAttach).toBe(1)
       const source = binding.source.current()
       if (!source) {
         throw new Error('missing source')

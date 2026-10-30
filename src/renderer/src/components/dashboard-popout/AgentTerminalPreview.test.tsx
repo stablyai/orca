@@ -6,30 +6,13 @@ import { AgentTerminalDialog } from './AgentTerminalDialog'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Terminal } from '@xterm/xterm'
+import { previewContext, type PreviewTestTerminal } from './preview-terminal-emulator-test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
 import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-preview'
 
 const terminalHarness = vi.hoisted(() => ({
-  instances: new Array<{
-    options: Terminal['options']
-    element: HTMLElement
-    write: ReturnType<typeof vi.fn>
-    writeCallbacks: (() => void)[]
-    onDataListener: ((data: string) => void) | null
-    dispose: ReturnType<typeof vi.fn>
-    resize: ReturnType<typeof vi.fn>
-    reset: ReturnType<typeof vi.fn>
-    paste: ReturnType<typeof vi.fn>
-    input: ReturnType<typeof vi.fn>
-    scrollToTop: ReturnType<typeof vi.fn>
-    scrollToBottom: ReturnType<typeof vi.fn>
-    selectAll: ReturnType<typeof vi.fn>
-    modes: { bracketedPasteMode: boolean }
-    selectionText: string
-    customKeyHandler: ((event: KeyboardEvent) => boolean) | null
-  }>(),
+  instances: new Array<PreviewTestTerminal>(),
   userInputListener: null as (() => void) | null,
   userInputDispose: vi.fn()
 }))
@@ -53,58 +36,16 @@ const imeHarness = vi.hoisted(() => ({
   claimResult: false
 }))
 
-vi.mock('@xterm/xterm', () => ({
-  Terminal: class {
-    options: Terminal['options'] = {}
-    cols = 80
-    rows = 24
-    buffer = { active: { cursorY: 0 } }
-    writeCallbacks: (() => void)[] = []
-    onDataListener: ((data: string) => void) | null = null
-    customKeyHandler: ((event: KeyboardEvent) => boolean) | null = null
-    selectionText = ''
-    write = vi.fn((_data: string, callback?: () => void) => {
-      if (callback) {
-        this.writeCallbacks.push(callback)
+vi.mock('@xterm/xterm', async () => {
+  const { PreviewTestTerminal } = await import('./preview-terminal-emulator-test-fixture')
+  return {
+    Terminal: class extends PreviewTestTerminal {
+      constructor() {
+        super(terminalHarness)
       }
-    })
-    open = vi.fn()
-    focus = vi.fn()
-    dispose = vi.fn()
-    resize = vi.fn()
-    reset = vi.fn()
-    modes = { bracketedPasteMode: false }
-    paste = vi.fn((data: string) => {
-      terminalHarness.userInputListener?.()
-      this.onDataListener?.(data)
-    })
-    input = vi.fn((data: string) => {
-      terminalHarness.userInputListener?.()
-      this.onDataListener?.(data)
-    })
-    element = document.createElement('div')
-    unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
-    loadAddon = vi.fn()
-    attachCustomWheelEventHandler = vi.fn()
-    scrollToTop = vi.fn()
-    scrollToBottom = vi.fn()
-    selectAll = vi.fn()
-    clearSelection = vi.fn()
-    getSelection = vi.fn(() => this.selectionText)
-    hasSelection = vi.fn(() => this.selectionText !== '')
-    attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
-      this.customKeyHandler = handler
-    })
-    onData = vi.fn((listener: (data: string) => void) => {
-      this.onDataListener = listener
-      return { dispose: vi.fn() }
-    })
-
-    constructor() {
-      terminalHarness.instances.push(this)
     }
   }
-}))
+})
 vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOriginal) => ({
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
@@ -249,18 +190,8 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
     const url = 'https://github.com/stablyai/orca/pull/34229'
-    act(() => {
-      terminal.options.linkHandler?.hover?.(new MouseEvent('mousemove'), url, {
-        start: { x: 1, y: 1 },
-        end: { x: 2, y: 1 }
-      })
-      terminal.element.dispatchEvent(
-        new MouseEvent('contextmenu', {
-          button: 2,
-          cancelable: true
-        })
-      )
-    })
+    act(() => previewContext(terminal, url))
+    expect(terminal.clearSelection).toHaveBeenCalledOnce()
     const browser = await view.findByRole('button', { name: /System Browser/ })
     expect(view.queryByRole('button', { name: 'Terminal link settings' })).toBeNull()
     fireEvent.click(browser)
@@ -304,13 +235,8 @@ describe('AgentTerminalPreview', () => {
     const view = render(<Host />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
-    act(() => {
-      terminal.options.linkHandler?.hover?.(new MouseEvent('mousemove'), 'https://example.com', {
-        start: { x: 1, y: 1 },
-        end: { x: 2, y: 1 }
-      })
-      terminal.element.dispatchEvent(new MouseEvent('contextmenu', { button: 2, cancelable: true }))
-    })
+    act(() => previewContext(terminal, 'https://example.com'))
+    expect(terminal.clearSelection).toHaveBeenCalledOnce()
     fireEvent.click(await view.findByRole('button', { name: 'Terminal link settings' }))
     expect(onNavigate).toHaveBeenCalledOnce()
     await waitFor(() => expect(view.queryByRole('dialog')).toBeNull())
@@ -320,6 +246,22 @@ describe('AgentTerminalPreview', () => {
       storeState.openSettingsPage.mock.invocationCallOrder[0]!
     )
   })
+
+  it.each(['absent', 'no-link'] as const)(
+    'refuses preview context without %s press authority',
+    async (origin) => {
+      const view = render(
+        <TooltipProvider>
+          <AgentTerminalPreview ptyId="pty-1" />
+        </TooltipProvider>
+      )
+      await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+      const terminal = terminalHarness.instances[0]!
+      act(() => previewContext(terminal, 'https://example.com', origin))
+      expect(view.queryByRole('button', { name: /System Browser/ })).toBeNull()
+      expect(terminal.clearSelection).not.toHaveBeenCalled()
+    }
+  )
 
   it('routes signaled user input while a live write parses and drops parser replies', async () => {
     render(<AgentTerminalPreview ptyId="pty-1" />)

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { PtyInputSource } from './pty-input-source'
 import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 import {
   createPtyPreconnectInputBuffer,
@@ -197,4 +198,55 @@ describe('createPtyPreconnectInputBuffer', () => {
     await expect(pastePending).resolves.toBe(false)
     expect(buffer.isBuffering()).toBe(false)
   })
+})
+
+it('publishes bulk survivors before abort cleanup reentry and settles all removed waiters despite throws', async () => {
+  const buffer = createPtyPreconnectInputBuffer()
+  const first = new AbortController()
+  const later = new AbortController()
+  const live: PtyInputSource = {
+    ptyId: 'live',
+    isCurrent: () => true,
+    sendInput: () => true,
+    sendInputImmediate: () => true
+  }
+  const firstWait = buffer.enqueueAccepted('first', 'driving', undefined, { signal: first.signal })
+  const laterWait = buffer.enqueueAccepted('later', 'driving', undefined, { signal: later.signal })
+  buffer.enqueue('survivor', 'ordinary', 'driving', undefined, live)
+  const events: string[] = []
+  const remove = first.signal.removeEventListener.bind(first.signal)
+  const firstCleanup = vi
+    .spyOn(first.signal, 'removeEventListener')
+    .mockImplementation((...args) => {
+      remove(...args)
+      events.push('first')
+      expect(buffer.enqueue('inner-successor', 'ordinary', 'driving', undefined, live)).toBe(true)
+      expect(buffer.discardUnscoped()).toBe(false)
+      throw new Error('first cleanup')
+    })
+  const laterCleanup = vi.spyOn(later.signal, 'removeEventListener').mockImplementation(() => {
+    events.push('later')
+    throw new Error('later cleanup')
+  })
+  try {
+    expect(() => buffer.discardUnscoped()).toThrow('first cleanup')
+    expect(events).toEqual(['first', 'later'])
+    await expect(firstWait).resolves.toBe(false)
+    await expect(laterWait).resolves.toBe(false)
+    const sent: string[] = []
+    await buffer.flush({
+      isCurrent: () => true,
+      sendInput: (text) => {
+        sent.push(text)
+        return true
+      },
+      sendInputImmediate: () => true
+    })
+    expect(sent).toEqual(['survivor', 'inner-successor'])
+    expect(firstCleanup).toHaveBeenCalledOnce()
+    expect(laterCleanup).toHaveBeenCalledOnce()
+  } finally {
+    firstCleanup.mockRestore()
+    laterCleanup.mockRestore()
+  }
 })

@@ -35,3 +35,35 @@ export type PreconnectInputWriter = {
    */
   continuesAfterFailedWrite?: () => boolean
 }
+
+export const createBufferedInput = (
+  data: string,
+  kind: PtyPreconnectInputKind,
+  inputKind: TerminalInputKind,
+  resolve?: BufferedInput['resolve'],
+  signal?: AbortSignal,
+  source?: PtyInputSource
+): BufferedInput => ({
+  data,
+  kind,
+  inputKind,
+  ...(source ? { source } : {}),
+  ...(resolve ? { resolve } : {}),
+  ...(signal ? { signal } : {})
+})
+
+export const notifyRetainedInput = (
+  onRetained: ((entry: PtyPreconnectInputEntry) => void) | undefined,
+  input: BufferedInput
+): void => {
+  try {
+    onRetained?.({
+      data: input.data,
+      kind: input.kind,
+      inputKind: input.inputKind,
+      ...(input.source ? { source: input.source } : {})
+    })
+  } catch {
+    // Handoff capture is advisory; a callback failure must not reject input admission.
+  }
+}

@@ -8,6 +8,7 @@ import {
   type RemoteRuntimeInputJournal,
   type RemoteRuntimeInputStream
 } from './remote-runtime-input-journal'
+import { observeRetainedInputWork } from './retained-input-work-test-fixture'
 import type { PtyInputSource } from './pty-input-source'
 
 const a = { handle: 'A', incarnationId: 'i1' }
@@ -196,5 +197,109 @@ it.each(['cancel', 'query', 'retired'] as const)(
     h.journal.send(h.stream, a, [{ text: 'positive', queryReply: false }])
     await h.settle()
     expect(h.writes).toEqual(['A:positive'])
+  }
+)
+
+it.each([10, 100])(
+  'bounds real endpoint withdrawal and ACK/query work with N=%i records',
+  async (n) => {
+    const work = observeRetainedInputWork()
+    try {
+      for (const mixed of [false, true]) {
+        const h = hostHarness()
+        let oldCurrent = true
+        const source = (current: () => boolean): PtyInputSource => ({
+          ptyId: 'B',
+          isCurrent: current,
+          sendInput: () => true,
+          sendInputImmediate: () => true
+        })
+        const old = source(() => oldCurrent)
+        const live = source(() => true)
+        const seqs = h.journal.send(
+          h.stream,
+          a,
+          Array.from({ length: n }, (_, i) => ({
+            text: `v${i}`,
+            queryReply: false,
+            ...(mixed && i % 3 !== 0 ? { source: i % 3 === 1 ? old : live } : {})
+          }))
+        )
+        const waits = seqs.map((seq) => h.journal.whenAcknowledged(seq))
+        await h.settle()
+        // The actual host refused, so every record remains retained/unacknowledged.
+        oldCurrent = false
+        const before = h.frames.length
+        const count = work.measure(() => h.journal.resume(h.connect(b), b))
+        expect(count.visits).toBeGreaterThan(0)
+        expect(count.reads).toBeGreaterThan(0)
+        expect(count.total).toBeLessThanOrEqual(32 + 16 * n)
+        if (mixed) {
+          expect(h.frames.slice(before)).toEqual(
+            seqs.map((seq, i) => ({
+              target: 'B',
+              seq,
+              text: i % 3 === 2 ? `v${i}` : ''
+            }))
+          )
+        } else {
+          expect(h.frames).toHaveLength(before)
+          expect(vi.getTimerCount()).toBe(0)
+        }
+        h.allow()
+        await h.settle()
+        if (mixed) {
+          await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_INPUT_ACK_STALL_MS + 8000)
+          await h.settle()
+        }
+        expect(await Promise.all(waits)).toEqual(seqs.map((_, i) => mixed && i % 3 === 2))
+        expect(h.writes.filter((text) => text.startsWith('B:'))).toEqual(
+          mixed ? seqs.flatMap((_, i) => (i % 3 === 2 ? [`B:v${i}`] : [])) : []
+        )
+        h.journal.send(h.stream, b, [{ text: 'positive', queryReply: false }])
+        await h.settle()
+        expect(h.writes.at(-1)).toBe('B:positive')
+        expect(h.recovery).not.toHaveBeenCalled()
+        h.journal.discard()
+      }
+      const h = hostHarness()
+      const seqs = h.journal.send(
+        h.stream,
+        a,
+        Array.from({ length: n }, (_, i) => ({
+          text: `ack${i}`,
+          queryReply: i === n - 1
+        }))
+      )
+      await h.settle()
+      const prefix = Math.floor(n / 2)
+      for (let seq = 1; seq <= prefix; seq += 1) {
+        expect(await h.host.admit('A', h.journal.sessionId, seq, async () => 'applied')).toEqual({
+          kind: 'applied',
+          appliedSeq: seq
+        })
+      }
+      let undelivered = false
+      const count = work.measure(() => {
+        h.journal.acknowledge(seqs[prefix - 1], 'applied')
+        h.journal.acknowledge(seqs[prefix - 1], 'resend')
+        undelivered = h.journal.hasUnacknowledgedInput()
+      })
+      expect(undelivered).toBe(true)
+      expect(count.visits).toBeGreaterThan(0)
+      expect(count.reads).toBeGreaterThan(0)
+      expect(count.total).toBeLessThanOrEqual(32 + 16 * n + 4 * prefix)
+      h.allow()
+      await h.settle()
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_INPUT_ACK_STALL_MS + 8000)
+      await h.settle()
+      expect(h.frames.some((frame) => frame.seq === n && frame.text === '')).toBe(true)
+      h.journal.send(h.stream, a, [{ text: 'after-ack', queryReply: false }])
+      await h.settle()
+      expect(h.writes.at(-1)).toBe('A:after-ack')
+      h.journal.discard()
+    } finally {
+      work.dispose()
+    }
   }
 )

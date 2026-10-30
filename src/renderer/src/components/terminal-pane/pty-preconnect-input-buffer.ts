@@ -6,12 +6,13 @@ export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
 // Budget retained paste across transport/handoff copies and up to 64 deferred splits, independently of the single-write ceiling.
 export const PTY_PRECONNECT_INPUT_MAX_CODE_UNITS = 4 * CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS
 
-import type {
-  PtyPreconnectInputKind,
-  PtyPreconnectInputEntry,
-  AcceptedInputOptions,
-  BufferedInput,
-  PreconnectInputWriter
+import {
+  createBufferedInput,
+  notifyRetainedInput,
+  type PtyPreconnectInputEntry,
+  type AcceptedInputOptions,
+  type BufferedInput,
+  type PreconnectInputWriter
 } from './pty-preconnect-input-entry'
 export type {
   PtyPreconnectInputKind,
@@ -89,21 +90,6 @@ export function createPtyPreconnectInputBuffer(
     pendingCodeUnits += input.data.length
     return true
   }
-  const createInput = (
-    data: string,
-    kind: PtyPreconnectInputKind,
-    inputKind: TerminalInputKind,
-    resolve?: BufferedInput['resolve'],
-    signal?: AbortSignal,
-    source?: PtyInputSource
-  ): BufferedInput => ({
-    data,
-    kind,
-    inputKind,
-    ...(source ? { source } : {}),
-    ...(resolve ? { resolve } : {}),
-    ...(signal ? { signal } : {})
-  })
   // Why: a caller that timed out already reported the write failed; delivering it later would land a stray fragment.
   const withdraw = (input: BufferedInput): void => {
     const index = pending.indexOf(input)
@@ -114,25 +100,18 @@ export function createPtyPreconnectInputBuffer(
     pendingCodeUnits -= input.data.length
     input.resolve?.(false)
   }
-  const notifyRetained = (
-    onRetained: ((entry: PtyPreconnectInputEntry) => void) | undefined,
-    input: BufferedInput
-  ): void => {
-    try {
-      onRetained?.({
-        data: input.data,
-        kind: input.kind,
-        inputKind: input.inputKind,
-        ...(input.source ? { source: input.source } : {})
-      })
-    } catch {
-      // Handoff capture is advisory; a callback failure must not reject input admission.
-    }
-  }
-
   // Seeded entries already belong to predecessor handoff; do not report them back as newly typed.
   for (const entry of initialEntries) {
-    retain(createInput(entry.data, entry.kind, entry.inputKind, undefined, undefined, entry.source))
+    retain(
+      createBufferedInput(
+        entry.data,
+        entry.kind,
+        entry.inputKind,
+        undefined,
+        undefined,
+        entry.source
+      )
+    )
   }
   const clear = (): void => {
     const dropped = pending
@@ -266,10 +245,10 @@ export function createPtyPreconnectInputBuffer(
     isBuffering: () => buffering,
     hasPendingInput: () => pending.length > 0 || activeAcceptedInput !== null,
     enqueue(data, kind, inputKind, onRetained, source) {
-      const input = createInput(data, kind, inputKind, undefined, undefined, source)
+      const input = createBufferedInput(data, kind, inputKind, undefined, undefined, source)
       const retained = retain(input)
       if (retained) {
-        notifyRetained(onRetained, input)
+        notifyRetainedInput(onRetained, input)
       }
       return retained
     },
@@ -283,26 +262,48 @@ export function createPtyPreconnectInputBuffer(
         const onAbort = (): void => withdraw(input)
         // Why: a long-lived caller signal would otherwise pin every settled input through its listener.
         const settle = (accepted: boolean): void => {
-          signal?.removeEventListener('abort', onAbort)
-          resolve(accepted)
+          try {
+            signal?.removeEventListener('abort', onAbort)
+          } finally {
+            resolve(accepted)
+          }
         }
-        const input = createInput(data, 'accepted', inputKind, settle, signal, source)
+        const input = createBufferedInput(data, 'accepted', inputKind, settle, signal, source)
         if (!retain(input)) {
           resolve(false)
           return
         }
         signal?.addEventListener('abort', onAbort, { once: true })
-        notifyRetained(onRetained, input)
+        notifyRetainedInput(onRetained, input)
       })
     },
     flush,
     discardUnscoped: () => {
+      const retained: BufferedInput[] = []
+      const dropped: BufferedInput[] = []
+      let retainedCodeUnits = 0
       let droppedTyping = false
-      for (const input of [...pending]) {
+      for (const input of pending) {
         if (!input.source || !input.source.isCurrent()) {
           droppedTyping ||= !input.source && input.inputKind === 'driving'
-          withdraw(input)
+          dropped.push(input)
+        } else {
+          retained.push(input)
+          retainedCodeUnits += input.data.length
         }
+      }
+      pending = retained
+      pendingCodeUnits = retainedCodeUnits
+      let failure: unknown
+      for (const input of dropped) {
+        try {
+          input.resolve?.(false)
+        } catch (error) {
+          failure ??= error
+        }
+      }
+      if (failure !== undefined) {
+        throw failure
       }
       return droppedTyping
     },

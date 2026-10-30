@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRemoteRuntimeRecoveryInputHold } from './remote-runtime-recovery-input-hold'
-import { PTY_PRECONNECT_INPUT_MAX_ENTRIES } from './pty-preconnect-input-buffer'
+import type { PtyInputSource } from './pty-input-source'
+import { observeRetainedInputWork } from './retained-input-work-test-fixture'
+import {
+  createPtyPreconnectInputBuffer,
+  PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,
+  PTY_PRECONNECT_INPUT_MAX_ENTRIES
+} from './pty-preconnect-input-buffer'
 
 function createWriter() {
   const sent: string[] = []
@@ -258,3 +264,74 @@ it('continues ordinary and current-scope neighbors when a synchronous held write
   expect(sent).toEqual(['ordinary', 'current-B'])
   expect(hold.isHolding()).toBe(false)
 })
+
+it.each([10, 100])(
+  'bounds actual hold/preconnect bulk withdrawal and preserves mixed bytes at N=%i',
+  async (n) => {
+    const work = observeRetainedInputWork()
+    try {
+      for (const mixed of [false, true]) {
+        const hold = createRemoteRuntimeRecoveryInputHold()
+        let oldCurrent = true
+        const old: PtyInputSource = {
+          ptyId: 'old',
+          isCurrent: () => oldCurrent,
+          sendInput: () => true,
+          sendInputImmediate: () => true
+        }
+        const live: PtyInputSource = { ...old, ptyId: 'live', isCurrent: () => true }
+        const texts = Array.from({ length: n }, (_, i) => `v${i}💡`)
+        const waits = texts.map((text, i) =>
+          hold.enqueueAccepted(
+            endpoint,
+            text,
+            'driving',
+            undefined,
+            mixed && i % 3 !== 0 ? (i % 3 === 1 ? old : live) : undefined
+          )
+        )
+        oldCurrent = false
+        const count = work.measure(() => hold.discardUnscoped())
+        expect(count.visits).toBeGreaterThan(0)
+        expect(count.reads).toBeGreaterThan(0)
+        expect(count.total).toBeLessThanOrEqual(32 + 16 * n)
+        const { sent, writer } = createWriter()
+        await hold.release(endpoint, writer)?.done
+        expect(await Promise.all(waits)).toEqual(texts.map((_, i) => mixed && i % 3 === 2))
+        expect(sent).toEqual(texts.filter((_, i) => mixed && i % 3 === 2))
+        expect(hold.hasPendingInput()).toBe(false)
+        expect(hold.enqueue(endpoint, 'ordinary-positive', 'driving')).toBe(true)
+        await hold.release(endpoint, writer)?.done
+        expect(sent.at(-1)).toBe('ordinary-positive')
+      }
+      const buffer = createPtyPreconnectInputBuffer()
+      const live: PtyInputSource = {
+        ptyId: 'live',
+        isCurrent: () => true,
+        sendInput: () => true,
+        sendInputImmediate: () => true
+      }
+      const waits = Array.from({ length: n }, (_, i) =>
+        buffer.enqueueAccepted('💡', 'driving', undefined, undefined, i % 2 ? live : undefined)
+      )
+      let droppedTyping = false
+      const count = work.measure(() => {
+        droppedTyping = buffer.discardUnscoped()
+      })
+      expect(droppedTyping).toBe(true)
+      expect(count.visits).toBeGreaterThan(0)
+      expect(count.reads).toBeGreaterThan(0)
+      expect(count.total).toBeLessThanOrEqual(32 + 16 * n)
+      const remainingUnits = (n / 2) * '💡'.length
+      const filler = 'z'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS - remainingUnits)
+      expect(buffer.enqueue(filler, 'ordinary', 'driving')).toBe(true)
+      expect(buffer.enqueue('!', 'ordinary', 'driving')).toBe(false)
+      const { sent, writer } = createWriter()
+      await buffer.flush(writer)
+      expect(await Promise.all(waits)).toEqual(Array.from({ length: n }, (_, i) => i % 2 === 1))
+      expect(sent).toEqual([...Array.from({ length: n / 2 }, () => '💡'), filler])
+    } finally {
+      work.dispose()
+    }
+  }
+)
