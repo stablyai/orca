@@ -30,6 +30,32 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
       ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.f637a7dee9', 'thickness')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.linkUnderlines.title',
+      'Link Underlines'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.linkUnderlines.description',
+      'Underline OSC 8 terminal links always or only on hover. Explicit ANSI underlines are preserved.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.linkUnderlines.links',
+        'links'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.linkUnderlines.osc8',
+        'OSC 8'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.linkUnderlines.underline',
+        'underline'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d1fa00a9cb', 'hover')
+    ]
   }
 ])
 

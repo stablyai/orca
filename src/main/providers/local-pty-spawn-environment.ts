@@ -67,6 +67,7 @@ export function buildInheritedLocalPtyEnvironment(
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     // supports-hyperlinks rejects Orca by name despite xterm supporting OSC 8; force support.
     FORCE_HYPERLINK: '1',
+    PI_FORCE_HYPERLINKS: '1',
     [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
   } satisfies Record<string, string>
   removeUnspecifiedPaneIdentityEnv(spawnEnv, explicitEnv)

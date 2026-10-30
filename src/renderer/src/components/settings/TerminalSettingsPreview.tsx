@@ -129,6 +129,7 @@ export function TerminalSettingsPreview({
       cursorInactiveStyle: settings.terminalCursorStyle,
       cursorStyle: settings.terminalCursorStyle,
       cursorBlink: settings.terminalCursorBlink,
+      linkUnderlines: settings.terminalLinkUnderlines === 'always',
       fontSize: settings.terminalFontSize,
       fontFamily: buildFontFamily(effectiveFontFamily),
       fontWeight: weights.fontWeight,
@@ -184,6 +185,7 @@ export function TerminalSettingsPreview({
     // Mirror shape for the permanently unfocused preview cursor.
     terminal.options.cursorInactiveStyle = settings.terminalCursorStyle
     terminal.options.cursorBlink = settings.terminalCursorBlink
+    terminal.options.linkUnderlines = settings.terminalLinkUnderlines === 'always'
   }, [
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
@@ -191,7 +193,8 @@ export function TerminalSettingsPreview({
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,
-    settings.terminalCursorBlink
+    settings.terminalCursorBlink,
+    settings.terminalLinkUnderlines
   ])
 
   useEffect(() => {
