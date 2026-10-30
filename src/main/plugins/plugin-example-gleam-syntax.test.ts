@@ -12,7 +12,7 @@ it('ships an installable Gleam syntax pack whose grammar loads', async () => {
   const inspection = await inspectPluginInstallTree({
     rootDir: root,
     hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE,
-    expectedPluginKey: 'stablyai.orca-gleam-syntax'
+    identity: { pluginKey: 'stablyai.orca-gleam-syntax' }
   })
   expect(inspection).toMatchObject({ ok: true })
   if (!inspection.ok) {

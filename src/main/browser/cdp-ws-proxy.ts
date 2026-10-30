@@ -7,6 +7,7 @@ import { CdpTargetDiscovery } from './cdp-target-discovery'
 import { CdpDebuggerChannel } from './cdp-debugger-channel'
 import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
+import { CdpElementCapture } from './cdp-element-capture'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
 import type { AgentInputFocusGuard } from './agent-input-focus-guard'
@@ -34,6 +35,7 @@ export class CdpWsProxy {
   private readonly pageCapture: CdpPageCaptureCommands
   private readonly input: CdpPageInputCommands
   private pointAtNextResolvedNode = false
+  readonly elementCapture = new CdpElementCapture()
 
   constructor(
     private readonly webContents: WebContents,
@@ -248,6 +250,7 @@ export class CdpWsProxy {
         )
       return
     }
+    this.elementCapture.observe(msg.method, msg.params, effectiveSessionId)
     if (msg.method === 'DOM.focus') {
       this.domFocusReplay.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
       return

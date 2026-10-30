@@ -12839,7 +12839,6 @@
           "previous": "上一版",
           "updated": "更新時間",
           "license": "授權",
-          "homepage": "首頁",
           "whatsNew": "新功能"
         },
         "PluginDetailPage": {
@@ -18146,6 +18145,13 @@
           "confirm": "登入",
           "cancel": "取消"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 顯示",
+          "anonymousTitle": "此網頁顯示",
+          "confirm": "確定",
+          "cancel": "取消",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "攝影機",
@@ -22429,5 +22435,9 @@
       "needsPermission": "代理程式需要權限",
       "statusStale": "代理程式狀態資訊已過期"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "WSL 發行版 {{distro}} 已停止，因此 Orca 沒有啟動此終端機。請啟動該發行版後重試。",
+    "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   }
 }

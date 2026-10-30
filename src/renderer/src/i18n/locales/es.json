@@ -12831,7 +12831,6 @@
           "previous": "Anterior",
           "updated": "Actualizado",
           "license": "Licencia",
-          "homepage": "Página web",
           "whatsNew": "Novedades",
           "hashCopied": "Hash de contenido copiado",
           "hashCopyFailed": "No se pudo copiar el hash."
@@ -18375,6 +18374,13 @@
           "insecure": "Su conexión a este sitio no es privada.",
           "description": "{{origin}} solicita un nombre de usuario y contraseña."
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} dice",
+          "anonymousTitle": "Esta página dice",
+          "confirm": "Aceptar",
+          "cancel": "Cancelar",
+          "answer": "Respuesta"
+        },
         "sitePermission": {
           "label": {
             "camera": "Cámara",
@@ -23300,5 +23306,9 @@
       "needsPermission": "El agente necesita permiso",
       "statusStale": "El estado del agente está desactualizado"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "La distribución WSL {{distro}} está detenida, así que Orca no inició esta terminal. Inicia la distribución y vuelve a intentarlo.",
+    "terminalUnverifiable": "Orca no pudo comprobar si la distribución WSL {{distro}} está en ejecución, así que no inició esta terminal. Inicia la distribución y vuelve a intentarlo."
   }
 }

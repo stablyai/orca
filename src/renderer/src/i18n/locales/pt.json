@@ -9395,7 +9395,6 @@
           "previous": "Anterior",
           "updated": "Atualizado",
           "license": "Licença",
-          "homepage": "Site",
           "whatsNew": "Novidades"
         },
         "PluginFilterPopover": {
@@ -19442,6 +19441,13 @@
           "confirm": "Entrar",
           "cancel": "Cancelar"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} diz",
+          "anonymousTitle": "Esta página diz",
+          "confirm": "OK",
+          "cancel": "Cancelar",
+          "answer": "Resposta"
+        },
         "sitePermission": {
           "label": {
             "camera": "Câmera",
@@ -23203,5 +23209,9 @@
       "needsPermission": "O agente precisa de permissão",
       "statusStale": "O status do agente está desatualizado"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "A distribuição WSL {{distro}} está parada, então o Orca não iniciou este terminal. Inicie a distribuição e tente novamente.",
+    "terminalUnverifiable": "O Orca não conseguiu verificar se a distribuição WSL {{distro}} está em execução, então não iniciou este terminal. Inicie a distribuição e tente novamente."
   }
 }

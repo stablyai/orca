@@ -13055,7 +13055,6 @@
           "previous": "Précédente",
           "updated": "Mis à jour",
           "license": "Licence",
-          "homepage": "Page d’accueil",
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
           "hashCopyFailed": "Impossible de copier l’empreinte."
@@ -18599,6 +18598,13 @@
           "retry": "Ce nom d'utilisateur ou ce mot de passe n'a pas fonctionné.",
           "description": "{{origin}} demande un nom d'utilisateur et un mot de passe."
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} indique",
+          "anonymousTitle": "Cette page indique",
+          "confirm": "OK",
+          "cancel": "Annuler",
+          "answer": "Réponse"
+        },
         "sitePermission": {
           "label": {
             "camera": "Caméra",
@@ -23300,5 +23306,9 @@
       "needsPermission": "L’agent a besoin d’une autorisation",
       "statusStale": "Le statut de l’agent est obsolète"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "La distribution WSL {{distro}} est arrêtée, donc Orca n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez.",
+    "terminalUnverifiable": "Orca n'a pas pu vérifier si la distribution WSL {{distro}} est en cours d'exécution, donc il n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez."
   }
 }

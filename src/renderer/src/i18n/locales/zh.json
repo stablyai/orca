@@ -12578,7 +12578,6 @@
           "previous": "上一版本",
           "updated": "更新于",
           "license": "许可证",
-          "homepage": "主页",
           "whatsNew": "新功能",
           "hashCopied": "已复制内容哈希",
           "hashCopyFailed": "无法复制哈希。"
@@ -17904,6 +17903,13 @@
           "retry": "该用户名或密码无效。",
           "description": "{{origin}} 要求输入用户名和密码。"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 显示",
+          "anonymousTitle": "此网页显示",
+          "confirm": "确定",
+          "cancel": "取消",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "摄像头",
@@ -22613,5 +22619,9 @@
       "needsPermission": "智能体需要授权",
       "statusStale": "智能体状态信息已过期"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "WSL 发行版 {{distro}} 已停止，因此 Orca 没有启动此终端。请启动该发行版后重试。",
+    "terminalUnverifiable": "Orca 无法确认 WSL 发行版 {{distro}} 是否正在运行，因此没有启动此终端。请启动该发行版后重试。"
   }
 }

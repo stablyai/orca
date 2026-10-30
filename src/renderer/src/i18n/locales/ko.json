@@ -12545,7 +12545,6 @@
           "previous": "이전 버전",
           "updated": "업데이트",
           "license": "라이선스",
-          "homepage": "홈페이지",
           "whatsNew": "새로운 기능",
           "hashCopied": "콘텐츠 해시를 복사했습니다",
           "hashCopyFailed": "해시를 복사할 수 없습니다."
@@ -17904,6 +17903,13 @@
           "password": "비밀번호",
           "retry": "사용자 이름 또는 비밀번호가 올바르지 않습니다."
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 내용:",
+          "anonymousTitle": "이 페이지 내용:",
+          "confirm": "확인",
+          "cancel": "취소",
+          "answer": "답변"
+        },
         "sitePermission": {
           "label": {
             "camera": "카메라",
@@ -22612,5 +22618,9 @@
       "needsPermission": "에이전트에 권한이 필요합니다",
       "statusStale": "에이전트 상태 정보가 오래되었습니다"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
+    "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
   }
 }

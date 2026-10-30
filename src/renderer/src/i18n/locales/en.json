@@ -13226,7 +13226,6 @@
           "previous": "Previous",
           "updated": "Updated",
           "license": "License",
-          "homepage": "Homepage",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
           "hashCopyFailed": "Couldn't copy the hash."
@@ -18692,6 +18691,13 @@
           "confirm": "Sign in",
           "cancel": "Cancel"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} says",
+          "anonymousTitle": "This page says",
+          "confirm": "OK",
+          "cancel": "Cancel",
+          "answer": "Answer"
+        },
         "sitePermission": {
           "label": {
             "camera": "Camera",
@@ -23184,5 +23190,9 @@
       "needsPermission": "Agent needs permission",
       "statusStale": "Agent status is stale"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
+    "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
   }
 }

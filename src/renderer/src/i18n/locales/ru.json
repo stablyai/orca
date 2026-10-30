@@ -13378,7 +13378,6 @@
           "previous": "Предыдущая",
           "updated": "Обновлено",
           "license": "Лицензия",
-          "homepage": "Сайт",
           "whatsNew": "Что нового"
         },
         "PluginDetailPage": {
@@ -18957,6 +18956,13 @@
           "confirm": "Войти",
           "cancel": "Отмена"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} сообщает",
+          "anonymousTitle": "Эта страница сообщает",
+          "confirm": "ОК",
+          "cancel": "Отмена",
+          "answer": "Ответ"
+        },
         "sitePermission": {
           "label": {
             "camera": "Камера",
@@ -23510,5 +23516,9 @@
       "needsPermission": "Агенту требуется разрешение",
       "statusStale": "Статус агента устарел"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "Дистрибутив WSL {{distro}} остановлен, поэтому Orca не запустила этот терминал. Запустите дистрибутив и повторите попытку.",
+    "terminalUnverifiable": "Orca не удалось проверить, запущен ли дистрибутив WSL {{distro}}, поэтому этот терминал не запущен. Запустите дистрибутив и повторите попытку."
   }
 }

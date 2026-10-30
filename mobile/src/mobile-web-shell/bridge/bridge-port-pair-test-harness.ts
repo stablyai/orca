@@ -14,6 +14,8 @@ import {
 } from './bridge-envelope'
 import type { BridgeErrorCapture } from './bridge-error-capture'
 import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 import {
   createBridgeRpcClient,
   type BridgeRpcClient,
@@ -39,6 +41,10 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   readonly pageReadyCount: () => number
   readonly pagePaintCount: () => number
   readonly backClaims: boolean[]
+  /** Every claim on the key rail the host reported, drops on `ready` and `close` included. */
+  readonly terminalKeyRailClaims: boolean[]
+  /** What each answered `ready` declared it reports, in order. */
+  /** Every clear the page asked the shell for, in order. */
   readonly routeParamClears: () => readonly { param: string; value: string }[]
   readonly routeRefusals: string[]
   flush: () => Promise<void>
@@ -66,6 +72,9 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  foldDivision?: BridgeFoldDivision | null
+  terminalKeyRail?: BridgeTerminalKeyRail
+  /** Stands for the wide host-area session, the one shell mount that tells the page it owns it. */
   ownsHostArea?: boolean
   onStorageWrite?: (key: string, value: string | null) => void
 }
@@ -171,6 +180,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
   const backClaims: boolean[] = []
+  const terminalKeyRailClaims: boolean[] = []
   let pageReadies = 0
   let pagePaints = 0
   const routeParamClears: { param: string; value: string }[] = []
@@ -194,6 +204,8 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     route: options.route ?? { pathname: '/h/host-a' },
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
     ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
+    ...(options.foldDivision === undefined ? {} : { foldDivision: options.foldDivision }),
+    ...(options.terminalKeyRail === undefined ? {} : { terminalKeyRail: options.terminalKeyRail }),
     readClientIdentity: () =>
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
@@ -228,6 +240,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
     onPageLocation: () => {},
+    onTerminalKeyRailClaim: (claimed) => terminalKeyRailClaims.push(claimed),
     onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
@@ -265,6 +278,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     pageReadyCount: () => pageReadies,
     pagePaintCount: () => pagePaints,
     backClaims,
+    terminalKeyRailClaims,
     routeParamClears: () => routeParamClears,
     routeRefusals,
     async flush(): Promise<void> {

@@ -10,7 +10,11 @@ import {
   PLUGIN_MARKETPLACE_CATEGORY_LIMIT,
   PLUGIN_MARKETPLACE_ENTRY_LIMIT
 } from './plugin-marketplace'
-import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
+import {
+  pluginFieldDoc,
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_MANIFEST_V2_SINCE
+} from '../manifest/plugin-schema-field-docs'
 
 /**
  * The plugin catalog (`orca-catalog.json`). The name never changes; `catalogVersion` does, and
@@ -40,6 +44,20 @@ export const pluginCatalogEntrySchema = z
   .object({
     id: marketplaceEntryFields.id,
     source: catalogV2GitSourceSchema,
+    ownerId: z
+      .number()
+      .int()
+      .positive()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional()
+      .catch(undefined)
+      .meta(
+        pluginFieldDoc(
+          "GitHub's numeric id of the repository owner, recorded the first time the plugin was listed. Names can be renamed or re-registered; this id cannot. Informational: Orca does not read it yet, and older Orca ignores it.",
+          PLUGIN_DERIVED_PUBLISHER_SINCE,
+          [1_234_567]
+        )
+      ),
     description: safePluginDisplayText(z.string().min(1).max(4_096))
       .optional()
       .catch(undefined)
@@ -123,7 +141,9 @@ export const pluginCatalogSchema = pluginCatalogDocumentSchema
         return []
       }
       seen.add(id)
-      return [parsed.data]
+      // Why dropped: listings are cached in a strict shape that older Orca reads back after a downgrade.
+      const { ownerId: _ownerId, ...entry } = parsed.data
+      return [entry]
     })
     return { ...catalog, plugins }
   })
