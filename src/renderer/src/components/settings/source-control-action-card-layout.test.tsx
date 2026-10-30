@@ -320,4 +320,29 @@ it('labels an own raw Sonnet recipe from the same source as its setup chips', as
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
   )
+  const { projectSourceControlActionLaunch } =
+    await import('../../../../shared/source-control-action-launch-preferences')
+  const { resolveAgentStartupPlanInputs } =
+    await import('../../../../shared/agent-startup-plan-inputs')
+  const { buildAgentStartupPlan } = await import('../../../../shared/tui-agent-startup')
+  const settings = useAppStore.getState().settings
+  const projection = projectSourceControlActionLaunch(recipe, 'claude', {
+    basePrompt: 'Do the work',
+    settings
+  })
+  const startup = buildAgentStartupPlan({
+    ...resolveAgentStartupPlanInputs({
+      agent: 'claude',
+      settings,
+      agentArgs: projection.agentArgs,
+      sessionOptions: projection.sessionOptions,
+      platform: 'linux',
+      shell: 'posix',
+      isRemote: false
+    }),
+    prompt: '',
+    allowEmptyPromptLaunch: true
+  })
+  expect(startup?.launchCommand).toContain("'--model' 'claude-sonnet-5-5'")
+  expect(startup?.launchCommand).not.toContain('claude-opus-5-5')
 })
