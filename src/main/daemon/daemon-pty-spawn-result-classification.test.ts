@@ -10,6 +10,16 @@ import type { PtyRegistrationClaim } from '../runtime/runtime-terminal-state-rec
 import { executePtySpawn } from '../ipc/pty/spawn-execute'
 import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 
+abstract class SessionSpawnTestAdapter extends DaemonPtySessionSpawn {
+  public override resultForExitBeforeSpawnReply(
+    sessionId: string,
+    result: CreateOrAttachResult,
+    operation: DaemonPtySpawnContext['operation']
+  ): PtySpawnResult | null {
+    return super.resultForExitBeforeSpawnReply(sessionId, result, operation)
+  }
+}
+
 it.each([
   { isNew: false, history: '' },
   { isNew: false, history: 'recovered history' },
@@ -73,10 +83,7 @@ it.each([
       coldRestoreCache: cache,
       activeSessionIds: new Set(),
       buildColdRestorePayload: coldRestorePayloadFromInfo,
-      resultForExitBeforeSpawnReply: Reflect.get(
-        DaemonPtySessionSpawn.prototype,
-        'resultForExitBeforeSpawnReply'
-      )
+      resultForExitBeforeSpawnReply: SessionSpawnTestAdapter.prototype.resultForExitBeforeSpawnReply
     })
     const lower: CreateOrAttachResult = {
       isNew,
