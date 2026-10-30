@@ -76,8 +76,7 @@ const trafficMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'closeQuestionsForDispatch',
   'createGate',
   'resolveGate',
-  'timeoutGate',
-  'resetMessages'
+  'timeoutGate'
 ])
 
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
@@ -111,6 +110,16 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
       return result
     }
   }
+  if (hasDomainMethod(prototype, 'commitLegacyCompatibilityPrincipal')) {
+    const commit = prototype.commitLegacyCompatibilityPrincipal
+    prototype.commitLegacyCompatibilityPrincipal = function (this: OrchestrationDb, params) {
+      const result = commit.call(this, params)
+      if (!result.duplicate) {
+        this.crewChanges.notify(new Set(['topology']))
+      }
+      return result
+    }
+  }
   const sourceIdentity = prototype.getOrCreateLocalMutationCallerFingerprint
   prototype.getOrCreateLocalMutationCallerFingerprint = function (this: OrchestrationDb) {
     const known = this.localMutationCallerFingerprint
@@ -124,7 +133,9 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   prototype.insertMessage = function (this: OrchestrationDb, message) {
     const result = insert.call(this, message)
     if (result.type !== 'heartbeat') {
-      this.crewChanges.notify(new Set(['traffic']))
+      this.crewChanges.notify(
+        new Set([result.delivery_contract === 'legacy_direct' ? 'topology' : 'traffic'])
+      )
     }
     return result
   }

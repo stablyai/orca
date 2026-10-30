@@ -1,3 +1,4 @@
+import { crewRecipientAvailability } from './crew-recipient-availability'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
@@ -43,6 +44,8 @@ export type CrewReadDependencies = {
     taskName: string | null,
     records: AgentSessionRecordReader | null
   ) => string | null
+  callerPaneForHandle?: (handle: string) => string | null
+  livePaneForHandle?: (handle: string) => string | null
   processForHandle?: (handle: string) => string | null
   statuses: readonly FleetAgentStatusEvidence[]
   now?: number
@@ -52,7 +55,13 @@ export type CrewReadDependencies = {
 
 export type CrewIdentityRead = Pick<
   CrewReadDependencies,
-  'liveHandle' | 'handleForPane' | 'paneForHandle' | 'processForHandle' | 'name'
+  | 'liveHandle'
+  | 'handleForPane'
+  | 'paneForHandle'
+  | 'processForHandle'
+  | 'callerPaneForHandle'
+  | 'livePaneForHandle'
+  | 'name'
 >
 
 function preview(body: string): string {
@@ -128,7 +137,7 @@ export function buildCrewSnapshot(
           remoteAttachment.process === deps.processForHandle?.(self.terminalHandle)
         )
       }))
-  const ownedRunAddresses = readCrewOwnedRunAddresses(db, self)
+  const ownedRunAddresses = readCrewOwnedRunAddresses(db, self, host.sourceInputs.legacyOwner)
   for (const current of host.sourceInputs.runInputs(ownedRunAddresses)) {
     const coordinator = party(current.session, current.handle, current.pane, `run:${current.id}`)
     if (coordinator) {
@@ -227,16 +236,29 @@ export function buildCrewSnapshot(
     row.partyKey = relation.key
     snapshot.sections.managedBy.push(row)
   }
-  for (const message of traffic) {
+  const selectedTraffic = traffic.flatMap((message) => {
     let targetAddress = addressOf(message.peer)
     if (!targetAddress) {
       const parsed = parseOrcaSessionAddress(message.peer)
       targetAddress = party(parsed, parsed ? null : message.peer, null, message.peer)?.address
     }
     if (!targetAddress || targetAddress === self.address) {
-      continue
+      return []
     }
-    const target = getParty(targetAddress)!
+    return [{ message, target: getParty(targetAddress)! }]
+  })
+  const sessionPeers = [
+    ...new Set(
+      selectedTraffic.flatMap(({ target }) =>
+        target.orcaSessionId && !rows.has(target.address) && canAddressPeer(target.address)
+          ? [target.orcaSessionId]
+          : []
+      )
+    )
+  ]
+  const available = crewRecipientAvailability(host, self, sessionPeers, deps)
+  for (const { message, target } of selectedTraffic) {
+    const targetAddress = target.address
     let row = rows.get(targetAddress)
     if (!row) {
       const sendAddress = target.orcaSessionId
@@ -249,7 +271,10 @@ export function buildCrewSnapshot(
         target,
         'peer',
         undefined,
-        canAddressPeer(sendAddress) ? sendAddress : undefined
+        canAddressPeer(sendAddress) &&
+          (!target.orcaSessionId || available?.(target.orcaSessionId) === true)
+          ? sendAddress
+          : undefined
       )
       snapshot.sections.talkingWith.push(row)
     }

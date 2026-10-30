@@ -629,3 +629,41 @@ it('keeps the real OSC hook producer and observation owner authoritative after a
     vi.useRealTimers()
   }
 })
+
+it('forwards finite context through actual live-pane nested-recipient reads with unchanged repair and disconnected outcomes', () => {
+  const measure = (population: number, captured: boolean) => {
+    const f = fixture()
+    for (let i = 0; i < population; i++) {
+      f.add(`nested-${i}`, `term_nested_${i}`, `pane-${i}`, i !== 0)
+      f.stamp(`term_nested_${i}`, `nested-${i}`)
+    }
+    // The stale first reverse mapping and missing targets exercise the second live-leaf acquisition.
+    f.owner.source.bindPty('stale-missing', 'term_stale')
+    const counts = { entries: 0, get: 0, set: 0, delete: 0 }
+    countIterations(f.owner.handles, counts)
+    countIterations(f.owner.handleByPtyId, counts)
+    countIterations(f.owner.ptysById, counts)
+    countIterations(f.owner.leaves, counts)
+    const context = captured ? f.runtime.createTerminalIdentityReadContext() : undefined
+    const output = []
+    for (let i = 0; i < population; i++) {
+      output.push(f.runtime.getLiveTerminalPaneKey(`term_nested_${i}`, context))
+      output.push(f.runtime.getLiveTerminalPaneKey(`term_missing_${i}`, context))
+    }
+    output.push(f.runtime.getLiveTerminalPaneKey('term_stale', context))
+    expect(output[0]).toBeNull()
+    expect(output[2]).toBe('pane-1')
+    expect(output.at(-1)).toBeNull()
+    return { output, state: f.state(), counts }
+  }
+  const samples = [3, 30].map((population) => {
+    const old = measure(population, false)
+    const current = measure(population, true)
+    expect(current.output).toEqual(old.output)
+    expect(current.state).toEqual(old.state)
+    return { old: old.counts, current: current.counts }
+  })
+  expect(samples[1].current.entries).toBeLessThanOrEqual(10 * samples[0].current.entries + 30)
+  expect(samples[1].old.entries).toBeGreaterThan(20 * samples[0].old.entries)
+  process.stdout.write(`nested live-pane ordered work ${JSON.stringify(samples)}\n`)
+})

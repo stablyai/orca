@@ -80,6 +80,7 @@ export function watchCrewRuntimeSources(
 }
 
 export type CrewRuntimeReaders = {
+  getLiveTerminalPaneKey?(handle: string, context?: TerminalIdentityReadContext): string | null
   getTerminalWorktreeIdForHandle(
     handle: string,
     context?: TerminalIdentityReadContext
@@ -117,6 +118,9 @@ export function readCrewRuntimeInputs(
   const openIdentityRead = () => {
     const context = openContext()
     return {
+      callerPaneForHandle: (handle: string) => runtime.getTerminalPaneKey(handle, context),
+      livePaneForHandle: (handle: string) =>
+        runtime.getLiveTerminalPaneKey?.(handle, context) ?? null,
       processForHandle: (handle: string) => runtime.getTerminalProcessIncarnation(handle, context),
       liveHandle: (handle: string) =>
         runtime.getTerminalWorktreeIdForHandle(handle, context) !== null,
@@ -133,6 +137,8 @@ export function readCrewRuntimeInputs(
     retainedDbExists,
     hostKey,
     records: store ? conversationRecordReader(store) : null,
+    callerPaneForHandle: (handle) => runtime.getTerminalPaneKey(handle),
+    livePaneForHandle: (handle) => runtime.getLiveTerminalPaneKey?.(handle) ?? null,
     processForHandle: (handle) => runtime.getTerminalProcessIncarnation(handle),
     liveHandle: (handle) => runtime.getTerminalWorktreeIdForHandle(handle) !== null,
     handleForPane: (pane) => runtime.getTerminalHandleForPaneKey(pane),

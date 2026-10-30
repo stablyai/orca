@@ -9,6 +9,13 @@ export const ORCHESTRATION_CREW_METHODS = [
     permission: 'workspace',
     params: CrewSubscribeParams,
     handler: async ({ party }, { runtime, signal, connectionId }, emit) => {
+      if (signal?.aborted) {
+        return
+      }
+      await runtime.openAgentSessionRecordStore()
+      if (signal?.aborted) {
+        return
+      }
       await new Promise<void>((resolve) => {
         const key = `crew:${connectionId ?? 'local'}:${++sequence}`
         const release = () => runtime.cleanupSubscription(key)

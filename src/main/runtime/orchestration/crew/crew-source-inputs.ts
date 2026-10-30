@@ -26,6 +26,9 @@ export function createCrewSourceInputs(db: OrchestrationDb | null) {
           )
           .get()
       )?.caller_fingerprint ?? null
+  let legacy: ReturnType<OrchestrationDb['getLegacyAdoptedRunMailboxOwner']> | undefined
+  const legacyOwner = () =>
+    legacy === undefined ? (legacy = db?.getLegacyAdoptedRunMailboxOwner() ?? null) : legacy
   const claims = new Map<string, CrewParentClaim>()
   const claimsByKey = new Map<string, Set<string>>()
   const creators = new Map<string, CrewParentClaim>()
@@ -152,5 +155,5 @@ export function createCrewSourceInputs(db: OrchestrationDb | null) {
     }
     return addresses.flatMap((address) => (runs.has(address) ? [runs.get(address)!] : []))
   }
-  return { parentInputs, provenance, runInputs, activeRemoteAttachmentForPane }
+  return { parentInputs, provenance, runInputs, activeRemoteAttachmentForPane, legacyOwner }
 }
