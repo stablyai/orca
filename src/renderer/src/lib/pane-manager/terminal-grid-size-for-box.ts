@@ -10,16 +10,36 @@ export type TerminalFitMetrics = {
   scrollbar: { showScrollbar?: boolean; width?: number } | undefined
 }
 
+function terminalScrollbarWidth({ scrollback, scrollbar }: TerminalFitMetrics): number {
+  return scrollback === 0 || !(scrollbar?.showScrollbar ?? true)
+    ? 0
+    : (scrollbar?.width ?? DEFAULT_SCROLL_BAR_WIDTH)
+}
+
+export function terminalBoxSizeForGrid(
+  grid: { cols: number; rows: number },
+  metrics: TerminalFitMetrics
+): { width: number; height: number } {
+  return {
+    width: Math.ceil(
+      grid.cols * metrics.cell.width +
+        metrics.padding.left +
+        metrics.padding.right +
+        terminalScrollbarWidth(metrics)
+    ),
+    height: Math.ceil(
+      grid.rows * metrics.cell.height + metrics.padding.top + metrics.padding.bottom
+    )
+  }
+}
+
 /** The grid a terminal would fit to if its xterm host element had this box. */
 export function terminalGridSizeForBox(
   box: { width: number; height: number },
   metrics: TerminalFitMetrics
 ): { cols: number; rows: number } {
-  const { cell, padding, scrollback, scrollbar } = metrics
-  const scrollbarWidth =
-    scrollback === 0 || !(scrollbar?.showScrollbar ?? true)
-      ? 0
-      : (scrollbar?.width ?? DEFAULT_SCROLL_BAR_WIDTH)
+  const { cell, padding } = metrics
+  const scrollbarWidth = terminalScrollbarWidth(metrics)
   // FitAddon reads the host's computed width/height with parseInt, which truncates.
   const width = Math.max(0, Math.trunc(box.width)) - padding.left - padding.right - scrollbarWidth
   const height = Math.max(0, Math.trunc(box.height)) - padding.top - padding.bottom

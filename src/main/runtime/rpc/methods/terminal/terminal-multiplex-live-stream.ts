@@ -19,17 +19,20 @@ export function activateMultiplexStream(
   const { isMobile, size } = published
   if (!isMobile) {
     stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
-      const mode =
-        event.mode === 'mobile-fit'
-          ? event.mode
-          : (runtime.getRemoteDesktopFitHold?.(ptyId, stream.remoteDesktopSubscriptionKey).mode ??
-            'desktop-fit')
+      const desktopHold = runtime.getRemoteDesktopFitHold?.(
+        ptyId,
+        stream.remoteDesktopSubscriptionKey
+      )
+      const mode = event.mode === 'mobile-fit' ? event.mode : (desktopHold?.mode ?? 'desktop-fit')
       emit({
         type: 'fit-override-changed',
         streamId: request.streamId,
         mode,
         cols: event.cols,
-        rows: event.rows
+        rows: event.rows,
+        ...(event.mode !== 'mobile-fit' && desktopHold?.localSharedGrid
+          ? { localSharedGrid: true }
+          : {})
       })
     })
     stream.unsubscribeDriver = runtime.subscribeToDriverChanges(ptyId, (driver) => {
@@ -49,7 +52,8 @@ export function activateMultiplexStream(
       streamId: request.streamId,
       mode: fitOverride?.mode ?? desktopHold.mode,
       cols: fitOverride?.cols ?? desktopHold.cols,
-      rows: fitOverride?.rows ?? desktopHold.rows
+      rows: fitOverride?.rows ?? desktopHold.rows,
+      ...(!fitOverride && desktopHold.localSharedGrid ? { localSharedGrid: true } : {})
     })
     emit({
       type: 'driver-changed',

@@ -30,6 +30,7 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalViewportClient } from './terminal-stream-types'
+import { reportWorkerTerminalWindowLease } from '../../../../window/worker-window-terminal-visibility'
 
 function decodeViewportFrame(
   payload: TerminalStreamFrame['payload']
@@ -80,7 +81,22 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SetOutputPaused && stream.supportsOutputPause) {
-      const payload = decodeTerminalStreamJson<{ paused?: unknown }>(frame.payload)
+      const payload = decodeTerminalStreamJson<{ paused?: unknown; visible?: unknown }>(
+        frame.payload
+      )
+      if (
+        !stream.isMobile &&
+        stream.supportsLocalWindowVisibility &&
+        typeof payload?.visible === 'boolean'
+      ) {
+        reportWorkerTerminalWindowLease(
+          runtime,
+          state.localTerminalWindow,
+          stream.ptyId,
+          stream.remoteDesktopSubscriptionKey,
+          payload.visible
+        )
+      }
       if (typeof payload?.paused !== 'boolean' || stream.outputPaused === payload.paused) {
         return
       }

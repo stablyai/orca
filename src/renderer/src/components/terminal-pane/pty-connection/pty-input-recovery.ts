@@ -33,6 +33,9 @@ import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../../shared/program-status/protocol'
 import { readCachedRuntimeEnvironmentCapability } from '../../../runtime/runtime-rpc-client'
+import { revealLocalSharedTerminalCursor } from '@/lib/pane-manager/local-shared-terminal-viewport'
+import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { isXtermMouseReport } from '../terminal-pointer-input-sequences'
 
 export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   session.markAcceptedTerminalInputSent = (): void => {
@@ -70,6 +73,9 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
               )
             )
           : createIpcPtyTransport(session.transportOptions)
+  session.transport.setOutputPaused?.(
+    !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+  )
   session.canSendDesktopQueryReply = (): boolean => {
     const ptyId = session.transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)
@@ -131,7 +137,18 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
 
   session.claimViewportForUserActivity = (input?: string): void => {
     const currentPtyId = session.transport.getPtyId()
-    if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
+    const override = currentPtyId ? getFitOverrideForPty(currentPtyId) : null
+    if (override?.localSharedGrid) {
+      if (
+        input !== undefined &&
+        !isPassiveTerminalInputReport(input) &&
+        !isXtermMouseReport(input)
+      ) {
+        revealLocalSharedTerminalCursor(session.pane)
+      }
+      return
+    }
+    if (!currentPtyId || override?.mode !== 'remote-desktop-fit') {
       return
     }
     // Focus reports after SIGWINCH are not ownership claims; otherwise different-grid mirrors steal the viewport forever (#26469).
@@ -184,7 +201,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     if (event.ptyId !== session.transport.getPtyId() || !isRemoteRuntimePtyId(event.ptyId)) {
       return
     }
-    if (event.mode === 'desktop-fit') {
+    if (event.mode === 'desktop-fit' || event.localSharedGrid) {
       session.visibleRemoteViewportClaimPtyId = event.ptyId
       session.pendingVisibleRemoteViewportClaim = false
       return

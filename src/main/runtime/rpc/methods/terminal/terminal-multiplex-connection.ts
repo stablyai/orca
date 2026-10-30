@@ -13,6 +13,7 @@ import type {
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { MultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
 import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal-stream-end-verdict'
+import type { WorkerTerminalWindow } from '../../../../window/worker-window-terminal-visibility'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
@@ -21,6 +22,7 @@ export type MultiplexEmit = (result: unknown) => void
 export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
   connectionId: string
+  localTerminalWindow?: WorkerTerminalWindow
   sendBinary: NonNullable<RpcContext['sendBinary']>
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']

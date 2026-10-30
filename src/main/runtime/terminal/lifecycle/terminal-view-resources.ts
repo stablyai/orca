@@ -26,6 +26,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
         mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
         cols: number
         rows: number
+        localSharedGrid?: boolean
       }) => void
     >
   >()

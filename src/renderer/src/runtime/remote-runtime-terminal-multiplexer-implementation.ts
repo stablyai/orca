@@ -39,6 +39,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       supportsInputAck: false,
       inputLedgerId: null,
       outputPaused: false,
+      outputPauseReported: false,
       streamGeneration: null,
       sourceAckedEndByte: 0,
       heldAckBytes: 0,
@@ -152,7 +153,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             outputPauseDropNotice: 1,
             writeUnavailable: 1,
             ...(args.client.type === 'desktop'
-              ? { desktopViewportClaims: 1, endpointLossNotice: 1 }
+              ? { desktopViewportClaims: 1, endpointLossNotice: 1, localWindowVisibility: 1 }
               : {}),
             ...(args.inputSessionId ? { inputAck: 1 } : {})
           },

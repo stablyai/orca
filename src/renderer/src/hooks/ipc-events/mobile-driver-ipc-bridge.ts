@@ -30,6 +30,7 @@ type PendingMobileStateEvent =
         mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
         cols: number
         rows: number
+        localSharedGrid?: boolean
       }
     }
   | { kind: 'driver'; event: { ptyId: string; driver: RuntimeTerminalDriverState } }
@@ -53,8 +54,8 @@ export function registerMobileDriverIpcBridge(
   const applyPendingMobileStateEvents = (): void => {
     for (const pending of pendingMobileStateEvents) {
       if (pending.kind === 'fit') {
-        const { ptyId, mode, cols, rows } = pending.event
-        setFitOverride(ptyId, mode, cols, rows)
+        const { ptyId, mode, cols, rows, localSharedGrid } = pending.event
+        setFitOverride(ptyId, mode, cols, rows, localSharedGrid)
       } else if (pending.kind === 'driver') {
         setDriverForPty(pending.event.ptyId, pending.event.driver)
       } else if (pending.kind === 'browser-driver') {
@@ -81,7 +82,7 @@ export function registerMobileDriverIpcBridge(
         enqueue({ kind: 'fit', event })
         return
       }
-      setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
+      setFitOverride(event.ptyId, event.mode, event.cols, event.rows, event.localSharedGrid)
     })
   )
   unsubs.push(

@@ -36,6 +36,7 @@ import {
 import type { PendingSafeFitContinuation } from './pane-fit-continuation-registry'
 import { notifyPaneFitSucceeded } from './pane-fit-webgl-attach-signal'
 import { recordPaneFitClientSize } from './pane-fit-client-size'
+import { syncLocalSharedTerminalViewport } from './local-shared-terminal-viewport'
 
 export {
   canApplyPaneMetricOptions,
@@ -86,6 +87,7 @@ function performSafeFit(pane: ManagedPane): boolean {
   if (deferTerminalGeometryMutationDuringRebuild(pane.terminal, 'safe-fit', () => safeFit(pane))) {
     return false
   }
+  syncLocalSharedTerminalViewport(pane)
   if (!canMeasurePaneForFit(pane)) {
     return false
   }
@@ -116,6 +118,7 @@ function performSafeFit(pane: ManagedPane): boolean {
       } else {
         resumePendingFitScrollRestoreAfterFit(pane.terminal)
       }
+      syncLocalSharedTerminalViewport(pane)
       return true
     }
 

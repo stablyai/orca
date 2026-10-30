@@ -8,6 +8,10 @@ import { installPrivilegedWindowNavigationPolicy } from './privileged-window-nav
 import { showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../shared/quit-teardown-deadline'
+import {
+  trackWorkerTerminalWindow,
+  type WindowTerminalRuntime
+} from './worker-window-terminal-visibility'
 
 type WorkerWindowRuntime = Pick<
   OrcaRuntimeRpcServer,
@@ -115,7 +119,8 @@ export function zoomWorkerWindowIfFocused(direction: UIZoomDirection): boolean {
 /** Reuse paired-client isolation instead of publishing a second authoritative terminal graph. */
 export async function createWorkerWindow(
   runtime: WorkerWindowRuntime,
-  store: WorkerWindowStore
+  store: WorkerWindowStore,
+  terminalRuntime?: WindowTerminalRuntime
 ): Promise<BrowserWindow> {
   const id = randomUUID()
   const offer = runtime.createPairingOffer({
@@ -156,6 +161,14 @@ export async function createWorkerWindow(
       }
     })
     const worker = window
+    if (terminalRuntime) {
+      trackWorkerTerminalWindow(
+        terminalRuntime,
+        worker,
+        offer.deviceId,
+        () => runtime.getDeviceRegistry()?.listDevices() ?? []
+      )
+    }
     workerWindows.add(worker)
     installPrivilegedWindowNavigationPolicy(worker.webContents)
     worker.webContents.setZoomLevel(store.getUI().uiZoomLevel ?? 0)

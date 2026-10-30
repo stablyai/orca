@@ -44,7 +44,13 @@ export const runtimeApi = {
     }
   },
   getTerminalFitOverrides: (): Promise<
-    { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
+    {
+      ptyId: string
+      mode: 'mobile-fit' | 'remote-desktop-fit'
+      cols: number
+      rows: number
+      localSharedGrid?: boolean
+    }[]
   > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
   getTerminalDrivers: (): Promise<
     {
@@ -72,6 +78,7 @@ export const runtimeApi = {
       mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
       cols: number
       rows: number
+      localSharedGrid?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -81,6 +88,7 @@ export const runtimeApi = {
         mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
         cols: number
         rows: number
+        localSharedGrid?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)

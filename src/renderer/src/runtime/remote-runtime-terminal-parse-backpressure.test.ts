@@ -182,10 +182,36 @@ describe('remote terminal renderer backpressure', () => {
       decodeTerminalStreamJson<{ paused?: boolean }>(
         decodeTerminalStreamFrame(sendBinary.mock.calls[0]![0])!.payload
       )
-    ).toEqual({ paused: true })
+    ).toEqual({ paused: true, visible: false })
     expect(stream.setOutputPaused(true)).toBe(true)
     expect(sentOpcodes()).toEqual([TerminalStreamOpcode.SetOutputPaused])
     stream.close()
+  })
+
+  it('reports initial visibility once per stream, even when output is already unpaused', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer } =
+      await import('./remote-runtime-terminal-multiplexer')
+    const mux = getRemoteRuntimeTerminalMultiplexer('windows-test')
+    for (const terminal of ['first-view', 'reconnected-view']) {
+      const stream = await mux.subscribeTerminal({
+        terminal,
+        client: { id: 'local-window', type: 'desktop' },
+        callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
+      })
+      callbacks?.onResponse({
+        ok: true,
+        result: { type: 'subscribed', streamId: stream.streamId, capabilities: { outputPause: 1 } }
+      })
+      sendBinary.mockClear()
+
+      expect(stream.setOutputPaused(false)).toBe(true)
+      expect(stream.setOutputPaused(false)).toBe(true)
+      expect(sentOpcodes()).toEqual([TerminalStreamOpcode.SetOutputPaused])
+      expect(
+        decodeTerminalStreamJson(decodeTerminalStreamFrame(sendBinary.mock.calls[0]![0])!.payload)
+      ).toEqual({ paused: false, visible: true })
+      stream.close()
+    }
   })
 
   it('keeps paused input immediate without arming a hidden-output probe', async () => {

@@ -14,6 +14,7 @@ import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
 import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
+import { resolveWorkerTerminalWindow } from '../../../../window/worker-window-terminal-visibility'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -22,7 +23,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal, pairedDeviceId },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -37,6 +38,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       const state = {
         runtime,
         connectionId,
+        localTerminalWindow: resolveWorkerTerminalWindow(runtime, pairedDeviceId),
         sendBinary,
         registerBinaryStreamHandler,
         signal,

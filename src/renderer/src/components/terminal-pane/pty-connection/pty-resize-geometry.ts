@@ -37,6 +37,26 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
       return
     }
     const fitOverride = getFitOverrideForPty(currentPtyId)
+    if (fitOverride?.localSharedGrid) {
+      safeFit(session.pane)
+      if (paneGeometryChanged) {
+        let proposed: { cols: number; rows: number } | undefined
+        try {
+          proposed = session.pane.fitAddon.proposeDimensions()
+        } catch {
+          return
+        }
+        if (proposed && proposed.cols > 0 && proposed.rows > 0) {
+          session.lastObservedDesktopGrid = proposed
+          if (isRemoteRuntimePtyId(currentPtyId)) {
+            session.transport.resize(proposed.cols, proposed.rows, { claim: false })
+          } else {
+            window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
+          }
+        }
+      }
+      return
+    }
     if (!fitOverride) {
       if (session.pane.terminal.cols > 0 && session.pane.terminal.rows > 0) {
         // Record the local grid before remote holding so the next genuine layout change can claim immediately.

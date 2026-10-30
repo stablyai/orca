@@ -15,6 +15,7 @@ import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-
 import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { trackTerminalWindow } from './worker-window-terminal-visibility'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -26,6 +27,7 @@ export function registerRuntimeWindowLifecycle(
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
+  trackTerminalWindow(runtime, mainWindow)
   const mainWebContents = mainWindow.webContents
   const rendererNotifications = createRuntimeRendererNotificationSender({
     isWindowDestroyed: () => mainWindow.isDestroyed(),
@@ -208,8 +210,14 @@ export function registerRuntimeWindowLifecycle(
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
-    terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
-      send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
+    terminalFitOverrideChanged: (ptyId, mode, cols, rows, localSharedGrid) =>
+      send('runtime:terminalFitOverrideChanged', {
+        ptyId,
+        mode,
+        cols,
+        rows,
+        ...(localSharedGrid ? { localSharedGrid } : {})
+      }),
     terminalDriverChanged: (ptyId, driver) =>
       send('runtime:terminalDriverChanged', { ptyId, driver }),
     nativeChatLaunchDraftResolved: (tabId, resolution) =>

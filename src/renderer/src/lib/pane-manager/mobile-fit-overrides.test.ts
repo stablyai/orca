@@ -23,6 +23,29 @@ afterEach(() => {
 })
 
 describe('setFitOverride / getFitOverrideForPty', () => {
+  it('keeps shared-grid metadata through hydration and handle replacement without tagging mobile holds', () => {
+    hydrateOverrides([
+      {
+        ptyId: 'shared-old',
+        mode: 'remote-desktop-fit',
+        cols: 160,
+        rows: 40,
+        localSharedGrid: true
+      }
+    ])
+    replaceFitOverridePtyId('shared-old', 'shared-new')
+    expect(getFitOverrideForPty('shared-new')).toEqual({
+      mode: 'remote-desktop-fit',
+      cols: 160,
+      rows: 40,
+      localSharedGrid: true
+    })
+    setFitOverride('shared-new', 'mobile-fit', 40, 20, true)
+    expect(getFitOverrideForPty('shared-new')).toEqual({ mode: 'mobile-fit', cols: 40, rows: 20 })
+    setFitOverride('shared-new', 'desktop-fit', 160, 40)
+    expect(getFitOverrideForPty('shared-new')).toBeNull()
+  })
+
   it('stores a mobile-fit override keyed by ptyId', () => {
     setFitOverride('pty-1', 'mobile-fit', 49, 20)
 

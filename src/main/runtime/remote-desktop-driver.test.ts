@@ -49,6 +49,16 @@ class TestOrcaRuntimeService extends OrcaRuntimeService {
   getLayoutQueues() {
     return this.layoutQueues
   }
+
+  runNextQueuedLayoutForTest(ptyId: string) {
+    const queue = this.layoutQueues.get(ptyId)
+    const next = queue?.pending.shift()
+    if (!queue || !next) {
+      throw new Error('Expected a queued terminal layout')
+    }
+    queue.running = this.runLayoutSlot(ptyId, next.target, next.waiters)
+    return queue.running
+  }
 }
 
 const store = {
@@ -136,6 +146,43 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
 }
 
 describe('remote desktop viewer width driver', () => {
+  it('retains an indefinite phone-fit hold when a formerly mirrored native window hides', async () => {
+    const { runtime, ptySizes, resizeCalls } = createRuntime(null)
+    runtime.setLocalTerminalWindowVisible(1, true)
+    runtime.setLocalTerminalWindowVisible(2, true)
+    runtime.setLocalTerminalWindowLease('pty-1', 'host:1', 1, true)
+    runtime.setLocalTerminalWindowLease('pty-1', 'worker-stream', 2, true)
+    expect(runtime.getLocalSharedTerminalGrid('pty-1')).toEqual({ cols: 150, rows: 40 })
+    runtime.recordRendererGeometry('pty-1', 170, 45)
+
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    expect(runtime.getLocalSharedTerminalGrid('pty-1')).toBeNull()
+    expect(await runtime.writeTerminalPreviewInput('pty-1', 'blocked')).toBe(false)
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+    expect(runtime.getLayoutForTest('pty-1')?.kind).toBe('phone')
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    const phoneResizes = [...resizeCalls]
+
+    runtime.setLocalTerminalWindowVisible(2, false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(resizeCalls).toEqual(phoneResizes)
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    expect(runtime.getLayoutForTest('pty-1')?.kind).toBe('phone')
+    expect(runtime.getTerminalFitOverride('pty-1')).toMatchObject({
+      mode: 'mobile-fit',
+      cols: 45,
+      rows: 20
+    })
+    expect(runtime.getLocalSharedTerminalGrid('pty-1')).toBeNull()
+
+    await runtime.handleMobileSubscribe('pty-1', 'phone-B', { cols: 50, rows: 22 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 50, rows: 22 })
+    expect(await runtime.writeTerminalPreviewInput('pty-1', 'still-blocked')).toBe(false)
+  })
+
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
@@ -486,6 +533,134 @@ describe('remote desktop viewer width driver', () => {
 
     expect(resizeCalls).toEqual([{ ptyId: 'pty-1', cols: 150, rows: 40 }])
   })
+
+  it('keeps a replacement local stream pinned when the retired same-slot cleanup settles', async () => {
+    const { runtime, resizeCalls } = createRuntime()
+    const key = 'multiplex:worker-connection:7'
+    const canonical = { cols: 150, rows: 40 }
+    runtime.setLocalTerminalWindowVisible(1, true)
+    runtime.setLocalTerminalWindowVisible(2, true)
+    runtime.setLocalTerminalWindowLease('pty-1', 'host:1', 1, true)
+    runtime.setLocalTerminalWindowLease('pty-1', key, 2, true)
+    await runtime.updateRemoteDesktopViewer('pty-1', key, 'retired-viewer', 80, 24, false)
+    expect(runtime.getRemoteDesktopFitHold('pty-1', key)).toMatchObject({
+      ...canonical,
+      localSharedGrid: true
+    })
+    resizeCalls.splice(0)
+
+    runtime.removeLocalTerminalWindowLease('pty-1', key)
+    const unregistering = runtime.unregisterRemoteDesktopViewers('pty-1', [key])
+    runtime.setLocalTerminalWindowLease('pty-1', key, 2, false)
+    const registering = runtime.updateRemoteDesktopViewer(
+      'pty-1',
+      key,
+      'replacement-viewer',
+      72,
+      22,
+      false
+    )
+    runtime.setLocalTerminalWindowLease('pty-1', key, 2, true)
+    await unregistering
+    await registering
+
+    await expect(runtime.claimRemoteDesktopViewer('pty-1', key)).resolves.toBe(true)
+    await runtime.refreshRemoteDesktopViewer('pty-1', 'replacement-viewer', 90, 28, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual(canonical)
+    expect(resizeCalls).toEqual([])
+    expect(runtime.getRemoteDesktopFitHold('pty-1', key)).toEqual({
+      mode: 'remote-desktop-fit',
+      ...canonical,
+      localSharedGrid: true
+    })
+  })
+
+  it.each([
+    { survivor: 'host', queued: false },
+    { survivor: 'host', queued: true },
+    { survivor: 'worker', queued: false },
+    { survivor: 'worker', queued: true }
+  ] as const)(
+    'makes the surviving $survivor authoritative before clearing its shared hold (queued: $queued)',
+    async ({ survivor, queued }) => {
+      const { runtime, ptySizes, resizeCalls } = createRuntime()
+      const workerKey = 'multiplex:worker-connection:7'
+      const hostGrid = { cols: 137, rows: 64 }
+      const workerGrid = { cols: 90, rows: 28 }
+      runtime.setLocalTerminalWindowVisible(1, true)
+      runtime.setLocalTerminalWindowVisible(2, true)
+      if (survivor === 'host') {
+        runtime.setLocalTerminalWindowLease('pty-1', workerKey, 2, true)
+        await runtime.updateRemoteDesktopViewer('pty-1', workerKey, 'worker', 94, 56)
+        runtime.setLocalTerminalWindowLease('pty-1', 'host:1', 1, true)
+      } else {
+        runtime.setLocalTerminalWindowLease('pty-1', 'host:1', 1, true)
+        runtime.setLocalTerminalWindowLease('pty-1', workerKey, 2, true)
+      }
+      const canonical = runtime.getTerminalSize('pty-1')
+      expect(runtime.getLocalSharedTerminalGrid('pty-1')).toEqual(canonical)
+      runtime.recordRendererGeometry('pty-1', hostGrid.cols, hostGrid.rows)
+      await runtime.updateRemoteDesktopViewer(
+        'pty-1',
+        workerKey,
+        'worker',
+        workerGrid.cols,
+        workerGrid.rows,
+        false
+      )
+      expect(runtime.getTerminalSize('pty-1')).toEqual(canonical)
+      resizeCalls.splice(0)
+
+      const events: string[] = []
+      const fits: { hostMode: string; workerMode: string; localSharedGrid: boolean }[] = []
+      const unsubscribeFit = runtime.subscribeToFitOverrideChanges('pty-1', (event) => {
+        const hold = runtime.getRemoteDesktopFitHold('pty-1', workerKey)
+        fits.push({
+          hostMode: event.mode,
+          workerMode: hold.mode,
+          localSharedGrid: event.localSharedGrid === true || hold.localSharedGrid === true
+        })
+        events.push('fit')
+      })
+      const unsubscribeResize = runtime.subscribeToTerminalResize('pty-1', () => {
+        events.push('resize')
+      })
+      if (queued) {
+        runtime.getLayoutQueues().set('pty-1', { running: new Promise(() => {}), pending: [] })
+      }
+      try {
+        runtime.setLocalTerminalWindowLease(
+          'pty-1',
+          survivor === 'host' ? workerKey : 'host:1',
+          survivor === 'host' ? 2 : 1,
+          false
+        )
+
+        expect(fits[0]).toMatchObject({
+          [survivor === 'host' ? 'hostMode' : 'workerMode']: 'desktop-fit',
+          localSharedGrid: false
+        })
+        if (queued) {
+          expect(events).toEqual(['fit'])
+          expect(ptySizes.get('pty-1')).toEqual(canonical)
+          await runtime.runNextQueuedLayoutForTest('pty-1')
+        }
+        await vi.advanceTimersByTimeAsync(0)
+
+        const expected = survivor === 'host' ? hostGrid : workerGrid
+        expect(ptySizes.get('pty-1')).toEqual(expected)
+        expect(resizeCalls).toEqual([{ ptyId: 'pty-1', ...expected }])
+        expect(events.indexOf('resize')).toBeGreaterThan(events.indexOf('fit'))
+        expect(runtime.getRemoteDesktopFitHold('pty-1', workerKey).mode).toBe(
+          survivor === 'worker' ? 'desktop-fit' : 'remote-desktop-fit'
+        )
+      } finally {
+        unsubscribeFit()
+        unsubscribeResize()
+        runtime.getLayoutQueues().delete('pty-1')
+      }
+    }
+  )
 
   it('applies the latest viewer width when the host takes back from a phone', async () => {
     const { runtime } = createRuntime()

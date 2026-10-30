@@ -6,6 +6,7 @@ type FitOverride = {
   mode: 'mobile-fit' | 'remote-desktop-fit'
   cols: number
   rows: number
+  localSharedGrid?: boolean
 }
 
 const overridesByPtyId = new Map<string, FitOverride>()
@@ -22,6 +23,8 @@ type OverrideChangeEvent = {
   mode: FitHoldMode
   cols: number
   rows: number
+  localSharedGrid?: boolean
+  priorLocalSharedGrid?: boolean
   // Carry pre-event dimensions so listeners can distinguish stale phone-fit xterm size from newer user resizing.
   priorCols: number | null
   priorRows: number | null
@@ -40,10 +43,22 @@ function notifyChange(event: OverrideChangeEvent): void {
   }
 }
 
-export function setFitOverride(ptyId: string, mode: FitHoldMode, cols: number, rows: number): void {
+export function setFitOverride(
+  ptyId: string,
+  mode: FitHoldMode,
+  cols: number,
+  rows: number,
+  localSharedGrid?: boolean
+): void {
   const prior = overridesByPtyId.get(ptyId) ?? null
+  const sharedGrid = mode === 'remote-desktop-fit' && localSharedGrid === true
   if (mode === 'mobile-fit' || mode === 'remote-desktop-fit') {
-    overridesByPtyId.set(ptyId, { mode, cols, rows })
+    overridesByPtyId.set(ptyId, {
+      mode,
+      cols,
+      rows,
+      ...(sharedGrid ? { localSharedGrid: true } : {})
+    })
   } else {
     overridesByPtyId.delete(ptyId)
   }
@@ -52,6 +67,8 @@ export function setFitOverride(ptyId: string, mode: FitHoldMode, cols: number, r
     mode,
     cols,
     rows,
+    ...(sharedGrid ? { localSharedGrid: true } : {}),
+    ...(prior?.localSharedGrid ? { priorLocalSharedGrid: true } : {}),
     priorCols: prior?.cols ?? null,
     priorRows: prior?.rows ?? null
   })
@@ -64,7 +81,7 @@ export function replaceFitOverridePtyId(replacedPtyId: string, ptyId: string): v
   }
   // Keep hold across handle rotation until replacement authority arrives; remove unreachable old-handle entries.
   if (!overridesByPtyId.has(ptyId)) {
-    setFitOverride(ptyId, replaced.mode, replaced.cols, replaced.rows)
+    setFitOverride(ptyId, replaced.mode, replaced.cols, replaced.rows, replaced.localSharedGrid)
   }
   setFitOverride(replacedPtyId, 'desktop-fit', replaced.cols, replaced.rows)
 }
@@ -120,12 +137,20 @@ export function hydrateOverrides(
     mode: 'mobile-fit' | 'remote-desktop-fit'
     cols: number
     rows: number
+    localSharedGrid?: boolean
   }[]
 ): void {
   const previous = new Map(overridesByPtyId)
   overridesByPtyId.clear()
   for (const o of overrides) {
-    overridesByPtyId.set(o.ptyId, { mode: o.mode, cols: o.cols, rows: o.rows })
+    overridesByPtyId.set(o.ptyId, {
+      mode: o.mode,
+      cols: o.cols,
+      rows: o.rows,
+      ...(o.mode === 'remote-desktop-fit' && o.localSharedGrid === true
+        ? { localSharedGrid: true }
+        : {})
+    })
   }
 
   // Hydration can follow pane mount; notify overlays even without another live IPC event.
@@ -136,6 +161,8 @@ export function hydrateOverrides(
       mode: override.mode,
       cols: override.cols,
       rows: override.rows,
+      ...(override.localSharedGrid ? { localSharedGrid: true } : {}),
+      ...(prior?.localSharedGrid ? { priorLocalSharedGrid: true } : {}),
       priorCols: prior?.cols ?? null,
       priorRows: prior?.rows ?? null
     })
@@ -148,6 +175,7 @@ export function hydrateOverrides(
       mode: 'desktop-fit',
       cols: 0,
       rows: 0,
+      ...(prior.localSharedGrid ? { priorLocalSharedGrid: true } : {}),
       priorCols: prior.cols,
       priorRows: prior.rows
     })

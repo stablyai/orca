@@ -76,6 +76,22 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
       for (const pane of getAffectedPanes()) {
         latestOverrideByTerminal.set(pane.terminal, restoreVersion)
       }
+      const isCurrentPane = (pane: ManagedPane): boolean =>
+        active &&
+        managerRef.current === manager &&
+        latestOverrideByTerminal.get(pane.terminal) === restoreVersion &&
+        getAffectedPanes().some(
+          (current) => current.terminal === pane.terminal && current.container === pane.container
+        )
+      if (event.localSharedGrid || event.priorLocalSharedGrid) {
+        // Apply geometry before the resized process's next cursor-addressed output is parsed.
+        for (const pane of getAffectedPanes()) {
+          fitAndRefreshDesktopPane(pane, () => isCurrentPane(pane))
+        }
+        if (event.mode !== 'desktop-fit') {
+          return
+        }
+      }
       if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
         // Why: when mobile drives, xterm must shrink to phone dims or the wide desktop grid garbles the phone-wrapped stream.
         // Why: skip the rAF unless this tab actually has a mis-parked pane.
@@ -100,13 +116,7 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
       }
       if (event.mode === 'desktop-fit') {
         const shouldRestorePane = (pane: ManagedPane): boolean =>
-          active &&
-          managerRef.current === manager &&
-          latestOverrideByTerminal.get(pane.terminal) === restoreVersion &&
-          !getFitOverrideForPty(event.ptyId) &&
-          getAffectedPanes().some(
-            (current) => current.terminal === pane.terminal && current.container === pane.container
-          )
+          isCurrentPane(pane) && !getFitOverrideForPty(event.ptyId)
         // Why: fitAddon.fit() measures the DOM, so run under rAF after layout settles; the timeout is a safety net if fit silently threw.
         const fitAffectedPanes = (): void => {
           for (const pane of getAffectedPanes()) {

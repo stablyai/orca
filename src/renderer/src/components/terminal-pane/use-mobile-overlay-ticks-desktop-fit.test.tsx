@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
+import { Terminal } from '@xterm/headless'
 import { hydrateOverrides, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
@@ -140,6 +141,51 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 39)
   })
 
+  it('fits a released shared grid before cursor-addressed redraw bytes without waiting for a frame', async () => {
+    const terminal = new Terminal({ cols: 94, rows: 56, allowProposedApi: true })
+    const pane = createPane()
+    Object.defineProperties(pane.terminal, {
+      cols: { get: () => terminal.cols },
+      rows: { get: () => terminal.rows },
+      buffer: { get: () => terminal.buffer }
+    })
+    pane.terminal.resize.mockImplementation((cols, rows) => terminal.resize(cols, rows))
+    pane.fitAddon.proposeDimensions.mockReturnValue({ cols: 137, rows: 64 })
+    pane.fitAddon.fit.mockImplementation(() => pane.terminal.resize(137, 64))
+    const binding = mountForPane(pane)
+    try {
+      act(() => setFitOverride('pty-1', 'remote-desktop-fit', 94, 56, true))
+      expect(terminal.cols).toBe(94)
+      expect(terminal.rows).toBe(56)
+
+      act(() => setFitOverride('pty-1', 'desktop-fit', 137, 64))
+      expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+      expect(terminal.cols).toBe(137)
+      expect(terminal.rows).toBe(64)
+      expect(rafQueue.length).toBeGreaterThan(0)
+
+      let parsed = false
+      terminal.write(
+        '\x1b[?1049h\x1b[2J\x1b[HFRAME\x1b[4;128HRIGHT_EDGE\x1b[64;1HBOTTOM_EDGE\x1b[6;9H',
+        () => {
+          parsed = true
+        }
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(parsed).toBe(true)
+      expect(terminal.buffer.active.type).toBe('alternate')
+      expect(terminal.buffer.active.getLine(3)?.translateToString(true)).toBe(
+        `${' '.repeat(127)}RIGHT_EDGE`
+      )
+      expect(terminal.buffer.active.getLine(63)?.translateToString(true)).toBe('BOTTOM_EDGE')
+      expect(terminal.buffer.active.cursorX).toBe(8)
+      expect(terminal.buffer.active.cursorY).toBe(5)
+    } finally {
+      binding.unmount()
+      terminal.dispose()
+    }
+  })
+
   it('does not refresh while applying a mobile-fit hold', () => {
     const pane = createPane()
     pane.terminal.cols = 120
@@ -234,35 +280,46 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
     expect(pane.terminal.resize).not.toHaveBeenCalledWith(120, 40)
   })
 
-  it.each(['unmount', 'rebind', 'retirement', 'manager replacement', 'new phone hold'] as const)(
-    'drops replay-deferred restore after %s',
-    async (transition) => {
-      const pane = createPane()
-      const binding = mountForPane(pane)
-      beginTerminalScrollIntentBufferRebuild(pane.terminal)
-      act(() => setFitOverride('pty-1', 'desktop-fit', 120, 40))
+  it.each(
+    (['desktop-fit', 'shared-grid release'] as const).flatMap((restore) =>
+      (['unmount', 'rebind', 'retirement', 'manager replacement', 'new phone hold'] as const).map(
+        (transition) => ({ restore, transition })
+      )
+    )
+  )('drops replay-deferred $restore after $transition', async ({ restore, transition }) => {
+    const pane = createPane()
+    const binding = mountForPane(pane)
+    if (restore === 'shared-grid release') {
+      act(() => setFitOverride('pty-1', 'remote-desktop-fit', 49, 20, true))
+      pane.terminal.refresh.mockClear()
+    }
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+    act(() => setFitOverride('pty-1', 'desktop-fit', 120, 40))
+    if (restore === 'desktop-fit') {
       flushAnimationFrames()
       act(() => vi.advanceTimersByTime(100))
-      if (transition === 'unmount') {
-        binding.unmount()
-      } else if (transition === 'retirement') {
-        binding.setPanes([])
-      } else if (transition === 'manager replacement') {
-        binding.managerRef.current = null
-      } else if (transition === 'rebind') {
-        binding.paneTransportsRef.current = new Map([[1, { getPtyId: () => 'pty-2' }]])
-      } else {
-        act(() => setFitOverride('pty-1', 'mobile-fit', 49, 20))
-      }
-      endTerminalScrollIntentBufferRebuild(pane.terminal)
-      await act(async () => {
-        await Promise.resolve()
-      })
-      expect(pane.terminal.cols).toBe(49)
-      expect(pane.terminal.refresh).not.toHaveBeenCalled()
-      expect(pane.fitAddon.fit).not.toHaveBeenCalled()
     }
-  )
+    if (transition === 'unmount') {
+      binding.unmount()
+    } else if (transition === 'retirement') {
+      binding.setPanes([])
+    } else if (transition === 'manager replacement') {
+      binding.managerRef.current = null
+    } else if (transition === 'rebind') {
+      binding.paneTransportsRef.current = new Map([[1, { getPtyId: () => 'pty-2' }]])
+    } else {
+      act(() => setFitOverride('pty-1', 'mobile-fit', 49, 20))
+    }
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    flushAnimationFrames()
+    act(() => vi.advanceTimersByTime(100))
+    expect(pane.terminal.cols).toBe(49)
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+  })
 
   it('does not restore a replacement terminal that reused a pane id during replay', async () => {
     const pane = createPane()

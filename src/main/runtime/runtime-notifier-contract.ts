@@ -168,7 +168,8 @@ export type RuntimeNotifier = {
     ptyId: string,
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit',
     cols: number,
-    rows: number
+    rows: number,
+    localSharedGrid?: boolean
   ): void
   // Publish driver/clientId so the lock banner distinguishes mobile actors; boolean lock state loses identity (docs/mobile-presence-lock.md).
   terminalDriverChanged(ptyId: string, driver: DriverState): void

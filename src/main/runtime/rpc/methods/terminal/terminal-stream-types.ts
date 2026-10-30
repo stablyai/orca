@@ -68,6 +68,7 @@ export type TerminalMultiplexStream = {
   ackInFlightBytes: number
   ackWindowBytes: number
   supportsOutputPause: boolean
+  supportsLocalWindowVisibility?: boolean
   // Why: lets the client skip the reveal snapshot when a pause discarded nothing.
   supportsOutputPauseDropNotice: boolean
   pausedOutputDropNoticeSent: boolean

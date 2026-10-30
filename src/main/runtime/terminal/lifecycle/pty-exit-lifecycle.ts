@@ -226,6 +226,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       // Clear and notify driver state so dead panes cannot retain mobile lock banners.
       this.terminalDrivers.clear(ptyId)
       this.remoteDesktopFloor.clearPty(ptyId)
+      this.localWindowTerminalGrids.clearPty(ptyId)
       this.disposeHeadlessTerminal(ptyId)
       this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {

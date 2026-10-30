@@ -33,6 +33,7 @@ export type TerminalMultiplexEvent =
       mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
       cols: number
       rows: number
+      localSharedGrid?: boolean
     }
   | {
       type: 'driver-changed'
@@ -64,7 +65,10 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onSubscribed?: () => void
   /** The host installed the stream and named its capabilities; its initial snapshot is still on the way. */
   onSubscribeAcknowledged?: (result?: TerminalAttachmentLaunchResult) => void
-  onOutputPauseCapability?: () => void
+  onOutputPauseCapability?: (
+    reportOutputPaused: (paused: boolean) => boolean,
+    dropsReported: boolean
+  ) => void
   /** The host discarded output while this stream was paused (negotiated streams only). */
   onPausedOutputDropped?: () => void
   onEnd?: (verdict: TerminalStreamEndVerdict) => void
@@ -73,6 +77,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
     cols: number
     rows: number
+    localSharedGrid?: boolean
   }) => void
   onDriverChanged?: (
     driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
@@ -194,6 +199,7 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   supportsInputAck: boolean
   inputLedgerId: string | null
   outputPaused: boolean
+  outputPauseReported: boolean
   streamGeneration: string | null
   sourceAckedEndByte: number
   heldAckBytes: number

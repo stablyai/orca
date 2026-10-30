@@ -36,12 +36,14 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       if (!runtime) {
         return
       }
-      void createWorkerWindow(runtime, store).catch((error: unknown) => {
-        dialog.showErrorBox(
-          'Orca',
-          error instanceof Error ? error.message : 'Could not open another Orca window.'
-        )
-      })
+      void createWorkerWindow(runtime, store, state.runtime ?? undefined).catch(
+        (error: unknown) => {
+          dialog.showErrorBox(
+            'Orca',
+            error instanceof Error ? error.message : 'Could not open another Orca window.'
+          )
+        }
+      )
     },
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
     ...getAppMenuQuitHandlers(),

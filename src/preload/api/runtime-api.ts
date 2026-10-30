@@ -40,7 +40,13 @@ export type RuntimeApi = {
       callback: (response: RuntimeRpcResponse<unknown>) => void
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
     getTerminalFitOverrides: () => Promise<
-      { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
+      {
+        ptyId: string
+        mode: 'mobile-fit' | 'remote-desktop-fit'
+        cols: number
+        rows: number
+        localSharedGrid?: boolean
+      }[]
     >
     getTerminalDrivers: () => Promise<
       {
@@ -64,6 +70,7 @@ export type RuntimeApi = {
         mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
         cols: number
         rows: number
+        localSharedGrid?: boolean
       }) => void
     ) => () => void
     onTerminalDriverChanged: (

@@ -1,4 +1,4 @@
-import { clampTerminalViewport } from '../../shared/terminal-viewport'
+import { clampTerminalViewport, type TerminalDesktopFitHold } from '../../shared/terminal-viewport'
 
 type Viewport = { cols: number; rows: number }
 type Viewer = Viewport & { clientId: string; activity: number }
@@ -12,6 +12,7 @@ export type RemoteDesktopTerminalFloorDependencies = {
   resolveHostTarget: (ptyId: string) => Viewport
   /** False on a headless host (orca serve, orcad), which has no pane to give a PTY's grid back to. */
   hostShowsTerminals: () => boolean
+  getLocalSharedGrid?: (ptyId: string, subscriptionKey?: string) => Viewport | null
   applyLayout: (ptyId: string, target: LayoutTarget) => Promise<{ ok: boolean }>
 }
 
@@ -37,7 +38,7 @@ export class RemoteDesktopTerminalFloor {
   }
 
   hasLayoutState(ptyId: string): boolean {
-    return this.owners.has(ptyId) || this.hostReclaimTargets.has(ptyId)
+    return this.isResizeDriven(ptyId) || this.hostReclaimTargets.has(ptyId)
   }
 
   hasHostReclaimTarget(ptyId: string): boolean {
@@ -45,39 +46,45 @@ export class RemoteDesktopTerminalFloor {
   }
 
   isResizeDriven(ptyId: string): boolean {
-    return this.owners.has(ptyId)
+    return this.owners.has(ptyId) || this.getLocalSharedGrid(ptyId) !== null
   }
 
   isViewerOwner(ptyId: string, subscriptionKey: string): boolean {
     return this.owners.get(ptyId) === subscriptionKey
   }
 
-  getFitHold(
-    ptyId: string,
-    subscriptionKey: string
-  ): { mode: 'remote-desktop-fit' | 'desktop-fit'; cols: number; rows: number } {
+  getOwnerSubscriptionKey(ptyId: string): string | null {
+    return this.owners.get(ptyId) ?? null
+  }
+
+  getFitHold(ptyId: string, subscriptionKey: string): TerminalDesktopFitHold {
+    const sharedGrid = this.getLocalSharedGrid(ptyId, subscriptionKey)
     return {
-      mode: this.isViewerOwner(ptyId, subscriptionKey) ? 'desktop-fit' : 'remote-desktop-fit',
-      ...(this.dependencies.getTerminalSize(ptyId) ?? { cols: 0, rows: 0 })
+      mode:
+        !sharedGrid && this.isViewerOwner(ptyId, subscriptionKey)
+          ? 'desktop-fit'
+          : 'remote-desktop-fit',
+      ...(sharedGrid ?? this.dependencies.getTerminalSize(ptyId) ?? { cols: 0, rows: 0 }),
+      ...(sharedGrid ? { localSharedGrid: true as const } : {})
     }
   }
 
   recordHostReclaimTarget(ptyId: string, cols: number, rows: number): void {
     // Phone presence must not seed desktop-viewer reclaim geometry.
-    if (!this.owners.has(ptyId) || cols <= 0 || rows <= 0) {
+    if ((!this.owners.has(ptyId) && !this.getLocalSharedGrid(ptyId)) || cols <= 0 || rows <= 0) {
       return
     }
     this.hostReclaimTargets.set(ptyId, { cols, rows })
   }
 
   clearStaleHostReclaimTarget(ptyId: string): void {
-    if (!this.hasViewers(ptyId)) {
+    if (!this.hasViewers(ptyId) && !this.getLocalSharedGrid(ptyId)) {
       this.hostReclaimTargets.delete(ptyId)
     }
   }
 
   updateHostReclaimTarget(ptyId: string, cols: number, rows: number): void {
-    if (this.hostReclaimTargets.has(ptyId)) {
+    if (this.hostReclaimTargets.has(ptyId) || this.getLocalSharedGrid(ptyId)) {
       this.hostReclaimTargets.set(ptyId, { cols, rows })
     }
   }
@@ -96,20 +103,22 @@ export class RemoteDesktopTerminalFloor {
     }
     const owner = this.owners.get(ptyId)
     const target = owner ? (this.viewers.get(ptyId)?.get(owner) ?? null) : null
+    const sharedGrid = this.getLocalSharedGrid(ptyId, target ? owner : undefined)
     const reclaimingHost = !target
     const viewerRevision = this.viewerRevisions.get(ptyId) ?? 0
     const layoutTarget: LayoutTarget = target
       ? {
           kind: 'remote-desktop',
-          cols: target.cols,
-          rows: target.rows,
+          cols: sharedGrid?.cols ?? target.cols,
+          rows: sharedGrid?.rows ?? target.rows,
           ownerSubscriptionKey: owner!
         }
-      : { kind: 'desktop', ...this.resolveHostReclaimTarget(ptyId) }
+      : { kind: 'desktop', ...(sharedGrid ?? this.resolveHostReclaimTarget(ptyId)) }
     const result = await this.dependencies.applyLayout(ptyId, layoutTarget)
     // Retain true host geometry after failed or superseded reclaim.
     if (
       reclaimingHost &&
+      !sharedGrid &&
       result.ok &&
       !this.owners.has(ptyId) &&
       this.viewerRevisions.get(ptyId) === viewerRevision
@@ -129,7 +138,8 @@ export class RemoteDesktopTerminalFloor {
   ): Promise<boolean> {
     const viewport = clampTerminalViewport(cols, rows)
     const claims =
-      claim || (!this.owners.has(ptyId) && this.orphanedOwnerClientIds.get(ptyId) === clientId)
+      !this.getLocalSharedGrid(ptyId, subscriptionKey) &&
+      (claim || (!this.owners.has(ptyId) && this.orphanedOwnerClientIds.get(ptyId) === clientId))
     if (claims) {
       this.ensureHostReclaimTarget(ptyId)
     }
@@ -167,6 +177,9 @@ export class RemoteDesktopTerminalFloor {
     if (!viewer) {
       return Promise.resolve(false)
     }
+    if (this.getLocalSharedGrid(ptyId, subscriptionKey)) {
+      return Promise.resolve(true)
+    }
     if (this.owners.get(ptyId) === subscriptionKey) {
       const size = this.dependencies.getTerminalSize(ptyId)
       return size?.cols === viewer.cols && size.rows === viewer.rows
@@ -182,6 +195,10 @@ export class RemoteDesktopTerminalFloor {
 
   claimHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
     this.orphanedOwnerClientIds.delete(ptyId)
+    if (this.getLocalSharedGrid(ptyId)) {
+      this.hostReclaimTargets.set(ptyId, clampTerminalViewport(cols, rows))
+      return Promise.resolve(true)
+    }
     if (!this.owners.has(ptyId)) {
       // Host input must join an in-flight reclaim rather than overtake it.
       return this.hostReclaimTargets.has(ptyId) ? this.applyLayout(ptyId) : Promise.resolve(true)
@@ -267,17 +284,21 @@ export class RemoteDesktopTerminalFloor {
       return Promise.resolve(false)
     }
     const viewport = clampTerminalViewport(cols, rows)
-    if (claim) {
-      this.ensureHostReclaimTarget(ptyId)
-    }
     let changed = false
+    let hasUnpinnedViewer = false
     for (const [subscriptionKey, viewer] of viewers) {
       if (viewer.clientId !== clientId) {
         continue
       }
-      const activity = claim ? ++this.activity : viewer.activity
+      const pinned = this.getLocalSharedGrid(ptyId, subscriptionKey) !== null
+      const claims = claim && !pinned
+      if (claims) {
+        this.ensureHostReclaimTarget(ptyId)
+      }
+      hasUnpinnedViewer ||= !pinned
+      const activity = claims ? ++this.activity : viewer.activity
       viewers.set(subscriptionKey, { ...viewer, ...viewport, activity })
-      if (claim) {
+      if (claims) {
         this.setOwner(ptyId, subscriptionKey)
       }
       changed = true
@@ -286,7 +307,15 @@ export class RemoteDesktopTerminalFloor {
       return Promise.resolve(false)
     }
     this.bumpRevision(ptyId)
-    return this.owners.has(ptyId) ? this.applyLayout(ptyId) : Promise.resolve(true)
+    return hasUnpinnedViewer && this.owners.has(ptyId)
+      ? this.applyLayout(ptyId)
+      : Promise.resolve(true)
+  }
+
+  private getLocalSharedGrid(ptyId: string, subscriptionKey?: string): Viewport | null {
+    return this.dependencies.isMobileDriven(ptyId)
+      ? null
+      : (this.dependencies.getLocalSharedGrid?.(ptyId, subscriptionKey) ?? null)
   }
 
   private resolveHostReclaimTarget(ptyId: string): Viewport {

@@ -29,6 +29,7 @@ import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
 import { applyCumulativeAck } from '../delivery/accounting'
 import { sendModelRestoreNeededMarker } from '../delivery/payload'
 import { isMainWindowPtyIpcEvent } from './write-input'
+import { reportHostTerminalWindowLease } from '../../../window/worker-window-terminal-visibility'
 import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
 import type { PaintedRestoreAck } from '../../../../shared/painted-restore-ack'
 import type { PtyIpcSession } from '../session'
@@ -226,10 +227,11 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   })
 
   ipcMain.removeAllListeners('pty:setRendererPtyVisible')
-  ipcMain.on('pty:setRendererPtyVisible', (_event, args: { id: string; visible: boolean }) => {
-    if (typeof args.id !== 'string' || !args.id) {
+  ipcMain.on('pty:setRendererPtyVisible', (event, args: { id: string; visible: boolean }) => {
+    if (!isMainWindowPtyIpcEvent(event, mainWindow) || typeof args.id !== 'string' || !args.id) {
       return
     }
+    reportHostTerminalWindowLease(runtime, event.sender, args.id, args.visible, event.senderFrame)
     // Preserve hidden-at-production origin through batching even if visibility changes before flush.
     rendererVisibilityKnownPtys.add(args.id)
     if (args.visible) {

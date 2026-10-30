@@ -103,6 +103,38 @@ async function recoveringTransport(duringOutage?: (transport: PtyTransport) => v
 }
 
 describe('remote recovery input at the subscribed ack', () => {
+  it('reports local visibility before replaying a recovery claim and held input', async () => {
+    const { transport, streamId } = await recoveringTransport()
+    transport.claimViewport?.(120, 40)
+    subscriptionSendBinary.mockClear()
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'subscribed', streamId, capabilities: { outputPause: 1 } }
+    })
+    transport.sendInput('typed', 'driving')
+    await vi.waitFor(() => expect(inputFrameTexts()).toEqual(['typed']))
+    const frames = subscriptionSendBinary.mock.calls
+      .map(([bytes]) => decodeTerminalStreamFrame(bytes))
+      .filter(
+        (frame) =>
+          frame &&
+          [
+            TerminalStreamOpcode.SetOutputPaused,
+            TerminalStreamOpcode.ClaimViewport,
+            TerminalStreamOpcode.Resize,
+            TerminalStreamOpcode.Input
+          ].includes(frame.opcode)
+      )
+    expect(frames.map((frame) => frame?.opcode)).toEqual([
+      TerminalStreamOpcode.SetOutputPaused,
+      TerminalStreamOpcode.ClaimViewport,
+      TerminalStreamOpcode.Resize,
+      TerminalStreamOpcode.Input
+    ])
+    expect(decodeTerminalStreamJson(frames[0]!.payload)).toEqual({ paused: false, visible: true })
+    transport.destroy?.()
+  })
+
   it('sends held typing once the host acks the subscribe, before its snapshot finishes', async () => {
     const { transport, streamId } = await recoveringTransport()
     expect(transport.sendInput('held-', 'driving')).toBe(true)

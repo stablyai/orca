@@ -17,6 +17,7 @@ import {
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import { subscribeToPtyEndpointLoss } from '../../../terminal/pty-endpoint-loss-signal'
+import { reportWorkerTerminalWindowLease } from '../../../../window/worker-window-terminal-visibility'
 
 export async function initializeMultiplexStream(
   state: TerminalMultiplexConnection,
@@ -37,6 +38,7 @@ export async function initializeMultiplexStream(
     ackInFlightBytes: 0,
     ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
     supportsOutputPause: request.capabilities?.outputPause === 1,
+    supportsLocalWindowVisibility: request.capabilities?.localWindowVisibility === 1,
     supportsOutputPauseDropNotice:
       request.capabilities?.outputPause === 1 && request.capabilities.outputPauseDropNotice === 1,
     pausedOutputDropNoticeSent: false,
@@ -85,6 +87,15 @@ export async function initializeMultiplexStream(
     exitWaiterAbort: new AbortController()
   }
   streams.set(request.streamId, stream)
+  if (!isMobile && stream.supportsLocalWindowVisibility) {
+    reportWorkerTerminalWindowLease(
+      runtime,
+      state.localTerminalWindow,
+      ptyId,
+      remoteDesktopSubscriptionKey,
+      false
+    )
+  }
   stream.unregisterBinaryHandler = registerBinaryStreamHandler(request.streamId, (frame) =>
     state.handleSlotFrame(stream, frame)
   )

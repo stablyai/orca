@@ -18,6 +18,7 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       outputPause: z.literal(1).optional(),
+      localWindowVisibility: z.literal(1).optional(),
       outputPauseDropNotice: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional(),
       // Old clients quarantine input after writeUnavailable; send host-lost semantics only to clients that understand them.

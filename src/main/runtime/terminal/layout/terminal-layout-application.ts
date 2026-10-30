@@ -42,6 +42,14 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
       return { ok: false, reason: 'pty-exited' }
     }
 
+    const sharedGrid = this.getLocalSharedTerminalGrid(
+      ptyId,
+      target.kind === 'remote-desktop' ? target.ownerSubscriptionKey : undefined
+    )
+    if (sharedGrid && target.kind !== 'phone') {
+      target = { ...target, ...sharedGrid }
+    }
+
     const prev = this.layouts.get(ptyId) ?? null
     const seq = (prev?.seq ?? 0) + 1
     const next: PtyLayoutState = { ...target, seq, appliedAt: Date.now() }
@@ -104,6 +112,9 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
       this.notePaneGrid(ptyId, target.cols, target.rows)
     }
 
+    this.localWindowTerminalGrids.refreshPinnedGrid(ptyId)
+    const localSharedGrid = this.getLocalSharedTerminalGrid(ptyId) !== null
+
     // Publish remote-desktop ownership even at equal geometry; also notify on override changes to repair inconsistent held banners (#7588).
     const overrideChanged = (prevFitOverride != null) !== (target.kind === 'phone')
     if (target.kind === 'remote-desktop' || modeChanged || overrideChanged) {
@@ -114,23 +125,29 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
       }
       this.notifier?.terminalFitOverrideChanged(
         ptyId,
-        target.kind === 'phone'
-          ? 'mobile-fit'
-          : target.kind === 'remote-desktop'
-            ? 'remote-desktop-fit'
-            : 'desktop-fit',
+        localSharedGrid
+          ? 'remote-desktop-fit'
+          : target.kind === 'phone'
+            ? 'mobile-fit'
+            : target.kind === 'remote-desktop'
+              ? 'remote-desktop-fit'
+              : 'desktop-fit',
         target.cols,
-        target.rows
+        target.rows,
+        localSharedGrid
       )
       this.notifyFitOverrideListeners(
         ptyId,
-        target.kind === 'phone'
-          ? 'mobile-fit'
-          : target.kind === 'remote-desktop'
-            ? 'remote-desktop-fit'
-            : 'desktop-fit',
+        localSharedGrid
+          ? 'remote-desktop-fit'
+          : target.kind === 'phone'
+            ? 'mobile-fit'
+            : target.kind === 'remote-desktop'
+              ? 'remote-desktop-fit'
+              : 'desktop-fit',
         target.cols,
-        target.rows
+        target.rows,
+        localSharedGrid
       )
     }
 

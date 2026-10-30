@@ -84,6 +84,7 @@ export abstract class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeW
     this.resizeHeadlessTerminal(ptyId, cols, rows)
     this.notePaneGrid(ptyId, cols, rows)
     this.refreshRendererGeometry(ptyId, cols, rows)
+    this.localWindowTerminalGrids.refreshPinnedGrid(ptyId)
   }
 
   // Fresh pane measurements update restore baselines without resizing, bypassing cascade suppression and override-echo filtering (docs/mobile-fit-hold.md).

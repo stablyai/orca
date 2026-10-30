@@ -15,7 +15,7 @@ import type {
 } from '../../../../shared/runtime-terminal-contracts'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../../runtime-terminal-contracts'
-import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
+import { OrcaRuntimeWithLocalWindowTerminalGrids } from './local-window-terminal-grids'
 import type {
   DriverState,
   ApplyLayoutResult,
@@ -41,7 +41,7 @@ import type { ServeBrowserPageState } from '../../serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
-export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideListeners {
+export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithLocalWindowTerminalGrids {
   declare registerSubscriptionCleanup: RuntimeServiceCommandSurface['registerSubscriptionCleanup']
   declare cleanupSubscription: RuntimeServiceCommandSurface['cleanupSubscription']
 
@@ -212,6 +212,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   })
 
   protected readonly remoteDesktopFloor = new RemoteDesktopTerminalFloor({
+    getLocalSharedGrid: (ptyId, key) => this.getLocalSharedTerminalGrid(ptyId, key),
     isMobileDriven: (ptyId) => this.getDriver(ptyId).kind === 'mobile',
     getTerminalSize: (ptyId) => this.getTerminalSize(ptyId) ?? null,
     resolveHostTarget: (ptyId) => this.resolveDesktopRestoreTarget(ptyId),

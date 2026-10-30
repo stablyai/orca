@@ -24,6 +24,9 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     stream.unsubscribeDriver()
     stream.unregisterBinaryHandler()
     streams.delete(streamId)
+    if (state.localTerminalWindow && stream.supportsLocalWindowVisibility) {
+      runtime.removeLocalTerminalWindowLease(stream.ptyId, stream.remoteDesktopSubscriptionKey)
+    }
     state.flushAllAckPendingOutput()
     // Delete before abort so the released exit-waiter's catch cannot re-detach.
     stream.exitWaiterAbort.abort()

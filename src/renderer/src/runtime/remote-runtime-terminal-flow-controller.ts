@@ -64,16 +64,17 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     if (!stream.supportsOutputPause || !this.isRegisteredStream(stream)) {
       return false
     }
-    if (stream.outputPaused === paused) {
+    if (stream.outputPauseReported && stream.outputPaused === paused) {
       return true
     }
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.SetOutputPaused,
-      encodeTerminalStreamJson({ paused })
+      encodeTerminalStreamJson({ paused, visible: !paused })
     )
     if (sent) {
       stream.outputPaused = paused
+      stream.outputPauseReported = true
     }
     return sent
   }

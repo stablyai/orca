@@ -161,4 +161,43 @@ describe('remote pane reveal round trips', () => {
       vi.useRealTimers()
     }
   })
+
+  it('keeps a local shared grid through resize and input while reporting passive geometry for handoff', async () => {
+    const transport = await createRevealTransport()
+    await transport.connect({ url: '', cols: 160, rows: 40, callbacks: {} })
+    const { streamId } = latestSubscribePayload()
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'fit-override-changed',
+        streamId,
+        mode: 'remote-desktop-fit',
+        cols: 160,
+        rows: 40,
+        localSharedGrid: true
+      }
+    })
+    subscriptionSendBinary.mockClear()
+
+    transport.claimViewport?.(72, 30)
+    transport.resize(72, 30, { claim: true })
+    transport.sendInput('pwd\r', 'driving')
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const opcodes = () =>
+      subscriptionSendBinary.mock.calls.map(([bytes]) => decodeTerminalStreamFrame(bytes)?.opcode)
+    expect(opcodes()).toContain(TerminalStreamOpcode.Input)
+    expect(opcodes()).not.toContain(TerminalStreamOpcode.ClaimViewport)
+    expect(opcodes()).not.toContain(TerminalStreamOpcode.Resize)
+
+    transport.resize(72, 30, { claim: false })
+    await vi.waitFor(() => expect(opcodes()).toContain(TerminalStreamOpcode.Resize))
+    expect(opcodes()).not.toContain(TerminalStreamOpcode.ClaimViewport)
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'fit-override-changed', streamId, mode: 'desktop-fit', cols: 72, rows: 30 }
+    })
+    transport.claimViewport?.(100, 35)
+    expect(opcodes()).toContain(TerminalStreamOpcode.ClaimViewport)
+  })
 })

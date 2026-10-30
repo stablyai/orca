@@ -98,7 +98,11 @@ import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
 } from '@/runtime/agent-session-create-operation'
-import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  getFitOverrideForPty,
+  replaceFitOverridePtyId,
+  setFitOverride
+} from '@/lib/pane-manager/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import {
   isWebTerminalSurfaceTabId,
@@ -448,6 +452,8 @@ export function createRemoteRuntimePtyTransport(
   let pendingViewportClaim = false
   // Why: recovery holds viewport sends, so the intent must survive to the stream that releases typing.
   let recoveryDeferredViewport: 'claim' | 'resize' | null = null
+  const isLocalSharedGrid = (): boolean =>
+    Boolean(remotePtyId && getFitOverrideForPty(remotePtyId)?.localSharedGrid)
   let pendingClaimInput: { text: string; queryReply: boolean }[] = []
   let pendingClaimQueryReplyCount = 0
   let terminalCreateRetryWait: {
@@ -2065,7 +2071,9 @@ export function createRemoteRuntimePtyTransport(
             terminal: targetHandle,
             text: chunk,
             client: { id: clientId, type: 'desktop' },
-            ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
+            ...(desiredViewport && !isLocalSharedGrid()
+              ? { viewport: desiredViewport, claimViewport: true as const }
+              : {})
           })
         )
         if (result.send.accepted !== true) {
@@ -2143,7 +2151,9 @@ export function createRemoteRuntimePtyTransport(
         terminal: targetHandle,
         text,
         client: { id: clientId, type: 'desktop' },
-        ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
+        ...(desiredViewport && !isLocalSharedGrid()
+          ? { viewport: desiredViewport, claimViewport: true as const }
+          : {})
       })
     )
       .then((result) => {
@@ -2190,7 +2200,7 @@ export function createRemoteRuntimePtyTransport(
   function replayRecoveryDeferredViewport(stream: RemoteRuntimeMultiplexedTerminal): void {
     const deferred = recoveryDeferredViewport
     recoveryDeferredViewport = null
-    if (!deferred || !desiredViewport) {
+    if (!deferred || !desiredViewport || (deferred === 'claim' && isLocalSharedGrid())) {
       return
     }
     const { cols, rows } = desiredViewport
@@ -2209,7 +2219,7 @@ export function createRemoteRuntimePtyTransport(
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
     const targetHandle = handle
-    if (!connected || !targetHandle) {
+    if (!connected || !targetHandle || (claim && isLocalSharedGrid())) {
       return
     }
     if (inputBlocked()) {
@@ -2967,13 +2977,10 @@ export function createRemoteRuntimePtyTransport(
             })
           }
         },
-        onOutputPauseCapability: () => {
+        onOutputPauseCapability: (reportOutputPaused, dropsReported) => {
           if (isCurrentSubscription()) {
-            storedCallbacks.onOutputPauseChanged?.(
-              desiredOutputPaused,
-              nextStream.setOutputPaused(desiredOutputPaused),
-              nextStream.reportsPausedOutputDrops?.() === true
-            )
+            const supported = reportOutputPaused(desiredOutputPaused)
+            storedCallbacks.onOutputPauseChanged?.(desiredOutputPaused, supported, dropsReported)
           }
         },
         onPausedOutputDropped: () => {
@@ -2983,6 +2990,7 @@ export function createRemoteRuntimePtyTransport(
         },
         onSubscribeAcknowledged: (result) => {
           if (isCurrentSubscription()) {
+            installedStream?.setOutputPaused(desiredOutputPaused)
             if (
               result &&
               (!authoritativePtyIncarnationId ||
@@ -3008,13 +3016,16 @@ export function createRemoteRuntimePtyTransport(
                 return
               }
             }
-            releaseHeldInput()
+            if (installedStream) {
+              releaseHeldInput()
+            }
           }
         },
         onSubscribed: () => {
           if (!isCurrentSubscription()) {
             return
           }
+          installedStream?.setOutputPaused(desiredOutputPaused)
           if (installedStream) {
             // Why: hosts without a subscribed ack never reach the ack replay.
             replayRecoveryDeferredViewport(installedStream)
@@ -3023,11 +3034,13 @@ export function createRemoteRuntimePtyTransport(
               return
             }
           }
-          storedCallbacks.onOutputPauseChanged?.(
-            desiredOutputPaused,
-            nextStream.setOutputPaused(desiredOutputPaused),
-            nextStream.reportsPausedOutputDrops?.() === true
-          )
+          if (installedStream) {
+            storedCallbacks.onOutputPauseChanged?.(
+              desiredOutputPaused,
+              installedStream.setOutputPaused(desiredOutputPaused),
+              installedStream.reportsPausedOutputDrops?.() === true
+            )
+          }
           if (!subscriptionAttached && sameHandleEndRecovery) {
             recordSameHandleEndReuse(subscribedHandle)
           }
@@ -3053,7 +3066,9 @@ export function createRemoteRuntimePtyTransport(
             storedCallbacks.onStreamRecovered?.()
           }
           storedCallbacks.onStatus?.('shell')
-          releaseHeldInput()
+          if (installedStream) {
+            releaseHeldInput()
+          }
         },
         onEnd: (verdict) => {
           if (!isCurrentSubscription()) {
@@ -3109,7 +3124,23 @@ export function createRemoteRuntimePtyTransport(
             unconfirmedClaim = null
           }
           if (isCurrentSubscription() && subscribedPtyId) {
-            setFitOverride(subscribedPtyId, event.mode, event.cols, event.rows)
+            if (event.localSharedGrid) {
+              viewportBatcher.clear()
+              recoveryDeferredViewport = null
+              pendingViewportClaim = false
+              unconfirmedClaim = null
+            }
+            setFitOverride(
+              subscribedPtyId,
+              event.mode,
+              event.cols,
+              event.rows,
+              event.localSharedGrid
+            )
+            const stream = getCurrentMultiplexedStream(subscribedHandle)
+            if (event.localSharedGrid && stream) {
+              flushPendingClaimInput(stream)
+            }
           }
         },
         onDriverChanged: (driver) => {
@@ -3198,7 +3229,20 @@ export function createRemoteRuntimePtyTransport(
       markRecoveryHealthy()
     }
     // Why: a viewport change during the subscribe round-trip hit the no-op one-shot fallback; replay the latest viewport so the PTY isn't stuck at subscribe-time size.
-    if (recoveryDeferredViewport) {
+    const outputPauseSupported = nextStream.setOutputPaused(desiredOutputPaused)
+    storedCallbacks.onOutputPauseChanged?.(
+      desiredOutputPaused,
+      outputPauseSupported,
+      nextStream.reportsPausedOutputDrops?.() === true
+    )
+    if (isLocalSharedGrid()) {
+      viewportBatcher.clear()
+      recoveryDeferredViewport = null
+      pendingViewportClaim = false
+      if (desiredViewport) {
+        nextStream.resize(desiredViewport.cols, desiredViewport.rows)
+      }
+    } else if (recoveryDeferredViewport) {
       // Why ack-gated: a host still resolving the PTY ignores viewport frames sent after Subscribe.
       if (inputReadySubscription === generation || subscriptionAttached) {
         replayRecoveryDeferredViewport(nextStream)
@@ -3868,6 +3912,9 @@ export function createRemoteRuntimePtyTransport(
       if (!connected || !handle) {
         return false
       }
+      if (isLocalSharedGrid()) {
+        return true
+      }
       rememberViewport(cols, rows)
       if (inputBlocked()) {
         deferViewportForRecovery(true)
@@ -3896,6 +3943,9 @@ export function createRemoteRuntimePtyTransport(
     resize(cols: number, rows: number, meta): boolean {
       if (!connected || !handle) {
         return false
+      }
+      if (isLocalSharedGrid() && meta?.claim !== false) {
+        return true
       }
       rememberViewport(cols, rows)
       if (inputBlocked()) {

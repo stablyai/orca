@@ -2,7 +2,11 @@
 import { FitAddon } from '@xterm/addon-fit'
 import type { Terminal } from '@xterm/xterm'
 import { describe, expect, it } from 'vitest'
-import { terminalGridSizeForBox, type TerminalFitMetrics } from './terminal-grid-size-for-box'
+import {
+  terminalBoxSizeForGrid,
+  terminalGridSizeForBox,
+  type TerminalFitMetrics
+} from './terminal-grid-size-for-box'
 
 function fitAddonResult(
   box: { width: number; height: number },
@@ -83,5 +87,10 @@ const cases: [string, { width: number; height: number }, TerminalFitMetrics][] =
 describe('terminalGridSizeForBox', () => {
   it.each(cases)('matches FitAddon.proposeDimensions for %s', (_name, box, metrics) => {
     expect(terminalGridSizeForBox(box, metrics)).toEqual(fitAddonResult(box, metrics))
+  })
+
+  it.each(cases)('sizes a fixed grid at native cells with %s', (_name, _box, metrics) => {
+    const grid = { cols: 160, rows: 40 }
+    expect(fitAddonResult(terminalBoxSizeForGrid(grid, metrics), metrics)).toEqual(grid)
   })
 })

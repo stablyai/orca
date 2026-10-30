@@ -97,7 +97,10 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
           : null
       stream.supportsInputAck = stream.inputLedgerId !== null
       if (stream.supportsOutputPause) {
-        stream.callbacks.onOutputPauseCapability?.()
+        stream.callbacks.onOutputPauseCapability?.(
+          (paused) => this.setOutputPaused(stream, paused),
+          stream.supportsPausedOutputDropNotice
+        )
       }
       if (!stream.initialSnapshotReceived) {
         stream.callbacks.onSubscribeAcknowledged?.(
@@ -151,7 +154,8 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       stream.callbacks.onFitOverrideChanged?.({
         mode: event.mode,
         cols: event.cols,
-        rows: event.rows
+        rows: event.rows,
+        ...(event.localSharedGrid === true ? { localSharedGrid: true } : {})
       })
     } else if (event.type === 'driver-changed') {
       if (!isTerminalDriverState(event.driver)) {

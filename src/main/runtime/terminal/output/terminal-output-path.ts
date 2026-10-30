@@ -131,11 +131,21 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
 
   getAllTerminalFitOverrides(): Map<
     string,
-    { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
+    {
+      mode: 'mobile-fit' | 'remote-desktop-fit'
+      cols: number
+      rows: number
+      localSharedGrid?: boolean
+    }
   > {
     const result = new Map<
       string,
-      { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
+      {
+        mode: 'mobile-fit' | 'remote-desktop-fit'
+        cols: number
+        rows: number
+        localSharedGrid?: boolean
+      }
     >()
     for (const [ptyId, override] of this.terminalFitOverrides) {
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
@@ -147,6 +157,12 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
       const size = this.getTerminalSize(ptyId)
       if (size) {
         result.set(ptyId, { mode: 'remote-desktop-fit', ...size })
+      }
+    }
+    for (const ptyId of this.localWindowTerminalGrids.pinnedPtyIds()) {
+      const grid = this.getLocalSharedTerminalGrid(ptyId)
+      if (grid) {
+        result.set(ptyId, { mode: 'remote-desktop-fit', ...grid, localSharedGrid: true })
       }
     }
     return result

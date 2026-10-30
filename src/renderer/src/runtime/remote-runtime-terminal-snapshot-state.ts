@@ -86,6 +86,7 @@ export function disposeRemoteTerminalStreamState(
   stream: RemoteRuntimeMultiplexedTerminalState,
   message: string
 ): void {
+  stream.outputPauseReported = false
   discardOutputAcknowledgements(stream)
   stream.watchdog.dispose()
   clearSnapshot(stream)

@@ -182,7 +182,12 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
   getRemoteDesktopFitHold(
     ptyId: string,
     subscriptionKey: string
-  ): { mode: 'remote-desktop-fit' | 'desktop-fit'; cols: number; rows: number } {
+  ): {
+    mode: 'remote-desktop-fit' | 'desktop-fit'
+    cols: number
+    rows: number
+    localSharedGrid?: true
+  } {
     return this.remoteDesktopFloor.getFitHold(ptyId, subscriptionKey)
   }
 
@@ -248,6 +253,10 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     viewport: { cols: number; rows: number }
   ): Promise<boolean> {
     const { cols, rows } = clampTerminalViewport(viewport.cols, viewport.rows)
+    if (this.getLocalSharedTerminalGrid(ptyId)) {
+      this.recordRendererGeometry(ptyId, cols, rows)
+      return true
+    }
     if (this.terminalFitOverrides.has(ptyId) || this.getDriver(ptyId).kind === 'mobile') {
       this.recordRendererGeometry(ptyId, cols, rows)
       return true
