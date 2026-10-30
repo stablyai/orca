@@ -17,6 +17,7 @@
     "./scripts/vitest-module-cache-resolution-key.ts",
     "../src/main/**/*",
     "../src/cli/runtime/transport.ts",
+    "../src/cli/runtime/metadata.ts",
     "../src/cli/runtime/envelope-schema.ts",
     "../src/cli/runtime/types.ts",
     "../src/cli/runtime/runtime-access-denied.ts",
