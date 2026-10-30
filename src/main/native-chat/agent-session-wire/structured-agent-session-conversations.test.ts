@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
-import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
+import {
+  StructuredAgentSessionConversations,
+  type JournalPublication
+} from './structured-agent-session-conversations'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
@@ -33,7 +36,11 @@ afterEach(async () => {
 
 async function openJournal(name: string): Promise<AgentSessionJournal> {
   root ??= await mkdtemp(join(tmpdir(), 'orca-conversations-'))
-  return journals.open({ identity: IDENTITY, stateDirectory: join(root, name) })
+  return journals.open({
+    identity: IDENTITY,
+    mintEpoch: () => 'conversations-test-epoch',
+    stateDirectory: join(root, name)
+  })
 }
 
 function session(journal: AgentSessionJournal) {
@@ -160,5 +167,176 @@ describe('a conversation delivers what its journal commits', () => {
       kind: 'status',
       text: 'durable'
     })
+  })
+})
+
+describe('internal publication lifetime, independently of presentation', () => {
+  it('retires source slots on replacement/clear, isolates bad readers, and fences old disposers', async () => {
+    const conversations = new StructuredAgentSessionConversations({
+      deliver: vi.fn(),
+      logger: recordingStructuredAgentSessionLogger().logger,
+      now: () => 0
+    })
+    const old = await openJournal('old'),
+      current = await openJournal('current')
+    const next = vi.fn(),
+      error = vi.fn(),
+      bad = vi.fn()
+    const release = conversations.observeConversationPublications('session-1', { next, error })
+    conversations.set('session-1', session(old))
+    const oldSource = next.mock.lastCall![0].source
+    conversations.set('session-1', session(old))
+    expect(next).toHaveBeenCalledTimes(2)
+    conversations.set('session-1', session(current))
+    expect(next.mock.lastCall![0].source).not.toBe(oldSource)
+    expect(current.cursor()).toEqual(old.cursor())
+    const fail = conversations.observeConversationPublications('session-1', {
+      next: (hint) => {
+        if (hint.kind === 'commit') {
+          throw new Error('consumer')
+        }
+      },
+      error: bad
+    })
+    await appendStatus(current, 'durable despite consumer failure')
+    expect(bad).toHaveBeenCalledOnce()
+    expect(next.mock.lastCall![0]).toMatchObject({ kind: 'commit', journal: current })
+    const count = next.mock.calls.length
+    await appendStatus(old, 'detached')
+    expect(next).toHaveBeenCalledTimes(count)
+    const map: Map<string, StructuredAgentSessionHostSession> = conversations
+    map.clear()
+    expect(next.mock.lastCall![0]).toMatchObject({ kind: 'detach', source: null, journal: null })
+    await appendStatus(current, 'after clear')
+    expect(next).toHaveBeenCalledTimes(count + 1)
+    release()
+    release()
+    fail()
+    const successor = { next: vi.fn(), error: vi.fn() }
+    const releaseB = conversations.observeConversationPublications('session-1', successor)
+    release()
+    conversations.publish('session-1', 'operational')
+    expect(successor.next.mock.lastCall![0].kind).toBe('operational')
+    const releaseC = conversations.observeConversationPublications('session-1', successor)
+    releaseB()
+    releaseB()
+    conversations.set('session-1', session(current))
+    await appendStatus(current, 'independent acquisition survives')
+    expect(successor.next.mock.lastCall![0].kind).toBe('commit')
+    let reentrantRelease = () => {}
+    const reentrant = vi.fn()
+    const initialFailure = conversations.observeConversationPublications('session-1', {
+      next: () => {
+        throw new Error('initial reader')
+      },
+      error: () => {
+        reentrantRelease = conversations.observeConversationPublications('session-1', {
+          next: reentrant,
+          error: vi.fn()
+        })
+      }
+    })
+    initialFailure()
+    conversations.publish('session-1', 'operational')
+    expect(reentrant.mock.lastCall![0].kind).toBe('operational')
+    conversations.endPublications()
+    expect(successor.next.mock.lastCall![0].kind).toBe('end')
+    expect(reentrant.mock.lastCall![0].kind).toBe('end')
+    releaseC()
+    reentrantRelease()
+    expect(conversations['observers'].size).toBe(0)
+    const listener = vi.fn()
+    const before = old.observeCommits(listener)
+    const after = old.observeCommits(listener)
+    before()
+    before()
+    await appendStatus(old, 'new listener survives old disposal')
+    expect(listener).toHaveBeenCalledOnce()
+    after()
+    after()
+    const settle = vi.fn(),
+      prior = old.stopMarks.observeSettleEdges(settle)
+    const dispose = old.stopMarks.observeSettleEdges(settle)
+    prior()
+    old.stopMarks.settled({ settling: true }, 'turn')
+    expect(settle).toHaveBeenCalledOnce()
+    dispose()
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('forwards actual host commits, Stop/work/restore/drop/clear/end without starting or sending to read', async () => {
+    const { createQueuedMessageTestRig } =
+      await import('./structured-agent-session-queued-message-rig.test-fixture')
+    const { HOST_TEST_SESSION: id } = await import('./structured-agent-session-host-test-data')
+    const rig = await createQueuedMessageTestRig({ restartable: true })
+    const events: JournalPublication[] = []
+    const started = rig.starts.mock.calls.length,
+      dispatched = rig.dispatch.mock.calls.length
+    const release = rig.host.observeConversationPublications(id, {
+      next: (hint) => events.push(hint),
+      error: (error) => {
+        throw error
+      }
+    })
+    try {
+      const { sessions } = rig.host.collaboratorsForTests()
+      const first = sessions.get(id)!.journal
+      await appendStatus(first, 'zero display readers')
+      expect(events.findLast((event) => event.kind === 'commit')).toMatchObject({
+        kind: 'commit',
+        journal: first,
+        cursor: first.cursor(),
+        rows: [expect.objectContaining({ kind: 'item' })]
+      })
+      const cursor = first.cursor()
+      rig.host.publishWorkChanged(id)
+      const delivery = rig.host['clientDelivery']
+      delivery.publishGenerationEnded(id, { restate: true })
+      delivery.publishStatusAndSettlement(id)
+      delivery.publishRestored(id)
+      expect(events.slice(-4).map((e) => e.kind)).toEqual([
+        'operational',
+        'operational',
+        'operational',
+        'reset'
+      ])
+      expect(events.at(-1)).toMatchObject({ kind: 'reset', cursor })
+      await rig.stop()
+      expect(events.filter((event) => event.kind === 'operational').length).toBeGreaterThan(1)
+      await rig.host.close(id, 'evict')
+      expect(events.some((event) => event.kind === 'detach' && event.source === null)).toBe(true)
+      const reopened = await rig.host.journalSnapshot(id)
+      expect(reopened.items).toContainEqual(
+        expect.objectContaining({ body: { kind: 'status', text: 'zero display readers' } })
+      )
+      const second = sessions.get(id)!.journal
+      expect(second).not.toBe(first)
+      const oldEvents = events.length
+      // Old journal is closed and its slots are detached.
+      first.stopMarks.settled({ settling: true }, 'old')
+      expect(events).toHaveLength(oldEvents)
+      await second.replaceEpochItems('handle_forked', 1, [])
+      expect(events.at(-1)?.kind).toBe('reset')
+      const plain: Map<string, StructuredAgentSessionHostSession> = sessions
+      plain.clear()
+      expect(events.at(-1)).toMatchObject({ kind: 'detach', journal: null })
+      await rig.host.journalSnapshot(id)
+      expect(rig.starts).toHaveBeenCalledTimes(started)
+      expect(rig.dispatch).toHaveBeenCalledTimes(dispatched)
+      rig.host.stopDelivery()
+      expect(events.at(-1)?.kind).toBe('end')
+      const late = vi.fn()
+      const lateRelease = rig.host.observeConversationPublications(id, {
+        next: late,
+        error: vi.fn()
+      })
+      expect(late).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ kind: 'end' }))
+      lateRelease()
+      release()
+      release()
+    } finally {
+      release()
+      await rig.dispose()
+    }
   })
 })

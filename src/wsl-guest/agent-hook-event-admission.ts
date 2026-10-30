@@ -1,4 +1,4 @@
-import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
+import { previewHookPresence } from '../shared/agent-hook-presence-transition'
 import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
 import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
@@ -53,7 +53,11 @@ export function applyRelayHookEvent(
   if (cancellation.hold) {
     return previous
   }
-  const transitioned = transitionHookPresence(cancellation.event, previous)
+  const preview = previewHookPresence(cancellation.event, previous)
+  const transitioned = preview.transitioned && {
+    ...preview.transitioned,
+    statusAdmissionSession: incoming.statusAdmissionSession
+  }
   if (!transitioned) {
     return undefined
   }

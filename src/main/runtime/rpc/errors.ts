@@ -150,6 +150,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
+  // The user chose Keep open; only they can undo it, so a coordinator must not retry blindly.
+  'terminal_kept_open',
   'worker_cannot_coordinate_own_run',
   'worker_cannot_take_over_run',
   'request_mismatch',

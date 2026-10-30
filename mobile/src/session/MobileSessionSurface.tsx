@@ -5,6 +5,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
+import { MobileWorkerAutoCloseStrip } from './MobileWorkerAutoCloseStrip'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -13,7 +14,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} />
-        {}
+        <MobileWorkerAutoCloseStrip controller={controller} />
         <MobileSessionContentRow controller={controller} />
       </View>
       <MobileSessionSheets controller={controller} />

@@ -73,6 +73,8 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+vi.mock('./use-allow-auto-close', () => ({ useAllowAutoClose: () => undefined }))
+
 vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: ({
     tab,

@@ -219,7 +219,7 @@ it('refuses a combined native chat edit before saving its name, while accepting 
     expect(notifier.renameTerminal).not.toHaveBeenCalled()
   } finally {
     await stopStructuredAgentSessionRuntime()
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   }
 })
