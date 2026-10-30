@@ -121,8 +121,8 @@ describe('scanOmpUsageFiles', () => {
         { type: 'title', title: 'Session A' },
         usageMessage({
           timestamp: localTimestamp(10, 1, 9, 1),
-          model: 'glm-5.3',
-          provider: 'giga-osa',
+          model: 'fixture-mini',
+          provider: 'fixture-labs',
           input: 1000,
           output: 100,
           cacheRead: 200,
@@ -134,10 +134,10 @@ describe('scanOmpUsageFiles', () => {
         '{"type":"message","message":{"role":"assistant",',
         usageMessage({
           timestamp: localTimestamp(10, 1, 9, 2),
-          model: 'glm-5.3',
-          provider: 'giga-osa'
+          model: 'fixture-mini',
+          provider: 'fixture-labs'
         }),
-        { type: 'model_change', timestamp: localTimestamp(10, 1, 9, 3), model: 'glm-5.4' },
+        { type: 'model_change', timestamp: localTimestamp(10, 1, 9, 3), model: 'fixture-pro' },
         usageMessage({
           timestamp: localTimestamp(10, 2, 10, 0),
           input: 500,
@@ -153,7 +153,7 @@ describe('scanOmpUsageFiles', () => {
       { type: 'model_change', timestamp: localTimestamp(10, 3, 8, 0), model: 'ignored-model' },
       usageMessage({
         timestamp: localTimestamp(10, 3, 8, 1),
-        model: 'glm-5.3-flash',
+        model: 'fixture-mini-flash',
         provider: 'other-provider',
         input: 7,
         output: 3,
@@ -165,8 +165,8 @@ describe('scanOmpUsageFiles', () => {
       sessionRecord('session-c', worktreePath, localTimestamp(10, 3, 9, 0)),
       usageMessage({
         timestamp: localTimestamp(10, 3, 9, 1),
-        model: 'glm-5.3',
-        provider: 'giga-osa'
+        model: 'fixture-mini',
+        provider: 'fixture-labs'
       })
     ])
 
@@ -181,8 +181,8 @@ describe('scanOmpUsageFiles', () => {
       startedAt: localTimestamp(10, 1, 9, 0),
       endedAt: localTimestamp(10, 2, 10, 0),
       cwd: worktreePath,
-      model: 'glm-5.4',
-      provider: 'giga-osa',
+      model: 'fixture-pro',
+      provider: 'fixture-labs',
       repoId: 'repo-1',
       worktreeId: 'wt-1',
       inputTokens: 1500,
@@ -197,7 +197,7 @@ describe('scanOmpUsageFiles', () => {
     const sessionB = result.sessions.find((session) => session.sessionId === 'session-b')
     expect(sessionB).toMatchObject({
       cwd: '/elsewhere/project',
-      model: 'glm-5.3-flash',
+      model: 'fixture-mini-flash',
       provider: 'other-provider',
       inputTokens: 7,
       outputTokens: 3,
@@ -252,8 +252,8 @@ describe('scanOmpUsageFiles', () => {
     const parsedLine = JSON.stringify(
       usageMessage({
         timestamp: localTimestamp(10, 5, 9, 5),
-        model: 'glm-5.4',
-        provider: 'giga-osa',
+        model: 'fixture-pro',
+        provider: 'fixture-labs',
         input: 100,
         output: 10,
         costTotal: 0.001
@@ -263,8 +263,8 @@ describe('scanOmpUsageFiles', () => {
     const editedLine = JSON.stringify(
       usageMessage({
         timestamp: localTimestamp(10, 5, 9, 5),
-        model: 'glm-5.4',
-        provider: 'giga-osa',
+        model: 'fixture-pro',
+        provider: 'fixture-labs',
         input: 900,
         output: 90,
         costTotal: 0.001
@@ -310,7 +310,7 @@ describe('scanOmpUsageFiles', () => {
     expect(second.sessions[0]).toMatchObject({
       startedAt: localTimestamp(10, 5, 9, 0),
       endedAt: localTimestamp(10, 6, 10, 0),
-      model: 'glm-5.4',
+      model: 'fixture-pro',
       inputTokens: 300,
       outputTokens: 30,
       totalTokens: 330
@@ -357,8 +357,8 @@ describe('scanOmpUsageFiles', () => {
     const line = JSON.stringify(
       usageMessage({
         timestamp: localTimestamp(10, 9, 9, 1),
-        model: 'glm-5.4',
-        provider: 'giga-osa',
+        model: 'fixture-pro',
+        provider: 'fixture-labs',
         input: 40,
         output: 4,
         costTotal: 0.0004
@@ -406,8 +406,8 @@ describe('scanOmpUsageFiles', () => {
       ...padding('old', 60),
       usageMessage({
         timestamp: localTimestamp(10, 7, 9, 5),
-        model: 'glm-5.4',
-        provider: 'giga-osa',
+        model: 'fixture-pro',
+        provider: 'fixture-labs',
         input: 100,
         output: 10,
         costTotal: 0.001
@@ -426,7 +426,7 @@ describe('scanOmpUsageFiles', () => {
       ...padding('new', 40),
       usageMessage({
         timestamp: localTimestamp(10, 8, 8, 5),
-        model: 'glm-5.4',
+        model: 'fixture-pro',
         provider: 'other-provider',
         input: 5,
         output: 1,
@@ -459,8 +459,8 @@ describe('scanOmpUsageFiles', () => {
       ...padding,
       usageMessage({
         timestamp: localTimestamp(10, 12, 9, 5),
-        model: 'glm-5.4',
-        provider: 'giga-osa',
+        model: 'fixture-pro',
+        provider: 'fixture-labs',
         input: 100,
         output: 10,
         costTotal: 0.001
@@ -474,8 +474,8 @@ describe('scanOmpUsageFiles', () => {
         sessionRecord('session-b', worktreePath, localTimestamp(10, 13, 9, 0)),
         usageMessage({
           timestamp: localTimestamp(10, 13, 9, 5),
-          model: 'glm-5.4',
-          provider: 'giga-osa',
+          model: 'fixture-pro',
+          provider: 'fixture-labs',
           input: 200,
           output: 20,
           costTotal: 0.002
@@ -493,8 +493,8 @@ describe('scanOmpUsageFiles', () => {
       toJsonl([
         usageMessage({
           timestamp: localTimestamp(10, 14, 9, 5),
-          model: 'glm-5.4',
-          provider: 'giga-osa',
+          model: 'fixture-pro',
+          provider: 'fixture-labs',
           input: 50,
           output: 5,
           costTotal: 0.0005
@@ -532,8 +532,8 @@ describe('mergeAppendedFile', () => {
     startedAt: localTimestamp(10, 10, 9, 0),
     endedAt: localTimestamp(10, 10, 9, 5),
     cwd: '/repo',
-    model: 'glm-5.4',
-    provider: 'giga-osa',
+    model: 'fixture-pro',
+    provider: 'fixture-labs',
     inputTokens: 10,
     outputTokens: 1,
     cacheReadTokens: 0,
