@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
 import { nativeChatFollowUpBehaviorRead } from '../transport/settings-read-operations'
 import type { RpcClient } from '../transport/rpc-client'
+import { nativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
 
-// Read per connection and chat: the phone has no settings stream, and Steer is the default.
+// Read per connection and chat: the phone has no settings stream; until it answers, the default.
 export function useMobileNativeChatQueueFollowUps(
   client: RpcClient | null,
   connected: boolean,
   sessionId: string | null
 ): boolean {
-  const [queueFollowUps, setQueueFollowUps] = useState(false)
+  const [queueFollowUps, setQueueFollowUps] = useState(
+    () => nativeChatFollowUpBehavior(null) === 'queue'
+  )
   useEffect(() => {
     if (!client || !connected || !sessionId) {
       return
