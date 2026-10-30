@@ -71,3 +71,85 @@ describe('cancelling a launch prompt in the real writer', () => {
     expect(delivered).toBe(false)
   })
 })
+
+it('forwards accepted Enter once without a signal and bypasses busy readiness only on reuse', async () => {
+  const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'omp')
+  const wait = vi.spyOn(runtime, 'waitForTerminal').mockRejectedValue(new Error('busy'))
+  const submitted = vi.fn()
+  const delivered = await deliverTerminalAgentLaunchPrompt({
+    runtime,
+    handle,
+    agent: 'omp',
+    freshLaunch: false,
+    allowBusy: true,
+    text: 'unique followup',
+    onSubmitWritten: submitted
+  })
+  expect(delivered).toBe(true)
+  expect(wait).not.toHaveBeenCalled()
+  expect(writes.filter((data) => data.endsWith('\r'))).toHaveLength(1)
+  expect(submitted).toHaveBeenCalledOnce()
+})
+
+it('keeps an accepted combined Enter delivered after a submit callback throws', async () => {
+  const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'omp')
+  const before = runtime.getTerminalPromptRequestBinding(handle)
+  const submitted = vi.fn(() => {
+    throw new Error('terminal_handle_stale')
+  })
+  expect(
+    await deliverTerminalAgentLaunchPrompt({
+      runtime,
+      handle,
+      agent: 'omp',
+      freshLaunch: false,
+      allowBusy: true,
+      text: 'once',
+      expectedBinding: before,
+      onSubmitWritten: submitted
+    })
+  ).toBe(true)
+  expect(writes.filter((data) => data.endsWith('\r'))).toHaveLength(1)
+  expect(submitted).toHaveBeenCalledOnce()
+})
+
+it.each(['answer', 'revoke'] as const)(
+  'busy reuse holds permission until %s without waiting for idle',
+  async (action) => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    try {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'codex'
+      )
+      runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
+      const wait = vi.spyOn(runtime, 'waitForTerminal')
+      const sent = deliverTerminalAgentLaunchPrompt({
+        runtime,
+        handle,
+        agent: 'codex',
+        freshLaunch: false,
+        allowBusy: true,
+        text: 'permission held followup',
+        signal: controller.signal,
+        expectedBinding: runtime.getTerminalPromptRequestBinding(handle)
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(writes).toEqual([])
+      expect(wait).not.toHaveBeenCalled()
+      if (action === 'revoke') {
+        controller.abort()
+      }
+      runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      await vi.runAllTimersAsync()
+      expect(await sent).toBe(action === 'answer')
+      expect(writes.filter((data) => data.includes('permission held followup'))).toHaveLength(
+        action === 'answer' ? 1 : 0
+      )
+    } finally {
+      controller.abort()
+      vi.useRealTimers()
+    }
+  }
+)

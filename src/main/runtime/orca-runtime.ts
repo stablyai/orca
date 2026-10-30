@@ -1,3 +1,4 @@
+import { terminalCloseActionCurrent } from './terminal-surface-close'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
@@ -248,7 +249,10 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   }
 
   /** Apply a window command to the partitions that hold its tab. */
-  async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
+  async applyLayoutCommand(
+    command: WindowLayoutCommand,
+    beforeAction?: () => void
+  ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
@@ -260,7 +264,12 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
-        this.layoutCommandRun(command)
+        beforeAction
+          ? {
+              ...this.layoutCommandRun(command),
+              beforeWrite: () => terminalCloseActionCurrent(beforeAction)
+            }
+          : this.layoutCommandRun(command)
       )
     // Order sleep/wake after previously accepted hook statuses.
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)

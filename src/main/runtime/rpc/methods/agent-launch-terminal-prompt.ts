@@ -2,6 +2,8 @@
  * Reuse worker readiness and sendTerminalAgentPrompt for serialized, generation-fenced bracketed paste and per-agent Enter timing across local, WSL and SSH. */
 
 import { randomUUID } from 'node:crypto'
+import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
+import type { AgentPromptExpectedBinding } from '../../runtime-terminal-contracts'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
@@ -24,7 +26,8 @@ const BLOCKED_RECHECK_MS = 1_000
 
 export type TerminalPromptRuntime = LaunchedAgentReadinessRuntime &
   LaunchedAgentWriteGuardRuntime &
-  Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'>
+  Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'> &
+  Partial<Pick<OrcaRuntimeService, 'getTerminalPromptRequestBinding'>>
 
 type ReadinessClock = { now: () => number; sleep: (ms: number) => Promise<void> }
 
@@ -87,6 +90,10 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   clock?: ReadinessClock
   /** Aborting ends the readiness wait and refuses the paste; text already handed over stays so. */
   signal?: AbortSignal
+  onSubmitWritten?: () => void
+  assertCurrent?: () => void
+  allowBusy?: boolean
+  expectedBinding?: AgentPromptExpectedBinding
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
     return false
@@ -97,15 +104,22 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   })
   // Once Enter left, a later throw (an abort during verification) cannot unsend the text.
   let submitted = false
+  let writeReserved = false
   try {
-    const wait = await waitThroughBlockingPrompts(
-      args.runtime,
-      args.handle,
-      args.agent,
-      args.freshLaunch,
-      args.clock ?? REAL_CLOCK,
-      args.signal
-    )
+    args.assertCurrent?.()
+    const expectedBinding =
+      args.expectedBinding ?? args.runtime.getTerminalPromptRequestBinding?.(args.handle)
+    const wait =
+      args.allowBusy && !args.freshLaunch
+        ? undefined
+        : await waitThroughBlockingPrompts(
+            args.runtime,
+            args.handle,
+            args.agent,
+            args.freshLaunch,
+            args.clock ?? REAL_CLOCK,
+            args.signal
+          )
     // An unsatisfied wait does not authorize pasting into a dialog, dead process or unready agent.
     if (wait && !wait.satisfied) {
       console.warn(
@@ -117,25 +131,40 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       inputKind: 'launch',
       // A fresh launch's composer was just seen ready; a reused pane's state is only inferred.
       composerReady: args.freshLaunch,
-      beforeWrite: guard.beforeWrite,
+      ...(expectedBinding ? { expectedBinding } : {}),
+      beforeWrite: async (ptyId) => {
+        args.assertCurrent?.()
+        await guard.beforeWrite(ptyId)
+        args.assertCurrent?.()
+      },
+      reserveWrite: () => {
+        writeReserved = true
+      },
       // Both fields enable queued acceptance; without requestId a slow first turn throws despite written input.
       acceptQueued: true,
+      ...(args.allowBusy && !args.freshLaunch ? { onPermission: 'wait' as const } : {}),
       requestId: randomUUID(),
       // Once handed over, let the pane show progress; the launch receipt does not claim turn observation.
       observationTimeoutMs: 0,
-      ...(args.signal
-        ? {
-            signal: args.signal,
-            onSubmitWritten: () => {
-              submitted = true
-            }
-          }
-        : {})
+      ...(args.signal ? { signal: args.signal } : {}),
+      onSubmitWritten: () => {
+        submitted = true
+        args.onSubmitWritten?.()
+      }
     })
     return sent.accepted
   } catch (error) {
     if (isAgentPromptStalledError(error) || submitted) {
       return true
+    }
+    if (
+      args.allowBusy &&
+      !args.freshLaunch &&
+      !writeReserved &&
+      error instanceof Error &&
+      error.message === 'agent_not_in_foreground'
+    ) {
+      throw new AgentLaunchSurfaceUnavailableError('The terminal agent exited before delivery.')
     }
     console.warn(
       '[agent-launch] the terminal agent started, its launch prompt was not delivered',

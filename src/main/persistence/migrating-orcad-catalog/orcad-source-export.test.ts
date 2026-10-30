@@ -1,8 +1,9 @@
+import { prepareOrcadMigrationAutomationState } from './orcad-destination-automation-state'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -312,3 +313,38 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     )
   })
 })
+
+it.each(['terminal', 'chat'] as const)(
+  'dormant migration treats delivered %s history separately from result finality',
+  (sessionKind) => {
+    const store = sourceStore()
+    const automation = sshAutomation(store)
+    const run = store.createAutomationRun(automation, 1)
+    store.updateAutomationRun({ runId: run.id, status: 'dispatched', sessionKind })
+    expect(
+      createOrcadMigrationManifest(store, TARGET).payload.dormantState?.automations?.some(
+        (entry) => entry.id === automation.id
+      ) ?? false
+    ).toBe(sessionKind === 'terminal')
+  }
+)
+
+it.each(['terminal', 'chat'] as const)(
+  'destination capacity accepts only bounded delivered %s history',
+  (sessionKind) => {
+    const store = sourceStore()
+    const automation = sshAutomation(store)
+    const run = {
+      ...store.createAutomationRun(automation, 1),
+      status: 'dispatched' as const,
+      sessionKind
+    }
+    const target = getDefaultPersistedState('/temporary-home')
+    const prepare = () => prepareOrcadMigrationAutomationState([automation], [run], target)
+    if (sessionKind === 'chat') {
+      expect(prepare).toThrow('orcad_migration_dormant_automation_run_active')
+    } else {
+      expect(prepare().newRuns).toEqual([run])
+    }
+  }
+)

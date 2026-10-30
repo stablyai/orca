@@ -28,6 +28,7 @@ import {
   AutomationRunCompletionWatcher,
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
@@ -88,7 +89,9 @@ export class AutomationService {
     this.headlessDispatcher = opts.headlessDispatcher ?? null
     this.chatDispatcher = opts.chatDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
-    this.runs = createAutomationRunWriter(store, this.publish)
+    this.runs = createAutomationRunWriter(store, this.publish, () =>
+      this.completionWatcher?.retain(store.listAutomationRuns())
+    )
     this.completionWatcher = opts.terminalObserver
       ? new AutomationRunCompletionWatcher({
           observer: opts.terminalObserver,
@@ -100,6 +103,7 @@ export class AutomationService {
   }
 
   publishAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
+    this.completionWatcher?.retain(this.store.listAutomationRuns())
     this.publish?.(payload)
   }
 
@@ -126,7 +130,7 @@ export class AutomationService {
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
     // Headless hosts need startup catch-up without a renderer-ready notification.
-    if (this.rendererReady || this.headlessDispatcher) {
+    if (this.rendererReady || (this.allowRemoteHostScheduling && this.headlessDispatcher)) {
       // Serve adopts PTYs and publishes its graph before start().
       this.completionWatcher?.markTerminalSurfaceReady()
       void this.evaluateDueRuns()
@@ -175,10 +179,13 @@ export class AutomationService {
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
+    if (isFinalAutomationRunStatus(result.status)) {
+      this.completionWatcher?.forget(result.runId)
+    }
     const run = await this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
-      if (run.status === 'dispatched') {
+      if (run.status === 'dispatched' && run.sessionKind === 'chat') {
         this.completionWatcher?.watch(run)
       }
       return run
@@ -195,6 +202,10 @@ export class AutomationService {
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
+  }
+
+  reserveTerminalRun(run: AutomationRun, prompt: string, agent: TuiAgent) {
+    return this.completionWatcher?.reserve(run, prompt, agent)
   }
 
   private async evaluateDueRuns(): Promise<void> {
@@ -247,7 +258,9 @@ export class AutomationService {
 
     // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
-    const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
+    const canDispatch =
+      this.canDispatchToRenderer() ||
+      Boolean(this.allowRemoteHostScheduling && this.headlessDispatcher)
     const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
     // Once WSL owns the schedule, avoid churning skips on the retained local copy.
     if (refusal?.errorCode === 'wslMoveOwnedByHost') {
@@ -290,6 +303,7 @@ export class AutomationService {
     target: AutomationRunTargetResult,
     generation: number
   ): Promise<AutomationRun> {
+    const hostAvailable = this.allowRemoteHostScheduling || this.canDispatchToRenderer()
     return this.runInAutomationLane(automation.id, () =>
       requestAutomationDispatch(
         {
@@ -297,11 +311,8 @@ export class AutomationService {
           runs: this.runs,
           isActive: () => !this.stopped && generation === this.dispatchGeneration,
           getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
-          headlessDispatcher: this.headlessDispatcher,
-          chatDispatcher:
-            this.allowRemoteHostScheduling || this.canDispatchToRenderer()
-              ? this.chatDispatcher
-              : null,
+          headlessDispatcher: hostAvailable ? this.headlessDispatcher : null,
+          chatDispatcher: hostAvailable ? this.chatDispatcher : null,
           resolveTarget: (current) => this.resolveTarget(current),
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),
@@ -311,6 +322,6 @@ export class AutomationService {
         run,
         target
       )
-    )
+    ).finally(() => this.completionWatcher?.retain(this.store.listAutomationRuns()))
   }
 }

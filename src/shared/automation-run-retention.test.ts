@@ -76,12 +76,18 @@ describe('pruneAutomationRuns', () => {
     expect(pruneAutomationRuns(makeRuns('a', 3), -1)).toEqual([])
   })
 
-  // Dispatched completions may arrive hours later; retain their rows or updateAutomationRun throws.
+  // Chat retains its live obligation; terminal handoff history has the ordinary bound.
   it('never evicts in-flight runs, even far past the cap', () => {
     const inFlight = [
       run({ id: 'old-pending', automationId: 'a', status: 'pending', createdAt: -3 }),
       run({ id: 'old-dispatching', automationId: 'a', status: 'dispatching', createdAt: -2 }),
-      run({ id: 'old-dispatched', automationId: 'a', status: 'dispatched', createdAt: -1 })
+      run({
+        id: 'old-dispatched',
+        automationId: 'a',
+        sessionKind: 'chat',
+        status: 'dispatched',
+        createdAt: -1
+      })
     ]
     const kept = pruneAutomationRuns([...inFlight, ...makeRuns('a', 10)], 3)
     expect(kept.map((r) => r.id)).toEqual([
@@ -189,4 +195,13 @@ it('does not inspect ordering timestamps when an automation is within its retent
   expect(kept).toHaveLength(100)
   expect(kept.every((entry, index) => entry === runs[index])).toBe(true)
   expect(reads).toBe(0)
+})
+
+it('bounds delivered terminal history independently of result finality across normalization', () => {
+  const rows = makeRuns('a', 105).map((row) => ({ ...row, status: 'dispatched' as const }))
+  const retained = pruneAutomationRuns(JSON.parse(JSON.stringify(rows)))
+  expect(retained).toHaveLength(100)
+  expect(retained[0]?.id).toBe('a-5')
+  expect(retained.every((row) => row.status === 'dispatched' && row.error === null)).toBe(true)
+  expect(pruneAutomationRuns(retained)).toEqual(retained)
 })

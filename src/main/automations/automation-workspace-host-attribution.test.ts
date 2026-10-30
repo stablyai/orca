@@ -242,6 +242,7 @@ describe('dispatch refused for an ambiguous workspace host', () => {
     const dispatcher = vi.fn(async () => ({ workspaceId: 'folder:fw-1', terminalSessionId: 't1' }))
     const service = new AutomationService(seeded.store, {
       tickMs: 60_000,
+      allowRemoteHostScheduling: true,
       headlessDispatcher: dispatcher
     })
 

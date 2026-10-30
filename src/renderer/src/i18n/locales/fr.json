@@ -17771,8 +17771,6 @@
           "clear": "Effacer les arguments",
           "unsupported": "Cet agent ne prend pas encore en charge les arguments supplémentaires.",
           "label": "Arguments supplémentaires de l'agent",
-          "needsFreshSession": "Les arguments supplémentaires exigent une nouvelle session à chaque exécution.",
-          "useFreshSessions": "Utiliser de nouvelles sessions",
           "helper": "Ajoutés aux arguments par défaut de cet hôte à chaque nouvelle session.",
           "detailLabel": "Arguments supplémentaires"
         },

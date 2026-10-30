@@ -8,10 +8,7 @@ import {
   supportsExtraAgentArgs
 } from '../../../../shared/automation-extra-agent-args'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS } from './automation-page-parts'
-import {
-  draftExtraAgentArgsNeedFreshSession,
-  getDraftExtraAgentArgsError
-} from './automation-draft-model'
+import { getDraftExtraAgentArgsError } from './automation-draft-model'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationExtraAgentArgsFieldProps = {
@@ -25,7 +22,6 @@ export function AutomationExtraAgentArgsField({
 }: AutomationExtraAgentArgsFieldProps): React.JSX.Element {
   const supported = supportsExtraAgentArgs(draft.agentId)
   const error = getDraftExtraAgentArgsError(draft)
-  const needsFreshSession = supported && draftExtraAgentArgsNeedFreshSession(draft)
   const inputId = useId()
   const messageId = useId()
   return (
@@ -43,7 +39,7 @@ export function AutomationExtraAgentArgsField({
           value={draft.extraAgentArgs}
           spellCheck={false}
           disabled={!supported}
-          aria-invalid={Boolean(error) || needsFreshSession}
+          aria-invalid={Boolean(error)}
           aria-describedby={messageId}
           placeholder={getExtraAgentArgsPlaceholder(draft.agentId)}
           onChange={(event) =>
@@ -65,28 +61,6 @@ export function AutomationExtraAgentArgsField({
             >
               {translate('auto.components.automations.extraAgentArgs.clear', 'Clear arguments')}
             </Button>
-          ) : null}
-          {needsFreshSession ? (
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-destructive">
-                {translate(
-                  'auto.components.automations.extraAgentArgs.needsFreshSession',
-                  'Extra arguments require a fresh session for every run.'
-                )}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="shrink-0"
-                onClick={() => onDraftChange((current) => ({ ...current, reuseSession: false }))}
-              >
-                {translate(
-                  'auto.components.automations.extraAgentArgs.useFreshSessions',
-                  'Use fresh sessions'
-                )}
-              </Button>
-            </div>
           ) : null}
           {supported || !error ? (
             <p className="text-[11px] text-muted-foreground">

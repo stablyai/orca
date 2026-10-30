@@ -422,10 +422,19 @@ describe('orcad migration manifest', () => {
         }
       })
     ).toThrow('orcad_migration_dormant_automation_run_status_invalid')
-    for (const invalid of [
-      { extraAgentArgs: '--dangerously-bypass-approvals-and-sandbox' },
-      { extraAgentArgs: '--model gpt-5', reuseSession: true }
-    ]) {
+    expect(
+      parseOrcadMigrationManifest({
+        ...candidate,
+        payload: {
+          ...candidate.payload,
+          dormantState: {
+            ...candidate.payload.dormantState,
+            automations: [{ ...automation, extraAgentArgs: '--model gpt-5', reuseSession: true }]
+          }
+        }
+      }).payload.dormantState?.automations?.[0]
+    ).toMatchObject({ extraAgentArgs: '--model gpt-5', reuseSession: true })
+    for (const invalid of [{ extraAgentArgs: '--dangerously-bypass-approvals-and-sandbox' }]) {
       expect(() =>
         parseOrcadMigrationManifest({
           ...candidate,

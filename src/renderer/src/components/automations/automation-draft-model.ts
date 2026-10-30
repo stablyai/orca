@@ -55,15 +55,3 @@ export function getDraftExtraAgentArgsError(
   })
   return parsed.ok ? null : extraAgentArgsErrorText(parsed)
 }
-
-/** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */
-export function draftExtraAgentArgsNeedFreshSession(
-  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'reuseSession' | 'workspaceMode' | 'surface'>
-): boolean {
-  return (
-    draft.surface !== 'chat' &&
-    hasExtraAgentArgs(draft.extraAgentArgs) &&
-    draft.workspaceMode === 'existing' &&
-    draft.reuseSession
-  )
-}

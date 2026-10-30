@@ -1,15 +1,14 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
-import type {
-  RuntimeMobileSessionTerminalTab,
-  RuntimeSessionTabCloseReason
-} from '../../../../shared/runtime-types'
-import type { RuntimePtyTabCloseAuthority } from '../../runtime-terminal-state-records'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import {
   adjudicateAbsentMobileSessionTabClose,
   resolveMobileSessionLifecycleCloseContext,
   type MobileSessionLifecycleCloseHost
 } from '../../mobile-session-lifecycle-close-adjudication'
-import type { MobileSessionTabCloseOutcome } from '../../mobile-session-tab-close-outcome'
+import type {
+  MobileSessionTabCloseOutcome,
+  MobileSessionTabCloseOptions
+} from '../../mobile-session-tab-close-outcome'
 import {
   committedMobileSessionTabClose,
   delegatedMobileSessionTabClose,
@@ -29,15 +28,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
   async closeMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
-    options: {
-      reason?: RuntimeSessionTabCloseReason
-      expectedPublicationEpoch?: string
-      expectedTerminalHandle?: string
-      clientNavigationId?: string
-      localPtyTeardownOwnedExternally?: boolean
-      expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
-      force?: boolean
-    } = {}
+    options: MobileSessionTabCloseOptions = {}
   ): Promise<MobileSessionTabCloseOutcome> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
@@ -166,6 +157,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       // Headless parents need local kill/de-persist or relay acknowledgments resurrect them; renderer-owned parents retain its pin guard/durable close.
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
         await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+          beforeAction: options.beforeAction,
           allowMissingPersistedTab: Boolean(ptyCloseAuthority),
           force: options.force,
           reason: options.reason,
@@ -190,6 +182,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             ? rendererPublicationThrottle.acquire(win.webContents)
             : () => {}
         try {
+          options.beforeAction?.()
           await (options.localPtyTeardownOwnedExternally
             ? this.notifier.closeTerminalTab(tab.parentTabId, {
                 localPtyTeardownOwnedExternally: true,
@@ -221,6 +214,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             : null
           // Relay recovery may acknowledge an absent renderer tab; HUB still retires its SSH surface.
           await this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
+            beforeAction: options.beforeAction,
             // The renderer may already have durably removed it.
             allowMissingPersistedTab: true,
             force: options.force,
@@ -249,12 +243,14 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
           this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)
         ) {
           await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+            beforeAction: options.beforeAction,
             force: options.force,
             ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
           })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           return finishCommittedClose()
         }
+        options.beforeAction?.()
         this.notifier.closeTerminal(tab.parentTabId)
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return delegatedMobileSessionTabClose()

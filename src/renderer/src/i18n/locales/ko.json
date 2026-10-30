@@ -17126,8 +17126,6 @@
           "clear": "인수 지우기",
           "unsupported": "이 에이전트는 아직 추가 인수를 지원하지 않습니다.",
           "label": "추가 에이전트 인수",
-          "needsFreshSession": "추가 인수를 사용하려면 실행할 때마다 새 세션이 필요합니다.",
-          "useFreshSessions": "새 세션 사용",
           "helper": "새 세션마다 이 호스트의 기본 인수 뒤에 추가됩니다.",
           "detailLabel": "추가 인수"
         },

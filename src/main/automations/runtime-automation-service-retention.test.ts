@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../shared/automations-types'
 import { RUN_TERMINAL_GRACE_MS } from './headless-run-terminal-retention'
+import { TerminalRunFactsRegister } from '../runtime/terminal-run-facts'
+import { readRunTerminalClientUse } from '../runtime/run-terminal-client-use'
 
 vi.mock('./service', () => ({
   AutomationService: class {
@@ -39,23 +41,46 @@ function firstRunOwnsWorkspace(worktreeId: string) {
 }
 
 function build(headless: boolean) {
+  const facts = new TerminalRunFactsRegister()
+  for (const run of finishedRuns(5)) {
+    facts.recordSpawnCommit({ id: run.terminalPtyId!, incarnationId: 'incarnation' })
+  }
+  facts.recordInput('pty-1', 'driving', 'human\r')
   const runtime = {
     setAutomationService: vi.fn(),
     notifyAutomationsChanged: vi.fn(),
     getTerminalHandleForPaneKey: vi.fn((paneKey: string) => `handle:${paneKey}`),
     getTerminalPtyIdForHandle: vi.fn((handle: string) => `pty-${handle.split('tab-')[1]?.[0]}`),
-    readTerminalClientUse: vi.fn((ptyId: string) => (ptyId === 'pty-1' ? 'used' : 'unused')),
-    closeTerminal: vi.fn(async (_handle: string) => ({})),
+    getTerminalProcessIncarnation: vi.fn(() => 'incarnation'),
+    readObservedAgentStatusPaneIdentityFn: vi.fn((key: string) => ({
+      kind: 'observed',
+      terminalHandle: `handle:${key}`,
+      processIncarnation: 'incarnation'
+    })),
+    getAgentStatusRowsForPane: vi.fn(() => [{ state: 'done', connectionId: null }]),
+    readTerminalClientUse: vi.fn((ptyId: string) =>
+      readRunTerminalClientUse(
+        { hasRawTerminalViewSubscriber: () => false, terminalRunFacts: facts },
+        ptyId
+      )
+    ),
+    closeTerminal: vi.fn(async (_handle: string, options: { beforeAction: () => void }) => {
+      options.beforeAction()
+      return {}
+    }),
     confirmTerminalShellAlone: vi.fn(async (_ptyId: string) => false),
     closeTerminalTab: vi.fn(async (_handle: string) => ({})),
     sleepTerminalsForWorktree: vi.fn(
       async (
         _selector: string,
-        options: { soleLivePtyId?: string }
-      ): Promise<{ livePtyIds: string[]; stoppedPtyIds: string[] }> => ({
-        livePtyIds: [options.soleLivePtyId ?? ''],
-        stoppedPtyIds: [options.soleLivePtyId ?? '']
-      })
+        options: { soleLivePtyId?: string; beforeAction: () => void }
+      ): Promise<{ livePtyIds: string[]; stoppedPtyIds: string[] }> => {
+        options.beforeAction()
+        return {
+          livePtyIds: [options.soleLivePtyId ?? ''],
+          stoppedPtyIds: [options.soleLivePtyId ?? '']
+        }
+      }
     )
   }
   const store = {
@@ -117,7 +142,7 @@ describe('headless automation service run terminal retention', () => {
     service.stop()
   })
 
-  it('fails and closes a dispatched run whose agent exited, proven by its shell alone', async () => {
+  it('preserves delivery history when closing a dispatched run whose agent exited, proven by its shell alone', async () => {
     vi.useFakeTimers()
     const { runtime, service, store } = build(true)
     store.listAutomationRuns.mockReturnValue([
@@ -131,7 +156,7 @@ describe('headless automation service run terminal retention', () => {
     await expect(drain()).resolves.toBe(1)
     expect(runtime.confirmTerminalShellAlone).toHaveBeenCalledWith('pty-0')
     expect(service.markDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'r0', status: 'dispatch_failed', terminalPtyId: null })
+      expect.objectContaining({ runId: 'r0', status: 'dispatched', terminalPtyId: null })
     )
   })
 
@@ -152,7 +177,8 @@ describe('headless automation service run terminal retention', () => {
     await expect(drain()).resolves.toBe(4)
 
     expect(runtime.sleepTerminalsForWorktree).toHaveBeenCalledWith('id:wt-0', {
-      soleLivePtyId: 'pty-0'
+      soleLivePtyId: 'pty-0',
+      beforeAction: expect.any(Function)
     })
     expect(runtime.sleepTerminalsForWorktree).toHaveBeenCalledTimes(1)
     expect(service.markDispatchResult).toHaveBeenCalledWith({
@@ -181,7 +207,9 @@ describe('headless automation service run terminal retention', () => {
     await drain()
 
     expect(runtime.sleepTerminalsForWorktree).not.toHaveBeenCalled()
-    expect(runtime.closeTerminal).toHaveBeenCalledWith('handle:tab-0:1')
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('handle:tab-0:1', {
+      beforeAction: expect.any(Function)
+    })
   })
 
   it.each([
@@ -215,3 +243,14 @@ describe('headless automation service run terminal retention', () => {
     expect(service.markDispatchResult).not.toHaveBeenCalled()
   })
 })
+
+it.each(['working', 'permission', 'unknown'] as const)(
+  'does not close a completed root with %s whole-pane facts',
+  async (state) => {
+    const { runtime, service } = build(true)
+    runtime.getAgentStatusRowsForPane.mockReturnValue([{ state, connectionId: null }])
+    await expect(service.releaseFinishedRunTerminals!()).resolves.toBe(0)
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(runtime.sleepTerminalsForWorktree).not.toHaveBeenCalled()
+  }
+)

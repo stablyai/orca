@@ -26,18 +26,15 @@ export function readAutomationRunReceipt(
   run: Pick<AutomationRun, 'id' | 'createdAt'>
 ): AutomationRunReceipt | null {
   const callerKey = rpcCallerOperationKey(AUTOMATION_AGENT_CALLER)
-  for (const purpose of ['fresh-launch'] as const) {
+  for (const purpose of ['fresh-launch', 'reuse-send'] as const) {
     const row = store.getOperationRow(callerKey, automationRunOperationId(run, purpose))
     if (!row) {
       continue
     }
     if (row.outcome.status !== 'succeeded' || !isAgentLaunchResult(row.outcome.launch)) {
-      return null
+      continue
     }
     const launch = row.outcome.launch
-    if (launch.receipt.preferred !== 'structured') {
-      return null
-    }
     if (launch.outcome.kind === 'structured') {
       return {
         kind: 'chat',

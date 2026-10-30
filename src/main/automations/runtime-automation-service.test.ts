@@ -95,7 +95,7 @@ beforeEach(() => {
 })
 describe('host-owned automation execution', () => {
   it.each([false, true])(
-    'uses the same Chat dispatcher on desktop/headless=%s without supplying a desktop Terminal dispatcher',
+    'uses the same Chat dispatcher on desktop/headless=%s while exposing the guarded terminal reuse dispatcher',
     async (headless) => {
       fixture(headless)
       captured.launch.mockResolvedValue({
@@ -105,7 +105,7 @@ describe('host-owned automation execution', () => {
           '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
         terminalHandle: 'term-1'
       })
-      expect(Boolean(captured.options.headlessDispatcher)).toBe(headless)
+      expect(Boolean(captured.options.headlessDispatcher)).toBe(true)
       const dispatcher = captured.options.chatDispatcher!
       const result = await dispatcher({
         automation: { ...state.automations[0], surface: 'chat' },

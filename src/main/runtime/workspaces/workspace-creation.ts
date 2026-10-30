@@ -122,7 +122,12 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
           provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
           createTerminal: (selector, options) =>
-            this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
+            this.createTerminal(selector, {
+              ...options,
+              ...wslUserAct(args),
+              signal: args.signal,
+              onPtySpawnDispatched: args.beforeTerminalSpawn
+            }),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
           sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
@@ -225,7 +230,16 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         canSpawn: Boolean(this.ptyController?.spawn),
         provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
         createTerminal: (selector, options) =>
-          this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree),
+          this.createTerminal(
+            selector,
+            {
+              ...options,
+              ...wslUserAct(args),
+              signal: args.signal,
+              onPtySpawnDispatched: args.beforeTerminalSpawn
+            },
+            worktree
+          ),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
         provision: (options) =>

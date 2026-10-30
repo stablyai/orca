@@ -1,8 +1,5 @@
-import {
-  isFinalAutomationRunStatus,
-  type Automation,
-  type AutomationRun
-} from '../../../shared/automations-types'
+import { isAutomationRunHistory } from '../../../shared/automation-run-retention'
+import type { Automation, AutomationRun } from '../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
@@ -60,7 +57,7 @@ export function collectOrcadMigrationSourceAutomationState(
       matching.length === 1 &&
       automationCanTransfer(matching[0], scope) &&
       runs.every((run) => runContextCanTransfer(run, scope))
-    if (!transferable || !runs.every((run) => isFinalAutomationRunStatus(run.status))) {
+    if (!transferable || !runs.every((run) => isAutomationRunHistory(run))) {
       if (transferable) {
         runningAutomationNames.push(matching[0].name)
       }

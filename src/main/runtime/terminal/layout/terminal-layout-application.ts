@@ -7,7 +7,10 @@ import { PaneGridRecorder } from './pane-grid-recording'
 
 export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentActor {
   protected abstract suppressResizesForMs(ms: number): void
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    beforeAction?: () => void
+  ): Promise<LayoutApplyReply>
   private paneGrids: PaneGridRecorder | null = null
 
   /** Layout-owner build: remembers a resized terminal's grid on the pane showing it. */

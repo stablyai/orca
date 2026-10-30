@@ -565,7 +565,7 @@ describe('cancelling a launch prompt', () => {
     ).resolves.toBe(false)
   })
 
-  it('passes no signal or acceptance hook when the caller gave no signal', async () => {
+  it('latches accepted Enter even when the caller gave no signal', async () => {
     const stub = runtimeStub({})
 
     await deliverTerminalAgentLaunchPrompt({
@@ -578,7 +578,7 @@ describe('cancelling a launch prompt', () => {
 
     const options = stub.sendTerminalAgentPrompt.mock.calls[0]![2]
     expect(options).not.toHaveProperty('signal')
-    expect(options).not.toHaveProperty('onSubmitWritten')
+    expect(options.onSubmitWritten).toBeTypeOf('function')
     expect(stub.waitForTerminal.mock.calls[0]![1]).not.toHaveProperty('signal')
   })
 })

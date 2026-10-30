@@ -17126,8 +17126,6 @@
           "clear": "引数をクリア",
           "unsupported": "この Agent は追加の引数にまだ対応していません。",
           "label": "追加の Agent 引数",
-          "needsFreshSession": "追加の引数を使うには、実行ごとに新しいセッションが必要です。",
-          "useFreshSessions": "新しいセッションを使用",
           "helper": "新しいセッションごとに、このホストのデフォルト引数に追加されます。",
           "detailLabel": "追加の引数"
         },

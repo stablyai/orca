@@ -17421,8 +17421,6 @@
           "clear": "清除引數",
           "unsupported": "此代理程式暫不支援額外引數。",
           "label": "額外的代理程式引數",
-          "needsFreshSession": "額外引數要求每次執行都使用新工作階段。",
-          "useFreshSessions": "使用新工作階段",
           "helper": "每次新工作階段時附加到此主機的預設引數之後。",
           "detailLabel": "額外引數"
         },

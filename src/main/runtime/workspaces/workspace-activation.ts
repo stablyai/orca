@@ -297,7 +297,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   deliverStartupFollowup(
     handle: string,
     followup: WorktreeStartupFollowup,
-    options?: { signal?: AbortSignal; agentLaunch?: boolean }
+    options?: Parameters<typeof deliverStartupFollowupPrompt>[4]
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
     return deliverStartupFollowupPrompt(this, host, handle, followup, options)

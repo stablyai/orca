@@ -10,13 +10,17 @@ import {
   readIncrementalTranscriptMessages,
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
-import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
+import {
+  createTranscriptWatchSnapshotReader,
+  adoptTranscriptWatchSnapshot
+} from './transcript-watch-snapshot'
 import { emitTranscriptUnavailableSnapshot } from './transcript-unavailable-snapshot'
 import { transcriptWatcherPathIsInstallable } from './transcript-watcher-install-probe'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
-import type {
-  NativeChatTranscriptSubscription,
-  SubscribeNativeChatTranscriptArgs
+import {
+  transcriptReadRecord,
+  type NativeChatTranscriptSubscription,
+  type SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import { createTranscriptWatchScheduler } from './transcript-watch-scheduler'
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
@@ -38,7 +42,8 @@ export async function installTranscriptWatcher(
   if (!(await transcriptWatcherPathIsInstallable(filePath, signal))) {
     return null
   }
-  const { onAppend, onInitialSnapshot, onReplace, initialLimit } = args
+  const { onAppend, onInitialSnapshot, onReplace } = args
+  const initialLimit = args.onRecord ? undefined : args.initialLimit
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
 
   const state = createIncrementalTranscriptState()
@@ -62,44 +67,39 @@ export async function installTranscriptWatcher(
     }
   }
 
-  async function readAndEmitAppends(): Promise<void> {
+  const observeRecord = (line: string | null, offset: number): void => {
+    if (closed || !watchedVersion) {
+      return
+    }
+    args.onRecord?.(transcriptReadRecord(line, offset, watchedVersion.identity))
+  }
+
+  async function readMessages(onChunk?: (messages: NativeChatMessage[]) => void) {
     let lifecycle: NativeChatTurnLifecycle | undefined
-    const remaining = await readIncrementalTranscriptMessages(
+    const messages = await readIncrementalTranscriptMessages(
       filePath,
       state,
       decode,
-      (messages) => {
-        if (!closed) {
-          onAppend(messages)
-        }
-      },
+      onChunk,
       decodeLifecycle ?? undefined,
-      (nextLifecycle) => {
-        lifecycle = nextLifecycle
+      (next) => {
+        lifecycle = next
       },
       gateAbort.signal,
-      args.sourceOrder
+      args.sourceOrder,
+      observeRecord
     )
-    if (!closed && (remaining.length > 0 || lifecycle)) {
-      onAppend(remaining, lifecycle)
-    }
+    return { messages, lifecycle }
   }
 
-  async function readSnapshot(limit: number) {
-    return readNativeChatTranscriptTailFile(
-      filePath,
-      limit,
-      decode,
-      false,
-      undefined,
-      decodeLifecycle,
-      gateAbort.signal,
-      (boundary) => {
-        state.boundary = boundary
-      },
-      args.sourceOrder
-    )
-  }
+  const readSnapshot = createTranscriptWatchSnapshotReader(
+    filePath,
+    decode,
+    decodeLifecycle,
+    gateAbort.signal,
+    args.sourceOrder,
+    state
+  )
 
   async function finishSuccessfulDrain(startVersion: TranscriptFileVersion): Promise<void> {
     const completedVersion = await readTranscriptFileVersion(filePath, gateAbort.signal)
@@ -114,6 +114,11 @@ export async function installTranscriptWatcher(
     if (closed) {
       return
     }
+    args.onRecord?.({
+      kind: 'caught-up',
+      identity: completedVersion.identity,
+      offset: state.offset
+    })
     if (!nativeWatcher.needsRebind() || nativeWatcher.bind()) {
       rotationRetryCount = 0
       return
@@ -146,7 +151,11 @@ export async function installTranscriptWatcher(
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
     }
-    watchedVersion ??= current
+    if (initialDrain || contentReplaced) {
+      args.onRecord?.({ kind: 'reset', identity: current.identity })
+    }
+    watchedVersion = current
+    args.onRecord?.({ kind: 'read-start', identity: current.identity, offset: current.size })
 
     const replacementSnapshot =
       // Zero is a valid bounded window; do not fall back to an unbounded incremental read.
@@ -157,9 +166,7 @@ export async function installTranscriptWatcher(
       return
     }
     if (replacementSnapshot && onReplace) {
-      state.offset = replacementSnapshot.consumedTo
-      state.pendingStart = state.offset
-      state.latestTimestamp = replacementSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
+      adoptTranscriptWatchSnapshot(state, replacementSnapshot)
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
@@ -180,9 +187,7 @@ export async function installTranscriptWatcher(
     if (initialDrain && onInitialSnapshot) {
       initialDrain = false
       if (initialSnapshot) {
-        state.offset = initialSnapshot.consumedTo
-        state.pendingStart = state.offset
-        state.latestTimestamp = initialSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
+        adoptTranscriptWatchSnapshot(state, initialSnapshot)
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,
@@ -191,19 +196,7 @@ export async function installTranscriptWatcher(
           initialSnapshot.lifecycle
         )
       } else {
-        let lifecycle: NativeChatTurnLifecycle | undefined
-        const messages = await readIncrementalTranscriptMessages(
-          filePath,
-          state,
-          decode,
-          undefined,
-          decodeLifecycle ?? undefined,
-          (nextLifecycle) => {
-            lifecycle = nextLifecycle
-          },
-          gateAbort.signal,
-          args.sourceOrder
-        )
+        const { messages, lifecycle } = await readMessages()
         if (closed) {
           return
         }
@@ -211,7 +204,14 @@ export async function installTranscriptWatcher(
       }
     } else {
       initialDrain = false
-      await readAndEmitAppends()
+      const { messages, lifecycle } = await readMessages((chunk) => {
+        if (!closed) {
+          onAppend(chunk)
+        }
+      })
+      if (!closed && (messages.length > 0 || lifecycle)) {
+        onAppend(messages, lifecycle)
+      }
     }
     await finishSuccessfulDrain(current)
   }

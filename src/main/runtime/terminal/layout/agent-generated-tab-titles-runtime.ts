@@ -7,7 +7,10 @@ import type { LayoutApplyReply } from '../../../../shared/workspace-layout/works
 import type { WindowLayoutCommand } from '../../runtime-layout-apply'
 
 export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithWorktreeSleepResumeRecording {
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    beforeAction?: () => void
+  ): Promise<LayoutApplyReply>
 
   private readonly agentGeneratedTabTitles = new AgentGeneratedTabTitles({
     enabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,

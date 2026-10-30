@@ -11,3 +11,15 @@ export function sleptNothing(
     postStopVerified: true
   }
 }
+
+export function verifiedWorktreeSleep(
+  stoppedPtyIds: string[],
+  livePtyIds: Iterable<string>
+): RuntimeWorktreeTerminalSleepResult {
+  return {
+    stopped: stoppedPtyIds.length,
+    stoppedPtyIds,
+    livePtyIds: [...livePtyIds].sort(),
+    postStopVerified: true
+  }
+}

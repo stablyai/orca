@@ -17656,8 +17656,6 @@
           "clear": "Argumente leeren",
           "unsupported": "Zusätzliche Argumente werden für diesen Agenten noch nicht unterstützt.",
           "label": "Zusätzliche Agentenargumente",
-          "needsFreshSession": "Zusätzliche Argumente erfordern bei jeder Ausführung eine neue Sitzung.",
-          "useFreshSessions": "Neue Sitzungen verwenden",
           "helper": "Werden bei jeder neuen Sitzung zu den Standardargumenten dieses Hosts hinzugefügt.",
           "detailLabel": "Zusätzliche Argumente"
         },

@@ -2,14 +2,24 @@ import { isFinalAutomationRunStatus, type AutomationRun } from './automations-ty
 
 export const MAX_AUTOMATION_RUNS_PER_AUTOMATION = 100
 
+/** Delivery history may acquire a result later without pinning history or workspace metadata. */
+export function isAutomationRunHistory(
+  run: Pick<AutomationRun, 'status' | 'sessionKind'>
+): boolean {
+  return (
+    isFinalAutomationRunStatus(run.status) ||
+    (run.status === 'dispatched' && run.sessionKind !== 'chat')
+  )
+}
+
 // Bound runs because every save serializes the whole blob (28.5MB once blocked flush for 210ms).
 export function pruneAutomationRuns(
   runs: readonly AutomationRun[],
   maxPerAutomation: number = MAX_AUTOMATION_RUNS_PER_AUTOMATION
 ): AutomationRun[] {
   const kept = new Set<string>()
-  // Evict only final runs; delayed dispatched completion still needs its row.
-  const finalRuns = runs.filter((run) => isFinalAutomationRunStatus(run.status))
+  // A transient observer detaches if bounded history evicts its delivery row.
+  const finalRuns = runs.filter(isAutomationRunHistory)
   for (const automationRuns of Map.groupBy(finalRuns, (run) => run.automationId).values()) {
     // Order by append createdAt then scheduledFor for stable same-millisecond eviction.
     if (automationRuns.length > maxPerAutomation) {
@@ -22,7 +32,7 @@ export function pruneAutomationRuns(
   }
 
   // Survivors keep their original append order — callers index by position.
-  return runs.filter((run) => kept.has(run.id) || !isFinalAutomationRunStatus(run.status))
+  return runs.filter((run) => kept.has(run.id) || !isAutomationRunHistory(run))
 }
 
 /** Number legacy runs before pruning. Continue above retained maximums, never append positions: pre-runNumber downgrades can append blanks after pruned 101+ survivors and would reissue titles. */

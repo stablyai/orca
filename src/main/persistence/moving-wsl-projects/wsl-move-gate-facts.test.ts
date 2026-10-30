@@ -145,8 +145,8 @@ describe('collectWslMoveGateInputs', () => {
 
   it('takes running automation runs and live dispatches in scope only', async () => {
     const run = (id: string, status: AutomationRun['status'], workspaceId: string | null) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The gate reads only id, status and workspaceId.
-      ({ id, status, workspaceId }) as AutomationRun
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The gate reads only these run facts.
+      ({ id, status, workspaceId, sessionKind: 'chat' }) as AutomationRun
     const inputs = await collectWslMoveGateInputs(
       sources({
         automationRuns: () => [

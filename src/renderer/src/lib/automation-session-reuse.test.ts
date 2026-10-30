@@ -85,7 +85,7 @@ describe('automation session reuse in the renderer store', () => {
     expect(session).toEqual({ tabId: 'tab-1', ptyId: 'pty-right', paneKey: splitPaneKey })
   })
 
-  it('does not reuse an unrelated split pane for a run with exact pane identity', () => {
+  it('uses the exact live run pane without borrowing an unrelated split pane status', () => {
     const session = findReusableAutomationSession({
       automationId: 'auto-1',
       agentId: 'claude',
@@ -111,7 +111,7 @@ describe('automation session reuse in the renderer store', () => {
       } as never
     })
 
-    expect(session).toBeNull()
+    expect(session).toEqual({ tabId: 'tab-1', ptyId: 'pty-1', paneKey })
   })
 
   it('rejects an exact run pane when its PTY is no longer live', () => {

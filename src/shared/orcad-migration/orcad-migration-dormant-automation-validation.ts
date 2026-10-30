@@ -2,6 +2,7 @@ import { assertAutomationExtraAgentArgs } from '../automation-extra-agent-args-r
 import { isTuiAgent } from '../tui-agent-config'
 import type { Automation, AutomationRun } from '../automations-types'
 import { getAutomationRunRepoId } from '../automation-run-identity'
+import { isAutomationRunHistory } from '../automation-run-retention'
 import {
   assertUnique,
   boundedArray,
@@ -21,14 +22,17 @@ import {
   parseUsage
 } from './orcad-migration-dormant-automation-fields'
 
-const FINAL_RUN_STATUSES = new Set<unknown>([
+const RUN_STATUSES = [
+  'pending',
+  'dispatching',
+  'dispatched',
   'completed',
   'dispatch_failed',
   'skipped_precheck',
   'skipped_missed',
   'skipped_unavailable',
   'skipped_needs_interactive_auth'
-])
+] as const
 
 export function parseOrcadMigrationDormantAutomations(value: unknown): Automation[] {
   const automations = boundedArray(value, parseAutomation, 'automations')
@@ -77,7 +81,7 @@ function parseAutomation(value: unknown): Automation {
   if (!isMigratedAutomation(copy)) {
     throw new Error('orcad_migration_dormant_automation_invalid')
   }
-  // A disallowed flag or Reuse with extras would otherwise persist and fail every later run.
+  // Disallowed launch flags must not enter persisted automation definitions.
   try {
     assertAutomationExtraAgentArgs(copy)
   } catch {
@@ -162,7 +166,8 @@ function isMigratedAutomationRun(value: unknown): value is AutomationRun {
   parseContext(record.sourceContext, 'task-source')
   requiredString(record.title, 'orcad_migration_dormant_automation_run_title_invalid')
   requiredFinite(record.scheduledFor, 'orcad_migration_dormant_automation_run_schedule_invalid')
-  if (!FINAL_RUN_STATUSES.has(record.status)) {
+  const status = RUN_STATUSES.find((status) => status === record.status)
+  if (!status) {
     throw new Error('orcad_migration_dormant_automation_run_status_invalid')
   }
   if (record.trigger !== 'scheduled' && record.trigger !== 'manual') {
@@ -178,6 +183,9 @@ function isMigratedAutomationRun(value: unknown): value is AutomationRun {
   )
   if (record.sessionKind !== 'terminal' && record.sessionKind !== 'chat') {
     throw new Error('orcad_migration_dormant_automation_run_session_invalid')
+  }
+  if (!isAutomationRunHistory({ status, sessionKind: record.sessionKind })) {
+    throw new Error('orcad_migration_dormant_automation_run_status_invalid')
   }
   for (const field of [
     'chatSessionId',

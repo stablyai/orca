@@ -9,11 +9,7 @@ import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import { translate } from '@/i18n/i18n'
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
-import {
-  draftExtraAgentArgsNeedFreshSession,
-  getDraftExtraAgentArgsError,
-  parseDraftTime
-} from './automation-draft-model'
+import { getDraftExtraAgentArgsError, parseDraftTime } from './automation-draft-model'
 import { saveOrcaAutomation } from './automation-orca-save'
 import type { AutomationSaveContext } from './automation-save-context'
 
@@ -88,12 +84,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       return
     }
     const effectiveDraft = { ...draft, surface }
-    const extrasError = draftExtraAgentArgsNeedFreshSession(effectiveDraft)
-      ? translate(
-          'auto.components.automations.extraAgentArgs.needsFreshSession',
-          'Extra arguments require a fresh session for every run.'
-        )
-      : getDraftExtraAgentArgsError(effectiveDraft)
+    const extrasError = getDraftExtraAgentArgsError(effectiveDraft)
     if (extrasError) {
       toast.error(extrasError)
       return

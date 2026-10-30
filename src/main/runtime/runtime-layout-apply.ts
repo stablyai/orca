@@ -79,7 +79,8 @@ export async function applyWindowLayoutCommand(
     const terminalTabId = terminalIdOf(store, hostIds[0], command.workspace, command.tabIds[0])
     const reply = await store.applyLayoutCommand(
       { ...command, force: command.refusePinned ? command.force === true : true },
-      holders
+      holders,
+      run
     )
     // Cancel launches only for tabs actually closed; refused pinned tabs still receive theirs.
     if (
@@ -138,7 +139,8 @@ export async function applyWindowLayoutCommand(
   markAgentLaunchesClosedByUser(workspace, { kind: 'pane', tabId, leafId })
   return store.applyLayoutCommand(
     { type: 'closePane', workspace, tabId, leafId, userPaneClose: true },
-    holders
+    holders,
+    run
   )
 }
 

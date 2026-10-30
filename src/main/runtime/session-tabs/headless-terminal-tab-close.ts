@@ -49,6 +49,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       authorizedPty?: RuntimePtyWorktreeRecord
       force?: boolean
       reason?: RuntimeSessionTabCloseReason
+      beforeAction?: () => void
     } = {}
   ): Promise<void> {
     const closedParentTabId = tab.parentTabId
@@ -71,7 +72,8 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       {
         allowMissing: options.allowMissingPersistedTab,
         force: options.force,
-        reason: options.reason
+        reason: options.reason,
+        beforeAction: options.beforeAction
       }
     )
     if (!acknowledgeRetirement().matches) {
@@ -110,6 +112,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     }
     if (options.killPtys !== false) {
       for (const ptyId of ptyIdsToKill) {
+        options.beforeAction?.()
         this.ptyController?.kill(ptyId)
       }
     }

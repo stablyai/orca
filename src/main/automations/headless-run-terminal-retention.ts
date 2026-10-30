@@ -1,8 +1,5 @@
-import {
-  isFinalAutomationRunStatus,
-  type AutomationRun,
-  type AutomationRunStatus
-} from '../../shared/automations-types'
+import { isAutomationRunHistory } from '../../shared/automation-run-retention'
+import type { AutomationRun, AutomationRunStatus } from '../../shared/automations-types'
 import { automationRunRecency } from '../../shared/automation-session-reuse'
 
 export const RUN_TERMINAL_GRACE_MS = 10 * 60_000
@@ -14,14 +11,16 @@ export type HeadlessRunTerminalRetentionDeps = {
   /** Used, viewed, or unknown-use terminals belong to the user and must stay open. */
   terminalClientUse: (run: AutomationRun) => 'used' | 'unused' | 'unknown'
   /** True only while the pane holds this run's PTY. */
+  terminalIncarnation: (run: AutomationRun) => string | null
   runTerminalAlive: (run: AutomationRun) => boolean
-  /** Require fresh proof that only an idle shell remains in the PTY. */
+  /** Current foreground/background observations veto retirement; they do not prove input consumption. */
+  wholePaneClear: (run: AutomationRun, allowEmpty?: boolean) => boolean
   shellAloneAtPrompt: (run: AutomationRun) => Promise<boolean>
   /** Close only this run's pane and PTY; preserve user-created splits. */
-  closeRunTerminal: (run: AutomationRun) => Promise<boolean>
+  closeRunTerminal: (run: AutomationRun, assertSafe: () => void) => Promise<boolean>
   runOwnsWorkspace: (run: AutomationRun) => boolean
   /** Preserve the resumable tab; return false if another terminal is live or sleep fails. */
-  sleepRunWorkspace: (run: AutomationRun) => Promise<boolean>
+  sleepRunWorkspace: (run: AutomationRun, assertSafe: () => void) => Promise<boolean>
   /** Clear terminal references while preserving status, error and output. */
   forgetRunTerminal: (run: AutomationRun) => Promise<void>
   /** Serialize retention with dispatch to protect reused panes. */
@@ -43,25 +42,17 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
   const firstSeenAt = new Map<string, number>()
   let timer: ReturnType<typeof setInterval> | null = null
   let sweeping: Promise<void> | null = null
+  let generation = 0
 
   const forget = async (run: AutomationRun): Promise<void> => {
     await deps.forgetRunTerminal(run)
     firstSeenAt.delete(run.id)
   }
 
-  const mayClose = async (run: AutomationRun, graceMs: number): Promise<boolean> => {
-    if (now() - (firstSeenAt.get(run.id) ?? now()) < graceMs) {
-      return false
-    }
-    if (deps.terminalClientUse(run) !== 'unused') {
-      return false
-    }
-    return run.status === 'completed' || (await deps.shellAloneAtPrompt(run))
-  }
-
   const sweepAutomation = async (
     automationId: string,
-    policy: { keep: number; graceMs: number }
+    policy: { keep: number; graceMs: number },
+    expectedGeneration: number
   ): Promise<number> => {
     let releasedCount = 0
     let kept = 0
@@ -83,7 +74,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
       }
       try {
         if (!deps.runTerminalAlive(run)) {
-          if (isFinalAutomationRunStatus(run.status)) {
+          if (isAutomationRunHistory(run)) {
             await forget(run)
           }
           continue
@@ -97,21 +88,50 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
           kept += 1
           continue
         }
-        if (!(await mayClose(run, policy.graceMs))) {
+        const incarnation = deps.terminalIncarnation(run)
+        if (
+          !incarnation ||
+          deps.terminalClientUse(run) !== 'unused' ||
+          now() - (firstSeenAt.get(run.id) ?? now()) < policy.graceMs
+        ) {
           continue
         }
+        const shell = await deps.shellAloneAtPrompt(run)
+        const assertSafe = (): void => {
+          const latest = deps
+            .listRuns()
+            .filter((candidate) => candidate.terminalPaneKey === run.terminalPaneKey)
+            .toSorted((a, b) => automationRunRecency(b) - automationRunRecency(a))[0]
+          if (
+            generation !== expectedGeneration ||
+            !latest ||
+            latest.id !== run.id ||
+            latest.terminalPtyId !== run.terminalPtyId ||
+            latest.status !== run.status ||
+            deps.terminalClientUse(latest) !== 'unused' ||
+            !deps.runTerminalAlive(latest) ||
+            deps.terminalIncarnation(latest) !== incarnation ||
+            !(
+              (latest.status === 'completed' && deps.wholePaneClear(latest)) ||
+              (shell && deps.wholePaneClear(latest, true))
+            )
+          ) {
+            throw new Error('automation_terminal_retention_revoked')
+          }
+        }
+        assertSafe()
         // Closing a completed run's own workspace would lose its resumable session.
         if (run.status === 'completed' && deps.runOwnsWorkspace(run)) {
-          if (await deps.sleepRunWorkspace(run)) {
+          if (await deps.sleepRunWorkspace(run, assertSafe)) {
             firstSeenAt.delete(run.id)
             releasedCount += 1
           }
           continue
         }
-        if (await deps.closeRunTerminal(run)) {
+        if (await deps.closeRunTerminal(run, assertSafe)) {
           releasedCount += 1
+          await forget(run)
         }
-        await forget(run)
       } catch (error) {
         console.error('[automations] could not close a run terminal:', error)
       }
@@ -120,10 +140,22 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
   }
 
   const sweepOnce = async (policy: { keep: number; graceMs: number }): Promise<number> => {
+    const expectedGeneration = generation
     let releasedCount = 0
+    const retained = new Set(
+      deps
+        .listRuns()
+        .filter((run) => run.terminalPaneKey && run.terminalPtyId)
+        .map((run) => run.id)
+    )
+    for (const id of firstSeenAt.keys()) {
+      if (!retained.has(id)) {
+        firstSeenAt.delete(id)
+      }
+    }
     for (const automationId of new Set(deps.listRuns().map((run) => run.automationId))) {
       releasedCount += await deps.inAutomationLane(automationId, () =>
-        sweepAutomation(automationId, policy)
+        sweepAutomation(automationId, policy, expectedGeneration)
       )
     }
     return releasedCount
@@ -155,6 +187,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
       timer.unref?.()
     },
     stop: () => {
+      generation += 1
       if (timer) {
         clearInterval(timer)
         timer = null

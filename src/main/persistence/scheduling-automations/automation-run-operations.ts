@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
   Automation,
@@ -10,6 +9,7 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
+  isAutomationRunHistory,
   nextAutomationRunNumber,
   pruneAutomationRuns
 } from '../../../shared/automation-run-retention'
@@ -234,8 +234,8 @@ export function updateAutomationRun(
     run.id === result.runId ? updated : run
   )
   operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
-  if (!isFinalAutomationRunStatus(current.status) && isFinalAutomationRunStatus(updated.status)) {
-    // Final runs stop pinning workspace metadata (#17775).
+  if (!isAutomationRunHistory(current) && isAutomationRunHistory(updated)) {
+    // Delivery-only terminal history also releases its metadata ownership.
     invalidateLocalWorktreeMetadataPruneInputs()
   }
   touchAutomation(operations.state, updated.automationId, now)

@@ -77,7 +77,7 @@ function createFakeRuntime(initial: Partial<FakePane>) {
 
 function observe(runtime: AutomationRunTerminalHost) {
   const controller = new AbortController()
-  const settled: AutomationRunCompletionObservation[] = []
+  const settled: (AutomationRunCompletionObservation | null)[] = []
   const errors: unknown[] = []
   const observer = createRuntimeAutomationRunTerminalObserver(runtime)
   const promise = observer

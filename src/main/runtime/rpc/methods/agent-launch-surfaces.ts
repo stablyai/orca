@@ -1,3 +1,5 @@
+import type { AgentPromptExpectedBinding } from '../../runtime-terminal-contracts'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
@@ -34,6 +36,20 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 
+export type AgentLaunchHostPolicy = {
+  signal?: AbortSignal
+  wslUserAct?: boolean
+  assertCurrent?: () => void
+  onSubmitWritten?: () => void
+  allowBusy?: boolean
+  expectedBinding?: AgentPromptExpectedBinding
+  terminalTitle?: string
+  suppressStartupUpdatePrompt?: true
+  unprovableHost?: 'write-unless-shell'
+  onWorkspaceCreated?: (worktreeId: string) => void
+  onSurfacePublished?: (result: AgentLaunchResult) => void
+}
+
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
   context: RpcContext,
@@ -43,7 +59,8 @@ export function agentLaunchSurfaceFactory(
   callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
   // Read the early pane at spawn: publication and user close can finish after admission.
-  view: AgentLaunchView = { early: null, presentation: undefined }
+  view: AgentLaunchView = { early: null, presentation: undefined },
+  policy: AgentLaunchHostPolicy = {}
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
   const { early: earlyTab, presentation } = view
@@ -141,9 +158,12 @@ export function agentLaunchSurfaceFactory(
       }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
-        wslUserAct: true,
+        ...(policy.wslUserAct === false ? {} : { wslUserAct: true as const }),
         // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
+        signal: policy.signal,
+        ...(policy.terminalTitle ? { title: policy.terminalTitle } : {}),
+        ...(policy.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
         terminalImageViewerSupported: terminalImageViewerSupported(context),
         // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
         ...(startupPrompt
@@ -175,7 +195,10 @@ export function agentLaunchSurfaceFactory(
                   : agentLaunchTabViewerRule(context, presentation)
             }
           : {}),
-        onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
+        onPtySpawnDispatched: () => {
+          policy.assertCurrent?.()
+          terminalSpawn.onPtySpawnDispatched()
+        }
       })
       const terminal = await created.catch(terminalSpawn.rethrow)
       if (earlyTab?.closedByUser()) {
@@ -202,7 +225,12 @@ export function agentLaunchSurfaceFactory(
         return runtime.deliverStartupFollowup(
           handle,
           { agent, prompt: prompt.text },
-          { agentLaunch: true, ...(signal ? { signal } : {}) }
+          {
+            onSubmitWritten: policy.onSubmitWritten,
+            assertCurrent: policy.assertCurrent,
+            agentLaunch: policy.unprovableHost !== 'write-unless-shell',
+            ...(signal ? { signal } : {})
+          }
         )
       }
       return deliverTerminalAgentLaunchPrompt({
@@ -211,6 +239,11 @@ export function agentLaunchSurfaceFactory(
         agent,
         freshLaunch,
         text: prompt.text,
+        onSubmitWritten: policy.onSubmitWritten,
+        assertCurrent: policy.assertCurrent,
+        allowBusy: policy.allowBusy,
+        unprovableHost: policy.unprovableHost,
+        expectedBinding: policy.expectedBinding,
         ...(signal ? { signal } : {})
       })
     }

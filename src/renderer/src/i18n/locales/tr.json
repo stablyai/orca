@@ -17642,8 +17642,6 @@
           "clear": "Argümanları temizle",
           "unsupported": "Bu ajan henüz ek argümanları desteklemiyor.",
           "label": "Ek ajan argümanları",
-          "needsFreshSession": "Ek argümanlar her çalıştırmada yeni bir oturum gerektirir.",
-          "useFreshSessions": "Yeni oturumlar kullan",
           "helper": "Her yeni oturumda bu ana makinenin varsayılan argümanlarına eklenir.",
           "detailLabel": "Ek argümanlar"
         },

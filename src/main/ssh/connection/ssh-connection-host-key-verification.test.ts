@@ -1,3 +1,4 @@
+import { runAttributedToSshOwner } from './ssh-connection-attribution'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -141,3 +142,30 @@ describe('SshConnection host key verification', () => {
     expect(connectAttempts).toBe(1)
   })
 })
+
+it.each([false, true])(
+  'automation auth fallback never opens credential UI, cached=%s',
+  async (cached) => {
+    resetSshConnectionMocks()
+    ssh2Mock.connectBehavior = 'error'
+    ssh2Mock.connectErrorMessage = 'All configured authentication methods failed'
+    const onCredentialRequest = vi.fn(async () => 'interactive-test-password')
+    await runAttributedToSshOwner(
+      Symbol('automation'),
+      async () => {
+        const conn = new SshConnection(
+          createTarget(),
+          createCallbacks({ onCredentialRequest }),
+          cached ? { password: 'rejected-cache', passphrase: null } : undefined
+        )
+        try {
+          await expect(conn.connect()).rejects.toThrow(/authentication/i)
+          expect(onCredentialRequest).not.toHaveBeenCalled()
+        } finally {
+          await conn.disconnect()
+        }
+      },
+      { allowCredentialPrompt: false }
+    )
+  }
+)

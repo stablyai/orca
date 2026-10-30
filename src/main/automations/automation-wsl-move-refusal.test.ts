@@ -217,6 +217,7 @@ describe('scheduled automations under a WSL move', () => {
     const dispatcher = vi.fn()
     const service = new AutomationService(store, {
       tickMs: 60_000,
+      allowRemoteHostScheduling: true,
       headlessDispatcher: dispatcher
     })
 

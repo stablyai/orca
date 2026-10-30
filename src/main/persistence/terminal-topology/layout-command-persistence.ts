@@ -80,6 +80,7 @@ export class LayoutCommandPersistence {
     hostIds: readonly string[] = [],
     run: {
       live?: LayoutLiveContext
+      beforeWrite?: () => boolean
       stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
       onEffects?: (effects: LayoutEffects) => void
     } = {}
@@ -97,15 +98,21 @@ export class LayoutCommandPersistence {
         noteEffects: (noted) => (effects = noted)
       })
     )
+    const guardedCommit = (): DurableProfileStateMutation<LayoutApplyOutcome> => {
+      if (run.beforeWrite?.() === false) {
+        return { value: { ok: false, code: 'pane_not_found' }, persist: false }
+      }
+      return commit()
+    }
     // Applied closes must stay closed even when persistence fails.
     const applied: Promise<LayoutApplyOutcome> =
       ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
         ? keptOnWriteFailure(
             (mutate) => context.runtime.runDurableMutation(mutate),
-            writingOnly(resolved, commit),
+            writingOnly(resolved, guardedCommit),
             context.writeLater
           )
-        : context.runtime.runDurableMutation(writingOnly(resolved, commit))
+        : context.runtime.runDurableMutation(writingOnly(resolved, guardedCommit))
     if (!run.onEffects) {
       return applied
     }

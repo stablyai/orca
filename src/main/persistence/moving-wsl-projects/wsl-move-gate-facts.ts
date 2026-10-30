@@ -7,7 +7,8 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
 import { getAgentResumeArgv } from '../../../shared/agent-resume-argv'
 import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
-import { isFinalAutomationRunStatus, type AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations-types'
+import { isAutomationRunHistory } from '../../../shared/automation-run-retention'
 import { probePtyRunningWorkWithInspection } from '../../../shared/pty-running-work-probe'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalProcessInspection } from '../../../shared/terminal-process-inspection'
@@ -118,7 +119,7 @@ export async function collectWslMoveGateInputs(
     panes,
     runningAutomationRunIds: sources
       .automationRuns()
-      .filter((run) => !isFinalAutomationRunStatus(run.status) && inScope(run.workspaceId))
+      .filter((run) => !isAutomationRunHistory(run) && inScope(run.workspaceId))
       .map((run) => run.id),
     activeDispatchIds: sources
       .dispatches()

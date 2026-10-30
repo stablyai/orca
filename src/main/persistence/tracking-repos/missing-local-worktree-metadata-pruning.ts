@@ -1,3 +1,4 @@
+import { isAutomationRunHistory } from '../../../shared/automation-run-retention'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -6,7 +7,6 @@ import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
 import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
 import {
   addPersistedSessionWorktreeOwners,
@@ -56,7 +56,7 @@ function collectPersistedWorkspaceOwners(
     }
   }
   for (const run of state.automationRuns) {
-    if (!isFinalAutomationRunStatus(run.status)) {
+    if (!isAutomationRunHistory(run)) {
       add(run.workspaceId)
     }
   }

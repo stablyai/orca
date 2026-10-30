@@ -110,17 +110,21 @@ describe('automation extra agent args persistence', () => {
     expect(store.listAutomations()[0].extraAgentArgs).toBe('--model opus')
   })
 
-  it('validates the merged record so enabling Reuse with stored extras fails', async () => {
+  it('retains fresh-launch extras when enabling Reuse and still validates agent support', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
     const { id } = store.createAutomation({ ...BASE, extraAgentArgs: '--model opus' })
 
-    expect(() => store.updateAutomation(id, { reuseSession: true })).toThrow(
-      'Extra arguments require a fresh session for every run.'
-    )
-    expect(() =>
+    expect(store.updateAutomation(id, { reuseSession: true })).toMatchObject({
+      reuseSession: true,
+      extraAgentArgs: '--model opus'
+    })
+    expect(
       store.createAutomation({ ...BASE, reuseSession: true, extraAgentArgs: '--model opus' })
-    ).toThrow('fresh session')
+    ).toMatchObject({
+      reuseSession: true,
+      extraAgentArgs: '--model opus'
+    })
     expect(() => store.updateAutomation(id, { agentId: 'gemini' })).toThrow("aren't supported")
     expect(
       store.updateAutomation(id, { extraAgentArgs: '', reuseSession: true }).reuseSession
@@ -143,10 +147,13 @@ describe('automation extra agent args persistence', () => {
       extraAgentArgs: '--model opus',
       launchSetup: { surface: 'chat', extraAgentArgs: '--model opus' }
     })
-    expect(() =>
+    expect(
       store.updateAutomation(chat.id, { launchSetupPatch: { surface: 'terminal' } })
-    ).toThrow('fresh session')
-    expect(store.listAutomations().find((row) => row.id === chat.id)?.surface).toBe('chat')
+    ).toMatchObject({
+      surface: 'terminal',
+      reuseSession: true,
+      extraAgentArgs: '--model opus'
+    })
     expect(() =>
       store.updateAutomation(chat.id, {
         extraAgentArgs: '',

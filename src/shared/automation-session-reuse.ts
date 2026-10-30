@@ -37,7 +37,7 @@ export function findReusableAutomationRun<Session>(args: {
       continue
     }
     const status = args.agentStatusForPane(run.terminalPaneKey)
-    if (!status || !isIdleAgentOf(status, args.agentId)) {
+    if (status && !isAgentOf(status, args.agentId)) {
       continue
     }
     const session = args.liveSession(run)
@@ -50,19 +50,10 @@ export function findReusableAutomationRun<Session>(args: {
 
 function isReusableRun(run: AutomationRun, worktreeId: string): run is ReusableAutomationRun {
   return (
-    run.workspaceId === worktreeId &&
-    run.status === 'completed' &&
-    Boolean(run.terminalPaneKey) &&
-    Boolean(run.terminalPtyId)
+    run.workspaceId === worktreeId && Boolean(run.terminalPaneKey) && Boolean(run.terminalPtyId)
   )
 }
 
-function isIdleAgentOf(
-  status: { state: string; agentType?: AgentType },
-  agentId: TuiAgent
-): boolean {
-  if (status.state !== 'done') {
-    return false
-  }
+function isAgentOf(status: { state: string; agentType?: AgentType }, agentId: TuiAgent): boolean {
   return !status.agentType || status.agentType === 'unknown' || status.agentType === agentId
 }

@@ -1,4 +1,10 @@
 import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
+import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
+import {
+  connectRegisteredSshTarget,
+  getRegisteredSshState,
+  registeredSshTargetNeedsCredentialPrompt
+} from '../ssh/targets/ssh-target-registry'
 import type { WebContents } from 'electron'
 import { isDeepStrictEqual } from 'node:util'
 import type {
@@ -6,7 +12,6 @@ import type {
   AutomationRun,
   AutomationPrecheckResult
 } from '../../shared/automations-types'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
@@ -103,10 +108,13 @@ export async function requestAutomationDispatch(
     }
     return target
   }
-  const refuse = (failure: AutomationRunFailure) =>
+  const refuse = (
+    failure: AutomationRunFailure,
+    status: 'skipped_unavailable' | 'skipped_needs_interactive_auth' = 'skipped_unavailable'
+  ) =>
     ctx.runs.updateRun({
       runId: run.id,
-      status: 'skipped_unavailable',
+      status,
       workspaceId: automation.workspaceId,
       ...failure
     })
@@ -153,7 +161,10 @@ export async function requestAutomationDispatch(
   if (lateRefusal || !target.ok) {
     return refuse(lateRefusal ?? automationRunFailure('noDispatchHost'))
   }
-  const renderer = automation.surface === 'chat' ? null : ctx.getRenderer()
+  const renderer =
+    automation.surface === 'chat' || (automation.reuseSession && ctx.headlessDispatcher)
+      ? null
+      : ctx.getRenderer()
   if (renderer) {
     return sendRendererDispatch(
       renderer,
@@ -166,6 +177,37 @@ export async function requestAutomationDispatch(
       run
     )
   }
+  const connectionId = getRepoSshConnectionId(target.repo)
+  if (connectionId && getRegisteredSshState(connectionId)?.status !== 'connected') {
+    if (registeredSshTargetNeedsCredentialPrompt(connectionId)) {
+      return refuse(
+        {
+          error:
+            'The SSH host needs sign-in before this automation can run. Connect it and try again.'
+        },
+        'skipped_needs_interactive_auth'
+      )
+    }
+    try {
+      const connected = await connectRegisteredSshTarget(connectionId, {
+        automatic: true,
+        interactive: false
+      })
+      if (readRun().status !== 'dispatching') {
+        return returnDurable(readRun())
+      }
+      target = resolveCurrentTarget()
+      if (!target.ok) {
+        return refuse(target)
+      }
+      if (connected.status !== 'connected') {
+        return refuse({ error: 'The SSH host is unavailable. Connect it and try again.' })
+      }
+    } catch {
+      readRun()
+      return refuse({ error: 'The SSH host could not reconnect. Connect it and try again.' })
+    }
+  }
   const dispatcher = automation.surface === 'chat' ? ctx.chatDispatcher : ctx.headlessDispatcher
   if (!dispatcher) {
     return refuse(automationRunFailure('noDispatchHost'))
@@ -175,6 +217,7 @@ export async function requestAutomationDispatch(
     automation,
     run,
     target,
+    currentRun: readRun,
     dispatcher: (request) => {
       if (readRun().status !== 'dispatching') {
         throw new AutomationDispatchCancelledError('The run changed before its agent could launch.')

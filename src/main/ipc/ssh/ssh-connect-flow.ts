@@ -44,7 +44,7 @@ import {
 /** `automatic`: no user asked for this connect, so a cancelled sign-in or a Disconnect stays. */
 export async function connectTarget(
   targetId: string,
-  options: { automatic?: boolean } = {}
+  options: { automatic?: boolean; interactive?: boolean } = {}
 ): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
@@ -57,7 +57,7 @@ export async function connectTarget(
       const label = getSshTargetRegistryStore()?.getTarget(targetId)?.label ?? targetId
       throw createSshUserDisconnectedError(label)
     }
-    return admitConnect(targetId, true)
+    return admitConnect(targetId, true, options.interactive !== false)
   }
   clearSshCredentialDeclined(targetId)
   // Only explicit user connects may lift the re-pair cap.
@@ -75,7 +75,11 @@ export async function connectTarget(
   }
 }
 
-async function admitConnect(targetId: string, automatic = false): Promise<SshConnectionState> {
+async function admitConnect(
+  targetId: string,
+  automatic = false,
+  interactive = true
+): Promise<SshConnectionState> {
   // Fence requests that entered before disconnect/reset but resume after its cleanup.
   const admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
@@ -104,7 +108,7 @@ async function admitConnect(targetId: string, automatic = false): Promise<SshCon
   // Shutdown fences and snapshots synchronously; register below or fail here without an admission gap.
   assertSshConnectsNotFenced()
 
-  const promise = doConnect(targetId, replacePendingTransport, automatic)
+  const promise = doConnect(targetId, replacePendingTransport, automatic, interactive)
   const attempt = { authority: getSshProviderAuthority(targetId), promise }
   connectInFlight.set(targetId, attempt)
   try {
@@ -119,7 +123,8 @@ async function admitConnect(targetId: string, automatic = false): Promise<SshCon
 async function doConnect(
   targetId: string,
   replacePendingTransport = false,
-  automatic = false
+  automatic = false,
+  interactive = true
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
@@ -141,18 +146,18 @@ async function doConnect(
   // Attribute decision-created transports so cancellation closes only those not adopted by a newer owner.
   const owner = Symbol(targetId)
   // Deploy/conversion require teardown first; rotated authority still lets concurrent connects join.
-  const server = await runAttributedToSshOwner(owner, () => decideHostServer(target)).catch(
-    async (error: unknown) => {
-      if (!isCurrentConnectAttempt(targetId, authority)) {
-        await abandonDecisionTransport(targetId, owner, authority)
-        throw createCancelledConnectAttemptError()
-      }
-      // A failed setup leaves no relay to own the transport its decision dialed.
+  const server = await runAttributedToSshOwner(owner, () => decideHostServer(target), {
+    allowCredentialPrompt: interactive
+  }).catch(async (error: unknown) => {
+    if (!isCurrentConnectAttempt(targetId, authority)) {
       await abandonDecisionTransport(targetId, owner, authority)
-      publishHostServerDecisionFailure(targetId, error)
-      throw error
+      throw createCancelledConnectAttemptError()
     }
-  )
+    // A failed setup leaves no relay to own the transport its decision dialed.
+    await abandonDecisionTransport(targetId, owner, authority)
+    publishHostServerDecisionFailure(targetId, error)
+    throw error
+  })
   // A shutdown that began during the decision is the actionable reason, ahead of the rotation.
   assertSshConnectsNotFenced()
   if (!isCurrentConnectAttempt(targetId, authority)) {

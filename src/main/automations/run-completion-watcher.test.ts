@@ -184,9 +184,8 @@ describe('authority-owned automation run completion', () => {
     service.setRendererReady()
     await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
 
-    expect(readRun(store, automation.id, dispatched.id).status).toBe('dispatch_failed')
+    expect(readRun(store, automation.id, dispatched.id).status).toBe('dispatched')
     expect(readRun(store, automation.id, dispatching.id).status).toBe('dispatch_failed')
-    expect(readRun(store, automation.id, dispatched.id).error).toContain('terminal')
     expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
     expect(readRun(store, automation.id, pendingManual.id)).toMatchObject({
       status: 'dispatch_failed',
@@ -351,4 +350,62 @@ describe('automationsChanged publication', () => {
     expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
     service.stop()
   })
+  it.each(['complete', 'detach', 'argv', 'raw-startup', 'delete', 'stop'] as const)(
+    'owns a prearmed result through dispatch acknowledgement: %s',
+    async (outcome) => {
+      const store = await createStore()
+      const automation = createAutomation(store)
+      const completed = Promise.withResolvers<AutomationRunCompletionObservation | null>()
+      let reservation: ReturnType<AutomationService['reserveTerminalRun']>
+      let service: AutomationService
+      service = new AutomationService(store, {
+        allowRemoteHostScheduling: true,
+        terminalObserver: {
+          resolveRunTerminal: () => 'handle-1',
+          observeCompletion: () => completed.promise
+        },
+        headlessDispatcher: async ({ run }) => {
+          reservation = service.reserveTerminalRun(run, automation.prompt, automation.agentId)
+          reservation!.bind({ ...LAUNCH_TARGET, sessionKind: 'terminal' }, 'handle-1')
+          if (outcome === 'argv' || outcome === 'raw-startup') {
+            reservation!.deliverySettled()
+          } else {
+            reservation!.submitted()
+          }
+          completed.resolve(
+            outcome === 'complete' || outcome === 'delete' || outcome === 'stop'
+              ? { status: 'completed' }
+              : null
+          )
+          await Promise.resolve()
+          if (outcome === 'delete') {
+            store.deleteAutomation(automation.id)
+          }
+          if (outcome === 'stop') {
+            service.stop()
+          }
+          return { ...LAUNCH_TARGET, sessionKind: 'terminal' }
+        }
+      })
+      try {
+        if (outcome === 'delete' || outcome === 'stop') {
+          await service.runNow(automation.id).catch(() => {})
+          expect(reservation!.signal.aborted).toBe(true)
+          expect(
+            store.listAutomationRuns(automation.id).some((run) => run.status === 'completed')
+          ).toBe(false)
+        } else {
+          const result = await service.runNow(automation.id)
+          await vi.waitFor(() =>
+            expect(readRun(store, automation.id, result.id).status).toBe(
+              outcome === 'complete' ? 'completed' : 'dispatched'
+            )
+          )
+          expect(reservation!.signal.aborted).toBe(true)
+        }
+      } finally {
+        service.stop()
+      }
+    }
+  )
 })

@@ -2,30 +2,45 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { SshConnection } from './ssh-connection'
 
-const scope = new AsyncLocalStorage<symbol>()
+const scope = new AsyncLocalStorage<{ owner: symbol; allowCredentialPrompt: boolean }>()
 const openers = new WeakMap<SshConnection, symbol>()
 const adopters = new WeakMap<SshConnection, symbol>()
 // A tunnel built outside any connect attempt (a restore, a lifecycle action) owns its transport.
 const BACKGROUND_OWNER = Symbol('ssh-connection-background-owner')
 
-export function runAttributedToSshOwner<T>(owner: symbol, work: () => Promise<T>): Promise<T> {
-  return scope.run(owner, work)
+export function runAttributedToSshOwner<T>(
+  owner: symbol,
+  work: () => Promise<T>,
+  options?: { allowCredentialPrompt?: boolean }
+): Promise<T> {
+  return scope.run(
+    {
+      owner,
+      allowCredentialPrompt:
+        options?.allowCredentialPrompt !== false && sshCredentialPromptAllowed()
+    },
+    work
+  )
+}
+
+export function sshCredentialPromptAllowed(): boolean {
+  return scope.getStore()?.allowCredentialPrompt !== false
 }
 
 export function currentSshOwner(): symbol | undefined {
-  return scope.getStore()
+  return scope.getStore()?.owner
 }
 
 /** Work that reuses a pooled transport relies on it, so it becomes that transport's latest owner. */
 export function recordSshConnectionReused(connection: SshConnection): void {
-  const owner = scope.getStore()
+  const owner = scope.getStore()?.owner
   if (owner) {
     adopters.set(connection, owner)
   }
 }
 
 export function recordSshConnectionOpened(connection: SshConnection): void {
-  const owner = scope.getStore()
+  const owner = scope.getStore()?.owner
   if (owner) {
     openers.set(connection, owner)
   }
@@ -33,7 +48,7 @@ export function recordSshConnectionOpened(connection: SshConnection): void {
 
 /** The latest user of a pooled transport; a tunnel outside any attempt counts as its own owner. */
 export function adoptSshConnection(connection: SshConnection, owner?: symbol): void {
-  adopters.set(connection, owner ?? scope.getStore() ?? BACKGROUND_OWNER)
+  adopters.set(connection, owner ?? scope.getStore()?.owner ?? BACKGROUND_OWNER)
 }
 
 /** True only for a transport `owner` opened and nothing newer took over. */

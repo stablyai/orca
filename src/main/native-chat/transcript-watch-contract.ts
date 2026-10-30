@@ -8,7 +8,16 @@ import type {
 } from '../../shared/native-chat-types'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
 
+export type TranscriptRecordObservation =
+  | { kind: 'reset'; identity: string }
+  | { kind: 'read-start'; identity: string; offset: number }
+  | { kind: 'record'; identity: string; offset: number; line: string }
+  | { kind: 'caught-up'; identity: string; offset: number }
+  | { kind: 'gap'; identity: string }
+
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
+  /** Host-only ordered records, before the display callbacks batch lifecycle edges. */
+  onRecord?: (record: TranscriptRecordObservation) => void
   agent: AgentType
   sessionId: string
   onAppend: (messages: NativeChatMessage[], lifecycle?: NativeChatTurnLifecycle) => void
@@ -38,4 +47,12 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
 export type NativeChatTranscriptSubscription = {
   unsubscribe: () => void
   watching: boolean
+}
+
+export function transcriptReadRecord(
+  line: string | null,
+  offset: number,
+  identity: string
+): TranscriptRecordObservation {
+  return line === null ? { kind: 'gap', identity } : { kind: 'record', identity, offset, line }
 }

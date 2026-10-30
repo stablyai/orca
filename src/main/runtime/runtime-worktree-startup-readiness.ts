@@ -56,7 +56,12 @@ export async function deliverStartupFollowupPrompt(
   host: WorktreeStartupReadinessHost,
   handle: string,
   { agent, prompt }: WorktreeStartupFollowup,
-  options: { signal?: AbortSignal; agentLaunch?: boolean } = {}
+  options: {
+    signal?: AbortSignal
+    agentLaunch?: boolean
+    onSubmitWritten?: () => void
+    assertCurrent?: () => void
+  } = {}
 ): Promise<boolean> {
   const { signal } = options
   try {
@@ -72,6 +77,8 @@ export async function deliverStartupFollowupPrompt(
       }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
+        options.assertCurrent?.()
+        signal?.throwIfAborted()
         host.write(ptyId, `${prompt}\r`, 'launch')
         return true
       }
@@ -82,6 +89,8 @@ export async function deliverStartupFollowupPrompt(
       agent,
       freshLaunch: true,
       text: prompt,
+      onSubmitWritten: options.onSubmitWritten,
+      assertCurrent: options.assertCurrent,
       unprovableHost: 'write-if-shell-provable',
       ...(signal ? { signal } : {})
     })

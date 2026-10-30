@@ -537,7 +537,7 @@ describe('Store', () => {
     expect(healed.automationRuns.at(-1)?.runNumber).toBe(250)
   })
 
-  it('does not strand an in-flight run whose completion lands after the retention cap', async () => {
+  it('does not strand an in-flight Chat run whose completion lands after the retention cap', async () => {
     const store = await createStore()
     store.addRepo(
       makeRepo({
@@ -560,6 +560,7 @@ describe('Store', () => {
     store.updateAutomationRun({
       runId: inFlight.id,
       status: 'dispatched',
+      sessionKind: 'chat',
       workspaceId: null,
       error: null
     })

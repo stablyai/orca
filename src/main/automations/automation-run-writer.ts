@@ -24,7 +24,8 @@ export function createAutomationRunWriter(
     | 'automationChangeSelector'
     | 'flushPendingOrThrowAsync'
   >,
-  publish: PublishAutomationsChanged | null
+  publish: PublishAutomationsChanged | null,
+  onRunsChanged?: () => void
 ): AutomationRunWriter {
   // Scope to the run’s host; missing records fall back to an authority-wide event.
   const announce = (automationId: string, reason: 'run' | 'usage'): void => {
@@ -42,12 +43,14 @@ export function createAutomationRunWriter(
     },
     createRun: async (automation, scheduledFor, trigger): Promise<AutomationRun> => {
       const run = store.createAutomationRun(automation, scheduledFor, trigger)
+      onRunsChanged?.()
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       announce(automation.id, 'run')
       return run
     },
     updateRun: async (result: AutomationDispatchResult): Promise<AutomationRun> => {
       const run = store.updateAutomationRun(result)
+      onRunsChanged?.()
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       announce(run.automationId, result.usage ? 'usage' : 'run')
       return run
@@ -55,6 +58,7 @@ export function createAutomationRunWriter(
     repeatSkip: async (automationId, error, scheduledFor): Promise<AutomationRun | null> => {
       const run = store.recordRepeatedAutomationSkip(automationId, error, scheduledFor)
       if (run) {
+        onRunsChanged?.()
         await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
         announce(automationId, 'run')
       }

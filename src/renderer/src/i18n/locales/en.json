@@ -17954,8 +17954,6 @@
           "clear": "Clear arguments",
           "unsupported": "Extra arguments aren't supported for this agent yet.",
           "label": "Extra agent arguments",
-          "needsFreshSession": "Extra arguments require a fresh session for every run.",
-          "useFreshSessions": "Use fresh sessions",
           "helper": "Added to this host's default arguments for each fresh session.",
           "detailLabel": "Extra arguments"
         },

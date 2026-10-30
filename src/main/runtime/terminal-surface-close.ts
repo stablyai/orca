@@ -154,6 +154,7 @@ export function closeTerminalSurfaceInWorkspaceSession(
 
 /** How one close commits; `reason` is recorded only when the close resolves to the whole tab. */
 export type TerminalSurfaceCloseOptions = {
+  beforeAction?: () => void
   allowMissing?: boolean
   force?: boolean
   reason?: RuntimeSessionTabCloseReason
@@ -269,6 +270,7 @@ export function terminalSurfaceCloseMutation(
         target.kind === 'tab' &&
         !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
       ) {
+        commit.options.beforeAction?.()
         commit.setSession(routed.result.session, routed.hostId)
         return { value: undefined }
       }
@@ -277,6 +279,7 @@ export function terminalSurfaceCloseMutation(
         persist: false
       }
     }
+    commit.options.beforeAction?.()
     // Why every holder: a legacy relay reattach can leave one tab in two partitions.
     for (const { hostId, result } of closed) {
       commit.setSession(result.session, hostId)
@@ -284,5 +287,15 @@ export function terminalSurfaceCloseMutation(
     commit.onClosed([...new Set(closed.flatMap(({ result }) => result.ptyIdsToKill))])
     // Bookkeeping cannot undo user close or skip kill; failed persistence leaves the in-memory removal dirty for the next write.
     return { value: undefined }
+  }
+}
+
+/** Automatic retirement may be revoked while asynchronous preparation runs. */
+export function terminalCloseActionCurrent(beforeAction?: () => void): boolean {
+  try {
+    beforeAction?.()
+    return true
+  } catch {
+    return false
   }
 }

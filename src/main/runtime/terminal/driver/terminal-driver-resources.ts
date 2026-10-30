@@ -91,7 +91,10 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     processIncarnation: string,
     serializedHostScope: string | null
   ): Promise<'live' | 'exited' | 'unverifiable'>
-  abstract closeTerminal(handle: string): Promise<RuntimeTerminalClose>
+  abstract closeTerminal(
+    handle: string,
+    options?: { beforeAction?: () => void }
+  ): Promise<RuntimeTerminalClose>
   abstract getExactWorkerProviderSession(
     handle: string,
     observedAfter: number

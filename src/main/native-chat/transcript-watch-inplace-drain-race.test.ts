@@ -95,3 +95,47 @@ it.each([
     expect(getActiveNativeChatWatcherCount()).toBe(before)
   }
 })
+
+it('keeps raw accepted input and end in order when display lifecycle batching collapses them', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-ordered-'))
+  const filePath = join(root, 'rollout.jsonl')
+  const events: string[] = []
+  let stop = () => {}
+  try {
+    await writeFile(filePath, '')
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'codex',
+      sessionId: 'session',
+      filePath,
+      debounceMs: 0,
+      reconciliationIntervalMs: 20,
+      onAppend: () => {},
+      initialLimit: 1,
+      onRecord: (event) => {
+        events.push(event.kind === 'record' ? JSON.parse(event.line).payload.type : event.kind)
+      }
+    })
+    stop = sub.unsubscribe
+    await expect.poll(() => events).toContain('caught-up')
+    events.length = 0
+    const row = (payload: unknown) => `${JSON.stringify({ type: 'event_msg', payload })}\n`
+    await appendFile(
+      filePath,
+      row({ type: 'task_started', turn_id: 'T' }) +
+        row({
+          type: 'item_completed',
+          turn_id: 'T',
+          item: { type: 'UserMessage', id: 'U', content: [{ type: 'text', text: 'P' }] }
+        }) +
+        row({ type: 'task_complete', turn_id: 'T' })
+    )
+    await expect
+      .poll(() => events.filter((event) => event.startsWith('task_') || event === 'item_completed'))
+      .toEqual(['task_started', 'item_completed', 'task_complete'])
+    expect(events.indexOf('read-start')).toBeLessThan(events.indexOf('item_completed'))
+    expect(events.lastIndexOf('caught-up')).toBeGreaterThan(events.indexOf('task_complete'))
+  } finally {
+    stop()
+    await rm(root, { recursive: true, force: true })
+  }
+})

@@ -14370,8 +14370,6 @@
           "clear": "Limpar argumentos",
           "unsupported": "Este agente ainda não aceita argumentos extras.",
           "label": "Argumentos extras do agente",
-          "needsFreshSession": "Os argumentos extras exigem uma nova sessão a cada execução.",
-          "useFreshSessions": "Usar novas sessões",
           "helper": "Adicionados aos argumentos padrão deste host a cada nova sessão.",
           "detailLabel": "Argumentos extras"
         },
