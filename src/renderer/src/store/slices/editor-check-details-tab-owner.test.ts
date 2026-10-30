@@ -68,8 +68,8 @@ function createOwnerStore(state: Partial<AppState>) {
   return { store, fetchPRCheckDetails, setCatalog }
 }
 
-function open(store: StoreApi<AppState>): string {
-  store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+function open(store: StoreApi<AppState>, worktreeId = 'wt-1'): string {
+  store.getState().openCheckRunDetails(worktreeId, 'repo:99', check, {
     details: null,
     loading: false,
     error: null
@@ -81,6 +81,82 @@ describe('check-details tab owner', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  it.each(['tracked', 'detected'] as const)(
+    'reloads a pinned direct SSH tab when its %s listing shares a target with a server proxy',
+    async (source) => {
+      const directRepo = { ...pairedRepo, path: '/direct', executionHostId: 'ssh:builder' as const }
+      const directWorkspace = {
+        ...pairedWorktree,
+        id: 'repo-1::/direct',
+        path: '/direct',
+        runtimeOwnerEnvironmentId: undefined
+      }
+      const listings = (
+        rows: AppState['worktreesByRepo'][string]
+      ): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'> => ({
+        worktreesByRepo: source === 'tracked' ? { 'repo-1': rows } : {},
+        detectedWorktreesByRepo:
+          source === 'detected'
+            ? {
+                'repo-1': {
+                  repoId: 'repo-1',
+                  authoritative: true,
+                  source: 'git',
+                  worktrees: rows.map((row) => ({
+                    ...row,
+                    ownership: 'external',
+                    selectedCheckout: false,
+                    visible: true
+                  }))
+                }
+              }
+            : {}
+      })
+      const { store, fetchPRCheckDetails, setCatalog } = createOwnerStore({
+        activeWorktreeId: directWorkspace.id,
+        activeWorkspaceExecutionHostId: 'ssh:builder',
+        repos: [directRepo, pairedRepo],
+        ...listings([directWorkspace])
+      })
+      const tabId = open(store, directWorkspace.id)
+      expect(store.getState().openFiles[0].operationProvenance?.generation.route).toEqual({
+        executionHostId: 'ssh:builder',
+        runtimeEnvironmentId: null
+      })
+      store.setState({ activeWorkspaceExecutionHostId: 'runtime:server' })
+
+      await store.getState().reloadOpenCheckRunDetailsTab(tabId)
+
+      expect(fetchPRCheckDetails).toHaveBeenCalledWith(
+        '/direct',
+        expect.objectContaining({ checkRunId: 42 }),
+        { repoId: 'repo-1', repoOwnerExecutionHostId: 'ssh:builder' }
+      )
+      fetchPRCheckDetails.mockClear()
+      setCatalog({ repos: [pairedRepo] })
+      await store.getState().reloadOpenCheckRunDetailsTab(tabId)
+      expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+
+      setCatalog({
+        repos: [directRepo, pairedRepo],
+        ...listings([directWorkspace, { ...pairedWorktree, id: directWorkspace.id }])
+      })
+      await store.getState().reloadOpenCheckRunDetailsTab(tabId)
+      expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+      expect(store.getState().openFiles[0].checkRunDetails?.error).toBe(
+        'Repository details are unavailable for this check.'
+      )
+
+      const pairedTabId = open(store, directWorkspace.id)
+      await store.getState().reloadOpenCheckRunDetailsTab(pairedTabId)
+      expect(fetchPRCheckDetails).toHaveBeenCalledWith(
+        '/remote',
+        expect.objectContaining({ checkRunId: 42 }),
+        { repoId: 'repo-1', repoOwnerExecutionHostId: 'runtime:server' }
+      )
+    }
+  )
 
   it.each([
     {

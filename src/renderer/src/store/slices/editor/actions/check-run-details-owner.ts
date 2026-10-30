@@ -15,6 +15,7 @@ import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index
 import { layoutFrameWorkspace } from '@/runtime/layout-frame-workspaces'
 import {
   resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteForHost,
   type WorktreeOperationOwnerRecord,
   type WorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
@@ -145,7 +146,27 @@ function getRowRoute(state: AppState, row: WorktreeOperationOwnerRecord) {
     })
   }
   const resolution = resolveExactWorktreeRoute(state, row)
-  return resolution.kind === 'resolved' ? onPairedWebClientHost(state, resolution.route) : null
+  if (resolution.kind === 'resolved') {
+    return onPairedWebClientHost(state, resolution.route)
+  }
+  if (resolution.kind !== 'ambiguous' || !row.hostId) {
+    return null
+  }
+  // Opening can prove a direct listing despite a repo proxy; retain that fallback without adopting a server's row.
+  const directRoute = onPairedWebClientHost(state, {
+    executionHostId: row.hostId,
+    runtimeEnvironmentId: null
+  })
+  const qualifiedRoute = resolveWorktreeOperationRouteForHost(
+    {
+      ...state,
+      worktreesByRepo: selectWorktreesByRepo(state),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state)
+    },
+    row.id,
+    row.hostId
+  )
+  return qualifiedRoute && isTabOwnerRoute(directRoute, qualifiedRoute) ? qualifiedRoute : null
 }
 
 function isTabOwnerRoute(tab: WorktreeOperationRoute, row: WorktreeOperationRoute): boolean {
