@@ -22,6 +22,7 @@ import {
   isBacklogFilterEmpty,
   type BacklogFilters
 } from '@/components/task-page-azure-devops-backlog-filters'
+import type { AzureDevOpsTaskView } from '@/components/task-page-azure-devops-team-selection-persistence'
 
 export type AzureDevOpsFilterOptions = {
   workItemTypes: string[]
@@ -72,19 +73,24 @@ export function collectAzureDevOpsFilterOptions(
 
 /**
  * Options describe what the active view shows: a board keeps the completed cards the
- * backlog drops, so its `Done`/`Closed` states, tags and assignees only exist there.
+ * backlog drops, so its `Done`/`Closed` states, tags and assignees only exist there,
+ * and the Work items view spans the project rather than one team's areas.
  */
 export function collectAzureDevOpsViewFilterOptions(args: {
-  view: 'backlog' | 'board'
+  view: AzureDevOpsTaskView
   /** Null until the board for the selected level is loaded. */
   boardItems: AzureDevOpsWorkItem[] | null
+  workItems: AzureDevOpsWorkItem[]
   backlogItems: AzureDevOpsWorkItem[]
   iterations: AzureDevOpsIteration[]
 }): AzureDevOpsFilterOptions {
-  return collectAzureDevOpsFilterOptions(
-    args.view === 'board' && args.boardItems !== null ? args.boardItems : args.backlogItems,
-    args.iterations
-  )
+  const items =
+    args.view === 'board' && args.boardItems !== null
+      ? args.boardItems
+      : args.view === 'workItems'
+        ? args.workItems
+        : args.backlogItems
+  return collectAzureDevOpsFilterOptions(items, args.iterations)
 }
 
 function toggle(set: ReadonlySet<string>, value: string): Set<string> {

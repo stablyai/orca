@@ -17,6 +17,10 @@ import {
   type BacklogFilters
 } from './task-page-azure-devops-backlog-filters'
 import type { BacklogRow } from './task-page-azure-devops-backlog-tree'
+import {
+  azureDevOpsWorkItemColumns,
+  buildAzureDevOpsWorkItemRows
+} from './task-page-azure-devops-work-item-rows'
 import type { useAzureDevOpsBacklogColumnWidths } from './use-azure-devops-backlog-column-widths'
 import type { AzureDevOpsContentProps } from './use-task-page-azure-devops-state'
 
@@ -57,6 +61,12 @@ function buildBoardProps(args: {
 
 // Why: pulled out of the hook so the hook body stays under the file line budget.
 export function buildAzureDevOpsContentProps(args: {
+  /** Items assigned to the signed-in user project-wide, most recently changed first. */
+  workItems: AzureDevOpsWorkItem[]
+  workItemsUnhydratedItemCount: number
+  workItemsErrorStatus: AzureDevOpsContentProps['workItems']['errorStatus']
+  workItemsErrorMessage: string | null
+  workItemsLoading: boolean
   status: AzureDevOpsContentProps['status']
   errorMessage: string | null
   projectLabel: string | null
@@ -149,6 +159,27 @@ export function buildAzureDevOpsContentProps(args: {
       onChange: args.setFilters
     },
     backlogUnhydratedItemCount: args.backlogUnhydratedItemCount,
+    workItems: {
+      // The view filters locally, like the backlog and the board.
+      table: {
+        rows: buildAzureDevOpsWorkItemRows(
+          args.workItems.filter((item) => matchesBacklogFilters(item, args.filters))
+        ),
+        columnFields: azureDevOpsWorkItemColumns(),
+        workItemTypes: args.workItemTypes,
+        tagColors: {},
+        itemById: args.itemById,
+        // Flat list: nothing expands, so the handler has no row to act on.
+        onToggleExpand: () => {},
+        onOpenItem: args.setDetailId,
+        onUseItem: args.useItem
+      },
+      totalItemCount: args.workItems.length,
+      unhydratedItemCount: args.workItemsUnhydratedItemCount,
+      errorStatus: args.workItemsErrorStatus,
+      errorMessage: args.workItemsErrorMessage,
+      loading: args.workItemsLoading
+    },
     table: {
       rows: args.rows,
       columnFields: args.columnWidths.columns,

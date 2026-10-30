@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AzureDevOpsAssignedWorkItemsPage,
   AzureDevOpsBacklogPage,
   AzureDevOpsTeam,
   AzureDevOpsTeamConfiguration,
@@ -250,6 +251,35 @@ describe('Azure DevOps backlog flow integration', () => {
       `${WIT}/workitems/10`,
       `${WIT}/workitems`
     ])
+  })
+
+  it('loads the Work items view with no team route at all', async () => {
+    const { calls } = installAzureDevOpsFetchFixture({
+      '/acme/_apis/projects/Project': PROJECT_RESPONSE,
+      [`${WIT}/workitemtypes`]: WORK_ITEM_TYPES_RESPONSE,
+      [`${WIT}/wiql`]: { workItems: [{ id: 11 }, { id: 10 }] },
+      [`${WIT}/workitems`]: (url: URL) => ({
+        value: (url.searchParams.get('ids') ?? '')
+          .split(',')
+          .map(Number)
+          .map((id) => POOL[id])
+          .filter(Boolean)
+      })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler registered for this channel returns the assigned work items page.
+    const page = (await handlers.get('azureDevOpsBoards:loadAssignedWorkItems')!(
+      {},
+      { repoPath, repoId: 'repo-1', connectionId: null }
+    )) as AzureDevOpsAssignedWorkItemsPage
+    expect(page.items.map((i) => i.id)).toEqual([11, 10])
+    expect(page.unhydratedItemCount).toBe(0)
+    // No team-scoped route is touched: this view is project-wide.
+    expect(calls.every((u) => !u.pathname.includes('/team-'))).toBe(true)
+    const body = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.find(([input]) => new URL(String(input)).pathname === `${WIT}/wiql`)?.[1]?.body
+    expect(String(body)).toContain('[System.AssignedTo] = @Me')
+    expect(String(body)).toContain('ORDER BY [System.ChangedDate] DESC')
   })
 
   it('reports a repo whose remote is not Azure DevOps before any HTTP call', async () => {

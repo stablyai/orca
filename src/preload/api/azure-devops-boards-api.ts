@@ -1,4 +1,5 @@
 import type {
+  AzureDevOpsAssignedWorkItemsPage,
   AzureDevOpsBacklogLevel,
   AzureDevOpsBacklogPage,
   AzureDevOpsBoardPage,
@@ -28,6 +29,10 @@ export type AzureDevOpsBoardsApi = {
   loadBoard: (
     args: AzureDevOpsBoardsRepoArgs & AzureDevOpsTeamRoute & { level: AzureDevOpsBacklogLevel }
   ) => Promise<AzureDevOpsBoardPage | null>
+  /** Project-wide, assigned to @Me; no team route, so no team area scoping. */
+  loadAssignedWorkItems: (
+    args: AzureDevOpsBoardsRepoArgs
+  ) => Promise<AzureDevOpsAssignedWorkItemsPage>
   getWorkItem: (
     args: AzureDevOpsBoardsRepoArgs & {
       id: number

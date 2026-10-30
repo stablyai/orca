@@ -11,6 +11,7 @@ import {
   EMPTY_BACKLOG_FILTERS,
   type BacklogFilters
 } from './task-page-azure-devops-backlog-filters'
+import type { AzureDevOpsTaskView } from './task-page-azure-devops-team-selection-persistence'
 
 const COLUMN_FIELD = 'WEF_1_Kanban.Column'
 const LANE_FIELD = 'WEF_1_Kanban.Lane'
@@ -92,16 +93,22 @@ function boardPage(overrides: Partial<AzureDevOpsBoardPage> = {}): AzureDevOpsBo
 
 function props(
   overrides: {
-    view?: 'backlog' | 'board'
+    view?: AzureDevOpsTaskView
     board?: AzureDevOpsBoardPage | null
     filters?: BacklogFilters
     boardAvailable?: boolean
+    workItems?: AzureDevOpsWorkItem[]
   } = {}
 ) {
   return buildAzureDevOpsContentProps({
     status: 'ready',
     errorMessage: null,
     projectLabel: 'acme/Project',
+    workItems: overrides.workItems ?? [],
+    workItemsUnhydratedItemCount: 0,
+    workItemsErrorStatus: null,
+    workItemsErrorMessage: null,
+    workItemsLoading: false,
     teams: [],
     teamName: 'Platform',
     selectTeam: vi.fn(),
@@ -191,5 +198,30 @@ describe('buildAzureDevOpsContentProps', () => {
     // A loaded page must not cost a layout build while the table is what is on screen.
     expect(props({ view: 'backlog' }).board).toBeNull()
     expect(props({ board: null }).board).toBeNull()
+  })
+
+  it('builds flat Work items rows in the host’s order, with no tree and no expansion', () => {
+    const built = props({ view: 'workItems', workItems: [item(7), item(3)] })
+    expect(built.workItems.table.rows.map((row) => row.key)).toEqual(['item:7', 'item:3'])
+    expect(built.workItems.table.rows.every((row) => row.kind === 'item' && !row.hasChildren)).toBe(
+      true
+    )
+    expect(built.workItems.table.columnFields.map((c) => c.referenceName)).toEqual([
+      'System.Title',
+      'System.State',
+      'System.AreaPath',
+      'System.ChangedDate'
+    ])
+    expect(built.workItems.totalItemCount).toBe(2)
+  })
+
+  it('filters the Work items list locally, keeping the unfiltered total for the empty state', () => {
+    const built = props({
+      view: 'workItems',
+      workItems: [item(7), item(3, { title: 'Needle' })],
+      filters: { ...EMPTY_BACKLOG_FILTERS, keyword: 'Needle' }
+    })
+    expect(built.workItems.table.rows.map((row) => row.key)).toEqual(['item:3'])
+    expect(built.workItems.totalItemCount).toBe(2)
   })
 })

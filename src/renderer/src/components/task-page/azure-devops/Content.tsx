@@ -58,6 +58,48 @@ function hostStatusNotice(
   return null
 }
 
+/** The Work items area: its own failure notices, then the flat assigned-to-me list. */
+export function AzureDevOpsWorkItemsArea(
+  props: AzureDevOpsContentProps['workItems']
+): React.JSX.Element {
+  const hostNotice = hostStatusNotice(props.errorStatus)
+  if (hostNotice !== null) {
+    return hostNotice
+  }
+  if (props.errorMessage !== null) {
+    return (
+      <Notice>
+        {translate(
+          'auto.components.TaskPage.azureDevOps.workItems.loadFailed',
+          'Couldn’t load your Azure DevOps work items: {{value0}}',
+          { value0: props.errorMessage }
+        )}
+      </Notice>
+    )
+  }
+  if (props.loading && props.table.rows.length === 0) {
+    return <Spinner />
+  }
+  if (props.totalItemCount === 0) {
+    return (
+      <Notice>
+        {translate(
+          'auto.components.TaskPage.azureDevOps.workItems.empty',
+          'No work items in this project are assigned to you.'
+        )}
+      </Notice>
+    )
+  }
+  return (
+    <>
+      <AzureDevOpsBacklogNotices unhydratedItemCount={props.unhydratedItemCount} />
+      <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
+        <AzureDevOpsBacklogTable {...props.table} />
+      </div>
+    </>
+  )
+}
+
 /** The board area: its own failure notices, then the board itself. */
 export function AzureDevOpsBoardArea(
   props: Pick<AzureDevOpsContentProps, 'board' | 'boardErrorStatus' | 'boardErrorMessage'>
@@ -92,6 +134,12 @@ export function TaskPageAzureDevOpsContent({
       <AzureDevOpsToolbar {...props.toolbar} />
       {hostNotice !== null ? (
         hostNotice
+      ) : props.view === 'workItems' ? (
+        // Why: this view needs no team and no level, so a team/level failure must not hide it.
+        <>
+          <TaskPageAzureDevOpsFilters {...props.filters} />
+          <AzureDevOpsWorkItemsArea {...props.workItems} />
+        </>
       ) : props.status === 'error' ? (
         <Notice>
           {translate(

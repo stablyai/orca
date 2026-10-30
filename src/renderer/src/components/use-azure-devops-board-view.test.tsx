@@ -113,9 +113,14 @@ describe('useAzureDevOpsBoardViewSelection', () => {
     expect(result.current.boardAvailable).toBe(true)
   })
 
-  it('keeps the backlog when another level is the persisted board one', () => {
+  it('lands on Work items when another level is the only persisted choice', () => {
     const { result } = render({ stored: { [featuresKey]: 'board' } })
-    expect(result.current.view).toBe('backlog')
+    expect(result.current.view).toBe('workItems')
+  })
+
+  it('lands on Work items with nothing persisted, and restores a persisted backlog choice', () => {
+    expect(render({}).result.current.view).toBe('workItems')
+    expect(render({ stored: { [requirementKey]: 'backlog' } }).result.current.view).toBe('backlog')
   })
 
   it('persists a change under the level key', () => {
@@ -134,15 +139,18 @@ describe('useAzureDevOpsBoardViewSelection', () => {
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
-  it('ignores a persisted value that is neither backlog nor board', () => {
+  it('ignores a persisted value that is not one of the three views', () => {
     const { result } = render({ stored: { [requirementKey]: 'kanban' } })
-    expect(result.current.view).toBe('backlog')
+    expect(result.current.view).toBe('workItems')
     expect(
       readAzureDevOpsViewSelection({ azureDevOpsViewSelection: { k: 'kanban' } }, 'k')
     ).toBeNull()
     expect(readAzureDevOpsViewSelection({ azureDevOpsViewSelection: { k: 'board' } }, 'k')).toBe(
       'board'
     )
+    expect(
+      readAzureDevOpsViewSelection({ azureDevOpsViewSelection: { k: 'workItems' } }, 'k')
+    ).toBe('workItems')
     expect(
       readAzureDevOpsViewSelection({ azureDevOpsViewSelection: { k: 'board' } }, null)
     ).toBeNull()

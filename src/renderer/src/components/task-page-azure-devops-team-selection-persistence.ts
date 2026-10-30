@@ -10,7 +10,11 @@ export type AzureDevOpsViewSelectionSettings = {
   azureDevOpsViewSelection: Record<string, string> | null
 }
 
-export type AzureDevOpsTaskView = 'backlog' | 'board'
+/** Mirrors Azure DevOps' own left nav: Work items, Boards, Backlogs. */
+export type AzureDevOpsTaskView = 'workItems' | 'backlog' | 'board'
+
+/** Where someone with no stored choice lands, as in Azure DevOps' own hub order. */
+export const DEFAULT_AZURE_DEVOPS_TASK_VIEW: AzureDevOpsTaskView = 'workItems'
 
 /** Backlog and board are per level, so the remembered view is scoped to team and level too. */
 export function azureDevOpsViewSelectionKey(
@@ -26,7 +30,7 @@ export function readAzureDevOpsViewSelection(
   key: string | null
 ): AzureDevOpsTaskView | null {
   const stored = key === null ? undefined : settings?.azureDevOpsViewSelection?.[key]
-  return stored === 'backlog' || stored === 'board' ? stored : null
+  return stored === 'workItems' || stored === 'backlog' || stored === 'board' ? stored : null
 }
 
 /** Remembers the view per level; a failed write toasts and leaves the in-memory pick alone. */

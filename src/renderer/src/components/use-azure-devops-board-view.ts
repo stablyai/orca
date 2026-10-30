@@ -13,6 +13,7 @@ import {
   type AzureDevOpsBoardLoadStatus
 } from './use-azure-devops-board-loader'
 import {
+  DEFAULT_AZURE_DEVOPS_TASK_VIEW,
   persistAzureDevOpsViewSelection,
   readAzureDevOpsViewSelection,
   type AzureDevOpsTaskView,
@@ -20,8 +21,8 @@ import {
 } from './task-page-azure-devops-team-selection-persistence'
 
 /**
- * The Backlog/Board choice for the selected level: restored from settings, written
- * back on a pick, and forced to Backlog for a level the session found board-less.
+ * The Work items/Backlog/Board choice for the selected level: restored from settings,
+ * written back on a pick, and forced to Backlog for a level the session found board-less.
  */
 export function useAzureDevOpsBoardViewSelection(args: {
   /** `azureDevOpsViewSelectionKey` for the current (project, team, level); null until known. */
@@ -54,10 +55,14 @@ export function useAzureDevOpsBoardViewSelection(args: {
   const chosen =
     picked !== null && picked.key === viewKey
       ? picked.view
-      : readAzureDevOpsViewSelection(settings, viewKey)
-  // A level this session found board-less, and a choice made before the key is known, show the backlog.
+      : (readAzureDevOpsViewSelection(settings, viewKey) ?? DEFAULT_AZURE_DEVOPS_TASK_VIEW)
+  // A level this session found board-less, or a Board choice made before the key is known, shows the backlog.
   const view: AzureDevOpsTaskView =
-    chosen === 'board' && viewKey !== null && !boardlessKeys.has(viewKey) ? 'board' : 'backlog'
+    chosen !== 'board'
+      ? chosen
+      : viewKey !== null && !boardlessKeys.has(viewKey)
+        ? 'board'
+        : 'backlog'
 
   const selectView = useCallback(
     (next: AzureDevOpsTaskView) => {

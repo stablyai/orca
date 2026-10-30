@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type {
+  AzureDevOpsAssignedWorkItemsPage,
   AzureDevOpsBacklogLevel,
   AzureDevOpsBacklogPage,
   AzureDevOpsBoardPage,
@@ -19,6 +20,11 @@ export type AzureDevOpsBacklogCacheEntry = { page: AzureDevOpsBacklogPage; loade
 
 export type AzureDevOpsBoardCacheEntry = { page: AzureDevOpsBoardPage; loadedAt: number }
 
+export type AzureDevOpsAssignedWorkItemsCacheEntry = {
+  page: AzureDevOpsAssignedWorkItemsPage
+  loadedAt: number
+}
+
 /** What every boards request needs from a repo. Narrow so callers can key effects by identity:
  *  `updateRepo` replaces the Repo object without changing any of these. */
 export type AzureDevOpsRepoIdentity = Pick<Repo, 'id' | 'path' | 'connectionId'>
@@ -28,6 +34,8 @@ export type AzureDevOpsBoardsSlice = {
   azureDevOpsConfigurationByTeam: Record<string, AzureDevOpsTeamConfiguration>
   azureDevOpsBacklogByKey: Record<string, AzureDevOpsBacklogCacheEntry>
   azureDevOpsBoardByKey: Record<string, AzureDevOpsBoardCacheEntry>
+  /** Keyed by repo id alone: the Work items view is project-wide and team-less. */
+  azureDevOpsAssignedWorkItemsByRepo: Record<string, AzureDevOpsAssignedWorkItemsCacheEntry>
   loadAzureDevOpsTeams: (repo: AzureDevOpsRepoIdentity) => Promise<AzureDevOpsTeam[]>
   loadAzureDevOpsConfiguration: (
     repo: AzureDevOpsRepoIdentity,
@@ -59,6 +67,14 @@ export type AzureDevOpsBoardsSlice = {
     level: AzureDevOpsBacklogLevel,
     options?: { force?: boolean }
   ) => Promise<AzureDevOpsBoardPage | null>
+  /** Cached assigned items for the repo, fresh or stale, without a request. */
+  readAzureDevOpsAssignedWorkItems: (
+    repo: AzureDevOpsRepoIdentity
+  ) => { page: AzureDevOpsAssignedWorkItemsPage; fresh: boolean } | null
+  loadAzureDevOpsAssignedWorkItems: (
+    repo: AzureDevOpsRepoIdentity,
+    options?: { force?: boolean }
+  ) => Promise<AzureDevOpsAssignedWorkItemsPage>
   /** @param cachedIds Ids the caller holds, so the host only hydrates the children it must. */
   loadAzureDevOpsWorkItem: (
     repo: AzureDevOpsRepoIdentity,
@@ -92,7 +108,7 @@ export function azureDevOpsBoardKey(
 }
 
 export function isAzureDevOpsBacklogEntryFresh(
-  entry: AzureDevOpsBacklogCacheEntry | AzureDevOpsBoardCacheEntry,
+  entry: { loadedAt: number },
   now = Date.now()
 ): boolean {
   return now - entry.loadedAt < AZURE_DEVOPS_BACKLOG_CACHE_TTL
@@ -116,6 +132,7 @@ export const createAzureDevOpsBoardsSlice: StateCreator<
   azureDevOpsConfigurationByTeam: {},
   azureDevOpsBacklogByKey: {},
   azureDevOpsBoardByKey: {},
+  azureDevOpsAssignedWorkItemsByRepo: {},
 
   isAzureDevOpsAuthenticated: (repo) =>
     window.api.azureDevOpsBoards.isAuthenticated(repoArgs(repo)),
@@ -195,6 +212,26 @@ export const createAzureDevOpsBoardsSlice: StateCreator<
         }
       }))
     }
+    return page
+  },
+
+  readAzureDevOpsAssignedWorkItems: (repo) => {
+    const entry = get().azureDevOpsAssignedWorkItemsByRepo[repo.id]
+    return entry ? { page: entry.page, fresh: isAzureDevOpsBacklogEntryFresh(entry) } : null
+  },
+
+  loadAzureDevOpsAssignedWorkItems: async (repo, options) => {
+    const cached = get().azureDevOpsAssignedWorkItemsByRepo[repo.id]
+    if (cached && !options?.force && isAzureDevOpsBacklogEntryFresh(cached)) {
+      return cached.page
+    }
+    const page = await window.api.azureDevOpsBoards.loadAssignedWorkItems(repoArgs(repo))
+    set((state) => ({
+      azureDevOpsAssignedWorkItemsByRepo: {
+        ...state.azureDevOpsAssignedWorkItemsByRepo,
+        [repo.id]: { page, loadedAt: Date.now() }
+      }
+    }))
     return page
   },
 

@@ -3226,7 +3226,14 @@
           "backlog": {
             "unhydratedItems_one": "{{count}} work item couldn’t be loaded and is missing from this list. Refresh to try again.",
             "unhydratedItems_other": "{{count}} work items couldn’t be loaded and are missing from this list. Refresh to try again."
-          }
+          },
+          "workItems": {
+            "loadFailed": "Couldn’t load your Azure DevOps work items: {{value0}}",
+            "empty": "No work items in this project are assigned to you."
+          },
+          "workItemsView": "Work items",
+          "columnAreaPath": "Area Path",
+          "columnChangedDate": "Changed Date"
         }
       },
       "Terminal": {

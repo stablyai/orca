@@ -1,5 +1,13 @@
 import React from 'react'
-import { ChevronDown, LayoutGrid, List, RefreshCw, SlidersHorizontal, Users } from 'lucide-react'
+import {
+  ChevronDown,
+  LayoutGrid,
+  List,
+  RefreshCw,
+  SlidersHorizontal,
+  UserRound,
+  Users
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -17,6 +25,7 @@ import type {
   AzureDevOpsBacklogLevel,
   AzureDevOpsTeam
 } from '../../../../../shared/azure-devops/boards-types'
+import type { AzureDevOpsTaskView } from '@/components/task-page-azure-devops-team-selection-persistence'
 
 export type AzureDevOpsToolbarProps = {
   teams: AzureDevOpsTeam[]
@@ -25,8 +34,8 @@ export type AzureDevOpsToolbarProps = {
   levels: AzureDevOpsBacklogLevel[]
   selectedLevelId: string | null
   onSelectLevel: (levelId: string) => void
-  view: 'backlog' | 'board'
-  onSelectView: (view: 'backlog' | 'board') => void
+  view: AzureDevOpsTaskView
+  onSelectView: (view: AzureDevOpsTaskView) => void
   boardAvailable: boolean
   showParents: boolean
   onToggleShowParents: (next: boolean) => void
@@ -88,10 +97,11 @@ function BacklogViewOptions(props: AzureDevOpsToolbarProps): React.JSX.Element {
   )
 }
 
-export function AzureDevOpsToolbar(props: AzureDevOpsToolbarProps): React.JSX.Element {
+/** Team and level scope the backlog and the board; the Work items view is project-wide. */
+function TeamAndLevelPickers(props: AzureDevOpsToolbarProps): React.JSX.Element {
   const selectedLevel = props.levels.find((l) => l.id === props.selectedLevelId) ?? null
   return (
-    <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+    <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm">
@@ -131,6 +141,14 @@ export function AzureDevOpsToolbar(props: AzureDevOpsToolbarProps): React.JSX.El
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+    </>
+  )
+}
+
+export function AzureDevOpsToolbar(props: AzureDevOpsToolbarProps): React.JSX.Element {
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+      {props.view === 'workItems' ? null : <TeamAndLevelPickers {...props} />}
 
       <div className="ml-auto flex items-center gap-2">
         {props.view === 'backlog' ? <ShowParentsToggle {...props} /> : null}
@@ -140,11 +158,15 @@ export function AzureDevOpsToolbar(props: AzureDevOpsToolbarProps): React.JSX.El
           size="sm"
           value={props.view}
           onValueChange={(value) => {
-            if (value === 'backlog' || value === 'board') {
+            if (value === 'workItems' || value === 'backlog' || value === 'board') {
               props.onSelectView(value)
             }
           }}
         >
+          <ToggleGroupItem value="workItems">
+            <UserRound className="size-3.5" />
+            {translate('auto.components.TaskPage.azureDevOps.workItemsView', 'Work items')}
+          </ToggleGroupItem>
           <ToggleGroupItem value="backlog">
             <List className="size-3.5" />
             {translate('auto.components.TaskPage.azureDevOps.backlogView', 'Backlog')}

@@ -108,6 +108,20 @@ export type AzureDevOpsBacklogPage = {
   ancestors?: AzureDevOpsWorkItem[]
 }
 
+/**
+ * Azure DevOps' own Work items view: the project's items assigned to the signed-in
+ * user, flat and team-less, so an item outside every team area still shows.
+ */
+export type AzureDevOpsAssignedWorkItemsPage = {
+  /** Most recently changed first, as `ORDER BY [System.ChangedDate] DESC` returned them. */
+  items: AzureDevOpsWorkItem[]
+  /**
+   * Ids the query returned that the batch fetch did not (deleted, moved, or hidden
+   * by a field rule since the query). Absent from older hosts.
+   */
+  unhydratedItemCount?: number
+}
+
 export type AzureDevOpsBoardColumn = {
   id: string
   name: string

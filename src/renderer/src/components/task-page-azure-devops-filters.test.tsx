@@ -47,6 +47,7 @@ describe('collectAzureDevOpsViewFilterOptions', () => {
     const options = collectAzureDevOpsViewFilterOptions({
       view: 'board',
       boardItems,
+      workItems: [],
       backlogItems,
       iterations: []
     })
@@ -59,6 +60,7 @@ describe('collectAzureDevOpsViewFilterOptions', () => {
     const backlog = collectAzureDevOpsViewFilterOptions({
       view: 'backlog',
       boardItems,
+      workItems: [],
       backlogItems,
       iterations: []
     })
@@ -67,6 +69,7 @@ describe('collectAzureDevOpsViewFilterOptions', () => {
     const loading = collectAzureDevOpsViewFilterOptions({
       view: 'board',
       boardItems: null,
+      workItems: [],
       backlogItems,
       iterations: []
     })

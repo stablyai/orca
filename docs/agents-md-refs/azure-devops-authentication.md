@@ -51,9 +51,24 @@ collection URL and provide a PAT via `ORCA_AZURE_DEVOPS_TOKEN`.
 ## Tasks
 
 With authentication in place, Azure DevOps also appears as a task source on the
-Tasks page: pick a team, pick a backlog level, and Orca shows the team's backlog
-as Azure DevOps shows it — same items, order, hierarchy and columns. The team
-choice is remembered per project in `azureDevOpsTeamSelection`.
+Tasks page, with the same three views as the Azure DevOps left nav: **Work
+items**, **Backlog** and **Board**. Backlog and Board belong to a team, so both
+are scoped to that team's area paths: pick a team, pick a backlog level, and
+Orca shows the team's backlog as Azure DevOps shows it — same items, order,
+hierarchy and columns. The team choice is remembered per project in
+`azureDevOpsTeamSelection`, and the view choice in `azureDevOpsViewSelection`.
+
+The Work items view is the team-less one, as it is in Azure DevOps: it reads the
+whole project's work items assigned to the signed-in user, so an item outside
+every team's areas still appears. It is one WIQL read —
+`[System.TeamProject] = <project> AND [System.AssignedTo] = @Me`, excluding the
+`Removed` state category, `ORDER BY [System.ChangedDate] DESC` — plus the same
+batched work item reads the other views use. The list is flat (the backlog is
+where the parent/child tree lives), the team and backlog level pickers are
+hidden because it needs neither, and it is where someone with no stored view
+choice lands. A team or backlog-configuration failure does not hide it, since
+this view uses neither. There is no default work item type filter: the filter
+bar narrows what the query returned, as in the other views.
 
 Profiles that already carry a `visibleTaskProviders` list (any profile saved
 before this provider existed) do not gain it automatically: enable Azure DevOps

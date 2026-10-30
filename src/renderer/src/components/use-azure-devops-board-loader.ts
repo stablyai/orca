@@ -12,6 +12,7 @@ import type {
 import type { AzureDevOpsTeamRoute } from '../../../shared/azure-devops/boards-repo-resolution'
 import type { Repo } from '../../../shared/repo-types'
 import { resolveAzureDevOpsLoadFailure } from './task-page-azure-devops-backlog-level-selection'
+import type { AzureDevOpsTaskView } from './task-page-azure-devops-team-selection-persistence'
 
 export type AzureDevOpsBoardLoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -38,7 +39,7 @@ export function useAzureDevOpsBoardLoader(args: {
   repo: Repo | null
   teamRoute: AzureDevOpsTeamRoute | null
   level: AzureDevOpsBacklogLevel | null
-  view: 'backlog' | 'board'
+  view: AzureDevOpsTaskView
 }): {
   board: AzureDevOpsBoardPage | null
   status: AzureDevOpsBoardLoadStatus

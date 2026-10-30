@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { ipcMain } from 'electron'
 import type {
+  AzureDevOpsAssignedWorkItemsPage,
   AzureDevOpsBacklogLevel,
   AzureDevOpsBacklogPage,
   AzureDevOpsBoardPage,
@@ -16,6 +17,7 @@ import {
   type AzureDevOpsTeamRoute
 } from '../../shared/azure-devops/boards-repo-resolution'
 import type { Repo } from '../../shared/repo-types'
+import { loadAzureDevOpsAssignedWorkItems } from '../azure-devops/boards/assigned-work-items-client'
 import { loadAzureDevOpsBacklogPage } from '../azure-devops/boards/backlog-client'
 import { loadAzureDevOpsBoardPage } from '../azure-devops/boards/board-items-client'
 import { getAzureDevOpsBacklogViewSettings } from '../azure-devops/boards/backlog-view-settings-client'
@@ -142,6 +144,14 @@ export function registerAzureDevOpsBoardsHandlers(store: Store): void {
     ): Promise<AzureDevOpsBoardPage | null> => {
       const { repo } = await resolveRepo(store, args)
       return loadAzureDevOpsBoardPage(repo, azureDevOpsTeamRouteSegment(args), args.level)
+    }
+  )
+
+  ipcMain.handle(
+    'azureDevOpsBoards:loadAssignedWorkItems',
+    async (_event, args: AzureDevOpsBoardsRepoArgs): Promise<AzureDevOpsAssignedWorkItemsPage> => {
+      const { repo } = await resolveRepo(store, args)
+      return loadAzureDevOpsAssignedWorkItems(repo)
     }
   )
 

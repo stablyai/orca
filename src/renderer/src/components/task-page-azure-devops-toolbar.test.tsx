@@ -117,6 +117,26 @@ describe('AzureDevOpsToolbar', () => {
     expect(onResetColumnWidths).toHaveBeenCalledTimes(1)
   })
 
+  it('hides the team and level pickers while Work items is active: it needs neither', () => {
+    const p = props({ view: 'workItems' })
+    render(<AzureDevOpsToolbar {...p} />)
+    expect(screen.queryByRole('button', { name: /Mobile/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Backlog items/ })).toBeNull()
+    expect(screen.getByRole('radio', { name: 'Work items' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    fireEvent.click(screen.getByRole('radio', { name: 'Backlog' }))
+    expect(p.onSelectView).toHaveBeenCalledWith('backlog')
+  })
+
+  it('offers Work items from the other views', () => {
+    const p = props({ view: 'backlog' })
+    render(<AzureDevOpsToolbar {...p} />)
+    fireEvent.click(screen.getByRole('radio', { name: 'Work items' }))
+    expect(p.onSelectView).toHaveBeenCalledWith('workItems')
+  })
+
   it('toggles Show parents', () => {
     const p = props()
     render(<AzureDevOpsToolbar {...p} />)
