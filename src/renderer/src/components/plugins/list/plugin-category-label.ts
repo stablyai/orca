@@ -10,13 +10,12 @@ function kindLabel(kind: PluginFilterKind): string {
       return translate('auto.components.settings.PluginFilterPopover.languages', 'Languages')
     case 'icons':
       return translate('auto.components.settings.PluginFilterPopover.icons', 'Icons')
+    case 'editors':
+      return translate('auto.components.settings.PluginFilterPopover.editors', 'Editors')
     case 'commands':
       return translate('auto.components.settings.PluginFilterPopover.commands', 'Commands & panels')
     case 'machines':
-      return translate(
-        'auto.components.settings.PluginFilterPopover.machines',
-        'Machines & recipes'
-      )
+      return translate('auto.components.settings.PluginFilterPopover.remoteVms', 'Remote/VMs')
   }
 }
 

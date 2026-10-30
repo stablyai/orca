@@ -209,7 +209,7 @@ it('preserves owner, hydration, transport, refusal, removal and local-missing au
   const disabled = () => getByRole('button').hasAttribute('disabled')
   expect(disabled()).toBe(false)
   fireEvent.click(getByRole('button'))
-  expect(create).toHaveBeenCalledExactlyOnceWith(repo.id)
+  expect(create).toHaveBeenCalledExactlyOnceWith(repo, { pinHost: false })
   act(() =>
     useAppStore
       .getState()

@@ -18,6 +18,7 @@ import {
   ChatImageRead,
   FilePathsExist,
   DocPreviewFileRead,
+  DocPreviewFileReadChunk,
   FileListAll,
   FileOpenDiff,
   FileOpenTab,
@@ -113,6 +114,21 @@ export const FILE_METHODS = [
         params.implicitRootRelativePath,
         params.authorizedRootRelativePaths,
         remoteFileContentBudget(clientKind, requestId)
+      )
+  }),
+  defineMethod({
+    name: 'files.readDocPreviewChunk',
+    permission: 'workspace',
+    params: DocPreviewFileReadChunk,
+    handler: async (params, { runtime }) =>
+      runtime.readDocPreviewChunk(
+        params.worktree,
+        params.relativePath,
+        params.entryRelativePath,
+        params.implicitRootRelativePath,
+        params.authorizedRootRelativePaths,
+        params.offset,
+        params.length
       )
   }),
   defineMethod({

@@ -2,19 +2,29 @@ import { ArrowUpRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../ui/button'
 import type { PluginListEntry } from '../list/plugin-list-entries'
-import { pluginCategoryLabel } from '../list/plugin-category-label'
+import { PluginCategoryBadges } from '../list/PluginCategoryBadge'
+import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
-function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({
+  label,
+  value,
+  mono = false
+}: {
+  label: string
+  value: React.ReactNode
+  mono?: boolean
+}) {
   return (
     <div className="flex justify-between gap-3 py-1 text-xs">
       <dt className="shrink-0 text-muted-foreground">{label}</dt>
       <dd
         data-mono={mono}
         className="min-w-0 truncate text-right data-[mono=true]:font-mono"
-        title={value}
+        title={typeof value === 'string' ? value : undefined}
       >
         {value}
       </dd>
@@ -32,7 +42,7 @@ function LinkButton({ url, label }: { url: string | null; label: string }) {
       variant="link"
       size="xs"
       className="-ml-2"
-      onClick={() => void window.api.shell.openUrl(url)}
+      onClick={(event) => openAppHttpLink(url, { event })}
     >
       {label}
       <ArrowUpRight />
@@ -53,8 +63,6 @@ export function PluginDetailInfo({
   const rollbackVersion = usePluginRollbackVersion(
     plugin?.source?.kind === 'marketplace' ? plugin.pluginKey : null
   )
-  // Why: "official" is trust, already shown by the verified mark.
-  const categories = entry.categories.filter((category) => category !== 'official')
   const updated = formatPluginReleaseDate(listing?.updatedAt)
   const license = plugin?.license ?? listing?.license
   const repository =
@@ -110,10 +118,10 @@ export function PluginDetailInfo({
             value={license}
           />
         ) : null}
-        {categories.length > 0 ? (
+        {pluginFilterKinds(entry).size > 0 ? (
           <InfoRow
             label={translate('auto.components.settings.PluginDetailPage.categories', 'Categories')}
-            value={[...new Set(categories.map(pluginCategoryLabel))].join(', ')}
+            value={<PluginCategoryBadges entry={entry} />}
           />
         ) : null}
         <InfoRow

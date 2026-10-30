@@ -112,6 +112,40 @@ describe('launchAgentBackgroundSession with automation extras', () => {
     expect(mockRegisterAgentLaunchConfig).not.toHaveBeenCalled()
   })
 
+  it('suppresses Codex updates for a desktop automation without saving the override', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    await launchAgentBackgroundSession({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('check_for_update_on_startup=false'),
+        launchConfig: expect.objectContaining({
+          agentCommand: expect.not.stringContaining('check_for_update_on_startup')
+        })
+      })
+    )
+  })
+
+  it('marks paired-server launches unattended even when their prompt is pasted later', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    useRemoteAgentBackgroundRuntime(state)
+    await launchAgentBackgroundSession({
+      agent: 'aider',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({ agent: 'aider', promptDelivery: 'auto-submit' })
+      })
+    )
+    expect(mockSpawn).not.toHaveBeenCalled()
+  })
+
   it('refuses a client-side launch that would drop extras on a paired server', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
     useRemoteAgentBackgroundRuntime(state)

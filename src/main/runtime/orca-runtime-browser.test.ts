@@ -221,6 +221,28 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(bridge.tabList).toHaveBeenCalledWith(undefined)
   })
 
+  it('lists no tabs without waking the window when no saved tab could mount', async () => {
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map()),
+      tabList: vi.fn(() => ({ tabs: [] }))
+    } as unknown as AgentBrowserBridge
+    const host = createHost({
+      getAgentBrowserBridge: () => bridge,
+      serveBrowserTabs: {
+        opened: vi.fn(),
+        start: vi.fn(async () => false),
+        hasStartable: () => false
+      }
+    })
+    const commands = new RuntimeBrowserCommands(host)
+
+    await expect(commands.browserTabList({ worktree: 'id:wt-1' })).resolves.toEqual({ tabs: [] })
+
+    expect(host.getAuthoritativeWindow).not.toHaveBeenCalled()
+    expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
+  })
+
   it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
     const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const webContents = { send: vi.fn() }

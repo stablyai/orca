@@ -12,7 +12,11 @@ import {
 } from './headless-dispatch-runner'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import { createAutomationDispatchToken } from './dispatch-tokens'
-import { describeScheduledRefusal, sendRendererDispatch } from './dispatch-refusal'
+import {
+  describeScheduledRefusal,
+  describeStoppedWslDistroRefusal,
+  sendRendererDispatch
+} from './dispatch-refusal'
 import {
   automationRunFailure,
   type AutomationRunFailure
@@ -116,6 +120,12 @@ export async function requestAutomationDispatch(
   })
   if (refusal || !target.ok) {
     return refuse(refusal ?? automationRunFailure('noDispatchHost'))
+  }
+  // The distro may have stopped since the tick decided; a manual run may start it.
+  const stopped =
+    run.trigger === 'scheduled' ? await describeStoppedWslDistroRefusal(ctx.store, target) : null
+  if (stopped) {
+    return refuse(stopped)
   }
   await ctx.runs.updateRun({
     runId: run.id,

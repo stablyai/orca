@@ -34,6 +34,8 @@ ORCA wait --url <substring> --json
 ORCA wait --selector <css> --json
 ORCA wait --load networkidle --json
 ORCA eval --expression <js> --json
+ORCA set device --name "iPhone 15" --json
+ORCA viewport --width 390 --height 844 --scale 3 --mobile --json
 ORCA tab list --json
 ORCA tab create --url <url> --json
 ORCA tab switch --index <n> --json
@@ -52,6 +54,7 @@ Browser rules:
 - Browser commands default to the current worktree and its active tab. Use `--worktree all` only intentionally.
 - For concurrent browser work, run `ORCA tab list --json`, read `tabs[].browserPageId`, and pass `--page <browserPageId>` on later commands.
 - Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command "tab ..."`, so Orca keeps UI state synchronized.
+- Use `ORCA set device` or `ORCA viewport --mobile`, not `ORCA exec --command "set device ..."`, so the page also gets touch input and `pointer: coarse`. Each page load (reload, `goto`, link click) resets it, so run it again after navigating.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Anything not listed above goes through `ORCA exec --command "<agent-browser command>"`.
 - If `fill` or `type` fails on a custom input, try `ORCA focus --element @e1 --json` then `ORCA inserttext --text "text" --json`.

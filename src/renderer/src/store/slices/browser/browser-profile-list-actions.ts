@@ -13,8 +13,7 @@ import {
   getBrowserSettingsHostId,
   getBrowserSettingsRuntimeEnvironmentId,
   profileListByHostUpdate,
-  getDefaultBrowserProfileForHost,
-  listedProfilesByHostUpdate
+  updateDefaultBrowserProfileForHost
 } from './browser-host-state'
 
 export function createBrowserProfileListActions(
@@ -27,6 +26,39 @@ export function createBrowserProfileListActions(
   // Why: change events can overlap fetches; only the latest listing per host may land, or an older one restores a deleted profile.
   const latestListingByHost = new Map<ExecutionHostId, number>()
   let listingCount = 0
+  const forgetDefaultProfileUnless = async (
+    hostId: ExecutionHostId,
+    isKept: (profileId: string) => boolean
+  ): Promise<void> => {
+    const saved = get().settings?.browserDefaultProfileIdByHostId?.[hostId]
+    if (saved && !isKept(saved)) {
+      await updateDefaultBrowserProfileForHost(get, hostId, (current) =>
+        current === saved ? null : current
+      )
+    }
+  }
+  // Why: a real listing always has Default, so an empty one (a web client's local host) proves nothing.
+  const landListing = async (
+    hostId: ExecutionHostId,
+    profiles: BrowserSessionProfile[]
+  ): Promise<void> => {
+    set((s) => profileListByHostUpdate(s, profiles, hostId))
+    if (profiles.length > 0) {
+      await forgetDefaultProfileUnless(hostId, (id) =>
+        profiles.some((profile) => profile.id === id)
+      )
+    }
+  }
+  const dropDeletedProfile = async (hostId: ExecutionHostId, profileId: string): Promise<void> => {
+    set((s) =>
+      profileListByHostUpdate(
+        s,
+        getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
+        hostId
+      )
+    )
+    await forgetDefaultProfileUnless(hostId, (id) => id !== profileId)
+  }
   return {
     fetchBrowserSessionProfiles: async (requestedHostId) => {
       const hostId = requestedHostId ?? getBrowserSettingsHostId(get())
@@ -55,7 +87,7 @@ export function createBrowserProfileListActions(
               : profile
           )
           if (isLatest()) {
-            set((s) => listedProfilesByHostUpdate(s, profiles, hostId))
+            await landListing(hostId, profiles)
           }
           return {
             hostId,
@@ -74,7 +106,7 @@ export function createBrowserProfileListActions(
       try {
         const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
         if (isLatest()) {
-          set((s) => listedProfilesByHostUpdate(s, profiles, hostId))
+          await landListing(hostId, profiles)
         }
       } catch {
         /* best-effort — stale profile list is preferable to a crash */
@@ -140,24 +172,7 @@ export function createBrowserProfileListActions(
             { timeoutMs: 15_000 }
           )
           if (result.deleted) {
-            set((s) => ({
-              ...profileListByHostUpdate(
-                s,
-                getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
-                hostId
-              ),
-              ...(getDefaultBrowserProfileForHost(s, hostId) === profileId
-                ? {
-                    ...(getBrowserSettingsHostId(s) === hostId
-                      ? { defaultBrowserSessionProfileId: null }
-                      : {}),
-                    defaultBrowserSessionProfileIdByHostId: {
-                      ...s.defaultBrowserSessionProfileIdByHostId,
-                      [hostId]: null
-                    }
-                  }
-                : {})
-            }))
+            await dropDeletedProfile(hostId, profileId)
           }
           return result.deleted
         } catch {
@@ -167,24 +182,7 @@ export function createBrowserProfileListActions(
       try {
         const ok = await window.api.browser.sessionDeleteProfile({ profileId })
         if (ok) {
-          set((s) => ({
-            ...profileListByHostUpdate(
-              s,
-              getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
-              hostId
-            ),
-            ...(getDefaultBrowserProfileForHost(s, hostId) === profileId
-              ? {
-                  ...(getBrowserSettingsHostId(s) === hostId
-                    ? { defaultBrowserSessionProfileId: null }
-                    : {}),
-                  defaultBrowserSessionProfileIdByHostId: {
-                    ...s.defaultBrowserSessionProfileIdByHostId,
-                    [hostId]: null
-                  }
-                }
-              : {})
-          }))
+          await dropDeletedProfile(hostId, profileId)
         }
         return ok
       } catch {

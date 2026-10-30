@@ -18,7 +18,7 @@ import { packagedClaudeChatScenario } from '../orcad/orcad-structured-chat-scena
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'
 import { envelope } from './wsl-orcad-chat-envelope'
-import { exerciseScriptedProviderChat } from './wsl-orcad-scripted-provider-chat'
+import { exerciseScriptedProviderChats } from './wsl-orcad-scripted-provider-chat'
 import {
   expectWindowsDecoyReachable,
   expectWindowsDecoyUnrun,
@@ -291,19 +291,17 @@ export async function proveWslStructuredChat(lane: ChatLane) {
   const gitWorktree = `path:${home}/wsl-orcad-lane-repo`
   const git = await exerciseChat(lane, install, gitWorktree, `${home}/wsl-orcad-lane-repo`)
   const folder = await exerciseChat(lane, install, folderWorktree, folderPath)
-  // One workspace kind each keeps the lane short; Claude already covers both.
-  const codex = await exerciseScriptedProviderChat(
+  const { codex, grok, opencode } = await exerciseScriptedProviderChats(
     lane,
-    install.codex,
-    gitWorktree,
-    `${home}/wsl-orcad-lane-repo`
+    install,
+    { worktree: gitWorktree, cwd: `${home}/wsl-orcad-lane-repo` },
+    { worktree: folderWorktree, cwd: folderPath }
   )
-  const grok = await exerciseScriptedProviderChat(lane, install.grok, folderWorktree, folderPath)
   const decoy = await expectWindowsDecoyReachable(lane)
   await expectWindowsDecoyUnrun(lane, home)
   const windowsOnly = await probeWindowsDecoy(lane, install, gitWorktree)
   expect(windowsOnly.errors, JSON.stringify(windowsOnly)).toEqual([])
   const windowsOnlyChat = await expectWindowsOnlyChatRefused(lane, gitWorktree)
   await expectWindowsDecoyUnrun(lane, home)
-  return { git, folder, codex, grok, decoy, windowsOnly, windowsOnlyChat }
+  return { git, folder, codex, grok, opencode, decoy, windowsOnly, windowsOnlyChat }
 }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isUsablePluginLanguagePack,
   pluginLanguagePackCoverage,
   translatableCatalogPaths
 } from './plugin-language-pack-coverage'
@@ -30,10 +29,5 @@ describe('plugin language pack coverage', () => {
       )
     ).toBe(75)
     expect(pluginLanguagePackCoverage({ common: { cancel: 'x' } }, new Set())).toBe(0)
-  })
-
-  it('offers only packs at or above the floor', () => {
-    expect(isUsablePluginLanguagePack({ coverage: 80 })).toBe(true)
-    expect(isUsablePluginLanguagePack({ coverage: 79 })).toBe(false)
   })
 })

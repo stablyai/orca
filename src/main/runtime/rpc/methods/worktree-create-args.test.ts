@@ -89,6 +89,9 @@ describe('buildManagedWorktreeCreateArgs', () => {
       }
     )
     expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
+    // E9: a person's create may start a stopped WSL distro for its terminals; an automation's never.
+    expect(build({ repo: 'id:repo-1', name: 'feature' })).toMatchObject({ wslUserAct: true })
+    expect(automationRun).not.toHaveProperty('wslUserAct')
   })
 })
 

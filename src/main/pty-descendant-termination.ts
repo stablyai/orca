@@ -1,18 +1,26 @@
-import { execFile } from 'node:child_process'
 import type { JobTerminationOutcome } from './windows/windows-pty-job'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
   verifyWindowsTreeKillTarget,
   type WindowsTreeKillTarget
 } from './windows-pty-root-identity'
-import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
+import type { ProcessTableRow } from './pty-process-table-parser'
+import {
+  DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+  readFreshProcessTable,
+  type ProcessTableCapture,
+  type ProcessTableReader
+} from './pty-descendant-fresh-table'
 
 export { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
+export {
+  DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+  type ProcessTableCapture,
+  type ProcessTableReader
+} from './pty-descendant-fresh-table'
+
 export const DESCENDANT_KILL_GRACE_MS = 2_000
-export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
-// Busy hosts can exceed execFile’s 1MB default; truncated output would omit descendants.
-const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
 
 export type PosixProcessIdentity = Pick<ProcessTableRow, 'pid' | 'startedAt'>
 
@@ -28,41 +36,7 @@ export type DescendantSnapshot = {
   reDerivedPids?: ReadonlySet<number>
 }
 
-export type ProcessTableCapture = {
-  rows: ProcessTableRow[]
-  /** Start boundary of the scan that produced rows, never a later consumer's time. */
-  capturedAtMs: number
-}
-
-export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
-
-function readFreshProcessTable(
-  timeoutMs = DESCENDANT_SNAPSHOT_TIMEOUT_MS
-): Promise<ProcessTableCapture> {
-  // Stamp before ps starts so a capture-second PID cannot appear older after a clock rollover.
-  const capturedAtMs = Date.now()
-  return new Promise((resolve, reject) => {
-    execFile(
-      'ps',
-      ['-axo', 'pid=,ppid=,pgid=,tpgid=,lstart='],
-      {
-        maxBuffer: PS_MAX_BUFFER_BYTES,
-        timeout: timeoutMs,
-        killSignal: 'SIGKILL',
-        // Pin lstart’s locale so delayed identity checks parse it consistently.
-        env: { ...process.env, LANG: 'C', LC_ALL: 'C' }
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve({ rows: parseProcessTable(stdout), capturedAtMs })
-      }
-    )
-  })
-}
 
 /** Share only scans not yet started; later requests need fresh identities before signalling. */
 export function createProcessTableSnapshotReader(
@@ -70,7 +44,7 @@ export function createProcessTableSnapshotReader(
 ): ProcessTableReader {
   let queued: { promise: Promise<ProcessTableCapture>; started: boolean } | null = null
 
-  return (timeoutMs) => {
+  const read: ProcessTableReader = (timeoutMs) => {
     if (queued && !queued.started) {
       return queued.promise
     }
@@ -93,6 +67,9 @@ export function createProcessTableSnapshotReader(
     void entry.promise.then(clearQueued, clearQueued)
     return entry.promise
   }
+  // Sharing a scan keeps the wrapped reader's in-process allowance.
+  read.deadlineAllowanceMs = readFresh.deadlineAllowanceMs
+  return read
 }
 
 export const readProcessTable = createProcessTableSnapshotReader(readFreshProcessTable)
@@ -111,7 +88,10 @@ export function readProcessTableBeforeDeadline(
       clearTimeout(timer)
       resolve(capture)
     }
-    const timer = setTimeout(() => finish(null), timeoutMs)
+    const timer = setTimeout(
+      () => finish(null),
+      timeoutMs + (readTable.deadlineAllowanceMs?.(timeoutMs) ?? 0)
+    )
     timer.unref?.()
     try {
       void readTable(timeoutMs).then(

@@ -67,10 +67,7 @@ export async function acquireClaudeSession({
       callbacks,
       sessionId
     },
-    () =>
-      liveSession && sessions.get(sessionId) === liveSession
-        ? liveSession.backgroundTasks.goalBackgroundWork
-        : 'unverifiable'
+    () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null)
   )
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
@@ -193,15 +190,13 @@ export async function acquireClaudeSession({
       open(
         {
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
+          prefixArgs: launch.prefixArgs,
           options: launch.options,
           cwd: launch.cwd,
           env: {
             ...launch.env,
             // The saved account directory must override a conflicting environment overlay.
-            ...claudeConfigDirEnvPatch(
-              launch.claudeConfigDir,
-              launch.env ? { env: launch.env } : {}
-            )
+            ...claudeConfigDirEnvPatch(launch.claudeConfigDir, { env: launch.env })
           },
           ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})
         },

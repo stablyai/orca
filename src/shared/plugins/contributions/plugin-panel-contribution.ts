@@ -80,7 +80,7 @@ export const pluginPanelContributionSchema = z
       ),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
-        'HTML file, relative to the plugin root, rendered inside a sandboxed panel frame.',
+        'HTML file, relative to the plugin root, rendered inside a panel frame. It is trusted code: install panels you trust.',
         PLUGIN_SCHEMA_SINCE_V1,
         ['dist/panel.html']
       )

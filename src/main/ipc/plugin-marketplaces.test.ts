@@ -168,8 +168,11 @@ describe('plugin marketplace IPC authority', () => {
     }
 
     await invoke('plugins:installMarketplacePlugin', preview)
-    expect(services.installer.install).toHaveBeenCalledWith(preview)
+    expect(services.installer.install).toHaveBeenCalledWith(preview, { trigger: 'catalog' })
     expect(pluginService.refresh).toHaveBeenCalledOnce()
+    await invoke('plugins:installMarketplacePlugin', { ...preview, fromInstallLink: true })
+    expect(services.installer.install).toHaveBeenLastCalledWith(preview, { trigger: 'deep_link' })
+    vi.mocked(pluginService.refresh).mockClear()
 
     vi.mocked(pluginService.refresh).mockClear()
     vi.mocked(services.installer.install).mockResolvedValueOnce({ ok: false, error: 'failed' })

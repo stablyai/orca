@@ -1,3 +1,14 @@
+import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session-wire'
+import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
+import {
+  OPTIONS,
+  BASE,
+  deferred,
+  accepted,
+  optionsClient,
+  recordingMutate,
+  mountOptions
+} from '../../use-mobile-structured-agent-options.test-fixture'
 import { createElement, useState, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -166,6 +177,86 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       renderer?.unmount()
     })
     renderer = null
+  })
+
+  it('renders actual settled permission/reset picks without busy state and locks ordinary pending model work', async () => {
+    const idle = deferred<AgentSessionOptionsResult>()
+    let reads = 0
+    const rpc = optionsClient(() =>
+      ++reads === 1
+        ? Promise.resolve({ ...OPTIONS, current: { ...OPTIONS.current, permissionMode: 'ask' } })
+        : idle.promise
+    )
+    const replies = Array.from({ length: 3 }, () => deferred<ReturnType<typeof accepted>>())
+    const { calls, mutate } = recordingMutate((index) => replies[index].promise)
+    const view = await mountOptions({ ...BASE, client: rpc.client, mutate, permissionOwn: true })
+    function ActualPickers() {
+      const options = view.current()
+      const { nativeChatSessionOptions } = useMobileNativeChatSessionOptionController({
+        client: rpc.client,
+        activeChatStructured: true,
+        activeSessionTabId: BASE.sessionId,
+        agent: 'codex',
+        dispatchCommand: async () => 'accepted',
+        hostId: 'phone-picker',
+        isTabChatView: () => true,
+        isWorking: false,
+        reportedModel: null,
+        structured: {
+          snapshot: options.optionSnapshot,
+          pendingId: options.pendingOptionId,
+          setOption: options.setStructuredOption,
+          invokeAction: options.invokeStructuredOption
+        },
+        toggleTabChatView: () => {},
+        worktreeId: 'workspace-1'
+      })
+      return createElement(MobileNativeChatSessionOptionPickers, {
+        ...nativeChatSessionOptions!,
+        presentation: { page: 'model', refocus: false },
+        onDrawerOpen: () => {},
+        onNavigate: () => {}
+      })
+    }
+    try {
+      await act(async () => {
+        renderer = create(createElement(ActualPickers))
+      })
+      for (const [index, value] of ['full-access', 'own'].entries()) {
+        let pick!: Promise<boolean>
+        act(() => {
+          pick = view.current().setStructuredOption('permissionMode', value)
+        })
+        expect(calls[index]?.fields).toEqual({ key: 'permissionMode', value })
+        expect(view.current().pendingOptionId).toBeNull()
+        await act(async () => renderer!.update(createElement(ActualPickers)))
+        expect(findAllByHostType(renderer!.root, 'ActivityIndicator')).toHaveLength(0)
+        expect(rowByText('GPT Fast').props.accessibilityState?.disabled).toBe(false)
+        await act(async () =>
+          replies[index].resolve(
+            accepted({ key: 'permissionMode', value, options: { permissionMode: value } }, true)
+          )
+        )
+        await expect(pick).resolves.toBe(true)
+        expect(view.current().pendingOptionId).toBeNull()
+        await act(async () => renderer!.update(createElement(ActualPickers)))
+        expect(findAllByHostType(renderer!.root, 'ActivityIndicator')).toHaveLength(0)
+        expect(rowByText('GPT Fast').props.accessibilityState?.disabled).toBe(false)
+      }
+      act(() => {
+        void view.current().setStructuredOption('model', 'gpt-fast')
+      })
+      await act(async () => renderer!.update(createElement(ActualPickers)))
+      expect(rowByText('GPT Live').props.accessibilityState?.disabled).toBe(true)
+      expect(findAllByHostType(renderer!.root, 'ActivityIndicator')).toHaveLength(1)
+      expect(calls.map((call) => call.fields)).toEqual([
+        { key: 'permissionMode', value: 'full-access' },
+        { key: 'permissionMode', value: 'own' },
+        { key: 'model', value: 'gpt-fast' }
+      ])
+    } finally {
+      await view.unmount()
+    }
   })
 
   it('renders nothing without a model descriptor', () => {

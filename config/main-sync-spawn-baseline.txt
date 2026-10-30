@@ -24,7 +24,7 @@
 1 src/main/daemon/pty-subprocess/shell-launch-plan.ts
 1 src/main/daemon/terminal-scopes.ts
 1 src/main/emulator/serve-sim-runtime-materializer.ts
-1 src/main/git/command-runner/git-exec-file.ts
+1 src/main/git/command-runner/git-exec-file-sync.ts
 1 src/main/git/repo-detection-command.ts
 1 src/main/git/runner.ts
 1 src/main/ipc/worktree-logic.ts

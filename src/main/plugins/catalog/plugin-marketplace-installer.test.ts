@@ -50,6 +50,9 @@ vi.mock('../installation/plugin-git-repository', () => ({
   checkoutPluginGitSource: git.checkout
 }))
 
+const telemetry = vi.hoisted(() => ({ track: vi.fn() }))
+vi.mock('../../telemetry/client', () => telemetry)
+
 const roots: string[] = []
 
 async function tempRoot(): Promise<string> {
@@ -126,7 +129,10 @@ function squarePng(side: number): Buffer {
   return Buffer.from([...signature, ...ihdr, 0, 0, 0, 0])
 }
 
-async function setup(imageCache?: PluginImageCache): Promise<{
+async function setup(
+  imageCache?: PluginImageCache,
+  catalogUrl = 'https://github.com/community/plugins.git'
+): Promise<{
   root: string
   marketplace: PluginMarketplaceService
   installer: PluginMarketplaceInstaller
@@ -137,11 +143,7 @@ async function setup(imageCache?: PluginImageCache): Promise<{
     pluginsDataDir: join(root, 'plugins-data'),
     fetcher: async () => ({ marketplaceCommit: git.marketplaceCommit, marketplace: marketplace() })
   })
-  const added = await service.addSource({
-    kind: 'git',
-    url: 'https://github.com/community/plugins.git',
-    ref: 'main'
-  })
+  const added = await service.addSource({ kind: 'git', url: catalogUrl, ref: 'main' })
   return {
     root,
     marketplace: service,
@@ -168,6 +170,7 @@ beforeEach(() => {
   git.worker = false
   git.icon = false
   git.paths = null
+  telemetry.track.mockReset()
   git.checkout.mockReset()
   git.checkout.mockImplementation(
     async ({ destination, path }: { destination: string; path?: string }) => {
@@ -466,5 +469,33 @@ describe('PluginMarketplaceInstaller', () => {
       ok: true,
       repositoryMoved: true
     })
+  })
+
+  it('reports public-catalog installs as install, reinstall, then update', async () => {
+    const communityCatalog = 'https://github.com/stablyai/orca-community-plugins.git'
+    const { installer, sourceId } = await setup(undefined, communityCatalog)
+    const preview = await installer.preview(sourceId, 'community.notes')
+    await installer.install(preview, { trigger: 'deep_link' })
+    await installer.install(preview)
+    git.commit = 'b'.repeat(40)
+    git.version = '2.0.0'
+    await installer.install(await installer.previewInstalledUpdate('community.notes'), {
+      trigger: 'auto_update'
+    })
+
+    const base = { plugin_key: 'community.notes', catalog: 'community' }
+    expect(telemetry.track.mock.calls).toEqual([
+      ['plugin_installed', { ...base, version: '1.0.0', kind: 'install', trigger: 'deep_link' }],
+      ['plugin_installed', { ...base, version: '1.0.0', kind: 'reinstall', trigger: 'catalog' }],
+      ['plugin_installed', { ...base, version: '2.0.0', kind: 'update', trigger: 'auto_update' }]
+    ])
+  })
+
+  it('never reports installs from a private catalog', async () => {
+    const { installer, sourceId } = await setup()
+    const result = await installer.install(await installer.preview(sourceId, 'community.notes'))
+
+    expect(result.ok).toBe(true)
+    expect(telemetry.track).not.toHaveBeenCalled()
   })
 })

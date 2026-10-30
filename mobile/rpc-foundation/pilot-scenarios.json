@@ -14549,7 +14549,8 @@
           "params": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           },
           "reply": {
             "ok": true,
@@ -20739,7 +20740,8 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p"
+            "worktree": "id:repo42::/p",
+            "includeLineStats": false
           },
           "reply": {
             "ok": true,

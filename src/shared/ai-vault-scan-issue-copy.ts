@@ -25,6 +25,7 @@ export const AI_VAULT_SCAN_ISSUE_COPY = {
     "WSL transcript files are unavailable because WSL distro '{{distro}}' is not running. Open a terminal in it to start it.",
   wslDistroUnverifiable:
     "WSL transcript files are unavailable because WSL didn't answer whether '{{distro}}' is running. Try again shortly.",
+  wslSessionsFromLastScan: 'WSL could not be checked; its sessions are from the last scan.',
   scopePathsTruncated: 'Only the first {{limit}} project paths were scanned.',
   invalidResultsSkipped: 'Skipped {{count}} invalid Agent Session History result entries.',
   scanTimedOutOnSshHost:

@@ -26,7 +26,7 @@ import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { RelayBrokerStatus } from '../runtime/mobile-cloud-relay/relay-session-broker-contract'
+import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
@@ -66,6 +66,8 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
 }
 
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
+const desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
+
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
   // Never cleared: closing the last main window still quits on Windows/Linux.
@@ -94,8 +96,7 @@ export const mainProcessState = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
   desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
   desktopPushService: null as DesktopPushService | null,
-  desktopRelayStatus: 'offline' as RelayBrokerStatus,
-  desktopRelayCellUrl: undefined as string | undefined,
+  desktopRelayStatus,
   pendingUnpairedDeviceAuthFailure: false,
   // Advertise headless browser panes only when offscreen display initialization succeeds.
   headlessBrowserDisplayAvailable: false,

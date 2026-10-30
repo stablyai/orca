@@ -1,3 +1,6 @@
+import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 // Journal-open refusal leaves the file intact and other runtime work available.
 
 import { createHash } from 'node:crypto'
@@ -317,11 +320,17 @@ describe('startup and other non-chat work without a structured host', () => {
       const unsubscribe = runtime.onMobileSessionTabsChanged((frame) => pushed.push(frame))
 
       await unlink(journalDatabasePath(root))
+      await seedTestAgentSessionRecordStore(root, {
+        records: [agentSessionRecordFixture({ sessionId: 'claude-1' })],
+        sessionTabs: [{ tabId: structuredAgentSessionTabId('claude-1'), sessionId: 'claude-1' }]
+      })
       const host = await install()
-      vi.spyOn(host, 'listSessionTabs').mockReturnValue([
-        { workspaceId: 'workspace-1', sessionId: 'claude-1', agent: 'claude' }
-      ])
-      vi.spyOn(host, 'setSessionTabVisibility').mockResolvedValue(undefined)
+      expect(host.deps.store.getConversation('claude-1')).toMatchObject({ sessionId: 'claude-1' })
+      expect(host.getPersistedVisibleSessionTabIndex()).toEqual({
+        present: true,
+        sessionIds: ['claude-1']
+      })
+      expect(host.isSessionTabVisible('claude-1')).toBe(true)
       const frames = await listInventory(runtime)
       unsubscribe()
 

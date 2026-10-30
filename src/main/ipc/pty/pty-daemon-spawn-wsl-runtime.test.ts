@@ -52,6 +52,11 @@ vi.mock('../../codex/codex-pane-account-registry', () =>
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+// Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
+vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()

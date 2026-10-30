@@ -9,6 +9,7 @@ import {
   normalizePluginUpdatePolicySettings,
   type PluginAutoUpdateState
 } from '../../../shared/plugins/catalog/plugin-update-policy'
+import { emptyPluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import { PLUGIN_AUTO_UPDATE_HOLD_BACK_MS, PluginAutoUpdater } from './plugin-auto-updater'
 
@@ -102,6 +103,7 @@ function setup(
       }
     },
     installer: {
+      readInstallLockfile: async () => emptyPluginLockfile(),
       findInstalledUpdateListing: vi.fn(async () => ({
         listing: {
           marketplaceSourceId: 'a'.repeat(32),
@@ -181,7 +183,10 @@ describe('plugin auto-update', () => {
     advance(HOUR)
     await updater.run()
     expect(install).toHaveBeenCalledTimes(1)
-    expect(install).toHaveBeenCalledWith(expect.anything(), { requireInstalled: true })
+    expect(install).toHaveBeenCalledWith(expect.anything(), {
+      requireInstalled: true,
+      trigger: 'auto_update'
+    })
     expect(consents[KEY]).toBe(next.consentFingerprint)
     expect(updater.getState()).toEqual({ updated: { [KEY]: '1.1.0' }, needsReview: {} })
     expect(changes.at(-1)?.updated).toEqual({ [KEY]: '1.1.0' })

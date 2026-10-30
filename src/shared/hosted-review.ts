@@ -121,6 +121,8 @@ export type CreateHostedReviewFailureReason =
   | 'review_lookup_unavailable'
   | 'provider_not_supported'
   | 'same_base_branch'
+  /** Bitbucket, Azure DevOps and Gitea need a base branch, head branch and title. */
+  | 'base_head_title_required'
   | 'rejected'
   | 'repository_not_found'
   | 'create_failed'
@@ -220,6 +222,8 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** The user's Create PR: it may start the repo's stopped WSL distro (E9). */
+  wakeWslDistro?: boolean
 }
 
 export type HostedReviewDecision = 'approved' | 'changes_requested' | 'review_required' | null

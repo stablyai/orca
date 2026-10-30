@@ -152,6 +152,14 @@ function createAcpAdapter(
     })
     return new AcpStructuredSessionAdapter({
       spec,
+      textTaskLaunch: {
+        resolveEnvironment: sources.resolveBaseEnvironment,
+        resolveLaunchEnv: sources.resolveAgentLaunchEnv,
+        resolveCommandSettings: sources.resolveCommandSettings,
+        refreshEnvironmentAfterMiss: sources.refreshAfterMissingProgram,
+        ...deps.acpLaunchCommand,
+        dataDirectory: deps.stateDirectory
+      },
       ...(spec.agent === 'omp'
         ? {
             atRestCommands: new AcpAtRestCommandCatalog(spec, {

@@ -132,6 +132,11 @@ export const gitApi = {
     message: string
     connectionId?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+  completeMerge: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:completeMerge', args),
   generateCommitMessage: (args: {
     worktreePath: string
     worktreeId?: string

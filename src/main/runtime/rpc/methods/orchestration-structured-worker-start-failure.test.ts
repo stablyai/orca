@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import {
   agentSessionLeaseFixture,
@@ -54,7 +55,19 @@ function installHost() {
   vi.spyOn(host, 'close').mockImplementation(async (sessionId) => {
     closed.push(sessionId)
   })
-  vi.spyOn(host, 'hasSession').mockReturnValue(true)
+  vi.spyOn(host, 'hasSession').mockImplementation((id) => !closed.includes(id))
+  vi.spyOn(store, 'getConversation').mockImplementation((id) =>
+    agentSessionConversationView(
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: id,
+          claimStatus: closed.includes(id) ? 'released' : 'live',
+          ownerProcess: null,
+          reservedSpawnToken: null
+        })
+      )
+    )
+  )
   vi.spyOn(host, 'subscribe').mockResolvedValue(() => {})
   vi.spyOn(store, 'requireWritableRecord').mockImplementation((sessionId) =>
     agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))

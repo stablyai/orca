@@ -138,9 +138,11 @@ export class WslHostsPolicyLiveUpdater {
       return
     }
     try {
+      // The validated text, not the parsed object: parsing strips fields this build doesn't know,
+      // and an equal revision never rewrites the cache, so a newer build would never see them.
       await writePluginFileAtomically(
         join(this.deps.userDataPath, wslHostsPolicyCacheFileName(channel)),
-        `${JSON.stringify(parsed.policy)}\n`
+        text
       )
     } catch (error) {
       warn(`downloaded policy not cached: ${describeError(error)}`)

@@ -9,6 +9,7 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 import { getLocalizedFeatureWallTileTitle } from './feature-wall-tour-localized-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function PreviewMedia(props: {
   posterUrl: string | null
@@ -78,14 +79,14 @@ export function RelatedFeatures(props: {
           <li key={tile.id}>
             <button
               type="button"
-              onClick={() => {
+              onClick={(event) => {
                 track('feature_wall_docs_clicked', {
                   group_id: workflow.id,
                   tile_id: tile.id,
                   source
                 })
                 track('feature_wall_tile_clicked', { tile_id: tile.id })
-                void window.api.shell.openUrl(tile.docsUrl)
+                openAppHttpLink(tile.docsUrl, { event })
               }}
               className="inline-flex items-center gap-1.5 text-left text-[13px] hover:underline hover:underline-offset-2"
             >
