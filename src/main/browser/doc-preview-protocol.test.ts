@@ -56,6 +56,7 @@ import {
   DOC_PREVIEW_LOAD_FAILURE_CHANNEL
 } from '../../shared/doc-preview-scheme'
 import { setDocPreviewFailureSink } from './doc-preview-failure-notice'
+import { PRIVILEGED_CUSTOM_SCHEMES } from '../startup/privileged-custom-schemes'
 
 function mintGrant(): ReturnType<typeof mintDocPreviewGrant> {
   return mintDocPreviewGrant({
@@ -288,6 +289,26 @@ describe('registerDocPreviewSchemePrivileges', () => {
       },
       media
     ])
+  })
+
+  it('keeps chat media and browser extension privileges in the single startup registration', () => {
+    registerDocPreviewSchemePrivileges(PRIVILEGED_CUSTOM_SCHEMES)
+    expect(protocol.registerSchemesAsPrivileged).toHaveBeenCalledTimes(1)
+    expect(protocol.registerSchemesAsPrivileged).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scheme: 'orca-chat-preview',
+          privileges: {
+            standard: true,
+            secure: true,
+            stream: true,
+            supportFetchAPI: true,
+            corsEnabled: true
+          }
+        }),
+        expect.objectContaining({ scheme: 'orca-extension-api' })
+      ])
+    )
   })
 
   // Extra privileges could bypass CSP or let service workers outlive the granted preview.

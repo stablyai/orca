@@ -26,7 +26,7 @@ vi.mock('./NativeChatComposer', async () => {
     NativeChatComposer: React.forwardRef<HTMLTextAreaElement, NativeChatComposerProps>(
       (props, ref) => (
         <>
-          <textarea ref={ref} aria-label="Edit message" />
+          <textarea ref={ref} aria-label="Edit message" data-composer-visible={props.isVisible} />
           <button onClick={props.editSession?.cancel}>Cancel editing</button>
         </>
       )
@@ -65,13 +65,16 @@ import type { QueuedMessageCard } from '../../../../shared/structured-agent-sess
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
-function renderList(owner: StructuredAgentSessionQueuedMessagesController) {
+function renderList(
+  owner: StructuredAgentSessionQueuedMessagesController,
+  attachTo = editAttachTo
+) {
   return render(
     <TooltipProvider delayDuration={0}>
       <NativeChatQueuedMessageList
         chatWorktreeId={null}
         controller={owner}
-        editAttachTo={editAttachTo}
+        editAttachTo={attachTo}
       />
     </TooltipProvider>
   )
@@ -148,36 +151,42 @@ describe('NativeChatQueuedMessageList inline edit', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy()
   })
 
-  it('the card being edited shows its editor in place of its text and actions; others cannot open one', async () => {
-    const editor = {
-      messageId: 'draft-1',
-      draftScopeKey: 'edit-scope',
-      imagesCapable: true,
-      text: 'editing',
-      acquiring: false,
-      saving: false,
-      canSave: true,
-      change: vi.fn(),
-      save: vi.fn(),
-      cancel: vi.fn()
+  it.each([true, false])(
+    'the edited card keeps its own composer and forwards chat visibility (%s)',
+    async (isVisible) => {
+      const editor = {
+        messageId: 'draft-1',
+        draftScopeKey: 'edit-scope',
+        imagesCapable: true,
+        text: 'editing',
+        acquiring: false,
+        saving: false,
+        canSave: true,
+        change: vi.fn(),
+        save: vi.fn(),
+        cancel: vi.fn()
+      }
+      const owner = controller(
+        [card({ messageId: 'draft-1' }), card({ messageId: 'draft-2', position: 2 })],
+        null,
+        true,
+        { editCapable: true, editor }
+      )
+      owner.reorder = { scope: 'session', pending: false, move: vi.fn(async () => {}) }
+      renderList(owner, { ...editAttachTo, isVisible })
+      expect(screen.queryByRole('button', { name: 'Reorder message' })).toBeNull()
+      const [edited, other] = screen.getAllByRole('listitem')
+      expect(within(edited!).getByRole('textbox', { name: 'Edit message' })).toBeTruthy()
+      expect(within(edited!).getByRole('textbox').getAttribute('data-composer-visible')).toBe(
+        String(isVisible)
+      )
+      expect(within(edited!).queryByRole('button', { name: 'Delete' })).toBeNull()
+      expect(within(edited!).queryByText('text of draft-1')).toBeNull()
+      fireEvent.pointerDown(within(other!).getByRole('button', { name: 'More actions' }))
+      const item = await screen.findByRole('menuitem', { name: 'Edit message' })
+      expect(item.getAttribute('aria-disabled')).toBe('true')
     }
-    const owner = controller(
-      [card({ messageId: 'draft-1' }), card({ messageId: 'draft-2', position: 2 })],
-      null,
-      true,
-      { editCapable: true, editor }
-    )
-    owner.reorder = { scope: 'session', pending: false, move: vi.fn(async () => {}) }
-    renderList(owner)
-    expect(screen.queryByRole('button', { name: 'Reorder message' })).toBeNull()
-    const [edited, other] = screen.getAllByRole('listitem')
-    expect(within(edited!).getByRole('textbox', { name: 'Edit message' })).toBeTruthy()
-    expect(within(edited!).queryByRole('button', { name: 'Delete' })).toBeNull()
-    expect(within(edited!).queryByText('text of draft-1')).toBeNull()
-    fireEvent.pointerDown(within(other!).getByRole('button', { name: 'More actions' }))
-    const item = await screen.findByRole('menuitem', { name: 'Edit message' })
-    expect(item.getAttribute('aria-disabled')).toBe('true')
-  })
+  )
 
   it('an edited card shows the editing header with its sender and hides its caption until editing ends', () => {
     const editor = {

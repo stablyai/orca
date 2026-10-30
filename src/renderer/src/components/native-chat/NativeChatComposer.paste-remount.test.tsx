@@ -17,6 +17,7 @@ import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtim
 type FieldProps = {
   imageAttachments?: readonly NativeChatComposerImageAttachment[]
   sendButtonDisabled?: boolean
+  addressPreviews?: NativeChatComposerFieldProps['addressPreviews']
   onRemoveImageAttachment: (id: string) => void
   onSend: () => void
 }
@@ -145,7 +146,7 @@ function composer(
   )
 }
 
-function installPreloadApi(ui: Record<string, unknown>): void {
+function installPreloadApi(ui: Record<string, unknown>, fs: Record<string, unknown> = {}): void {
   const inert = (): (() => void) => () => {}
   const namespace = (own: Record<string, unknown>): Record<string, unknown> =>
     new Proxy(own, {
@@ -154,8 +155,11 @@ function installPreloadApi(ui: Record<string, unknown>): void {
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: new Proxy<Record<string, unknown>>(
-      { ui: namespace(ui) },
-      { get: (target, key) => (key === 'ui' ? target.ui : namespace({})) }
+      { ui: namespace(ui), fs: namespace(fs) },
+      {
+        get: (target, key) =>
+          typeof key === 'string' && key in target ? target[key] : namespace({})
+      }
     )
   })
 }
@@ -212,6 +216,58 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
+
+it.each(['hidden', 'question card', 'conversation change'] as const)(
+  'retains address previews through reconnect and send locks, then releases on %s',
+  async (release) => {
+    const source = '/tmp/recording.wav'
+    const previewAddress = vi.fn(async ({ id }: { id: string }) => ({
+      status: 'ready' as const,
+      id,
+      name: 'recording.wav',
+      kind: 'audio' as const,
+      mimeType: 'audio/wav',
+      url: 'orca-chat-preview://resource/recording'
+    }))
+    const releaseAddressPreview = vi.fn(async () => {})
+    installPreloadApi({}, { previewAddress, releaseAddressPreview })
+    writeNativeChatDraftCache(PANE, source)
+    const props = {
+      terminalTabId: 'tab-1',
+      paneKey: PANE,
+      targetPtyId: 'pty-1',
+      agent: 'codex' as const
+    }
+    const view = render(<NativeChatComposer {...props} />)
+    await act(async () => mocks.state.fieldProps?.addressPreviews?.onTextPasted(source))
+    const preview = mocks.state.fieldProps?.addressPreviews?.entries[0]
+    expect(screen.getByText('recording.wav')).toBeTruthy()
+
+    for (const next of [
+      { targetPtyId: null, canSend: true },
+      { targetPtyId: 'pty-2', canSend: true },
+      { targetPtyId: 'pty-2', canSend: false },
+      { targetPtyId: 'pty-2', canSend: true }
+    ]) {
+      view.rerender(<NativeChatComposer {...props} {...next} />)
+      expect(screen.getByText('recording.wav')).toBeTruthy()
+      expect(mocks.state.fieldProps?.addressPreviews?.entries[0]?.id).toBe(preview?.id)
+      expect(releaseAddressPreview).not.toHaveBeenCalled()
+    }
+    expect(previewAddress).toHaveBeenCalledOnce()
+    view.rerender(
+      <NativeChatComposer
+        {...props}
+        isVisible={release !== 'hidden'}
+        inputOwnedByCard={release === 'question card'}
+        draftScopeKey={release === 'conversation change' ? 'other-conversation' : PANE}
+      />
+    )
+    expect(screen.queryByText('recording.wav')).toBeNull()
+    expect(releaseAddressPreview).toHaveBeenCalledWith({ id: preview?.id })
+    expect(readNativeChatDraftCache(PANE)).toBe(source)
+  }
+)
 
 describe('a paste into a chat on a paired server', () => {
   it('is still there when the composer returns from a prompt card that replaced it mid-upload', async () => {

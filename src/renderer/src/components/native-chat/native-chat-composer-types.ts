@@ -95,6 +95,8 @@ export type NativeChatComposerProps = {
   agent: AgentType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
+  /** Hidden retained chats must stop playback and release address preview resources. */
+  isVisible?: boolean
   /** Disable unavailable input and show this reason as its placeholder. */
   unavailableHint?: string | undefined
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */

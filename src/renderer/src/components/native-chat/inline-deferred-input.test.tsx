@@ -50,6 +50,8 @@ function Field({ scope, disabled = false }: { scope: string; disabled?: boolean 
   }, [draft.draft])
   useNativeChatComposerHandle(handle, {
     textareaRef: input,
+    draft: draft.draft,
+    addressPreviewsEnabled: true,
     isComposing: () => false,
     setDraft: draft.setDraft,
     setCaret: () => {},
