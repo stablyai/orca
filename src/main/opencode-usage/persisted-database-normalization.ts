@@ -4,7 +4,7 @@ import type {
   OpenCodeUsagePersistedState
 } from './types'
 
-/** Fills cost fields older OpenCode caches never wrote. Electron-free: the scan worker runs it too. */
+/** Normalize legacy cache cost fields without Electron so scan workers can use it. */
 export function normalizeOpenCodeUsagePersistedDatabases(
   databases: OpenCodeUsagePersistedDatabase[] | undefined
 ): OpenCodeUsagePersistedDatabase[] {

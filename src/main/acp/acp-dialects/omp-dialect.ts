@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { AcpAgentError } from '../acp-errors'
 import type { AcpCompactionReply, AcpDialect } from './acp-dialect'
 
 // Read raw result text instead of the repeated command echo in content.
@@ -7,6 +8,7 @@ import type { AcpCompactionReply, AcpDialect } from './acp-dialect'
 const textBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() })
 const promptErrorDataSchema = z.looseObject({ details: z.string() })
 const SIGNED_OUT_DETAIL_PREFIXES = ['No model selected.\n\nUse /login', 'No API key found for ']
+const CANCEL_CLEANUP_TIMED_OUT = 'ACP cancel cleanup timed out'
 const toolResultSchema = z.looseObject({
   content: z.array(z.unknown()),
   details: z
@@ -104,15 +106,27 @@ function compactionReply(text: string): AcpCompactionReply | undefined {
     : { outcome: 'failed', detail: reply }
 }
 
+function errorDetails(error: AcpAgentError): string | undefined {
+  return error.code === -32603
+    ? promptErrorDataSchema.safeParse(error.data).data?.details
+    : undefined
+}
+
 export const OMP_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
   compactionReply,
   authenticationRequired: (error) => {
-    const details = promptErrorDataSchema.safeParse(error.data).data?.details
+    const details = errorDetails(error)
     return (
-      error.code === -32603 &&
       details !== undefined &&
       SIGNED_OUT_DETAIL_PREFIXES.some((prefix) => details.startsWith(prefix))
+    )
+  },
+  // A timed-out cancel cleanup closes the session; later prompts get "Unsupported ACP session".
+  sessionLost: (error, sessionId) => {
+    const details = errorDetails(error)
+    return (
+      details === CANCEL_CLEANUP_TIMED_OUT || details === `Unsupported ACP session: ${sessionId}`
     )
   }
 }

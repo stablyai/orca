@@ -9,23 +9,8 @@ import { getOrcaProfileIndexPath, readProfileIndex } from './profile-index-store
 import { readProfileStateDomains } from '../persistence/profile-state/profile-state-domain-reader'
 import { assertNoRetainedProfileStateExports } from '../persistence/profile-state/profile-state-recovery-required'
 
-/**
- * Worktree ids owned by Orca profiles OTHER than the running one.
- *
- * Why the history GC needs these: terminal history is keyed by worktree id
- * under `userData/terminal-history`, which has no profile segment, and fish
- * history lands in the user's own fish data dir — but the Store the GC asks for
- * live ids only ever reads the ACTIVE profile's data file. So after a profile
- * switch every other profile's history looks orphaned, and the GC deletes shell
- * history those profiles are still using.
- *
- * Reading their persisted state directly is deliberate: a Store per profile would
- * run migrations and normalization against state another profile owns. Only the
- * id-bearing collections are read, and any unreadable profile is skipped —
- * a profile whose ids cannot be established must widen the live set's
- * uncertainty, never narrow it, so failure here is handled by the caller
- * refusing to prune rather than by pruning more.
- */
+/** Histories lack profile segments, so include inactive profiles before GC.
+ * Read persisted IDs without Store migrations; unreadable profiles must prevent pruning. */
 export function getOtherProfileWorktreeIdsForHistoryGc(userDataPath = getProfileUserDataPath()): {
   ids: Set<string>
   unreadableProfiles: number
@@ -35,13 +20,11 @@ export function getOtherProfileWorktreeIdsForHistoryGc(userDataPath = getProfile
 }
 
 type ProfileWorkspaceIds = {
-  /** Worktree ids with metadata, and folder workspace keys. */
   ids: Set<string>
   repoIds: Set<string>
 }
 
-/** The workspaces and projects every profile other than the running one holds. Any profile whose
- *  state can't be read is counted, never skipped silently: its ids are unknown. */
+/** Report unreadable inactive profiles explicitly: their IDs remain unknown. */
 export function readOtherProfileWorkspaceCatalog(
   userDataPath = getProfileUserDataPath()
 ): ProfileWorkspaceIds & { unreadableProfiles: number } {
@@ -72,9 +55,7 @@ function readProfileWorktreeIds(
   userDataPath: string
 ): ProfileWorkspaceIds | null {
   const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
-  // A present database is authoritative. In particular, do not fall back to a
-  // stale JSON export after corruption or a future schema, because that could
-  // make live history look orphaned and delete it.
+  // A present database is authoritative; stale JSON fallback could falsely orphan live history.
   const databasePresence = profileStateDatabasePresence(databaseFile)
   if (databasePresence === 'present') {
     return readProfileWorktreeIdsFromDatabase(databaseFile, profileId)
@@ -136,7 +117,7 @@ function readProfileWorktreeIdsFromDatabase(
   const worktreeMeta = domains.values.get('worktreeMeta')
   if (worktreeMeta !== undefined) {
     if (worktreeMeta === null) {
-      // Explicit null is a valid legacy state value and means no metadata.
+      // Null is valid legacy state with no metadata.
     } else if (!isRecord(worktreeMeta)) {
       return null
     } else {
@@ -148,7 +129,7 @@ function readProfileWorktreeIdsFromDatabase(
   const folderWorkspaces = domains.values.get('folderWorkspaces')
   if (folderWorkspaces !== undefined) {
     if (folderWorkspaces === null) {
-      // Explicit null is a valid legacy state value and means no workspaces.
+      // Null is valid legacy state with no workspaces.
     } else if (!Array.isArray(folderWorkspaces)) {
       return null
     } else {
@@ -164,7 +145,6 @@ function readProfileWorktreeIdsFromDatabase(
   return repoIds ? { ids, repoIds } : null
 }
 
-/** Null when the collection is present but not a list: its ids are unknown. */
 function repoIdsOf(repos: unknown): Set<string> | null {
   const ids = new Set<string>()
   if (repos === undefined || repos === null) {
@@ -187,8 +167,7 @@ function readProfileWorktreeIdsFromJson(dataFile: string): ProfileWorkspaceIds |
   try {
     parsed = JSON.parse(readFileSync(dataFile, 'utf8'))
   } catch {
-    // Missing is indistinguishable from corrupt here, and both mean the same
-    // thing to the caller: this profile's ids are unknown.
+    // Missing and corrupt both leave this profile’s IDs unknown.
     return null
   }
   if (!isRecord(parsed)) {

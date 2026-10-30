@@ -4,6 +4,7 @@ import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-chan
 import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -86,9 +87,10 @@ export function UpdateDownloadingContent({
         <button
           type="button"
           className="text-xs text-muted-foreground underline hover:text-foreground self-start"
-          onClick={() =>
-            void window.api.shell.openUrl(
-              release ? release.releaseNotesUrl : getReleaseNotesUrlForVersion(version)
+          onClick={(event) =>
+            openAppHttpLink(
+              release ? release.releaseNotesUrl : getReleaseNotesUrlForVersion(version),
+              { event }
             )
           }
         >
@@ -100,7 +102,13 @@ export function UpdateDownloadingContent({
       <div className="flex flex-col gap-2 mt-1">
         <Progress value={percent} className="h-1.5" />
         <p className="text-xs text-muted-foreground">
-          {translate('auto.components.UpdateCard.6e45bfa2e0', 'Downloading...')} {percent}%
+          {translate(
+            'auto.components.UpdateCard.downloadingPercent',
+            'Downloading... {{percent}}%',
+            {
+              percent
+            }
+          )}
         </p>
       </div>
     </div>

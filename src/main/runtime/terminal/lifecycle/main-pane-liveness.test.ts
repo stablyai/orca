@@ -1,5 +1,4 @@
-// L80 (P3): with the switch on, a pane main owns is no proof its terminal runs; the host's
-// inventory and the terminal's record decide. Switch-off, a window leaf still vouches for its pty.
+// Main-owned pane bindings do not prove process life; host inventory/records decide. Window-owned builds retain graph-based liveness.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
@@ -40,6 +39,7 @@ function hostController(host: Host, cwd: string, worktreeId: string) {
     kill: () => true,
     getForegroundProcess: async () => null,
     hasPty: (ptyId: string) => host.live.has(ptyId),
+    getPtyAvailability: (ptyId: string) => host.live.has(ptyId),
     listProcesses: async (providerKey?: string) =>
       [...host.live]
         .filter((id) => (id === SSH_PTY) === (providerKey === 'ssh:ssh-target'))
@@ -87,8 +87,7 @@ function savedPaneHost(ptyId: string, opts: { windowed?: boolean; splitPtyId?: s
       }
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime spec fixture store implements every method these paths call.
-  const runtime = new OrcaRuntimeService(runtimeStore as never)
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController(hostController(host, TEST_WORKTREE_PATH, TEST_WORKTREE_ID))
   const graph = {
     tabs: [
@@ -219,12 +218,11 @@ describe('a pane main owns does not vouch for its terminal (switch on)', () => {
       }
     })
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime spec fixture store implements every method these paths call.
     const runtime = new OrcaRuntimeService({
       ...runtimeStore,
       getFolderWorkspaces: () => [makeFolderWorkspace()],
       getProjectGroups: () => [makeFolderProjectGroup()]
-    } as never)
+    })
     runtime.setPtyController(
       hostController(host, TEST_FOLDER_WORKSPACE_PATH, TEST_FOLDER_WORKSPACE_KEY)
     )
@@ -266,8 +264,7 @@ describe('stopping a workspace through a listing gap (switch on)', () => {
     const liveIds = runtime['getLivePtyIdsForWorktree'](TEST_WORKTREE_ID)
     expect(liveIds).toEqual(new Set(['saved-pty']))
 
-    // The host answered it has no such id, which cannot prove the shell gone (a restarted host can
-    // omit survivors), and the kill draws no exit: the shell may still run.
+    // Reachable relay absence plus an unconfirmed kill cannot prove exit; restarted hosts can omit survivors.
     expect(runtime.getPtyLivenessVerdict('saved-pty')).toBeNull()
     const result = await runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     expect(result).toMatchObject({ ptyStopVerdict: 'unverifiable' })
@@ -384,14 +381,14 @@ describe('a terminal registered while a listing is in flight (switch on)', () =>
 })
 
 describe('switch off: a window leaf still vouches for its terminal', () => {
-  it('keeps a windowed pane connected when the inventory stops listing it', async () => {
+  it('keeps the window record but withholds a ready mobile handle when the host loses its PTY', async () => {
     layoutOwner.isMain = false
     const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
     expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
 
     host.live.clear()
 
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
+    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('pending-handle')
     expect(record(runtime, 'saved-pty')?.connected).toBe(true)
   })
 })

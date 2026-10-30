@@ -15,8 +15,7 @@ function makePane(): ManagedPane {
   return { id: 1, terminal: { options: {} } } as unknown as ManagedPane
 }
 
-// Mirrors PaneManager.getPanes(), which returns a fresh toPublicPane() wrapper
-// per call — so deferral state must not be keyed on the pane object identity.
+// getPanes returns new public wrappers each call; deferral must not use pane-object identity.
 function makeInternalPane(): ManagedPaneInternal {
   return { id: 1, terminal: { options: {} } } as unknown as ManagedPaneInternal
 }
@@ -52,8 +51,6 @@ describe('pane-metric-options-deferral', () => {
 
     applyOrDeferPaneMetricOptions(pane, { fontSize: 15 }, false)
     applyOrDeferPaneMetricOptions(pane, { fontSize: 21 }, false)
-    // A later measurable apply supersedes the pending deferral entirely: flushing
-    // afterwards must not resurrect the hidden-era value.
     applyOrDeferPaneMetricOptions(pane, { fontSize: 18 }, true)
 
     expect(pane.terminal.options.fontSize).toBe(18)
@@ -80,8 +77,7 @@ describe('pane-metric-options-deferral', () => {
     const internal = makeInternalPane()
     const deferView = toPublicPane(internal)
     const flushView = toPublicPane(internal)
-    // Every getPanes() call allocates a new wrapper; the two views are the same
-    // pane but never the same object.
+    // Fresh wrappers represent the same terminal, matching repeated getPanes calls.
     expect(deferView).not.toBe(flushView)
 
     applyOrDeferPaneMetricOptions(deferView, { fontSize: 16 }, false)
@@ -92,7 +88,6 @@ describe('pane-metric-options-deferral', () => {
   })
 
   it('flushes through the internal pane when a public view deferred', () => {
-    // fitAllPanesInternal / fitAllRevealedPanes iterate the internal panes.
     const internal = makeInternalPane()
 
     applyOrDeferPaneMetricOptions(toPublicPane(internal), { fontSize: 17 }, false)
@@ -110,7 +105,7 @@ describe('pane-metric-options-deferral', () => {
   })
 
   it('is never settled while a deferral is parked, even if values match', () => {
-    // Otherwise an equal-valued apply would skip and strand the stale deferral.
+    // Even an equal-valued apply must clear stale deferred values.
     const pane = makePane()
     applyOrDeferPaneMetricOptions(pane, { fontSize: 20 }, false)
     pane.terminal.options.fontSize = 14
@@ -122,13 +117,12 @@ describe('pane-metric-options-deferral', () => {
     const pane = makePane()
     applyOrDeferPaneMetricOptions(pane, { fontSize: 12, lineHeight: 1.5 }, false)
 
-    // Font zoom writes fontSize directly, then fits — which flushes.
+    // Font zoom writes directly before fit flushes deferred values.
     pane.terminal.options.fontSize = 22
     overridePendingPaneMetricOptions(pane, { fontSize: 22 })
     flushDeferredPaneMetricOptions(pane)
 
     expect(pane.terminal.options.fontSize).toBe(22)
-    // The other parked key still lands.
     expect(pane.terminal.options.lineHeight).toBe(1.5)
   })
 
@@ -152,9 +146,7 @@ describe('canApplyPaneMetricOptions gating', () => {
   }
 
   it('applies to a pane clamped narrow by a divider drag', () => {
-    // 50px is the divider clamp: over the pixel floor but ~5 cols, under the
-    // fit floor. Gating on the fit floor would strand it on a stale font,
-    // because it never hides and its box never changes.
+    // The 50px divider clamp clears the pixel floor but not the grid floor; using the latter would strand fonts indefinitely.
     expect(canApplyPaneMetricOptions(makeSizedPane({ width: 50, height: 600 }, 5))).toBe(true)
   })
 
@@ -168,9 +160,7 @@ describe('canApplyPaneMetricOptions gating', () => {
 })
 
 describe('metric weight-change forensics', () => {
-  // Field probe for the bold-collapse bug (STA-4042 family): weights never
-  // change in normal operation, so a transition crumb is either the poisoning
-  // or the healing write. These fail if the crumb is removed.
+  // Weights rarely change; retain transition crumbs that identify bold-collapse poisoning/healing writes (STA-4042).
   it('records prev/next/reason when a weight value actually changes', () => {
     const recorder = vi.fn()
     setTerminalWebglDiagnosticRecorder(recorder)

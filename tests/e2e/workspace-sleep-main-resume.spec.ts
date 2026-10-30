@@ -1,12 +1,4 @@
-/**
- * A workspace sleep's agents are resumed by main alone, with the window open: opening a slept
- * pane asks main to resume it, the pane attaches to main's terminal, and each agent resumes once
- * in its own pane, never in a fresh tab.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/workspace-sleep-main-resume.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Require main alone to resume each sleeping pane’s agent once, binding the window to that terminal without creating a fresh tab.
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'

@@ -23,8 +23,10 @@ import {
 } from '@/store/slices/worktrees-slice-test-fixtures'
 import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import {
+  ensureAgentLaunchPreferences,
   clearHostAgentMenuSettingsForTests,
-  readAgentLaunchPreferencesForWorktree
+  readAgentLaunchPreferencesForWorktree,
+  readAgentLaunchPreferencesForWorkspace
 } from '../settings/use-host-agent-launch-preferences'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 
@@ -200,6 +202,9 @@ it('ignores old reads across host switches, restarts, and re-pairing', async () 
 })
 
 it.each([20, 200])('bounds %s menu owners across save/open', async (n) => {
+  const reads = () => rpc.call.mock.calls.filter((call) => call[1] === 'settings.getAgentLaunch')
+  const mutations = () =>
+    rpc.call.mock.calls.filter((call) => call[1] === 'settings.mutateAgentLaunch')
   const notify = () =>
     mutateHostAgentLaunchSettings(
       { environmentId: 'alpha', pairingRevision: 7 },
@@ -218,15 +223,16 @@ it.each([20, 200])('bounds %s menu owners across save/open', async (n) => {
   )
   const hook = hooks[0]
   await act(async () => {})
+  expect(reads()).toHaveLength(1)
   await act(notify)
   await act(async () => old.resolve())
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'codex'
   )
-  expect(rpc.call).toHaveBeenCalledTimes(2 * n + 1)
+  expect(reads()).toHaveLength(2)
   hooks.forEach((h) => h.rerender({ open: false }))
   await act(notify)
-  expect(rpc.call).toHaveBeenCalledTimes(2 * n + 2)
+  expect(reads()).toHaveLength(2)
   rpc.call.mockImplementation(() =>
     payload({ ...raw, defaultTuiAgent: 'claude', disabledTuiAgents: ['codex'] })
   )
@@ -235,10 +241,13 @@ it.each([20, 200])('bounds %s menu owners across save/open', async (n) => {
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'claude'
   )
+  expect(reads()).toHaveLength(3)
   hooks.forEach((h) => h.unmount())
   await act(notify)
-  expect(rpc.call).toHaveBeenCalledTimes(3 * n + 3)
-  expect(payloadWork.count).toBe(3 * n + 3)
+  expect(reads()).toHaveLength(3)
+  expect(mutations()).toHaveLength(3)
+  expect(rpc.call).toHaveBeenCalledTimes(6)
+  expect(payloadWork.count).toBe(6)
   expectSettingsWorkScale('menu', n, [payloadWork.entries, payloadWork.bytes])
 })
 
@@ -343,4 +352,146 @@ it('gives the new-agent shortcut and badge the default the host menu applied', a
     defaultTuiAgent: 'codex',
     disabledTuiAgents: ['opencode']
   })
+})
+
+it('shares cold reads with independent cancelled waiters and retains mutation answers on failure', async () => {
+  vi.useFakeTimers()
+  try {
+    const pending = Promise.withResolvers<{ settings: typeof server }>()
+    rpc.call.mockReturnValueOnce(pending.promise)
+    const menu = renderHook(() =>
+      useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
+    )
+    const controller = new AbortController()
+    const attempt = ensureAgentLaunchPreferences(
+      useAppStore.getState(),
+      { kind: 'git-worktree', worktreeId: 'wt' },
+      controller.signal
+    )
+    const cancelled = expect(attempt).rejects.toMatchObject({ name: 'AbortError' })
+    await act(async () => controller.abort())
+    await cancelled
+    expect(rpc.call).toHaveBeenCalledTimes(1)
+    expect(rpc.call.mock.calls[0]?.[3].signal.aborted).toBe(false)
+    await act(async () => pending.resolve({ settings: server }))
+    rpc.call
+      .mockResolvedValueOnce({ settings: server })
+      .mockRejectedValueOnce(new Error('refresh failed'))
+    await act(async () => {
+      await mutateHostAgentLaunchSettings(
+        { environmentId: 'alpha', pairingRevision: 7 },
+        { type: 'availability', agent: 'claude', enabled: false }
+      )
+    })
+    expect(menu.result.current).toMatchObject({ state: 'settled', defaultTuiAgent: 'codex' })
+    await expect(
+      ensureAgentLaunchPreferences(useAppStore.getState(), {
+        kind: 'git-worktree',
+        worktreeId: 'wt'
+      })
+    ).resolves.toMatchObject({ defaultTuiAgent: 'codex' })
+    expect(rpc.call).toHaveBeenCalledTimes(3)
+    const late = Promise.withResolvers<{ settings: typeof server }>()
+    rpc.call.mockReturnValueOnce(late.promise)
+    act(() =>
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([['alpha', { ...status(), hostContactEpoch: 3 }]])
+      })
+    )
+    await act(async () => {})
+    const signal = rpc.call.mock.calls.at(-1)?.[3].signal
+    menu.unmount()
+    await act(async () => {})
+    expect(signal.aborted).toBe(true)
+    await act(async () =>
+      late.resolve({ settings: projectAgentLaunchSettings({ defaultTuiAgent: 'claude' }) })
+    )
+    expect(
+      readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt').defaultTuiAgent
+    ).toBe('codex')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+it.each(['pairing', 'runtime'] as const)(
+  'cancels a cold event-only wait on actual %s retirement without another acquisition',
+  async (change) => {
+    vi.useFakeTimers()
+    try {
+      const pending = Promise.withResolvers<{ settings: typeof server }>()
+      rpc.call.mockReturnValueOnce(pending.promise)
+      const attempt = ensureAgentLaunchPreferences(useAppStore.getState(), {
+        kind: 'git-worktree',
+        worktreeId: 'wt'
+      })
+      const cancelled = expect(attempt).rejects.toMatchObject({ name: 'AbortError' })
+      await act(async () => {})
+      if (change === 'pairing') {
+        replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
+      } else {
+        useAppStore.setState({
+          runtimeStatusByEnvironmentId: new Map([['alpha', status('replacement')]])
+        })
+      }
+      await act(async () => vi.advanceTimersByTime(3_000))
+      await cancelled
+      await act(async () => pending.resolve({ settings: server }))
+      expect(rpc.call).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)
+
+it.each([false, true])(
+  'shares prospective, git and folder owner snapshots, including old hosts (%s)',
+  async (supported) => {
+    rpc.supports.mockResolvedValue(supported)
+    const workspace = {
+      kind: 'git-worktree',
+      executionHostId: 'runtime:alpha',
+      repoId: TEST_REPO.id
+    } as const
+    const read = () =>
+      [
+        readAgentLaunchPreferencesForWorkspace(useAppStore.getState(), workspace),
+        readAgentLaunchPreferencesForWorkspace(useAppStore.getState(), {
+          kind: 'folder',
+          executionHostId: 'runtime:alpha'
+        }),
+        readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt'),
+        readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'folder:f1')
+      ].map((preferences) => preferences.defaultTuiAgent)
+    expect(read()).toEqual(Array(4).fill('opencode'))
+    expect(rpc.call).not.toHaveBeenCalled()
+    await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+    expect(read()).toEqual(Array(4).fill(supported ? 'codex' : 'opencode'))
+    if (supported) {
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([['alpha', status('replacement')]])
+      })
+      expect(read()).toEqual(Array(4).fill('opencode'))
+      await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+      expect(read()).toEqual(Array(4).fill('codex'))
+      replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
+      expect(read()).toEqual(Array(4).fill('opencode'))
+    }
+  }
+)
+
+it('keeps a cold detected shortcut synchronous without starting a preference read', async () => {
+  const { resolveTerminalAgentTabShortcut } = await import('../terminal-agent-tab-shortcut')
+  const { getRuntimeAgentInventoryKey } = await import('@/store/slices/runtime-agent-inventory-key')
+  useAppStore.setState((state) => ({
+    settings: { ...state.settings!, defaultTuiAgent: 'claude', disabledTuiAgents: [] },
+    runtimeDetectedAgentIds: { [getRuntimeAgentInventoryKey('alpha', 'wt')]: ['claude', 'codex'] }
+  }))
+  expect(
+    resolveTerminalAgentTabShortcut({
+      activeWorktreeId: 'wt',
+      keybindings: {},
+      matchShortcut: (action) => action === 'tab.newAgent'
+    })
+  ).toEqual({ actionId: 'tab.newAgent', agent: 'claude' })
+  expect(rpc.call).not.toHaveBeenCalled()
 })

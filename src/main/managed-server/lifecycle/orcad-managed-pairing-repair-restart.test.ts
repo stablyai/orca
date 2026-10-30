@@ -15,12 +15,12 @@ import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
 import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { ManagedOrcadPairingRepairs } from './orcad-managed-pairing-repair'
 import {
   OrcadManagedIdentityError,
   verifyManagedOrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -88,8 +88,7 @@ function repairsAgainst(saved: KnownRuntimeEnvironment, readiness: ServeReadines
     connect: async () => ({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only passed to readReadiness, which ignores it here.
       target: {} as SshTarget,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only passed to readReadiness, which ignores it here.
-      connection: {} as OrcadHostTransport
+      connection: unusedOrcadHostTransport()
     }),
     readReadiness: async () => readiness,
     refresh,

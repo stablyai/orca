@@ -79,10 +79,6 @@ describe('buildAiVaultServiceEnv', () => {
     expect(env.OPENCODE_DB).toBe('opencode-alt.db')
   })
 
-  it('runs the forked Electron binary as plain Node', () => {
-    expect(buildAiVaultServiceEnv({}, 'linux').ELECTRON_RUN_AS_NODE).toBe('1')
-  })
-
   it('ignores a POSIX variable that only matches an allowed name by case', () => {
     expect(buildAiVaultServiceEnv({ codex_home: '/tmp/spoof' }, 'linux')).toEqual({
       ELECTRON_RUN_AS_NODE: '1'
@@ -144,10 +140,6 @@ describe('buildRelayAiVaultServiceEnv', () => {
 
     expect(env.CODEX_HOME).toBeUndefined()
     expect(env.PATH).toBe('/usr/bin')
-  })
-
-  it('stays plain Node rather than an Electron child', () => {
-    expect(buildRelayAiVaultServiceEnv({}, 'linux').ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 })
 

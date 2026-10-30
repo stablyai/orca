@@ -1,10 +1,4 @@
-/**
- * E2E tests for splitting terminal panes and the stable UUID leaf identity each
- * split pane carries into its PTY binding, ORCA_PANE_KEY, and context menu.
- *
- * User Prompt:
- * - terminal panes can be split
- */
+// Require stable split-leaf UUIDs across PTY binding, ORCA_PANE_KEY and context menu.
 
 import { test, expect } from './helpers/orca-app'
 import {
@@ -20,16 +14,11 @@ import {
 import { openTerminalContextMenu } from './helpers/terminal-pane-title-actions'
 import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-mount-readiness'
 
-// Why: keep the suite serial so the headful pane tests never ask Playwright to
-// open multiple visible Electron windows at once.
+// Serialize headful scenarios; visible-window runs require an isolated display.
 test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
-  /**
-   * User Prompt:
-   * - terminal panes can be split
-   */
   test('can split terminal pane right', async ({ orcaPage }) => {
     const paneCountBefore = await countVisibleTerminalPanes(orcaPage)
 
@@ -40,10 +29,6 @@ test.describe('Terminal Panes', () => {
     expect(paneCountAfter).toBe(paneCountBefore + 1)
   })
 
-  /**
-   * User Prompt:
-   * - terminal panes can be split
-   */
   test('can split terminal pane down', async ({ orcaPage }) => {
     const paneCountBefore = await countVisibleTerminalPanes(orcaPage)
 

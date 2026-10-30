@@ -143,7 +143,6 @@ describe('Recover server', () => {
     await act(async () => button(container, 'Clear lock and restart').click())
     expect(container.textContent).toContain('did not start')
     expect(onOpenChange).not.toHaveBeenCalled()
-    // The lock is gone: no stale evidence, no second confirmation, no manual recovery.
     expect(container.textContent).not.toContain('boot-old')
     expect(button(container, 'Clear lock and restart')).toBeUndefined()
     expect(container.textContent).not.toContain('--reclaim-stale-lock')

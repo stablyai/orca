@@ -1,5 +1,7 @@
+import { EFFECTIVE_HARD_CAP_SQL } from './cell-connection-cap.js'
+
 export const ASSIGNMENT_CONNECTION_HEADROOM_QUERY =
-  `SELECT limits.cell_id, limits.hard_cap, limits.unobserved_bound,
+  `SELECT limits.cell_id, ${EFFECTIVE_HARD_CAP_SQL} AS effective_hard_cap, limits.unobserved_bound,
      connection_snapshot.enforced_connection_units,
      connection_snapshot.snapshot_at AS last_heartbeat_at,
      connection_snapshot.cell_incarnation AS connection_incarnation,

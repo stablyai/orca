@@ -40,7 +40,6 @@ export function shouldOfferLinearIssueFetchMore(options: {
   emptyKind: LinearIssueEmptyKind
   serverHasMore: boolean
 }): boolean {
-  // Why: Fetch more is only honest for client-team thinning of a larger server
-  // window. Server-filtered empties must not invite more pages of the same empty set.
+  // Offer more only when client-team filtering thinned a larger server window; server-filtered empties cannot benefit.
   return options.emptyKind === 'client-team' && options.serverHasMore
 }

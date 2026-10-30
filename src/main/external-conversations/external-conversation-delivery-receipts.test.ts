@@ -138,3 +138,39 @@ describe('DeliveryReceipts ledger capacity', () => {
     db.close()
   })
 })
+
+describe('DeliveryReceipts.recorded', () => {
+  it('replays a result, reads an interrupted delivery as unknown, and runs nothing', async () => {
+    const { path, db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    await receipts.run(KEY, 'done', 'connector.send', ['hi'], async () => ({ outcome: 'accepted' }))
+    void receipts.run(KEY, 'interrupted', 'connector.send', ['hi'], never)
+    await receipts.run(KEY, 'refused', 'connector.send', ['hi'], async () => ({
+      outcome: 'refused',
+      reason: 'agent_not_reachable'
+    }))
+    db.close()
+
+    const reopened = new OrchestrationDb(path)
+    const restarted = new DeliveryReceipts(() => reopened)
+    await expect(restarted.recorded(KEY, 'done')).resolves.toEqual({ outcome: 'accepted' })
+    await expect(restarted.recorded(KEY, 'interrupted')).resolves.toEqual({
+      outcome: 'unknown',
+      reason: 'replayed_after_restart'
+    })
+    await expect(restarted.recorded(KEY, 'refused')).resolves.toBeNull()
+    await expect(restarted.recorded(KEY, 'never-received')).resolves.toBeNull()
+    reopened.close()
+  })
+
+  it('answers a delivery still running in this process with its own result', async () => {
+    const { db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    const { promise, resolve } = Promise.withResolvers<Delivery>()
+    void receipts.run(KEY, 'running', 'connector.send', ['hi'], () => promise)
+    const recorded = receipts.recorded(KEY, 'running')
+    resolve({ outcome: 'accepted' })
+    await expect(recorded).resolves.toEqual({ outcome: 'accepted' })
+    db.close()
+  })
+})

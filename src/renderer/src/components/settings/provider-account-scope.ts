@@ -28,9 +28,7 @@ function providerHostScopeLabel(target: RuntimeClientTarget): string {
 export function getRemoteAccountsPaneScope(serverName: string | null): ProviderHostScope {
   const name = serverName?.trim()
   return {
-    // Why: the saved-server list is still empty on first paint, and the generic
-    // fallback is already a noun phrase — interpolating it would render
-    // "Remote server: the remote server".
+    // Unloaded server names need bare fallback labels; interpolation would repeat Remote server.
     label: name
       ? remoteServerScopeLabel(name)
       : translate(

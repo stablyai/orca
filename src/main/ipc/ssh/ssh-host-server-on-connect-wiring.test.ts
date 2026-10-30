@@ -3,10 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
-import { RemoteNodeRuntimeNoexecError } from '../../ssh/orcad-remote-node-runtime-report'
+import {
+  RemoteNodeRuntimeNoExtractorError,
+  RemoteNodeRuntimeNoexecError,
+  RemoteWindowsBuildUnsupportedError
+} from '../../ssh/orcad-remote-node-runtime-report'
 import { allowsDirectSshRelay, SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { resolveHostServerOnConnect } from '../../ssh/ssh-host-server-on-connect'
 import { unservedHostServerMessage } from '../../ssh/ssh-host-unserved-status'
@@ -62,8 +66,7 @@ beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'host-server-wiring-'))
   store = createSqliteTestStore(Store, { dataFile: join(userDataPath, 'orca-data.json') })
   store.addSshTarget(TARGET)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SshConnectionStore wraps the real test store it is given.
-  mocks.registry.current = new SshConnectionStore(store as never)
+  mocks.registry.current = new SshConnectionStore(store)
 })
 
 afterEach(async () => {
@@ -126,6 +129,35 @@ describe('connect-time server decision against the real profile', () => {
     await resolveHostServerOnConnect(target(), hostServerOnConnectDeps(userDataPath))
     expect(mocks.deploy).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    {
+      failure: () => new RemoteWindowsBuildUnsupportedError('9600'),
+      reason: 'windows_build_unsupported',
+      message: /older than Windows 10 and Windows Server 2016/
+    },
+    {
+      failure: () => new RemoteNodeRuntimeNoExtractorError(),
+      reason: 'windows_no_extractor',
+      message: /neither tar\.exe nor PowerShell’s Expand-Archive.*connect again/
+    }
+  ])(
+    'names a Windows host’s $reason in the connect error and rechecks it next connect',
+    async ({ failure, reason, message }) => {
+      mocks.deploy.mockRejectedValue(failure())
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const decision = await resolveHostServerOnConnect(
+        target(),
+        hostServerOnConnectDeps(userDataPath)
+      )
+      warn.mockRestore()
+      expect(decision).toEqual({ route: 'unserved', reason: 'orcad_unavailable', detail: reason })
+      const text = decision.route === 'unserved' ? unservedHostServerMessage(decision) : ''
+      expect(text).toMatch(message)
+      expect(text).not.toContain('Try connecting again')
+      expect(target().managedServerUnavailable).toBeUndefined()
+    }
+  )
 
   it('retries a host an older build kept on the relay', async () => {
     const deps = hostServerOnConnectDeps(userDataPath)

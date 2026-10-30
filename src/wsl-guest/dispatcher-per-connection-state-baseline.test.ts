@@ -1,9 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 
-// Why a census rather than a duration: "the dispatcher releases per-connection state" is a
-// statement about what is still *held* after churn, so it is measured by counting containers,
-// not by timing a teardown. Every number here is exact and load-independent.
+// Count retained containers after churn; exact state counts prove release without timing-dependent assertions.
 
 type Probed = {
   attachClient: RelayDispatcher['attachClient']

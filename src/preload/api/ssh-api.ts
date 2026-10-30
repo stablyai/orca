@@ -1,6 +1,7 @@
 import type {
   EnrichedDetectedPort,
   PortForwardEntry,
+  UnrestoredPortForward,
   SshConfigHostListArgs,
   SshConfigHostListResult,
   SshConfigHostResolution,
@@ -51,9 +52,20 @@ export type SshApi = {
   }) => Promise<PortForwardEntry>
   removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
   listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
+  listUnrestoredPortForwards: (args: { targetId: string }) => Promise<UnrestoredPortForward[]>
+  removeSavedPortForward: (args: {
+    targetId: string
+    localPort: number
+    remoteHost: string
+    remotePort: number
+  }) => Promise<void>
   listDetectedPorts: (args: { targetId: string }) => Promise<EnrichedDetectedPort[]>
   onPortForwardsChanged: (
-    callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    callback: (data: {
+      targetId: string
+      forwards: PortForwardEntry[]
+      unrestored?: UnrestoredPortForward[]
+    }) => void
   ) => () => void
   onDetectedPortsChanged: (
     callback: (data: { targetId: string; ports: EnrichedDetectedPort[] }) => void

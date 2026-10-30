@@ -5,10 +5,7 @@ function writeChunk(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
 }
 
-// Pins the xterm contract the alternate-screen atlas recovery relies on: by the
-// time a chunk's write callback runs, buffer.active.type reflects any
-// alternate-screen enter/exit parsed from that chunk — even when the sequence
-// splits across PTY chunk boundaries.
+// Write callbacks must observe parsed alternate-screen transitions, including escapes split across PTY chunks.
 describe('alternate-screen buffer state at write-callback time', () => {
   it('reflects an enter sequence split across two chunks', async () => {
     const term = new Terminal({ cols: 120, rows: 34, allowProposedApi: true })
@@ -57,24 +54,7 @@ describe('alternate-screen buffer state at write-callback time', () => {
   })
 })
 
-/**
- * Repro for the frozen-terminal investigation (Discord #performance / #2836).
- *
- * The vendored xterm WriteBuffer (6.1.0-beta.287) permanently wedges when a
- * synchronous exception escapes a write-completion callback: `_innerWrite`
- * has no try/catch around `cb()`, the tail `_scheduleInnerWrite()` never
- * runs, and later `write()` calls only re-schedule processing when the
- * buffer is EMPTY — which a stalled buffer never is again.
- *
- * In Orca, write-completion callbacks run settleForegroundRender → refresh →
- * renderer/WebGL code (pane-terminal-foreground-render-settle.ts) and the
- * replay-guard decrement (replay-guard.ts). So one renderer exception during
- * write completion freezes that pane's output forever AND latches the replay
- * guard, whose gate in pty-connection.ts onData then silently drops every
- * keystroke — the exact live-shell/flat-output.log/frozen-pane state the
- * field reports describe. @xterm/headless shares the same WriteBuffer as
- * @xterm/xterm at the same pinned version.
- */
+/** Vendored xterm write-callback exceptions skip scheduling and leave the queue permanently nonempty, freezing output and latching input’s replay guard; headless shares this WriteBuffer (#2836). */
 describe('xterm WriteBuffer stall (vendored 6.1.0-beta.287)', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -95,8 +75,7 @@ describe('xterm WriteBuffer stall (vendored 6.1.0-beta.287)', () => {
 
     expect(() => vi.runAllTimers()).toThrow('synthetic renderer failure')
 
-    // The wedge: the stalled buffer is never empty again, so new writes only
-    // enqueue — no drain is ever scheduled and no callback ever fires.
+    // A nonempty stalled buffer only queues later writes; no drain or completion is scheduled.
     term.write('third', () => {
       completed.push('third')
     })
@@ -106,10 +85,7 @@ describe('xterm WriteBuffer stall (vendored 6.1.0-beta.287)', () => {
   })
 
   it('permanently stops completing writes after a sync throw in a custom parser handler', () => {
-    // Orca registers custom CSI/OSC handlers (capability replies, titles,
-    // agent status). The parser does NOT isolate sync handler exceptions:
-    // they escape _action and wedge the buffer exactly like the callback
-    // case — custom handlers are a second freeze vector.
+    // Custom CSI/OSC handler exceptions also escape the parser and wedge the same write queue.
     vi.useFakeTimers()
     const term = new Terminal({ allowProposedApi: true })
     const completed: string[] = []

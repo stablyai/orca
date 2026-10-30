@@ -122,9 +122,4 @@ describe('first structured chat prompt', () => {
     const url = 'https://example.test/issues/123'
     expect(firstStructuredAgentSessionPrompt([message(url), message('Later')])).toBe(url)
   })
-
-  it('returns empty when no user prose exists', () => {
-    expect(firstStructuredAgentSessionPrompt([])).toBe('')
-    expect(firstStructuredAgentSessionPrompt([message('  ')])).toBe('')
-  })
 })

@@ -1,7 +1,7 @@
 import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
-} from '../../pty-hidden-delivery-gate'
+} from './pty-hidden-delivery-gate'
 import {
   rendererVisibilityKnownPtys,
   visibleRendererPtys,
@@ -18,6 +18,11 @@ import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import { clearFlushTimerIfIdle } from './flush'
+import {
+  advancePtyEscapeBoundary,
+  markPtyRendererStreamGap,
+  takePtyGapEscapeState
+} from './pty-gap-escape-state'
 import type { PtyIpcSession } from '../session'
 
 export function rendererPtyIsKnownHidden(id: string): boolean {
@@ -54,6 +59,7 @@ export function acceptPtyDataForRenderer(
   if (session.rendererExitingPtyIds.has(payload.id)) {
     return
   }
+  const escapeStateBefore = advancePtyEscapeBoundary(payload.id, payload.data)
   if (shouldDropHiddenRendererPtyData(payload.id, session.getSettings?.())) {
     const droppedChars = payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)
@@ -72,6 +78,7 @@ export function acceptPtyDataForRenderer(
   if (payload.data.length === 0 && !payload.transformed) {
     return
   }
+  const gapEscapeState = takePtyGapEscapeState(payload.id, escapeStateBefore)
   const containsBackgroundOutput = rendererPtyIsKnownHidden(payload.id)
   const overflowMarkedBeforeAppend = session.pendingOverflowMarkedPtys.has(payload.id)
   const pending = appendPendingPtyData(
@@ -83,8 +90,12 @@ export function acceptPtyDataForRenderer(
     preservesSeq,
     containsBackgroundOutput,
     rawLength,
-    payload.transformed === true
+    payload.transformed === true,
+    gapEscapeState
   )
+  if (pending.droppedOutput === true) {
+    markPtyRendererStreamGap(payload.id)
+  }
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
     !overflowMarkedBeforeAppend &&
@@ -127,7 +138,8 @@ export function acceptPtyDataForRenderer(
           : {}),
         ...(pending.transformed ? { transformed: true } : {}),
         ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
-        ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
+        ...(pending.droppedOutput === true ? { droppedOutput: true } : {}),
+        ...(pending.gapEscapeState ? { gapEscapeState: pending.gapEscapeState } : {})
       })
     } finally {
       session.updateProducerFlowControl(payload.id)

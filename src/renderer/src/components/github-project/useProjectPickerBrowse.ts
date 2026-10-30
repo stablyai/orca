@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -73,7 +74,10 @@ export function useProjectPickerBrowse(
       if (mountedRef.current && activeCacheKeyRef.current === cacheKey) {
         setBrowseError({
           type: 'unknown',
-          message: error instanceof Error ? error.message : 'Failed to list projects'
+          message:
+            error instanceof Error
+              ? error.message
+              : translate('projectViews.picker.listFailed', 'Failed to list projects')
         })
       }
     } finally {

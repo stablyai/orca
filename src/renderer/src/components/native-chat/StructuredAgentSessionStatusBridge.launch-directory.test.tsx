@@ -73,11 +73,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import { notifyStructuredLaunchListeners } from '@/lib/structured-agent-session-launch-registry'
+import { notifyStructuredLaunchListeners } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import {
   writeStructuredAgentLaunchRecord,
   deleteStructuredAgentLaunchRecord
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import {
   getStructuredAgentSessionStatusFeed,
@@ -311,7 +311,9 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       )
       expect(statusWork).toEqual({ members: 0, groups: hostCount })
       expect(reads.reduce((sum, read) => sum + read.mock.calls.length, 0)).toBe(perHost)
-      expect(snapshots.reduce((sum, read) => sum + read.mock.calls.length, 0)).toBe(2 * perHost)
+      // One capture read per member; only the changed session reruns owner checks and companions.
+      expect(snapshots.reduce((sum, read) => sum + read.mock.calls.length, 0)).toBe(perHost + 1)
+      expect(owners).toHaveBeenCalledTimes(0)
       expect(commits).toBe(1)
       expect(projects).toHaveBeenCalledOnce()
       expect(mocks.applyStatus).toHaveBeenCalledOnce()
@@ -817,7 +819,6 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
   })
 
   it('never records a path published by a remote runtime', async () => {
-    // The tab records the paired host that owns the chat.
     mocks.store?.setState({
       unifiedTabsByWorktree: {
         [FLOATING_TERMINAL_WORKTREE_ID]: [
@@ -830,7 +831,6 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
 
     emit({ type: 'snapshot', sessions: [summary({ launchDirectory: '/srv/remote/floating' })] })
 
-    // The summary itself landed; only its path was withheld.
     expect(Object.keys(mocks.store?.getState().agentStatusByPaneKey ?? {})).toHaveLength(1)
     expect(pins()).toEqual({})
   })

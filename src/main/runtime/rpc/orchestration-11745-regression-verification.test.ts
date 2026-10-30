@@ -1,7 +1,5 @@
 import './unused-default-rpc-methods.test-fixture'
-// Why: independent adversarial verification of every #11745 fix. Each case reproduces the ORIGINAL
-// defect and asserts it is closed by observing state, not just the response envelope — a refusal
-// that still mutated the graph is a failure, and so is a fix that fences a legitimate coordinator.
+// Pin #11745 through state as well as replies: refused calls must not mutate graphs or fence legitimate coordinators.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,8 +24,7 @@ import {
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
-// Why: an unrelated caller the runtime CAN resolve to a pane — otherwise the refusal would be
-// stable_pane_required and would prove nothing about Run authorization.
+// Resolve the unrelated caller to a pane so refusal tests Run authorization, not stable_pane_required.
 const OUTSIDER_HANDLE = CURRENT_WORKER_HANDLE
 
 const tempDirs: string[] = []
@@ -257,16 +254,13 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
 })
 
 describe('#11745 H1 — is --from an authenticated identity?', () => {
-  // Why: Run scoping authorizes on a declared handle, so an attested caller naming someone else's
-  // handle must be refused. Both cases run through the shared resolveRunScope, so they also pin
-  // that the gate path and the older task path cannot diverge again.
+  // Attestation cannot authorize someone else's declared handle; shared resolveRunScope must fence both gate and older task paths.
   it('refuses an attested caller naming ANOTHER coordinator handle in --from', async () => {
     const harness = createHarness()
     const runA = bindRunA(harness)
     const victimTask = harness.db.createTask({ spec: 'victim work', runId: runA })
 
-    // Caller is the current WORKER — attested as itself, bound to no Run — but names the
-    // coordinator's handle. Nothing on this request proves it may speak for that handle.
+    // The attested worker has no Run binding and cannot speak for the declared coordinator.
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.gateCreate',
@@ -294,7 +288,7 @@ describe('#11745 H1 — is --from an authenticated identity?', () => {
       )
     )
 
-    // Why: the weakness was inherited from this older path, so the fix has to cover it too.
+    // Cover the older path from which the weakness originated.
     expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
     expect(harness.db.listTasks({ runId: runA })).toHaveLength(0)
   })
@@ -382,9 +376,7 @@ describe('#11745 H1 — is --from an authenticated identity?', () => {
 
 describe('#11745 H1 — gateList read posture', () => {
   it('DOCUMENTS: naming a Run makes its gates readable with no caller identity at all', async () => {
-    // Why: gateList mirrors taskList (requireCurrentConsumer: params.run === undefined), so an
-    // explicitly named Run is inspectable by anyone. Reads only — gateCreate/gateResolve always
-    // require the binding. Pinned here so any future narrowing is a deliberate decision.
+    // Explicit Run reads are inspectable by anyone; omitted Run requires current consumer. Mutations always require binding.
     const harness = createHarness()
     const runA = bindRunA(harness)
     const ownTask = harness.db.createTask({ spec: 'own work', runId: runA })
@@ -561,8 +553,7 @@ describe('#11745 H4 — unattested caller on a taken-over adopted Run', () => {
     await legacyClaimsAdoptedRun(harness, 'v-h4b')
     await currentCoordinatorTakesOver(harness, 'v-h4b')
 
-    // Why: evidence names a different terminal, so this is an impostor rather than the owner
-    // ownsRunBinding is meant to admit. The attested handle must win over the declared one.
+    // Evidence names another terminal; trusted attestation must beat the declared owner handle.
     const before = adoptedGraph(harness)
     const response = await harness.dispatcher.dispatch(
       request(
@@ -752,11 +743,10 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
     expect(db.getCurrentRunForPane(`win:tab:${leaf(3)}`)?.id).toBe(twoColons.id)
     expect(db.getCurrentRunForPane('tab_empty:')?.id).toBe(emptyLeaf.id)
 
-    // A different first segment on an unparseable key must NOT match, even though the
-    // indexed suffix is identical — the suffix only narrows, isEquivalentPaneKey decides.
+    // Unparseable first segments must match too: suffix index narrows candidates; isEquivalentPaneKey decides.
     expect(db.getCurrentRunForPane(`other:tab:${leaf(3)}`)).toBeUndefined()
     expect(db.getCurrentRunForPane('other_empty:')).toBeUndefined()
-    // A parseable key must not be satisfied by an unparseable row sharing its suffix.
+    // A shared suffix cannot equate parseable and unparseable keys.
     expect(db.getCurrentRunForPane(`tab:${leaf(3)}`)).toBeUndefined()
   })
 

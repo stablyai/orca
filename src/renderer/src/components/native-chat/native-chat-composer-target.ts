@@ -3,18 +3,16 @@ import {
   NATIVE_CHAT_COMPOSER_PLACEHOLDER,
   NATIVE_CHAT_TURN_STATUS_COPY
 } from '../../../../shared/native-chat-turn-status'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 export type NativeChatResolvedTarget = {
   ptyId: string
 }
 
-/** Upper bound for clipboard text pulled into the composer via Cmd/Ctrl+V, so a
- *  pathological clipboard can't stall the round-trip. */
+/** Bound clipboard text so a pathological payload cannot stall IPC. */
 export const NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES = 16 * 1024 * 1024
 
-/** How a message sent while the chat reads Stopping goes out: as a queued card, or sent for the
- *  host to hold until the stop lands. */
+/** After Stop, use a queue card or a direct send held by the host until settlement. */
 export type NativeChatAfterStopSend = 'queue' | 'send'
 
 export function nativeChatComposerPlaceholder(

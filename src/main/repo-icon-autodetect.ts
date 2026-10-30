@@ -141,7 +141,12 @@ export async function detectRepoIconAndUpstream({
       ? await getRepoUpstream(repoPath, remoteRead.connectionId)
       : null
   const gitRemoteIdentity =
-    kind === 'git' ? await detectGitRemoteIdentity(repoPath, executionHostId) : null
+    kind === 'git'
+      ? await detectGitRemoteIdentity(repoPath, executionHostId, {
+          // Host Git on purpose: this runs while the project is being added, before it exists.
+          hostGit: true
+        })
+      : null
   const repoIcon = await detectRepoIcon({ repoPath, kind, executionHostId, upstream })
   return {
     ...(repoIcon ? { repoIcon } : {}),

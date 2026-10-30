@@ -1,8 +1,4 @@
-/**
- * The distros "Add WSL distro as a host" offers: every registered one (from the Lxss registry key,
- * which also says WSL 1 vs 2 without a localized `wsl --list --verbose` parse), with whether it
- * is running from a probe that never boots one. Docker Desktop's internal distros are not hosts.
- */
+/** List user distros from Lxss (including WSL version), then probe running state without booting any. Exclude Docker internals. */
 import type { WslHostDistro } from '../../shared/wsl-host-types'
 import { filterUserWslDistros } from '../wsl-distro-list-output'
 import { listConfirmedRunningWslDistros } from '../wsl-background-distro-gate'

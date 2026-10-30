@@ -15,6 +15,7 @@ import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 import {
+  MAX_NATIVE_CHAT_DISCLOSURES,
   NativeChatDisclosureContext,
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
@@ -157,7 +158,6 @@ import { i18n } from '@/i18n/i18n'
       )
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
       expect(container.querySelector('.lucide-message-square-more')).toBeInTheDocument()
-      // The raw call and its payload are exactly what this row exists to replace.
       expect(screen.queryByText(/Running AskUserQuestion/)).toBeNull()
       expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
     })
@@ -173,7 +173,6 @@ import { i18n } from '@/i18n/i18n'
 
       expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
-      // A run that is only the ask has no work left to head, so it draws no header.
       expect(container.querySelector('[data-native-chat-tool-run-state]')).toBeNull()
     })
 
@@ -270,8 +269,7 @@ import { i18n } from '@/i18n/i18n'
       render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />)
 
       expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-      // One call ran; being asked a question is not work to summarize. The agent
-      // is blocked on the reader, so the run reads settled, not in progress.
+      // Waiting for an answer settles the work summary; the question itself adds no call count.
       expect(screen.getByText('Read 1 file')).toBeInTheDocument()
       expect(screen.queryByText('Reading 1 file')).toBeNull()
     })
@@ -319,22 +317,35 @@ import { i18n } from '@/i18n/i18n'
     return box
   }
 
-  /** A live run inside the transcript's disclosure store, which is what remembers its box. */
+  /** A run inside the transcript's disclosure store, which is what remembers its box. */
   function Transcript({
     mounted = true,
-    count = 3
+    count = 3,
+    settled = false
   }: {
     mounted?: boolean
     count?: number
+    settled?: boolean
   }): React.JSX.Element {
     const disclosures = useNativeChatDisclosures()
     return (
       <NativeChatDisclosureContext.Provider value={disclosures}>
+        {settled ? (
+          <button
+            onClick={() => {
+              for (let index = 0; index < MAX_NATIVE_CHAT_DISCLOSURES; index++) {
+                disclosures.write(`line:pressure:${index}`, true)
+              }
+            }}
+          >
+            Expire other disclosures
+          </button>
+        ) : null}
         {mounted ? (
           <NativeChatToolRun
             blocks={calls(count)}
-            expandSignal
-            activeTurnIsWorking
+            expandSignal={!settled}
+            activeTurnIsWorking={!settled}
             disclosureId="message-1"
           />
         ) : null}
@@ -346,6 +357,7 @@ import { i18n } from '@/i18n/i18n'
     afterEach(() => {
       cleanup()
       vi.restoreAllMocks()
+      vi.unstubAllGlobals()
     })
     it('keeps a live run on its newest call until the reader scrolls away', () => {
       const contentHeight = { current: 600 }
@@ -386,7 +398,6 @@ import { i18n } from '@/i18n/i18n'
       contentHeight.current = 1200
       rerender(<Transcript mounted count={4} />)
 
-      // Neither back at the newest call nor following again: both were the reader's choice.
       expect(membersBox(container).scrollTop).toBe(100)
     })
 
@@ -401,8 +412,53 @@ import { i18n } from '@/i18n/i18n'
       fireEvent.click(header)
       fireEvent.click(header)
 
-      // A live run the reader reopens shows what it is doing now.
       expect(membersBox(container).scrollTop).toBe(900)
+    })
+
+    it('opens fresh after a mounted expired run records more scroll and is recycled', () => {
+      let resizeMembers: (() => void) | undefined
+      vi.stubGlobal(
+        'ResizeObserver',
+        class implements ResizeObserver {
+          constructor(private readonly callback: ResizeObserverCallback) {}
+          observe(target: Element): void {
+            if (target.hasAttribute('data-native-chat-tool-run-members')) {
+              resizeMembers = () => this.callback([], this)
+            }
+          }
+          unobserve(): void {}
+          disconnect(): void {}
+        }
+      )
+      layOut({ current: 900 })
+      const { container, rerender } = render(<Transcript settled />)
+      const header = container.querySelector<HTMLElement>('[data-native-chat-tool-run-state]')!
+      fireEvent.click(header)
+      const box = membersBox(container)
+      box.scrollTop = 120
+      fireEvent.scroll(box)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Expire other disclosures' }))
+      box.scrollTop = 140
+      if (!resizeMembers) {
+        throw new Error('members resize observer did not attach')
+      }
+      act(resizeMembers)
+      box.scrollTop = 160
+      fireEvent.scroll(box)
+      expect(header).toHaveAttribute('aria-expanded', 'true')
+      expect(membersBox(container)).toBe(box)
+      expect(box.scrollTop).toBe(160)
+
+      rerender(<Transcript settled mounted={false} />)
+      rerender(<Transcript settled />)
+      const returnedHeader = container.querySelector<HTMLElement>(
+        '[data-native-chat-tool-run-state]'
+      )!
+      expect(returnedHeader).toHaveAttribute('aria-expanded', 'false')
+      expect(container.querySelector('[data-native-chat-tool-run-members]')).toBeNull()
+      fireEvent.click(returnedHeader)
+      expect(membersBox(container).scrollTop).toBe(0)
     })
 
     it('opens a settled run at its first call', () => {

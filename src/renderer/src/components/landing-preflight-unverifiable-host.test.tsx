@@ -6,8 +6,8 @@ import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-sta
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
 import type { RuntimeEnvironmentStatus } from '../store/slices/runtime-status-types'
-import type { AppState } from '../store/types'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
+import { getDefaultSettings } from '../../../shared/constants'
 
 const ENVIRONMENT_ID = 'environment-a'
 const initialState = useAppStore.getInitialState()
@@ -51,8 +51,7 @@ describe('landing preflight under an unverifiable host probe', () => {
     useAppStore.setState(
       {
         ...initialState,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook under test reads only activeRuntimeEnvironmentId; the rest of GlobalSettings never reaches it.
-        settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID } as AppState['settings'],
+        settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: ENVIRONMENT_ID },
         invalidatePreflightStatus: invalidate,
         refreshPreflightStatus: refresh
       },

@@ -4,7 +4,7 @@ import { type FSWatcher, mkdtempSync, rmSync, watch, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as ParcelWatcher from '@parcel/watcher'
-import { loadParcelWatcher } from './parcel-watcher-module-loader'
+import { loadParcelWatcher } from './filesystem/watcher-process/parcel-watcher-module-loader'
 import { hasShallowWatchDelivered, noteShallowWatchDelivered } from './shallow-watch-delivery-probe'
 import { errorMessage } from '../../shared/error-message'
 

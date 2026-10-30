@@ -1,4 +1,5 @@
-import type { ReactNode, SyntheticEvent } from 'react'
+import { useState, type ReactNode, type SyntheticEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function TabHoverCard({
@@ -15,11 +16,14 @@ export function TabHoverCard({
   programName: string
   description?: string
   /** Controls below the program row; the card then stays open under the pointer. */
-  alert?: ReactNode
+  alert?: ReactNode | ((dismiss: () => void) => ReactNode)
 }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  // Remove the portal before navigation can start rendering a slower destination.
+  const dismiss = () => flushSync(() => setOpen(false))
   const interactive = alert !== undefined && alert !== null
   return (
-    <Tooltip disableHoverableContent={!interactive}>
+    <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent={!interactive}>
       <TooltipTrigger
         asChild
         onFocus={(event) => {
@@ -61,7 +65,7 @@ export function TabHoverCard({
             </span>
             <span className="min-w-0 break-all">{programName}</span>
           </div>
-          {alert}
+          {typeof alert === 'function' ? alert(dismiss) : alert}
         </div>
       </TooltipContent>
     </Tooltip>

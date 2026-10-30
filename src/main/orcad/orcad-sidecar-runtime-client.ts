@@ -79,7 +79,7 @@ export async function sendOrcadSidecarRequest(
         finish(new BrowserError('browser_error', 'Electron browser sidecar response is too large.'))
         return
       }
-      // The retained tail has no newline; avoid flattening it for each partial chunk.
+      // Avoid repeatedly flattening partial-line buffers.
       if (!chunk.includes('\n')) {
         return
       }

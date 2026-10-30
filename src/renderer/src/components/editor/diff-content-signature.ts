@@ -1,6 +1,4 @@
-// Why: Monaco diff tabs keep models alive via keepCurrent*Model. Rotating model
-// identities when git-fetched blob content changes forces a fresh paint without
-// remounting on every editable keystroke.
+// Rotate retained diff-model identities when fetched blobs change, avoiding stale paint without remounting on each edit.
 export function getDiffContentSignature(content: string): string {
   let hash = 2166136261
   for (let i = 0; i < content.length; i += 1) {

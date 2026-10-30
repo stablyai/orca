@@ -6,9 +6,10 @@ import { codexHookService } from './hook-service'
 import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
+import { grantCodexSandboxReadOnManagedHome } from './codex-windows-sandbox-read-grant'
 
 export function createCodexRuntimeHomeLaunchPreparation(deps: {
-  getRuntimeHome: () => CodexRuntimeHomeService | null
+  getRuntimeHome: () => Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> | null
   getSettings: () => GlobalSettings | undefined
 }) {
   return async (
@@ -32,6 +33,9 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
       }
       return null
     }
+    if (runtimeHomePath !== null && target?.runtime !== 'wsl') {
+      await grantCodexSandboxReadOnManagedHome(runtimeHomePath)
+    }
     const hookTarget =
       target?.runtime === 'wsl'
         ? { runtime: 'wsl' as const, wslDistro: target.wslDistro?.trim() || getDefaultWslDistro() }
@@ -40,6 +44,8 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
       isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
     const hooksEnabled = isHooksEnabled()
     try {
+      // Not a user act here: a passive restore or remount reaches this too (#35813), so a
+      // stopped distro skips the install; the hook relay installs once the distro runs.
       const status = await codexHookService.prepareRuntimeHomeForLaunch(
         runtimeHomePath,
         hookTarget,

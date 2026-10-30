@@ -2,13 +2,17 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
+import {
+  normalizeSourceControlAiSettings,
+  resolveSourceControlAiForOperation
+} from '../../../../shared/source-control-ai'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   setSourceControlActionDefault
 } from '../../../../shared/source-control-ai-actions'
 import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { Switch } from '../ui/switch'
 import { Card, CardContent } from '../ui/card'
@@ -18,6 +22,7 @@ import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import type { ActionRecipeDraftValue } from './source-control-ai-action-recipe-draft'
+import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 
 type ChatNamingSettingProps = {
   settings: GlobalSettings
@@ -127,6 +132,39 @@ export function ChatNamingSetting({
     }
   }
 
+  const cliRecipe = value.agentArgs?.trim()
+    ? resolveSourceControlAiForOperation({
+        settings: {
+          ...settings,
+          sourceControlAi: {
+            ...config,
+            actions: {
+              ...config.actions,
+              conversationName: {
+                ...recipe,
+                ...value,
+                ...(recipe?.agentId ? { agentId: null } : {})
+              }
+            }
+          }
+        },
+        operation: 'conversationName'
+      })
+    : null
+  const cliAgent = cliRecipe?.ok ? cliRecipe.value.params.agentId : null
+  const defaultAgentLabel = cliAgent
+    ? translate('settings.chat.names.configuredCliAgent', 'Use configured CLI agent ({{agent}})', {
+        agent:
+          cliAgent === 'custom'
+            ? translate(
+                'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
+                'Custom command'
+              )
+            : getAgentLabel(cliAgent)
+      })
+    : cliRecipe
+      ? translate('settings.chat.names.configuredCliAgentUnknown', 'Use configured CLI agent')
+      : translate('settings.chat.names.useChatAgent', 'Use chat agent')
   const searchEntry = getChatNamingSearchEntry()
   return (
     <SearchableSetting
@@ -150,8 +188,13 @@ export function ChatNamingSetting({
               />
             </div>
             {settings.nativeChatAutoName !== false || dirty ? (
-              <>
-                {recipe?.agentId === CUSTOM_AGENT_ID || customCommandDirty ? (
+              <AppearanceAdvancedDisclosure
+                forceOpen={dirty || isSaving}
+                contentClassName="space-y-3 pt-3"
+              >
+                {recipe?.agentId === CUSTOM_AGENT_ID ||
+                cliAgent === CUSTOM_AGENT_ID ||
+                customCommandDirty ? (
                   <CustomAgentCommandField
                     id="chat-name-custom-command"
                     value={customCommand}
@@ -165,10 +208,32 @@ export function ChatNamingSetting({
                 <SourceControlActionRecipeRow
                   actionId="conversationName"
                   selectedAgent={recipe?.agentId ?? null}
+                  defaultAgentLabel={defaultAgentLabel}
+                  defaultAgentSupportText={
+                    cliRecipe && !cliRecipe.ok
+                      ? cliRecipe.error
+                      : cliRecipe
+                        ? translate(
+                            'settings.chat.names.clearCliArguments',
+                            'Clear CLI arguments to use each chat’s agent.'
+                          )
+                        : undefined
+                  }
+                  defaultAgentArgsPlaceholder={
+                    cliAgent
+                      ? undefined
+                      : translate(
+                          'settings.chat.names.cliArgumentsPlaceholder',
+                          'Optional arguments for a configured CLI naming agent'
+                        )
+                  }
+
                   draftValue={value}
                   baseValue={persisted}
                   hasUnsavedChanges={dirty}
-                  defaultTuiAgent={settings.defaultTuiAgent}
+                  defaultTuiAgent={
+                    cliAgent && cliAgent !== 'custom' ? cliAgent : settings.defaultTuiAgent
+                  }
                   isSavingTemplate={isSaving}
                   onAgentChange={(_id, selected) => void saveAgent(selected)}
                   onTemplateChange={(_id, template) =>
@@ -190,7 +255,7 @@ export function ChatNamingSetting({
                   }}
                   onSave={() => void save()}
                 />
-              </>
+              </AppearanceAdvancedDisclosure>
             ) : null}
           </div>
         </CardContent>

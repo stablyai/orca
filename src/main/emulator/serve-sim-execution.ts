@@ -1,8 +1,8 @@
 import { runProcess } from '@orca/process-host'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { app } from 'electron'
 import { platform, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
@@ -68,8 +68,8 @@ function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): strin
   }
   materializedServeSimPackageDir = materializeServeSimRuntime({
     bundledPackageDir,
-    targetRootDir: join(app.getPath('userData'), 'serve-sim-runtime'),
-    version: app.getVersion()
+    targetRootDir: join(getAppEnvironment().getPath('userData'), 'serve-sim-runtime'),
+    version: getAppEnvironment().getVersion()
   })
   if (materializedServeSimPackageDir === null) {
     console.warn(
@@ -84,8 +84,8 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
   const bundledResourcesPath =
     process.resourcesPath ??
     (process.platform === 'darwin'
-      ? join(app.getPath('exe'), '..', '..', 'Resources')
-      : join(app.getPath('exe'), '..', 'resources'))
+      ? join(getAppEnvironment().getPath('exe'), '..', '..', 'Resources')
+      : join(getAppEnvironment().getPath('exe'), '..', 'resources'))
   // Prefer the legacy Resources/serve-sim path for already-installed bundles.
   for (const bundledPackageDir of [
     join(bundledResourcesPath, 'serve-sim'),
@@ -109,7 +109,7 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
     return { command: process.execPath, baseArgs: [bundledEntry], usesElectronAsNode: true }
   }
 
-  const nodeModulesPackageDir = join(app.getAppPath(), 'node_modules', 'serve-sim')
+  const nodeModulesPackageDir = join(getAppEnvironment().getAppPath(), 'node_modules', 'serve-sim')
   const nodeModulesEntry = join(nodeModulesPackageDir, 'dist', 'serve-sim.js')
   if (existsSync(nodeModulesEntry)) {
     return { command: process.execPath, baseArgs: [nodeModulesEntry], usesElectronAsNode: true }

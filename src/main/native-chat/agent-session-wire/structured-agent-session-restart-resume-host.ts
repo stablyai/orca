@@ -65,7 +65,7 @@ export function createStructuredAgentSessionRestartResume(
 
   const witnesses = createStructuredAgentSessionRestartWitnesses({
     sessions,
-    getRecord: deps.store.getRecord,
+    getRecord: deps.store.getConversation,
     childWork: surfaces.readChildWork,
     childWorkOpen: surfaces.childWorkOpen,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
@@ -91,10 +91,9 @@ export function createStructuredAgentSessionRestartResume(
   })
   const failures = createStructuredAgentSessionRestartFailureLedger({
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
-    getRecord: deps.store.getRecord,
+    getRecord: deps.store.getConversation,
     retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
     savedByNewerOrca: newerOrca.has,
-    reveal: (markers) => revealMarkers(markers),
     logger: deps.logger,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
@@ -117,7 +116,6 @@ export function createStructuredAgentSessionRestartResume(
     audience?: StructuredAgentSessionRestartAudience
   ): Promise<StructuredAgentSessionResumeCandidate[]> => {
     const markers = await readMarkers()
-    await revealMarkers(markers)
     // Inspection alone must not withdraw the offer.
     const { candidates, superseded } = derive(markers, 'may-be-held')
     retireSuperseded(superseded)

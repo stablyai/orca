@@ -163,7 +163,9 @@ type WorkingCandidateSession = {
 export function structuredAgentSessionWorkingAtStop(input: {
   sessionId: string
   session: WorkingCandidateSession | undefined
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  getRecord: (
+    sessionId: string
+  ) => Pick<AgentSessionRecord, 'providerHandleChain' | 'providerContextBoundary'> | null
   childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   /** Include unrecorded live work rejected by bounded storage. */
   childWorkOpen: (sessionId: string) => boolean

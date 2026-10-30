@@ -1,6 +1,4 @@
-// Why: a slept workspace keeps its panes mounted with only dead PTYs behind them.
-// Any pane connect that runs while the marker is set waits here, and the clear
-// that marks the workspace awake resumes every waiting connect.
+// Slept panes stay mounted behind dead PTYs. Connects wait on this marker until wake clears it.
 const sleepingWorktreeIds = new Set<string>()
 const tearingDownWorktreeIds = new Set<string>()
 const wakeListenersByWorktreeId = new Map<string, Set<() => void>>()
@@ -9,11 +7,7 @@ export function markWorktreeSleepIntent(worktreeId: string): void {
   sleepingWorktreeIds.add(worktreeId)
 }
 
-/**
- * Why: a spawn that resolves while the sleep teardown is still awaiting its host
- * would bind a PTY and clear the marker, waking every waiting pane mid-sleep.
- * Binds during the teardown window are not wakes.
- */
+// Spawns resolving during host teardown must not clear sleep and wake waiting panes; these binds are not wakes.
 export async function withWorktreeSleepTeardown<T>(
   worktreeId: string,
   teardown: () => Promise<T>
@@ -39,7 +33,7 @@ export function clearWorktreeSleepIntent(worktreeId: string | null): void {
     try {
       listener()
     } catch (error) {
-      // Why: one pane's connect failure must not strand its siblings or throw out of a store action.
+      // One failed connect must not strand siblings or escape a store action.
       console.error('[sleep-intent] wake listener failed', { worktreeId, error })
     }
   }

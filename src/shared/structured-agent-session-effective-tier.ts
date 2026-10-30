@@ -1,9 +1,8 @@
 /** A model's standard tier, which every model runs. */
 export const STANDARD_SERVICE_TIER = 'default'
 
-/** What a tier runs as under a model: one the model doesn't list runs as standard, except a tier
- *  no listed model offers that the agent itself reports running (a configured one). Unknown model
- *  tiers leave it as is. */
+/** Unlisted model tiers fall back to Standard unless the agent reports a configured tier no model lists.
+ * Unknown model tier lists preserve the value. */
 export function effectiveServiceTier(input: {
   tier: string
   modelTiers: readonly string[] | undefined

@@ -1,17 +1,12 @@
 // Derive cuts from the journal’s retained old epoch so admission and recovery agree without copying history.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { isAgentSessionRewindTarget } from '../../../shared/agent-session-rewind'
+import { savedRewindKeys, isAgentSessionRewindTarget } from '../../../shared/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
@@ -39,9 +34,9 @@ export function structuredRewindCut(
   const items = floor
     ? snapshot.items.filter((item) => item.sequence > floor.sequence)
     : snapshot.items
-  const { providerKey, omitted } = submissionKeys(snapshot.submissions)
+  const { providerKey, omitted, nativeIdentity } = savedRewindKeys(snapshot.submissions)
   const selected = items.find((item) => item.itemId === target.itemId)
-  const key = selected ? parseAgentJournalItemKey(providerKey(selected.itemId)) : null
+  const key = selected ? nativeIdentity(selected.itemId) : null
   if (key?.provider === 'claude' && target.provider === 'claude') {
     // Messages before an earlier fork still cut at their original position.
     const boundary = items.findIndex((item) => item.itemId === target.itemId)
@@ -130,26 +125,7 @@ function lastListedTurn(
 }
 
 export function providerItemIdOf(journal: AgentSessionJournal, itemId: string): string {
-  return submissionKeys(journal.snapshot().submissions).providerKey(itemId)
-}
-
-// Rebuilt epochs lose submission links, so accepted messages must adopt provider keys.
-function submissionKeys(submissions: readonly AgentJournalSubmission[]): {
-  providerKey: (itemId: string) => string
-  /** Queued messages survive separately; rejected messages never ran. */
-  omitted: ReadonlySet<string>
-} {
-  const providerKeys = new Map<string, string>()
-  const omitted = new Set<string>()
-  for (const submission of submissions) {
-    const key = agentJournalSubmissionKey(submission.clientMessageId)
-    if (isQueuedAgentJournalSubmission(submission) || submission.dispatchState === 'rejected') {
-      omitted.add(key)
-    } else if (submission.dispatchState === 'accepted' && submission.providerItemId) {
-      providerKeys.set(key, submission.providerItemId)
-    }
-  }
-  return { providerKey: (itemId) => providerKeys.get(itemId) ?? itemId, omitted }
+  return savedRewindKeys(journal.snapshot().submissions).providerKey(itemId)
 }
 
 /** Child rows belong to their enclosing main turn, never their child-thread turn ID. */

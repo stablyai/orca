@@ -79,9 +79,10 @@ export async function writeTempFileDurable(
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array
+  payload: string | Uint8Array,
+  mode?: number
 ): Promise<void> {
-  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true)
+  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true, mode)
 }
 
 /** Veto superseded writes before rename and remove their temp files on every uncommitted path. */
@@ -89,12 +90,14 @@ export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
   payload: string | Uint8Array,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  /** Creation mode for the new temp file, e.g. 0o600 for state other users must not read. */
+  mode?: number
 ): Promise<boolean> {
   let renamed = false
   try {
     // Fsync before publication so power loss cannot expose an empty file.
-    await writeTempFileDurable(tmpPath, payload)
+    await writeTempFileDurable(tmpPath, payload, mode)
     if (!(await renameFileWithWindowsRetryAsync(tmpPath, finalPath, isCurrent))) {
       return false
     }

@@ -14,7 +14,7 @@ import {
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
-import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 

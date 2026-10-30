@@ -72,13 +72,17 @@ describe('gitLabPipelineJobsToPRChecks', () => {
   })
 
   it('omits the job id when GitLab does not report a usable one', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: legacy input intentionally omits a required ID.
     const jobs = [
       { id: 0, name: 'zero', stage: '', status: 'failed', webUrl: '', duration: null },
       { name: 'missing', stage: '', status: 'failed', webUrl: '', duration: null }
     ] as unknown as GitLabPipelineJob[]
 
+    const checks = gitLabPipelineJobsToPRChecks(jobs)
+    expect(checks).toHaveLength(2)
+    expect(checks.map((check) => check.name)).toEqual(['zero', 'missing'])
     // Why: the runtime RPC schema requires a positive int, so a falsy id must not be forwarded.
-    for (const check of gitLabPipelineJobsToPRChecks(jobs)) {
+    for (const check of checks) {
       expect(check).not.toHaveProperty('gitlabJobId')
     }
   })

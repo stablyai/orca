@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { listStructuredProviderSessionOwnership } from './structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../structured-agent-session-history-adoption'
 import { cp, mkdtemp, rm } from 'node:fs/promises'
@@ -5,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
@@ -201,7 +202,7 @@ describe('same-conversation clear', () => {
     expect(store.listVisibleSessionIds()).toEqual([HOST_TEST_SESSION])
     expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe(tab)
     expect(cleared.providerHandleChain).toEqual([])
-    const ownership = listStructuredProviderSessionOwnership(store.listRecords())
+    const ownership = listStructuredProviderSessionOwnership(store.listConversations())
     expect(ownership).toEqual([])
     expect(
       findConflictingStructuredAdoption({
@@ -246,15 +247,29 @@ describe('same-conversation clear', () => {
     const params = commandParams('clear')
     await clearCommits(params)
     const first = store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary
+    await store.setConversationName(HOST_TEST_SESSION, 'New context name')
     expect(await host.conversationCommand(caller, params)).toMatchObject({
       ok: true,
       replayed: true
     })
     expect(await clearRows()).toHaveLength(1)
+    expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('New context name')
     await clearCommits()
     expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).not.toEqual(first)
     expect(await clearRows()).toHaveLength(2)
     expect(store.listRecords()).toHaveLength(1)
+    expect(adapter.acquire).toHaveBeenCalledTimes(1)
+    await host.flushAllStreamedEvents()
+    openTestJournalHostDatabase(generationRoot())
+      .db.prepare(
+        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+      )
+      .run(HOST_TEST_SESSION)
+    await openHost()
+    expect(await host.conversationCommand(caller, params)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
     expect(adapter.acquire).toHaveBeenCalledTimes(1)
   })
 
@@ -319,7 +334,7 @@ describe('same-conversation clear', () => {
   it('starts fresh after a restart between clear and first send', async () => {
     await clearCommits()
     await restartHost()
-    await host.restoreReadableSessions(store.listVisibleSessionIds())
+    await openTestChats(host, store.listVisibleSessionIds())
     expect(await host.send(caller, sendParams('after restart'))).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(adapter.dispatch).toHaveBeenCalledTimes(1))
     expect(vi.mocked(adapter.acquire).mock.calls.at(-1)![0].identity.providerHandle).toBeNull()
@@ -357,7 +372,7 @@ describe('same-conversation clear', () => {
         replacementSessionId: 'old-clear-destination'
       }
     })
-    await host.restoreReadableSessions(store.listVisibleSessionIds())
+    await openTestChats(host, store.listVisibleSessionIds())
     expect(await host.send(caller, sendParams('still this conversation'))).toMatchObject({
       ok: true
     })

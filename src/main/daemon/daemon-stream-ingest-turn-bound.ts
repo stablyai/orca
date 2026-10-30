@@ -23,6 +23,10 @@ export function attachTurnBoundedSocketReader(
   let drainWaiters: { untilBytes: number; done: () => void }[] = []
 
   const releaseDrainWaiters = (): void => {
+    // Why: runs per socket read and waiters exist only during disconnect; skip the filter allocation.
+    if (drainWaiters.length === 0) {
+      return
+    }
     const ready = drainWaiters.filter((waiter) => consumedBytes >= waiter.untilBytes)
     if (ready.length === 0) {
       return

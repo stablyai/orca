@@ -10,8 +10,7 @@ import {
   type MainSnapshot
 } from './pty-connection-test-hidden-restore-flood'
 
-// A restore task retired by timeout, PTY swap, or dispose must neither paint nor consume
-// the unhide recovery its successor owes the pane.
+// Retired restore tasks cannot paint or consume the unhide recovery owed by their successor.
 
 describe('hidden-output restore unhide with a retired task (STA-4869)', () => {
   installHiddenRestoreFloodSuiteHooks()

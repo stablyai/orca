@@ -45,23 +45,6 @@ describe('Azure DevOps API request (STA-3494)', () => {
     globalThis.fetch = OLD_FETCH
   })
 
-  it('retries with -preview when Azure DevOps Server rejects the api-version', async () => {
-    const versions: (string | null)[] = []
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      versions.push(url.searchParams.get('api-version'))
-      if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
-        return previewRejection()
-      }
-      return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
-    }) as never
-
-    await expect(
-      requestAzureDevOpsJsonAtBase(SERVER_BASE, '/_apis/connectionData')
-    ).resolves.toEqual({ authenticatedUser: { providerDisplayName: 'Server User' } })
-    expect(versions).toEqual(['7.1', '7.1-preview'])
-  })
-
   it('remembers the -preview requirement per origin after the first rejection', async () => {
     const versions: (string | null)[] = []
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {

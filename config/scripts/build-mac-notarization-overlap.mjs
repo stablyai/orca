@@ -156,6 +156,7 @@ export async function main(args = process.argv.slice(2)) {
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
   main().catch((error) => {
     console.error(error)
-    process.exitCode = 1
+    // electron-builder's temp-file exit hook calls process.exit(0) on beforeExit, which discards exitCode.
+    process.exit(1)
   })
 }

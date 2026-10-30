@@ -42,7 +42,6 @@ vi.mock('../worktrees/metadata/worktree-meta-persist', async (importOriginal) =>
   return { ...actual, persistWorktreeMeta: vi.fn(async () => undefined) }
 })
 
-// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

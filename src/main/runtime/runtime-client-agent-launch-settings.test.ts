@@ -122,7 +122,7 @@ describe('execution-host agent launch settings', () => {
       mode: 'manual'
     })
     expect(resolveTuiAgentLaunchArgs('claude', host)).toBe('')
-    expect(host.nativeChatPermissionMode).toBe('ask')
+    expect(host.nativeChatPermissionMode).toBe('full-access')
     expect(host.agentDefaultEnv?.claude).toEqual({ API_KEY: 'host-secret', KEEP: 'host-only' })
     expect(JSON.stringify(controller.getAgentLaunch())).not.toContain('host-only')
   })
@@ -137,7 +137,7 @@ describe('execution-host agent launch settings', () => {
       codex: '--approve-for-me'
     })
     expect(host.nativeChatPermissionMode).toBe(beforeNative)
-    expect(host.agentNativeChatPermissionModes).toEqual({ claude: 'auto', codex: 'auto' })
+    expect(host).not.toHaveProperty('agentNativeChatPermissionModes')
   })
 
   it('publishes scoped host defaults and resets them when a paired client chooses a shared chat default', async () => {
@@ -149,10 +149,10 @@ describe('execution-host agent launch settings', () => {
       agent: 'codex',
       mode: 'auto'
     })
-    expect(controller.get().agentNativeChatPermissionModes).toEqual({ codex: 'auto' })
+    expect(controller.get()).not.toHaveProperty('agentNativeChatPermissionModes')
     expect(host.agentDefaultArgs.claude).toBe('')
     await controller.update({ nativeChatPermissionMode: 'ask' })
-    expect(controller.get().agentNativeChatPermissionModes).toEqual({})
+    expect(controller.get()).not.toHaveProperty('agentNativeChatPermissionModes')
     expect(host.nativeChatPermissionMode).toBe('ask')
   })
 
@@ -261,3 +261,7 @@ describe('execution-host agent launch settings', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.mutateAgentLaunch')).toBe(false)
   })
 })
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))

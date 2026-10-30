@@ -1,9 +1,5 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-/**
- * "This machine holds a structured chat" against a real host and record store. Session history,
- * resume preparation and replay-safe phone launches all open the record store for a user who never
- * had a chat; only a chat record may turn the signal on, and the first one must turn it on at once.
- */
+/** Opening the store for history/resume/phone admission does not prove chat presence; the first chat record must update the signal immediately. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -59,6 +55,7 @@ const runtime = {
   openAgentSessionRecordStore: async () =>
     (
       await openAgentSessionRecordStoreOnce({
+        legacySessionTabIds: [],
         stateDirectory,
         hostId: 'local',
         logger: createStructuredAgentSessionLogger()

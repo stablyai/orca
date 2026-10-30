@@ -7,16 +7,12 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   if (filePath.toLowerCase().endsWith('.tsv')) {
     return '\t'
   }
-  // Include semicolon spreadsheet exports without adding general importer heuristics.
-  // Why: strip a leading UTF-8 BOM so it doesn't get counted as part of the
-  // first cell's characters (and so BOM-prefixed TSVs still sniff correctly).
+  // Strip the UTF-8 BOM before sniffing so it cannot affect first-cell classification.
   let text = content
   if (text.charCodeAt(0) === 0xfeff) {
     text = text.slice(1)
   }
-  // Why: skip leading blank/whitespace-only lines before sniffing. A file that
-  // starts with one or more empty lines would otherwise be classified as comma
-  // (0 tabs vs 0 commas, tie goes to comma), misdetecting blank-leading TSVs.
+  // Skip blank leading lines, whose zero-delimiter tie would incorrectly classify TSV as comma-separated.
   const firstLine = findFirstNonEmptyCsvSniffLine(text)
   const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
   const semicolons = countDelimiterOutsideQuotes(firstLine, ';')
@@ -100,8 +96,7 @@ function hasConsistentExistingCsvColumns(text: string, delimiter: string): boole
 }
 
 function findFirstNonEmptyCsvSniffLine(text: string): string {
-  // Why: delimiter sniffing only needs one representative line; splitting a
-  // pasted or dropped CSV can allocate one array entry per row before render.
+  // Scan a representative line without allocating an array entry per pasted/dropped row.
   const scanLength = Math.min(text.length, CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)
   let lineStart = 0
   let lineHasContent = false

@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   BottomDrawer,
   View,
@@ -46,16 +47,21 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
       onClose={() => {
         setProjectRepoNotInOrca(null)
       }}
-      // Why: opens over the project detail, which renders after it in the shared host.
+      // Layer above the project detail rendered later in the shared host.
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
     >
       {projectRepoNotInOrca ? (
         <View>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Repository not in Orca</Text>
+            <Text style={styles.sheetTitle}>
+              {translate('tasks.projectDetailDrawer.repositoryNotInOrca', 'Repository not in Orca')}
+            </Text>
             <Text style={styles.sheetSubtitle}>
-              {projectRepoNotInOrca.owner}/{projectRepoNotInOrca.repo} is not added to Orca. Add
-              this repository from the desktop app, then refresh mobile Tasks.
+              {translate(
+                'tasks.projectDetailDrawer.addRepositoryFromDesktop',
+                '{{repository}} is not added to Orca. Add this repository from the desktop app, then refresh mobile Tasks.',
+                { repository: `${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}` }
+              )}
             </Text>
           </View>
 
@@ -70,7 +76,9 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
                 }}
               >
                 <ExternalLink size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Open in GitHub</Text>
+                <Text style={styles.actionText}>
+                  {translate('tasks.projectDetailDrawer.openInGitHub', 'Open in GitHub')}
+                </Text>
               </Pressable>
             ) : null}
             {projectRepoNotInOrca.url ? <View style={styles.actionSeparator} /> : null}
@@ -87,8 +95,8 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
               <Text style={styles.actionText}>
                 {copiedLinkKey ===
                 `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
-                  ? 'Copied'
-                  : 'Copy repository'}
+                  ? translate('common.copied', 'Copied')
+                  : translate('tasks.projectDetailDrawer.copyRepository', 'Copy repository')}
               </Text>
             </Pressable>
           </View>
@@ -118,6 +126,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
     projectRowHandoff,
     taskUiReady
   } = model
+  const projectNumber = projectRowItem?.content.number
   return (
     <BottomDrawer
       visible={taskUiReady && projectRowItem != null}
@@ -133,27 +142,37 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
               </Text>
             </View>
             <Text style={styles.sheetSubtitle}>
-              GitHub Project · {projectRowItem.content.repository ?? activeProjectLabel}
-              {projectRowItem.content.number ? ` #${projectRowItem.content.number}` : ''}
+              {translate(
+                'tasks.projectDetailDrawer.projectSubtitle',
+                'GitHub Project · {{repository}}{{itemNumber}}',
+                {
+                  repository: projectRowItem.content.repository ?? activeProjectLabel,
+                  itemNumber: projectNumber ? ` #${projectNumber}` : ''
+                }
+              )}
             </Text>
           </View>
 
           <View style={styles.detailGroup}>
             <View style={styles.detailMetaGrid}>
               <View style={styles.detailMetaItem}>
-                <Text style={styles.detailMetaLabel}>Type</Text>
+                <Text style={styles.detailMetaLabel}>
+                  {translate('tasks.projectDetailDrawer.type', 'Type')}
+                </Text>
                 <Text style={styles.detailMetaValue}>
                   {projectRowItem.itemType === 'PULL_REQUEST'
-                    ? 'Pull request'
+                    ? translate('tasks.projectDetailDrawer.pullRequest', 'Pull request')
                     : projectRowItem.itemType === 'ISSUE'
-                      ? 'Issue'
+                      ? translate('tasks.projectDetailDrawer.issue', 'Issue')
                       : projectRowItem.itemType === 'DRAFT_ISSUE'
-                        ? 'Draft issue'
-                        : 'Project item'}
+                        ? translate('tasks.projectDetailDrawer.draftIssue', 'Draft issue')
+                        : translate('tasks.projectDetailDrawer.projectItem', 'Project item')}
                 </Text>
               </View>
               <View style={styles.detailMetaItem}>
-                <Text style={styles.detailMetaLabel}>Status</Text>
+                <Text style={styles.detailMetaLabel}>
+                  {translate('tasks.projectDetailDrawer.status', 'Status')}
+                </Text>
                 <Text style={styles.detailMetaValue}>{projectRowStatusLabel(projectRowItem)}</Text>
               </View>
             </View>
@@ -178,21 +197,32 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
             {SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowItem.itemType === 'ISSUE' ? (
               <View style={styles.detailSection}>
                 <View style={styles.detailSectionHeader}>
-                  <Text style={styles.detailSectionTitle}>Issue type</Text>
+                  <Text style={styles.detailSectionTitle}>
+                    {translate('tasks.projectDetailDrawer.issueType', 'Issue type')}
+                  </Text>
                   <Text style={styles.detailSectionMeta}>
-                    {projectRowItem.content.issueType?.name ?? 'No type'}
+                    {projectRowItem.content.issueType?.name ??
+                      translate('tasks.projectDetailDrawer.noType', 'No type')}
                   </Text>
                 </View>
                 {projectIssueTypesLoading ? (
                   <View style={styles.detailLoadingInline}>
                     <ActivityIndicator size="small" color={colors.textSecondary} />
-                    <Text style={styles.detailMuted}>Loading issue types...</Text>
+                    <Text style={styles.detailMuted}>
+                      {translate(
+                        'tasks.projectDetailDrawer.loadingIssueTypes',
+                        'Loading issue types...'
+                      )}
+                    </Text>
                   </View>
                 ) : projectIssueTypesError ? (
                   <Text style={styles.detailError}>{projectIssueTypesError}</Text>
                 ) : projectIssueTypes.length === 0 ? (
                   <Text style={styles.detailMuted}>
-                    No issue types configured for this repository.
+                    {translate(
+                      'tasks.projectDetailDrawer.noIssueTypes',
+                      'No issue types configured for this repository.'
+                    )}
                   </Text>
                 ) : (
                   <View style={styles.chipRow}>
@@ -226,7 +256,9 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                         disabled={projectMutating}
                         onPress={() => void mutateProjectRowIssueType(projectRowItem, null)}
                       >
-                        <Text style={styles.detailChipText}>Clear type</Text>
+                        <Text style={styles.detailChipText}>
+                          {translate('tasks.projectDetailDrawer.clearType', 'Clear type')}
+                        </Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -251,11 +283,16 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                 }
               >
                 <Plus size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Create Workspace</Text>
+                <Text style={styles.actionText}>
+                  {translate('tasks.projectDetailDrawer.createWorkspace', 'Create Workspace')}
+                </Text>
               </Pressable>
             ) : (
               <Text style={styles.emptyInlineText}>
-                Workspaces can only be created from GitHub issues and pull requests.
+                {translate(
+                  'tasks.projectDetailDrawer.workspaceCreationRequirement',
+                  'Workspaces can only be created from GitHub issues and pull requests.'
+                )}
               </Text>
             )}
 
@@ -273,7 +310,9 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   }}
                 >
                   <ExternalLink size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>Open in GitHub</Text>
+                  <Text style={styles.actionText}>
+                    {translate('tasks.projectDetailDrawer.openInGitHub', 'Open in GitHub')}
+                  </Text>
                 </Pressable>
                 <View style={styles.actionSeparator} />
                 <Pressable
@@ -290,8 +329,8 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   <Copy size={16} color={colors.textPrimary} />
                   <Text style={styles.actionText}>
                     {copiedLinkKey === `github-project:${projectRowItem.id}`
-                      ? 'Copied'
-                      : 'Copy GitHub link'}
+                      ? translate('common.copied', 'Copied')
+                      : translate('tasks.projectDetailDrawer.copyGitHubLink', 'Copy GitHub link')}
                   </Text>
                 </Pressable>
               </>
@@ -327,7 +366,9 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                     <X size={16} color={colors.textPrimary} />
                   )}
                   <Text style={styles.actionText}>
-                    {projectRowItem.content.state === 'CLOSED' ? 'Reopen item' : 'Close item'}
+                    {projectRowItem.content.state === 'CLOSED'
+                      ? translate('tasks.projectDetailDrawer.reopenItem', 'Reopen item')
+                      : translate('tasks.projectDetailDrawer.closeItem', 'Close item')}
                   </Text>
                 </Pressable>
               </>
@@ -343,11 +384,16 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   onPress={() => setMergeMethodProjectRow(projectRowItem)}
                 >
                   <GitBranch size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>Merge pull request</Text>
+                  <Text style={styles.actionText}>
+                    {translate('tasks.projectDetailDrawer.mergePullRequest', 'Merge pull request')}
+                  </Text>
                 </Pressable>
                 {!projectRowHostedRepo ? (
                   <Text style={styles.emptyInlineText}>
-                    Merge requires this repository in Orca.
+                    {translate(
+                      'tasks.projectDetailDrawer.mergeRepositoryRequirement',
+                      'Merge requires this repository in Orca.'
+                    )}
                   </Text>
                 ) : null}
               </>

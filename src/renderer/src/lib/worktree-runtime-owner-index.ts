@@ -18,8 +18,7 @@ type FolderWorkspaceOwnerRecord = Pick<
 >
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 
-// Why: owner resolution runs inside retained selectors and interaction paths;
-// immutable-slice indexes prevent unrelated store writes from rescanning.
+// Immutable-slice indexes avoid rescans on unrelated writes inside retained selectors and interaction paths.
 const worktreeOwnerIndexCache = new WeakMap<
   Record<string, readonly WorktreeOwnerRecord[]>,
   ReadonlyMap<string, IndexedWorktreeOwnerEntry>

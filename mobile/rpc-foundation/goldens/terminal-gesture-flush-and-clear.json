@@ -25,14 +25,48 @@
         "$rpc": "undefined"
       }
     },
-    "3dc7f55dee2a": {
-      "name": "toast",
-      "ordinal": 7,
+    "2744881d0748": {
+      "name": "terminal-subscribe",
+      "ordinal": 8,
       "value": {
-        "durationMs": {
-          "$rpc": "null"
+        "handle": "terminal-1"
+      }
+    },
+    "42b4a7d170de": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
         },
-        "message": "Terminal cleared"
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 16,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "clear": {
+              "cleared": true,
+              "handle": "terminal-1"
+            }
+          }
+        }
       }
     },
     "47c387a75ffc": {
@@ -105,6 +139,16 @@
         "startedAt": 16
       }
     },
+    "7e0ebd472c7b": {
+      "name": "toast",
+      "ordinal": 9,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Terminal cleared"
+      }
+    },
     "8224ccdb2cd8": {
       "name": "terminal.send#1",
       "ordinal": 2,
@@ -123,6 +167,13 @@
       "name": "terminal.clearBuffer#1",
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "94a34b9a1800": {
+      "name": "terminal-unsubscribe",
+      "ordinal": 7,
+      "value": {
+        "handle": "terminal-1"
+      }
     },
     "94ce15ec36dc": {
       "name": "orchestration.workerTerminalUserInput#1",
@@ -192,7 +243,7 @@
         "startedAt": 0
       }
     },
-    "afb61324f54a": {
+    "bfd73b81d7a1": {
       "name": "terminal.clearBuffer#1",
       "ordinal": 5,
       "args": [
@@ -209,7 +260,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -237,40 +288,6 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "ebaa6b64425b": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "cleared": true
-          }
-        }
       }
     }
   },
@@ -332,7 +349,7 @@
       {
         "id": "clearing",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "bfd73b81d7a1"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -346,7 +363,7 @@
       {
         "id": "cleared",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "42b4a7d170de"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -354,7 +371,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["3dc7f55dee2a"]
+          "effects": ["94a34b9a1800", "2744881d0748", "7e0ebd472c7b"]
         }
       }
     ]

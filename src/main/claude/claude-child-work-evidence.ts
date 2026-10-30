@@ -4,7 +4,10 @@ import type {
   AgentChildWorkLiveObservation
 } from '../../shared/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from './claude-background-task-frames'
-import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type {
+  ClaudeSession,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import { deriveToolInputPreview } from '../../shared/agent-hook-listener/tool-input-preview'
 import {
   claudeRecord,

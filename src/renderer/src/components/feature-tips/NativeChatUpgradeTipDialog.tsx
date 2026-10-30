@@ -14,7 +14,6 @@ import { NativeChatUpgradeFeatureTipVisual } from './NativeChatUpgradeFeatureTip
 // Interpolated in place of a {{name}} so the translated sentence keeps its own word order.
 const EMPHASIS_SLOT = '\u0001'
 
-/** A translated sentence with one bolded name in it. */
 function EmphasisSentence({
   sentence,
   emphasis
@@ -63,7 +62,6 @@ export function NativeChatUpgradeTipDialog({
   open: boolean
   tip: FeatureTip
   primaryBusy: boolean
-  /** Live Chat UI setting. */
   chatModeOn: boolean
   onOpenChange: (open: boolean) => void
   onPrimaryAction: () => void
@@ -131,13 +129,9 @@ export function NativeChatUpgradeTipDialog({
                 />
               </span>
               <FeatureTipSettingsLine
-                lead={translate(
-                  'featureTips.nativeChatUpgrade.settingsInstruction',
-                  'Manage Chat UI in'
-                )}
-                link={translate(
-                  'featureTips.nativeChatUpgrade.settingsLink',
-                  'Settings → Experimental'
+                text={translate(
+                  'featureTips.nativeChatUpgrade.manageInSettings',
+                  'Manage Chat UI in <link>Settings → Experimental</link>.'
                 )}
                 onClick={onSettingsClick}
               />

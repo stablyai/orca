@@ -7,7 +7,6 @@ import type { RpcClient } from './rpc-client'
 import { runRpcOperation } from './rpc-operation'
 import type { SendRequestOptions } from './unvalidated-rpc-request-port'
 
-/** What a chunk or range reply restates about the window it answers. */
 export type MobileWebBundleWindowHeader = {
   readonly buildId: string
   readonly path: string
@@ -19,12 +18,10 @@ export type MobileWebBundleWindowHeader = {
 
 export type MobileWebBundleWindowReply = {
   readonly header: MobileWebBundleWindowHeader
-  /** Decoded on demand, so a reply the fetch discards or refuses by its header is never inflated.
-   *  `expected` is the slot length on the grid; a range inflates into at most one byte past it. */
+  // Decode only after header/stop checks; inflate at most one byte past the expected slot length.
   readonly bytes: (expected: number) => Uint8Array
 }
 
-/** One client, one grid and one read method, fixed for a whole fetch by the manifest reply. */
 export type MobileWebBundleWindowReader = {
   readonly windowBytes: number
   read(
@@ -37,8 +34,7 @@ export type MobileWebBundleWindowReader = {
   ): Promise<MobileWebBundleWindowReply>
 }
 
-/** Ranges when the host named a range grid, chunks otherwise: a host that predates the range
- *  method names none, and every bundle host serves chunks. */
+// Choose ranges only from the manifest’s grid; older hosts still serve chunks.
 export function mobileWebBundleWindowReader(
   client: RpcClient,
   opened: Pick<MobileWebBundleManifestReply, 'chunkBytes' | 'rangeBytes'>
@@ -80,8 +76,7 @@ export function mobileWebBundleWindowReader(
   }
 }
 
-/** Every host encodes with `Buffer#toString('base64')`, so the strict native decoder refuses nothing a
- *  host sends; `atob` is the fallback the pairing and E2EE paths already run on Hermes. */
+// Canonical host base64 works with strict native decoding; retain the Hermes atob fallback.
 function decodeBase64(value: string): Uint8Array {
   const native = pairedE2EENativeCodec()
   if (!native) {

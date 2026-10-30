@@ -2,15 +2,15 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
 } from '@/lib/passive-macos-app-data-access'
-import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useStaleConflictOperationPolling } from './stale-conflict-operation-poll'
@@ -26,11 +26,9 @@ import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const STATUS_SAFETY_INTERVAL_MS = 60_000
 const STATUS_ACTIVITY_DEBOUNCE_MS = 125
-// Why: evidence-driven status refreshes must keep the pre-scheduler floor so
-// sustained terminal/file signals can never run git back-to-back (#7983).
+// Retain the pre-scheduler floor so sustained change signals cannot run Git back-to-back (#7983).
 const STATUS_ACTIVITY_MIN_GAP_MS = 3000
-// Why: status scans and remote conflict probes can take longer than their
-// timers; duration-aware spacing prevents a slow task from running nonstop.
+// Duration-aware spacing keeps slow scans/probes from running nonstop beyond their timer cadence.
 export const SLOW_GIT_POLL_BACKOFF = {
   idleMultiplier: 1,
   changeSignalMultiplier: 1,
@@ -92,10 +90,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     activeRepoSupportsGit &&
     shouldPollActiveGitStatus(activeGitStatusPollingArgs) &&
     isActiveConnectionReady
-  // Why: the huge flag must only pause evidence-free polling, not push-signal
-  // refreshes — a fresh non-huge status result is the only thing that can
-  // clear the flag, so gating every lane on it would deadlock the worktree
-  // into stale status until an app restart.
+  // Pause only evidence-free polling: gating signal refreshes too would prevent a fresh result from clearing huge status.
   const shouldPollActiveWorktreeGitStatus =
     canFetchActiveWorktreeGitStatus &&
     !!activeWorktreeId &&
@@ -103,9 +98,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const activeStatusPollScope = shouldPollActiveWorktreeGitStatus
     ? `${activeExecutionHostId}\0${activeWorktreeId}\0${worktreePath}`
     : null
-  // Why: opening any git-status consumer (Source Control, Files, Checks, or an
-  // editor file) must refresh promptly, matching the pre-scheduler behavior
-  // where the interactive interval flip re-ran an immediate poll.
+  // Opening any status consumer must refresh promptly, preserving the previous interactive-poll behavior.
   const interactiveConsumerVisible = hasInteractiveActiveGitStatusConsumer(
     activeGitStatusPollingArgs
   )
@@ -123,8 +116,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       signal: AbortSignal
       shouldApply: () => boolean
     }) => {
-      // Why: eligibility can change between timer dispatch and task start.
-      // Avoid launching work that its liveness guard would have to discard.
+      // Recheck eligibility after timer dispatch so changed liveness cannot launch stale work.
       if (
         request.signal.aborted ||
         !isWindowVisible() ||
@@ -135,34 +127,32 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         return
       }
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        const target = getWorktreeGitOwnerTarget(activeWorktreeId)
-        if (!target) {
+        // Why one resolution: a same-path twin must not get this copy's transport, SSH target or answer.
+        const copy = resolveWorktreeGitCopyNow(activeWorktreeId)
+        if (!copy) {
           return
         }
+        // Only the first status after the user's own switch here may start WSL (E9); polls, remounts
+        // and restores stay gated.
+        const wakeWslDistro = takeRecentWorkspaceSwitchWake(activeWorktreeId, 'git-status')
         await refreshGitStatusForWorktree({
-          target,
+          target: copy.transport,
+          ownerHostId: copy.hostId,
           worktreeId: activeWorktreeId,
           worktreePath,
-          connectionId,
+          connectionId: copy.connectionId,
           pushTarget: activePushTarget,
-          deps: {
-            setGitStatus,
-            updateWorktreeGitIdentity,
-            setUpstreamStatus,
-            fetchUpstreamStatus
-          },
+          deps: { setGitStatus, updateWorktreeGitIdentity, setUpstreamStatus, fetchUpstreamStatus },
           request: {
             admissionTier: admissionTierForGitStatusRefreshReason(request.reason),
             ...(request.reason === 'safety' ? { reuseLineStats: true } : {}),
             signal: request.signal,
             shouldApply: request.shouldApply,
-            onStatusAccepted: publishUpstreamRefWatch
+            onStatusAccepted: publishUpstreamRefWatch,
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
           }
         })
-      } catch {
-        // ignore
-      }
+      } catch {}
     },
     [
       activePushTarget,
@@ -177,8 +167,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     ]
   )
 
-  // Why: the scheduler must survive harmless store rerenders so its in-flight,
-  // trailing-signal, and safety-horizon state remain authoritative.
+  // Preserve scheduler lifetime across harmless rerenders so in-flight/trailing/pacing state remains authoritative.
   const runFetchStatusRef = useRef(runFetchStatus)
   runFetchStatusRef.current = runFetchStatus
   const canApplyScheduledStatusRef = useRef(canFetchActiveWorktreeGitStatus)
@@ -186,9 +175,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const statusRefreshGenerationRef = useRef(0)
 
   const statusSchedulerRef = useRef<GitStatusRefreshScheduler | null>(null)
-  // Why: pacing belongs to the current worktree, not to scheduler instances —
-  // execution-host/push-target rebuilds must not reset it, or a flapping host id
-  // lets sustained change signals run git at the bare debounce.
+  // Persist pacing per worktree across host/target scheduler rebuilds so flapping cannot bypass the minimum gap.
   const statusPacingRef = useRef<{
     key: string
     pacing: GitStatusRefreshPacing
@@ -229,9 +216,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         statusSchedulerRef.current = null
       }
     }
-    // Why: push-target changes must bump the generation so an in-flight refresh
-    // captured against the old remote/branch can't apply or cache stale upstream
-    // status for the new one.
+    // Target changes must invalidate in-flight results captured against an old remote/branch.
   }, [activeExecutionHostId, activePushTarget, activeWorktreeId, worktreePath])
 
   useEffect(() => {
@@ -288,8 +273,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     }
   }, [activeWorktreeId, canFetchActiveWorktreeGitStatus, interactiveConsumerVisible])
 
-  // Why: file, terminal, and metadata evidence share one scheduler window so
-  // a single Git operation cannot fan out into several status subprocesses.
+  // Coalesce file/terminal/metadata evidence so one Git operation cannot fan out status subprocesses.
   const fetchStatusOnChangeSignal = useCallback(() => {
     statusSchedulerRef.current?.signal()
   }, [])

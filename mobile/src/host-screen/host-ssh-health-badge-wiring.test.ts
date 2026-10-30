@@ -54,12 +54,10 @@ function row(worktreeId: string, repoId: string): Worktree {
   }
 }
 
-// Drives the screen's own state, metadata refresh and row projection against one desktop reply set.
 async function displayedRows(args: {
   repos: { id: string; displayName: string; connectionId?: string }[]
   rows: Worktree[]
   sshTarget: Record<string, unknown>
-  /** The catalog a second refresh answers, once the first has applied. */
   thenRepos?: { id: string; displayName: string; connectionId?: string }[]
 }): Promise<Worktree[]> {
   let repos = args.repos

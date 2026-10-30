@@ -115,7 +115,6 @@ const texts = () =>
     .map((node) => node.props.children)
     .filter((child): child is string => typeof child === 'string')
 
-/** Taps the control whose accessibility label is `label`. */
 const press = (label: string) => {
   act(() => {
     renderer!.root
@@ -126,7 +125,6 @@ const press = (label: string) => {
 
 const back = () => press('Back to Workspace options')
 
-/** Flips the filter switch whose accessibility label is `label`. */
 const flip = (label: string, value: boolean) => {
   act(() => {
     renderer!.root
@@ -193,7 +191,6 @@ describe('the phone Workspace options sheet', () => {
     expect(settings.toggleRepoFilter).toHaveBeenCalledWith('r2')
     back()
     press('Show properties, 8')
-    // Ports is the desktop's own; the phone leaves it out.
     expect(texts()).not.toContain('Ports')
     press('Automation')
     expect(settings.toggleCardProperty).toHaveBeenCalledWith('automation')

@@ -67,15 +67,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
       return
     }
-    if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
-      return
-    }
-    // Why the gate lives HERE and not at each caller: this method is the single point at
-    // which this subsystem commits to typing the pointer into the pane, and it has four
-    // callers (handle delivery, post-probe redelivery, flight settle, and the notification
-    // coordinator's per-leaf path). Gating callers meant each new one silently bypassed the
-    // check; gating the commit point cannot be bypassed. Refusal parks and re-offers rather
-    // than dropping — `isAgentSettledForDelivery` arms the re-check.
+    // Gate settled-agent input at this shared commit point; refusal parks for recheck instead of dropping mail.
     if (!this.deps.isAgentSettledForDelivery(leaf)) {
       this.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
@@ -118,7 +110,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
-    const unread = selectOrchestrationPointerBatch({
+    const { messages: unread, heldDeliveryId } = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,
       waiters,
@@ -158,6 +150,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       leaf,
       mailboxHandle,
       messages: unread,
+      heldDeliveryId,
       newestSequence,
       enterDelayMs: pointerEnterDelayMs(),
       leafKey: this.leafKey(leaf),
@@ -179,9 +172,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (flight?.stagedMessageIds.length) {
       const db = this.deps.getDb()
       if (db && flight.processIncarnation) {
-        // Why: the Enter timer was just cleared, so a reserved or merely-written pointer provably
-        // never submitted and is released. An attempted Enter may already have landed, so it stays
-        // at its phase for the resume path to revalidate rather than being sent a second time.
+        // Release only phases that provably never sent Enter; an attempted Enter may already have landed.
         db.releaseMailboxPointerEnter(
           flight.stagedMessageIds,
           { ptyId, processIncarnation: flight.processIncarnation },

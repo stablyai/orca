@@ -1,7 +1,4 @@
-// Why: xterm gives each Brahmic spacing vowel sign (U+09BF, U+09CB, …) its own cell, matching
-// wcwidth/string-width, so TUIs align on that count. WebGL then draws each cell in isolation and the
-// font never reorders or composes the cluster. Joining the cluster's cells lets the browser shape it
-// without changing the cell count.
+// xterm gives spacing vowel signs their own cells for wcwidth-compatible TUI alignment. Join cluster cells for browser shaping without changing that count.
 
 const INDIC_SCAN_FLOOR = 0x0900
 const INDIC_SCAN_CEILING = 0x0dff
@@ -30,7 +27,7 @@ export function containsIndicScriptText(text: string): boolean {
 
 /** Character-joiner handler: [start, end) ranges of Indic clusters that occupy more than one cell. */
 export function findIndicClusterRanges(text: string): [number, number][] {
-  // Why: xterm merges other joiners' results into this array in place, so it must be freshly allocated each call.
+  // Allocate fresh ranges because xterm merges other joiners’ results into them in place.
   const ranges: [number, number][] = []
   if (!containsIndicScriptText(text)) {
     return ranges

@@ -78,19 +78,14 @@ internal class OrcaMobileWebShellView(
       retainedPool.clear()
     }
 
-    private object ParkedWebViewClient : WebViewClient() {
+    private class ParkedWebViewClient(
+      private val served: MobileWebShellServed
+    ) : WebViewClient() {
       override fun shouldInterceptRequest(
         view: WebView,
         request: WebResourceRequest
       ): WebResourceResponse =
-        WebResourceResponse(
-          "text/plain",
-          "utf-8",
-          403,
-          "Forbidden",
-          emptyMap(),
-          ByteArrayInputStream(ByteArray(0))
-        )
+        serveMobileWebShellRequest(served, request) ?: refusedMobileWebShellResponse()
 
       override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
         true
@@ -100,6 +95,50 @@ internal class OrcaMobileWebShellView(
         return true
       }
     }
+
+    private fun buildRequestParts(
+      url: Uri,
+      method: String = "GET",
+      hasRangeHeader: Boolean = false
+    ): MobileWebShellRequestParts = MobileWebShellRequestParts(
+      method = method,
+      hasRangeHeader = hasRangeHeader,
+      scheme = url.scheme,
+      host = url.host,
+      port = url.port,
+      userInfo = url.userInfo,
+      query = url.query,
+      fragment = url.fragment,
+      encodedPath = url.encodedPath,
+      urlLength = url.toString().length
+    )
+
+    private fun serveMobileWebShellRequest(
+      current: MobileWebShellServed?,
+      request: WebResourceRequest
+    ): WebResourceResponse? {
+      val active = current ?: return null
+      val parts = buildRequestParts(
+        request.url,
+        method = request.method,
+        hasRangeHeader = request.requestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
+      )
+      val path = resolveMobileWebShellRequestPath(parts, active.originHost) ?: return null
+      val asset = active.generation.entries[path] ?: return null
+      val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
+      val headers = mobileWebShellResponseHeaders(path, bytes.size)
+      val (mimeType, charset) = splitMobileWebShellContentType(asset.contentType)
+      return WebResourceResponse(mimeType, charset, 200, "OK", headers, ByteArrayInputStream(bytes))
+    }
+
+    private fun refusedMobileWebShellResponse(): WebResourceResponse = WebResourceResponse(
+      MOBILE_WEB_SHELL_REFUSAL_MIME_TYPE,
+      MOBILE_WEB_SHELL_REFUSAL_CHARSET,
+      MOBILE_WEB_SHELL_REFUSAL_STATUS,
+      MOBILE_WEB_SHELL_REFUSAL_REASON,
+      MOBILE_WEB_SHELL_REFUSAL_HEADERS,
+      ByteArrayInputStream(mobileWebShellRefusalBody())
+    )
   }
 
   private val onLoadState by EventDispatcher<Map<String, Any>>()
@@ -114,15 +153,11 @@ internal class OrcaMobileWebShellView(
   private var bridgeInstalled = false
   private var bridgeChannel: MobileWebShellBridgeChannel? = null
   private val bridgeGate = MobileWebShellBridgeGate()
-  // Chromium hands a reply proxy to the listener, so native cannot speak first. The envelope has
-  // the page send `ready` before anything is delivered, so there is nothing to speak first about.
-  // Volatile for the same reason as `documentFailed`: `reportDocumentFailure` drops the proxy from
-  // whichever thread `shouldInterceptRequest` ran on, and the listener reads it on the UI thread.
+  // The page sends ready before native replies; volatile proxy state crosses interceptor/UI threads.
   @Volatile private var replyProxy: JavaScriptReplyProxy? = null
   private var applied: MobileWebShellAppliedProps? = null
   private val loadState = MobileWebShellLoadStateMachine()
-  // Written on the main thread, read from onPageStarted/onPageFinished, which Chromium runs after
-  // the failure that hid the view; `shouldInterceptRequest` also runs off the main thread.
+  // Failure state crosses main-thread callbacks and Chromium’s background interceptor.
   @Volatile private var documentFailed = false
   private var renderProcessGone = false
   @Volatile private var served: MobileWebShellServed? = null
@@ -260,21 +295,14 @@ internal class OrcaMobileWebShellView(
    * served and visible would show a page the caller has just been told is not loaded.
    */
   private fun failPropUpdate(reason: MobileWebShellFailureReason) {
-    // The listener outlives the props it was installed under, and the document it was installed
-    // for is still alive after `stopLoading`: left in place it would keep posting through an
-    // origin this mount has just stopped serving, and re-arm the reply proxy doing it.
+    // Remove the old listener: stopLoading leaves its same-origin document alive and able to rearm replies.
     removeBridgeListener()
     served = null
     webView?.visibility = View.INVISIBLE
     emit(loadState.failed(reason))
   }
 
-  /**
-   * `addWebMessageListener` is the whole install: Chromium injects an `orcaBridge` object of the
-   * agreed shape before any page script runs, and enforces the allowed origin itself, which is why
-   * the listener needs no origin check of its own. Answers false only for a provider too old to
-   * offer the listener at all.
-   */
+  /** addWebMessageListener injects before scripts and enforces origins; false means unsupported provider. */
   private fun applyBridgeListener(view: WebView, origin: String): Boolean {
     removeBridgeListener()
     val outcome = mobileWebShellBridgeInstall(
@@ -330,10 +358,7 @@ internal class OrcaMobileWebShellView(
     }
   }
 
-  /**
-   * Thrown rather than dropped: the only caller is the React Native host, and a silent drop would
-   * turn a chunking bug there into a request that never settles.
-   */
+  /** Throw so a host chunking bug rejects rather than leaving its request unsettled. */
   fun postBridgeMessage(json: String) {
     val proxy = replyProxy ?: throw MobileWebShellBridgeUnavailableException()
     val byteCount = json.toByteArray(Charsets.UTF_8).size
@@ -362,7 +387,7 @@ internal class OrcaMobileWebShellView(
     if (retainsSlot && canRetain) {
       val channel = currentChannel ?: MobileWebShellBridgeChannel(null)
       channel.owner = null
-      view.webViewClient = ParkedWebViewClient
+      view.webViewClient = ParkedWebViewClient(currentServed)
       view.onPause()
       (view.context as? MutableContextWrapper)?.baseContext = context.applicationContext
       detachWebViewFromParent(view)
@@ -407,15 +432,8 @@ internal class OrcaMobileWebShellView(
     view.destroy()
   }
 
-  // databaseEnabled and the two file-URL settings are deprecated and inert on new WebViews, but
-  // the floor here is Chromium 83, and an invariant left to a default is one nobody can read.
-  //
-  // device-checked in B4: no setting below can be proven from a JVM test, and neither can
-  // shouldOverrideUrlLoading dropping a navigation. Confirm on a device that a page cannot reach
-  // the network (blockNetworkLoads), cannot keep state across a remount (domStorageEnabled,
-  // databaseEnabled, cacheMode), cannot read a file or a content provider (allowFileAccess,
-  // allowContentAccess, the two file-URL settings), cannot load http (mixedContentMode), and
-  // cannot navigate away from the document.
+  // Keep explicit settings for the Chromium 83 floor, even where newer WebViews ignore deprecated options.
+  // B4 requires device proofs: no network, persistent state, file/content access, cleartext or navigation escape.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {
     val view = WebView(MutableContextWrapper(context))
@@ -436,8 +454,7 @@ internal class OrcaMobileWebShellView(
       mediaPlaybackRequiresUserGesture = true
       setGeolocationEnabled(false)
     }
-    // Never clearCache(true): that is process-global and would wipe the HTTP cache of every other
-    // WebView in the app, including the terminal's. LOAD_NO_CACHE plus no-store is per view.
+    // clearCache(true) is process-global, including terminals; use per-view LOAD_NO_CACHE and no-store.
     view.webViewClient = ShellWebViewClient()
     view.webChromeClient = object : WebChromeClient() {
       override fun onCreateWindow(
@@ -448,8 +465,7 @@ internal class OrcaMobileWebShellView(
       ): Boolean = false
     }
     view.setDownloadListener { _, _, _, _, _ -> }
-    // Replaces WebView's own inset handling (its listener on P–R, onApplyWindowInsets on S+);
-    // forwarding the zeroed set keeps S+ in step.
+    // Replace WebView inset handling on P–R/S+; forward zeroed insets for S+ parity.
     ViewCompat.setOnApplyWindowInsetsListener(view) { target, insets ->
       ViewCompat.onApplyWindowInsets(target, insetsForShellPage(insets))
     }
@@ -460,18 +476,12 @@ internal class OrcaMobileWebShellView(
     if (emission != null) onLoadState(emission.toPayload())
   }
 
-  /**
-   * Chromium commits its own error document after `onReceivedError` returns, so hiding the WebView
-   * synchronously is undone a moment later; posting is what keeps the shell's own state the only
-   * thing on screen. `shouldInterceptRequest` also runs off the main thread.
-   */
+  /** Post hiding past Chromium’s error-document commit; interception may also run off the main thread. */
   private fun reportDocumentFailure() {
     replyProxy = null
-    // Synchronously, unlike the emission: the error document commits before the post runs, and a
-    // page that failed is not one to hear from in the meantime.
+    // Drop replies synchronously before Chromium’s error document commits and the posted hide runs.
     loadState.documentEnded()
-    // Set before the post, not inside it: onPageFinished runs in between and would otherwise
-    // report `ready` over the failure and make the error page visible again.
+    // Set before posting: intervening onPageFinished must not restore ready or expose the error page.
     documentFailed = true
     val epoch = loadState.epoch
     post {
@@ -494,42 +504,16 @@ internal class OrcaMobileWebShellView(
     url: Uri,
     method: String = "GET",
     hasRangeHeader: Boolean = false
-  ): MobileWebShellRequestParts = MobileWebShellRequestParts(
+  ): MobileWebShellRequestParts = buildRequestParts(
+    url = url,
     method = method,
-    hasRangeHeader = hasRangeHeader,
-    scheme = url.scheme,
-    host = url.host,
-    port = url.port,
-    userInfo = url.userInfo,
-    query = url.query,
-    fragment = url.fragment,
-    encodedPath = url.encodedPath,
-    urlLength = url.toString().length
+    hasRangeHeader = hasRangeHeader
   )
 
-  private fun serveRequest(request: WebResourceRequest): WebResourceResponse? {
-    val current = served ?: return null
-    val parts = requestParts(
-      request.url,
-      method = request.method,
-      hasRangeHeader = request.requestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
-    )
-    val path = resolveMobileWebShellRequestPath(parts, current.originHost) ?: return null
-    val asset = current.generation.entries[path] ?: return null
-    val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
-    val headers = mobileWebShellResponseHeaders(path, bytes.size)
-    val (mimeType, charset) = splitMobileWebShellContentType(asset.contentType)
-    return WebResourceResponse(mimeType, charset, 200, "OK", headers, ByteArrayInputStream(bytes))
-  }
+  private fun serveRequest(request: WebResourceRequest): WebResourceResponse? =
+    serveMobileWebShellRequest(served, request)
 
-  private fun refusedResponse(): WebResourceResponse = WebResourceResponse(
-    MOBILE_WEB_SHELL_REFUSAL_MIME_TYPE,
-    MOBILE_WEB_SHELL_REFUSAL_CHARSET,
-    MOBILE_WEB_SHELL_REFUSAL_STATUS,
-    MOBILE_WEB_SHELL_REFUSAL_REASON,
-    MOBILE_WEB_SHELL_REFUSAL_HEADERS,
-    ByteArrayInputStream(mobileWebShellRefusalBody())
-  )
+  private fun refusedResponse(): WebResourceResponse = refusedMobileWebShellResponse()
 
   private inner class ShellWebViewClient : WebViewClient() {
     /** Never null, so no request can fall through to the network. */
@@ -544,9 +528,7 @@ internal class OrcaMobileWebShellView(
     }
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-      // `hasGesture` decides only what may be offered to the opener. Nothing is allowed on the
-      // strength of it: Chromium is permitted to report false for a request a human started, and a
-      // subframe can navigate the top frame with no gesture at all.
+      // hasGesture gates only opener offers: human requests may omit it and subframes can target top without it.
       val verdict = mobileWebShellNavigationVerdict(
         url = request.url?.toString(),
         isForMainFrame = request.isForMainFrame,
@@ -557,11 +539,7 @@ internal class OrcaMobileWebShellView(
           served?.originHost,
           request.isForMainFrame
         ),
-        // Always false, and it is the platform that says so. WebViewClient's own javadoc: "This
-        // callback is not called for all page navigations. In particular, this is not called for
-        // navigations which the app initiated with loadUrl(): this callback would not serve a purpose
-        // in this case, because the app already knows about the navigation." So there is no own-load
-        // window here to keep a flag for, and nothing reaching this callback is the shell's own load.
+        // loadUrl bypasses this callback by WebViewClient contract; no callback action is our own load.
         isShellLoad = false,
         hasGesture = request.hasGesture(),
         isDownload = false
@@ -573,25 +551,20 @@ internal class OrcaMobileWebShellView(
     }
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-      // The document that spoke is being replaced, so its proxy stops being somewhere to post: the
-      // next one has to say `ready` first, which is what the envelope has it do.
+      // Discard the replaced document’s reply proxy; the next page must send ready.
       replyProxy = null
       loadState.documentEnded()
       if (documentFailed || !isDocumentUrl(Uri.parse(url))) return
-      // The load the caller was told about is the one now on screen, so this is where the page
-      // becomes something to hear. Chromium runs page script after this.
+      // Arm at commit before page script runs.
       loadState.committed()
       emit(loadState.started())
     }
 
-    // No URL check: the page rewrites its own path with history.replaceState before its first
-    // render, so the document that committed at "/" finishes at the route it opened. What is left
-    // is whether this is the document the caller was told about, which is what committing means.
+    // history.replaceState changes the document path before finish; commit state identifies the load.
     override fun onPageFinished(view: WebView, url: String) {
       if (documentFailed || !loadState.hasCommittedDocument) return
       view.visibility = View.VISIBLE
-      // After the rewrite as well as before it: the back-forward list is the page's, and the shell
-      // gives it no way back to a document it has already replaced.
+      // Remove history so the page cannot return to a replaced document.
       view.clearHistory()
       emit(loadState.finished())
     }
@@ -612,11 +585,7 @@ internal class OrcaMobileWebShellView(
       if (request.isForMainFrame) reportDocumentFailure()
     }
 
-    /**
-     * Returning false would kill the app. The dead WebView is destroyed and not rebuilt: renderer
-     * memory pressure, a provider update and a bad bundle are indistinguishable here, so the retry
-     * policy is the caller's and lives in one place.
-     */
+    /** Return true to avoid killing the app; destroy the dead WebView and leave retry policy to the caller. */
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
       renderProcessGone = true
       destroyWebViewImmediate()
@@ -634,11 +603,7 @@ internal class MobileWebShellBridgeMessageTooLargeException(byteCount: Int) : Co
     "$MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES byte cap"
 )
 
-/**
- * The shell pads the bars and shortens the WebView for the keyboard, so WebView M144+ forwarding
- * systemBars/displayCutout to env(safe-area-inset-*), and M139+ resizing for ime(), pad twice.
- * Zeroed, never CONSUMED, so later changes still arrive (Android "Understand window insets in WebView").
- */
+/** The shell already pads bars/keyboard; zero (never consume) insets to prevent WebView M144+ bar and M139+ IME double-padding. */
 private fun insetsForShellPage(insets: WindowInsetsCompat): WindowInsetsCompat =
   WindowInsetsCompat.Builder(insets)
     .setInsets(SHELL_OWNED_INSET_TYPES, Insets.NONE)

@@ -23,13 +23,7 @@ import { PendingBrowserAnnotationCard } from './pending-browser-annotation-card'
 import type { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from './use-browser-page-grab-annotations'
 
-/**
- * Everything the annotate and markup tools paint over a guest: the draw surface, the pending
- * comment card, the annotation tray, the right-click grab menu and the inline confirmation toast.
- *
- * Shared because these overlays are the other half of the toolbar's tool cluster — a surface that
- * offers the tools but not these would arm a picker whose result the reader could never see.
- */
+/** Pair guest tools with all their result overlays so every surface that arms a picker can display its result. */
 export function BrowserGuestAnnotateOverlays({
   markup,
   grab,
@@ -75,6 +69,8 @@ export function BrowserGuestAnnotateOverlays({
     handleAnnotationTraySendOpenChange,
     activeGroupId,
     browserAnnotationsPrompt,
+    includePageDetails,
+    handleIncludePageDetailsChange,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
     handleCopyBrowserAnnotations,
@@ -101,6 +97,7 @@ export function BrowserGuestAnnotateOverlays({
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
           payload={pendingAnnotationPayload}
+          worktreeId={worktreeId}
           resolveAnchor={(cardHeight) =>
             getBrowserOverlayAnchor(
               pendingAnnotationPayload,
@@ -124,6 +121,8 @@ export function BrowserGuestAnnotateOverlays({
           worktreeId={worktreeId}
           activeGroupId={activeGroupId}
           browserAnnotationsPrompt={browserAnnotationsPrompt}
+          includePageDetails={includePageDetails}
+          handleIncludePageDetailsChange={handleIncludePageDetailsChange}
           handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
           handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}

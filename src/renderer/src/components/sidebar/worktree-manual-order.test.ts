@@ -121,7 +121,6 @@ describe('expandDraggedWorktreeIdsForVisibleLineage', () => {
     ).toEqual(['parent', 'child', 'z'])
   })
 
-  // Single-pass coverage must not end early when a descendant is also selected.
   it('keeps ancestor coverage when a nested descendant is selected too', () => {
     expect(
       expandDraggedWorktreeIdsForVisibleLineage(

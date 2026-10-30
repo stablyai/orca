@@ -1,10 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * Why a render test on top of shouldRevealWorktreeDeveloperMenu's unit tests:
- * the shipped bug was the submenu rendering unconditionally, i.e. a WIRING
- * defect. These assert the modifier actually reaches the reveal state through
- * the real right-click handler.
- */
+/** Exercise modifier wiring through the real right-click handler; unit-testing the reveal predicate cannot catch an unconditional submenu. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -37,12 +32,16 @@ vi.mock('@/store', () => {
   }
 })
 
-vi.mock('@/store/selectors', () => ({
-  useAllWorktrees: () => [],
-  useRepoById: () => null,
-  useRepoMap: () => new Map(),
-  useWorktreeMap: () => new Map()
-}))
+vi.mock('@/store/selectors', () => {
+  const emptyWorktrees: never[] = []
+  const emptyMap = new Map()
+  return {
+    getAllWorktreesFromState: () => emptyWorktrees,
+    useRepoById: () => null,
+    getRepoMapFromState: () => emptyMap,
+    getWorktreeMapFromState: () => emptyMap
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
@@ -52,8 +51,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-// Why: Radix portals/submenus need real layout; a passthrough keeps the test on
-// the reveal decision rather than menu mechanics.
+// Mock layout-dependent Radix portals so this test isolates the reveal decision.
 vi.mock('@/components/ui/dropdown-menu', () => {
   const passthrough = ({ children }: { children?: ReactNode }) => <>{children}</>
   return {
@@ -106,8 +104,7 @@ function makeWorktree(): Worktree {
   } as Worktree
 }
 
-// Why: assert on text content — the passthrough menu mock renders each label as
-// a bare text node beside its icon, which getByText's element matching skips.
+// Read textContent because passthrough labels are bare text nodes that getByText cannot match.
 function openContextMenu(altKey: boolean): string {
   const { container } = render(
     <WorktreeContextMenu worktree={makeWorktree()}>

@@ -114,9 +114,7 @@ describe('runtime metadata', () => {
     })
 
     it('retains metadata when only the runtimeId differs', () => {
-      // Why: pid reuse is possible across an auto-update (fork+exec keeps the
-      // old pid if the OS reassigns it quickly). The runtimeId check is the
-      // second-level guard that catches this even when pid collides.
+      // Auto-update may reuse a pid; runtimeId must still prevent treating the replacement as the old owner.
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
       tempDirs.push(userDataPath)
       writeRuntimeMetadata(userDataPath, {

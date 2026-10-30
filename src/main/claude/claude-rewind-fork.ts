@@ -10,7 +10,7 @@ import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-instal
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
-import { claudeSessionIdForRewind } from './claude-structured-session-id'
+import { claudeSessionIdForRewind } from './structured/claude-structured-session-id'
 import { materializeClaudeRewindTranscript } from './claude-rewind-transcript'
 
 type TranscriptPromptRow = { type: 'user'; uuid: string; parentUuid?: unknown }

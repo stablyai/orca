@@ -57,8 +57,7 @@ const CASES: {
     host: { kind: 'direct-ssh', connectionId: 'box' }
   },
   {
-    // #24067: the repo row names no owner; only the workspace row names the VM. Recipe VM targets
-    // publish no connection state, so this app's own runtime scans them.
+    // Recipe VMs lack connection state; workspace ownership directs this app's scan even without repo ownership (#24067).
     name: 'recipe VM workspace whose repo row names no host',
     rows: {
       repos: [{ id: 'repo-1' }],

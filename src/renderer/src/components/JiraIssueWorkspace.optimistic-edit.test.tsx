@@ -193,8 +193,7 @@ describe('JiraIssueWorkspace optimistic edits', () => {
   })
 
   it('offers the new status transitions after a status change', async () => {
-    // Why: Jira only allows transitions out of the current status, so the menu
-    // must be reloaded once the issue has moved.
+    // Reload transitions after a status change; Jira accepts only current-state transitions.
     const inProgress = {
       id: '3',
       name: 'In Progress',
@@ -249,8 +248,7 @@ describe('JiraIssueWorkspace optimistic edits', () => {
   ] as const)(
     'stays on the newly opened issue when a save for the previous one %s',
     async (_, outcome) => {
-      // Why: the task page keeps one workspace instance across selections, so a
-      // save that finishes after switching must not write the old issue back.
+      // The task page reuses this instance; a late save must not restore a previously selected issue.
       const update = deferred<typeof outcome>()
       runtimeMocks.jiraUpdateIssueForTarget.mockReturnValue(update.promise)
       runtimeMocks.jiraGetIssueForTarget.mockImplementation(

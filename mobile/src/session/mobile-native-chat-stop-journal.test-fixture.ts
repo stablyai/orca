@@ -1,5 +1,4 @@
-// A Codex chat's journal shaped like a long chat whose last send never opened and was taken back
-// at the child's exit, right after a send made while a Stop was ending the turn before it.
+// Model a send held through Stop, followed by a never-opened send withdrawn on child exit.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -26,20 +25,17 @@ type RowInput = {
   >
 }[JournalRow['kind']]
 
-/** A person's Stop is ending work from `from` until `until` (journal rows), as the status feed says. */
+// Status-feed Stopping spans use inclusive journal-row bounds.
 export type StopJournalStopping = { from: number; until: number }
 
 export type StopJournal = HostJournalFrames & {
   rows: readonly JournalRow[]
-  /** The row that took the never-opened send back. */
   takenBack: number
-  /** The never-opened send's submission row. */
   neverOpenedSent: number
   stopping: readonly StopJournalStopping[]
 }
 
-/** Where the host writes a send made while a Stop is ending a turn: after that turn's end (a host
- *  that holds sends while Stopping, as the QA journal shows), or while the turn still runs. */
+// Exercise hosts that hold sends until turn end as well as those that write during Stop.
 export type SendWhileStoppingWritten = 'after-end' | 'during-turn'
 
 export function stopJournal(
@@ -96,7 +92,6 @@ export function stopJournal(
     })
   const turnBody = (id: string, turnId: string, state: 'running' | 'completed' | 'interrupted') =>
     ({ kind: 'turn', turnId, state, userItemId: `orca:${id}`, startedAt: 1 }) as const
-  /** The provider opens a turn for `id`, echoes the send and streams an answer. */
   const openTurn = (id: string, turnId: string): void => {
     const record = turnItem(turnId)
     const providerKey = `codex:${THREAD}:${turnId}:0`
@@ -183,7 +178,7 @@ export function stopJournal(
     submit(id)
     handOver(id)
     openTurn(id, turnId)
-    // A provider status the turn revises, then drops again or keeps: early on, and near the end.
+    // Revise/drop provider status both early and near the tail to exercise retained history.
     const revisesStatus = index < 2 || index >= historyTurns - 2
     if (revisesStatus) {
       const progress = `codex:${THREAD}:${turnId}:progress`
@@ -211,7 +206,6 @@ export function stopJournal(
       endTurn(id, turnId, 'completed')
     }
   }
-  // A Stop is ending a turn when a send arrives; the host hands it over once the turn has ended.
   submit('stopped')
   handOver('stopped')
   openTurn('stopped', 't-stopped')
@@ -227,7 +221,6 @@ export function stopJournal(
   handOver('sent-while-stopping')
   openTurn('sent-while-stopping', 't-sent-while-stopping')
   endTurn('sent-while-stopping', 't-sent-while-stopping', 'completed')
-  // A send the provider never opened; a turn-less Stop ends the child, whose exit takes it back.
   const neverOpenedSent = submit(NEVER_OPENED)
   handOver(NEVER_OPENED)
   const stopNeverOpened = stopEvent()
@@ -241,7 +234,6 @@ export function stopJournal(
     recovered: true
   })
   stopping.push({ from: stopNeverOpened, until: takenBack - 1 })
-  // The next send starts a new child under a new fence.
   fence = 2
   submit('recovery')
   handOver('recovery')

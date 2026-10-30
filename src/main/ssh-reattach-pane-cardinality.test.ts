@@ -7,10 +7,14 @@ import {
   createStore,
   createStoreWithSshRemotePtyLeases,
   makeRepo,
-  makeTerminalTab,
   writeDataFile
-} from './persistence-test-harness'
-import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
+} from './persistence/persistence-test-harness'
+import {
+  makeTerminalTab,
+  TEST_LEAF_1,
+  TEST_LEAF_2
+} from './persistence/persistence-session-fixtures'
+
 import { getDefaultPersistedState } from '../shared/constants'
 
 vi.mock('electron', () => ({

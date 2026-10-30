@@ -4,7 +4,7 @@ import {
 } from '@/lib/agent-launch-routing'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG } from '../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { isNativeChatProviderDisplayedOn } from '../../../shared/native-chat-providers'
+import { isNativeChatProviderDisplayedOn } from '../../../shared/native-chat/native-chat-providers'
 import {
   isNativeChatEnabled,
   type NativeChatDefaultSettings
@@ -62,7 +62,8 @@ export type ChatUnavailableReason =
 export type NewTabAgentMenuRow = (
   | { kind: 'chat'; agent: TuiAgent }
   | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
-  | { kind: 'cli'; agent: TuiAgent }
+  /** `chat`: set to open as a CLI, though it can open as a chat here too. */
+  | { kind: 'cli'; agent: TuiAgent; chat?: true }
   | { kind: 'terminal'; agent: TuiAgent }
 ) & { executionHostId?: ExecutionHostId }
 
@@ -71,9 +72,7 @@ export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
 
 export function buildNewTabAgentMenuRows(args: {
   settings: NewTabAgentMenuSettings | null | undefined
-  /** The agents detected on the workspace's machine. */
   detectedOnHost: readonly TuiAgent[] | null
-  /** The agents Orca can open as a chat. */
   chatAgents: readonly TuiAgent[]
   hostChatAnswer: (agent: TuiAgent) => HostChatAnswer
   /** Whether the chat's own program runs there, which for some agents is not their CLI. */
@@ -93,11 +92,19 @@ export function buildNewTabAgentMenuRows(args: {
     chatProgramOffered(args.chatProgram(agent)) ||
     (args.chatProgram(agent) === 'unknown' && installed.includes(agent))
   const providedHere = chatAgents.filter(canOpen)
+  const chatToo = new Set<TuiAgent>()
   for (const agent of chatAgents) {
-    if (!isNativeChatProviderDisplayedOn(settings, agent, providedHere)) {
+    const displayed = isNativeChatProviderDisplayedOn(settings, agent, providedHere)
+    if (!displayed && (!installed.includes(agent) || !canOpen(agent))) {
       continue
     }
     const answer = args.hostChatAnswer(agent)
+    if (!displayed) {
+      if (answer === 'yes') {
+        chatToo.add(agent)
+      }
+      continue
+    }
     const program = args.chatProgram(agent)
     if (answer === 'yes' && canOpen(agent)) {
       runnable.push(agent)
@@ -128,6 +135,10 @@ export function buildNewTabAgentMenuRows(args: {
     ...orderAgents(
       defaultAgent,
       installed.filter((agent) => !runnable.includes(agent))
-    ).map((agent) => ({ kind: 'cli' as const, agent }))
+    ).map((agent) => ({
+      kind: 'cli' as const,
+      agent,
+      ...(chatToo.has(agent) ? { chat: true as const } : {})
+    }))
   ]
 }

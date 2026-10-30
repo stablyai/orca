@@ -70,6 +70,8 @@ export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** Effort replaces part of the native composite model selection. */
+  effortChangesModel?: true
   subagentStop?: {
     /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }
@@ -98,6 +100,11 @@ export type AcpDialect = {
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
+  /** Completion of an independent text task, apart from interactive turn projection. */
+  textTaskCompletion?(
+    method: string,
+    params: unknown
+  ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
   modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
   /** Claimed permission requests are never auto-approved. */
@@ -109,6 +116,8 @@ export type AcpDialect = {
     at: number
   ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
+  /** The agent dropped this session; only a new child can reopen it. */
+  sessionLost?(error: AcpAgentError, sessionId: string): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined

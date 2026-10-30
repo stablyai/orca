@@ -37,6 +37,8 @@ describe('mobile terminal diagnostics', () => {
     const diagnostics = new MobileTerminalDiagnostics()
 
     diagnostics.firstStreamEvent('terminal-1', 1, 'subscribed')
+    diagnostics.firstStreamEvent('terminal-1', 1, 'write')
+    expect(log).toHaveBeenCalledTimes(1)
     diagnostics.terminalUnsubscribed('terminal-1')
     diagnostics.firstStreamEvent('terminal-1', 1, 'subscribed')
 

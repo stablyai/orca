@@ -1,6 +1,7 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { getDefaultWslDistro } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
 import { CliInstaller } from './cli-installer'
 import {
   buildManagedLegacyRemoveCommand,
@@ -305,7 +306,7 @@ async function runWslCommand(
     throw new WslCliLoginPathUnavailableError(distro)
   }
   if (result.code !== 0) {
-    throw new Error(result.stderr.trim() || `WSL command failed with exit code ${result.code}.`)
+    throw new Error(describeWslProcessFailure(result))
   }
   return result.stdout
 }

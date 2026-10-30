@@ -32,9 +32,9 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
   applyManagedKimiHooks,
   KIMI_HOOK_EVENTS,
@@ -81,7 +81,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('kimi'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -98,7 +97,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  exit 0',
     'fi',
     // Form fields preserve arbitrary path text; stdin keeps large payloads off curl's command line for EDR.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/kimi" \\',
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/kimi" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

@@ -5,7 +5,7 @@ import type { PanZoomSize } from './pan-zoom-view'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
 
 function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {
-  // Why: sanitized SVG is HTML-serialized (`&nbsp;`), which an XML image document rejects.
+  // HTML-serialized sanitized SVG can contain &nbsp;, which XML image documents reject.
   const element = new DOMParser().parseFromString(svg, 'text/html').querySelector('svg')
   const [, , width, height] = (element?.getAttribute('viewBox') ?? '')
     .trim()
@@ -27,7 +27,7 @@ function useSvgObjectUrl(xml: string | null): string | null {
       setUrl(null)
       return
     }
-    // Why: an image document keeps the copy's ids and styles out of the page that still shows the original.
+    // An image document isolates copied IDs and styles from the original on the page.
     const next = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }))
     setUrl(next)
     return () => URL.revokeObjectURL(next)

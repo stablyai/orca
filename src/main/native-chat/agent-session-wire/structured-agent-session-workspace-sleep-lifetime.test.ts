@@ -1,3 +1,5 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   adapterAtPublishFor,
@@ -36,7 +38,13 @@ it('omits an unverified stop superseded by a newer send while retaining a siblin
   const sibling = 'session-beta'
   const siblingRecord = { ...record, sessionId: sibling }
   const getRecord = store.getRecord.bind(store)
-  vi.spyOn(store, 'listRecords').mockReturnValue([record, siblingRecord])
+  vi.spyOn(store, 'listConversations').mockReturnValue(
+    [record, siblingRecord].map(agentSessionConversationView)
+  )
+  const getConversation = store.getConversation
+  vi.spyOn(store, 'getConversation').mockImplementation((id) =>
+    id === sibling ? agentSessionConversationView(siblingRecord) : getConversation(id)
+  )
   vi.spyOn(store, 'getRecord').mockImplementation((id) =>
     id === sibling ? siblingRecord : getRecord(id)
   )
@@ -149,7 +157,7 @@ it.each(['persist', 'root-exit', 'retry', 'successor', 'root-successor'] as cons
       kind: 'exit-observed',
       ownerFence: 1
     })
-    await restarted.restoreReadableSessions()
+    await openTestChats(restarted)
     expect(await restarted.sleepWorkspace('workspace-1')).toEqual({
       stoppedSessionIds: ['session-alpha']
     })
@@ -331,7 +339,7 @@ it('stops an agent that is still starting', async () => {
 
   expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
   expect(acquire).toHaveBeenCalledTimes(2)
-  expect(closeSession).toHaveBeenCalledWith(SESSION)
+  expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
   expect(host['runtimeState'].startFlights.has(SESSION)).toBe(false)
   expect(host['sessions'].get(SESSION)?.child ?? null).toBeNull()
 })
@@ -365,14 +373,14 @@ it('sleeps only proven ended chats after idle eviction or restart', async () => 
     await foundRestTestChat(rig)
     rig.clock.now += IDLE_MS + 1
     await vi.waitFor(() => {
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
       expect(rig.host.hasSession(SESSION)).toBe(false)
     })
     expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined()
     expect(await rig.host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
     expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined()
     await rig.restart()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     expect(await rig.host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
     const getRecord = rig.store.getRecord.bind(rig.store)
     vi.spyOn(rig.store, 'getRecord').mockImplementation((id) => {

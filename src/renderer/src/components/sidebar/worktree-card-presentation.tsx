@@ -132,7 +132,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     ? hasDetailedMetaRowContent
     : hasMetadataBadge || cacheStartedAt != null
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
-  // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
   const showBranchIdentityHover = newCardStyle
     ? Boolean(identityDisplay) &&

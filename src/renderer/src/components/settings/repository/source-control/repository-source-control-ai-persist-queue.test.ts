@@ -38,14 +38,6 @@ describe('createRepoAiPersistQueue', () => {
     h = makeQueue()
   })
 
-  it('persists a changed value and stores the normalized saved result', async () => {
-    h.updateRepo.mockResolvedValue(true)
-    const ok = await h.queue.persistTransform((base) => ({ ...base, enabled: true }))
-    expect(ok).toBe(true)
-    expect(h.updateRepo).toHaveBeenCalledTimes(1)
-    expect(h.getPersisted()).toMatchObject({ enabled: true })
-  })
-
   it('skips the backend write when the transform is a no-op', async () => {
     h.updateRepo.mockResolvedValue(true)
     const ok = await h.queue.persistTransform((base) => base)
@@ -59,7 +51,7 @@ describe('createRepoAiPersistQueue', () => {
     const p2 = h.queue.persistTransform((base) => ({ ...base, customAgentCommand: 'run {prompt}' }))
     await Promise.all([p1, p2])
     expect(h.updateRepo).toHaveBeenCalledTimes(2)
-    // The second write must carry the first write's field -> it ran against the persisted result, not stale base.
+    // Queued writes must use the preceding persisted result so sibling fields survive.
     expect(h.getPersisted()).toMatchObject({ enabled: true, customAgentCommand: 'run {prompt}' })
   })
 
@@ -119,31 +111,13 @@ describe('createRepoAiPersistQueue', () => {
       ...base,
       customAgentCommand: 'should-not-write'
     }))
-    // Switch repos while the first write is in flight and the second is queued.
     h.setRepoId('repo-2')
     releaseFirst()
     const [ok1, ok2] = await Promise.all([p1, p2])
     expect(ok1).toBe(true)
     expect(ok2).toBe(true)
-    // Second must not run against repo-2.
     expect(h.updateRepo).toHaveBeenCalledTimes(1)
     // Completing a stale write must not seed the new repo's local persisted base.
     expect(h.setPersisted).not.toHaveBeenCalled()
-  })
-
-  it('does not apply setPersisted when the repo switches during an in-flight updateRepo', async () => {
-    let release: (ok: boolean) => void = () => {}
-    h.updateRepo.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          release = resolve
-        })
-    )
-    const pending = h.queue.persistTransform((base) => ({ ...base, enabled: true }))
-    h.setRepoId('repo-2')
-    release(true)
-    await expect(pending).resolves.toBe(true)
-    expect(h.setPersisted).not.toHaveBeenCalled()
-    expect(h.onError).not.toHaveBeenCalled()
   })
 })

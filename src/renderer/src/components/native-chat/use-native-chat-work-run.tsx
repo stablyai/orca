@@ -5,12 +5,11 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-c
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
-} from '../../../../shared/native-chat-work-run'
+} from '../../../../shared/native-chat/native-chat-work-run'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 
-/** What a row draws under its head when it draws a work run. */
 export type NativeChatWorkRun = {
   /** Every member's tool blocks, in order: the run's one block list. */
   blocks: NativeChatBlock[]
@@ -20,7 +19,6 @@ export type NativeChatWorkRun = {
   revealedDiff: NativeChatDiffReveal | undefined
 }
 
-/** The run a row draws in place of its own calls, when `members` names one. */
 export function useNativeChatWorkRun(
   members: readonly NativeChatMessage[] | undefined,
   {

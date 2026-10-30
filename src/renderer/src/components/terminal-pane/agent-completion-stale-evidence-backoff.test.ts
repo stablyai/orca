@@ -1,14 +1,4 @@
-// The second consumer of the capture budget, at the point where a user feels it.
-//
-// A whole-machine `ps` costs seconds on a large or loaded host: 2.5-9.0s on an idle 2,002-process
-// laptop, 4.0-18.6s at load 46. Publishing that as a truthful-but-late `live` record does not help
-// this pane. `admitRemoteForegroundEvidence` refuses it, every refusal increments
-// `consecutiveInspectionErrors`, and the poll scheduler's backoff then stretches the cadence to its
-// 10s floor -- so agent-completion detection degrades on exactly the hosts where a capture is
-// slowest, which are the hosts where agents take longest to finish.
-//
-// Giving up on the capture and publishing a prompt `unverifiable` instead costs one poll and
-// nothing else: the record is admitted, so no error is counted.
+// A capture exceeding its budget must publish prompt unverifiable evidence; truthful-but-stale live records trigger retries and degrade completion cadence.
 import { describe, expect, it, vi } from 'vitest'
 import { handleAgentCompletionInspectionResult } from './agent-completion-inspection-result'
 import type { RemoteInspectionState } from './agent-completion-inspection-result'
@@ -115,14 +105,12 @@ describe('agent completion polling under a host capture it cannot use', () => {
   it.each([
     ['at the ceiling', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS, 0],
     ['one step past it', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1, 1]
-  ])('counts %s as %s errors', (_label, capturedAgeMs, errors) => {
+  ])('counts a capture %s toward inspection errors', (_label, capturedAgeMs, errors) => {
     expect(inspect(liveRecord(capturedAgeMs), 0).consecutiveInspectionErrors).toBe(errors)
   })
 
   it('admits a capture that lands inside the evidence budget', () => {
-    // The reason the budget is 1,200ms rather than lower: a capture inside it must still clear the
-    // 2,000ms ceiling once its duration is counted once instead of twice. Under the double count
-    // this same record was refused, because 1,200 + a 1,300ms round trip read as 2,500.
+    // Count capture time once: 1,200ms capture within a 1,300ms round trip fits the 2,000ms evidence ceiling.
     expect(inspect(liveRecord(1_200), 1_300).consecutiveInspectionErrors).toBe(0)
   })
 })

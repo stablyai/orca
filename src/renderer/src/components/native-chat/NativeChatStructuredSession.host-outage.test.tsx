@@ -146,7 +146,6 @@ afterEach(() => {
   })
 })
 
-// The chat's own stream retrying is not the host's outage: with the host up, nothing is said.
 it('adds no host line and no read line to a loaded chat while its host stays connected', () => {
   renderPane()
   act(() => {

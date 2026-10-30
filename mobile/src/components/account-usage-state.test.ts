@@ -90,8 +90,7 @@ describe('hasRenderableUsage', () => {
     expect(hasRenderableUsage(snapshot, 'claude')).toBe(true)
   })
 
-  // The bug: system-default auth has zero managed accounts but real usage data,
-  // and the home screen used to hide it entirely.
+  // System-default auth has no managed accounts but real usage; home must not hide it.
   it('is true with zero managed accounts when active rate-limit data exists (system default)', () => {
     const snapshot = makeSnapshot({
       codexLimits: makeLimits({

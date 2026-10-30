@@ -1,3 +1,4 @@
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-permission-modes-capability'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
@@ -117,5 +118,12 @@ export function hostSupportsNativeChatPermissions(
   return runtimeEnvironmentSupportsCapability(
     owner.environmentId,
     AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY
+  )
+}
+
+export function hostSupportsOwnChatPermissions(owner: AgentLaunchSettingsOwner): Promise<boolean> {
+  return runtimeEnvironmentSupportsCapability(
+    owner.environmentId,
+    AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
   )
 }

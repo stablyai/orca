@@ -13,6 +13,7 @@ import {
   DORMANT_NAMESPACE,
   DORMANT_WORKTREE_ID,
   FOLDER_WORKSPACE,
+  PROJECT_GROUP,
   REPOSITORY,
   dormantState,
   manifest
@@ -23,7 +24,7 @@ import {
   readDataFile,
   testState,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
@@ -83,18 +84,13 @@ describe('orcad migration catalog persistence', () => {
       }
     })
     expect(replay).toEqual(first)
-    expect(restored.getRepos()).toEqual([
-      expect.not.objectContaining({
-        connectionId: expect.anything(),
-        executionHostId: expect.anything()
-      })
-    ])
+    expect(restored.getRepos()).toEqual([expect.objectContaining({ id: 'repo-1' })])
+    expect(restored.getRepos()[0]).not.toHaveProperty('connectionId')
+    expect(restored.getRepos()[0]).not.toHaveProperty('executionHostId')
     expect(restored.getProjectGroups()).toEqual([
-      expect.not.objectContaining({
-        connectionId: expect.anything(),
-        executionHostId: expect.anything()
-      })
+      expect.objectContaining({ id: 'group-1', connectionId: null })
     ])
+    expect(restored.getProjectGroups()[0]).not.toHaveProperty('executionHostId')
     expect(restored.getFolderWorkspaces()).toEqual([
       expect.objectContaining({ id: 'folder-1', comment: 'Keep this note' })
     ])
@@ -127,6 +123,64 @@ describe('orcad migration catalog persistence', () => {
       activeWorkspaceExecutionHostId: 'local',
       activeTabId: 'tab-dormant'
     })
+  })
+
+  // Two desktops on one host each carry their own focus; the second must not be refused for it.
+  it('takes a second desktop onto a host another desktop already moved, keeping the host focus whole', () => {
+    const store = createStore()
+    const first = manifest()
+    commitCatalog(store, manifest({ payload: { ...first.payload, dormantState: dormantState() } }))
+    // The host names only a project; the optional focus fields stay unset.
+    const {
+      activeWorkspaceKey: _key,
+      activeWorkspaceExecutionHostId: _host,
+      ...hostSession
+    } = store.getWorkspaceSession()
+    store.setWorkspaceSession({
+      ...hostSession,
+      activeRepoId: REPOSITORY.id,
+      activeWorktreeId: null,
+      activeTabId: null
+    })
+
+    const secondRepo = { ...REPOSITORY, id: 'repo-2', path: '/srv/repo-2' }
+    const secondWorktree = `${secondRepo.id}::/srv/repo-2`
+    const second = manifest({
+      migrationId: 'migration-second-desktop',
+      source: { sshTargetId: 'ssh-prod-b', sshTargetGeneration: 1, targetLabel: 'Production' },
+      payload: {
+        repositories: [secondRepo],
+        projectGroups: [PROJECT_GROUP],
+        folderWorkspaces: [],
+        dormantState: {
+          version: 1,
+          worktreeMeta: [],
+          worktreeLineage: [],
+          workspaceLineage: [],
+          sparsePresets: [],
+          retiredWorktreeNames: [],
+          retiredWorktreeNamespaces: [],
+          workspaceSession: {
+            ...getDefaultWorkspaceSession(),
+            activeRepoId: secondRepo.id,
+            activeWorktreeId: secondWorktree,
+            activeWorkspaceKey: worktreeWorkspaceKey(secondWorktree),
+            activeWorkspaceExecutionHostId: 'local'
+          }
+        }
+      }
+    })
+
+    expect(commitCatalog(store, second)).toMatchObject({ state: 'committed' })
+    expect(store.getRepos().map((repo) => repo.id)).toEqual([REPOSITORY.id, secondRepo.id])
+    const focus = store.getWorkspaceSession()
+    expect(focus).toMatchObject({
+      activeRepoId: REPOSITORY.id,
+      activeWorktreeId: null,
+      activeTabId: null
+    })
+    expect(focus.activeWorkspaceKey ?? null).toBeNull()
+    expect(focus.activeWorkspaceExecutionHostId ?? null).toBeNull()
   })
 
   it('stages durably without publishing rows, then commits catalog and receipt together', async () => {
@@ -416,7 +470,7 @@ describe('orcad migration catalog persistence', () => {
     expect(store.getRepos()).toHaveLength(1)
   })
 
-  it('requires a durable stage before commit and bounds concurrent dormant catalogs', () => {
+  it('requires a stage before commit and bounds concurrent dormant catalogs', () => {
     const store = createStore()
     const input = manifest()
     expect(() => store.commitStagedOrcadMigrationCatalog(input)).toThrow(

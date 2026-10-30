@@ -23,26 +23,27 @@ vi.mock('electron', () => ({
 describe('Hermes captured hook readiness', () => {
   const captured = readFileSync(join(__dirname, '__fixtures__', 'hermes-tui-ready.txt'), 'utf8')
 
-  /** The real payload Orca's managed Hermes plugin produces for `eventName`, wired through the
-   *  same normalizer the hook relay uses — so a regression in the event mapping fails here too,
-   *  not only in the provider's own unit test. */
+  /** Run managed Hermes payloads through the real normalizer so event-mapping regressions fail at this runtime boundary too. */
   const status = (eventName: string, payload: Record<string, unknown> = {}): string => {
     const parsed = normalizeHermesEvent(createHookListenerState(), eventName, '', 'pane-1', payload)
     expect(parsed, `hermes plugin event ${eventName} must normalize to a status`).not.toBeNull()
     return `\x1b]9999;${JSON.stringify(parsed)}\x07`
   }
 
-  const readyPane = async () =>
-    createTranscriptPane({
+  const readyPane = async () => {
+    const pane = await createTranscriptPane({
       paneTitle: 'Hermes Agent',
       foregroundProcess: 'hermes',
       launchAgent: 'hermes',
       size: { cols: 120, rows: 31 },
       data: captured
     })
+    await pane.runtime.readTerminal(pane.handle, { screen: true })
+    return pane
+  }
 
   describe('Hermes TUI readiness from a captured PTY', () => {
-    it('settles tui-idle on the session-boundary row a freshly launched Hermes emits', async () => {
+    it('settles tui-idle on a ready composer after the session-boundary hook', async () => {
       const { runtime, handle } = await readyPane()
       // What Orca's own managed plugin sends for `on_session_start`.
       runtime.onPtyData(
@@ -55,7 +56,7 @@ describe('Hermes captured hook readiness', () => {
       await expect(
         runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_000 })
       ).resolves.toMatchObject({ satisfied: true })
-      // The boundary row is tier-1 evidence, so no pane's screen is serialized to settle it.
+      // The retained screen decides without a provider screen round trip.
       expect(read.mock.calls.filter(([, options]) => options?.screen === true)).toEqual([])
     }, 5_000)
 
@@ -102,8 +103,13 @@ describe('Hermes captured hook readiness', () => {
       ).rejects.toThrow('timeout')
     }, 3_000)
 
-    it('does not settle on a turn-end done row, only on a session boundary', async () => {
-      const { runtime, handle } = await readyPane()
+    it('does not settle on a turn-end done row without a ready screen', async () => {
+      const { runtime, handle } = await createTranscriptPane({
+        paneTitle: 'Hermes Agent',
+        foregroundProcess: 'hermes',
+        launchAgent: 'hermes',
+        data: ''
+      })
       // `post_llm_call` lands `done` without the boundary flag; the #6011 rule still applies.
       runtime.onPtyData(
         TRANSCRIPT_PANE_PTY_ID,
@@ -320,8 +326,7 @@ describe('Canonical hook status readiness', () => {
       ).toBe('timeout')
     })
 
-    // Both write funnels record input (terminal-run-facts-input.test.ts), the user's keys included:
-    // typing `pi` to restart the agent in the same shell must not read the old process's done.
+    // Input starts a possible new turn, including typed agent restarts; prior done hooks cannot settle it.
     it.each([
       ['a prompt Orca sent', 'next task\r'],
       ['the user restarting the agent in the same shell', 'pi\r']
@@ -371,8 +376,7 @@ describe('Canonical hook status readiness', () => {
       ).toBe('ready')
     })
 
-    // Why: Codex before its Interrupt hook sends nothing for an Esc mid-turn, so only its done
-    // decides; a working row leaves its title and screen rules to decide.
+    // Before Codex Interrupt hooks, Esc posts no update; trust done only and leave working to screen rules.
     it('settles Codex on its done, and leaves a working row to its screen rules', async () => {
       const codex = { launchAgent: 'codex' as const, data: CODEX_BUSY_SCREEN }
       expect(await waitOutcome({ ...codex, rows: () => [row({ agentType: 'codex' })] })).toBe(

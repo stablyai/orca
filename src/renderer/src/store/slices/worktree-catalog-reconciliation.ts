@@ -2,13 +2,7 @@ import { structuralValuesEqualIgnoringUndefined } from '../../../../shared/struc
 
 type CatalogRow = { id: string }
 
-// NOTHING HITS THIS TODAY: both callers key on ids that are unique by
-// construction, so buckets stay at 1-3. It only bounds the damage if that ever
-// changes — a same-id bucket costs one deep compare per candidate, so an
-// unbounded one is O(k^2). A cap beats an index keyed on a second walk that
-// would have to stay in step with structuralValuesEqualIgnoringUndefined, and
-// reuse is only an optimization: dropping a match past the window costs object
-// identity, never correctness.
+// Cap duplicate-ID scans to avoid O(k²) growth if normally tiny buckets expand; missed reuse loses identity only, so no second structural index is needed.
 const MAX_DUPLICATE_ID_SCAN = 8
 
 export function reuseEqualCatalogRows<T extends CatalogRow>(

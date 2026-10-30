@@ -21,7 +21,6 @@ import {
   REMOTE_RUNTIME_INPUT_RESEND_BACKOFF_MS
 } from './remote-runtime-input-journal'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -216,11 +215,25 @@ describe('remote pane input across a silent outage', () => {
     transport.destroy?.()
   })
 
-  it('names an input session and negotiates acks on subscribe', async () => {
-    const { transport } = await connectPane({ inputAck: 1 })
+  it('preserves the acknowledged input session across reconnects', async () => {
+    const { transport, streamId } = await connectPane({ inputAck: 1 })
     const payload = latestSubscribePayload()
     expect(payload.capabilities).toMatchObject({ inputAck: 1 })
     expect(payload.inputSessionId).toEqual(expect.any(String))
+    expect(payload.inputSessionId?.length).toBeGreaterThan(0)
+    const first = transport.sendInputAccepted?.('before\r', 'driving')
+    await vi.waitFor(() => expect(sentInputs()).toHaveLength(1))
+    emitInputAck(streamId, sentInputs()[0].seq)
+    await expect(first).resolves.toBe(true)
+
+    subscriptionCallbacks?.onClose?.()
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await reconnect({ inputAck: 1 }, 2)
+    expect(latestSubscribePayload().inputSessionId).toBe(payload.inputSessionId)
+    const second = transport.sendInputAccepted?.('after\r', 'driving')
+    await vi.waitFor(() => expect(sentInputs(2)).toHaveLength(1))
+    emitInputAck(latestSubscribePayload().streamId, sentInputs(2)[0].seq)
+    await expect(second).resolves.toBe(true)
     transport.destroy?.()
   })
 

@@ -1,21 +1,10 @@
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 
-// Why: xterm's EscapeSequenceParser invokes custom CSI/OSC handlers
-// synchronously inside WriteBuffer._innerWrite, which has no try/catch. A
-// handler throw skips the loop's tail re-schedule, and write() only re-arms
-// on an EMPTY buffer — one throw permanently freezes the pane (output stops;
-// a pending replay guard never releases and silently eats keystrokes).
-// Verified against vendored xterm 6.1.0-beta.287 in
-// xterm-write-buffer-stall.repro.test.ts. Same escape class as
-// terminal-link-provider-guard.ts, applied to parser handlers.
+// Custom CSI/OSC throws escape xterm’s write loop, skip rescheduling and permanently freeze a nonempty buffer, latching replay/input guards (xterm-write-buffer-stall.repro.test.ts).
 const MAX_REPORTS_PER_HANDLER = 5
 const reportCountsByHandler = new Map<string, number>()
 
-/**
- * Wrap a custom parser handler so a synchronous throw is reported and
- * degraded to "not handled" (xterm falls through to the previous/default
- * handler) instead of wedging the terminal's write pipeline.
- */
+/** Report synchronous handler throws and fall through to prior/default parsing instead of wedging the write pipeline. */
 export function guardParserHandler<HandlerArgs extends unknown[]>(
   handlerName: string,
   handler: (...args: HandlerArgs) => boolean

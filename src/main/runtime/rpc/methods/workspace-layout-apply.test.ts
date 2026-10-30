@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { LayoutApplyOutcome } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { RuntimeStore } from '../../runtime-store-contract'
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { LAYOUT_APPLY_METHODS } from './workspace-layout'
+import { ALL_RPC_METHODS } from './index'
+import { partialRuntimeStore, type PartialRuntimeStore } from '../../runtime-store-partial-fixture'
+
+// Pin a window-owned build even under `ORCA_LAYOUT_OWNER=main`, so the default registry omits layout commands.
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const frozen = vi.hoisted(() => ({ workspaces: new Set<string>() }))
 vi.mock(
@@ -23,15 +32,6 @@ const SPLIT = {
   leafId: 'leaf-1',
   direction: 'vertical'
 } as const
-
-async function registeredMethods(layoutOwnerIsMain: boolean) {
-  vi.resetModules()
-  vi.doMock('../../../../shared/layout-owner-switch', () => ({
-    ORCA_LAYOUT_OWNER_IS_MAIN: layoutOwnerIsMain
-  }))
-  const { ALL_RPC_METHODS } = await import('./index')
-  return eraseRpcMethods(ALL_RPC_METHODS)
-}
 
 function sessionListing(tabId: string): WorkspaceSessionState {
   return {
@@ -56,38 +56,45 @@ function sessionListing(tabId: string): WorkspaceSessionState {
   }
 }
 
-function runtimeHolding(hostId: string) {
-  const applyLayoutCommand = vi.fn(async () => ({ ok: true, result: { leafId: 'minted' } }))
+function runtimeHolding(hostId: ExecutionHostId) {
+  const applyLayoutCommand = vi.fn(async (): Promise<LayoutApplyOutcome> => ({
+    ok: true,
+    result: { leafId: 'minted' }
+  }))
   const applyTabRenames = vi.fn(async () => [])
   const empty: WorkspaceSessionState = { ...sessionListing('other'), tabsByWorktree: {} }
-  const store = {
+  const store: PartialRuntimeStore = {
     getRepo: () => undefined,
     getWorkspaceSessionHostIds: () => ['local', hostId],
     getWorkspaceSession: (host: string) => (host === hostId ? sessionListing('tab-1') : empty),
     applyLayoutCommand,
     applyTabRenames
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the apply path reads only these store methods.
-  return { runtime: new OrcaRuntimeService(store as never), applyLayoutCommand, applyTabRenames }
+  return {
+    runtime: new OrcaRuntimeService(partialRuntimeStore(store)),
+    applyLayoutCommand,
+    applyTabRenames
+  }
 }
 
 afterEach(() => {
   frozen.workspaces.clear()
-  vi.doUnmock('../../../../shared/layout-owner-switch')
-  vi.resetModules()
 })
 
 describe('layout.apply', () => {
-  it('is not registered in a window-owned build, and never advertised or open to phones', async () => {
-    const methods = await registeredMethods(false)
-
-    expect(methods.some((method) => method.name === 'layout.apply')).toBe(false)
+  it('is not registered in a window-owned build, and never advertised or open to phones', () => {
+    const names = ALL_RPC_METHODS.map((method) => method.name)
+    for (const name of ['layout.apply', 'layout.reopenHeldPanes', 'layout.reportView']) {
+      expect(names, name).not.toContain(name)
+    }
     expect(RUNTIME_CAPABILITIES.some((capability) => capability.startsWith('layout'))).toBe(false)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('layout.apply')).toBe(false)
   })
 
-  it('is registered in a layout-owner build; a split keeps only a valid window pane id', async () => {
-    const apply = (await registeredMethods(true)).find((method) => method.name === 'layout.apply')
+  it('keeps only a valid window pane id on a split', async () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
     if (!apply || isStreamingMethod(apply)) {
       throw new Error('layout.apply is not a request method')
     }
@@ -439,7 +446,9 @@ describe('layout.apply', () => {
   })
 
   it('takes an open into a new split under the window’s group id, on every open kind', async () => {
-    const apply = (await registeredMethods(true)).find((method) => method.name === 'layout.apply')
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
     const parse = (command: Record<string, unknown>) => apply?.params?.safeParse({ command })
     const split = { besideGroupId: 'g1', direction: 'right' }
     const opens = [
@@ -647,7 +656,6 @@ describe('layout.apply', () => {
     expect(parses({ kind: 'generated', renames: [] })).toBe(false)
     expect(parses({ kind: 'custom', renames: [titled] })).toBe(false)
     expect(parses({ kind: 'generated', renames: [{ ...titled, workspace: '' }] })).toBe(false)
-    // A title that replaces the tab's first one reaches main as such.
     const replacing = { ...titled, replaceExisting: true }
     expect(
       apply?.params?.safeParse({
@@ -660,11 +668,11 @@ describe('layout.apply', () => {
   })
 
   it('gives each title in its tab’s partition in one write, naming a paired server’s tab', async () => {
-    const applyTabRenames = vi.fn(async (batches: { renames: { tabId: string }[] }[]) => [
+    const applyTabRenames = vi.fn<NonNullable<RuntimeStore['applyTabRenames']>>(async (batches) => [
       { rename: batches[0]!.renames[0]!, code: 'tab_not_found' }
     ])
     const hosts: Record<string, string> = { 'tab-1': 'local', 'tab-2': 'ssh:target-1' }
-    const store = {
+    const store: PartialRuntimeStore = {
       getRepo: () => undefined,
       getWorkspaceSessionHostIds: () => ['local', 'ssh:target-1', 'runtime:env-1'],
       getWorkspaceSession: (host: string) => ({
@@ -673,13 +681,23 @@ describe('layout.apply', () => {
         unifiedTabs: {
           [WORKTREE]: Object.entries({ ...hosts, 'tab-3': 'runtime:env-1' })
             .filter(([, owner]) => owner === host)
-            .map(([id]) => ({ id, entityId: id, contentType: 'terminal' }))
+            .map(([id]): Tab => ({
+              id,
+              entityId: id,
+              groupId: 'group-1',
+              worktreeId: WORKTREE,
+              contentType: 'terminal',
+              label: id,
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 0
+            }))
         }
       }),
       applyTabRenames
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the apply path reads only these store methods.
-    const runtime = new OrcaRuntimeService(store as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
     const titled = (tabId: string) => ({ workspace: WORKTREE, tabId, title: `Title ${tabId}` })
 
     const reply = await runtime.applyLayoutCommand({
@@ -746,7 +764,6 @@ describe('layout.apply', () => {
     await expect(runtime.applyLayoutCommand(SPLIT)).resolves.toEqual({
       ok: true,
       result: { leafId: 'minted' },
-      // No one subscribes, so the stream has sent nothing.
       frameSeq: 0
     })
     expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'])
@@ -754,24 +771,23 @@ describe('layout.apply', () => {
 
   it('names the stream position of the frame its write produced, sent before the reply', async () => {
     let session = sessionListing('tab-1')
-    const written = new Set<(hostId: string | null) => void>()
+    const written = new Set<(hostId: ExecutionHostId | null) => void>()
     const order: string[] = []
-    const store = {
+    const store: PartialRuntimeStore = {
       getRepo: () => undefined,
       getWorkspaceSessionHostIds: () => ['local'],
       getWorkspaceSession: () => session,
-      onWorkspaceSessionWritten: (listener: (hostId: string | null) => void) => {
+      onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
         written.add(listener)
         return () => written.delete(listener)
       },
-      applyLayoutCommand: vi.fn(async () => {
+      applyLayoutCommand: vi.fn(async (): Promise<LayoutApplyOutcome> => {
         session = { ...session, activeTabId: null, tabsByWorktree: {} }
         written.forEach((listener) => listener('local'))
         return { ok: true, result: { leafId: 'minted' } }
       })
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the apply and stream paths read only these store methods.
-    const runtime = new OrcaRuntimeService(store as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
     const sent: number[] = []
     const { seq } = runtime.subscribeWorkspaceLayouts((event) => {
       order.push('frame')

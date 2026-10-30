@@ -21,7 +21,7 @@ afterEach(() => {
 })
 
 describe('scope identity at the search choke point', () => {
-  it('narrows to the host’s own paths and acknowledges the scope it resolved', async () => {
+  it('forwards the host’s resolved paths to the service', async () => {
     const service = fakeSearchService()
     setSessionSearchService(service)
     installSessionSearchScopeCatalogSource(() => CATALOG)

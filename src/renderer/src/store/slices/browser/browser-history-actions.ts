@@ -56,8 +56,7 @@ export function createBrowserHistoryActions(
               ...(bump ? { lastVisitedAt: now, visitCount: existing.visitCount + 1 } : {})
             }
           : null
-        // A repeated title-updated event from a live preview changes nothing; hand back the same
-        // state so no subscriber re-renders. Over the cap the old path still had trimming to do.
+        // Repeated preview title events return same state unless over-cap trimming still needs work.
         if (
           existing &&
           updated &&

@@ -17,7 +17,9 @@ describe('isCodexAuthError', () => {
 describe('extractCodexAuthError', () => {
   it('returns the first matching auth line', () => {
     expect(
-      extractCodexAuthError('startup log\nERROR: not logged in. Please sign in again.\nmore log')
+      extractCodexAuthError(
+        'startup log\nERROR: not logged in. Please sign in again.\nplease reauthenticate\nmore log'
+      )
     ).toBe('ERROR: not logged in. Please sign in again.')
   })
 

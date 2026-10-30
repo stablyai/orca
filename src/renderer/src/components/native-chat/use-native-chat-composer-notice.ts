@@ -46,8 +46,7 @@ export function useNativeChatComposerNotice(
   return { notices, setNotice }
 }
 
-/** A chat's last send or command error: shown in the card until dismissed or the next send clears
- *  it. A command's refusal names what the chat shows it waiting on, so it goes once that is gone. */
+/** Retain send/command errors until dismissed or replaced; drop refusals when their visible blocking cause ends. */
 export function useNativeChatComposerError(causes: StructuredConversationCommandCauses): {
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
   reportComposerError: NativeChatStructuredComposerTransport['onError']

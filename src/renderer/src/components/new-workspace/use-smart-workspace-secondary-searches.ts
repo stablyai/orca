@@ -240,8 +240,6 @@ export function useSmartWorkspaceSecondarySearches({
     return () => {
       stale = true
     }
-    // Why: list/search are stable store methods; unrelated store writes must not refetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     disabled,
     linearConnected,
@@ -250,6 +248,9 @@ export function useSmartWorkspaceSecondarySearches({
     linearSourceContext,
     linearWorkspaceIdOverride,
     linearUrlIntent,
+    setLinearIssues,
+    setLinearLoading,
+    setLinearReadError,
     setSettledLinearUrlQuery,
     shouldQueryLinear
   ])

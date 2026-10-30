@@ -1,6 +1,4 @@
-// Markdown links come from untrusted comment/PR bodies, so the scheme is gated to a
-// safe allowlist before opening — never hand an arbitrary scheme (javascript:, file:,
-// app deep links) to the OS URL handler.
+// Allowlist untrusted Markdown URL schemes before OS dispatch; never permit javascript/file/app-deep-link handlers.
 const ALLOWED_SCHEMES = ['http:', 'https:', 'mailto:']
 
 export function isAllowedMarkdownLinkUrl(url: string): boolean {

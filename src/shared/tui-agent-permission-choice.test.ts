@@ -1,6 +1,12 @@
-import * as permissionArgs from './agent-permission-args'
-import { measureSettingsWork, expectSettingsWorkScale } from './global-settings-test-fixture'
 import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
+import * as startupShell from './tui-agent-startup-shell'
+import * as launchCompiler from './agent-session-option-launch'
+import * as reconciliation from './agent-choice-reconciliation'
+import { projectAgentLaunchProfile } from './agent-launch-profile'
+import { getDefaultSettings } from './constants'
+import { legacyChatPermissionWrite } from '../main/persistence/applying-settings/legacy-chat-permission-write'
+import { measureSettingsWork, expectSettingsWorkScale } from './global-settings-test-fixture'
+
 import {
   wholeAgentEnvironmentUpdates,
   legacyLaunchTextUpdates
@@ -18,8 +24,16 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from './tui-agent-launch-defaults'
-import { applyAllAgentsPermission, resolveAgentPermission } from './tui-agent-permission-choice'
-import { agentArgsSetPermission, migrateAgentPermissionChoice } from './tui-agent-permission-lift'
+import {
+  agentPermissionArgs,
+  applyAllAgentsPermission,
+  resolveAgentPermission
+} from './tui-agent-permission-choice'
+import {
+  agentArgsSetPermission,
+  liftAgentPermissionArgs,
+  migrateAgentPermissionChoice
+} from './tui-agent-permission-lift'
 
 const legacy = (
   args: Record<string, string>,
@@ -30,26 +44,14 @@ const legacy = (
 })
 
 describe('one-time move of permission flags out of Arguments', () => {
-  it('imports Grok modes from recorded 1.0.62 help without taking ownership of other modes', () => {
-    // Installed 1.0.62 (1474f9cbdd91) --help, permission-mode excerpt; not captured argv.
-    const recordedHelp = `      --permission-mode <MODE>
-          Permission mode
-
-          [possible values: default, acceptEdits, auto, dontAsk, bypassPermissions, plan]`
-    const option = recordedHelp.trim().split(' ')[0]
-    const modes = recordedHelp.match(/possible values: ([^\]]+)/)?.[1].split(', ')
-    expect(modes).toBeDefined()
-    for (const mode of modes ?? []) {
-      const text = `${option} ${mode} --model grok-code-fast-1`
-      const migrated = migrateAgentPermissionChoice({ agentDefaultArgs: { grok: text } })
-      const choice =
-        mode === 'default' ? 'ask' : mode === 'bypassPermissions' ? 'full-access' : 'own'
-      expect(resolveAgentPermission('grok', migrated).choice).toBe(choice)
-      expect(migrated.agentDefaultArgs.grok).toBe(
-        choice === 'own' ? text : '--model grok-code-fast-1'
-      )
-      expect(resolveTuiAgentLaunchArgs('grok', migrated)).toBe(text)
-    }
+  it('lifts the canonical read-only Codex Ask and uses it for stored Ask choices', () => {
+    const recipe = '-a on-request -s read-only -c approvals_reviewer=user'
+    expect(agentPermissionArgs('codex', 'ask')).toBe(recipe)
+    expect(liftAgentPermissionArgs('codex', `${recipe} --search`)).toEqual({
+      choice: 'ask',
+      args: '--search'
+    })
+    expect(resolveTuiAgentLaunchArgs('codex', { agentPermissionDefault: 'ask' })).toBe(recipe)
   })
 
   it('turns saved shapes into a stored choice and leaves the rest of the text', () => {
@@ -106,6 +108,31 @@ describe('one-time move of permission flags out of Arguments', () => {
 })
 
 describe('terminal launch composes the stored choice', () => {
+  it.each([
+    ['claude', '--permission-mode default', '--dangerously-skip-permissions'],
+    [
+      'codex',
+      '-a on-request -s read-only -c approvals_reviewer=user',
+      '--dangerously-bypass-approvals-and-sandbox'
+    ]
+  ] as const)('%s uses explicit permission before legacy fallback', (agent, ask, bypass) => {
+    for (const permissionMode of ['ask', 'own'] as const) {
+      const recipe = permissionMode === 'ask' ? ask : ''
+      for (const userArgs of [undefined, '', '--search', bypass]) {
+        const expected = userArgs === bypass ? bypass : [recipe, userArgs].filter(Boolean).join(' ')
+        const settings = userArgs === undefined ? {} : { agentDefaultArgs: { [agent]: userArgs } }
+        const input = { target: 'terminal' as const, userArgs, choices: { permissionMode } }
+        const projected = projectAgentLaunchProfile(agent, {}, input)
+        expect.soft(resolveTuiAgentLaunchArgs(agent, settings, permissionMode)).toBe(expected)
+        expect.soft(projected.args).toBe(expected)
+      }
+    }
+    expect(resolveTuiAgentLaunchArgs(agent, {})).toBe(bypass)
+    const choices = { options: { effort: 'high' } }
+    const optionOnly = projectAgentLaunchProfile(agent, {}, { target: 'terminal', choices })
+    expect(optionOnly.args).toContain(bypass)
+  })
+
   const typed = {
     agentPermissionDefault: 'full-access',
     agentPermissionOverrides: { claude: 'ask', codex: 'own' },
@@ -123,14 +150,6 @@ describe('terminal launch composes the stored choice', () => {
     expect(resolveTuiAgentLaunchArgs('gemini', { agentPermissionDefault: 'ask' })).toBe('')
   })
 
-  it('passes an older host’s published text through unchanged', () => {
-    expect(
-      resolveTuiAgentLaunchArgs('claude', {
-        agentDefaultArgs: { claude: '--permission-mode auto' }
-      })
-    ).toBe('--permission-mode auto')
-  })
-
   it('Auto for all agents keeps the others on what they had', () => {
     const next = applyAllAgentsPermission({ agentPermissionDefault: 'full-access' }, 'auto')
     expect(resolveAgentPermission('claude', next).choice).toBe('auto')
@@ -138,17 +157,50 @@ describe('terminal launch composes the stored choice', () => {
   })
 })
 
+it.each(['typed', 'legacy', 'chat'] as const)(
+  'keeps migration-owned and hand-set choices across global writes (%s)',
+  (path) => {
+    const settings = {
+      ...getDefaultSettings('/synthetic'),
+      ...migrateAgentPermissionChoice(legacy({ gemini: '', grok: '' }))
+    }
+    settings.agentPermissionOverrides.codex = 'ask'
+    const original = { ...settings.agentPermissionOverrides }
+    expect(Object.values(original).filter((value) => value === 'own').length).toBeGreaterThan(1)
+    for (const choice of ['ask', 'auto', 'auto', 'full-access'] as const) {
+      const mode = choice === 'ask' ? 'manual' : choice === 'auto' ? 'auto' : 'yolo'
+      const before = { ...settings.agentPermissionOverrides }
+      Object.assign(
+        settings,
+        path === 'chat'
+          ? legacyChatPermissionWrite(settings, { nativeChatPermissionMode: choice })
+          : agentLaunchSettingsMutationUpdates(
+              settings,
+              path === 'legacy' ? { type: 'permissions', mode } : { type: 'permission', choice },
+              'linux'
+            )
+      )
+      expect(settings.agentPermissionOverrides).toMatchObject(original)
+      expect(settings.agentPermissionOverrides).toMatchObject(before)
+    }
+    expect(
+      applyAllAgentsPermission({ agentPermissionDefault: 'auto' }, 'auto').agentPermissionOverrides
+    ).toEqual({})
+    expect(() =>
+      agentLaunchSettingsMutationUpdates(
+        settings,
+        { type: 'permission', agent: 'gemini', choice: 'ask' },
+        'linux'
+      )
+    ).toThrow('This agent does not offer that permission')
+  }
+)
+
 describe('older clients against a host with the stored choice', () => {
   const host = {
     ...migrateAgentPermissionChoice(legacy({ codex: '--approve-for-me --search' })),
     nativeChatPermissionMode: 'ask'
   } satisfies AgentLaunchSettingsSource
-
-  it('see Arguments with the flag included', () => {
-    const projected = projectAgentLaunchSettings(host)
-    expect(projected.agentDefaultArgs.codex).toBe('--approve-for-me --search')
-    expect(projected.agentPermission?.userArgs.codex).toBe('--search')
-  })
 
   it('deleting the published flag means the agent’s own settings; another flag becomes the choice', () => {
     const deleted = agentLaunchSettingsMutationUpdates(
@@ -174,12 +226,6 @@ describe('older clients against a host with the stored choice', () => {
       'linux'
     )
     expect(resolveTuiAgentLaunchArgs('claude', { ...host, ...manual })).toBe('')
-  })
-
-  it('new chats start in the stored choice; agents on their own settings keep the Chat default', () => {
-    expect(newChatPermissionModeForSettings('codex', host)).toBe('auto')
-    const own = { ...host, agentPermissionOverrides: { codex: 'own' as const } }
-    expect(newChatPermissionModeForSettings('codex', own)).toBe('ask')
   })
 })
 
@@ -376,21 +422,6 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     expect(projectAgentLaunchSettings(loaded).agentDefaultArgs[agent]).toBe(launch)
     expect(newChatPermissionModeForSettings(agent, loaded)).toBe(chat)
     expect(agentArgsSetPermission(agent, value)).toBe(carrier)
-  })
-
-  it('keeps a Gemini mode from recorded 0.63.0 help user-owned through import and composition', () => {
-    // Installed 0.63.0 --help, ticket 1916: syntax evidence, without a provider turn.
-    const recordedHelp = `      --approval-mode             Set the approval mode: default (prompt for approval), auto_edit (auto-approve edit tools), yolo (auto-approve all tools), plan (read-only mode)  [string] [choices: "default", "auto_edit", "yolo", "plan"]`
-    const option = recordedHelp.trim().split(/\s+/)[0]
-    const mode = recordedHelp.match(/choices: "([^"]+)"/)?.[1]
-    const text = `${option} ${mode}`
-    expect(text).toBe('--approval-mode default')
-    const imported = migrateAgentPermissionChoice({ agentDefaultArgs: { gemini: text } })
-    expect(imported.agentDefaultArgs.gemini).toBe(text)
-    expect(resolveAgentPermission('gemini', imported).choice).toBe('own')
-    const full = { ...imported, agentPermissionDefault: 'full-access' as const }
-    expect(resolveAgentPermission('gemini', full).choice).toBe('full-access')
-    expect(resolveTuiAgentLaunchArgs('gemini', full)).toBe(text)
   })
 
   it.each(['--approval-mode auto_edit', '--approval-mode=plan', '-y'])(
@@ -600,19 +631,20 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     })
   })
 
-  it('preserves chat-only migration defaults, then seeds Ask and retains raw choices through Auto', () => {
+  it('migrates agents without terminal flags to own, then retains explicit chat choices through Auto', () => {
     const agents = ['antigravity', 'opencode', 'opencode2', 'omp'] as const
     const upgraded = {
       ...migrateAgentPermissionChoice(legacy({})),
       nativeChatPermissionMode: 'ask' as const
     }
     for (const agent of ['opencode', 'opencode2', 'omp'] as const) {
-      expect(newChatPermissionModeForSettings(agent, upgraded)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, upgraded)).toBe('own')
     }
     const ask = { ...upgraded, ...applyAllAgentsPermission(upgraded, 'ask') }
     for (const agent of agents) {
+      const expected = agent === 'antigravity' ? 'ask' : 'own'
       expect(resolveTuiAgentLaunchArgs(agent, ask)).toBe('')
-      expect(newChatPermissionModeForSettings(agent, ask)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, ask)).toBe(expected)
       const edited = {
         ...ask,
         ...agentLaunchSettingsMutationUpdates(
@@ -621,7 +653,7 @@ describe('permission carrier ownership across save, reload and consumers', () =>
           'linux'
         )
       }
-      expect(newChatPermissionModeForSettings(agent, edited)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, edited)).toBe(expected)
     }
     const own = { ...ask, agentPermissionOverrides: { omp: 'own' as const } }
     const auto = { ...own, ...applyAllAgentsPermission(own, 'auto') }
@@ -633,16 +665,17 @@ describe('permission carrier ownership across save, reload and consumers', () =>
 })
 
 const importWork = { chars: 0, visits: 0 }
-const cut = permissionArgs.permissionRecipeCut
-vi.spyOn(permissionArgs, 'permissionRecipeCut').mockImplementation((agent, text, recipe) => {
-  const { value, work } = measureSettingsWork(() => cut(agent, text, recipe))
+const reconcile = reconciliation.reconcileAgentChoiceArgs
+vi.spyOn(reconciliation, 'reconcileAgentChoiceArgs').mockImplementation((input) => {
+  const { userArgs: text } = input
+  const { value, work } = measureSettingsWork(() => reconcile(input))
   importWork.chars += work.chars
   importWork.visits += work.visits
   if (text.length < 100) {
     return value
   }
   const calls = work.inputs,
-    w = recipe.split(' ').length,
+    w = 8,
     t = text.split(' ').length
   expect(calls.filter((v) => v === text)).toHaveLength(3)
   // Fixed token/span/owner allowance plus native slices and two B construction passes per candidate.
@@ -673,9 +706,71 @@ it.each([false, true])('bounds actual startup/raw resume (%s)', (resume) => {
         providerSession: { key: 'session_id', id: 's' }
       })
     )
-    expect(plan?.launchConfig.agentCommand).toBe(`claude ${raw}`)
+    // Restart records surviving raw pins; the provider restores the generated model seed.
+    expect(plan?.launchConfig.agentCommand).toBe(resume ? 'claude' : `claude ${raw}`)
     expect(plan?.launchCommand).toBe(`claude ${resume ? "'--model' 'opus' '--resume' 's'" : raw}`)
     expect(work.visits).toBeLessThanOrEqual(40 * (2 * n + 1))
     expectSettingsWorkScale(`startup-${resume}`, n, [work.visits])
+  }
+})
+
+it('skips unused full-input projection work but keeps genuine replacement and shell validation', () => {
+  const tokenize = vi.spyOn(startupShell, 'tokenizeStartupCommand')
+  const remove = vi.spyOn(launchCompiler, 'removeOverriddenAgentSessionArgs')
+  const rows: { n: number; tokenizer: number; remover: number }[] = []
+  try {
+    for (const n of [128, 1280]) {
+      const raw = `  ${'--verbose  '.repeat(n)} `
+      tokenize.mockClear()
+      remove.mockClear()
+      expect(
+        resolveTuiAgentLaunchArgs('claude', {
+          agentPermissionDefault: 'own',
+          agentDefaultArgs: { claude: raw }
+        })
+      ).toBe(raw)
+      for (const target of ['terminal', 'structured', 'legacy-permission'] as const) {
+        expect(
+          projectAgentLaunchProfile(
+            'claude',
+            { agentPermissionDefault: 'own' },
+            { target, userArgs: raw }
+          ).args
+        ).toBe(raw)
+      }
+      expect(tokenize).not.toHaveBeenCalled()
+      expect(remove).not.toHaveBeenCalled()
+      rows.push({ n, tokenizer: tokenize.mock.calls.length, remover: remove.mock.calls.length })
+    }
+    expect(
+      projectAgentLaunchProfile(
+        'claude',
+        { agentPermissionDefault: 'own' },
+        {
+          target: 'terminal',
+          userArgs: '--model haiku --verbose',
+          choices: { model: 'opus' }
+        }
+      ).args
+    ).toBe("--model opus '--verbose'")
+    expect(tokenize).toHaveBeenCalled()
+    expect(remove).toHaveBeenCalled()
+    const invalid = "--verbose '"
+    expect(
+      projectAgentLaunchProfile(
+        'claude',
+        {},
+        {
+          target: 'terminal',
+          userArgs: invalid,
+          shell: 'posix',
+          choices: { permissionMode: 'ask' }
+        }
+      ).args
+    ).toBe(invalid)
+    process.stdout.write(`${JSON.stringify({ metric: 'empty-projection', rows })}\n`)
+  } finally {
+    tokenize.mockRestore()
+    remove.mockRestore()
   }
 })

@@ -2,6 +2,7 @@ import type { BrowserPageConversionOrigin } from '../../../../../shared/browser-
 
 export type HtmlDocPreviewProps = {
   previewId: string
+  browserWorkspaceId: string
   filePath: string
   relativePath: string
   worktreeId: string

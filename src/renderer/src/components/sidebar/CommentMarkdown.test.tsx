@@ -16,7 +16,6 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('comment-md-p')
     expect(markup).toContain('role="heading"')
     expect(markup).toContain('aria-level="2"')
-    // Weight-only styling stays the compact default; block flow is opt-in.
     expect(markup).toContain('font-bold')
   })
 
@@ -118,7 +117,6 @@ describe('CommentMarkdown', () => {
   })
 
   it('renders document markdown images with an expand control for the lightbox', () => {
-    // Why: document bodies need a large preview without a provider-specific renderer.
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"

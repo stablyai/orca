@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
-// Shape captured from omp 17.0.5: `approvalMode` is the ambient tools.approvalMode
-// (always-ask | write | yolo), and `reason` is the tool's own override reason.
+// Match OMP 17.0.5: approvalMode is ambient; reason belongs to the tool override.
 const APPROVAL_REQUEST = {
   toolName: 'bash',
   reason: 'Critical pattern detected',

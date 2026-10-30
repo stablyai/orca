@@ -1,13 +1,9 @@
-/**
- * The web half of ruling 5, driven through the real bridge handshake rather than a stubbed client:
- * what the pane reads is what `init` actually carried.
- */
+// Drive web grant negotiation through real init handshake rather than stubbed client (ruling 5).
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Mock unused provider hook re-exports to avoid importing Expo runtime.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,

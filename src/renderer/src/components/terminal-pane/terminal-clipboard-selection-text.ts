@@ -8,8 +8,7 @@ import { stripTerminalSelectionGutter } from '../../../../shared/terminal-select
  */
 export function readTerminalClipboardSelection(terminal: Pick<Terminal, 'getSelection'>): string {
   const selection = terminal.getSelection()
-  // Why `=== false`: profiles saved before the setting existed have no key, and
-  // they should trim like every new profile does.
+  // Missing legacy settings retain the default trimming behavior.
   if (useAppStore.getState().settings?.terminalCopyTrimsGutter === false) {
     return selection
   }

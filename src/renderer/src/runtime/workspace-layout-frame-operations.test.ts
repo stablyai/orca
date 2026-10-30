@@ -1,6 +1,4 @@
-// Main's operations as the window draws them from their records frames (design E2a): each shows
-// from the store's own view, without reading the window's session back, and leaves the store as
-// the full build does (the apply check, installed below).
+// Draw main operations from records frames using store view without session read-back; apply checker requires full-build parity (E2a).
 
 import { NO_HELD_TABS } from '@/store/workspace-layout-frame-held-tabs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -141,7 +139,6 @@ describe('main’s operations drawn record by record', () => {
 
     expect(check.fullBuilt).toEqual([])
     expect(check.workspaceBuilt).toEqual([GIT_KEY])
-    // Presence: the frame changed what the store shows.
     expect(store.getState()).not.toBe(before)
     close()
   })

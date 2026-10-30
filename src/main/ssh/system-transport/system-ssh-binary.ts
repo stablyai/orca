@@ -37,9 +37,6 @@ function findSshOnPath(platform: NodeJS.Platform): string | null {
   return null
 }
 
-/**
- * Find the system ssh binary path. Returns null if not found.
- */
 export function findSystemSsh(): string | null {
   if (process.env.ORCA_SYSTEM_SSH_PATH) {
     return process.env.ORCA_SYSTEM_SSH_PATH

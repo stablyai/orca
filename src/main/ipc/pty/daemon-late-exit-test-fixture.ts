@@ -7,7 +7,7 @@ import {
   waitFor
 } from '../../daemon/daemon-pty-adapter-test-harness'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { setPtyHostBindings, type PtyIpcSurface } from '../pty-host-bindings'
+import { setPtyHostBindings, type PtyIpcSurface } from './pty-host-bindings'
 import { consumeSyntheticKillExit, rememberSyntheticKillExit } from './delivery/exit'
 import { installPtyKillIpcHandler } from './ipc/renderer-kill'
 import { bindProviderListeners } from './provider/bind-listeners'
@@ -164,8 +164,8 @@ export async function startLateExitHarness() {
     },
     id: PTY_ID,
     deliverProviderExit: (event: { id: string; code: number; incarnationId?: string }) => {
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: exit listeners may unsubscribe while receiving the event.
-      for (const listener of [...harness.adapter['exitListeners']]) {
+      // Why: exit listeners may unsubscribe while receiving the event.
+      for (const listener of Array.from(harness.adapter['exitListeners'])) {
         listener(event)
       }
     },

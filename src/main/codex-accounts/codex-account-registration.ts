@@ -1,4 +1,11 @@
 import { randomUUID } from 'node:crypto'
+import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import {
+  WINDOWS_RM_MAX_RETRIES,
+  WINDOWS_RM_RETRY_DELAY_MS
+} from '../../shared/windows-transient-lock-removal'
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState
@@ -37,6 +44,17 @@ type CodexAccountRegistrationDependencies = {
   managedHomePaths: CodexManagedHomePath
   managedHomes: CodexManagedHomeLifecycle
   login: (managedHomePath: string) => Promise<void>
+}
+
+const REAUTH_STAGING_DIR_NAME = '.orca-reauth-login'
+
+function removeStagingHome(stagingHomePath: string): void {
+  rmSync(stagingHomePath, {
+    recursive: true,
+    force: true,
+    maxRetries: WINDOWS_RM_MAX_RETRIES,
+    retryDelay: WINDOWS_RM_RETRY_DELAY_MS
+  })
 }
 
 export class CodexAccountRegistration {
@@ -93,7 +111,7 @@ export class CodexAccountRegistration {
       options?.activateIfSelectionWasEmpty === true && selectedAccountId === null
 
     this.dependencies.configMirror.safeSyncIntoManagedHome(managedHomePath, undefined, account.id)
-    await this.dependencies.login(managedHomePath)
+    await this.loginThroughStagingHome(managedHomePath, account.id)
     const identity = this.dependencies.readIdentityFromHome(managedHomePath, account.id)
     if (!identity.email) {
       throw new Error('Codex login completed, but Orca could not resolve the account email.')
@@ -132,6 +150,31 @@ export class CodexAccountRegistration {
     // Reauthentication can change identity, so refresh quota without reusing the old account cache.
     this.startQuotaRefresh(undefined, accountTarget)
     return this.dependencies.selection.snapshot()
+  }
+
+  // `codex login` revokes and deletes the home's current auth first, so only a finished login may replace it (#10795).
+  private async loginThroughStagingHome(managedHomePath: string, accountId: string): Promise<void> {
+    const stagingHomePath = join(managedHomePath, REAUTH_STAGING_DIR_NAME)
+    removeStagingHome(stagingHomePath)
+    mkdirSync(stagingHomePath, { recursive: true })
+    try {
+      // Carry forced-workspace and credential-store settings into the login.
+      copyFileSync(join(managedHomePath, 'config.toml'), join(stagingHomePath, 'config.toml'))
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
+    }
+    try {
+      await this.dependencies.login(stagingHomePath)
+      this.dependencies.managedHomes.importAuthFromHome(stagingHomePath, managedHomePath, accountId)
+    } finally {
+      try {
+        removeStagingHome(stagingHomePath)
+      } catch (error) {
+        console.warn('[codex-accounts] Failed to remove reauthentication staging home:', error)
+      }
+    }
   }
 
   private prepareManagedHomeForLogin(managedHomePath: string, accountId: string): void {

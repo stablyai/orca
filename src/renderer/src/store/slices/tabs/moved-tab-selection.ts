@@ -1,5 +1,4 @@
-// The user's move selects the moved tab in the store update whose frame shows the move (L120),
-// not on main's later reply, which a newer drag may have overtaken.
+// Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
 import type { AppState } from '../../types'
 import {

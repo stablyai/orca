@@ -3,9 +3,9 @@ import {
   adapterFor,
   fakeClaude,
   identityFor,
-  claudeOpened,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 
 it("applies a resumed conversation's saved Fast off before message input beside the Arguments' settings", async () => {
   let fastMode = true

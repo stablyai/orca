@@ -1,4 +1,3 @@
-/** Every way a staged handle ends, and every refusal a page gets for one that has. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readShellRefusalCode } from './bridge-host-errors'
 import {
@@ -60,7 +59,6 @@ describe('minting handles', () => {
     registry.mint(Array.from({ length: BRIDGE_MEDIA_MAX_LIVE_HANDLES }, (_, i) => staged(i)))
     const extra = staged(99)
     expect(refusalOf(() => registry.mint([extra]))).toBe('native_media_handle_cap')
-    // Refused whole: the file this pick staged is discarded, not left in the cache unreferenced.
     expect(deleted).toEqual([extra.uri])
     expect(registry.liveCount()).toBe(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
   })
@@ -109,8 +107,7 @@ describe('reading a handle', () => {
   })
 
   it('never hands back more than one chunk, whatever length it was asked for', () => {
-    // The wire cannot ask this — the params schema refuses it first — and the registry answers it
-    // anyway, because what it will hand a reader is its own promise and not the schema's.
+    // Call the registry directly to prove its own chunk bound even when no wire schema runs.
     const [item] = registry.mint([staged(1, BRIDGE_MEDIA_READ_MAX_BYTES * 3)])
     const range = registry.read(item?.handle ?? '', 0, BRIDGE_MEDIA_READ_MAX_BYTES * 3)
     expect(range.end).toBe(BRIDGE_MEDIA_READ_MAX_BYTES)
@@ -168,9 +165,7 @@ describe('ending a handle', () => {
   })
 
   it('answers false for a handle the TTL already expired, as the wire contract says', () => {
-    // `release` was the one lifetime path that did not sweep first, so an expired handle was still
-    // in the map when it looked and the page was told `released: true` for a file the next sweep
-    // would have taken anyway. `mediaReleaseParamsSchema`'s own docstring promises the opposite.
+    // Release must sweep before lookup so expired handles report released:false as the wire contract promises.
     let clock = 1_000
     const swept: string[] = []
     const ageing = new MediaHandleRegistry({
@@ -180,7 +175,6 @@ describe('ending a handle', () => {
     const [item] = ageing.mint([staged(1)])
     clock += MEDIA_HANDLE_TTL_MS + 1
     expect(ageing.release(item?.handle ?? '')).toBe(false)
-    // Swept, not leaked: the file goes either way, and only the answer differs.
     expect(swept).toEqual(['file:///cache/orca-media-1.png'])
   })
 
@@ -197,8 +191,7 @@ describe('ending a handle', () => {
   })
 
   it('answers false for a handle it no longer holds, rather than refusing', () => {
-    // Releasing twice, or after the TTL swept, asks for the state the page already has. A refusal
-    // there would make an unmount path that cannot know which handles survived look like a fault.
+    // Repeated/expired release is normal during unmount, whose caller cannot know which handles survived.
     const [item] = registry.mint([staged(1)])
     registry.release(item?.handle ?? '')
     expect(registry.release(item?.handle ?? '')).toBe(false)
@@ -211,7 +204,6 @@ describe('ending a handle', () => {
     registry.releaseAll()
     expect(deleted).toHaveLength(3)
     expect(registry.liveCount()).toBe(0)
-    // Idempotent: a session that ends under an unmount reaches this twice.
     registry.releaseAll()
     expect(deleted).toHaveLength(3)
   })

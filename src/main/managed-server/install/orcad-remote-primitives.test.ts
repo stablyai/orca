@@ -282,4 +282,50 @@ describe('orcad remote context', () => {
     })
     expect(order).toEqual(['prepare', 'record'])
   })
+
+  it('uses a WSL caller-known platform and login home instead of probing them', async () => {
+    vi.mocked(detectRemoteHostPlatform).mockClear()
+    const commands: string[] = []
+    mockExec.mockImplementation(async (_conn, command: string) => {
+      commands.push(command)
+      return command.includes('ldd') ? 'ldd (GNU libc) 2.39\n' : '__ORCAD_RECORD_ABSENT__\n'
+    })
+    const wslTarget = { kind: 'wsl', id: 'wsl:u', distro: 'U', label: 'U' } as const
+
+    const context = await resolveOrcadRemoteContext(wslTarget, conn, undefined, linux, {
+      loginHome: '/home/u\n',
+      firstLibcProbeOutput: 'ldd (Ubuntu GLIBC 2.39-0ubuntu8) 2.39\n'
+    })
+
+    expect(context).toMatchObject({
+      remoteHome: '/home/u',
+      userDataDir: '/home/u/.orca',
+      serverTarget: 'linux-x64-glibc'
+    })
+    expect(detectRemoteHostPlatform).not.toHaveBeenCalled()
+    expect(commands.some((command) => command.includes('$HOME'))).toBe(false)
+    expect(commands.some((command) => command.includes('ldd'))).toBe(false)
+  })
+
+  it('runs the libc fallbacks when the folded first probe proves nothing', async () => {
+    vi.mocked(detectRemoteHostPlatform).mockClear()
+    const commands: string[] = []
+    mockExec.mockImplementation(async (_conn, command: string) => {
+      commands.push(command)
+      return command.includes('getconf') ? 'glibc 2.39\n' : '__ORCAD_RECORD_ABSENT__\n'
+    })
+    const wslTarget = { kind: 'wsl', id: 'wsl:u', distro: 'U', label: 'U' } as const
+
+    const context = await resolveOrcadRemoteContext(wslTarget, conn, undefined, linux, {
+      loginHome: '/home/u',
+      firstLibcProbeOutput: 'sh: ldd: not found\n'
+    })
+
+    expect(context.serverTarget).toBe('linux-x64-glibc')
+    // The same plain exec the default probe uses, not the fenced orcad runner.
+    expect(mockExec).toHaveBeenCalledWith(conn, expect.stringContaining('getconf'), {
+      signal: undefined
+    })
+    expect(commands.some((command) => command.includes('ldd --version'))).toBe(false)
+  })
 })

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useHostClient } from '../transport/host-client-hooks'
 import {
@@ -31,7 +30,9 @@ import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
+import { sessionFlowFloor } from './mobile-web-shell-session-step'
 import type {
+  MobileWebShellReportedFailure,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
   MobileWebShellSessionState,
@@ -40,58 +41,34 @@ import type {
 
 export type MobileWebShellSessionView = {
   readonly state: MobileWebShellSessionState
-  /** The download's progress as it is dispatched, ahead of the React commit that `state` waits on. */
+  // Publish before React commit so progress can advance while the JS thread is busy.
   readonly downloadProgress: DownloadProgressFeed
-  /** The route patterns this shell would render from the page, for the page to be told about. */
   readonly pageRoutes: readonly string[]
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   readonly routeGrants: readonly string[]
   readonly ownsHostArea: boolean
-  /** Non-null when this generation is a fallback from an update the shell refused, for the caller
-   *  to say so beside the page rather than instead of it. */
+  // Explain fallback beside the running page without replacing it.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly retry: () => void
-  /** B3's failure reasons, forwarded verbatim; the reducer owns what each one means. */
-  readonly reportShellFailure: (reason: MobileWebShellFailureReason) => void
-  /** The native view began a document; drops what the document it replaces said about itself. */
+  readonly reportShellFailure: (reason: MobileWebShellReportedFailure) => void
   readonly reportDocumentStarted: () => void
-  /** The native view finished a document; starts the wait for the page's first word. */
   readonly reportDocumentLoaded: () => void
-  /** The page spoke over the bridge; ends that wait, whichever of the two arrived first. */
   readonly reportPageReady: () => void
-  /** The page has a frame on screen. */
   readonly reportPagePainted: () => void
-  /** The page took the device Back key, or let it go. */
   readonly reportPageBackClaim: (claimed: boolean) => void
-  /**
-   * Whether the page has handshaken on this session, which the bridge host is rebuilt against.
-   *
-   * Projected into state beside `state` rather than read off the ref while rendering: a
-   * `page-ready` changes nothing else, so no other value would re-render to carry it out.
-   */
+  // Project document facts into React state: page-ready alone changes no session-state identity to trigger a render.
   readonly pageReady: boolean
-  /** How far this document has got towards being something to show. Projected for the same
-   *  reason as `pageReady`: `page-painted` moves nothing else. */
+  // Project paint for the same reason: the ready state itself does not change.
   readonly pageFrame: ShellPageFrame
-  /** Whether the shell should take Back off the navigator. Projected for the same reason as
-   *  `pageReady`: a claim moves nothing else, so no other value would re-render to carry it. */
+  // Project Back claims so claim-only events still rerender.
   readonly backClaimed: boolean
 }
 
-/**
- * Drives one hybrid shell session for one host: the reducer decides, this runs what it asks for.
- *
- * Every effect result is checked against an epoch before it is dispatched, so an unmount, a host
- * change or a retry abandons work in flight instead of applying it to the next session. Nothing
- * here decides anything — a rule that lived in this file would be a rule with no table test.
- */
+// Run reducer effects behind an epoch fence so unmount/host change/retry cannot apply abandoned results to the replacement session.
 export function useMobileWebShellSession(args: {
   hostId: string
-  /** The route this mount stands for, matched against the page routes the bundle declares. */
   routePathname: string
-  /** A wide layout; a change restarts the session only where it changes the answer. */
   wide?: boolean
-  /** False when this app has no screen of its own for the route. */
   appNamesRoute?: boolean
   runtime?: MobileWebShellRuntime
 }): MobileWebShellSessionView {
@@ -139,33 +116,43 @@ export function useMobileWebShellSession(args: {
   const [downloadProgress] = useState(createDownloadProgressFeed)
   const hostKey = useMemo(() => deriveHostCacheKey(hostId), [hostId])
   const startedAtRef = useRef(runtime.now())
-  // Bumped by anything that invalidates work in flight; every dispatch out of an effect checks it.
   const epochRef = useRef(0)
-  // Aborted on the same bump: a download nobody will use still holds four of the host's read slots.
+  // Abort abandoned downloads to release their four host read slots.
   const downloadsRef = useRef<Set<AbortController>>(new Set())
-  // Cancelled on the same bump, for the same reason: an armed deadline belongs to the generation it
-  // was armed under, and the epoch check alone would leave a real timer alive until it fired.
+  // Cancel deadlines too; epoch guards alone leave real timers alive until expiry.
   const timersRef = useRef<Set<() => void>>(new Set())
-  // The log's host for `dispatch`, which is stable; moved with the session rebuild below.
   const hostIdRef = useRef(hostId)
   const logTraceRef = useRef(EMPTY_SHELL_LOG_TRACE)
   const runEffectRef = useRef<
     ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
   >(null)
 
+  const cancelPending = useCallback((downloads = true): void => {
+    if (downloads) {
+      downloadsRef.current.forEach((controller) => controller.abort())
+      downloadsRef.current.clear()
+    }
+    timersRef.current.forEach((cancel) => cancel())
+    timersRef.current.clear()
+  }, [])
+
   const dispatch = useCallback(
     (epoch: number, event: MobileWebShellSessionEvent): void => {
       if (epoch !== epochRef.current) {
         return
       }
-      const stepped = reduceMobileWebShellSession(sessionRef.current, event)
-      const trace = traceShellStep(logTraceRef.current, sessionRef.current, event, stepped.session)
+      const previous = sessionRef.current
+      const stepped = reduceMobileWebShellSession(previous, event)
+      const trace = traceShellStep(logTraceRef.current, previous, event, stepped.session)
       logTraceRef.current = trace
-      for (const line of shellSessionStepLines(sessionRef.current, event, stepped.session, trace)) {
+      for (const line of shellSessionStepLines(previous, event, stepped.session, trace)) {
         recordShellLifecycleLine(hostIdRef.current, line)
       }
       sessionRef.current = stepped.session
       recordSessionInRetainedStore(hostIdRef.current, clientRef.current, stepped.session)
+      if (stepped.session.flow !== previous.flow) {
+        cancelPending(sessionFlowFloor(stepped.session) !== sessionFlowFloor(previous))
+      }
       const next = stepped.session.state
       if (next.kind === 'fetching') {
         downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
@@ -178,20 +165,13 @@ export function useMobileWebShellSession(args: {
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
     },
-    [downloadProgress]
+    [cancelPending, downloadProgress]
   )
 
   const invalidate = useCallback((): void => {
     epochRef.current += 1
-    for (const controller of downloadsRef.current) {
-      controller.abort()
-    }
-    downloadsRef.current.clear()
-    for (const cancel of timersRef.current) {
-      cancel()
-    }
-    timersRef.current.clear()
-  }, [])
+    cancelPending()
+  }, [cancelPending])
 
   const runEffect = useCallback(
     async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {
@@ -297,9 +277,7 @@ export function useMobileWebShellSession(args: {
         hostStatus: hostProtocolWindow
       }
     })
-    // `hostId` and `routePathname` are in the list because they are what rebuilds the session
-    // above: the reducer starts nothing on a repeat verdict, so a fresh session nobody re-armed
-    // would sit in `checking` forever. Both, not just the host, because either one rebuilds it.
+    // Host and pathname rebuild the session; re-arm even on an unchanged verdict or the fresh session would remain checking.
   }, [
     dispatch,
     hostCapabilities,
@@ -320,7 +298,7 @@ export function useMobileWebShellSession(args: {
   }, [dispatch, invalidate, routePathname, runtime])
 
   const reportShellFailure = useCallback(
-    (reason: MobileWebShellFailureReason) => {
+    (reason: MobileWebShellReportedFailure) => {
       evictRetainedShellSessionForHost(hostIdRef.current, routePathname)
       dispatch(epochRef.current, { type: 'shell-failed', reason })
     },

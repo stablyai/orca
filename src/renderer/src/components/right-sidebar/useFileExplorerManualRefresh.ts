@@ -35,8 +35,7 @@ export function useFileExplorerManualRefresh(refreshTree: () => Promise<unknown>
 
     isRefreshingRef.current = true
     setIsRefreshing(true)
-    // Why: local refreshes are usually instant, but SSH can be visibly slower.
-    // Delay the spinner so fast refreshes do not flicker.
+    // Delay the spinner so fast local refreshes do not flicker while slow SSH refreshes remain visible.
     spinnerTimerRef.current = window.setTimeout(
       () => setShowRefreshSpinner(true),
       REFRESH_SPINNER_DELAY_MS

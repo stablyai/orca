@@ -9,6 +9,7 @@ import {
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
+import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
   protected setClaudeBackgroundEvidence(
@@ -69,6 +70,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
+    const transcriptPath = event?.providerSession?.transcriptPath
+    if (transcriptPath) {
+      // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
+      getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
+    }
     const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)

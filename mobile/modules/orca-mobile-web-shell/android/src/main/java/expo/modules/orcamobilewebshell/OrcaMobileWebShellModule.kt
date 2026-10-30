@@ -1,7 +1,12 @@
 package expo.modules.orcamobilewebshell
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -16,6 +21,21 @@ class OrcaMobileWebShellModule : Module() {
         Handler(Looper.getMainLooper()).post {
           OrcaMobileWebShellView.clearRetainedSlot()
         }
+      }
+    }
+
+    // Takes a FileProvider content:// URI; the grant lets the chosen viewer read Orca's cache file.
+    AsyncFunction("presentPdf") { uri: String ->
+      val activity = appContext.currentActivity ?: throw Exceptions.MissingActivity()
+      val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(Uri.parse(uri), "application/pdf")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }
+      try {
+        activity.startActivity(intent)
+      } catch (error: ActivityNotFoundException) {
+        // The bridge forwards this code to the page as a refusal it can name.
+        throw CodedException("native_pdf_no_viewer", "No installed app opens PDFs", error)
       }
     }
 

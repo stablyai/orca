@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
@@ -14,7 +14,7 @@ import {
   isSettledWrite,
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import { isDrivingInputKind, type TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
 
@@ -39,7 +39,7 @@ export function writePtyFromRuntimeController(
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
   const observeAcceptedInput = (): void => {
-    if (inputKind === 'driving' && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
+    if (isDrivingInputKind(inputKind) && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
       deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
     }
   }
@@ -227,9 +227,10 @@ export async function resetInputModesFromRuntimeController(
 const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 
-export function hasPtyFromRuntimeController(
+function readReadyPtyProvider(
   deps: PtyRuntimeControllerDeps,
-  ptyId: string
+  ptyId: string,
+  read: (provider: IPtyProvider) => boolean | null
 ): boolean | null {
   try {
     // A local provider cannot prove remote-host absence.
@@ -248,10 +249,25 @@ export function hasPtyFromRuntimeController(
       }
       return null
     }
-    return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
+    return read(getProviderForPty(ptyId))
   } catch {
     return null
   }
+}
+
+export function hasPtyFromRuntimeController(deps: PtyRuntimeControllerDeps, ptyId: string) {
+  return readReadyPtyProvider(deps, ptyId, (provider) => provider.hasPty?.(ptyId) ?? null)
+}
+
+export function getPtyAvailabilityFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): boolean | null {
+  return readReadyPtyProvider(
+    deps,
+    ptyId,
+    (provider) => provider.getPtyAvailability?.(ptyId) ?? null
+  )
 }
 
 export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows: number): boolean {

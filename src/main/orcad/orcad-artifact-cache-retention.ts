@@ -1,12 +1,5 @@
-/**
- * Bounds the desktop's `<userData>/orcad-artifacts` slot cache: per target, keep the most
- * recently used slots and evict the rest at startup. The cache survives uninstall (it lives in userData); this is what keeps it small.
- *
- * Never evicted: a slot this process materialized (an SSH deploy may be reading it), the slot
- * a live local orcad serve runs from (named by the profile's instance lock), and the slot a
- * surviving terminal daemon runs from (named by its PID record). A record from another machine or
- * boot is unverifiable, so its slot is kept too.
- */
+// Bound persistent artifact caches while retaining materialized, live-server and daemon slots.
+// Unknown machine/boot ownership must preserve slots too.
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeRuntimeAsset } from '../../shared/node-runtime-pin'
@@ -20,18 +13,16 @@ import {
   type OrcadSlotPeerJudge
 } from './orcad-daemon-slot-pins'
 
-/** The in-use slot plus the two most recent others (the newest three when none is in use). */
+/** In-use slot plus two others, or the newest three when none is in use. */
 const ORCAD_ARTIFACT_CACHE_KEEP = 3
 
 const REPAIR_SUFFIX = /\.repair-\d+$/u
 
 type OrcadArtifactCachePruneOptions = {
   keep?: number
-  /** Slot versions to keep whatever their age. */
   inUseVersions?: ReadonlySet<string>
 }
 
-/** Removes the stale slots under `cacheRoot` and returns their paths. Best effort per entry. */
 export async function pruneOrcadArtifactCache(
   cacheRoot: string,
   options: OrcadArtifactCachePruneOptions = {}
@@ -55,7 +46,7 @@ export async function pruneOrcadArtifactCache(
       (slot): slot is { name: string; mtimeMs: number } => slot.mtimeMs !== null
     )
     const isInUse = (name: string): boolean => inUse.has(name.replace(REPAIR_SUFFIX, ''))
-    // The in-use version counts toward `keep`; with none in use, the newest stands in for it.
+    // The in-use version consumes one keep slot; otherwise retain the newest keep versions.
     const othersToKeep = present.some((slot) => isInUse(slot.name)) ? keep - 1 : keep
     const others = present
       .filter((slot) => !isInUse(slot.name))
@@ -76,7 +67,6 @@ export async function pruneOrcadArtifactCache(
   return removed
 }
 
-/** A pass over `<userData>/orcad-artifacts` that never evicts a slot something still runs from. */
 export function pruneDesktopOrcadArtifactCache(
   userDataPath: string,
   alsoInUse: readonly string[] = []
@@ -99,10 +89,7 @@ export function pruneDesktopOrcadArtifactCache(
   })
 }
 
-/**
- * The slot version a live local orcad serve runs from, or null when none holds the profile. A
- * serve on another machine or boot (a shared home) is unverifiable from here, so its slot stays.
- */
+/** Keep slots used by local servers, including unverifiable ownership from other machines/boots. */
 export function liveLocalOrcadServeVersion(
   userDataPath: string,
   isAlive: (pid: number) => boolean = isProcessAlive,

@@ -22,10 +22,7 @@ export type TerminalUseSources = {
   isWriteFenced: (worktreeId: string) => boolean
 }
 
-/**
- * Writes when a workspace's terminal was last used, on the host that owns it, for every device:
- * input from the window, a phone or the CLI, and a phone attaching. Output never counts.
- */
+/** Stamp terminal use on the owning host for window/phone/CLI input and phone attach; output never counts. */
 export class TerminalUseProducer {
   private readonly writtenAt = new Map<string, number>()
 

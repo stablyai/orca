@@ -14,6 +14,12 @@ export const WINDOWS_PROCESS_TREE_REQUIRED = [
   'build/Release/windows_process_tree.node'
 ] as const
 
+export const WINDOWS_REGISTRY_REQUIRED = [
+  'package.json',
+  'index.js',
+  'build/Release/orca_windows_registry.node'
+] as const
+
 export type CopyOp = {
   sourcePath: string
   /** Destination path relative to the host root, posix-separated. */
@@ -37,6 +43,10 @@ export type DaemonHostSources = {
 
 export function daemonHostProcessPackageDir(sources: DaemonHostSources): string {
   return join(sources.resourcesPath, 'node_modules', '@orca', 'process-host')
+}
+
+export function daemonHostWindowsRegistryDir(sources: DaemonHostSources): string {
+  return join(sources.resourcesPath, 'node_modules', '@orca', 'windows-registry')
 }
 
 function daemonHostNodePtyDir(sources: DaemonHostSources): string {
@@ -73,14 +83,20 @@ function isRuntimeProcessHostPath(packageRel: string): boolean {
   )
 }
 
+function isRequiredRuntimePath(packageRel: string, requiredFiles: readonly string[]): boolean {
+  return (
+    packageRel === '' ||
+    requiredFiles.some(
+      (required) => required === packageRel || required.startsWith(`${packageRel}/`)
+    )
+  )
+}
+
 /** Keep lib siblings and paths leading to required files so the package loader can resolve the addon. */
 function isRuntimeProcessTreePath(packageRel: string): boolean {
   return (
-    packageRel === '' ||
     packageRel.startsWith('lib/') ||
-    WINDOWS_PROCESS_TREE_REQUIRED.some(
-      (required) => required === packageRel || required.startsWith(`${packageRel}/`)
-    )
+    isRequiredRuntimePath(packageRel, WINDOWS_PROCESS_TREE_REQUIRED)
   )
 }
 
@@ -149,6 +165,14 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     kind: 'dir',
     filter: (sourcePath) =>
       isRuntimeProcessTreePath(toPosixRelative(windowsProcessTreeDir, sourcePath))
+  })
+  const registryDir = daemonHostWindowsRegistryDir(sources)
+  ops.push({
+    sourcePath: registryDir,
+    destRel: toPosixRelative(appDir, registryDir),
+    kind: 'dir',
+    filter: (sourcePath) =>
+      isRequiredRuntimePath(toPosixRelative(registryDir, sourcePath), WINDOWS_REGISTRY_REQUIRED)
   })
   const nodePtyDir = daemonHostNodePtyDir(sources)
   ops.push({

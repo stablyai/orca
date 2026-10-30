@@ -1,7 +1,4 @@
-/**
- * Whether a proxied target may switch to the loopback route. Fails closed: the route is only a
- * speedup, so any doubt keeps the direct proxy route.
- */
+/** Loopback is optional: any uncertainty retains the direct proxy route. */
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { SshTarget } from '../../../shared/ssh-types'
@@ -12,9 +9,7 @@ import { findSystemSsh } from './system-ssh-binary'
 
 const LOOPBACK_ROUTE_ADMISSION_TIMEOUT_MS = 5_000
 
-// Why: these are exactly what the route rewrites; any other difference means ssh_config matched
-// differently once HostName became 127.0.0.1 (e.g. `Match host`), so commands would change identity.
-// ControlPath only matters for multiplexing, which Windows OpenSSH cannot do, and `%C` differs by host.
+// Allow only route rewrites; other drift changes login identity (e.g. Match host). Ignore ControlPath because Windows lacks multiplexing and %C changes with host.
 const ROUTE_REWRITTEN_SSH_G_KEYS = new Set([
   'hostname',
   'port',
@@ -27,7 +22,6 @@ const IDENTITY_SSH_G_KEYS = ['identityfile', 'certificatefile']
 // Why bounded: a hop's own ProxyJump is followed, and ssh_config can loop.
 const MAX_JUMP_HOPS = 8
 
-/** On admission, where the forward must land and the known_hosts name OpenSSH uses for it. */
 export type LoopbackRouteAdmission =
   | { admitted: true; sshdPort: number; hostKeyAlias: string }
   | { admitted: false; reason: string }
@@ -75,7 +69,7 @@ function refuse(reason: string): LoopbackRouteAdmission {
   return { admitted: false, reason }
 }
 
-/** The sshd the direct route reaches, as OpenSSH resolved it — the forward must land on the same one. */
+/** The forward must reach the same sshd OpenSSH resolves for direct login. */
 export function readDialledEndpoint(
   direct: Map<string, string[]>
 ): { sshdPort: number; hostKeyAlias: string } | null {
@@ -114,7 +108,7 @@ async function mayAskForSecurityKey(
     return true
   }
   const resolved = parseSshGOutput(serializeSshGLines(config))
-  // Why config-backed: then the check reads exactly the IdentityFile list `ssh -G` reported.
+  // Config-backed resolution uses exactly the IdentityFile list ssh -G reported.
   const configBacked: SshTarget = {
     id: 'loopback-admission',
     label: 'loopback-admission',
@@ -158,7 +152,6 @@ async function checkJumpHops(
   return null
 }
 
-/** The ProxyJump chain a route takes, as OpenSSH resolved it (including a manual `-J`). */
 export function listJumpHosts(config: Map<string, string[]>): string[] {
   const configured = config.get('proxyjump')?.[0]
   if (!configured || configured.toLowerCase() === 'none') {
@@ -191,7 +184,6 @@ function serializeSshGLines(config: Map<string, string[]>): string {
   return [...config].flatMap(([key, values]) => values.map((value) => `${key} ${value}`)).join('\n')
 }
 
-/** Each `ssh -G` line keyed by option; repeated options (IdentityFile, SendEnv…) keep every value. */
 function parseSshGLines(stdout: string): Map<string, string[]> {
   const options = new Map<string, string[]>()
   for (const rawLine of stdout.split(/\r?\n/)) {
@@ -206,10 +198,7 @@ function parseSshGLines(stdout: string): Map<string, string[]> {
   return options
 }
 
-/**
- * Settings the route would change. A `%` token counts even when both outputs match: `ssh -G`
- * leaves some unexpanded, and a routed login expands `%h` to 127.0.0.1.
- */
+/** Unexpanded % tokens count as drift even if ssh -G outputs match: routed login expands %h to 127.0.0.1. */
 export function findConfigDrift(
   direct: Map<string, string[]>,
   routed: Map<string, string[]>
@@ -230,10 +219,7 @@ function hasUnexpandedToken(value: string): boolean {
   return value.replaceAll('%%', '').includes('%') || value.includes('${')
 }
 
-/**
- * `ssh-add -L` lists sk- key types. An unreachable default agent can sign nothing; an unreachable
- * configured IdentityAgent may only be a path ssh-add resolved differently, so it fails closed.
- */
+/** An unreachable default agent can sign nothing; a configured IdentityAgent may resolve differently in ssh-add, so fail closed. */
 export function agentListingMayHoldSecurityKey(
   result: { code: number | null; stdout: string; timedOut: boolean },
   agentConfigured: boolean

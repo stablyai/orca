@@ -7,17 +7,14 @@ import {
 } from '../../shared/speech-recognizer-package'
 import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
 
-/**
- * A local model asked of a host with no on-device recognizer. Why this code: every mobile build maps
- * `voice_model_not_ready:` to the setup sheet, which lists only the models this host can run.
- */
+/** Mobile maps voice_model_not_ready: to host-supported model setup, including hosts with no recognizer. */
 export const LOCAL_SPEECH_UNAVAILABLE_ERROR = 'voice_model_not_ready:unavailable'
 
 export function getSttWorkerPath(): string {
   return resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), 'stt-worker.js')
 }
 
-/** The recognizer addon's directory, or null on a host that has none (an orcad slot alone). */
+/** Recognizer directory, or null on hosts without one. */
 export function getSherpaModulePath(): string | null {
   const nativePackage = speechRecognizerPackageName(process.platform, process.arch)
   const resourcesPath =
