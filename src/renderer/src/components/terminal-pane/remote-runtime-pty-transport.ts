@@ -3372,7 +3372,7 @@ export function createRemoteRuntimePtyTransport(
     // Why: literal LF bytes from paste/programmatic input must survive; callers use \r or the enter flag for semantic Enter.
     const targetHandle = handle
     const targetEpoch = lifecycleEpoch
-    return inputBatcher.push(data, () => {
+    return inputBatcher.push(data, (): boolean | void => {
       if (lifecycleEpoch !== targetEpoch || handle !== targetHandle) {
         return false
       }
@@ -3875,7 +3875,7 @@ export function createRemoteRuntimePtyTransport(
         }
         // Why: earlier input still in size validation reaches the hold later; queue behind it.
         if (inputBatcher.hasPendingValidation()) {
-          return inputBatcher.push(data, () => {
+          return inputBatcher.push(data, (): boolean | void => {
             if (releaseThenShouldHold(inputKind)) {
               recoveryInputHold.enqueue(holdEndpoint(), data, inputKind, call)
               return false

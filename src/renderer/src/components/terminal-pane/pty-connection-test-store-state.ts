@@ -1,4 +1,4 @@
-import type { vi } from 'vitest'
+import type { Mock, vi } from 'vitest'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
@@ -6,6 +6,7 @@ import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-ag
 import type { AppState } from '@/store/types'
 
 export type StoreState = {
+  isPtyShutdownPending?: (ptyId: string) => boolean
   activeWorktreeId: string | null
   tabsByWorktree: Record<
     string,
@@ -13,14 +14,15 @@ export type StoreState = {
       id: string
       ptyId: string | null
       title?: string
+      defaultTitle?: string
       launchAgent?: string
       shellOverride?: string
       forceHostRuntime?: boolean
       generation?: number
     }[]
   >
-  ptyIdsByTabId?: Record<string, string[]>
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+  ptyIdsByTabId: Record<string, string[]>
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   terminalPaneStartsByPaneKey?: AppState['terminalPaneStartsByPaneKey']
   terminalPaneResumeOutcomesByPaneKey?: AppState['terminalPaneResumeOutcomesByPaneKey']
   /** Pty id → the agent its pane restarts as once the account change lands. */
@@ -104,7 +106,7 @@ export type StoreState = {
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   consumeTabStartupCommand?: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  agentStatusByPaneKey: Record<string, unknown>
+  agentStatusByPaneKey: Record<string, { agentType?: unknown; [key: string]: unknown }>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
@@ -127,8 +129,8 @@ export type StoreState = {
   dropAgentStatus: ReturnType<typeof vi.fn>
   retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   restoreAgentPaneAuthority: ReturnType<typeof vi.fn>
-  setPaneForegroundAgent: ReturnType<typeof vi.fn>
-  clearPaneForegroundAgent: ReturnType<typeof vi.fn>
+  setPaneForegroundAgent: Mock<(paneKey: string, entry: PaneForegroundAgentEntry) => void>
+  clearPaneForegroundAgent: Mock<(paneKey: string) => void>
   markTerminalBell: ReturnType<typeof vi.fn>
   markAgentAttentionUnread: ReturnType<typeof vi.fn>
 }

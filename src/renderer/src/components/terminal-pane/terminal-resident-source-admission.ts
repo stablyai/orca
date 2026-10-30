@@ -42,8 +42,10 @@ export function createTerminalResidentSourceAdmissions(
     const sameExecution =
       existing &&
       (!options.incarnationId || existing.identity.incarnationId === options.incarnationId)
-    if (sameExecution && existing.identity.runtimeId !== null && !options.selectLegacy) {
-      return existing
+        ? existing
+        : undefined
+    if (sameExecution && sameExecution.identity.runtimeId !== null && !options.selectLegacy) {
+      return sameExecution
     }
     const paired = parseRemoteRuntimePtyId(options.ptyId)
     const identity = {
@@ -57,7 +59,7 @@ export function createTerminalResidentSourceAdmissions(
       incarnationId: options.incarnationId ?? null
     }
     const resident = sameExecution
-      ? existing
+      ? sameExecution
       : residentRegistry.admit(identity, (captured) =>
           createTerminalResidentPolicy(
             options.binding,
@@ -142,7 +144,7 @@ export function createTerminalResidentSourceAdmissions(
     }
     const source: {
       close?: () => void
-      endpoint?: string
+      endpoint?: string | null
       tabId: string
       paneKey: string
       binding: TerminalResidentBinding

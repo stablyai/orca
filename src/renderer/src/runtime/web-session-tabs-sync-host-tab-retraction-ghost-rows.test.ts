@@ -272,7 +272,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       const snapshot = makeHostSnapshot({ snapshotVersion: 1, hostTabIds: [KEEP_TAB], hostNow: T0 })
       const first = snapshot.tabs[0]!
       const foreignLeaf = '33333333-3333-4333-8333-333333333333'
-      const withLeaves = {
+      const withLeaves: RuntimeMobileSessionTabsResult = {
         ...snapshot,
         tabs: [
           ...snapshot.tabs,

@@ -13,7 +13,7 @@ export const sourceSubscriptionsByPtyId = new Map<
   string,
   {
     close?: () => void
-    endpoint?: string
+    endpoint?: string | null
     tabId?: string
     paneKey?: string
     binding?: TerminalResidentBinding

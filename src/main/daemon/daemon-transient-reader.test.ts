@@ -317,7 +317,8 @@ describe('complete terminal state delivery', () => {
       const emission = (data: string, start: number) => ({
         data,
         rawStartSeq: start,
-        rawEndSeq: start + data.length
+        rawEndSeq: start + data.length,
+        transformed: false
       })
       try {
         plane.emit(emission('\x07', 0))

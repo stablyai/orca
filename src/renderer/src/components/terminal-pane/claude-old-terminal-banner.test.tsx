@@ -198,8 +198,8 @@ it('keeps passive display equivalent to absent foreground and retains the indepe
           agentType: 'claude',
           state: 'working',
           prompt: '',
-          updatedAt: Date.now(),
-          stateStartedAt: Date.now(),
+          updatedAt: 1_000,
+          stateStartedAt: 1_000,
           stateHistory: []
         }
       }

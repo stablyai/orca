@@ -14,6 +14,7 @@ const DONE_SETTLE_MS = 1500
 const ROUTING = { connectionId: null }
 
 type MockStoreState = {
+  settings: { promptCacheTimerEnabled: boolean }
   tabsByWorktree: Record<string, { id: string; launchAgent?: AgentType }[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType } | undefined>
@@ -91,6 +92,46 @@ async function createPolicy(ptyId: string) {
     () => true
   )
   return { ...policy.commandCode, dispose: () => policy.dispose() }
+}
+
+async function createPresentedExecution() {
+  const {
+    admitLegacyTerminalSemanticResident,
+    getTerminalSemanticResident,
+    retireTerminalSemanticResident
+  } = await import('./terminal-side-effect-facts-handler')
+  const resident = admitLegacyTerminalSemanticResident({
+    ptyId: PTY_ID_LOCAL,
+    incarnationId: 'command-code-execution',
+    byteSource: false,
+    binding: {
+      paneKey: PANE_KEY,
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      cwd: '',
+      initialTitle: mockStoreState.runtimePaneTitlesByTabId[TAB_ID]?.[PANE_ID]
+    }
+  })
+  const policy = resident.policy
+  return {
+    resident,
+    policy,
+    current: () => getTerminalSemanticResident(PTY_ID_LOCAL),
+    attach: () =>
+      policy.attachPresentation({
+        paneId: PANE_ID,
+        isVisible: () => true,
+        showTitle: vi.fn(),
+        resetInputModes: vi.fn(),
+        setFocusReportSuppression: vi.fn(),
+        markBracketedPasteInterrupted: vi.fn(),
+        onAgentExited: vi.fn(),
+        setMode2031: vi.fn(),
+        clearFocusReportSuppression: vi.fn()
+      }),
+    retire: () =>
+      retireTerminalSemanticResident(PTY_ID_LOCAL, resident.identity.incarnationId ?? undefined)
+  }
 }
 
 describe('terminal Command Code status policy', () => {
@@ -293,47 +334,81 @@ describe('terminal Command Code status policy', () => {
     policy.dispose()
   })
 
-  // Reveal inherits the settle deadline; flushing early would make the same-prompt guard reject a genuine working repaint.
-  it('dispose hands the pending settle to the remounted pane instead of completing it early', async () => {
+  it('retains the admitted execution, policy and deadline across presentation detach and reveal', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',
       prompt: 'Fix the spinner',
       agentType: 'command-code'
     })
-    const policy = await createPolicy(PTY_ID_LOCAL)
-    const { setCommandCodeDoneSettleExecutor } = await import('./command-code-done-settle')
+    const execution = await createPresentedExecution()
+    const { resident, policy } = execution
+    const commandCode = policy.commandCode
+    let detach = execution.attach()
+    try {
+      commandCode.onCommandCodeDone('Fix the spinner')
+      const pendingTimers = vi.getTimerCount()
+      vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+      detach()
+      expect(resident.isLive).toBe(true)
+      expect(execution.current()).toBe(resident)
+      detach = execution.attach()
+      expect(resident.policy).toBe(policy)
+      expect(resident.policy.commandCode).toBe(commandCode)
+      expect(vi.getTimerCount()).toBe(pendingTimers)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
 
-    policy.onCommandCodeDone('Fix the spinner')
-    vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
-    const revealedPaneSettle = vi.fn()
-    setCommandCodeDoneSettleExecutor(PANE_KEY, revealedPaneSettle)
-    policy.dispose()
-
-    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(1)
-    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
+      vi.advanceTimersByTime(1)
+      expect(mockStoreState.setAgentStatus).toHaveBeenCalledExactlyOnceWith(
+        PANE_KEY,
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        }),
+        expect.anything(),
+        undefined,
+        ROUTING
+      )
+      vi.advanceTimersByTime(DONE_SETTLE_MS)
+      expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
+    } finally {
+      detach()
+      execution.retire()
+    }
   })
 
-  // A revealed pane’s working repaint before the inherited deadline must still cancel completion.
-  it('lets a working repaint after the handoff cancel the transferred settle', async () => {
+  it('lets a working repaint after presentation reveal cancel the same execution settle', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',
       prompt: 'Fix the spinner',
       agentType: 'command-code'
     })
-    const policy = await createPolicy(PTY_ID_LOCAL)
-    const { cancelCommandCodeDoneSettle, setCommandCodeDoneSettleExecutor } =
-      await import('./command-code-done-settle')
-
-    policy.onCommandCodeDone('Fix the spinner')
-    const revealedPaneSettle = vi.fn()
-    setCommandCodeDoneSettleExecutor(PANE_KEY, revealedPaneSettle)
-    policy.dispose()
-    cancelCommandCodeDoneSettle(PANE_KEY)
-    vi.advanceTimersByTime(DONE_SETTLE_MS * 2)
-
-    expect(revealedPaneSettle).not.toHaveBeenCalled()
-    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    const execution = await createPresentedExecution()
+    const { policy, resident } = execution
+    let detach = execution.attach()
+    try {
+      policy.commandCode.onCommandCodeDone('Fix the spinner')
+      vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+      detach()
+      detach = execution.attach()
+      expect(execution.current()).toBe(resident)
+      policy.commandCode.onCommandCodeWorking('Fix the spinner')
+      vi.advanceTimersByTime(DONE_SETTLE_MS * 2)
+      expect(mockStoreState.setAgentStatus).toHaveBeenCalledExactlyOnceWith(
+        PANE_KEY,
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        }),
+        expect.anything(),
+        undefined,
+        ROUTING
+      )
+    } finally {
+      detach()
+      execution.retire()
+    }
   })
 
   it('dispose does not flush a settle a working repaint already cancelled', async () => {

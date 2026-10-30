@@ -56,8 +56,11 @@ describe('workspace cleanup live-agent finder', () => {
     try {
       const absent = await enrichWorkspaceCleanupCandidatesForScan([candidate], state, token)
       for (const role of ['process-admitted', 'process-read', null] as const) {
-        state.paneForegroundAgentByPaneKey =
-          foregroundConsumerState(role).paneForegroundAgentByPaneKey
+        const foreground = foregroundConsumerState(role).paneForegroundAgentByPaneKey
+        if (!foreground) {
+          throw new Error('Consumer fixture must initialize foreground records')
+        }
+        state.paneForegroundAgentByPaneKey = foreground
         const evidence = [...getWorkspaceCleanupAgentEvidence(state, [candidate]).values()]
         const [result] = await enrichWorkspaceCleanupCandidatesForScan([candidate], state, token)
         if (role === 'process-read') {

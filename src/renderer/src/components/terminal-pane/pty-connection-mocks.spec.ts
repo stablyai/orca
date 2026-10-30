@@ -174,6 +174,9 @@ async function transportMockFactory() {
       }
     }
     const sendInput = transport.sendInput.getMockImplementation()
+    if (!sendInput) {
+      throw new Error('Expected the transport input implementation before resident wrapping')
+    }
     transport.sendInput.mockImplementation((data, kind, call) => {
       const id = boundPtyId ?? transport.getPtyId()
       if (id) {
@@ -181,17 +184,23 @@ async function transportMockFactory() {
         call?.onEligible(id)
         call?.onDispatch(id)
       }
-      return sendInput?.(data, kind, call)
+      return sendInput(data, kind, call)
     })
-    const accepted = transport.sendInputAccepted?.getMockImplementation()
-    transport.sendInputAccepted?.mockImplementation((data, kind, acceptedOptions) => {
-      const id = boundPtyId ?? transport.getPtyId()
-      if (id) {
-        admit(id)
-        acceptedOptions?.call?.onDispatch(id)
+    const acceptedInput = transport.sendInputAccepted
+    if (acceptedInput) {
+      const accepted = acceptedInput.getMockImplementation()
+      if (!accepted) {
+        throw new Error('Expected the accepted-input implementation before resident wrapping')
       }
-      return accepted?.(data, kind, acceptedOptions)
-    })
+      acceptedInput.mockImplementation((data, kind, acceptedOptions) => {
+        const id = boundPtyId ?? transport.getPtyId()
+        if (id) {
+          admit(id)
+          acceptedOptions?.call?.onDispatch(id)
+        }
+        return accepted(data, kind, acceptedOptions)
+      })
+    }
     const attach = transport.attach.getMockImplementation()
     transport.attach.mockImplementation((opts) => {
       const result = attach?.(opts)
@@ -225,7 +234,10 @@ async function transportMockFactory() {
       }
       const result = await connect?.(opts)
       boundPtyId = typeof result === 'string' ? result : (result?.id ?? transport.getPtyId())
-      admit(boundPtyId, result?.incarnationId)
+      admit(
+        boundPtyId,
+        typeof result === 'object' && result !== null ? result.incarnationId : undefined
+      )
       return result
     })
     return transport

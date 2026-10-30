@@ -38,26 +38,19 @@ vi.mock('./run-terminal-shell-alone', async (importOriginal) => ({
   confirmRootShellHasNoChildrenFromProcessTable: shellAlone
 }))
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/opencode-authority',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/opencode-authority',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ])
-}))
+vi.mock('../git/worktree', () => {
+  const worktree = {
+    path: '/tmp/worktree-a',
+    head: 'abc',
+    branch: 'feature/opencode-authority',
+    isBare: false,
+    isMainWorktree: false
+  }
+  return {
+    listWorktrees: vi.fn().mockResolvedValue([{ ...worktree }]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([{ ...worktree }])
+  }
+})
 
 class MeasuredAuthorityServer extends AgentHookServer {
   get measuredStore() {
@@ -87,6 +80,7 @@ function measureAuthority(server: MeasuredAuthorityServer, size: number) {
         sessionId: subject.sessionId,
         workspaceId: 'foreign',
         agent: 'codex',
+        latestPrompt: '',
         status: 'working',
         hostExecutionOwned: true,
         updatedAt: 100
@@ -170,7 +164,11 @@ function measureAuthority(server: MeasuredAuthorityServer, size: number) {
       }
     }
   }
-  const bindings = agentHookRuntimeDeps(server, { read: () => null }, () => ({}))
+  const bindings = agentHookRuntimeDeps(
+    server,
+    { read: () => ({ kind: 'unobserved' }) },
+    () => ({})
+  )
   return {
     counts,
     otherSources,
@@ -323,6 +321,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
   const tempDirs: string[] = []
 
   afterEach(() => {
+    vi.useRealTimers()
     for (const server of servers) {
       server.stop()
     }
@@ -335,7 +334,12 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
   })
 
   it('keeps ordinary-shell D capture independent of population while real presence reconciles, including raw and capable ingress', async () => {
-    const measurements = []
+    const measurements: (ReturnType<typeof measureAuthority>['counts'] & {
+      size: number
+      d: number
+      otherSources: ReturnType<typeof measureAuthority>['otherSources']
+      subscribers: number
+    })[] = []
     for (const size of [10, 100]) {
       const server = new MeasuredAuthorityServer()
       servers.push(server)
@@ -696,6 +700,8 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
   it.each([10, 100])(
     'does not let a later OpenCode session satisfy the previous pending retirement (C=%s)',
     async (size) => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(1_000)
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-sta4557-successor-'))
       tempDirs.push(userDataPath)
       let server = new MeasuredAuthorityServer()
@@ -779,7 +785,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
           source: 'opencode',
           env: 'production',
           launchToken: pane.launchToken,
-          receivedAt: Date.now(),
+          receivedAt: 1_000,
           worktreeId: pane.runtime.getOrchestrationDispatchAuthority(pane.evidence.terminalHandle)
             ?.worktreeId,
           payload: { hook_event_name: 'SessionBusy', sessionID: 'session-2' }

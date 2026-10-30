@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import {
@@ -7,7 +10,7 @@ import {
 } from '../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
-import { postHookEvent, installTestLaunchAuthority } from './server.test-fixtures'
+import { postHookEvent, installTestLaunchAuthority, recentTs } from './server.test-fixtures'
 import {
   TMUX_TEST_PANE,
   TMUX_TEST_ROOT,
@@ -41,12 +44,16 @@ const SECOND_PANE_KEY = makePaneKey('tab-authority-2', '22222222-2222-4222-8222-
 
 describe('AgentHookServer authority evidence', () => {
   const servers: AgentHookServer[] = []
+  const persistenceDirectories: string[] = []
 
   afterEach(() => {
     for (const server of servers) {
       server.stop()
     }
     servers.length = 0
+    for (const directory of persistenceDirectories.splice(0)) {
+      rmSync(directory, { recursive: true, force: true })
+    }
     vi.restoreAllMocks()
   })
 
@@ -147,23 +154,50 @@ describe('AgentHookServer authority evidence', () => {
       tabId: 'tab-authority',
       worktreeId: 'workspace',
       launchToken: 'old',
+      connectionId: null,
       payload: { state: 'working', prompt: '', agentType: 'codex' },
       receivedAt: 100,
       stateStartedAt: 100
     } satisfies AgentHookEventPayload & { receivedAt: number; stateStartedAt: number }
-    seedLegacyAgentStatusForTests(server._getStateForTests(), event)
-    await server.start()
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-authority-evidence-'))
+    persistenceDirectories.push(userDataPath)
+    const statusDirectory = join(userDataPath, 'agent-hooks')
+    mkdirSync(statusDirectory)
+    const receivedAt = recentTs()
+    const launchTokenHash = createHash('sha256').update('old').digest('hex')
+    writeFileSync(
+      join(statusDirectory, 'last-status.json'),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE_KEY]: {
+            ...event,
+            launchToken: undefined,
+            launchTokenHash,
+            receivedAt,
+            stateStartedAt: receivedAt
+          }
+        }
+      })
+    )
+    await server.start({ env: 'production', userDataPath })
+    const attestation = {
+      paneKey: PANE_KEY,
+      launchTokenHash,
+      connectionId: null,
+      terminalProvenance: 'restored' as const
+    }
+    expect(server.attestCompatibilityAuthority(attestation)).toEqual({
+      paneKey: PANE_KEY,
+      source: 'hydrated_commitment'
+    })
+    expect(server.getStatusSnapshotForPane(PANE_KEY)).toHaveLength(1)
     clearPaneCacheState(server._getStateForTests(), PANE_KEY)
+    expect(server.getStatusSnapshotForPane(PANE_KEY)).toEqual([])
+    expect(server.attestCompatibilityAuthority(attestation)).not.toBeNull()
     const hashOnly = server.capturePaneAuthorityRetirement(PANE_KEY)
     hashOnly()
-    expect(
-      server.attestCompatibilityAuthority({
-        paneKey: PANE_KEY,
-        launchTokenHash: createHash('sha256').update('old').digest('hex'),
-        connectionId: null,
-        terminalProvenance: 'restored'
-      })
-    ).toBeNull()
+    expect(server.attestCompatibilityAuthority(attestation)).toBeNull()
     server.ingestRemote({ ...event, launchToken: undefined }, null)
     const current = server.capturePaneAuthorityRetirement(PANE_KEY)
     current()

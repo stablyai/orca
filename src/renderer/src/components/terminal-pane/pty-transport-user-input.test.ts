@@ -106,6 +106,10 @@ describe('createIpcPtyTransport: input kind', () => {
     })
     expect(sent).toBe(false)
     expect(window.api.pty.write).not.toHaveBeenCalled()
+    expect(transport.detach).toBeTypeOf('function')
+    if (!transport.detach) {
+      throw new Error('IPC transport must provide detach')
+    }
     transport.detach()
     expect(onEligible).not.toHaveBeenCalled()
   })

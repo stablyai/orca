@@ -92,6 +92,7 @@ describe('main canonical tmux projection', () => {
             sessionId: subject.sessionId,
             workspaceId: 'foreign',
             agent: 'codex',
+            latestPrompt: '',
             status: 'working',
             hostExecutionOwned: true,
             updatedAt: 100

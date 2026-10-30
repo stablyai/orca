@@ -234,11 +234,12 @@ export function registerTerminalSideEffectFactConsumer(
       return detach
     }
   }
-  let entries = consumersByPtyId.get(options.ptyId)
-  if (!entries) {
-    entries = new Set()
-    consumersByPtyId.set(options.ptyId, entries)
+  let registeredEntries = consumersByPtyId.get(options.ptyId)
+  if (!registeredEntries) {
+    registeredEntries = new Set()
+    consumersByPtyId.set(options.ptyId, registeredEntries)
   }
+  const entries = registeredEntries
   entries.add(entry)
   const resident = residentsByPtyId.get(options.ptyId)
   if (resident) {

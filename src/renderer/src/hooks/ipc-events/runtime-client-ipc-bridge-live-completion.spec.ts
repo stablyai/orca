@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../../shared/constants'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import * as terminalNotifications from '../../components/terminal-pane/use-notification-dispatch'
@@ -28,7 +29,7 @@ export function registerLiveTerminalSourceCompletionTests(
       const paneKey = `tab:${leafId}`
       const ptyId = toRemoteRuntimePtyId('physical', 'host-a')
       useAppStore.setState({
-        settings: { ...useAppStore.getState().settings },
+        settings: { ...getDefaultSettings('/home/test'), ...useAppStore.getState().settings },
         fetchHostWorkspaceStatuses: vi.fn(async () => {}),
         ptyIdsByTabId: { tab: [ptyId] },
         terminalLayoutsByTabId: {

@@ -1,7 +1,7 @@
 import type { TerminalInputCall } from './terminal-input-call'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { PtyReplayDataMeta, PtyTransport } from './pty-transport-types'
+import type { PtyConnectResult, PtyReplayDataMeta, PtyTransport } from './pty-transport-types'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
@@ -29,16 +29,18 @@ export type ConnectCallbacks = {
 export type MockTransport = {
   retryRecovery?: () => boolean
   attach: Mock<PtyTransport['attach']>
-  connect: ReturnType<typeof vi.fn> & {
-    mockImplementation: (
-      impl: (opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>) => Promise<unknown>
-    ) => unknown
-  }
+  connect: Mock<
+    (
+      opts: { callbacks: ConnectCallbacks; sessionId?: string } & Record<string, unknown>
+    ) => Promise<string | PtyConnectResult | null | void>
+  >
   disconnect: ReturnType<typeof vi.fn>
   detach?: ReturnType<typeof vi.fn>
-  sendInput: ReturnType<typeof vi.fn>
-  sendInputImmediate: ReturnType<typeof vi.fn>
-  sendInputAccepted?: ReturnType<typeof vi.fn>
+  sendInput: Mock<(data: string, kind?: string, call?: TerminalInputCall) => boolean>
+  sendInputImmediate: Mock<(data: string) => boolean>
+  sendInputAccepted?: Mock<
+    (data: string, kind?: string, options?: { call?: TerminalInputCall }) => Promise<boolean>
+  >
   claimViewport: ReturnType<typeof vi.fn>
   setOutputPaused?: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
@@ -72,6 +74,8 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
       }
       return true
     }),
+    // Query replies delegate to the same spy as ordinary input.
+    sendInputImmediate: vi.fn((data: string) => sendInput(data)),
     claimViewport: vi.fn(() => true),
     resize: vi.fn(() => true),
     getPtyId: vi.fn(() => ptyId),
@@ -79,9 +83,7 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     serializeBuffer: undefined
   }
   transport.isConnected = vi.fn(() => ptyId !== null)
-  const sendInput = transport.sendInput as unknown as (data: string) => boolean
-  // Why: query replies route through sendInputImmediate; delegate to the same spy so reply-delivery assertions still observe them (#7329).
-  transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
+  const sendInput = transport.sendInput
   transport.sendInputAccepted = vi.fn(
     async (data: string, kind?: string, options?: { call?: TerminalInputCall }) =>
       transport.sendInput(data, kind, options?.call)

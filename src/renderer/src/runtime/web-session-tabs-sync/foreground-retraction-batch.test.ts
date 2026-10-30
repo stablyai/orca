@@ -91,7 +91,7 @@ it('bounds actual nonempty snapshot/operations batches through index, leaf walk,
         flushes = 0,
         flushedRecords = 0
       const contexts = new WeakSet<object>()
-      let currentForeground: typeof state.paneForegroundAgentByPaneKey
+      let currentForeground: typeof state.paneForegroundAgentByPaneKey | undefined = undefined
       const originalDelete = Set.prototype.delete
       vi.spyOn(Set.prototype, 'delete').mockImplementation(function (
         this: Set<unknown>,
@@ -125,6 +125,7 @@ it('bounds actual nonempty snapshot/operations batches through index, leaf walk,
               flushedRecords++
               yield record
             }
+            return undefined
           })
         }
         const before = s[name]

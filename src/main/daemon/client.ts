@@ -52,7 +52,6 @@ export class DaemonClient {
   private connectingPromise: Promise<void> | null = null
   private connectionAttemptGeneration = 0
   private daemonIdentity: DaemonEndpointIdentity | null = null
-  private terminalState = false
   private transientReader: DaemonTransientReader | undefined
 
   private daemonResizeModel: string | null | undefined
@@ -160,7 +159,6 @@ export class DaemonClient {
       if (!sameDaemonIdentity(controlIdentity, streamHello.identity)) {
         throw new DaemonProtocolError('Daemon identity changed during connection')
       }
-      this.terminalState = streamHello.terminalState === true
       const emit = (event: DaemonEvent, source?: DaemonStreamSource): void => {
         if (this.streamSocket !== pendingStreamSocket) {
           return

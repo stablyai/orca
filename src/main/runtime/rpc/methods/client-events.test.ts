@@ -75,7 +75,7 @@ describe('runtime.clientEvents.subscribe', () => {
   })
 
   it('publishes the historical baseline before availability can synchronously publish live facts', async () => {
-    const historical: RuntimeClientEvent[] = []
+    const historical: { type: unknown }[] = []
     const live: RuntimeClientEvent = {
       type: 'terminalSideEffects',
       batch: {
@@ -102,7 +102,12 @@ describe('runtime.clientEvents.subscribe', () => {
         connectionId: 'ordering',
         clientCapabilities: ['terminal-side-effect-state.v1']
       } as RpcContext,
-      (event) => historical.push(event)
+      (event) => {
+        if (typeof event !== 'object' || event === null || !('type' in event)) {
+          throw new Error('Runtime event must have a type')
+        }
+        historical.push(event)
+      }
     )
     expect(historical.map((event) => event.type)).toEqual(['ready', 'terminalSideEffects'])
     cleanups.forEach((cleanup) => cleanup())

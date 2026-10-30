@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../../shared/constants'
 import { expect, it, vi } from 'vitest'
 import * as terminalNotifications from '../../components/terminal-pane/use-notification-dispatch'
 import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-transitions'
@@ -27,7 +28,7 @@ export function registerLateTerminalSourceRetryTest(
     const paneKey = `tab:${leafId}`
     useAppStore.setState({
       markTerminalBell,
-      settings: { ...useAppStore.getState().settings },
+      settings: { ...getDefaultSettings('/home/test'), ...useAppStore.getState().settings },
       fetchHostWorkspaceStatuses: vi.fn(async () => {}),
       ptyIdsByTabId: { tab: [ptyId] },
       terminalLayoutsByTabId: {

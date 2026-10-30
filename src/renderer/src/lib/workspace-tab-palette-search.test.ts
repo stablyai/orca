@@ -137,7 +137,7 @@ describe('workspace-tab-palette-search', () => {
     const leaf = '11111111-1111-4111-8111-111111111111'
     const paneKey = `terminal-1:${leaf}`
     for (const agentEvidence of ['process-admitted', 'process-read', null] as const) {
-      const options = {
+      const options: Partial<Parameters<typeof buildSearchableWorkspaceTabs>[0]> = {
         terminalLayoutsByTabId: {
           'terminal-1': {
             root: { type: 'leaf' as const, leafId: leaf },

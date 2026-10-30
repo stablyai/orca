@@ -16,8 +16,8 @@ export type TerminalForegroundServices = {
   worktreeId: string
   tabId: string
   runtimeEnvironmentId?: string | null
-  cwd: string
-  startup: PaneLaunchAgentPaneSlice['startup']
+  cwd?: string
+  startup: PaneLaunchAgentPaneSlice['startup'] | null
   isLive?: () => boolean
   execution?: object
   endpoint?: string

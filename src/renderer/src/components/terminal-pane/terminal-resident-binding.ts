@@ -18,7 +18,7 @@ export type TerminalResidentBinding = {
   paneKey: string
   worktreeId: string
   tabId: string
-  cwd: string
+  cwd?: string
   startup?: PtyPaneStartup
   initialTitle?: string
   workspaceOwner?: NotificationWorkspaceOwner

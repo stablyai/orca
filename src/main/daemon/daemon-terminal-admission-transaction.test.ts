@@ -86,7 +86,7 @@ describe('negotiated attachment and claimed execution', () => {
             rows: 24,
             command: 'typed-agent-command',
             agentSessionEnsure: { claim, surface },
-            terminalState: true
+            terminalState: true as const
           }
         })
         const accepted = daemon.admission.createOrAttach(clientId, request('canonical'))

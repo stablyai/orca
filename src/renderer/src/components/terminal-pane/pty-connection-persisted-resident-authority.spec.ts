@@ -23,12 +23,12 @@ export function registerPersistedResidentAuthorityTests(fixture: {
   it.each(['shell', 'question', 'working-interrupt', 'pending-completion'] as const)(
     'folds real persisted paired input into established S0 execution: %s',
     async (scenario) => {
-      let callbacks: MultiplexSubscriptionCallbacks = null
+      const subscriptionState: { callbacks: MultiplexSubscriptionCallbacks } = { callbacks: null }
       let resolvedHandle = 'terminal-1'
       const wire = createRemoteRuntimeTransportMocks({
-        getCallbacks: () => callbacks,
+        getCallbacks: () => subscriptionState.callbacks,
         setCallbacks: (value) => {
-          callbacks = value
+          subscriptionState.callbacks = value
         },
         getResolvedPaneHandle: () => resolvedHandle,
         setResolvedPaneHandle: (value) => {
@@ -58,7 +58,7 @@ export function registerPersistedResidentAuthorityTests(fixture: {
         minCompatibleRuntimeClientVersion: 2,
         capabilities: [TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY, 'terminal-side-effect-state.v1']
       }
-      state.runtimeStatusByEnvironmentId.set('env-1', { status })
+      state.runtimeStatusByEnvironmentId.set('env-1', { status, checkedAt: 1_000 })
       const deps = buildPaneConnectionDeps(fixture.getState, {
         tabId,
         mountFollowsTerminalPark: true
@@ -209,7 +209,7 @@ export function registerPersistedResidentAuthorityTests(fixture: {
         await vi.waitFor(() => expect(wire.latestSubscribePayload()).toBeDefined())
         const subscription = wire.latestSubscribePayload()
         expect(subscription.terminal).toBe('terminal-1')
-        callbacks?.onResponse({
+        subscriptionState.callbacks?.onResponse({
           ok: true,
           result: { type: 'subscribed', streamId: subscription.streamId }
         })

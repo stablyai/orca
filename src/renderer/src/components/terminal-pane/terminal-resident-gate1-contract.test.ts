@@ -19,7 +19,7 @@ import { foregroundAgentForActions } from '../../../../shared/agent-status-ident
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 
-let state: StoreState
+let state: StoreState & Parameters<typeof resolveWindowsShiftEnterEncodingForPane>[0]
 const read = vi.fn<() => Promise<RuntimeTerminalProcessInspection>>()
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => state, subscribe: () => () => {} }
@@ -106,7 +106,7 @@ function resident() {
 beforeEach(async () => {
   vi.useFakeTimers()
   epoch = 0
-  state = createInitialStoreState(() => state)
+  state = { ...createInitialStoreState(() => state), agentLaunchConfigByPaneKey: {} }
   await installTerminalTestGlobals()
   vi.mocked(window.api.pty.inspectProcess).mockImplementation(() => read())
   read.mockReset()

@@ -83,6 +83,10 @@ import {
   useDashboardPopoutBridge
 } from './useDashboardPopoutBridge'
 
+const actual = await vi.importActual<{ buildDashboardSnapshot: typeof SnapshotBuilder }>(
+  './build-dashboard-snapshot'
+)
+
 type DashboardSnapshotWatchState = Parameters<typeof dashboardSnapshotInputsChanged>[0]
 
 function makeSnapshotWatchState(): DashboardSnapshotWatchState {
@@ -169,9 +173,6 @@ describe('useDashboardPopoutBridge', () => {
     vi.useFakeTimers()
     vi.setSystemTime(FOREGROUND_TEST_NOW)
     vi.spyOn(Date, 'now').mockReturnValue(FOREGROUND_TEST_NOW)
-    const actual = await vi.importActual<{ buildDashboardSnapshot: typeof SnapshotBuilder }>(
-      './build-dashboard-snapshot'
-    )
     mocks.buildDashboardSnapshot.mockImplementation(actual.buildDashboardSnapshot)
     let current = { ...makeSnapshotWatchState(), ...foregroundConsumerState('process-admitted') }
     mocks.readSnapshotState.mockReturnValue(current)

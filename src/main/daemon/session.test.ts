@@ -1,6 +1,7 @@
 import { createMockSubprocess } from './session-test-subprocess'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
+import { TerminalSnapshotConsumption } from '../../shared/terminal-snapshot-consumption'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
@@ -10,6 +11,7 @@ import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
   TerminalTransientObservation,
+  TerminalTransientFact,
   TerminalTransientSink
 } from '../../shared/terminal-transient-observation'
 import {
@@ -106,17 +108,28 @@ describe('Session', () => {
       const marker = (value: string): string => `\x1b]133;${value}\x07`
       const staged: TerminalTransientObservation[] = []
       const delivered: TerminalTransientObservation[] = []
+      const liveFacts: TerminalTransientFact[] = []
       const order: string[] = []
       const installs: TerminalTransientObservation[] = []
+      const readers: (() => TerminalTransientObservation)[] = []
+      const consumption = new TerminalSnapshotConsumption()
       const transients: TerminalTransientSink = {
-        install: (current, incarnation) => {
+        install: (current, incarnation, readCurrent) => {
           expect(incarnation).toBe(session.incarnationId)
+          expect(readCurrent()).toEqual(current)
+          readers.push(readCurrent)
           installs.push(current)
+          expect(consumption.install(current).effects).toEqual([])
         },
         stage: (observation) => staged.push(observation),
         commit: () => {
           order.push('effects')
-          delivered.push(...staged.splice(0))
+          for (const snapshot of staged.splice(0)) {
+            delivered.push(snapshot)
+            liveFacts.push(
+              ...(consumption.consume(snapshot)?.effects.map((effect) => effect.fact) ?? [])
+            )
+          }
         }
       }
       subprocess.simulateData(marker('B') + marker('C'))
@@ -135,14 +148,38 @@ describe('Session', () => {
       expect(installs).toHaveLength(2)
       subprocess.simulateData(`${marker('C')}sleep 60`)
       subprocess.simulateData(`${marker('D;0')}${marker('A')}\x07`)
-      expect(
-        delivered.filter((entry) => entry.kind === 'observation').map((entry) => entry.fact.kind)
-      ).toEqual(['command-started', 'command-finished', 'bell'])
+      expect(liveFacts).toEqual([
+        { kind: 'command-started' },
+        { kind: 'command-finished', exitCode: 0 },
+        { kind: 'bell' }
+      ])
+      expect(installs[0]?.current).toMatchObject({ command: 'running', commandOrdinal: 1 })
+      expect(installs[1]?.current).toMatchObject({ command: 'running', commandOrdinal: 1 })
+      expect(installs[1]?.effects['command-finished']).toBeUndefined()
+      expect(delivered.at(-1)?.effects['command-finished']?.count).toBe(1)
+      for (const kind of ['command-started', 'bell'] as const) {
+        expect(installs[1]?.effects[kind]?.count).toBe(1)
+        expect(delivered.at(-1)?.effects[kind]?.count).toBe(2)
+      }
+      expect(delivered).toHaveLength(2)
+      expect(delivered[0]?.current).toMatchObject({ command: 'running', commandOrdinal: 2 })
+      expect(delivered[0]?.effects['command-finished']).toBeUndefined()
+      expect(delivered[0]?.effects.bell?.count).toBe(1)
+      expect(delivered[1]?.current).toMatchObject({ command: 'prompt', commandOrdinal: 2 })
+      expect(readers[0]?.()).toEqual(delivered.at(-1))
+      expect(readers[1]?.()).toEqual(delivered.at(-1))
       expect(order).toEqual(['display', 'effects', 'display', 'effects', 'display', 'effects'])
       session.detachClient(second)
       attach()
-      expect(installs.at(-1)).toMatchObject({ kind: 'install', current: { command: 'prompt' } })
-      expect(delivered).toHaveLength(3)
+      expect(installs).toHaveLength(3)
+      expect(installs.at(-1)).toEqual(delivered.at(-1))
+      expect(installs.at(-1)?.current.command).toBe('prompt')
+      expect(liveFacts.map((fact) => fact.kind)).toEqual([
+        'command-started',
+        'command-finished',
+        'bell'
+      ])
+      expect(delivered).toHaveLength(2)
     })
 
     it('does not confirm shell ownership from historical replay bytes', () => {

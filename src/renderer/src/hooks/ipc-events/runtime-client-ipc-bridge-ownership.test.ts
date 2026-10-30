@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../../shared/constants'
 import { registerLiveTerminalSourceCompletionTests } from './runtime-client-ipc-bridge-live-completion.spec'
 import { registerLateTerminalSourceRetryTest } from './runtime-client-ipc-bridge-late-terminal-source.spec'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -549,7 +550,11 @@ it('R2-C3 follows actual empty-ready rollback and upgrade with stale or missing 
   useAppStore.setState({
     markTerminalBell,
     fetchHostWorkspaceStatuses: vi.fn(async () => {}),
-    settings: { ...useAppStore.getState().settings, activeRuntimeEnvironmentId: 'host-a' }
+    settings: {
+      ...getDefaultSettings('/home/test'),
+      ...useAppStore.getState().settings,
+      activeRuntimeEnvironmentId: 'host-a'
+    }
   })
   const source = new TerminalSnapshotState()
   const ptyId = toRemoteRuntimePtyId('physical', 'host-a')
@@ -598,7 +603,11 @@ it('R2-C3 follows actual empty-ready rollback and upgrade with stale or missing 
     expect(markTerminalBell).toHaveBeenCalledOnce()
     // Missing separately refreshed status must not suppress a current actual ready.
     useAppStore.setState({
-      settings: { ...useAppStore.getState().settings, activeRuntimeEnvironmentId: 'host-a' },
+      settings: {
+        ...getDefaultSettings('/home/test'),
+        ...useAppStore.getState().settings,
+        activeRuntimeEnvironmentId: 'host-a'
+      },
       runtimeStatusByEnvironmentId: new Map()
     })
     expect(h.pending).toHaveLength(4)

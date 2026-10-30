@@ -260,7 +260,7 @@ describe('generic terminal observation authority', () => {
       expect(replay.capture).not.toHaveBeenCalled()
       expect(replay.pty?.launchToken).toBe('controlled-launch')
     } finally {
-      sink?.dispose()
+      sink?.dispose?.()
       batcher.clear()
       reader.dispose()
       socket.destroy()

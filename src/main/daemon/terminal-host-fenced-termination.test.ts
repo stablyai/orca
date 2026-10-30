@@ -85,6 +85,10 @@ describe('execution-side conditional teardown', () => {
 
   it('refuses a promoted agent claim after the listing', async () => {
     const created = await create('pty', true)
+    expect(created.attachToken).not.toBeNull()
+    if (created.attachToken === null) {
+      throw new Error('Accepted creation must attach a client')
+    }
     host.detach('pty', created.attachToken)
     expect(host.beginFencedTermination(request(created.incarnationId))).toEqual({
       accepted: false,
@@ -95,6 +99,10 @@ describe('execution-side conditional teardown', () => {
 
   it('refuses an in-flight claim before its promotion', async () => {
     const created = await create()
+    expect(created.attachToken).not.toBeNull()
+    if (created.attachToken === null) {
+      throw new Error('Accepted creation must attach a client')
+    }
     host.detach('pty', created.attachToken)
     const claiming = host.createOrAttach({
       sessionId: 'pty',
@@ -113,6 +121,10 @@ describe('execution-side conditional teardown', () => {
 
   it('reserves teardown synchronously, refuses later attach, and waits for physical exit', async () => {
     const created = await create()
+    expect(created.attachToken).not.toBeNull()
+    if (created.attachToken === null) {
+      throw new Error('Accepted creation must attach a client')
+    }
     host.detach('pty', created.attachToken)
     vi.mocked(handles[0]!.forceKill).mockImplementation(() => {})
     const termination = host.beginFencedTermination(request(created.incarnationId))

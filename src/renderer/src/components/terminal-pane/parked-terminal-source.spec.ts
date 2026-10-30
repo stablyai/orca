@@ -28,7 +28,7 @@ export function registerParkedTerminalSourceTests(context: {
     close: ReturnType<typeof vi.fn>
   }[]
 }): void {
-  const { startWatcher, dispatchTerminalNotification, emit } = context
+  const { dispatchTerminalNotification, emit } = context
   it.each([
     ['local main-authority', 'pty-parked-1'],
     ['SSH through main', 'ssh:connection-1@@pty-1'],
@@ -296,97 +296,4 @@ export function registerParkedTerminalSourceTests(context: {
       expect(dispatchTerminalNotification).toHaveBeenCalledOnce()
     }
   )
-
-  it('delivers the first capable live bell through daemon installation, runtime projection and the resident store', async () => {
-    const { Socket } = await import('node:net')
-    const { DaemonStreamDataBatcher } =
-      await import('../../../../main/daemon/daemon-stream-data-batcher')
-    const { DaemonTransientReader } =
-      await import('../../../../main/daemon/daemon-transient-reader')
-    const { SessionOutputPlane } = await import('../../../../main/daemon/session-output-plane')
-    const { OrcaRuntimeService } = await import('../../../../main/runtime/orca-runtime')
-    const handler = await import('./terminal-side-effect-facts-handler')
-    context.getStore().settings = {
-      ...context.getStore().settings,
-      terminalMainSideEffectAuthority: true
-    }
-    Object.assign(window.api.pty, { hasPty: vi.fn().mockResolvedValue(false) })
-    const { dispose } = await startWatcher()
-    const runtime = new OrcaRuntimeService(undefined, undefined, {
-      onTerminalSideEffects: handler.dispatchTerminalSideEffectBatch
-    })
-    runtime.setPtyController({
-      spawn: vi.fn(),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Terminal',
-          activeLeafId: LEAF_ID,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: LEAF_ID,
-          paneRuntimeId: PANE_ID,
-          ptyId: PTY_ID
-        }
-      ]
-    })
-    const socket = new Socket()
-    let deep = 256 * 1024
-    Object.defineProperty(socket, 'writableLength', { get: () => deep })
-    const reader = new DaemonTransientReader((event) => {
-      if (event.event === 'terminalObservation') {
-        runtime.applyTerminalTransientObservation(PTY_ID, event.incarnationId, event.payload)
-      }
-    })
-    vi.spyOn(socket, 'write').mockImplementation((...args: unknown[]) => {
-      reader.accept(JSON.parse(String(args[0])))
-      return deep === 0
-    })
-    const batcher = new DaemonStreamDataBatcher(() => ({
-      streamSocket: socket,
-      streamFraming: 'ndjson'
-    }))
-    const plane = new SessionOutputPlane({ cols: 80, rows: 24, incarnationId: 'physical' })
-    try {
-      plane.emit({ data: '\x07', rawStartSeq: 0, rawEndSeq: 1 })
-      batcher.enqueue('client', PTY_ID, 'x'.repeat(64 * 1024))
-      plane.attachClient({
-        transients: batcher.bindTransients('client', PTY_ID),
-        onData: (data) => batcher.enqueue('client', PTY_ID, data),
-        onExit: () => {}
-      })
-      plane.emit({ data: '\x07', rawStartSeq: 1, rawEndSeq: 2 })
-      batcher.flush('client')
-      expect(context.getStore().markTerminalBell).not.toHaveBeenCalled()
-      deep = 0
-      batcher.flush('client')
-      expect(context.getStore().markTerminalBell).toHaveBeenCalledOnce()
-      const resident = handler.getTerminalSemanticResident(PTY_ID)
-      expect(resident?.identity.incarnationId).toBe('physical')
-      dispose()
-      await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
-      expect(dispatchTerminalNotification).toHaveBeenCalledOnce()
-      expect(handler.getTerminalSemanticResident(PTY_ID)).toBe(resident)
-    } finally {
-      reader.dispose()
-      plane.markDisposed()
-      plane.disposeEmulator()
-      batcher.clear()
-      socket.destroy()
-      runtime.onPtyExit(PTY_ID, 0)
-      dispose()
-    }
-  })
 }

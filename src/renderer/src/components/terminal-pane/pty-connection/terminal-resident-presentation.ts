@@ -5,10 +5,8 @@ import { markTerminalBracketedPasteInterrupted } from '../terminal-bracketed-pas
 import type { TerminalSemanticResident } from '../terminal-side-effect-facts-handler'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-import type {
-  createTerminalResidentPolicy,
-  TerminalResidentPresentation
-} from '../terminal-resident-policy'
+import type { createTerminalResidentPolicy } from '../terminal-resident-policy'
+import type { TerminalResidentPresentation } from '../terminal-resident-binding'
 import { getTerminalSemanticResident } from '../terminal-semantic-residents'
 
 export function installTerminalResidentPolicy(session: ConnectPanePtySession): void {
