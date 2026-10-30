@@ -255,7 +255,12 @@ async function unmount() {
     tree = undefined
   })
 }
-function holdCredential() {
+function holdCredential(): {
+  entered: Promise<void>
+  promise: Promise<string | null>
+  resolve: (value: string | null | PromiseLike<string | null>) => void
+  reject: (reason?: unknown) => void
+} {
   const entered = Promise.withResolvers<void>()
   const held = Promise.withResolvers<string | null>()
   ports.readSecret.mockImplementationOnce(async () => {

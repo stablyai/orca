@@ -117,11 +117,9 @@ afterEach(async () => {
     for (const release of heldSources.splice(0)) {
       await release()
     }
-    if (vi.isFakeTimers()) {
-      await vi.advanceTimersByTimeAsync(0)
-    } else {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
+    await (vi.isFakeTimers()
+      ? vi.advanceTimersByTimeAsync(0)
+      : new Promise((resolve) => setTimeout(resolve, 0)))
     const { pushNativeSnapshotForTests } = await import('./push-native-preparation')
     expect(pushNativeSnapshotForTests().physical).toBe(0)
   } finally {
