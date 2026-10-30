@@ -105,7 +105,7 @@ export function WorktreeCardSecondaryRows({
                 type="button"
                 variant="outline"
                 size="chip"
-                className="relative z-10 max-w-32"
+                className="relative z-10 max-w-32 gap-1 has-[>svg]:px-1.5"
                 aria-label={lineageChildAriaLabel}
                 aria-expanded={!lineageCollapsed}
                 onClick={onLineageToggle}
