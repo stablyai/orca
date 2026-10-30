@@ -158,3 +158,103 @@ describe('remote runtime recovery input hold', () => {
     await vi.waitFor(() => expect(sent).toEqual(['pre-entry typed']))
   })
 })
+
+it('retains the entry scope through release and removes a retired accepted item without clearing its neighbors', async () => {
+  const { createPtyInputSourceBinding } = await import('./pty-input-source')
+  const source = createPtyInputSourceBinding<string>({
+    same: (a, b) => a === b,
+    refine: (_, next) => next,
+    create: (get, isCurrent) => ({
+      ptyId: get(),
+      isCurrent,
+      sendInput: () => false,
+      sendInputImmediate: () => false
+    })
+  })
+  source.change('A', () => {})
+  const a = source.current()
+  if (!a) {
+    throw new Error('Missing A')
+  }
+  const hold = createRemoteRuntimeRecoveryInputHold()
+  const sent: { text: string; source: unknown }[] = []
+  let finish: (accepted: boolean) => void = () => {}
+  const acceptedWriter = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve
+      })
+  )
+  const accepted = hold.enqueueAccepted(endpoint, 'old-accepted', 'driving', undefined, a)
+  hold.enqueue(endpoint, 'ordinary', 'driving')
+  const active = hold.release(endpoint, {
+    isCurrent: () => true,
+    sendInput: (text, _kind, scope) => {
+      sent.push({ text, source: scope })
+      return true
+    },
+    sendInputImmediate: () => true,
+    sendInputAccepted: acceptedWriter
+  })
+  await vi.waitFor(() => expect(acceptedWriter).toHaveBeenCalledOnce())
+  expect(acceptedWriter).toHaveBeenCalledWith('old-accepted', 'driving', undefined, a)
+  source.change('B', () => {})
+  const b = source.current()
+  if (!b) {
+    throw new Error('Missing B')
+  }
+  hold.enqueue(endpoint, 'current-B', 'driving', b)
+  finish(false)
+  await active?.done
+  await expect(accepted).resolves.toBe(false)
+  expect(sent).toEqual([
+    { text: 'ordinary', source: undefined },
+    { text: 'current-B', source: b }
+  ])
+  expect(hold.isHolding()).toBe(false)
+})
+
+it('continues ordinary and current-scope neighbors when a synchronous held write retires its source and throws', async () => {
+  const { createPtyInputSourceBinding } = await import('./pty-input-source')
+  const source = createPtyInputSourceBinding<string>({
+    same: (a, b) => a === b,
+    refine: (_, next) => next,
+    create: (get, isCurrent) => ({
+      ptyId: get(),
+      isCurrent,
+      sendInput: () => false,
+      sendInputImmediate: () => false
+    })
+  })
+  source.change('A', () => {})
+  const a = source.current()
+  if (!a) {
+    throw new Error('Missing A')
+  }
+  const hold = createRemoteRuntimeRecoveryInputHold()
+  const sent: string[] = []
+  hold.enqueue(endpoint, 'old-A', 'driving', a)
+  hold.enqueue(endpoint, 'ordinary', 'driving')
+  const release = hold.release(endpoint, {
+    isCurrent: () => true,
+    sendInput: (text, _kind, scope) => {
+      if (scope === a) {
+        source.change('B', () => {})
+        const b = source.current()
+        if (!b) {
+          throw new Error('Missing B')
+        }
+        hold.enqueue(endpoint, 'current-B', 'driving', b)
+        throw new Error('A retired during write')
+      }
+      expect(scope?.isCurrent() ?? true).toBe(true)
+      sent.push(text)
+      return true
+    },
+    sendInputImmediate: () => true,
+    sendInputAccepted: async () => true
+  })
+  await release?.done
+  expect(sent).toEqual(['ordinary', 'current-B'])
+  expect(hold.isHolding()).toBe(false)
+})

@@ -2,6 +2,8 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { createPtyInputSourceBinding } from '../terminal-pane/pty-input-source'
+import { installTerminalLinkPtyMouseSuppression } from '../terminal-pane/terminal-link-pty-mouse-suppression'
 import { openStandaloneTerminal } from './open-standalone-terminal'
 
 let emitData: (data: string) => void = () => {}
@@ -9,8 +11,15 @@ let signalUserInput: () => void = () => {}
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
-    open(): void {}
-    dispose(): void {}
+    element: HTMLElement | undefined
+    open(container: HTMLElement): void {
+      this.element = container
+    }
+    dispose(): void {
+      emitData = () => {}
+    }
+    reset(): void {}
+    clearSelection(): void {}
     write(_data: string, done?: () => void): void {
       done?.()
     }
@@ -31,7 +40,17 @@ vi.mock('@/components/terminal-pane/terminal-native-copy-gutter', () => ({
   installTerminalNativeCopyGutterTrim: () => ({ dispose: () => {} })
 }))
 vi.mock('../dashboard-popout/preview-terminal-compatibility', () => ({
-  installPreviewTerminalCompatibility: () => () => {}
+  installPreviewTerminalCompatibility: (terminal: {
+    element: HTMLElement
+    clearSelection: () => void
+  }) => {
+    const inputOwner = installTerminalLinkPtyMouseSuppression(terminal, {
+      candidate: () => 'fixture-link',
+      eligible: () => true,
+      canContinue: () => true
+    })
+    return Object.assign(() => inputOwner.dispose(), { inputOwner })
+  }
 }))
 vi.mock('../dashboard-popout/preview-terminal-ime-bridge', () => ({
   installPreviewImeBridge: () => ({ claimKeyEvent: () => false, dispose: () => {} })
@@ -91,3 +110,70 @@ describe('standalone terminal input', () => {
     expect(sendInput).toHaveBeenCalledWith(CURSOR_POSITION_REPLY)
   })
 })
+
+it.each([false, true])(
+  'keeps the actual standalone onData/source/disposal route with answersQueries=%s',
+  (answersQueries) => {
+    const writes: string[] = []
+    const sources = createPtyInputSourceBinding<string>({
+      same: (a, b) => a === b,
+      refine: (_, next) => next,
+      create: (endpoint, isCurrent) => ({
+        ptyId: endpoint(),
+        isCurrent,
+        sendInput: (data) => {
+          if (!isCurrent()) {
+            return false
+          }
+          writes.push(`${endpoint()}:${data}`)
+          return true
+        },
+        sendInputImmediate: () => false
+      })
+    })
+    sources.change('A', () => {})
+    const container = document.createElement('div')
+    const ordinary = vi.fn(() => true)
+    const terminal = openStandaloneTerminal({
+      container,
+      options: {},
+      kittyKeyboardModes: new TerminalKittyKeyboardModeTracker(),
+      sessionKey: 'source',
+      sendInput: ordinary,
+      inputSource: { getInputSource: sources.current, observeInputSource: sources.observe },
+      answersQueries,
+      getSettings: () => null,
+      getMacOptionAsAlt: () => 'false',
+      getTerminalInput: () => null
+    })
+    if (!terminal) {
+      throw new Error('missing standalone')
+    }
+    const down = '\x1b[<0;1;1M'
+    const up = '\x1b[<0;1;1m'
+    container.addEventListener('mousedown', () => {
+      signalUserInput()
+      emitData(down)
+    })
+    container.addEventListener('mouseup', () => {
+      signalUserInput()
+      emitData(up)
+    })
+    container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }))
+    sources.change('B', () => {})
+    container.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    expect(writes).toEqual([`A:${down}`])
+    expect(ordinary).not.toHaveBeenCalled()
+    emitData(CURSOR_POSITION_REPLY)
+    expect(ordinary).toHaveBeenCalledTimes(answersQueries ? 1 : 0)
+    signalUserInput()
+    emitData('ordinary-before-connect')
+    expect(ordinary).toHaveBeenLastCalledWith('ordinary-before-connect')
+    container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }))
+    terminal.dispose()
+    expect(writes).toEqual([`A:${down}`, `B:${down}`])
+    container.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    emitData('disposed')
+    expect(ordinary).not.toHaveBeenCalledWith('disposed')
+  }
+)

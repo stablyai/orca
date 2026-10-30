@@ -29,18 +29,32 @@ export function attachIpcPty(options: PtyAttachOptions, context: IpcPtyAttachCon
 
   const id = options.existingPtyId
   context.bind(id)
+  if (!context.isCurrent(id)) {
+    return
+  }
   context.handlers.registerData(id)
+  if (!context.isCurrent(id)) {
+    return
+  }
   context.handlers.registerExit(id)
   if (!context.isCurrent(id)) {
     return
   }
 
   replayEagerPtyBuffer(options, context)
+  if (!context.isCurrent(id)) {
+    return
+  }
   if (options.cols && options.rows) {
     window.api.pty.resize(id, options.cols, options.rows)
   }
+  if (!context.isCurrent(id)) {
+    return
+  }
   options.callbacks.onConnect?.()
-  options.callbacks.onStatus?.('shell')
+  if (context.isCurrent(id)) {
+    options.callbacks.onStatus?.('shell')
+  }
 }
 
 function replayEagerPtyBuffer(options: PtyAttachOptions, context: IpcPtyAttachContext): void {

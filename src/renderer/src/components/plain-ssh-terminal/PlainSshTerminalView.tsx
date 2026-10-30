@@ -1,3 +1,4 @@
+import { createPtyInputSourceBinding } from '../terminal-pane/pty-input-source'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import type { ITheme, Terminal } from '@xterm/xterm'
@@ -117,6 +118,21 @@ export function PlainSshTerminalView({
     const { theme, mode } = resolveThemeColors(mountSettings, systemPrefersDarkRef.current)
     const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker({ kittyKeyboard: true })
     let sessionId: string | null = null
+    const inputSource = createPtyInputSourceBinding<string>({
+      same: (a, b) => a === b,
+      refine: (_, next) => next,
+      create: (endpoint, isCurrent) => {
+        const id = endpoint()
+        const write = (data: string): boolean => {
+          if (!isCurrent()) {
+            return false
+          }
+          api.write({ sessionId: id, data })
+          return true
+        }
+        return { ptyId: id, isCurrent, sendInput: write, sendInputImmediate: write }
+      }
+    })
     const standalone = openStandaloneTerminal({
       container,
       options: buildPreviewTerminalOptions({
@@ -139,6 +155,7 @@ export function PlainSshTerminalView({
         return true
       },
       // Why: this xterm is the SSH session's only emulator, so remote programs wait on its replies.
+      inputSource: { getInputSource: inputSource.current, observeInputSource: inputSource.observe },
       answersQueries: true,
       getSettings: () => settingsRef.current,
       getMacOptionAsAlt: () => macOptionAsAltRef.current,
@@ -169,14 +186,29 @@ export function PlainSshTerminalView({
     const droppedEarlyChars = new Map<string, number>()
     let unsubscribe: () => void = () => {}
     const finish = (next: PlainSshTerminalPhase | null): void => {
-      phase = 'done'
-      sessionId = null
+      if (
+        !inputSource.change(
+          null,
+          () => {
+            phase = 'done'
+            sessionId = null
+          },
+          true
+        )
+      ) {
+        return
+      }
       early.length = 0
       earlyDataChars = 0
       droppedEarlyChars.clear()
-      unsubscribe()
-      if (next) {
-        onPhaseRef.current(next)
+      const stop = unsubscribe
+      unsubscribe = () => {}
+      try {
+        stop()
+      } finally {
+        if (next) {
+          onPhaseRef.current(next)
+        }
       }
     }
     const handle = (event: PlainSshTerminalEvent, id: string): void => {
@@ -234,9 +266,20 @@ export function PlainSshTerminalView({
           return
         }
         const id = result.sessionId
-        sessionId = id
-        phase = 'open'
+        if (
+          !inputSource.change(id, () => {
+            sessionId = id
+            phase = 'open'
+          }) ||
+          disposed ||
+          sessionId !== id
+        ) {
+          return
+        }
         onPhaseRef.current({ kind: 'open' })
+        if (disposed || sessionId !== id || phase !== 'open') {
+          return
+        }
         const dropped = droppedEarlyChars.get(id)
         droppedEarlyChars.clear()
         if (dropped) {
@@ -248,7 +291,9 @@ export function PlainSshTerminalView({
             handle(event, id)
           }
         }
-        terminal.focus()
+        if (!disposed && phase === 'open' && sessionId === id) {
+          terminal.focus()
+        }
       })
       .catch((error: unknown) => {
         if (!disposed) {
@@ -271,15 +316,37 @@ export function PlainSshTerminalView({
     observer.observe(container)
     return () => {
       disposed = true
-      observer.disconnect()
-      resizeListener.dispose()
-      unsubscribe()
-      if (sessionId) {
-        api.close({ sessionId })
+      const id = sessionId
+      if (terminalRef.current === terminal) {
+        terminalRef.current = null
+        fitRef.current = null
       }
-      standalone.dispose()
-      terminalRef.current = null
-      fitRef.current = null
+      let failure: unknown
+      for (const cleanup of [
+        () => standalone.dispose(),
+        () => observer.disconnect(),
+        () => resizeListener.dispose(),
+        () => unsubscribe(),
+        () => {
+          inputSource.change(null, () => {
+            sessionId = null
+          })
+        },
+        () => {
+          if (id) {
+            api.close({ sessionId: id })
+          }
+        }
+      ]) {
+        try {
+          cleanup()
+        } catch (error) {
+          failure ??= error
+        }
+      }
+      if (failure !== undefined) {
+        throw failure
+      }
     }
   }, [targetId])
 

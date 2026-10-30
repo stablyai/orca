@@ -17,7 +17,7 @@ import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 export function installPreviewTerminalCompatibility(
   terminal: Terminal,
   deps: { getSettings: () => GlobalSettings | null; linkRouting?: PreviewTerminalLinkRouting }
-): () => void {
+): ReturnType<typeof installPreviewTerminalLinks> {
   // Load Unicode 11 before its width shim and any replay; earlier writes bake wide characters into default v6 widths.
   terminal.loadAddon(new Unicode11Addon())
   activateOrcaTerminalUnicodeProvider(terminal)
@@ -32,12 +32,18 @@ export function installPreviewTerminalCompatibility(
   const disposeArabicShapingJoiner = configureLazyArabicShapingJoiner(terminal, () => false)
   const imeAnchorHandler = installTerminalImeCandidateAnchor(terminal)
 
-  return () => {
-    disposeLinks()
-    if (imeAnchorHandler && terminal.element) {
-      terminal.element.removeEventListener('compositionstart', imeAnchorHandler)
-      terminal.element.removeEventListener('compositionupdate', imeAnchorHandler)
-    }
-    disposeArabicShapingJoiner()
-  }
+  return Object.assign(
+    () => {
+      try {
+        disposeLinks()
+      } finally {
+        if (imeAnchorHandler && terminal.element) {
+          terminal.element.removeEventListener('compositionstart', imeAnchorHandler)
+          terminal.element.removeEventListener('compositionupdate', imeAnchorHandler)
+        }
+        disposeArabicShapingJoiner()
+      }
+    },
+    { inputOwner: disposeLinks.inputOwner }
+  )
 }

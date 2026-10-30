@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createPtyInputSourceBinding } from './pty-input-source'
 import { createRemoteRuntimeRecoveryInputHold } from './remote-runtime-recovery-input-hold'
 
 const endpoint = { handle: 'terminal-1', incarnationId: 'inc-1' }
@@ -96,4 +97,35 @@ describe('telling the user their pre-bind typing was dropped', () => {
 
     expect(onTypingDiscardedBeforeBind).not.toHaveBeenCalled()
   })
+})
+
+it('withdraws ordinary pre-bind typing once while retaining a current scoped neighbor without a gesture notice', async () => {
+  const { hold, onTypingDiscardedBeforeBind } = holdWithNotice()
+  const sources = createPtyInputSourceBinding<string>({
+    same: (a, b) => a === b,
+    refine: (_, next) => next,
+    create: (_, isCurrent) => ({
+      ptyId: 'source',
+      isCurrent,
+      sendInput: () => true,
+      sendInputImmediate: () => true
+    })
+  })
+  sources.change('source', () => {})
+  const source = sources.current()
+  if (!source) {
+    throw new Error('missing source')
+  }
+  hold.enqueue(null, 'ordinary', 'driving')
+  hold.enqueue(null, 'mouse-report', 'driving', source)
+  hold.expect(null)
+  expect(onTypingDiscardedBeforeBind).toHaveBeenCalledOnce()
+  const { writer, sent } = createWriter()
+  await hold.release(endpoint, writer)?.done
+  expect(sent).toEqual(['mouse-report'])
+  expect(onTypingDiscardedBeforeBind).toHaveBeenCalledOnce()
+  hold.enqueue(null, 'retired-mouse', 'driving', source)
+  sources.change(null, () => {}, true)
+  hold.expect(null)
+  expect(onTypingDiscardedBeforeBind).toHaveBeenCalledOnce()
 })

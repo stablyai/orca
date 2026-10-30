@@ -1,3 +1,5 @@
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import { flushAsyncTicks } from './pty-connection-test-async'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
@@ -243,4 +245,56 @@ describe('createIpcPtyTransport', () => {
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
   })
+
+  it.each([undefined, 'ssh-1'])(
+    'keeps actual IPC source queue lifetime and caller reentry for connection %s',
+    async (connectionId) => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({ connectionId })
+      await transport.connect({ url: '', callbacks: {} })
+      const a = transport.getInputSource?.()
+      if (!a) {
+        throw new Error('Missing actual IPC source')
+      }
+      expect(Boolean(a.sendInputAccepted)).toBe(!connectionId)
+      expect(a.sendInput('current-A', 'driving')).toBe(true)
+      await flushAsyncTicks()
+      vi.mocked(window.api.pty.write).mockClear()
+      const payload = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+      expect(a.sendInput(payload, 'driving')).toBe(true)
+      const staleStatus = vi.fn()
+      const after = transport.observeInputSource?.({
+        beforeChange: () => {},
+        afterChange: (source) => {
+          if (source?.ptyId === 'pty-2') {
+            transport.attach({ existingPtyId: 'pty-3', callbacks: {} })
+          }
+        }
+      })
+      transport.attach({ existingPtyId: 'pty-2', callbacks: { onStatus: staleStatus } })
+      await flushAsyncTicks()
+      expect(a.isCurrent()).toBe(false)
+      expect(a.sendInput('retired-A', 'driving')).toBe(false)
+      expect(transport.getPtyId()).toBe('pty-3')
+      expect(staleStatus).not.toHaveBeenCalled()
+      expect(window.api.pty.write).not.toHaveBeenCalled()
+      transport.sendInput('ordinary-B', 'driving')
+      const b = transport.getInputSource?.()
+      if (!b) {
+        throw new Error('Missing successor source')
+      }
+      expect(b.sendInput('current-B', 'driving')).toBe(true)
+      await flushAsyncTicks()
+      expect(vi.mocked(window.api.pty.write).mock.calls.every(([id]) => id === 'pty-3')).toBe(true)
+      expect(
+        vi
+          .mocked(window.api.pty.write)
+          .mock.calls.map(([, data]) => data)
+          .join('')
+      ).toBe('ordinary-Bcurrent-B')
+      after?.dispose()
+      transport.destroy?.()
+      expect(b.isCurrent()).toBe(false)
+    }
+  )
 })

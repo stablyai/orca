@@ -24,7 +24,7 @@ import {
   type StandaloneTerminal
 } from '../standalone-terminal/open-standalone-terminal'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
-import { terminalPreviewApiFor } from './terminal-preview-api'
+import { bindTerminalPreviewApiFor } from './terminal-preview-api'
 import {
   previewTerminalLinkContext,
   type PreviewTerminalLinkSource
@@ -65,6 +65,7 @@ export function AgentTerminalPreview({
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
+  const standaloneRef = useRef<StandaloneTerminal | null>(null)
   const settings = useAppStore((state) => state.settings)
   const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
@@ -101,7 +102,24 @@ export function AgentTerminalPreview({
     terminalInputRef.current = terminalInput
     onRequestCloseRef.current = onRequestClose
     onNavigateRef.current = onNavigate
-    linkSourceRef.current = linkSource
+    const previous = linkSourceRef.current
+    if (
+      previous?.worktreeId !== linkSource?.worktreeId ||
+      previous?.tabId !== linkSource?.tabId ||
+      previous?.leafId !== linkSource?.leafId ||
+      previous?.ptyId !== linkSource?.ptyId ||
+      previous?.executionHostId !== linkSource?.executionHostId
+    ) {
+      try {
+        standaloneRef.current?.invalidateSource()
+      } finally {
+        if (linkSourceRef.current === previous) {
+          linkSourceRef.current = linkSource
+        }
+      }
+    } else {
+      linkSourceRef.current = linkSource
+    }
   }, [settings, macOptionAsAlt, terminalInput, onRequestClose, linkSource, onNavigate])
 
   // Font changes retain the replay-driven fit, grid claim and input-owner reset.
@@ -115,7 +133,7 @@ export function AgentTerminalPreview({
     let standalone: StandaloneTerminal | null = null
     let terminal: Terminal | null = null
     let offData: (() => void) | null = null
-    const previewApi = terminalPreviewApiFor(ptyId)
+    const previewApi = bindTerminalPreviewApiFor(ptyId)
     // Why one read: the xterm's advertisement and its mirror must never disagree.
     const mountTerminalInput = terminalInputRef.current
     // Parse the same output as the pane so input policy sees the TUI’s negotiated kitty flags.
@@ -194,6 +212,7 @@ export function AgentTerminalPreview({
           }),
           kittyKeyboardModes,
           sessionKey: ptyId,
+          inputSource: previewApi,
           sendInput: (data) => previewApi.input(ptyId, data),
           answersQueries: false,
           getSettings: () => settingsRef.current,
@@ -209,6 +228,7 @@ export function AgentTerminalPreview({
         if (!standalone) {
           return
         }
+        standaloneRef.current = standalone
         terminal = standalone.terminal
         terminalRef.current = terminal
       } else if (replaceExisting) {
@@ -217,7 +237,7 @@ export function AgentTerminalPreview({
           clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
           clamp(snap.rows ?? FALLBACK_ROWS, 2, 200)
         )
-        terminal.reset()
+        standalone?.reset()
       }
       replayPreviewConnectionSnapshot({
         snapshot: snap,
@@ -251,14 +271,37 @@ export function AgentTerminalPreview({
     }
 
     const releaseTerminal = (): void => {
-      offData?.()
+      const stop = offData
+      const retired = standalone
       offData = null
-      standalone?.dispose()
       standalone = null
       terminal = null
-      terminalRef.current = null
-      setLinkRequest(null)
-      void previewApi.unsubscribe(ptyId)
+      if (standaloneRef.current === retired) {
+        standaloneRef.current = null
+        terminalRef.current = null
+      }
+      let failure: unknown
+      for (const cleanup of [
+        () => stop?.(),
+        () => retired?.dispose(),
+        () => {
+          void previewApi.unsubscribe(ptyId)
+        },
+        () => {
+          if (standaloneRef.current === null) {
+            setLinkRequest(null)
+          }
+        }
+      ]) {
+        try {
+          cleanup()
+        } catch (error) {
+          failure ??= error
+        }
+      }
+      if (failure !== undefined) {
+        throw failure
+      }
     }
 
     const setup = async (replaceExisting = false): Promise<void> => {
@@ -303,13 +346,16 @@ export function AgentTerminalPreview({
 
     return () => {
       disposed = true
-      boxFit.dispose()
       if (retryTimer) {
         clearTimeout(retryTimer)
       }
-      gridClaim.dispose()
-      boxResizeObserver?.disconnect()
-      releaseTerminal()
+      try {
+        boxFit.dispose()
+        gridClaim.dispose()
+        boxResizeObserver?.disconnect()
+      } finally {
+        releaseTerminal()
+      }
     }
   }, [
     ptyId,

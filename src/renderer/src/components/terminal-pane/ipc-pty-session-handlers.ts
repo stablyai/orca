@@ -24,7 +24,7 @@ type IpcPtySessionHandlersOptions = {
   getPtyId: () => string | null
   getCallbacks: () => PtyCallbacks
   getSuppressAttentionEvents: () => boolean
-  markExited: () => void
+  markExited: () => boolean
   onPtyExit?: IpcPtyTransportOptions['onPtyExit']
 }
 
@@ -141,13 +141,25 @@ export function createIpcPtySessionHandlers({
         unregisterAll(id)
         return
       }
-      clearAccumulatedState()
-      markExited()
-      unregisterAll(id)
       const callbacks = getCallbacks()
-      callbacks.onExit?.(code)
-      callbacks.onDisconnect?.()
-      onPtyExit?.(id, code)
+      clearAccumulatedState()
+      unregisterAll(id)
+      if (!markExited()) {
+        return
+      }
+      try {
+        callbacks.onExit?.(code)
+      } finally {
+        try {
+          if (getPtyId() === null) {
+            callbacks.onDisconnect?.()
+          }
+        } finally {
+          if (getPtyId() === null) {
+            onPtyExit?.(id, code)
+          }
+        }
+      }
     }
     ptyExitHandlers.set(id, exit)
     ownedExitHandlers.set(id, exit)

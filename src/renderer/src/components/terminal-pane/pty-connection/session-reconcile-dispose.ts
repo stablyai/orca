@@ -1,11 +1,8 @@
+import { disposePanePtySession } from './dispose-pane-pty-session'
 import { useAppStore } from '@/store'
 import { consumeRestartReplacement } from './restart-replacement-on-show'
 import { shouldReconcileMissingSession, type HasPty } from '../terminal-dead-session-reconcile'
-import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/pane-tree-ops'
-import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-resize-hold'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
-import { releaseRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { SHIFT_ENTER_RECONFIRM_IDLE_MS } from './foreground-output-scan'
@@ -147,139 +144,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     reconcileIfSessionMissing: session.reconcileIfSessionMissing,
     isUntouchedFreshSpawnPty: (ptyId) =>
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
-    dispose() {
-      session.disposed = true
-      session.discardAgentPreReadyDraft?.()
-      session.cleanupKittyFileReader()
-      session.disposeSpawnDeferral()
-      session.startupTiming?.finish('disposed')
-      const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
-      if (unsentReplacedPtyId) {
-        // Why: no spawn will carry this stop now, and the pane no longer references the PTY.
-        void Promise.resolve()
-          .then(() => window.api.pty.kill(unsentReplacedPtyId))
-          .catch((err: unknown) => console.warn('[terminal] failed to stop a replaced PTY:', err))
-      }
-      // Successors may reuse numeric pane slots before disposal; leave their errors untouched.
-      const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
-      if (!currentPaneTransport || currentPaneTransport === session.transport) {
-        session.deps.onPtyErrorClearedRef?.current?.(session.pane.id)
-      }
-      // Detached observers cede byte-derived agent-status authority to the host’s next mirror snapshot.
-      session.releaseRendererOwnedAgentStatusPane?.()
-      // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
-      const queue = session.deferredReattachLiveData
-      session.deferredReattachLiveData = null
-      queue?.discard()
-      session.reattachLiveDataDeferralDepth = 0
-      session.deferredReattachLiveDataOwners = new Map()
-      cancelPendingSafeFitContinuations(session.pane)
-      session.pendingHiddenSnapshotFit = null
-      session.pendingReattachFit = null
-      // Why: park/reconnect/remount doesn't advance the recovery epoch, so invalidate this xterm or its delayed retry could hit the next instance.
-      session.terminalRecoveryInstance.unregister()
-      session.unregisterUndeliverableWriteHandler()
-      session.unsubscribeRemoteDesktopActivationClaim()
-      session.cancelHiddenOutputSnapshotScrollRestore()
-      session.liveScrollbackRestore?.dispose()
-      session.liveScrollbackRestore = null
-      session.structuralReplayCoordinator.dispose()
-      session.cancelFreshSpawnFollowReset()
-      // Why: cancel the post-spawn reconcile's pending rAF so a torn-down pane can't keep fitting/resizing after disposal.
-      session.ptySizeReconcileHandle?.cancel()
-      session.ptySizeReconcileHandle = null
-      session.ptySizeReassertion.dispose()
-      session.terminalSelectionFitGuard?.dispose()
-      session.terminalSelectionFitGuard = null
-      if (session.pendingForegroundGridDriftCheckRaf !== null) {
-        cancelAnimationFrame(session.pendingForegroundGridDriftCheckRaf)
-        session.pendingForegroundGridDriftCheckRaf = null
-      }
-      session.clearForegroundGridDriftTrailingProbe()
-      // Why: a pane unmount must never leave its PTY delivery gated — the parked watcher or remounted pane re-decides.
-      session.releaseHiddenRendererPtyDelivery()
-      if (session.terminalKeyTargetSupportsEvents) {
-        session.terminalKeyTarget.removeEventListener('keydown', session.onTerminalKeyDown, {
-          capture: true
-        })
-      }
-      session.clearPendingTerminalInputIntent()
-      session.pendingTerminalInputWrite = null
-      session.interruptInference.dispose()
-      session.clearTitleOnlyInterruptTimer()
-      // Release without cancelling the turn’s settle deadline so the parked watcher inherits it.
-      session.releaseCommandCodeDoneSettleExecutor()
-      if (session.shiftEnterReconfirmTimer !== null) {
-        clearTimeout(session.shiftEnterReconfirmTimer)
-        session.shiftEnterReconfirmTimer = null
-      }
-      // Why: resolve in-flight passphrase-gate waits so their zustand subscribers + async IIFEs don't hang when the pane is torn down before SSH state changes.
-      while (session.waitTeardowns.length > 0) {
-        const teardown = session.waitTeardowns.pop()
-        teardown?.()
-      }
-      if (session.startupInjectTimer !== null) {
-        clearTimeout(session.startupInjectTimer)
-        session.startupInjectTimer = null
-      }
-      session.cleanupStartupDraftPasteTimers()
-      session.releaseUnattemptedStartupDraftPasteDelivery()
-      session.unregisterAgentHookTerminalLifecycle()
-      session.clearSuppressedTitleSideEffects()
-      session.clearPendingAgentTaskCompleteNotification()
-      session.pendingTerminalBellNotification = false
-      session.clearTerminalBellNotificationTimer()
-      session.clearReattachIdleAgentCursorResetTimer()
-      session.cleanupHiddenOutputRestoreDeferredRetry()
-      session.cleanupHiddenOutputRestoreForegroundDeadline()
-      session.cleanupHiddenOutputRestoreFloodRepaint()
-      session.flushRemoteProgramRedraw()
-      session.unregisterBacklogRecovery?.()
-      session.unregisterBacklogRecovery = null
-      session.unregisterDocumentVisibilityRecovery?.()
-      session.unregisterDocumentVisibilityRecovery = null
-      releaseRendererPtyVisibilityClaim(session.transport)
-      // Why: the pane's fact consumer must be gone before a parked-tab watcher takes over this PTY's facts in the same effect flush.
-      session.dropSideEffectFactConsumer()
-      session.clearPanePtyFitBinding()
-      discardTerminalOutput(session.pane.terminal)
-      session.unregisterE2ePtyDataInjection()
-      if (session.agentTaskCompleteSettingsUnsubscribe !== null) {
-        session.agentTaskCompleteSettingsUnsubscribe()
-        session.agentTaskCompleteSettingsUnsubscribe = null
-      }
-      if (session.unsubscribeWindowsDoneTerminalModeReset !== null) {
-        session.unsubscribeWindowsDoneTerminalModeReset()
-        session.unsubscribeWindowsDoneTerminalModeReset = null
-      }
-      if (session.connectFrame !== null) {
-        // Why: cancel the queued connect frame so a disposed pane (StrictMode/split-group remount) can't reattach the PTY and steal the live pane's handler wiring.
-        session.cancelScheduledConnectFrame()
-      }
-      if (session.connectFallbackTimer !== null) {
-        clearTimeout(session.connectFallbackTimer)
-        session.connectFallbackTimer = null
-      }
-      session.imeCompositionRouteDisposable.dispose()
-      session.onDataDisposable.dispose()
-      session.userInputActivityDisposable?.dispose()
-      session.terminalCapabilityRepliesDisposable.dispose()
-      session.onResizeDisposable.dispose()
-      session.pane.container.removeEventListener(
-        PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
-        session.onHeldPtyResizeFlush
-      )
-      session.geometryReportObserver?.disconnect()
-      if (session.pendingGeometryReportRaf !== null) {
-        cancelAnimationFrame(session.pendingGeometryReportRaf)
-        session.pendingGeometryReportRaf = null
-      }
-      session.commandLifecycle.dispose()
-      session.deferredCommandFinishedStatusDrop = null
-      session.visibleForegroundSamplePending = false
-      session.visibleForegroundSampleSettled = false
-      session.paneForegroundAgentTracker.dispose()
-      session.agentCompletionCoordinator.dispose()
-    }
+    dispose: () => disposePanePtySession(session)
   }
 }

@@ -1,3 +1,4 @@
+import type { TerminalLinkCommit } from './terminal-link-activation-operation'
 import type { Terminal } from '@xterm/xterm'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
@@ -20,6 +21,7 @@ type TerminalWebLinkClickDeps = Pick<
   | 'terminalHomePath'
   | 'sourceTabId'
 > & {
+  commit?: TerminalLinkCommit
   terminal: Terminal | null
   sourceOwner?: HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
@@ -49,17 +51,12 @@ export function handleTerminalWebLinkClick(
           : { kind: 'local' }),
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
       linkActionContext: deps.linkActionContext,
+      commit: deps.commit,
       actionDestinations: deps.actionDestinations
     })
-    // Use logical hit testing because WebLinksAddon knows only a physical row of wrapped URLs.
-    event.preventDefault()
   } else {
     handled = handleOscLink(url, event, deps)
   }
 
-  if (handled) {
-    // Clear selection/listeners before navigation can steal focus ahead of xterm mouseup cleanup.
-    deps.terminal?.clearSelection()
-  }
   return handled
 }

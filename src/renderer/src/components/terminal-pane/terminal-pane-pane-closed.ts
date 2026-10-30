@@ -45,124 +45,196 @@ export function createTerminalPaneClosedHandler(
       updateTabTitle,
       managerRef
     } = deps
-    onPtyRecoveryStateRef?.current?.(paneId, null)
+    let inputFailure: unknown
+    const finish = (cleanup: () => void): void => {
+      try {
+        cleanup()
+      } catch (error) {
+        inputFailure ??= error
+      }
+    }
     const isDetachedToTab = closedPane?.reason === 'detach'
     const isRetiredSurface = closedPane?.reason === 'retire'
-    disposeMapEntry(refs.linkProviderDisposablesRef.current, paneId)
-    disposeMapEntry(refs.terminalHandleLinkDisposablesRef.current, paneId)
-    disposeMapEntry(refs.linkifierClickPrimingDisposablesRef.current, paneId)
+    const binding = panePtyBindingsRef.current.get(paneId)
+    panePtyBindingsRef.current.delete(paneId)
+    const transport = paneTransportsRef.current.get(paneId)
+    paneTransportsRef.current.delete(paneId)
+    const closedPtyId = transport?.getPtyId() ?? null
+    const deferredSplitHandoff = context.deferredSplitHandoffs.get(paneId)
+    context.deferredSplitHandoffs.delete(paneId)
+    const replaced = (): boolean =>
+      paneTransportsRef.current.has(paneId) || panePtyBindingsRef.current.has(paneId)
+    const disposables = [
+      refs.linkProviderDisposablesRef.current,
+      refs.terminalHandleLinkDisposablesRef.current,
+      refs.linkifierClickPrimingDisposablesRef.current,
+      refs.fileLinkClickFallbackDisposablesRef.current,
+      refs.selectionDisposablesRef.current,
+      refs.nativeCopyDisposablesRef.current,
+      refs.imeCompositionDisposablesRef.current,
+      refs.imeNativeTextForwarderDisposablesRef.current,
+      refs.osc52DisposablesRef.current,
+      refs.osc7DisposablesRef.current,
+      refs.mouseHideDisposablesRef.current,
+      refs.httpLinkClickFallbackDisposablesRef.current
+    ].map((map) => {
+      const retired = map.get(paneId)
+      map.delete(paneId)
+      return retired
+    })
     const gesture = refs.linkPointerGesturesRef.current.get(paneId)
-    gesture?.dispose()
     refs.linkPointerGesturesRef.current.delete(paneId)
-    disposeMapEntry(refs.fileLinkClickFallbackDisposablesRef.current, paneId)
-    disposeMapEntry(refs.httpLinkClickFallbackDisposablesRef.current, paneId)
-    disposeMapEntry(refs.selectionDisposablesRef.current, paneId)
-    disposeMapEntry(refs.nativeCopyDisposablesRef.current, paneId)
-    disposeMapEntry(refs.imeCompositionDisposablesRef.current, paneId)
-    disposeMapEntry(refs.imeNativeTextForwarderDisposablesRef.current, paneId)
     const timer = refs.selectionCaptureTimersRef.current.get(paneId)
+    refs.selectionCaptureTimersRef.current.delete(paneId)
     if (timer !== undefined) {
       window.clearTimeout(timer)
-      refs.selectionCaptureTimersRef.current.delete(paneId)
     }
     paneMode2031Ref.current.delete(paneId)
     paneKittyKeyboardModesRef.current.delete(paneId)
     paneLastThemeModeRef.current.delete(paneId)
-    disposeMapEntry(refs.osc52DisposablesRef.current, paneId)
-    disposeMapEntry(refs.osc7DisposablesRef.current, paneId)
     paneCwdRef.current.delete(paneId)
-    disposeMapEntry(refs.mouseHideDisposablesRef.current, paneId)
-
-    const transport = paneTransportsRef.current.get(paneId)
-    const closedPtyId = transport?.getPtyId() ?? null
-    const terminalTab = useAppStore
-      .getState()
-      .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-    if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
-      useAppStore.getState().clearTabLaunchAgent(tabId)
-    }
-    const binding = panePtyBindingsRef.current.get(paneId)
-    binding?.dispose()
-    panePtyBindingsRef.current.delete(paneId)
-    const leafId = closedPane?.leafId
-    const deferredSplitHandoff = context.deferredSplitHandoffs.get(paneId)
-    if (deferredSplitHandoff) {
-      // Explicit close ends split intent; only whole-tab remount may retain it.
-      clearDeferredSplitPaneHandoff(deferredSplitHandoff)
-      context.deferredSplitHandoffs.delete(paneId)
-    } else if (leafId) {
-      // Close may outlive the numeric handle; discard deferred splits by durable leaf key.
-      discardDeferredSplitPaneHandoffForKey(makePaneKey(tabId, leafId))
-    }
-    if (leafId && isRetiredSurface) {
-      retireMountedTerminalPaneSurface({
-        paneKey: makePaneKey(tabId, leafId),
-        leafId,
-        paneId,
-        tabId,
-        ptyId: closedPtyId,
-        retireAgentPaneAuthority: useAppStore.getState().retireAgentPaneAuthority,
-        syncPanePtyLayoutBinding,
-        syncPanePtyLayoutBindingForLeaf,
-        clearExitedPanePtyLayoutBindingForLeaf,
-        clearTabPtyId,
-        ...(transport ? { transport } : {})
-      })
-    } else if (leafId && !isDetachedToTab) {
-      useAppStore.getState().retireAgentPaneAuthority(makePaneKey(tabId, leafId))
-    }
-    if (transport && !isRetiredSurface) {
-      if (isDetachedToTab) {
-        transport.detach?.({ preserveExitObserver: false })
-      } else {
-        const ptyId = suppressIntentionalPaneCloseExit(
-          transport,
-          useAppStore.getState().suppressPtyExit
-        )
-        if (ptyId) {
-          if (leafId && clearExitedPanePtyLayoutBindingForLeaf) {
-            clearExitedPanePtyLayoutBindingForLeaf(leafId, ptyId)
-          } else if (leafId) {
-            syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
-          } else {
-            syncPanePtyLayoutBinding(paneId, null)
-          }
-          clearTabPtyId(tabId, ptyId)
-        }
-        transport.destroy?.()
-      }
-      paneTransportsRef.current.delete(paneId)
-    }
-    clearRuntimePaneTitle(tabId, paneId)
     paneFontSizesRef.current.delete(paneId)
     replayingPanesRef.current.delete(paneId)
     refs.restoredViewportBlankingPanesRef.current.delete(paneId)
-    setPaneTitles((current) => {
-      if (!(paneId in current)) {
-        return current
+    finish(() => binding?.dispose())
+    for (const disposable of disposables) {
+      finish(() => disposable?.dispose())
+    }
+    finish(() => gesture?.dispose())
+    finish(() => onPtyRecoveryStateRef?.current?.(paneId, null))
+    const leafId = closedPane?.leafId
+    finish(() => {
+      if (replaced()) {
+        return
       }
-      const next = { ...current }
-      delete next[paneId]
-      return next
+      const terminalTab = useAppStore
+        .getState()
+        .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+      if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
+        useAppStore.getState().clearTabLaunchAgent(tabId)
+      }
     })
-    if (paneId in paneTitlesRef.current) {
+    finish(() => {
+      if (deferredSplitHandoff) {
+        clearDeferredSplitPaneHandoff(deferredSplitHandoff)
+      } else if (leafId && !replaced()) {
+        discardDeferredSplitPaneHandoffForKey(makePaneKey(tabId, leafId))
+      }
+    })
+    finish(() => {
+      if (replaced()) {
+        return
+      }
+      if (leafId && isRetiredSurface) {
+        retireMountedTerminalPaneSurface({
+          paneKey: makePaneKey(tabId, leafId),
+          leafId,
+          paneId,
+          tabId,
+          ptyId: closedPtyId,
+          retireAgentPaneAuthority: useAppStore.getState().retireAgentPaneAuthority,
+          syncPanePtyLayoutBinding: (id, pty) => {
+            if (!replaced()) {
+              syncPanePtyLayoutBinding(id, pty)
+            }
+          },
+          syncPanePtyLayoutBindingForLeaf: syncPanePtyLayoutBindingForLeaf
+            ? (leaf, pty, id) => {
+                if (!replaced()) {
+                  syncPanePtyLayoutBindingForLeaf(leaf, pty, id)
+                }
+              }
+            : undefined,
+          clearExitedPanePtyLayoutBindingForLeaf: clearExitedPanePtyLayoutBindingForLeaf
+            ? (leaf, pty) => {
+                if (!replaced()) {
+                  clearExitedPanePtyLayoutBindingForLeaf(leaf, pty)
+                }
+              }
+            : undefined,
+          clearTabPtyId: (tab, pty) => {
+            if (!replaced()) {
+              clearTabPtyId(tab, pty)
+            }
+          }
+        })
+      } else if (leafId && !isDetachedToTab) {
+        useAppStore.getState().retireAgentPaneAuthority(makePaneKey(tabId, leafId))
+      }
+    })
+    if (transport) {
+      if (isDetachedToTab || isRetiredSurface) {
+        finish(() => transport.detach?.({ preserveExitObserver: false }))
+      } else {
+        finish(() => {
+          if (replaced()) {
+            return
+          }
+          const ptyId = suppressIntentionalPaneCloseExit(
+            transport,
+            useAppStore.getState().suppressPtyExit
+          )
+          if (ptyId && !replaced()) {
+            if (leafId && clearExitedPanePtyLayoutBindingForLeaf) {
+              clearExitedPanePtyLayoutBindingForLeaf(leafId, ptyId)
+            } else if (leafId) {
+              syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
+            } else {
+              syncPanePtyLayoutBinding(paneId, null)
+            }
+            if (!replaced()) {
+              clearTabPtyId(tabId, ptyId)
+            }
+          }
+        })
+        finish(() => transport.destroy?.())
+      }
+    }
+    if (replaced()) {
+      if (inputFailure !== undefined) {
+        throw inputFailure
+      }
+      return
+    }
+    finish(() => clearRuntimePaneTitle(tabId, paneId))
+    if (replaced()) {
+      if (inputFailure !== undefined) {
+        throw inputFailure
+      }
+      return
+    }
+    finish(() =>
+      setPaneTitles((current) => {
+        if (!(paneId in current)) {
+          return current
+        }
+        const next = { ...current }
+        delete next[paneId]
+        return next
+      })
+    )
+    if (!replaced() && paneId in paneTitlesRef.current) {
       const next = { ...paneTitlesRef.current }
       delete next[paneId]
       paneTitlesRef.current = next
     }
-    setRenamingPaneId((current) => (current === paneId ? null : current))
-    setPaneCount(managerRef.current?.getPanes().length ?? 0)
+    finish(() => {
+      if (!replaced()) {
+        setRenamingPaneId((current) => (current === paneId ? null : current))
+      }
+    })
+    finish(() => setPaneCount(managerRef.current?.getPanes().length ?? 0))
     const activePane = managerRef.current?.getActivePane()
-    if (activePane) {
+    if (activePane && !replaced()) {
       reportActiveRendererPtyForPane(paneTransportsRef.current, activePane.id)
       const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-      updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, activePane.id))
+      if (!replaced()) {
+        updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, activePane.id))
+      }
     }
-    scheduleRuntimeGraphSync()
+    finish(() => scheduleRuntimeGraphSync())
+    if (inputFailure !== undefined) {
+      throw inputFailure
+    }
   }
-}
-
-function disposeMapEntry(map: Map<number, { dispose: () => void }>, paneId: number): void {
-  map.get(paneId)?.dispose()
-  map.delete(paneId)
 }

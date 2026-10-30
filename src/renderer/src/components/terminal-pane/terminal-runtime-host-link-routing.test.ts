@@ -1,3 +1,4 @@
+import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -116,7 +117,12 @@ afterEach(() => {
 })
 
 describe('terminal HTTP links on a runtime-hosted pane', () => {
-  const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
+  const baseDeps = {
+    worktreeId: 'wt-1',
+    worktreePath: '/tmp',
+    startupCwd: '/tmp',
+    commit: commitPreparedLinkForRoutingTest
+  }
 
   it('opens an OSC 8 hyperlink on the owning runtime', () => {
     expect(handleOscLink(URL, clickEvent(), { ...baseDeps, sourceOwner: runtimeSourceOwner })).toBe(
@@ -188,7 +194,12 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
 })
 
 describe('terminal HTTP links on a direct SSH pane', () => {
-  const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
+  const baseDeps = {
+    worktreeId: 'wt-1',
+    worktreePath: '/tmp',
+    startupCwd: '/tmp',
+    commit: commitPreparedLinkForRoutingTest
+  }
 
   it('opens an OSC 8 hyperlink through the owning SSH workspace', () => {
     expect(handleOscLink(URL, clickEvent(), { ...baseDeps, sourceOwner: sshSourceOwner })).toBe(
@@ -246,7 +257,12 @@ describe('terminal HTTP links on a direct SSH pane', () => {
 })
 
 describe('terminal HTTP links on a local pane', () => {
-  const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
+  const baseDeps = {
+    worktreeId: 'wt-1',
+    worktreePath: '/tmp',
+    startupCwd: '/tmp',
+    commit: commitPreparedLinkForRoutingTest
+  }
 
   it('still opens an OSC 8 hyperlink in an Orca browser tab', () => {
     expect(handleOscLink(URL, clickEvent(), { ...baseDeps, runtimeEnvironmentId: null })).toBe(true)

@@ -29,6 +29,7 @@ import type {
 } from '../../runtime/remote-runtime-terminal-multiplexer-types'
 import type { AcceptedInputOptions, PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { PtyInputSource, PtyInputSourceObserver } from './pty-input-source'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -166,6 +167,8 @@ export type PtyTransportRecoveryState = {
 }
 
 export type PtyTransport = {
+  getInputSource?: () => PtyInputSource | null
+  observeInputSource?: (observer: PtyInputSourceObserver) => { dispose: () => void }
   getPendingEscapeTailAnsi?: () => string
   connect: (options: {
     url: string

@@ -1,3 +1,8 @@
+import {
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit
+} from './terminal-link-activation-operation'
 import type { TerminalFileContext } from './terminal-file-path-mapping'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
@@ -24,6 +29,7 @@ import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/loc
 import { canOpenLinkInSourceGroup } from '@/store/slices/editor/tabs/editor-open-target-group'
 
 export type TerminalFileLinkActionDeps = {
+  commit?: TerminalLinkCommit
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
@@ -54,13 +60,21 @@ export function handleTerminalFileLink(
   actionDestination?: string
 ): boolean {
   if (isTerminalLinkDirectActivation(event)) {
-    event?.preventDefault?.()
-    openDetectedFilePath(filePath, line, column, {
-      ...deps,
-      openWithSystemDefault: Boolean(event?.shiftKey)
-    })
-    return true
+    return commitTerminalLinkActivation(
+      event,
+      prepareTerminalLinkActivation(event, {
+        kind: 'file',
+        direct: () =>
+          openDetectedFilePath(filePath, line, column, {
+            ...deps,
+            openWithSystemDefault: Boolean(event?.shiftKey)
+          }),
+        details: () => {}
+      }),
+      deps.commit ?? actionContext?.commit
+    )
   }
+
   const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
   return requestTerminalLinkAction(event, actionContext, {
     ...actions,

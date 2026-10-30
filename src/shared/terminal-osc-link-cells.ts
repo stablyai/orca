@@ -14,7 +14,7 @@ export function terminalLogicalLinkHasOscLink(
   })
 }
 
-function terminalRangeHasOscLink(
+export function terminalRangeHasOscLink(
   buffer: TerminalLinkBuffer,
   range: TerminalLinkBufferRange
 ): boolean {

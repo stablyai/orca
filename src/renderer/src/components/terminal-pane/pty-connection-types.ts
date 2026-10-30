@@ -1,3 +1,4 @@
+import type { TerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
@@ -127,7 +128,13 @@ export type PtyConnectionDeps = {
   clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
   /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
   onStartupBound?: () => void
-  deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
+  getPtyInputOwner?: (paneId: number) => TerminalLinkPtyMouseSuppression | undefined
+  deferPtyInput?: (
+    paneId: number,
+    data: string,
+    forward: (data: string) => void,
+    wasUserInput?: boolean
+  ) => void
   /** Record main’s 2031 subscription and current theme for later flip pushes; subscription itself is silent (#9993). */
   recordPaneMode2031Subscription?: (paneId: number, subscribedMode: 'dark' | 'light') => void
 }

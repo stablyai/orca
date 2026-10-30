@@ -109,6 +109,12 @@ describe('connectPanePty', () => {
     })
 
     const pane = createPane(1)
+    const dataDispose = vi.fn(() => {
+      throw new Error('input cleanup failed')
+    })
+    const resizeDispose = vi.fn()
+    pane.terminal.onData.mockReturnValue({ dispose: dataDispose })
+    pane.terminal.onResize.mockReturnValue({ dispose: resizeDispose })
     const { writes } = captureCallbackTerminalWrites(pane)
 
     // Count visibility getter reads to measure finally re-arms deterministically without timing or memory heuristics.
@@ -139,7 +145,10 @@ describe('connectPanePty', () => {
 
     expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
     expect(writes).toContain('snapshot-state\r\n')
-    disposable.dispose()
+    expect(() => disposable.dispose()).toThrow('input cleanup failed')
+    expect(dataDispose).toHaveBeenCalled()
+    expect(resizeDispose).toHaveBeenCalled()
+    expect(() => disposable.dispose()).not.toThrow()
     const readsAtDispose = visibilityReads
     try {
       await flushAsyncTicks(200)

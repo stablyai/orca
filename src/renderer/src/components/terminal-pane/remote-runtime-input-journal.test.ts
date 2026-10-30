@@ -3,6 +3,7 @@ import {
   REMOTE_RUNTIME_INPUT_ACK_STALL_MS,
   REMOTE_RUNTIME_INPUT_JOURNAL_MAX_CODE_UNITS,
   REMOTE_RUNTIME_INPUT_RESEND_BACKOFF_MS,
+  REMOTE_RUNTIME_INPUT_REFUSAL_ROUNDS_BEFORE_ESCALATION,
   createRemoteRuntimeInputJournal
 } from './remote-runtime-input-journal'
 
@@ -162,4 +163,83 @@ describe('remote runtime input journal', () => {
     journal.resume(next.stream, endpoint)
     expect(next.sent.map((input) => input.text)).toEqual(['a', 'b', 'c'])
   })
+})
+
+it('withdraws only retired scoped slots while ordinary metadata and a live successor scope coexist', async () => {
+  const { createPtyInputSourceBinding } = await import('./pty-input-source')
+  const source = createPtyInputSourceBinding<{ handle: string; incarnationId: string }>({
+    same: (a, b) => a.handle === b.handle && a.incarnationId === b.incarnationId,
+    unavailable: () => true,
+    refine: (_, next) => next,
+    create: (get, isCurrent) => ({
+      ptyId: get().handle,
+      get endpoint() {
+        return get()
+      },
+      isCurrent,
+      sendInput: () => false,
+      sendInputImmediate: () => false
+    })
+  })
+  const first = recordingStream()
+  let current = first
+  const refusal = vi.fn()
+  const journal = createRemoteRuntimeInputJournal({
+    currentStream: () => ({ stream: current.stream, endpoint }),
+    onRefusalsPersist: refusal
+  })
+  source.change({ handle: endpoint.handle, incarnationId: 'inc-1' }, () => {})
+  const a = source.current()
+  if (!a) {
+    throw new Error('Missing first capability')
+  }
+  const [old] = journal.send(first.stream, endpoint, [
+    { text: 'old', queryReply: false, source: a }
+  ])
+  if (old === undefined) {
+    throw new Error('Missing sequence')
+  }
+  const oldResult = journal.whenAcknowledged(old)
+  source.change({ handle: endpoint.handle, incarnationId: 'inc-2' }, () => {})
+  const b = source.current()
+  if (!b) {
+    throw new Error('Missing successor capability')
+  }
+  journal.send(first.stream, endpoint, [
+    { text: 'ordinary', queryReply: false },
+    { text: 'scoped-i2', queryReply: false, source: b }
+  ])
+  current = recordingStream()
+  journal.resume(current.stream, endpoint)
+  await expect(oldResult).resolves.toBe(false)
+  expect(current.sent).toEqual([
+    { seq: 1, text: '' },
+    { seq: 2, text: 'ordinary' },
+    { seq: 3, text: 'scoped-i2' }
+  ])
+  journal.acknowledge(3, 'applied')
+  vi.useFakeTimers()
+  const [last] = journal.send(current.stream, endpoint, [
+    { text: 'retired-only', queryReply: false, source: b }
+  ])
+  if (last === undefined) {
+    throw new Error('Missing final scoped sequence')
+  }
+  const result = journal.whenAcknowledged(last)
+  source.change(null, () => {}, true)
+  try {
+    for (let round = 0; round <= REMOTE_RUNTIME_INPUT_REFUSAL_ROUNDS_BEFORE_ESCALATION; round++) {
+      journal.acknowledge(3, 'resend')
+      vi.runOnlyPendingTimers()
+    }
+    await expect(result).resolves.toBe(false)
+    expect(current.sent.slice(4).every((entry) => entry.text === '')).toBe(true)
+    expect(refusal).not.toHaveBeenCalled()
+    journal.acknowledge(last, 'applied')
+    journal.discard()
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    journal.discard()
+    vi.useRealTimers()
+  }
 })

@@ -1,3 +1,4 @@
+import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
@@ -33,7 +34,7 @@ vi.mock('./terminal-worktree-path-link', () => ({
 
 import { handleTerminalFileLink } from './terminal-file-link-actions'
 
-const deps = { worktreeId: 'wt-1', worktreePath: '/repo' }
+const deps = { worktreeId: 'wt-1', worktreePath: '/repo', commit: commitPreparedLinkForRoutingTest }
 
 function plainEvent(): MouseEvent {
   return {
@@ -55,7 +56,7 @@ function context(
   return {
     paneId: 3,
     pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
-    claimPtyMouse: vi.fn(() => true),
+    commit: vi.fn(commitPreparedLinkForRoutingTest),
     request: request as TerminalLinkActionContext['request'],
     focusTerminal: vi.fn(),
     sourceOwner

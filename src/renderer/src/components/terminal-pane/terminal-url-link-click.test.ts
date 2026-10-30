@@ -1,3 +1,4 @@
+import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -188,6 +189,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick(URL_ROWS[0], event, {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -237,6 +242,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick(FRAMED_URL_ROWS[0], event, {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -268,6 +277,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick(fullWidthRows[0], mouseEventForRow(0), {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -300,6 +313,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick(urlRows[0], mouseEventForRow(0), {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -329,6 +346,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick(firstRow, mouseEventForRow(0), {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -350,6 +371,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick('http://example.com/', mouseEventForRow(0), {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -380,6 +405,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick('http://example.com/', mouseEventForRow(0), {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -468,6 +497,10 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(
       handleTerminalWebLinkClick(URL_ROWS[0], event, {
         terminal,
+        commit: (event, operation) => {
+          terminal.clearSelection()
+          return commitPreparedLinkForRoutingTest(event, operation)
+        },
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         startupCwd: '/tmp'
@@ -502,7 +535,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       getLinkActionContext: () => ({
         paneId: 1,
         pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
-        claimPtyMouse: vi.fn(() => true),
+        commit: vi.fn(commitPreparedLinkForRoutingTest),
         request,
         focusTerminal: vi.fn()
       })

@@ -1,192 +1,297 @@
-import type { IDisposable, Terminal } from '@xterm/xterm'
+import { createTerminalLinkPointerListeners } from './terminal-link-pointer-listeners'
 import {
-  isTerminalLinkActionActivation,
-  isTerminalLinkDirectActivation,
-  isTerminalMiddleClickActivation
-} from './terminal-link-activation'
+  sameNativeMouseEvent,
+  forwardTerminalLinkFrames,
+  type InputBinding,
+  type Transaction,
+  type TerminalLinkPtyMouseSuppression
+} from './terminal-link-input-transaction'
+import type { Terminal } from '@xterm/xterm'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import { isXtermMouseReport } from './terminal-pointer-input-sequences'
 
-const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
+const CAPTURE = { capture: true } as const
 const MAX_DEFERRED_PTY_INPUT_FRAMES = 64
 
-type DeferredPtyInput = {
-  data: string
-  forward: (data: string) => void
-}
+export type { TerminalLinkPtyMouseSuppression } from './terminal-link-input-transaction'
 
-export type TerminalLinkPtyMouseSuppression = IDisposable & {
-  claimAction: () => boolean
-  handlePtyInput: (data: string, forward: (data: string) => void) => void
-}
-
+/** One reversible transaction; a forwarded press can never acquire application ownership later. */
 export function installTerminalLinkPtyMouseSuppression(
-  terminal: Terminal,
-  shouldSuppressMouseEvent: (event: MouseEvent) => boolean,
-  shouldDeferPlainMouseEvent: (event: MouseEvent) => boolean = () => false,
-  shouldContinueDeferring: (event: MouseEvent) => boolean = () => true
+  terminal: Pick<Terminal, 'element' | 'clearSelection'>,
+  options: {
+    candidate: (event: MouseEvent) => string | null
+    eligible: (event: MouseEvent) => boolean
+    canContinue: (event: MouseEvent) => boolean
+  }
 ): TerminalLinkPtyMouseSuppression {
-  const terminalElement = terminal.element
-  const ownerDocument = terminalElement?.ownerDocument
-  const ownerWindow = ownerDocument?.defaultView
-  let previousMouseEventsRequireAlt: boolean | null = null
-  let restoreQueued = false
-  let deferredPtyInput: DeferredPtyInput[] | null = null
-  let capturesPtyInput = false
-  let actionClaimed = false
-  let deferredInputFallbackTimer: number | null = null
-  let deferredListenersInstalled = false
-
-  const restore = (): void => {
-    restoreQueued = false
-    if (previousMouseEventsRequireAlt === null) {
+  const element = terminal.element
+  const document = element?.ownerDocument
+  const window = document?.defaultView
+  const platform = getShortcutPlatform()
+  let source: InputBinding | null = null
+  let transaction: Transaction | null = null
+  let keyboard: { source: InputBinding; event: KeyboardEvent } | null = null
+  let timer: number | null = null
+  let closed = false
+  let applyingOperation = false
+  const clearTimer = (): void => {
+    if (timer !== null) {
+      window?.clearTimeout(timer)
+      timer = null
+    }
+  }
+  const pointerListeners = createTerminalLinkPointerListeners(document, window, {
+    replacePress,
+    captureMove,
+    captureUp,
+    checkDrag,
+    invalidate
+  })
+  const settle = (keepTail: boolean): void => {
+    const previous = transaction
+    if (!previous) {
       return
     }
-    terminal.options.mouseEventsRequireAlt = previousMouseEventsRequireAlt
-    previousMouseEventsRequireAlt = null
-    ownerDocument?.removeEventListener('mouseup', queueRestore)
-    ownerWindow?.removeEventListener('blur', restore)
+    const frames = previous.state === 'pending' ? previous.frames : null
+    previous.frames = null
+    previous.state =
+      previous.state === 'pending' || previous.state === 'revoked-forward'
+        ? 'revoked-forward'
+        : 'revoked-consumed'
+    if (keepTail && !closed) {
+      pointerListeners.install(true)
+    } else {
+      transaction = null
+      pointerListeners.remove()
+    }
+    forwardTerminalLinkFrames(frames)
   }
-  const queueRestore = (): void => {
-    if (restoreQueued || previousMouseEventsRequireAlt === null) {
+  const scheduleSettlement = (): void => {
+    if (timer !== null || !window) {
       return
     }
-    restoreQueued = true
-    queueMicrotask(restore)
-  }
-  const finishDeferredInput = (): void => {
-    if (deferredInputFallbackTimer !== null) {
-      ownerWindow?.clearTimeout(deferredInputFallbackTimer)
-      deferredInputFallbackTimer = null
-    }
-    const deferred = deferredPtyInput
-    const shouldForward = deferred !== null && !actionClaimed
-    deferredPtyInput = null
-    capturesPtyInput = false
-    actionClaimed = false
-    removeDeferredListeners()
-    if (shouldForward) {
-      for (const input of deferred) {
-        input.forward(input.data)
+    const pending = transaction
+    const origin = keyboard
+    timer = window.setTimeout(() => {
+      timer = null
+      if (keyboard === origin) {
+        keyboard = null
       }
-    }
+      if (transaction === pending && pending?.up) {
+        settle(false)
+      }
+    }, 0)
   }
-  const captureCurrentMouseEvent = (): void => {
-    capturesPtyInput = true
+  function invalidate(): void {
+    keyboard = null
+    settle(true)
   }
-  const handleMouseDown = (event: MouseEvent): void => {
-    if (isTerminalLinkActionActivation(event) && shouldDeferPlainMouseEvent(event)) {
-      finishDeferredInput()
-      deferredPtyInput = []
-      addDeferredListeners()
-      captureCurrentMouseEvent()
+  function replacePress(): void {
+    clearTimer()
+    keyboard = null
+    settle(false)
+  }
+  function captureMove(event: MouseEvent): void {
+    const pending = transaction
+    if (!pending) {
       return
     }
+    if (event.buttons === 0) {
+      settle(false)
+      return
+    }
+    pending.dispatch = event
+  }
+  function checkDrag(event: MouseEvent): void {
     if (
-      (!isTerminalLinkDirectActivation(event) && !isTerminalMiddleClickActivation(event)) ||
-      !shouldSuppressMouseEvent(event)
+      transaction?.state === 'pending' &&
+      !transaction.direct &&
+      transaction.down.button === 0 &&
+      !(platform === 'darwin' && transaction.down.ctrlKey) &&
+      !options.canContinue(event)
     ) {
+      settle(true)
+    }
+  }
+  function captureUp(event: MouseEvent): void {
+    if (!transaction || transaction.down.button !== event.button) {
       return
     }
-    restore()
-    previousMouseEventsRequireAlt = Boolean(terminal.options.mouseEventsRequireAlt)
-    // Why: an Orca-owned link gesture must not also reach a mouse-aware child TUI.
-    terminal.options.mouseEventsRequireAlt = true
-    ownerDocument?.addEventListener('mouseup', queueRestore)
-    ownerWindow?.addEventListener('blur', restore)
+    transaction.up = event
+    transaction.dispatch = event
+    scheduleSettlement()
   }
-  const handleDeferredMouseEvent = (): void => {
-    if (deferredPtyInput !== null) {
-      captureCurrentMouseEvent()
+  const captureDown = (event: MouseEvent): void => {
+    replacePress()
+    if (closed || !source?.isCurrent() || !options.eligible(event)) {
+      return
+    }
+    const candidate = options.candidate(event)
+    if (candidate === null) {
+      return
+    }
+    transaction = {
+      source,
+      candidate,
+      down: event,
+      up: null,
+      dispatch: event,
+      direct: isTerminalLinkDirectActivation(event),
+      state: 'pending',
+      frames: []
+    }
+    pointerListeners.install(false)
+  }
+  const apply = (event: MouseEvent, operation: () => void): void => {
+    applyingOperation = true
+    try {
+      event.preventDefault()
+      terminal.clearSelection()
+      operation()
+    } finally {
+      applyingOperation = false
     }
   }
-  const releaseIneligibleDrag = (event: MouseEvent): void => {
-    if (deferredPtyInput !== null && !shouldContinueDeferring(event)) {
-      finishDeferredInput()
-    }
-  }
-  const releaseCurrentMouseEvent = (): void => {
-    capturesPtyInput = false
-  }
-  const queueDeferredInputFallback = (): void => {
-    if (deferredPtyInput !== null) {
-      if (deferredInputFallbackTimer !== null) {
-        ownerWindow?.clearTimeout(deferredInputFallbackTimer)
+  element?.addEventListener('mousedown', captureDown, CAPTURE)
+  element?.addEventListener('mouseup', captureUp, CAPTURE)
+  const binding: TerminalLinkPtyMouseSuppression = {
+    commit: (event, operation) => {
+      if (event.type === 'contextmenu' && event.button === -1) {
+        return binding.commitKeyboard(event, operation.run)
       }
-      deferredInputFallbackTimer = ownerWindow?.setTimeout(finishDeferredInput, 0) ?? null
-    }
-  }
-  const handleBlur = (): void => {
-    finishDeferredInput()
-    restore()
-  }
-  const addDeferredListeners = (): void => {
-    if (deferredListenersInstalled) {
-      return
-    }
-    deferredListenersInstalled = true
-    ownerDocument?.addEventListener('mousemove', handleDeferredMouseEvent, CAPTURE_LISTENER_OPTIONS)
-    ownerDocument?.addEventListener('mousemove', releaseIneligibleDrag)
-    ownerDocument?.addEventListener('mouseup', handleDeferredMouseEvent, CAPTURE_LISTENER_OPTIONS)
-    ownerDocument?.addEventListener('mouseleave', finishDeferredInput)
-    ownerWindow?.addEventListener('mousedown', releaseCurrentMouseEvent)
-    ownerWindow?.addEventListener('mousemove', releaseCurrentMouseEvent)
-    ownerWindow?.addEventListener('mouseup', releaseCurrentMouseEvent)
-    ownerWindow?.addEventListener('mouseup', queueDeferredInputFallback)
-    ownerWindow?.addEventListener('click', queueDeferredInputFallback)
-    ownerWindow?.addEventListener('blur', handleBlur)
-  }
-  const removeDeferredListeners = (): void => {
-    if (!deferredListenersInstalled) {
-      return
-    }
-    deferredListenersInstalled = false
-    ownerDocument?.removeEventListener(
-      'mousemove',
-      handleDeferredMouseEvent,
-      CAPTURE_LISTENER_OPTIONS
-    )
-    ownerDocument?.removeEventListener('mousemove', releaseIneligibleDrag)
-    ownerDocument?.removeEventListener(
-      'mouseup',
-      handleDeferredMouseEvent,
-      CAPTURE_LISTENER_OPTIONS
-    )
-    ownerDocument?.removeEventListener('mouseleave', finishDeferredInput)
-    ownerWindow?.removeEventListener('mousedown', releaseCurrentMouseEvent)
-    ownerWindow?.removeEventListener('mousemove', releaseCurrentMouseEvent)
-    ownerWindow?.removeEventListener('mouseup', releaseCurrentMouseEvent)
-    ownerWindow?.removeEventListener('mouseup', queueDeferredInputFallback)
-    ownerWindow?.removeEventListener('click', queueDeferredInputFallback)
-    ownerWindow?.removeEventListener('blur', handleBlur)
-  }
-
-  terminalElement?.addEventListener('mousedown', handleMouseDown, CAPTURE_LISTENER_OPTIONS)
-  terminalElement?.addEventListener('mouseup', queueRestore, CAPTURE_LISTENER_OPTIONS)
-  return {
-    claimAction: () => {
-      if (deferredPtyInput === null) {
+      const candidate = options.candidate(event)
+      return candidate !== null && binding.commitPointer(event, candidate, operation.run)
+    },
+    bindSource: (next) => {
+      if (next !== source) {
+        source = next
+        invalidate()
+      }
+    },
+    invalidateSource: invalidate,
+    reset: invalidate,
+    recordKeyEvent: (event) => {
+      const menu =
+        event.key === 'ContextMenu' && event.type === (platform === 'win32' ? 'keyup' : 'keydown')
+      const f10 =
+        platform !== 'darwin' && event.type === 'keydown' && event.key === 'F10' && event.shiftKey
+      if (!closed && source?.isCurrent() && (menu || f10)) {
+        invalidate()
+        keyboard = { source, event }
+        scheduleSettlement()
+      }
+    },
+    commitKeyboard: (event, operation) => {
+      if (
+        closed ||
+        event.type !== 'contextmenu' ||
+        event.button !== -1 ||
+        event.buttons !== 0 ||
+        !keyboard ||
+        keyboard.source !== source ||
+        !keyboard.source.isCurrent()
+      ) {
         return false
       }
-      actionClaimed = true
+      keyboard = null
+      clearTimer()
+      apply(event, operation)
       return true
     },
-    handlePtyInput: (data, forward) => {
-      if (deferredPtyInput !== null && capturesPtyInput && isXtermMouseReport(data)) {
-        if (deferredPtyInput.length >= MAX_DEFERRED_PTY_INPUT_FRAMES) {
-          finishDeferredInput()
-          forward(data)
-          return
+    commitPointer: (event, candidate, operation) => {
+      const pending = transaction
+      if (pending?.state === 'consumed' && event.type === 'contextmenu') {
+        const origin = platform === 'win32' ? pending.up : pending.down
+        if (candidate === pending.candidate && origin && sameNativeMouseEvent(origin, event)) {
+          event.preventDefault()
+          return true
         }
-        deferredPtyInput.push({ data, forward })
+      }
+      if (
+        closed ||
+        !pending ||
+        pending.state !== 'pending' ||
+        pending.source !== source ||
+        !pending.source.isCurrent() ||
+        candidate !== pending.candidate
+      ) {
+        return false
+      }
+      const origin = platform === 'win32' ? pending.up : pending.down
+      const context = event.type === 'contextmenu'
+      if (
+        context
+          ? !origin || !sameNativeMouseEvent(origin, event)
+          : pending.dispatch !== event || (platform === 'darwin' && pending.down.ctrlKey)
+      ) {
+        return false
+      }
+      if (!context && !pending.direct && !options.canContinue(event)) {
+        settle(true)
+        return false
+      }
+      pending.state = 'consumed'
+      pending.frames = null
+      pointerListeners.install(true)
+      apply(event, operation)
+      return true
+    },
+    handlePtyInput: (data, forward, userInput = false, qualify) => {
+      const pending = transaction
+      // eventPhase survives mid-dispatch microtasks; application reentry is not an xterm report.
+      if (
+        !pending ||
+        applyingOperation ||
+        pending.dispatch.eventPhase === 0 ||
+        !isXtermMouseReport(data)
+      ) {
+        if (!qualify || qualify(data, userInput)) {
+          forward(data)
+        }
         return
       }
-      forward(data)
+      if (pending.state === 'consumed' || pending.state === 'revoked-consumed') {
+        return
+      }
+      if (!pending.source.isCurrent() || pending.source.qualify?.(data, userInput) === false) {
+        return
+      }
+      const originalForward = userInput ? pending.source.user : pending.source.unclassified
+      if (pending.state === 'revoked-forward') {
+        originalForward(data)
+        return
+      }
+      if ((pending.frames?.length ?? 0) === MAX_DEFERRED_PTY_INPUT_FRAMES) {
+        settle(true)
+        originalForward(data)
+        return
+      }
+      pending.frames?.push({ data, forward: originalForward })
     },
     dispose: () => {
-      finishDeferredInput()
-      restore()
-      terminalElement?.removeEventListener('mousedown', handleMouseDown, CAPTURE_LISTENER_OPTIONS)
-      terminalElement?.removeEventListener('mouseup', queueRestore, CAPTURE_LISTENER_OPTIONS)
+      if (closed) {
+        return
+      }
+      closed = true
+      source = null
+      keyboard = null
+      clearTimer()
+      element?.removeEventListener('mousedown', captureDown, CAPTURE)
+      element?.removeEventListener('mouseup', captureUp, CAPTURE)
+      const consumedDispatch =
+        transaction &&
+        (transaction.state === 'consumed' || transaction.state === 'revoked-consumed') &&
+        transaction.dispatch.eventPhase !== 0
+          ? transaction
+          : null
+      try {
+        settle(false)
+      } finally {
+        transaction = consumedDispatch
+        pointerListeners.remove()
+      }
     }
   }
+  return binding
 }

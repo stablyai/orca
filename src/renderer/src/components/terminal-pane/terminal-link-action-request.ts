@@ -1,9 +1,10 @@
 import type { TerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import {
-  isTerminalLinkActionActivation,
-  isTerminalLinkContextMenuActivation,
-  isTerminalMiddleClickActivation
-} from './terminal-link-activation'
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit,
+  type TerminalLinkActionDetails
+} from './terminal-link-activation-operation'
 import type { TerminalLinkClickBehavior } from './terminal-link-click-behavior'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import {
@@ -24,7 +25,7 @@ export type TerminalLinkActionRequester = (request: TerminalLinkActionRequest) =
 export type TerminalLinkActionContext = {
   paneId: number
   pointerGesture: TerminalLinkPointerGesture
-  claimPtyMouse: () => boolean
+  commit: TerminalLinkCommit
   request: TerminalLinkActionRequester
   focusTerminal: () => void
   plainClickBehavior?: TerminalLinkClickBehavior
@@ -40,56 +41,21 @@ export function closeTerminalLinkActionRequest(
   return closeLinkActionRequest(current, dismissed)
 }
 
-type LinkActionDetails = Pick<
-  TerminalLinkActionRequest,
-  'destination' | 'copyValue' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
->
-
 export function requestTerminalLinkAction(
   event: MouseEvent | undefined,
   context: TerminalLinkActionContext | null | undefined,
-  details: LinkActionDetails | (() => void)
+  details: TerminalLinkActionDetails | (() => void)
 ): boolean {
-  const contextMenu = event && isTerminalLinkContextMenuActivation(event)
-  if (
-    !event ||
-    !context ||
-    !(
-      contextMenu ||
-      (isTerminalLinkActionActivation(event) && context.plainClickBehavior !== 'none') ||
-      (isTerminalMiddleClickActivation(event) && context.middleClickBehavior !== 'none')
-    ) ||
-    (!contextMenu && !context.pointerGesture.canRequestAction(event))
-  ) {
-    return false
-  }
-
-  if (!context.claimPtyMouse()) {
-    return false
-  }
-  event.preventDefault()
-  if (typeof details === 'function') {
-    details()
-    return true
-  }
-  const middleClick = isTerminalMiddleClickActivation(event)
-  if (
-    !contextMenu &&
-    (middleClick ? context.middleClickBehavior : context.plainClickBehavior) === 'open'
-  ) {
-    context.focusTerminal()
-    details.primary?.run()
-    return true
-  }
-  if (middleClick && context.middleClickBehavior !== 'actions') {
-    return false
-  }
-  context.request({
-    ...details,
-    paneId: context.paneId,
-    anchorX: event.clientX,
-    anchorY: event.clientY,
-    restoreFocus: context.focusTerminal
-  })
-  return true
+  return commitTerminalLinkActivation(
+    event,
+    prepareTerminalLinkActivation(
+      event,
+      {
+        kind: typeof details === 'function' ? 'unresolved' : details.kind,
+        details
+      },
+      context
+    ),
+    context?.commit
+  )
 }

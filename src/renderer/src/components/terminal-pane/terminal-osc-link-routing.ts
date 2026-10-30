@@ -1,3 +1,8 @@
+import {
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit
+} from './terminal-link-activation-operation'
 import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
 import { requestTerminalLinkAction } from './terminal-link-action-request'
 import { showFileLinkUnresolvedToast } from '@/components/native-chat/native-chat-file-link-toasts'
@@ -61,6 +66,7 @@ export function handleOscLink(
         'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro' | 'sourceTabId'
       >
     > & {
+      commit?: TerminalLinkCommit
       fileContext?: TerminalFileLinkActionDeps['fileContext']
       onInternalOpen?: () => void
       onOpenFailure?: TerminalFileLinkActionDeps['onOpenFailure']
@@ -105,6 +111,7 @@ export function handleOscLink(
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
         linkActionContext: deps.linkActionContext,
         actionDestinations: deps.actionDestinations,
+        commit: deps.commit,
         actionDestination: rawText
       })
     )
@@ -126,8 +133,15 @@ export function handleOscLink(
     if (target?.kind === 'path') {
       const report = (): void => showFileLinkUnresolvedToast(target.link.pathText)
       if (isTerminalLinkDirectActivation(mouseEvent)) {
-        report()
-        return finish(true)
+        return commitTerminalLinkActivation(
+          mouseEvent,
+          prepareTerminalLinkActivation(mouseEvent, {
+            kind: 'unresolved',
+            direct: report,
+            details: report
+          }),
+          deps.commit ?? deps.linkActionContext?.commit
+        )
       }
       return finish(requestTerminalLinkAction(mouseEvent, deps.linkActionContext, report))
     }

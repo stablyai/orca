@@ -1,3 +1,4 @@
+import type { TerminalLinkCommit } from './terminal-link-activation-operation'
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -51,7 +52,7 @@ export type TerminalLinkTestDoubles = {
   createBrowserTabMock: Mock
   setPendingEditorRevealMock: Mock
   setMarkdownViewModeMock: Mock
-  deps: { worktreeId: string; worktreePath: string }
+  deps: { worktreeId: string; worktreePath: string; commit: TerminalLinkCommit }
   storeState: TerminalLinkStoreState
 }
 
@@ -70,7 +71,11 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setPendingEditorRevealMock = vi.fn()
   const setMarkdownViewModeMock = vi.fn()
 
-  const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
+  const deps = {
+    worktreeId: 'wt-1',
+    worktreePath: '/tmp',
+    commit: commitPreparedLinkForRoutingTest
+  }
   // Adapt legacy openFile assertions while recording the opened view for guarded reveal.
   const openFileForLinkMock = vi.fn(
     (
@@ -128,4 +133,11 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     deps,
     storeState
   }
+}
+
+/** Isolated destination tests inject the commit seam; owner composition is covered separately. */
+export const commitPreparedLinkForRoutingTest: TerminalLinkCommit = (event, operation) => {
+  event.preventDefault?.()
+  operation.run()
+  return true
 }

@@ -1,5 +1,6 @@
+import { commitPreparedLinkForRoutingTest } from '../terminal-pane/terminal-link-handlers-test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { previewTerminalLinkContext } from './preview-terminal-link-context'
+import { previewTerminalLinkContext as resolvePreviewTerminalLinkContext } from './preview-terminal-link-context'
 import { terminalLinkClickBehaviorFor } from '@/components/terminal-pane/terminal-link-click-behavior'
 import { handleOscLink } from '@/components/terminal-pane/terminal-osc-link-routing'
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
@@ -66,6 +67,12 @@ vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
         }
       : null
 }))
+
+function previewTerminalLinkContext(
+  source: Parameters<typeof resolvePreviewTerminalLinkContext>[0]
+) {
+  return { ...resolvePreviewTerminalLinkContext(source), commit: commitPreparedLinkForRoutingTest }
+}
 
 const id = 'repo::/home/u/proj'
 const path = '/home/u/proj'
@@ -195,7 +202,7 @@ describe('preview source through OSC file opening', () => {
         linkActionContext: {
           paneId: 0,
           pointerGesture: { canRequestAction: () => false, dispose: vi.fn() },
-          claimPtyMouse: () => true,
+          commit: commitPreparedLinkForRoutingTest,
           request,
           focusTerminal: vi.fn(),
           sourceOwner: context.sourceOwner
@@ -259,7 +266,7 @@ describe('preview source through OSC file opening', () => {
           linkActionContext: {
             paneId: 0,
             pointerGesture: { canRequestAction: () => false, dispose: vi.fn() },
-            claimPtyMouse: () => true,
+            commit: commitPreparedLinkForRoutingTest,
             request,
             focusTerminal: vi.fn(),
             sourceOwner: context.sourceOwner
@@ -362,12 +369,14 @@ describe('preview source through OSC file opening', () => {
           },
           {
             ...context,
+            commit: activation.absent ? commitPreparedLinkForRoutingTest : undefined,
             linkActionContext: activation.absent
               ? null
               : {
                   paneId: 0,
                   pointerGesture: { canRequestAction: pointer, dispose: vi.fn() },
-                  claimPtyMouse: claim,
+                  commit: (event, operation) =>
+                    claim() && commitPreparedLinkForRoutingTest(event, operation),
                   request,
                   focusTerminal: vi.fn(),
                   plainClickBehavior: terminalLinkClickBehaviorFor(activation.settings)

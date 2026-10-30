@@ -51,6 +51,9 @@ export async function connectIpcPty(
   }
   if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
     context.bind(options.sessionId)
+    if (!context.isCurrent(options.sessionId)) {
+      return
+    }
     handlers.registerData(options.sessionId)
     if (context.isDestroyed()) {
       return
@@ -118,6 +121,9 @@ export async function connectIpcPty(
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
     context.bind(spawnResult.id)
+    if (!context.isCurrent(spawnResult.id)) {
+      return
+    }
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
       if (context.isDestroyed()) {

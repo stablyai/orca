@@ -78,15 +78,8 @@ export function createTerminalPanePtyDeps(args: {
     clearExitedPanePtyLayoutBinding: deps.clearExitedPanePtyLayoutBinding,
     clearExitedPanePtyLayoutBindingForLeaf: deps.clearExitedPanePtyLayoutBindingForLeaf,
     onStartupBound: deps.onStartupBound,
-    deferPtyInput: (paneId, data, forward) => {
-      const suppression =
-        refs.httpLinkClickFallbackDisposablesRef.current.get(paneId)?.ptyMouseSuppression
-      if (suppression) {
-        suppression.handlePtyInput(data, forward)
-      } else {
-        forward(data)
-      }
-    },
+    getPtyInputOwner: (paneId) =>
+      refs.httpLinkClickFallbackDisposablesRef.current.get(paneId)?.ptyMouseSuppression,
     recordPaneMode2031Subscription: (paneId, mode) => {
       deps.paneMode2031Ref.current.set(paneId, true)
       deps.paneLastThemeModeRef.current.set(paneId, mode)

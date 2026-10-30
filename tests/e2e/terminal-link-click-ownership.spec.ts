@@ -30,7 +30,8 @@ type LinkMode = 'http' | 'osc'
 async function startMouseAwareLinkFixture(
   orcaPage: Page,
   testInfo: TestInfo,
-  linkMode: LinkMode = 'http'
+  linkMode: LinkMode = 'http',
+  inputLogPath?: string
 ): Promise<{ mouseLogPath: string; ptyId: string; target: LinkTarget }> {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
@@ -43,7 +44,7 @@ async function startMouseAwareLinkFixture(
   await execInTerminal(
     orcaPage,
     ptyId,
-    `node ${JSON.stringify(FIXTURE_PATH)} ${JSON.stringify(mouseLogPath)} ${linkMode}`
+    `node ${JSON.stringify(FIXTURE_PATH)} ${JSON.stringify(mouseLogPath)} ${linkMode}${inputLogPath ? ` ${JSON.stringify(inputLogPath)}` : ''}`
   )
   const renderedLinkText = linkMode === 'osc' ? OSC_LINK_TEXT : LINK
   await waitForTerminalOutput(orcaPage, 'LINK_MOUSE_READY')
@@ -269,3 +270,108 @@ test.describe('terminal link click ownership', () => {
     await sendToTerminal(orcaPage, ptyId, 'q')
   })
 })
+
+for (const mode of ['http', 'osc'] as const) {
+  test(`real dashboard preview ${mode} composes exclusive actions with reporting-child refusal controls`, async ({
+    orcaPage
+  }, testInfo) => {
+    const rawInputLog = testInfo.outputPath('child-all-input.log')
+    const { mouseLogPath, ptyId } = await startMouseAwareLinkFixture(
+      orcaPage,
+      testInfo,
+      mode,
+      rawInputLog
+    )
+    await orcaPage.evaluate(async (id) => {
+      const state = window.__store?.getState()
+      const worktreeId = state?.activeWorktreeId
+      const tabId = worktreeId ? state?.activeTabIdByWorktree[worktreeId] : null
+      const pane = tabId ? window.__paneManagers?.get(tabId)?.getActivePane() : null
+      if (!state || !worktreeId || !tabId || !pane || !id) {
+        throw new Error('missing actual source pane')
+      }
+      await state.updateSettings({
+        experimentalAgentDashboardPopout: true,
+        experimentalAgentDashboardMode: 'in-window',
+        terminalLinkClickBehavior: 'actions',
+        terminalRightClickToPaste: false,
+        terminalGpuAcceleration: 'off'
+      })
+      // Display-only discovery for the real reporting child; this is not agent validation.
+      state.setAgentStatus(
+        `${tabId}:${pane.leafId}`,
+        { state: 'working', prompt: 'Ownership fixture', agentType: 'codex' },
+        'Codex',
+        { updatedAt: Date.now(), stateStartedAt: Date.now() },
+        { tabId, terminalHandle: id, worktreeId }
+      )
+    }, ptyId)
+    await orcaPage.getByRole('button', { name: /Agent Dashboard/ }).click()
+    await orcaPage.getByText('Ownership fixture', { exact: true }).first().click()
+    const preview = orcaPage.locator('[data-agent-terminal-preview]')
+    await expect(preview).toBeVisible()
+    const label = mode === 'osc' ? OSC_LINK_TEXT : LINK
+    const link = preview
+      .locator('.xterm-rows > div')
+      .filter({ hasText: label })
+      .locator('span')
+      .filter({ hasText: label })
+      .first()
+    const menu = orcaPage.locator('[data-terminal-link-action-popover]')
+    await link.hover({ force: true })
+    const before = childMouseReportCount(mouseLogPath)
+    await link.click({ force: true })
+    await expect(menu).toBeVisible()
+    await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
+    await expectOrcaOwnedMouseOutcome(mouseLogPath, before)
+    await orcaPage.keyboard.press('Escape')
+
+    // Preview middle belongs to the child even when plain actions are enabled.
+    await link.click({ force: true, button: 'middle' })
+    await expect(menu).toHaveCount(0)
+    await expect.poll(() => childMouseReportCount(mouseLogPath)).toBeGreaterThan(before)
+    await orcaPage.evaluate(async () => {
+      await window.__store?.getState().updateSettings({ terminalLinkClickBehavior: 'none' })
+    })
+    const beforeNone = childMouseReportCount(mouseLogPath)
+    await link.click({ force: true })
+    await expect(menu).toHaveCount(0)
+    await expect.poll(() => childMouseReportCount(mouseLogPath)).toBeGreaterThan(beforeNone)
+
+    const control = preview
+      .locator('.xterm-rows > div')
+      .filter({ hasText: 'CHILD_CONTROL' })
+      .locator('span')
+      .first()
+    const beforeControl = childMouseReportCount(mouseLogPath)
+    await control.click({ force: true })
+    await expect.poll(() => childMouseReportCount(mouseLogPath)).toBeGreaterThan(beforeControl)
+    if (process.platform === 'darwin') {
+      await orcaPage.evaluate(async () => {
+        await window.__store?.getState().updateSettings({ terminalLinkClickBehavior: 'actions' })
+      })
+      await link.hover({ force: true })
+      const beforeNative = childMouseReportCount(mouseLogPath)
+      await link.click({ force: true, modifiers: ['Control', 'Alt'] })
+      await expect(menu).toBeVisible()
+      await expectOrcaOwnedMouseOutcome(mouseLogPath, beforeNative)
+      await orcaPage.keyboard.press('Escape')
+      await control.click({ force: true })
+      const rawBefore = existsSync(rawInputLog) ? readFileSync(rawInputLog, 'utf8').length : 0
+      await preview.locator('.xterm-helper-textarea').press('Control+Alt+ArrowUp')
+      await expect
+        .poll(() => (existsSync(rawInputLog) ? readFileSync(rawInputLog, 'utf8').length : 0))
+        .toBeGreaterThan(rawBefore)
+      await expect(menu).toHaveCount(0)
+    }
+    if (process.platform === 'win32') {
+      await preview.locator('.xterm-helper-textarea').press('Shift+F10')
+      await expect
+        .poll(() =>
+          existsSync(rawInputLog) ? readFileSync(rawInputLog, 'utf8').replace(/\s/g, '') : ''
+        )
+        .toContain('1b5b32313b327e')
+    }
+    await sendToTerminal(orcaPage, ptyId, 'q')
+  })
+}

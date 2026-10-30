@@ -1,3 +1,10 @@
+import {
+  installTerminalLinkPtyMouseSuppression,
+  type TerminalLinkPtyMouseSuppression
+} from '../terminal-pane/terminal-link-pty-mouse-suppression'
+import { terminalLinkPressCandidate } from '../terminal-pane/terminal-link-press-candidate'
+import { isTerminalLinkDirectActivation } from '../terminal-pane/terminal-link-activation'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
@@ -23,6 +30,9 @@ export type PreviewTerminalLinkRouting = {
 export function installPreviewTerminalLinks(
   terminal: Pick<
     Terminal,
+    | 'buffer'
+    | 'cols'
+    | 'rows'
     | 'element'
     | 'options'
     | 'hasSelection'
@@ -41,10 +51,30 @@ export function installPreviewTerminalLinks(
     > | null
     linkRouting?: PreviewTerminalLinkRouting
   }
-): () => void {
+): (() => void) & { inputOwner: TerminalLinkPtyMouseSuppression } {
   installGuardedLinkProviderRegistration(terminal)
   const pointerGesture = deps.linkRouting ? installTerminalLinkPointerGesture(terminal) : null
   let hoveredLink: string | null = null
+  const inputOwner = installTerminalLinkPtyMouseSuppression(terminal, {
+    candidate: (event) => terminalLinkPressCandidate(terminal, event),
+    eligible: (event) => {
+      const contextPress =
+        event.button === 2 ||
+        (getShortcutPlatform() === 'darwin' && event.button === 0 && event.ctrlKey)
+      if (contextPress) {
+        return Boolean(deps.linkRouting)
+      }
+      return (
+        event.button === 0 &&
+        (isTerminalLinkDirectActivation(event) ||
+          Boolean(
+            pointerGesture?.canRequestAction(event) &&
+            terminalLinkClickBehaviorFor(deps.getSettings()) !== 'none'
+          ))
+      )
+    },
+    canContinue: (event) => Boolean(pointerGesture?.canRequestAction(event))
+  })
   const activate = (event: MouseEvent, uri: string): boolean => {
     const context = deps.linkRouting?.getContext() ?? previewTerminalLinkContext()
     let requested = false
@@ -60,12 +90,13 @@ export function installPreviewTerminalLinks(
     })
     const handled = handleOscLink(uri, event, {
       ...context,
+      commit: inputOwner.commit,
       onInternalOpen: navigate,
       linkActionContext: deps.linkRouting &&
         pointerGesture && {
           paneId: 0,
           pointerGesture,
-          claimPtyMouse: () => true,
+          commit: inputOwner.commit,
           request: (request) => {
             requested = true
             deps.linkRouting?.request(
@@ -96,9 +127,6 @@ export function installPreviewTerminalLinks(
     ) {
       navigate()
     }
-    if (handled) {
-      terminal.clearSelection()
-    }
     return handled
   }
   const hover = (_event: MouseEvent, uri: string): void => {
@@ -120,11 +148,18 @@ export function installPreviewTerminalLinks(
     }
   }
   terminal.element?.addEventListener('contextmenu', contextMenu)
-  return () => {
-    pointerGesture?.dispose()
-    terminal.element?.removeEventListener('contextmenu', contextMenu)
-    if (terminal.options.linkHandler === linkHandler) {
-      terminal.options.linkHandler = previousHandler
-    }
-  }
+  return Object.assign(
+    () => {
+      try {
+        inputOwner.dispose()
+      } finally {
+        pointerGesture?.dispose()
+        terminal.element?.removeEventListener('contextmenu', contextMenu)
+        if (terminal.options.linkHandler === linkHandler) {
+          terminal.options.linkHandler = previousHandler
+        }
+      }
+    },
+    { inputOwner }
+  )
 }

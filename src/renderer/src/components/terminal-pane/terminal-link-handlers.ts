@@ -1,3 +1,8 @@
+import {
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit
+} from './terminal-link-activation-operation'
 import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
@@ -5,7 +10,7 @@ import { extractTerminalFileLinkReadings } from '../../../../shared/terminal-lin
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
-import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
+import { prepareFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
@@ -46,6 +51,7 @@ export type LinkHandlerDeps = {
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
   /** The pane's terminal on its paired server, which may grant files it printed. */
   getRuntimeTerminalHandleForPane?: (paneId: number) => string | null
+  getLinkCommit?: (paneId: number) => TerminalLinkCommit | undefined
   getLinkActionContext?: (paneId: number) => TerminalLinkActionContext | null
   /** The terminal tab whose panes print these links; editor opens place beside its group. */
   sourceTabId?: string
@@ -144,6 +150,7 @@ export function createFilePathLinkProvider(
                     target.column,
                     event,
                     {
+                      commit: deps.getLinkCommit?.(paneId),
                       worktreeId,
                       worktreePath,
                       runtimeEnvironmentId,
@@ -155,7 +162,7 @@ export function createFilePathLinkProvider(
                     deps.getLinkActionContext?.(paneId)
                   )
                 ) {
-                  pane.terminal.clearSelection?.()
+                  event.preventDefault()
                 }
               },
               hover: () => {
@@ -226,7 +233,7 @@ export function installFilePathLinkClickFallback(
     const runtimeEnvironmentId =
       deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
     // Retry hit testing on modifier mouseup: wrapped links can hover active without clickable-row activation. Opening coalesces duplicates.
-    const opened = openFilePathLinkAtBufferPosition(
+    const operation = prepareFilePathLinkAtBufferPosition(
       terminal.buffer.active,
       position,
       terminal.cols,
@@ -244,10 +251,19 @@ export function installFilePathLinkClickFallback(
         onOpenFailure: showFileLinkOpenFailureToast
       }
     )
-    if (opened) {
-      event.preventDefault()
+    if (
+      commitTerminalLinkActivation(
+        event,
+        operation &&
+          prepareTerminalLinkActivation(event, {
+            kind: 'file',
+            direct: operation,
+            details: operation
+          }),
+        deps.getLinkCommit?.(paneId)
+      )
+    ) {
       event.stopPropagation()
-      terminal.clearSelection()
     }
   }
 

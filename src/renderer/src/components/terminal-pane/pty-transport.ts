@@ -1,3 +1,4 @@
+import { createIpcPtyPreconnectInput } from './ipc-pty-preconnect-input'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
@@ -7,6 +8,7 @@ import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import { createIpcPtyInputSource } from './ipc-pty-input-source'
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
@@ -44,11 +46,25 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     }
   })
-  const advancePtyLifecycle = (): number => {
-    lifecycleGeneration += 1
-    lastExitGeneration = null
-    inputWriteQueue.clear()
-    return lifecycleGeneration
+  const inputSource = createIpcPtyInputSource({
+    connectionId,
+    inputWriteQueue,
+    isConnected: () => connected
+  })
+  const advancePtyLifecycle = (unavailable = false, adopt?: () => void): number | null => {
+    const nextGeneration = lifecycleGeneration + 1
+    return inputSource.change(
+      null,
+      () => {
+        lifecycleGeneration = nextGeneration
+        lastExitGeneration = null
+        inputWriteQueue.clear()
+        adopt?.()
+      },
+      unavailable
+    )
+      ? nextGeneration
+      : null
   }
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -68,64 +84,45 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getCallbacks: () => storedCallbacks,
     getSuppressAttentionEvents: () => suppressAttentionEvents,
     markExited: () => {
-      advancePtyLifecycle()
-      lastExitGeneration = lifecycleGeneration
-      connected = false
-      ptyId = null
-      preconnectInputBuffer?.clear()
+      return (
+        advancePtyLifecycle(true, () => {
+          lastExitGeneration = lifecycleGeneration
+          connected = false
+          ptyId = null
+          preconnectInputBuffer?.clear()
+        }) !== null
+      )
     },
     onPtyExit
   })
   const bind = (id: string): void => {
-    ptyId = id
-    connected = true
+    inputSource.change({ id, generation: lifecycleGeneration }, () => {
+      ptyId = id
+      connected = true
+    })
   }
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
   }
-  const dropPreconnectInput = (reason: string): void => {
-    if (preconnectInputBuffer?.hasPendingInput()) {
-      console.warn(
-        `[pty-transport] dropped keys typed while the terminal was connecting: ${reason}`
-      )
-    }
-    preconnectInputBuffer?.clear()
-  }
-  const flushPreconnectInput = async (): Promise<void> => {
-    if (!preconnectInputBuffer?.isBuffering()) {
-      return
-    }
-    const id = ptyId
-    if (destroyed || !connected || !id) {
-      // Why: a closed pane's keys have no owner; only a failed attach is worth reporting.
-      if (destroyed) {
-        preconnectInputBuffer.clear()
-      } else {
-        dropPreconnectInput('the terminal did not attach')
-      }
-      return
-    }
-    if (opts.releasePreconnectInput && !opts.releasePreconnectInput()) {
-      dropPreconnectInput('startup work appeared before it attached')
-      return
-    }
-    await preconnectInputBuffer.flush({
-      isCurrent: () => !destroyed && connected && ptyId === id,
-      sendInput: (data, inputKind) => inputWriteQueue.enqueue(id, data, inputKind),
-      sendInputImmediate: (data) => inputWriteQueue.enqueueQueryReply(id, data),
-      ...(connectionId
-        ? {}
-        : {
-            sendInputAccepted: (data: string, inputKind: TerminalInputKind) =>
-              inputWriteQueue.enqueueAccepted(id, data, inputKind)
-          })
-    })
-  }
+  const { drop: dropPreconnectInput, flush: flushPreconnectInput } = createIpcPtyPreconnectInput({
+    preconnectInputBuffer,
+    inputWriteQueue,
+    connectionId,
+    releasePreconnectInput: opts.releasePreconnectInput,
+    isDestroyed: () => destroyed,
+    isConnected: () => connected,
+    getPtyId: () => ptyId
+  })
 
   return {
+    getInputSource: inputSource.current,
+    observeInputSource: inputSource.observe,
     getPendingEscapeTailAnsi: outputProcessor.getPendingEscapeTailAnsi,
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
+      if (connectGeneration === null) {
+        return
+      }
       pendingConnectGeneration = connectGeneration
       try {
         return await connectIpcPty(options, {
@@ -158,6 +155,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     attach: (options) => {
       const attachGeneration = advancePtyLifecycle()
+      if (attachGeneration === null) {
+        return
+      }
       try {
         attachIpcPty(options, {
           handlers,
@@ -184,24 +184,32 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     disconnect() {
-      advancePtyLifecycle()
+      if (advancePtyLifecycle() === null) {
+        return
+      }
       preconnectInputBuffer?.clear()
       const id = ptyId
       connected = false
       ptyId = null
       handlers.clearAccumulatedState()
       if (id) {
+        const disconnectGeneration = lifecycleGeneration
+        const callbacks = storedCallbacks
+        handlers.unregisterAll(id)
         try {
           window.api.pty.kill(id)
         } finally {
-          handlers.unregisterAll(id)
-          storedCallbacks.onDisconnect?.()
+          if (lifecycleGeneration === disconnectGeneration) {
+            callbacks.onDisconnect?.()
+          }
         }
       }
     },
 
     detach(options) {
-      advancePtyLifecycle()
+      if (advancePtyLifecycle() === null) {
+        return
+      }
       outputProcessor.disposePendingSideEffectGauge()
       handlers.clearAccumulatedState()
       preconnectInputBuffer?.clear()
@@ -286,7 +294,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     destroy(options) {
       onAbandonedConnect ??= options?.onAbandonedConnect
-      destroyed = true
+      if (
+        !inputSource.change(null, () => {
+          destroyed = true
+        })
+      ) {
+        return
+      }
       try {
         this.disconnect()
       } finally {
