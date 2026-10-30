@@ -126,6 +126,12 @@ export function registerMobileAndTerminalCloseIpcBridge(
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
         const language = detectLanguage(basename)
         openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
+          // Edit tabs only offer source and rich, so Markdown's preview is its own read-only tab.
+          if (preview && language === 'markdown') {
+            const file = { filePath, relativePath, worktreeId, language, runtimeEnvironmentId }
+            store.openMarkdownPreview(file, { selection })
+            return
+          }
           // Use File Explorer’s creation path so grouped ordering and markdown bridges stay consistent.
           const fileId = store.openFile(
             {
@@ -138,9 +144,6 @@ export function registerMobileAndTerminalCloseIpcBridge(
             },
             { selection }
           )
-          if (preview && language === 'markdown') {
-            store.setMarkdownViewMode(fileId, 'preview')
-          }
           positionFile(fileId, position, selection === 'focus')
         })
       }
