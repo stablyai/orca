@@ -10,17 +10,29 @@ import type { RunRemovedWork } from '../../../shared/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { withReceiptNext } from './receipt-next-text'
+import {
+  findRunOlderRuntimeWillUnbind,
+  olderRuntimeUnboundRunNext
+} from './older-runtime-run-binding'
 
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const unboundRunId = await findRunOlderRuntimeWillUnbind(client, from).catch(() => null)
     const result = await callOrchestrationMutation<{
       run: { id: string; objective: string; consumer_generation: number }
+      next?: string
     }>(client, flags, 'orchestration.runCreate', {
       objective: getRequiredStringFlag(flags, 'objective'),
       from
     })
-    printResult(result, json, (r) => `Run ${r.run.id} created and bound: ${r.run.objective}`)
+    if (unboundRunId && unboundRunId !== result.result.run.id) {
+      result.result.next = olderRuntimeUnboundRunNext(unboundRunId)
+    }
+    printResult(result, json, (r) =>
+      withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
+    )
   },
 
   'orchestration run-use': async ({ flags, client, cwd, json }) => {

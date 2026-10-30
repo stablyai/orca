@@ -6,6 +6,7 @@ import { parsePaneKey } from '../stable-pane-id'
 import { MAX_PANE_KEY_LEN, warnOnHookEnvOrVersionMismatch } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import { parseAgentHookJson } from './request-body'
+import { readFirstString } from './interactive-tool'
 
 function readHookHeader(headers: IncomingHttpHeaders, name: string): string | undefined {
   const value = headers[name]
@@ -100,6 +101,7 @@ export type ParsedHookEnvelope = {
   record: Record<string, unknown>
   paneKey: string
   hookPayloadRecord: Record<string, unknown>
+  eventName: unknown
   tabId?: string
   worktreeId?: string
   launchToken?: string
@@ -152,9 +154,16 @@ export function parseHookEnvelope(
   if (tabId && tabId !== parsedPaneKey.tabId) {
     return null
   }
+  const eventName =
+    readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
+    ('hook_event_name' in hookPayload ? hookPayload.hook_event_name : undefined) ??
+    ('hookEventName' in hookPayload ? hookPayload.hookEventName : undefined) ??
+    // Only jcode uses event for lifecycle; other providers may use it for unrelated data.
+    (source === 'jcode' && 'event' in hookPayload ? hookPayload.event : undefined)
   return {
     record,
     paneKey,
+    eventName,
     hookPayloadRecord: hookPayload as Record<string, unknown>,
     tabId,
     worktreeId: readEnvelopeString(record, 'worktreeId'),

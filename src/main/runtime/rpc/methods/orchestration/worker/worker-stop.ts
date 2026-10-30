@@ -5,6 +5,8 @@ import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../.
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
+import { refuseFederatedStopWhileKeptOpen } from './worker-keep-open'
+import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
 import {
   resolveStructuredWorkerForDispatch,
   stopStructuredWorker
@@ -28,6 +30,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               'Remote worker-stop requires a durable retry request.'
             )
           }
+          await refuseFederatedStopWhileKeptOpen(runtime, federated)
           const server = resolvePinnedFederatedServer(runtime, federated)
           const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
           if (begun.disposition === 'already_settled') {
@@ -179,6 +182,13 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             'none'
           )
         }
+        await archiveWorkerOutputBeforeStop({
+          runtime,
+          db,
+          dispatchId: params.dispatch,
+          terminalHandle: liveHandle,
+          attachedAt: begun.worker.created_at
+        })
         const structured = resolveStructuredWorkerForDispatch(db, params.dispatch)
         if (structured) {
           const stop = await stopStructuredWorker(structured, params.dispatch, runtime)

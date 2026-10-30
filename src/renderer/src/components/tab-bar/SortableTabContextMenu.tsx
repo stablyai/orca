@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, X } from 'lucide-react'
+import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,7 @@ import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuI
 import type { NativeChatTabSession } from './tab-session-history-switch'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 const TAB_COLORS = [
@@ -146,6 +147,13 @@ export function SortableTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   // Keep the route back from chat even while switching terminals into chat is disabled.
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
+  // Shown only on an orchestration worker the user kept open; returns it to auto-close.
+  const onAllowAutoClose = useAllowAutoClose({
+    open,
+    tabId: tab.id,
+    worktreeId: tab.worktreeId,
+    sessionId: nativeChat?.sessionId
+  })
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -198,6 +206,15 @@ export function SortableTabContextMenu({
             ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
             : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </DropdownMenuItem>
+        {onAllowAutoClose ? (
+          <DropdownMenuItem onSelect={onAllowAutoClose}>
+            <Timer className="size-3.5 shrink-0" />
+            {translate(
+              'components.tab.bar.SortableTabContextMenu.allowAutoClose',
+              'Allow Auto-Close'
+            )}
+          </DropdownMenuItem>
+        ) : null}
         <CopyTabIdMenuItem unifiedTabId={unifiedTabId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>

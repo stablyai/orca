@@ -6,6 +6,7 @@ import { isDispatchMutationMessageType, parseMessageTaskId } from '../schemas'
 import type { SendParams } from '../schemas'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
+import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import type { SendRecipientWarning } from './recipient-routing'
 import {
@@ -126,7 +127,13 @@ export function sendPointToPointMessage(args: {
       }
       const receipt = withSendWarnings(
         msg.type === 'worker_done'
-          ? { message: exposeMessage(msg), lifecycle: reconciled }
+          ? {
+              message: exposeMessage(msg),
+              lifecycle: reconciled,
+              ...(reconciled.action === 'completed' || reconciled.action === 'failed'
+                ? { next: WORKER_DONE_RECORDED_NEXT }
+                : {})
+            }
           : { message: exposeMessage(msg) }
       )
       return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
