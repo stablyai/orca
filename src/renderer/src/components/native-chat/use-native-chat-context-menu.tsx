@@ -360,7 +360,11 @@ function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): 
 function menuPointMissesSelection(x: number, y: number): boolean {
   const selection = window.getSelection()
   const caret = document.caretPositionFromPoint?.(x, y)
-  if (!selection || selection.isCollapsed || !caret) {
+  // A text control's caret offset counts its value, not DOM children, so it maps to no DOM point.
+  const textControl =
+    caret?.offsetNode instanceof HTMLInputElement ||
+    caret?.offsetNode instanceof HTMLTextAreaElement
+  if (!selection || selection.isCollapsed || !caret || textControl) {
     return false
   }
   for (let index = 0; index < selection.rangeCount; index += 1) {

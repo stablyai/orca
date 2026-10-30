@@ -142,6 +142,7 @@ function ImageHarness({
         <p>text</p>
       )}
       <textarea aria-label="composer" />
+      <input aria-label="answer" disabled defaultValue="read only" />
       <div role="textbox" aria-label="prompt" contentEditable suppressContentEditableWarning>
         typo
         <span contentEditable={false}>pill</span>
@@ -336,6 +337,13 @@ describe('useNativeChatContextMenu', () => {
       false
     ],
     [
+      'a reply selection right-clicked on a disabled field',
+      'text',
+      () => screen.getByRole('textbox', { name: 'answer' }),
+      'text',
+      true
+    ],
+    [
       'a composer selection right-clicked away from',
       'typo',
       () => screen.getByText('text'),
@@ -348,10 +356,11 @@ describe('useNativeChatContextMenu', () => {
     render(<ImageHarness />)
     const selection = window.getSelection()
     selection?.selectAllChildren(screen.getByText(selected))
-    // happy-dom lays out no text, so map the press to the pressed element directly.
+    // happy-dom lays out no text, so map the press to the pressed element as Chromium does.
+    const node = pressed()
     Object.defineProperty(document, 'caretPositionFromPoint', {
       configurable: true,
-      value: () => ({ offsetNode: pressed(), offset: 0 })
+      value: () => ({ offsetNode: node, offset: node instanceof HTMLInputElement ? 5 : 0 })
     })
     fireEvent.contextMenu(pressed())
     Reflect.deleteProperty(document, 'caretPositionFromPoint')
