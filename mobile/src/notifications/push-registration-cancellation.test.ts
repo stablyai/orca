@@ -305,9 +305,11 @@ it('shares a timed-out native acquisition, keeps listener T2 over late T1 and re
   vi.mocked(getDevicePushToken).mockReturnValueOnce(pending.promise)
   const first = client()
   const second = client()
-  attachPushRegistration('first', {
+  const withRpcResponses = (
+    connection: ReturnType<typeof client>
+  ): Parameters<typeof attachPushRegistration>[1] => ({
     sendRequest: async (method, params, options) => {
-      const result = await first.sendRequest(method, params, options)
+      const result = await connection.sendRequest(method, params, options)
       if (!result || typeof result !== 'object') {
         throw new Error('Missing actual fixture reply')
       }
@@ -318,19 +320,8 @@ it('shares a timed-out native acquisition, keeps listener T2 over late T1 and re
       return response
     }
   })
-  attachPushRegistration('second', {
-    sendRequest: async (method, params, options) => {
-      const result = await second.sendRequest(method, params, options)
-      if (!result || typeof result !== 'object') {
-        throw new Error('Missing actual fixture reply')
-      }
-      const response = { ...result, id: 'native-race' }
-      if (!isRpcResponse(response)) {
-        throw new Error('Invalid fixture RPC reply')
-      }
-      return response
-    }
-  })
+  attachPushRegistration('first', withRpcResponses(first))
+  attachPushRegistration('second', withRpcResponses(second))
   await vi.advanceTimersByTimeAsync(2000)
   expect(getDevicePushToken).toHaveBeenCalledOnce()
   expect(

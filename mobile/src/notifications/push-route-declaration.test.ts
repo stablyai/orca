@@ -548,8 +548,8 @@ it('retains prior members and refuses all newcomers for the prior100 declaration
   expect(bodies.at(-1)?.hosts).toHaveLength(100) // complete remaining batch now fits
 })
 
-it.each([10, 100, 101, 900])(
-  'allocates a complete distinct %i catalog or refuses initial establishment without empty/floor write',
+it.each([101, 900])(
+  'refuses an initial distinct %i catalog without empty/floor write',
   async (count) => {
     hosts(count)
     const { bodies, operations } = requests()
@@ -563,14 +563,8 @@ it.each([10, 100, 101, 900])(
     ).toBe(count)
     await register()
     expect(operations.filter((body) => body.action === 'read')).toHaveLength(1)
-    if (count <= 100) {
-      expect(bodies).toHaveLength(1)
-      expect(bodies.at(0)?.hosts).toHaveLength(count)
-      expect(state.storage.has('orca:push-route-version')).toBe(true)
-    } else {
-      expect(bodies).toEqual([])
-      expect(state.storage.has('orca:push-route-version')).toBe(false)
-    }
+    expect(bodies).toEqual([])
+    expect(state.storage.has('orca:push-route-version')).toBe(false)
   }
 )
 
@@ -586,7 +580,12 @@ it.each([10, 100])(
     const storage = (await import('@react-native-async-storage/async-storage')).default
     const writes = vi.spyOn(storage, 'setItem')
     await register()
+    expect(operations.filter((body) => body.action === 'read')).toHaveLength(1)
+    expect(bodies).toHaveLength(1)
+    expect(bodies.at(0)?.hosts).toHaveLength(count)
+    expect(state.storage.has('orca:push-route-version')).toBe(true)
     expect(hashes).toHaveBeenCalledTimes(count)
+    expect(new Set(hashes.mock.results.map(({ value }) => value)).size).toBe(count)
     expect(decodes).toHaveBeenCalledTimes(count)
     expect(signs).toHaveBeenCalledTimes(2)
     const signedBytes = signs.mock.calls.map(([bytes]) => bytes.byteLength)
@@ -602,6 +601,9 @@ it.each([10, 100])(
     const rows = await (
       await import('../transport/host-metadata-store')
     ).readStoredHostProfilesForMutation()
+    expect(new Set(hashes.mock.calls.map(([key]) => key))).toEqual(
+      new Set(rows.map((profile) => profile.publicKeyB64))
+    )
     const first = rows.at(0)
     if (!first) {
       throw new Error('Missing paired profile')
