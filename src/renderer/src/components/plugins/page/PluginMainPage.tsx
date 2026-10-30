@@ -3,12 +3,20 @@ import { translate } from '@/i18n/i18n'
 import { useLeftNavigationPluginPanels } from '@/store/plugin-panels'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
+import { canGoBackWorktreeHistory } from '@/store/slices/worktree-nav-history'
 import PluginPanel from '@/components/right-sidebar/PluginPanel'
 
 export function PluginMainPage({ tabKey }: { tabKey: `plugin:${string}` }): React.JSX.Element {
   const panels = useLeftNavigationPluginPanels()
-  const setActiveView = useAppStore((state) => state.setActiveView)
   const panel = panels.find((candidate) => candidate.tabKey === tabKey)
+  const closePage = (): void => {
+    const state = useAppStore.getState()
+    if (canGoBackWorktreeHistory(state)) {
+      state.goBackWorktree()
+    } else {
+      state.setActiveView('terminal')
+    }
+  }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
@@ -20,7 +28,7 @@ export function PluginMainPage({ tabKey }: { tabKey: `plugin:${string}` }): Reac
             'auto.components.plugins.PluginMainPage.close',
             'Close plugin page'
           )}
-          onClick={() => setActiveView('terminal')}
+          onClick={closePage}
         >
           <X />
         </Button>
