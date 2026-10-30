@@ -4,9 +4,11 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { Translate } from '../i18n/mobile-i18n'
 import { BottomDrawer } from './BottomDrawer'
 
-export type SetupTrustPrompt = {
+export type OrcaHookTrustPrompt = {
+  kind: 'setup' | 'archive'
   repoId: string
   repoName: string
   scriptContent: string
@@ -16,7 +18,7 @@ export type SetupTrustPrompt = {
 
 type Props = {
   visible: boolean
-  prompt: SetupTrustPrompt | null
+  prompt: OrcaHookTrustPrompt | null
   busy: boolean
   allowAlwaysTrust?: boolean
   onRunOnce: () => void
@@ -25,8 +27,8 @@ type Props = {
   onClose: () => void
 }
 
-// Prompt before create runs untrusted repo-owned orca.yaml setup; caller retains async persistence/create.
-export function SetupHookTrustDrawer({
+// Prompt before untrusted repo-owned orca.yaml setup or archive runs; caller retains async persistence and the action.
+export function OrcaHookTrustDrawer({
   visible,
   prompt,
   busy,
@@ -38,40 +40,18 @@ export function SetupHookTrustDrawer({
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const copy = prompt ? hookTrustCopy(t, prompt) : null
   return (
     <BottomDrawer visible={visible && prompt != null} onClose={onClose}>
-      {prompt ? (
+      {prompt && copy ? (
         <View>
           <View style={styles.trustHeader}>
-            <Text style={styles.title}>
-              {prompt.previouslyApproved
-                ? t(
-                    'components.setupHookTrustDrawer.scriptChangedTitle',
-                    "{{repoName}}'s setup script changed",
-                    { repoName: prompt.repoName }
-                  )
-                : t(
-                    'components.setupHookTrustDrawer.runSetupTitle',
-                    'Run setup from {{repoName}}?',
-                    {
-                      repoName: prompt.repoName
-                    }
-                  )}
-            </Text>
-            <Text style={styles.subtitle}>
-              {t(
-                'components.setupHookTrustDrawer.description',
-                "This repository's orca.yaml runs before the workspace starts. Only run it if you trust this repository."
-              )}
-            </Text>
+            <Text style={styles.title}>{copy.title}</Text>
+            <Text style={styles.subtitle}>{copy.description}</Text>
           </View>
 
           <View style={styles.trustScriptBox}>
-            <Text style={styles.trustScriptLabel}>
-              {prompt.previouslyApproved
-                ? t('components.setupHookTrustDrawer.newScriptLabel', 'New setup script')
-                : t('components.setupHookTrustDrawer.scriptLabel', 'Setup script')}
-            </Text>
+            <Text style={styles.trustScriptLabel}>{copy.scriptLabel}</Text>
             <Text style={styles.trustScriptText}>{prompt.scriptContent}</Text>
           </View>
 
@@ -125,6 +105,55 @@ export function SetupHookTrustDrawer({
       ) : null}
     </BottomDrawer>
   )
+}
+
+function hookTrustCopy(
+  t: Translate,
+  prompt: OrcaHookTrustPrompt
+): { title: string; description: string; scriptLabel: string } {
+  const repoName = { repoName: prompt.repoName }
+  if (prompt.kind === 'archive') {
+    return {
+      title: prompt.previouslyApproved
+        ? t(
+            'components.setupHookTrustDrawer.archiveScriptChangedTitle',
+            "{{repoName}}'s archive script changed",
+            repoName
+          )
+        : t(
+            'components.setupHookTrustDrawer.runArchiveTitle',
+            'Run archive script from {{repoName}}?',
+            repoName
+          ),
+      description: t(
+        'components.setupHookTrustDrawer.archiveDescription',
+        "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository."
+      ),
+      scriptLabel: prompt.previouslyApproved
+        ? t('components.setupHookTrustDrawer.newArchiveScriptLabel', 'New archive script')
+        : t('components.setupHookTrustDrawer.archiveScriptLabel', 'Archive script')
+    }
+  }
+  return {
+    title: prompt.previouslyApproved
+      ? t(
+          'components.setupHookTrustDrawer.scriptChangedTitle',
+          "{{repoName}}'s setup script changed",
+          repoName
+        )
+      : t(
+          'components.setupHookTrustDrawer.runSetupTitle',
+          'Run setup from {{repoName}}?',
+          repoName
+        ),
+    description: t(
+      'components.setupHookTrustDrawer.description',
+      "This repository's orca.yaml runs before the workspace starts. Only run it if you trust this repository."
+    ),
+    scriptLabel: prompt.previouslyApproved
+      ? t('components.setupHookTrustDrawer.newScriptLabel', 'New setup script')
+      : t('components.setupHookTrustDrawer.scriptLabel', 'Setup script')
+  }
 }
 
 const styles = themedStyleSheet(() => ({
