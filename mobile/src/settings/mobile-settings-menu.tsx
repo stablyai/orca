@@ -4,6 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileSettingsFrame({
   children,
@@ -12,6 +15,8 @@ export function MobileSettingsFrame({
   children: ReactNode
   onBack?: () => void
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   return (
@@ -19,13 +24,13 @@ export function MobileSettingsFrame({
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back', 'Back')}
           style={styles.backButton}
           onPress={onBack ?? (() => router.back())}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Settings</Text>
+        <Text style={styles.heading}>{t('common.settings', 'Settings')}</Text>
       </View>
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
@@ -38,6 +43,7 @@ export function MobileSettingsFrame({
 }
 
 export type MobileSettingsMenuItem = {
+  id: string
   label: string
   icon: LucideIcon
   onPress: () => void
@@ -52,10 +58,11 @@ export function MobileSettingsSection({
   items: MobileSettingsMenuItem[]
   spaced?: boolean
 }) {
+  useMobileColorScheme()
   return (
     <View style={[styles.section, spaced && styles.sectionSpacer]}>
-      {items.map(({ label, icon: Icon, onPress, external, disabled }, index) => (
-        <View key={label}>
+      {items.map(({ id, label, icon: Icon, onPress, external, disabled }, index) => (
+        <View key={id}>
           {index > 0 && <View style={styles.separator} />}
           <Pressable
             accessibilityRole="button"
@@ -75,7 +82,7 @@ export function MobileSettingsSection({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase, paddingHorizontal: spacing.lg },
   topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xl },
   backButton: {
@@ -108,4 +115,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   }
-})
+}))

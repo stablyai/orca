@@ -1,5 +1,4 @@
-// A runtime-started pane, written through the layout module before its terminal starts (design
-// 4.1): Loader, then the command, then the Serializer, so the partition is rewritten from one model.
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
 
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -12,6 +11,8 @@ import type {
   CommandOf,
   LayoutApplyOutcome,
   LayoutCommand,
+  LayoutContext,
+  LayoutEffects,
   LayoutRefusalCode
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
@@ -32,20 +33,24 @@ import { pruneClosedTerminalTabTombstones } from '../../../shared/closed-termina
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
 
-/** A new tab, or a split of an existing pane, with the ids its terminal will run under. */
 export type TerminalPaneAdmission =
   | (CommandOf<'createTerminalTab'> & { tabId: string; leafId: string })
   | (CommandOf<'splitPane'> & { newLeafId: string })
 
-/** 'exists': the start attaches to a pane already in the layout, so nothing is written. */
+/** exists attaches without rewriting layout. */
 export type TerminalPaneAdmissionOutcome = 'admitted' | 'exists' | LayoutRefusalCode
 
-/** The partition to write, or null when nothing changes; `views`: the result's, when seeded. */
+/** Null session means unchanged; views remain in memory. */
 export type PaneLayoutChange<T> = {
   value: T
   session: WorkspaceSessionState | null
   views?: PartitionEditorViews
+  /** Run after persistence; never expose effects in replies. */
+  effects?: LayoutEffects
 }
+
+/** Runtime facts unavailable from stored layout. */
+export type LayoutLiveContext = Pick<LayoutContext, 'isBindingLive' | 'retiresBinding'>
 
 export function admitPaneToSession(
   hostId: ExecutionHostId,
@@ -58,7 +63,7 @@ export function admitPaneToSession(
   if (workspace && locatePane(workspace, paneKeyOf(admission.tabId, leafId))) {
     return { value: 'exists', session: null }
   }
-  const change = applyToSession(loaded, admission, false, touchedRecordsWrite(session, loaded))
+  const change = applyToSession(loaded, admission, false, {}, touchedRecordsWrite(session, loaded))
   return { ...change, value: change.value.ok ? 'admitted' : change.value.code }
 }
 
@@ -68,12 +73,11 @@ export function withdrawPaneFromSession(
   pane: CommandOf<'closePane'>
 ): PaneLayoutChange<LayoutRefusalCode | null> {
   const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
-  const change = applyToSession(loaded, pane, false, touchedRecordsWrite(session, loaded))
+  const change = applyToSession(loaded, pane, false, {}, touchedRecordsWrite(session, loaded))
   return { ...change, value: change.value.ok ? null : change.value.code }
 }
 
-/** Switch point: in a layout-owner build a runtime pane writes only the records it changes, as
- *  `layout.apply` does; window-owned builds rewrite the whole partition. */
+/** Main-owned layouts patch changed records; window-owned builds rewrite the partition. */
 function touchedRecordsWrite(
   session: WorkspaceSessionState,
   loaded: LoadedWorkspaceLayout
@@ -81,7 +85,6 @@ function touchedRecordsWrite(
   return ORCA_LAYOUT_OWNER_IS_MAIN ? (after) => touchedRecords(session, loaded, after) : undefined
 }
 
-/** The stored partition with only the records the change touched rewritten; null when none. */
 function touchedRecords(
   session: WorkspaceSessionState,
   loaded: LoadedWorkspaceLayout,
@@ -91,16 +94,14 @@ function touchedRecords(
   return patched === session ? null : patched
 }
 
-/**
- * A client's layout command (`layout.apply`), with main minting every new id. Only the records the
- * command changed are written; the rest of the partition stays as stored, normalized or not.
- */
+/** Mint IDs in main and rewrite only changed records, preserving unnormalized untouched rows. */
 export function applyCommandToSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
   command: LayoutCommand,
-  /** Main's in-memory editor views, which the saved form lacks (layout-editor-views). */
-  views?: PartitionEditorViews
+  /** In-memory views absent from saved sessions. */
+  views?: PartitionEditorViews,
+  live: LayoutLiveContext = {}
 ): PaneLayoutChange<LayoutApplyOutcome> {
   const context = views
     ? { ...nameBasedLoadContext(), editorViewsOf: (key: string) => views[key] }
@@ -110,7 +111,7 @@ export function applyCommandToSession(
   if (taken) {
     return { value: taken, session: null }
   }
-  return applyToSession(loaded, command, views !== undefined, (after) => {
+  return applyToSession(loaded, command, views !== undefined, live, (after) => {
     const patched = touchedRecords(session, loaded, after)
     return patched
       ? followRemoteSessionAfterPaneDetach(
@@ -121,7 +122,7 @@ export function applyCommandToSession(
   })
 }
 
-/** Renames on one load of the partition, written once; each one main refused, with its code. */
+/** Apply renames on one partition load; return each refused rename and code. */
 export function applyRenamesToSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
@@ -149,11 +150,12 @@ export function applyRenamesToSession(
 
 const RENAME_CONTEXT = { mintId: randomUUID, mintLeafId: randomUUID, now: Date.now }
 
-/** Every pane write goes through here, so no create path can bring back a tab main closed. */
+/** Central admission prevents any create path from resurrecting a closed tab. */
 function applyToSession(
   loaded: LoadedWorkspaceLayout,
   command: LayoutCommand,
   keepsViews: boolean,
+  live: LayoutLiveContext,
   write: (after: WorkspaceSessionState) => WorkspaceSessionState | null = (after) => after
 ): PaneLayoutChange<LayoutApplyOutcome> {
   const closed = closedIds(loaded.layout, command)
@@ -161,20 +163,22 @@ function applyToSession(
     return { value: closed, session: null }
   }
   const applied = applyLayoutCommand(loaded.layout, command, {
+    ...live,
     mintId: randomUUID,
     mintLeafId: randomUUID,
-    now: Date.now
+    now: Date.now,
+    droppedLeafReason: 'live-edit'
   })
   return applied.ok
     ? {
         value: { ok: true, result: applied.result },
         session: write(saveWorkspaceLayout({ ...loaded, layout: applied.model })),
+        effects: applied.effects,
         ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
       }
     : { value: { ok: false, code: applied.code }, session: null }
 }
 
-/** A recorded close prunes the partition's close records, as today's close does. */
 function prunedOnRecord(
   command: LayoutCommand,
   session: WorkspaceSessionState
@@ -208,7 +212,7 @@ function closedIds(
   return null
 }
 
-/** A client's ids only: a runtime create may name a tab that exists, as a host's second pane does. */
+/** Runtime creates may target existing client tabs; only client IDs need collision checks. */
 function takenIds(layout: WorkspaceLayoutModel, command: LayoutCommand): LayoutApplyOutcome | null {
   if (command.type === 'createTerminalTab') {
     return takenTabId(layout, command)
@@ -219,11 +223,7 @@ function takenIds(layout: WorkspaceLayoutModel, command: LayoutCommand): LayoutA
   return command.type === 'applyDefaultTabs' ? takenDefaultTabId(layout, command) : null
 }
 
-/**
- * A window's create names its own ids: the same create again (a tab main wrote first, then drew
- * from its frame) finds its pane and changes nothing; another tab in this partition holding the
- * id refuses it.
- */
+/** Repeated client creates are no-ops on their existing pane; IDs held by another tab refuse. */
 function takenTabId(
   layout: WorkspaceLayoutModel,
   command: CommandOf<'createTerminalTab'>
@@ -243,11 +243,7 @@ function takenTabId(
   return holds ? { ok: false, code: 'tab_exists' } : null
 }
 
-/**
- * Switch point: a create sent again after its tab closed must not bring the tab back. Ids are
- * never reused, so a tab main recorded closed can only be such a resend. (A pane create lifts
- * the closed-pane fence by design: a window may draw a pane main took back again.)
- */
+/** Closed tab IDs cannot be reused; pane creates may still lift closed-pane fences. */
 function closedCreate(layout: WorkspaceLayoutModel, tabId: string): LayoutApplyOutcome | null {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return null
@@ -256,7 +252,7 @@ function closedCreate(layout: WorkspaceLayoutModel, tabId: string): LayoutApplyO
   return closed ? { ok: false, code: 'tab_closed' } : null
 }
 
-/** Default tabs come once, so any proposed id another tab holds refuses them all. */
+/** Refuse all default tabs if any proposed ID is already taken. */
 function takenDefaultTabId(
   layout: WorkspaceLayoutModel,
   command: CommandOf<'applyDefaultTabs'>
@@ -268,10 +264,7 @@ function takenDefaultTabId(
   return holds ? { ok: false, code: 'tab_exists' } : null
 }
 
-/**
- * A window's split under its own pane id: the same split again finds its pane and changes nothing;
- * another tab holding the id refuses it.
- */
+/** Repeated splits are no-ops on their existing pane; cross-tab leaf IDs refuse. */
 function takenLeafId(
   layout: WorkspaceLayoutModel,
   command: CommandOf<'splitPane'>

@@ -1,18 +1,17 @@
-// Open to the side in a layout-owner build (ORCA_LAYOUT_OWNER=main): each new split reaches main
-// with its tab, and the window draws main's frames, so both show the same groups after every step.
+// With main layout ownership, each split and tab must reach main together; drawn frames must preserve group parity.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
-import { recordOpenedAgentSessionTabInLayoutOwner } from '@/runtime/agent-session-tab-layout-owner'
+import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
+import { contentTabOpenPlacement } from './tabs/content-tab-open-placement'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -115,7 +114,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     await settledSent()
     expect(mainView()).toEqual(windowView())
 
-    // An editor open to the side: an empty split first, then the open fills it.
     const editorGroup = store.getState().createEmptySplitGroup(WT, ROOT, 'right')!
     openFile('/a.ts', { targetGroupId: editorGroup })
     expect(await settledSent()).toEqual([
@@ -128,16 +126,18 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     ])
     expect(mainView()).toEqual(windowView())
 
-    // A terminal and a browser tab made with their split, beside the editor's split.
     store.getState().createTab(WT, undefined, undefined, {
       split: { sourceGroupId: editorGroup, splitDirection: 'down' }
     })
     const terminalGroup = store.getState().groupsByWorktree[WT]!.at(-1)!.id
-    store.getState().createBrowserTab(WT, 'about:blank', {
+    const browser = store.getState().createBrowserTab(WT, 'about:blank', {
       split: { sourceGroupId: ROOT, splitDirection: 'left' }
     })
-    const browserGroup = store.getState().groupsByWorktree[WT]!.at(-1)!.id
-    expect(await settledSent()).toEqual([
+    const sentNow = await settledSent()
+    const browserGroup = store
+      .getState()
+      .unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === browser.id)!.groupId
+    expect(sentNow).toEqual([
       expect.objectContaining({
         type: 'createTerminalTab',
         tabId: onlyTabOf(terminalGroup),
@@ -191,17 +191,29 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     [
       'chat',
       () => {
-        // As openStructuredAgentSessionProvisionalTab does, on this test's store.
-        const tab = store.getState().createUnifiedTab(WT, 'agent-session', {
-          entityId: 'chat-1',
-          agentSessionAgent: 'codex',
+        // As openAgentSessionTabThroughLayoutOwner does, on this test's store.
+        const tabId = 'agent-session:chat-1'
+        const placement = contentTabOpenPlacement(store.getState(), WT, tabId, {
           targetGroupId: ROOT
+        })!
+        openContentTabThroughLayoutOwner(store.getState(), {
+          worktreeId: WT,
+          entityId: 'chat-1',
+          command: {
+            type: 'openAgentSessionTab',
+            tabId,
+            sessionId: 'chat-1',
+            agent: 'codex',
+            ...placement
+          },
+          facts: { label: 'Codex' },
+          shown: () => {},
+          drawHere: () => null
         })
-        recordOpenedAgentSessionTabInLayoutOwner(store.getState(), tab)
       }
     ]
   ])(
-    'records a %s tab opened into the emptied root after its neighbour split again',
+    'opens a %s tab into the emptied root after its neighbour split again',
     async (_kind, openIntoRoot) => {
       // The splits beside the emptied root hold tabs, so main has only those.
       store.getState().createTab(WT, undefined, undefined, {

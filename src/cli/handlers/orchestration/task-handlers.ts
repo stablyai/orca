@@ -62,7 +62,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       run,
       callerTerminalHandle
     })
-    // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.
+    // Only hosts that omit spec_truncated need client-side abbreviation.
     const needsClientAbbreviation =
       brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
     const output = needsClientAbbreviation

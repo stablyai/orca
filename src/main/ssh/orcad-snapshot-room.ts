@@ -1,4 +1,4 @@
-/** Whether the pre-activation snapshot fits, asked before the running server is stopped (#30491). */
+/** Check snapshot room before stopping a serving incumbent (#30491). */
 import { orcadRemoteBaseDir } from '../managed-server/install/orcad-remote-windows-node'
 import { execOrcadRemoteOr } from '../managed-server/install/orcad-remote-runtime-control'
 import {
@@ -25,7 +25,7 @@ export function orcadSnapshotsRoot(options: Pick<OrcadSlotOptions, 'host' | 'rem
   )
 }
 
-/** The refusal to show when the snapshot cannot fit, or null to go ahead (an unread answer too). */
+/** Unknown room proceeds to authoritative capture; return a refusal only for proven insufficient space. */
 export async function orcadSnapshotRoomRefusal(
   options: OrcadSlotOptions,
   record: OrcadActivationRecord,
@@ -58,7 +58,7 @@ async function measureRoom(options: OrcadSlotOptions, command: string): Promise<
   try {
     return await execOrcadRemoteOr(options, command)
   } catch (error) {
-    // A read-only probe that lost its channel only leaves the room unknown; the capture decides.
+    // Unconfirmed read-only cleanup leaves room unknown; capture decides, unless caller cancelled.
     if (isUnconfirmedSshCommandTermination(error) && !options.signal?.aborted) {
       return ''
     }

@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'
@@ -43,7 +44,6 @@ beforeEach(async () => {
     throw new Error('ACP agent definition absent')
   }
   const definition = acpStructuredAgentDefinition(spec)
-  // The rig adapter has no compact; this recovery never compacts.
   rig.host.deps.agents = new StructuredAgentRegistry([
     {
       definition: { ...definition, capabilities: { ...definition.capabilities, compact: false } },
@@ -73,7 +73,6 @@ afterEach(async () => {
   closeTestJournalHostDatabases()
 })
 
-/** Drops the old host without an exit callback or graceful turn settlement. */
 async function restartAfterCrash(): Promise<void> {
   const old = rig.host
   old.stopDelivery()
@@ -188,7 +187,7 @@ describe.each([
       const completedAt = bufferedOutput ? CONNECTION_CLOSED_AT : LAST_CHUNK_AT
       expect(journal.lastProviderActivityAt(1)).toBe(completedAt)
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       const snapshot = await rig.host.journalSnapshot(SESSION)
       const background = snapshot.items.find(
         (item) =>
@@ -206,7 +205,7 @@ describe.each([
         rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.lastProviderActivityAt(1)
       ).toBe(completedAt)
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(snapshot.items)
     }
   )

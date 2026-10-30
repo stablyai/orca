@@ -2,6 +2,7 @@ import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../share
 import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { materializeWorktreePushTargetRemote } from '../ipc/worktree-remote'
+import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
 import type { LocalGitProvider } from '../providers/local-git-provider'
 import {
   localGitOptionsForTarget,
@@ -13,14 +14,7 @@ import {
 export class RuntimeGitSyncCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
-  /**
-   * Resolves the provider and mints the push target's remote on the worktree's host.
-   *
-   * Why (#17828 review follow-up): this class deliberately materializes with no store (see the
-   * `undefined` arg below) to avoid unrelated ownership-inheritance/refspec-migration side effects
-   * on the RPC path -- so persistence goes through the host callback instead, using
-   * `target.worktree.id` already resolved here rather than threading a store through.
-   */
+  /** Materialize on the worktree host without Store ownership/refspec side effects; persist new push remotes via the resolved worktree's host callback (#17828). */
   private async prepareRemoteSync(
     target: RuntimeGitTarget,
     pushTarget: GitPushTarget | undefined
@@ -58,6 +52,8 @@ export class RuntimeGitSyncCommands {
     pushTarget?: GitPushTarget
   ): Promise<GitUpstreamStatus> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    // A poll no user asked for: never start a stopped WSL distro (E9).
+    await assertRuntimeReadWslDistroRunning(target, localGitOptionsForTarget(target).wslDistro)
     return requireRuntimeGitProvider(target).getUpstreamStatus(target.worktree.path, pushTarget)
   }
 
@@ -131,5 +127,12 @@ export class RuntimeGitSyncCommands {
     }
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).commit(target.worktree.path, message)
+  }
+
+  async completeRuntimeGitMerge(
+    worktreeSelector: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).completeMerge(target.worktree.path)
   }
 }

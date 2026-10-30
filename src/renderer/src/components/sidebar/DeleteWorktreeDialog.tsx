@@ -26,10 +26,11 @@ import {
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
-  getDeleteWorktreeLineageDialogCopy,
+  getDeleteWorktreeLineageDialogDescription,
   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
 } from './delete-worktree-dialog-copy'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
@@ -38,10 +39,12 @@ import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'
 import { collectRemovalUnsavedFiles } from '@/components/editor/removal-unsaved-editor-files'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -99,7 +102,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const isFolderWorkspaceDelete = !isBatchDelete && getIsFolderWorkspaceDelete(repoMap, worktree)
   const deleteCopy = getDeleteWorktreeDialogCopy({
     isBatchDelete,
-    worktree,
     worktreeCount: worktrees.length,
     folderWorkspaceDeleteCount: countFolderWorkspaceDeletes(repoMap, worktrees),
     isFolderWorkspaceDelete
@@ -113,9 +115,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     [allWorktrees, isBatchDelete, worktree, worktreeLineageById]
   )
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
-  // Why: the main worktree is the repo's original clone directory — `git worktree remove`
-  // always rejects it. We block the delete button upfront so the user doesn't have to
-  // discover this limitation via a confusing force-delete dead-end.
+  // Git cannot remove the original clone with worktree remove; block it before the force-delete dead end.
   const isMainWorktree = !isBatchDelete && (worktree?.isMainWorktree ?? false)
   const childWorkspaceCount = lineageDelete.descendants.length
   const canDeleteAllLineage =
@@ -124,7 +124,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     () => countFolderWorkspaceDeletes(repoMap, lineageDelete.deleteAllTargets),
     [lineageDelete.deleteAllTargets, repoMap]
   )
-  const lineageDeleteCopy = getDeleteWorktreeLineageDialogCopy({
+  const lineageDeleteDescription = getDeleteWorktreeLineageDialogDescription({
     childWorkspaceCount,
     deleteTargetCount: lineageDelete.deleteAllTargets.length,
     folderWorkspaceDeleteCount: lineageFolderWorkspaceDeleteCount
@@ -176,8 +176,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   ])
 
   if (!isOpen && dontAskAgain) {
-    // Why: this checkbox is a one-shot dialog intent; reset it as soon as the
-    // dialog is closed so a later delete never inherits a cancelled choice.
+    // Do not carry a canceled one-shot checkbox into later deletions.
     setDontAskAgain(false)
   }
 
@@ -252,10 +251,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       if (!currentWorktrees) {
         return
       }
-      // Why: force-delete is a recovery path taken after a failed first delete.
-      // Saving "don't ask again" from that state would conflate the recovery
-      // action with a broader preference. Only persist the preference on the
-      // primary (non-force) confirmation so users intentionally opt in.
+      const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
+      // Force delete is recovery, not consent to skip future confirmations; persist that preference only on primary confirmation.
       if (dontAskAgain && allowSkipConfirm && !force) {
         persistDontAskAgainPreference()
       }
@@ -265,18 +262,17 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           currentWorktrees,
           removeWorktree,
           closeModal,
-          onDeleted
+          onDeleted,
+          confirmedDiscards
         })
       } else {
-        // Why: this modal is the destructive confirmation for the workspace
-        // folder. Running a non-force remove here just turns dirty files into
-        // a redundant Force Delete toast after the user already confirmed.
+        // This modal already confirms destructive removal; dirty files must not require a second Force Delete confirmation.
         const deletePromise = runWorktreeDeletesInParallel(currentWorktrees, {
           force: forceOnConfirm,
-          onForceDeleted: handleForceDeletedFromToast
+          onForceDeleted: handleForceDeletedFromToast,
+          confirmedDiscards
         })
-        // Why: the workspace card owns the in-progress feedback, so the
-        // confirmation should get out of the way as soon as deletion begins.
+        // The workspace card owns progress feedback; close this confirmation when deletion starts.
         closeModal()
         void deletePromise.then((deletedTargets) => {
           if (deletedTargets.length > 0) {
@@ -297,7 +293,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       worktreeIds.length,
       worktreeDeleteIdentities,
       worktreeId,
-      resolveConfirmedTargets
+      resolveConfirmedTargets,
+      unsavedTargets
     ]
   )
 
@@ -309,7 +306,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       forceOnConfirm,
       onForceDeleted: handleForceDeletedFromToast,
       closeModal,
-      onDeleted
+      onDeleted,
+      confirmedDiscards: confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     })
   }
 
@@ -319,7 +317,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         surface="security"
         className="max-w-md"
         onOpenAutoFocus={(event) => {
-          // Why: with unsaved edits listed, Enter must not discard them; keep Radix's default focus.
+          // Unsaved edits must not be discarded by Enter; retain Radix’s default focus.
           if (
             isMainWorktree ||
             collectRemovalUnsavedFiles(useAppStore.getState, unsavedTargets).length > 0
@@ -327,11 +325,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             return
           }
           event.preventDefault()
-          // Why: this confirmation dialog exists specifically to guard a
-          // destructive action the user already chose from the context menu.
-          // Radix otherwise picks the first tabbable control, which can be the
-          // cancel/close affordance and breaks the expected "Delete, Enter"
-          // flow for quick keyboard confirmation.
+          // Focus confirmation for the chosen destructive action so Delete, Enter works without landing on Cancel.
           confirmButtonRef.current?.focus()
         }}
       >
@@ -350,14 +344,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           <DeleteWorktreeDialogDescription
             showChangeLossWarning={dirtyChanges.checkStates.size > 0}
             targetClassName={deleteCopy.targetClassName}
-            targetLabel={deleteCopy.targetLabel}
-            canDeleteAllLineage={canDeleteAllLineage}
-            childTargetLabel={lineageDeleteCopy.childTargetLabel}
-            descriptionSuffix={
-              canDeleteAllLineage
-                ? lineageDeleteCopy.descriptionSuffix
-                : deleteCopy.descriptionSuffix
-            }
+            targetName={isBatchDelete ? undefined : worktree?.displayName}
+            description={canDeleteAllLineage ? lineageDeleteDescription : deleteCopy.description}
           />
         </DialogHeader>
 

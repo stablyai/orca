@@ -11,10 +11,7 @@ import {
 import { resolveWorktreeLaunchHost, type LaunchHostRepo } from '../../worktree-launch-host-repo'
 import type { WorktreePtyHostFence } from '../../worktree-pty-host-fence'
 
-/**
- * Keys a worktree's sleep by the host its terminals run on: a same-id SSH twin is another
- * workspace, so its spawn must neither wake nor be refused by this copy's sleep.
- */
+/** Host-scope sleep keys so same-id twins cannot wake or block one another's spawns. */
 export function hostSleepKey(hostId: ExecutionHostId, worktreeId: string): HostScopedWorktreeKey {
   return composeWorktreeHostIdentity(hostId, worktreeIdentityKey(worktreeId))
 }
@@ -26,12 +23,7 @@ export type WorktreeSleepScope = {
   fence: WorktreePtyHostFence
 }
 
-/**
- * From the resolver the launch scope picks a spawn's connection with, so a sleep and the spawns of
- * one workspace always name one key. Rival rows that disagree refuse, as the launch does: a guessed
- * host would let the real host's spawns skip the sleep. Read once per sleep; a row re-pointed to
- * another host while asleep leaves the record under the host it was slept on.
- */
+/** Use the launch host resolver and refuse ambiguity. Capture once: repo retargeting while asleep must not move the slept host's record. */
 export function resolveSleepScope(
   repos: readonly LaunchHostRepo[],
   worktree: { id: string; repoId: string; hostId?: string | null }

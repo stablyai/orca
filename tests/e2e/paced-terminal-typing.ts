@@ -36,9 +36,7 @@ async function scanRecentKeyMarkerSeqs(
       if (!pane) {
         return { seqs, atMs: Date.now() }
       }
-      // Why trailing rows, not serialize: full-buffer serialization on every
-      // poll runs on the renderer main thread and would perturb the very
-      // latency being measured (same rationale as the history-size spec).
+      // Read trailing rows: full-buffer serialization would consume the renderer thread whose latency this measures.
       const re = new RegExp(`${markerPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`, 'g')
       const buffer = pane.terminal.buffer.active
       const start = Math.max(0, buffer.length - trailingRows)
@@ -96,8 +94,7 @@ export async function measurePacedTyping(
     }
   }, TIMER_SAMPLE_MS)
 
-  // Concurrent echo watcher: records the first time each key's marker is
-  // visible in the buffer, while typing continues at its own cadence.
+  // Observe first marker detection concurrently so polling does not alter typing cadence.
   const echoSeenAt = new Map<number, number>()
   let watching = true
   const echoWatcher = (async () => {

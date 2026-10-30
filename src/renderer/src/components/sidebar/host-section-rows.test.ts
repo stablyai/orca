@@ -773,7 +773,6 @@ describe('addHostSectionRows', () => {
   it('counts a collapsed repo group via its header count instead of zero', () => {
     const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
-    // The ssh repo group is collapsed: its header is present, items are not.
     const collapsedSshHeader = { ...repoHeader(ssh), count: 9 }
     const rows = [repoHeader(local), item('local-wt', local), collapsedSshHeader]
 

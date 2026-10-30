@@ -1,11 +1,4 @@
-// Today's store slices for the workspaces main's layout frames hold, built from the frames, the
-// content facts beside them and this window's view (design phase E2a). Not called yet: the switch
-// sets these slices from frames instead of restoring them from disk. Records come from the shared
-// Serializer and slices from the window's own restore builders, so a frame shows what the same
-// session restored from disk shows. Global selection (active workspace and tab) stays the view's;
-// a remote server's workspaces stay the mirror's, so the caller passes only the ones frames own.
-// Frames do not carry sleeping agent records, closed-tab records, default-tab marks or what a tab
-// reattaches at startup; those stay main's records and today's restore until the switch moves them.
+// Build main-owned frame slices through Serializer/restore builders (E2a); global selection stays window-owned, remote server workspaces mirror-owned. Sleeping/closed records, default marks and startup reattach remain outside frames.
 
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
@@ -274,7 +267,9 @@ export function buildLayoutFrameSlices({
       tabsByWorktree: rows.tabsByWorktree
     },
     session,
-    workspaceKeys
+    workspaceKeys,
+    // A frame redraws the window's own selection: one it never made stays none.
+    { unchosenStaysUnset: true }
   )
   const editorTabs = {
     ...tabs,

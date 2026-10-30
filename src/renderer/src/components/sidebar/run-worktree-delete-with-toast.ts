@@ -12,13 +12,11 @@ import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { blockRemovalForUnsavedFiles } from './removal-unsaved-files'
 
-// A failed delete usually means unresolved changes, so land on the diff panel.
 function viewWorktreeDiff(
   worktreeId: string,
   executionHostId: WorktreeRemovalTarget['executionHostId']
 ): void {
-  // The Source Control panel is the requested surface — don't re-seed a shell in a
-  // workspace the user is trying to delete.
+  // Open Source Control without reseeding a shell in the workspace being deleted.
   activateAndRevealWorktree(worktreeId, {
     providesInitialSurface: true,
     ...(executionHostId ? { executionHostId } : {})
@@ -38,7 +36,9 @@ export function runWorktreeDeleteWithToast(
 
   const removeOptions = {
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
-    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {})
+    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {}),
+    ...(options.confirmedDiscards ? { confirmedDiscards: options.confirmedDiscards } : {}),
+    ...(options.assertBeforeDispatch ? { assertBeforeDispatch: options.assertBeforeDispatch } : {})
   }
   const showFailureToast = (
     error: string,
@@ -60,8 +60,7 @@ export function runWorktreeDeleteWithToast(
       onViewChanges: () => viewWorktreeDiff(worktreeId, target.executionHostId),
       onAlwaysForceDelete: () =>
         useAppStore.getState().updateSettingsOrThrow({ alwaysForceDeleteWorktrees: true }),
-      // Why (#19334): re-runs the archive hook and waives the failure this time, so the waiver
-      // is an informed choice made after reading the refusal -- not something `force` implied.
+      // Waive archive-hook failure only after explicit refusal review; force alone does not imply consent.
       onDeleteAnyway: () =>
         retryFromToast({ force: options.force === true, allowFailedArchiveHook: true }),
       // The explicit Force Delete retry may waive an unverified PTY-stop proof.
@@ -83,9 +82,7 @@ export function runWorktreeDeleteWithToast(
     })
   }
 
-  // Both toast buttons do the same thing: recapture focus (the user may have navigated while the
-  // toast was open), retry with one waiver added, and report a success through `onForceDeleted` so
-  // the caller's bookkeeping runs. Only the waiver and the failure copy differ.
+  // Recapture focus and report completion for caller bookkeeping regardless of the waiver chosen.
   const retryFromToast = (retry: {
     force: boolean
     allowUnverifiedPtyStop?: boolean
@@ -101,11 +98,7 @@ export function runWorktreeDeleteWithToast(
           }
         }
       : {}
-    // Why re-show the full failure toast rather than a bare `toast.error` (#19334): a retry can
-    // fail for a DIFFERENT reason than the one the user just answered. Waiving a failed archive
-    // hook on a dirty checkout lands on the dirty preflight next, and a bare error offers no
-    // buttons — leaving the user stuck one step further in, which is the dead end this gate has
-    // now produced three times. Routing back through the same toast keeps every retry actionable.
+    // Retries may fail at a different gate; show its actionable toast so another refusal is not a dead end.
     const failed = (description: string): void => {
       const retryState = getDeleteStateForWorktreeHost(
         { id: worktreeId, hostId: target.executionHostId ?? undefined },
@@ -138,15 +131,17 @@ export function runWorktreeDeleteWithToast(
       .getState()
       .removeWorktree(target, retry.force, {
         ...(retry.allowUnverifiedPtyStop ? { allowUnverifiedPtyStop: true } : {}),
-        ...(retry.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {})
+        ...(retry.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {}),
+        ...(options.assertBeforeDispatch
+          ? { assertBeforeDispatch: options.assertBeforeDispatch }
+          : {})
       })
       .then((result) => {
         if (!result.ok) {
           failed(result.error)
           return
         }
-        // "A retry started from this toast completed the delete" — callers hang their bookkeeping
-        // off it, so without this a batch or Space-panel delete keeps listing what it removed.
+        // Notify the caller so batch and Space-panel bookkeeping removes the deleted workspace.
         options.onForceDeleted?.(target)
       })
       .catch((err: unknown) => failed(err instanceof Error ? err.message : String(err)))

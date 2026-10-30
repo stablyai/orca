@@ -1,6 +1,4 @@
-// A layout-owner build's window saving a workspace before main's frame with its first tab arrives:
-// the save carries none of that workspace's tab-bar records, so the Loader rebuilds the tab from
-// its row in a group it names. Main names its first group the same way, so nothing changed.
+// A pre-frame renderer save lacks main's first group; deterministic reconstruction must produce the same layout.
 
 import { describe, expect, it, vi } from 'vitest'
 import {

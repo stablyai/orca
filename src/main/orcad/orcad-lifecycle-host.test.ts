@@ -71,7 +71,6 @@ describe('startOrcadWithHost', () => {
     expect(existsSync(join(root, ORCAD_LOCK_FILE_NAME))).toBe(true)
   })
 
-  // Only a client's managed launch (an SSH host) has a desktop that can opt in to serve its CLI.
   it.each([
     ['a managed launch', { [ORCAD_MANAGED_ACTIVATION_ROOT_ENV]: '/home/me/.orca-server' }, true],
     ['a server the user started', {}, false]

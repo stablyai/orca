@@ -1,46 +1,60 @@
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
+import {
+  editorBufferIdOfView,
+  editorBufferSiblingViewIds
+} from '@/store/slices/editor/buffers/editor-buffer-views'
 import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
 import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
 import { canAutoSaveOpenFile } from './editor-autosave'
-import { flushPendingEditorBuffer } from './editor-pending-flush'
-import { editorModelSiblingTabs, editorTabModelUri } from './editor-save-disk-precondition'
+import { flushClosingEditorBuffers } from './editor-pending-flush'
+import { editorTabModelUri, isCodeViewTab } from './editor-save-disk-precondition'
+import { editorModelRegistry } from '@/lib/editor-model-registry'
 
-/**
- * Savable tabs among `closedIds` holding unsaved text whose every view (shared model, shared
- * record) also closes, one per model.
- */
+/** Prompt once per writable dirty record only when every view of it is closing. */
 export function lastViewUnsavedFiles(state: AppState, closedIds: ReadonlySet<string>): OpenFile[] {
-  const seenModels = new Set<string>()
+  const seenRecords = new Set<string>()
   const result: OpenFile[] = []
   for (const file of state.openFiles ?? []) {
     const unsaved = file.isDirty || state.editorDrafts?.[file.id] !== undefined
     if (!closedIds.has(file.id) || !unsaved || !canAutoSaveOpenFile(file)) {
       continue
     }
-    const modelSiblings = editorModelSiblingTabs(state, file)
-    const viewIds = [
-      ...modelSiblings.map((tab) => tab.id),
-      ...editorBufferSiblingViewIds(state, file.id)
-    ]
-    const modelKey = modelSiblings.length > 1 ? editorTabModelUri(state, file) : file.id
-    if (viewIds.every((id) => closedIds.has(id)) && !seenModels.has(modelKey)) {
-      seenModels.add(modelKey)
+    const recordId = editorBufferIdOfView(state, file.id)
+    const viewIds = editorBufferSiblingViewIds(state, file.id)
+    if (viewIds.every((id) => closedIds.has(id)) && !seenRecords.has(recordId)) {
+      seenRecords.add(recordId)
       result.push(file)
     }
   }
   return result
 }
 
-/** Commits text delayed views (rich Markdown, CSV, notebook) still hold for these tabs. */
+export function unsavedTextViewIds(state: AppState, file: OpenFile): string[] {
+  return [...new Set([file.id, ...editorBufferSiblingViewIds(state, file.id)])]
+}
+
+/** The freshest text of `file`: its mounted code model, else a draft a sharing view holds. */
+export function currentUnsavedText(state: AppState, file: OpenFile): string | undefined {
+  const registry = isCodeViewTab(state, file) ? editorModelRegistry.get() : null
+  const model = registry?.editor.getModel(registry.Uri.parse(editorTabModelUri(state, file)))
+  // Why attached only: a retained model can hold older text than a restored draft.
+  if (model?.isAttachedToEditor()) {
+    return model.getValue()
+  }
+  return (
+    unsavedTextViewIds(state, file)
+      .map((id) => state.editorDrafts?.[id])
+      .find((draft) => draft !== undefined) ?? model?.getValue()
+  )
+}
+
+/** Commits text every delayed view (rich Markdown, CSV, notebook pane) holds for these tabs. */
 export function flushRemovalPendingEdits(state: AppState, fileIds: Iterable<string>): void {
   try {
-    for (const fileId of fileIds) {
-      flushPendingEditorBuffer(state, fileId)
-    }
+    flushClosingEditorBuffers(state, fileIds)
   } catch (error) {
-    // Why: a view's flush failing must not block the removal that asked.
+    // Why: a flush failing must not block the removal that asked.
     console.error('[editor] flushing pending edits before a removal failed', error)
   }
 }

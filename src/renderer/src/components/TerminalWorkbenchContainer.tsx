@@ -1,9 +1,7 @@
 import type React from 'react'
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
 
-// Why: the outermost ancestor of every browser <webview>. Parking it with `hidden` whenever
-// the user leaves the workspace view also stops the guest compositing, which silently kills
-// screencast frames for a phone or an agent driving that page.
+// Keep hidden browser guests compositing while a phone/agent drives them; display:none silently stops screencasts.
 export function TerminalWorkbenchContainer({
   isVisible,
   children
@@ -18,12 +16,11 @@ export function TerminalWorkbenchContainer({
         isVisible
           ? 'flex flex-1 min-w-0 min-h-0'
           : retainBrowserGuestPaint
-            ? // Why: absolute keeps the invisible workbench out of the flex column so the
-              // active page (Settings, Tasks, …) still gets the full content area.
+            ? // Remove the invisible workbench from flex flow so the active page keeps full height.
               'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'hidden flex-1 min-w-0 min-h-0'
       }
-      // Why: a paintable-but-hidden workbench must stay unreachable by Tab / assistive tech.
+      // Keep hidden paintable panes outside keyboard/accessibility navigation.
       inert={!isVisible}
       aria-hidden={!isVisible}
       data-terminal-workbench-container=""

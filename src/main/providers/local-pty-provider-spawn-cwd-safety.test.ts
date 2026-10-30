@@ -62,10 +62,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,8 +102,7 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
@@ -192,13 +188,11 @@ describe('LocalPtyProvider', () => {
     it('falls back to the safe default cwd for automatic agent startup without an explicit cwd', async () => {
       spawnMock.mockClear()
       const origHome = process.env.HOME
-      // Pin HOME so we assert the exact resolved candidate, not just non-root-ness —
-      // catches regressions where resolveSafePtyDefaultCwd picks an unintended home.
+      // Pin the exact default-home candidate to catch unintended cwd resolution.
       process.env.HOME = '/home/testuser'
 
       try {
-        // Why: an omitted cwd resolves to a guaranteed-safe default home (the
-        // guard only rejects root-like paths), so the agent must still launch.
+        // Omitted cwd resolves to safe home; the root-path guard must still allow startup.
         await expect(
           provider.spawn({ cols: 80, rows: 24, command: 'codex' })
         ).resolves.toBeDefined()

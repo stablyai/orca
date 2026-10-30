@@ -1,5 +1,4 @@
-// One repo id registered on two hosts, each case with the partition the window saves the worktree
-// to. Main's router and the window's save routing are both checked against this one table.
+// Use one twin-repo fixture for main routing and window session-partition routing.
 import { getDefaultWorkspaceSession } from './constants'
 import type { ExecutionHostId } from './execution-host'
 import type { Repo } from './repo-types'
@@ -19,7 +18,6 @@ export const LOCAL_ROW: TwinRepoRow = { id: 'repo' }
 export const SSH_ROW: TwinRepoRow = { id: 'repo', connectionId: 'box' }
 export const RUNTIME_ROW: TwinRepoRow = { id: 'repo', executionHostId: 'runtime:env-1' }
 
-// Catalog rows as main lists them: every row carries its host; a runtime one names its owner too.
 function listedOn(hostId: ExecutionHostId): TwinCatalogRow {
   const row = { id: TWIN_WORKTREE_ID, repoId: 'repo', hostId }
   return hostId.startsWith('runtime:')
@@ -47,8 +45,7 @@ function tabsSession(): WorkspaceSessionState {
   }
 }
 
-/** Every partition a case reads: local always, `saved` with tabs, `staleOn` with only a leftover
- *  visit stamp for the worktree. */
+/** Read local plus saved tab partitions and stale visit-only partitions. */
 export function twinPartitionSessions(
   saved: readonly ExecutionHostId[],
   staleOn: readonly ExecutionHostId[] = []
@@ -78,46 +75,69 @@ export type TwinRepoHostCase = {
   expected: ExecutionHostId
 }
 
-const PAIRS: [string, TwinRepoRow, ExecutionHostId, TwinRepoRow, ExecutionHostId][] = [
-  ['local+ssh', LOCAL_ROW, 'local', SSH_ROW, 'ssh:box'],
-  ['local+runtime', LOCAL_ROW, 'local', RUNTIME_ROW, 'runtime:env-1'],
-  ['ssh+runtime', SSH_ROW, 'ssh:box', RUNTIME_ROW, 'runtime:env-1']
+const PAIRS: [
+  string,
+  TwinRepoRow,
+  ExecutionHostId,
+  ExecutionHostId,
+  TwinRepoRow,
+  ExecutionHostId,
+  ExecutionHostId,
+  ExecutionHostId
+][] = [
+  ['local+ssh', LOCAL_ROW, 'local', 'local', SSH_ROW, 'ssh:box', 'local', 'local'],
+  [
+    'local+runtime',
+    LOCAL_ROW,
+    'local',
+    'local',
+    RUNTIME_ROW,
+    'runtime:env-1',
+    'runtime:env-1',
+    'local'
+  ],
+  [
+    'ssh+runtime',
+    SSH_ROW,
+    'ssh:box',
+    'local',
+    RUNTIME_ROW,
+    'runtime:env-1',
+    'runtime:env-1',
+    'ssh:box'
+  ]
 ]
 
-// The window: a contested id goes to the shared primary, a runtime-owned one to its runtime, and
-// any other (SSH-only, local-only, unknown) to local, because the twin repo names no single host.
-function windowFresh(hosts: ExecutionHostId[]): ExecutionHostId {
-  if (hosts.length > 1) {
-    return hosts.includes('local')
-      ? 'local'
-      : (hosts.find((h) => h.startsWith('ssh:')) ?? hosts[0]!)
+const GENERATED_CASES: TwinRepoHostCase[] = PAIRS.flatMap(
+  ([pair, rowA, hostA, expectedA, rowB, hostB, expectedB, contested]) => {
+    // Test both catalog orders to reject first-row routing.
+    const orders = [
+      [rowB, rowA],
+      [rowA, rowB]
+    ]
+    const holdings: [string, ExecutionHostId[], ExecutionHostId][] = [
+      ['contested', [hostA, hostB], contested],
+      [`${hostA} only`, [hostA], expectedA],
+      [`${hostB} only`, [hostB], expectedB],
+      ['unknown', [], 'local']
+    ]
+    return orders.flatMap((repos, order) =>
+      holdings.flatMap(([holding, hosts, expected]) => {
+        const catalog = hosts.map(listedOn)
+        return [
+          { name: `${pair} #${order} ${holding}, fresh`, repos, catalog, saved: [], expected },
+          {
+            name: `${pair} #${order} ${holding}, saved`,
+            repos,
+            catalog,
+            saved: [expected],
+            expected
+          }
+        ]
+      })
+    )
   }
-  return hosts[0]?.startsWith('runtime:') ? hosts[0] : 'local'
-}
-
-const GENERATED_CASES: TwinRepoHostCase[] = PAIRS.flatMap(([pair, rowA, hostA, rowB, hostB]) => {
-  // Both catalog orders, so a case cannot pass by taking the first row.
-  const orders = [
-    [rowB, rowA],
-    [rowA, rowB]
-  ]
-  const holdings: [string, ExecutionHostId[]][] = [
-    ['contested', [hostA, hostB]],
-    [`${hostA} only`, [hostA]],
-    [`${hostB} only`, [hostB]],
-    ['unknown', []]
-  ]
-  return orders.flatMap((repos, order) =>
-    holdings.flatMap(([holding, hosts]) => {
-      const expected = windowFresh(hosts)
-      const catalog = hosts.map(listedOn)
-      return [
-        { name: `${pair} #${order} ${holding}, fresh`, repos, catalog, saved: [], expected },
-        { name: `${pair} #${order} ${holding}, saved`, repos, catalog, saved: [expected], expected }
-      ]
-    })
-  )
-})
+)
 
 export const TWIN_REPO_HOST_CASES: TwinRepoHostCase[] = [
   ...GENERATED_CASES,

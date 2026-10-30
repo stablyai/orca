@@ -1,5 +1,4 @@
-// An adhoc run builds one commit: every job checks out what resolve-ref pinned at dispatch, so a
-// push mid-run can never mix slot lanes from one commit with a template merge from the next.
+// Pin every job to dispatch’s resolved commit so mid-run pushes cannot mix artifacts.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,6 +40,7 @@ async function resolve(ref) {
       ...identity,
       REPO_URL: pathToFileURL(repository).href,
       GITHUB_OUTPUT: output,
+      RUNNER_TEMP: scratch,
       REQUESTED_REF: ref
     }
   })

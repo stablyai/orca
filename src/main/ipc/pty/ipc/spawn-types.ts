@@ -1,3 +1,4 @@
+import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -33,12 +34,16 @@ export type PtySpawnIpcArgs = {
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  // Untyped on purpose: only `'saved'` marks a resume built from saved facts.
+  resumeOrigin?: unknown
   launchToken?: unknown
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string
   sessionId?: string
+  // A view attaches to the main-started session or starts nothing.
+  attachOnlyView?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalKittyKeyboardProtocol?: boolean
@@ -46,20 +51,22 @@ export type PtySpawnIpcArgs = {
     foreground?: unknown
     background?: unknown
   }
-  // Why: hidden-at-spawn declaration (terminal-query-authority.md §races) — main marks hidden before byte zero so the gate owns spawn-time queries.
+  // Declare hidden state before output so main owns startup queries.
   initiallyHidden?: boolean
-  // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
+  // Persist pane binding before returning spawn so an abrupt app kill cannot lose daemon history.
   tabId?: string
   leafId?: string
-  // Why: a pane with a live owner is otherwise reattached, so a restart names the PTY it replaces.
+  // Explicit restart must replace a live owner that ordinary spawn would reattach.
   replacesPtyId?: string
-  // Untyped on purpose: parseTerminalPanePlacement is the one check, and drops what it rejects.
+  // Validate untyped placement only through parseTerminalPanePlacement.
   placement?: unknown
-  // Untyped on purpose: isRestoreSpawnIntent is the one check; anything else is undeclared.
+  // Accept declared restore intent only through isRestoreSpawnIntent.
   spawnIntent?: unknown
-  // Untyped on purpose: planPaneAgentLaunch's AgentLaunch.safeParse is the one check.
+  // Only `true` counts: a window restore no user act asked for.
+  wslPassiveRestore?: unknown
+  // Validate untyped launch input through AgentLaunch.safeParse.
   agentLaunch?: unknown
-  // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
+  // Main validates renderer telemetry; retain unknown input types at the IPC boundary.
   telemetry?: {
     agent_kind?: unknown
     launch_source?: unknown
@@ -77,6 +84,7 @@ export type AdoptStablePaneArgs = {
   tabId: string
   leafId: string
   onAdopted?: (result: PtySpawnResult) => void
+  onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
   completed?: AdoptStablePaneResult
   ownsPaneSpawnReservation?: true
   reservation?: PaneSpawnReservation
@@ -86,10 +94,13 @@ export type AdoptStablePaneArgs = {
   spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
   /** See StablePaneSpawnContext; adoption holds the pane's reservation through its fresh launch. */
   keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
+  attachOnlyView?: true
 }
 
 export type AdoptStablePaneResult = {
+  operation?: PaneSpawnOperation
   result: PtySpawnResult
+  outcome?: PtySpawnOutcome
   owner: StablePaneOwner
   materialized?: true
 }
@@ -108,7 +119,9 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
   assertWorkspaceAcceptsNewPty: (
     worktreeId: string | undefined,
-    sessionId?: string
+    sessionId?: string,
+    cwd?: string,
+    passiveWslRestore?: boolean
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,

@@ -5,8 +5,7 @@ import type {
 } from '../../../../shared/managed-runtime-install'
 import { megabytes, type ManagedRuntimeInstallAction } from './managed-runtime-install-view'
 
-/** `hero`: the whole-pane message of a chat with no messages; `strip`: the slim line above the
- *  composer outside that pane. Both read one card, so they never disagree. */
+/** Hero fills an empty chat pane; strip sits above the composer. Both render the same host snapshot. */
 export type ManagedRuntimeInstallLayout = 'hero' | 'strip'
 
 export type ManagedRuntimeInstallCardStep = { label: string; state: 'done' | 'current' | 'todo' }
@@ -14,7 +13,6 @@ export type ManagedRuntimeInstallCardStep = { label: string; state: 'done' | 'cu
 export type ManagedRuntimeInstallCard = {
   tone: 'offer' | 'running' | 'failed' | 'cancelled'
   title: string
-  /** The sentence under the title: what it is, why it failed, or what ended. */
   detail: string | null
   /** `percent` is null while the size of what remains is unknown. */
   progress: { percent: number | null; detail: string; percentText: string | null } | null
@@ -157,8 +155,7 @@ function offerCard(
   }
 }
 
-/** What an install card says and offers for the host's answer. `cancelling`: this surface's Cancel
- *  is still out, so it says so until the host's cancel settles. */
+/** Show local cancellation feedback only until this surface’s pending Cancel request settles. */
 export function managedRuntimeInstallCard(
   state: ManagedRuntimeInstallState,
   agent: string,

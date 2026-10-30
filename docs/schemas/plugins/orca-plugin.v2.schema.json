@@ -1,0 +1,1149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schemas/plugins/orca-plugin.v2.schema.json",
+  "title": "Orca plugin manifest",
+  "description": "The orca-plugin.json file at the root of an Orca plugin (manifest format 2).",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "JSON Schema URL for editor completion. Ignored by Orca.",
+      "x-orca-since": "1.4.245",
+      "type": "string",
+      "maxLength": 2048
+    },
+    "manifestVersion": {
+      "type": "number",
+      "const": 2,
+      "description": "Manifest format. Use 2 for new plugins.",
+      "x-orca-since": "1.4.245"
+    },
+    "execution": {
+      "type": "string",
+      "enum": [
+        "data",
+        "declarative",
+        "sandboxed-ui",
+        "trusted-worker"
+      ],
+      "description": "Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.",
+      "x-orca-since": "1.4.245",
+      "examples": [
+        "data"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Plugin id, kebab-case. The install identity is `<publisher>.<id>`. The reserved names `constructor` and `prototype` are refused.",
+      "x-orca-since": "1.4.160",
+      "examples": [
+        "gleam-syntax"
+      ]
+    },
+    "publisher": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Publisher slug, kebab-case. Must be the GitHub or GitLab user or organization that owns the repository (`acme` for `github.com/acme/gleam-syntax`), or the official and community catalogs reject the listing. The reserved names `constructor` and `prototype` are refused. The publishers `stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca` (any case), and ids starting `orca-`, install only from Orca's official catalog.",
+      "x-orca-since": "1.4.160",
+      "examples": [
+        "acme"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Display name.",
+      "x-orca-since": "1.4.160",
+      "examples": [
+        "Gleam"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
+      "description": "Plugin version, semver.",
+      "x-orca-since": "1.4.160",
+      "examples": [
+        "1.2.0"
+      ]
+    },
+    "description": {
+      "description": "One or two sentences shown in the plugin list.",
+      "x-orca-since": "1.4.160",
+      "type": "string",
+      "maxLength": 4096
+    },
+    "author": {
+      "description": "Who maintains the plugin.",
+      "x-orca-since": "1.4.160",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Author or organization name.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "Acme"
+          ]
+        },
+        "url": {
+          "description": "Author homepage.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "https://example.com"
+          ],
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "repository": {
+      "description": "Source repository URL.",
+      "x-orca-since": "1.4.160",
+      "examples": [
+        "https://github.com/acme/orca-gleam-syntax"
+      ],
+      "type": "string",
+      "maxLength": 2048
+    },
+    "license": {
+      "description": "SPDX license expression.",
+      "x-orca-since": "1.4.245",
+      "examples": [
+        "MIT",
+        "Apache-2.0 OR MIT"
+      ],
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^\\(?[A-Za-z0-9][A-Za-z0-9.+-]*(?: (?:AND|OR|WITH) \\(?[A-Za-z0-9][A-Za-z0-9.+-]*\\)?)*\\)?$"
+    },
+    "homepage": {
+      "description": "Project homepage, https only.",
+      "x-orca-since": "1.4.245",
+      "examples": [
+        "https://example.com/gleam"
+      ],
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^https:\\/\\/\\S+$"
+    },
+    "icon": {
+      "description": "Square image shown beside the plugin name. PNG, WEBP, static, at least 128×128, square, at most 256 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+      "x-orca-since": "1.4.160",
+      "examples": [
+        "assets/icon.png"
+      ],
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+    },
+    "engines": {
+      "type": "object",
+      "properties": {
+        "orca": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^>=\\d+\\.\\d+\\.\\d+$",
+          "description": "Oldest Orca release this plugin runs on, as `>=x.y.z`. Raise it to the newest \"Since\" of any field you use; a format 2 manifest needs at least `>=1.4.245`, because older Orca cannot read format 2.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            ">=1.4.245"
+          ]
+        }
+      },
+      "required": [
+        "orca"
+      ],
+      "additionalProperties": false,
+      "description": "Host versions this plugin supports. Older hosts refuse to load it.",
+      "x-orca-since": "1.4.160"
+    },
+    "main": {
+      "description": "Node entry run in an out-of-process plugin worker. Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+      "x-orca-since": "1.4.160",
+      "examples": [
+        "dist/main.mjs"
+      ],
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+    },
+    "contributes": {
+      "description": "What the plugin adds to Orca. Every point defaults to empty.",
+      "x-orca-since": "1.4.160",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "panels": {
+          "default": [],
+          "description": "Sidebar panels. At most 64.",
+          "x-orca-since": "1.4.160",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PanelContribution"
+          }
+        },
+        "commands": {
+          "default": [],
+          "description": "Command palette entries. At most 256.",
+          "x-orca-since": "1.4.160",
+          "maxItems": 256,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CommandContribution"
+          }
+        },
+        "events": {
+          "default": [],
+          "description": "Events delivered to the plugin worker. At most 3.",
+          "x-orca-since": "1.4.160",
+          "maxItems": 3,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EventContribution"
+          }
+        },
+        "languagePacks": {
+          "default": [],
+          "description": "Interface translations. At most 16.",
+          "x-orca-since": "1.4.160",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguagePackContribution"
+          }
+        },
+        "keybindings": {
+          "description": "Keyboard shortcuts for contributed commands. At most 256.",
+          "x-orca-since": "1.4.160",
+          "maxItems": 256,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeybindingContribution"
+          }
+        },
+        "vmRecipes": {
+          "default": [],
+          "description": "Virtual machine environment recipes. At most 64.",
+          "x-orca-since": "1.4.160",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VmRecipeContribution"
+          }
+        },
+        "themes": {
+          "default": [],
+          "description": "App color themes. At most 64.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThemeContribution"
+          }
+        },
+        "terminalThemes": {
+          "default": [],
+          "description": "Terminal ANSI palettes. At most 64.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThemeContribution"
+          }
+        },
+        "iconThemes": {
+          "default": [],
+          "description": "File icon themes. At most 32.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThemeContribution"
+          }
+        },
+        "syntaxes": {
+          "default": [],
+          "description": "Syntax highlighting for editor languages. At most 16.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxContribution"
+          }
+        },
+        "customEditors": {
+          "default": [],
+          "description": "Editors that open files of given types in the editor tab. At most 16.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CustomEditorContribution"
+          }
+        },
+        "newFiles": {
+          "default": [],
+          "description": "Untitled files the user can create from the + menu and the command palette. At most 16.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NewFileContribution"
+          }
+        },
+        "agentHarnesses": {
+          "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "skills": {
+          "description": "Reserved for agent skills; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "mcpServers": {
+          "description": "Reserved for MCP server definitions; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "hooks": {
+          "description": "Reserved for agent hooks; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "taskSources": {
+          "description": "Reserved for task sources; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "connections": {
+          "description": "Reserved for account connections; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "settings": {
+          "description": "Reserved for plugin settings; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "statusBarItems": {
+          "description": "Reserved for status bar items; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "sidebarCards": {
+          "description": "Reserved for sidebar cards; must be empty until their format is defined.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "default": [],
+      "description": "Host APIs the plugin asks the user to grant. At most 32.",
+      "x-orca-since": "1.4.160",
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Capability"
+      }
+    },
+    "cover": {
+      "description": "Wide image at the top of the plugin page.",
+      "x-orca-since": "1.4.245",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "Cover image shown on the plugin page, 16:10 recommended (1600×1000). PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "images/cover.png"
+          ]
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "What the image shows, for screen readers. Required.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "The Dusk theme on a terminal"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "alt"
+      ],
+      "additionalProperties": false
+    },
+    "screenshots": {
+      "description": "Screenshots for the plugin page, at most 6. All images together may be at most 8 MB.",
+      "x-orca-since": "1.4.245",
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Screenshot"
+      }
+    },
+    "pluginApi": {
+      "description": "Major version of the plugin host API this plugin targets. Optional (defaults to 1), and refused on `data` and `declarative` plugins, which never call it.",
+      "x-orca-since": "1.4.160",
+      "type": "number",
+      "const": 1
+    }
+  },
+  "required": [
+    "manifestVersion",
+    "execution",
+    "id",
+    "publisher",
+    "name",
+    "version",
+    "engines"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "PanelContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Panel id, unique among this plugin's panels. The reserved names `constructor` and `prototype` are refused.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "dashboard"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Title shown on the panel tab and its tooltip.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "Dashboard"
+          ]
+        },
+        "icon": {
+          "description": "Icon shown in the right-sidebar activity bar. Defaults to `plug`.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "database"
+          ],
+          "type": "string",
+          "enum": [
+            "activity",
+            "bar-chart-3",
+            "bell",
+            "blocks",
+            "book",
+            "bot",
+            "bug",
+            "calendar",
+            "cloud",
+            "code",
+            "database",
+            "file-text",
+            "flag",
+            "folder",
+            "gauge",
+            "globe",
+            "hammer",
+            "layers",
+            "lightbulb",
+            "package",
+            "plug",
+            "puzzle",
+            "rocket",
+            "star",
+            "terminal",
+            "wrench",
+            "zap"
+          ]
+        },
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "HTML file, relative to the plugin root, rendered inside a panel frame. It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "dist/panel.html"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "entry"
+      ],
+      "additionalProperties": false,
+      "description": "A sidebar panel. Requires the `sandboxed-ui` execution profile or higher."
+    },
+    "CommandContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$",
+          "description": "Command id, unique among this plugin's commands. Dotted namespaces are allowed.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "jupyter.restartKernel"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Title shown in the command palette.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "Restart kernel"
+          ]
+        },
+        "when": {
+          "description": "Where the command is available. `workspace` hides it when no workspace is active. Defaults to `global`.",
+          "x-orca-since": "1.4.160",
+          "x-orca-enum-since": {
+            "global": "1.4.160",
+            "workspace": "1.4.245"
+          },
+          "type": "string",
+          "enum": [
+            "global",
+            "workspace"
+          ]
+        },
+        "action": {
+          "description": "Built-in Orca action this command runs. A command with an action is declarative and never starts the plugin worker; one without needs `main`.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "view.tasks"
+          ],
+          "enum": [
+            "worktree.history.back",
+            "worktree.history.forward",
+            "sidebar.left.toggle",
+            "sidebar.sleepingWorkspaces.toggle",
+            "floatingWorkspace.maximize",
+            "tab.rename",
+            "workspace.rename",
+            "workspace.openBoard",
+            "view.tasks",
+            "sidebar.right.toggle",
+            "sidebar.explorer.toggle",
+            "sidebar.search.toggle",
+            "sidebar.sourceControl.toggle",
+            "sidebar.checks.toggle",
+            "sidebar.ports.toggle"
+          ],
+          "x-orca-enum-since": {
+            "worktree.history.back": "1.4.160",
+            "worktree.history.forward": "1.4.160",
+            "sidebar.left.toggle": "1.4.160",
+            "sidebar.sleepingWorkspaces.toggle": "1.4.160",
+            "floatingWorkspace.maximize": "1.4.160",
+            "tab.rename": "1.4.160",
+            "workspace.rename": "1.4.160",
+            "workspace.openBoard": "1.4.160",
+            "view.tasks": "1.4.160",
+            "sidebar.right.toggle": "1.4.160",
+            "sidebar.explorer.toggle": "1.4.160",
+            "sidebar.search.toggle": "1.4.160",
+            "sidebar.sourceControl.toggle": "1.4.160",
+            "sidebar.checks.toggle": "1.4.160",
+            "sidebar.ports.toggle": "1.4.160"
+          },
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "A command palette entry. Requires the `declarative` execution profile or higher."
+    },
+    "EventContribution": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "string",
+          "enum": [
+            "workspace.created",
+            "workspace.removed",
+            "agent.status.changed"
+          ],
+          "description": "Event delivered to the plugin worker.",
+          "x-orca-since": "1.4.160",
+          "x-orca-enum-since": {
+            "workspace.created": "1.4.245",
+            "workspace.removed": "1.4.245",
+            "agent.status.changed": "1.4.160"
+          }
+        }
+      },
+      "required": [
+        "on"
+      ],
+      "additionalProperties": false,
+      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+    },
+    "LanguagePackContribution": {
+      "type": "object",
+      "properties": {
+        "locale": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35,
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
+          "description": "BCP 47 locale the pack translates Orca into. Each locale appears once, ignoring case.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "pt-BR"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "JSON file of translated interface strings. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "locales/pt-BR.json"
+          ]
+        },
+        "displayName": {
+          "description": "Native-language name for the Settings picker. Omitted packs show `{locale} — {pluginKey}`.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Português (Brasil)"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "locale",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "An interface translation."
+    },
+    "KeybindingContribution": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$",
+          "description": "Id of a command this plugin contributes in `contributes.commands`.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "jupyter.restartKernel"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Key chord Orca recognizes, such as `Mod+Shift+K`. `Mod` is Cmd on macOS and Ctrl elsewhere. Each chord may be bound once on every platform.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "Mod+Shift+K"
+          ]
+        },
+        "when": {
+          "description": "Where the shortcut is active; must match its command's `when`.",
+          "x-orca-since": "1.4.160",
+          "x-orca-enum-since": {
+            "global": "1.4.160",
+            "workspace": "1.4.245"
+          },
+          "type": "string",
+          "enum": [
+            "global",
+            "workspace"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "A keyboard shortcut for a command."
+    },
+    "VmRecipeContribution": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "JSON environment recipe file, listed once. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.160",
+          "examples": [
+            "recipes/ubuntu.json"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "A virtual machine environment recipe."
+    },
+    "ThemeContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Theme id, unique within its family in this plugin. The reserved names `constructor` and `prototype` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "dusk"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Name shown in the theme picker.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Dusk"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "JSON theme file, at most 16 KiB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "themes/dusk.json"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "A titled theme file."
+    },
+    "SyntaxContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Language id, unique among this plugin's syntaxes. The reserved names `constructor` and `prototype` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "gleam"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Language name shown in the editor.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Gleam"
+          ]
+        },
+        "scopeName": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9_-]+)+$",
+          "description": "The grammar's root TextMate scope, unique among this plugin's syntaxes.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "source.gleam"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "TextMate grammar JSON file. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "syntaxes/gleam.tmLanguage.json"
+          ]
+        },
+        "configuration": {
+          "description": "Language configuration JSON file: comments, brackets and auto-closing pairs. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "syntaxes/language-configuration.json"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+        },
+        "extensions": {
+          "default": [],
+          "description": "File-name suffixes, with the dot, this language opens, ignoring case. A longer suffix such as `.excalidraw.json` wins over a shorter one, and a file named only the suffix never matches. At most 32.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            [
+              ".gleam"
+            ]
+          ],
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^\\.[A-Za-z0-9_+-]+(?:\\.[A-Za-z0-9_+-]+)*$"
+          }
+        },
+        "filenames": {
+          "default": [],
+          "description": "Exact file names this language opens, ignoring case; a name beats any extension. Names must be portable: no path separators, `.`, `..` or characters Windows forbids. At most 32.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            [
+              "gleam.toml"
+            ]
+          ],
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "scopeName",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "Syntax highlighting for one language."
+    },
+    "CustomEditorContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Editor id, unique among this plugin's custom editors. The reserved names `constructor` and `prototype` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "excalidraw"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Excalidraw"
+          ]
+        },
+        "icon": {
+          "description": "Square image shown on the tab of a file this editor opens. Defaults to the plugin icon. PNG, WEBP, static, at least 128×128, square, at most 256 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "images/editor-icon.png"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+        },
+        "extensions": {
+          "default": [],
+          "description": "File-name suffixes, with the dot, this editor opens, ignoring case. A longer suffix such as `.excalidraw.json` wins over a shorter one, and a file named only the suffix never matches. At most 32.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            [
+              ".excalidraw",
+              ".excalidraw.json"
+            ]
+          ],
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^\\.[A-Za-z0-9_+-]+(?:\\.[A-Za-z0-9_+-]+)*$"
+          }
+        },
+        "filenames": {
+          "default": [],
+          "description": "Exact file names this editor opens, ignoring case; a name beats any extension. Names must be portable: no path separators, `.`, `..` or characters Windows forbids. At most 32.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            []
+          ],
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "HTML file rendered inside an editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "editor/index.html"
+          ]
+        },
+        "priority": {
+          "description": "`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "default"
+          ],
+          "type": "string",
+          "enum": [
+            "default",
+            "option"
+          ]
+        },
+        "contentKind": {
+          "description": "`text` (the default) sends the file as text and accepts full-text edits. `bytes` sends the file's raw bytes, for binary formats such as spreadsheets, and accepts full-byte edits.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "bytes"
+          ],
+          "type": "string",
+          "enum": [
+            "text",
+            "bytes"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "entry"
+      ],
+      "additionalProperties": false,
+      "description": "An editor for the listed files, shown in the editor tab beside Source. It must list at least one extension or file name. Requires the `sandboxed-ui` execution profile or higher."
+    },
+    "NewFileContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "New-file id, unique among this plugin's new files. The reserved names `constructor` and `prototype` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "drawing"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Menu item shown in the tab bar + menu and the command palette.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "New Excalidraw drawing"
+          ]
+        },
+        "extension": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^\\.[A-Za-z0-9_+-]+(?:\\.[A-Za-z0-9_+-]+)*$",
+          "description": "Suffix, with the dot, of the untitled file it creates. The file opens in whatever editor takes that suffix, such as a custom editor from this plugin.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            ".excalidraw"
+          ]
+        },
+        "template": {
+          "description": "UTF-8 file copied into the new file, at most 256 KB. Without one the file starts empty. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "templates/empty.excalidraw"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+        },
+        "icon": {
+          "description": "Square image shown beside the menu item. Defaults to the plugin icon. PNG, WEBP, static, at least 128×128, square, at most 256 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "images/editor-icon.png"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "extension"
+      ],
+      "additionalProperties": false,
+      "description": "A kind of untitled file the user can create from the tab bar + menu or the command palette, in the active workspace."
+    },
+    "Capability": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "workspace:read",
+            "agent:read",
+            "terminal:send",
+            "notifications:show",
+            "storage:own",
+            "secrets:own",
+            "settings:own"
+          ],
+          "description": "Capability granted on user consent.",
+          "x-orca-since": "1.4.160",
+          "x-orca-enum-since": {
+            "workspace:read": "1.4.160",
+            "agent:read": "1.4.245",
+            "terminal:send": "1.4.160",
+            "notifications:show": "1.4.160",
+            "storage:own": "1.4.245",
+            "secrets:own": "1.4.245",
+            "settings:own": "1.4.160"
+          }
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "A host API the plugin may call once the user consents."
+    },
+    "Screenshot": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "Screenshot, 16:10 recommended (up to 2560×1600). PNG, JPEG, WEBP, static, at least 1280×800, at most 1536 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "images/editor.png"
+          ]
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "What the image shows, for screen readers. Required.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "The Dusk theme on a terminal"
+          ]
+        },
+        "caption": {
+          "description": "Short caption under the screenshot.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Gleam in the editor"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "theme": {
+          "description": "Show this screenshot only with a light or dark Orca theme.",
+          "x-orca-since": "1.4.245",
+          "type": "string",
+          "enum": [
+            "light",
+            "dark"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "alt"
+      ],
+      "additionalProperties": false,
+      "description": "One screenshot of the plugin in use."
+    }
+  }
+}

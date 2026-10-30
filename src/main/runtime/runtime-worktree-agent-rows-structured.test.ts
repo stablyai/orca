@@ -18,11 +18,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-/**
- * A structured session has no PTY and no hook script, so the host publishes its projection into
- * the agent-status store itself. This walks that store into `worktree ps` rows: before it, the CLI
- * reported a worktree running one as idle while the sidebar showed it working.
- */
+/** Structured sessions have no PTY/hooks; host-published status must reach worktree ps as well as the sidebar. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUBJECT = makeStructuredAgentStatusSubject(
@@ -62,7 +58,7 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {
@@ -144,7 +140,7 @@ describe('worktree ps reports structured sessions', () => {
     )
   })
 
-  // Null status means no turn has been persisted; the chat itself shows nothing, so neither does this.
+  // No persisted turn means no projected status, matching the chat.
   it('omits a session with no projected status', () => {
     expect(attach([summary({ status: null })]).agents).toHaveLength(0)
   })
@@ -156,23 +152,15 @@ describe('worktree ps reports structured sessions', () => {
   })
 })
 
-/**
- * The deliberate non-goal. Adding structured rows to `terminal list` was investigated and rejected:
- * mobile mounts a terminal WebView per row that can never receive a frame, a `connected`-keyed
- * refresh check goes permanently true and pins shipped clients to a fast cadence with no exit, and
- * the plugin projection has no field that can carry `writable: false`. Every SAFE consumer of a
- * terminal summary checks `ptyId`; the breaking ones key off `connected` or mere row presence,
- * which no added field can qualify. This pins that the listing never reads the status store.
- */
+/** Keep structured rows out of terminal list: shipped clients mount WebViews and poll by row presence/connected, which no added field can qualify. */
 describe('terminal listing is deliberately left alone', () => {
   it('never reads the agent-status store that now carries structured rows', async () => {
     const { readFile } = await import('node:fs/promises')
-    // terminal/layout/terminal-resize-listeners.ts owns listTerminals.
     const listing = await readFile(
       new URL('./terminal/layout/terminal-resize-listeners.ts', import.meta.url),
       'utf8'
     )
-    // Guard the guard: an empty read would make every assertion below vacuously true.
+    // An empty source read would satisfy every negative assertion.
     expect(listing).toContain('async listTerminals(')
     expect(listing).not.toContain('getAgentStatusSnapshotFn')
     expect(listing).not.toContain('structuredHost')

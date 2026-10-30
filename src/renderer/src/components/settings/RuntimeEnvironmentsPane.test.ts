@@ -193,10 +193,7 @@ describe('RuntimeEnvironmentsPane host details', () => {
   })
 
   it('distinguishes transport-up/runtime-down from an attached ready runtime', () => {
-    // Why: the row tracks attachment (reachable + ready), which exposes Disconnect.
-    // Whether the host is the default *active* server is a separate concept, so it
-    // must NOT change this label — otherwise the dot/label/button disagree (a host
-    // showed "Available" with a grey dot yet offered Disconnect).
+    // Attachment determines Disconnect and connection labels; default-server selection must not make dot/label/button disagree.
     expect(getRuntimeServerConnectionState(details({ status: 'ready' }))).toBe(
       'runtime-unavailable'
     )

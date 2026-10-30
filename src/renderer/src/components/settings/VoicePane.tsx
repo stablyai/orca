@@ -24,7 +24,7 @@ type VoicePaneProps = {
 }
 
 export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.JSX.Element {
-  // Why: a stable fallback prevents the fetch effect from repeating on every parent render.
+  // Keep fallback identity stable so parent renders cannot repeat fetch effects.
   const [defaultVoiceSettings] = useState(getDefaultVoiceSettings)
   const voiceSettings = settings.voice ?? defaultVoiceSettings
   const modelStates = useAppStore((s) => s.modelStates)
@@ -41,11 +41,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   )
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
-  // Why: every write here is a read-modify-write of the whole voice object, and the
-  // writers are async (key status probe, save/clear key). Merging onto the render-time
-  // snapshot would resurrect settings that changed while the IPC was in flight — e.g.
-  // reverting `enabled` to false and leaving the microphone picker permanently disabled.
-  // Written in an effect, not during render: the async writers all run post-commit.
+  // Merge async whole-object writes into committed current settings; render snapshots could undo toggles changed during IPC and disable the microphone picker.
   const voiceSettingsRef = useRef(voiceSettings)
   useEffect(() => {
     voiceSettingsRef.current = voiceSettings

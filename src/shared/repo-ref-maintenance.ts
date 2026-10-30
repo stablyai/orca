@@ -18,12 +18,6 @@ import {
   type RepoRefMaintenanceTarget
 } from './repo-ref-maintenance-policy'
 
-/**
- * The scheduler half of idle loose-ref packing: when to probe, when to pack,
- * when to stand down. The thresholds and the host contract it works against
- * live in `./repo-ref-maintenance-policy`.
- */
-
 /** Give up until the next real activity rather than re-arming forever. */
 const MAX_DEFERRALS = 6
 /** Each deferral doubles the wait, so a busy app is retried rarely, not hammered. */
@@ -49,16 +43,12 @@ export class RepoRefMaintenance {
   private readonly quietPeriodMs: number
   private readonly looseRefThreshold: number
   private readonly onError: (error: unknown) => void
-  // Why: at most one pack-refs anywhere. It holds a general git admission slot
-  // for its whole run, and two at once would halve git throughput on a small host.
-  // The slot is never released while a pack that could hold `packed-refs.lock`
-  // is still running -- an interrupt cancels the work and waits for it to stop.
+  // One app-wide pack avoids starving foreground Git; keep its slot until interrupted work has stopped.
   private inFlight: Promise<void> | null = null
   private inFlightAbort: AbortController | null = null
   private inFlightTracked: TrackedRepo | null = null
   private readonly lockGate = new PackedRefsLockGate()
-  // Why a count, not a flag: several ref-touching operations overlap routinely
-  // (a create's fetch inside a create), and the last one out reopens the window.
+  // Overlapping ref operations share the pause; only the last release reopens maintenance.
   private suspensions = 0
   private lastAttempt: Promise<void> = Promise.resolve()
   private disposed = false
@@ -73,11 +63,7 @@ export class RepoRefMaintenance {
     this.onError = options.onError ?? (() => {})
   }
 
-  /**
-   * Record a write to `target`'s repo and (re)start its quiet-period countdown.
-   * Every call pushes the attempt further out, so a burst of fetches or a
-   * worktree create can never be interrupted by maintenance it triggered.
-   */
+  /** Restart the quiet countdown on every write so maintenance cannot interrupt the burst that armed it. */
   arm(target: RepoRefMaintenanceTarget): void {
     if (this.disposed) {
       return
@@ -112,28 +98,13 @@ export class RepoRefMaintenance {
     return this.lastAttempt
   }
 
-  /**
-   * Wait out the `packed-refs` rewrite, if one is in progress.
-   *
-   * Deliberately not a kill. The lock is held for 0.03-1.37s of a 23-32s pack;
-   * the rest is the prune phase, during which a concurrent `fetch --prune`,
-   * `branch -D` or `update-ref` measurably succeeds because per-ref locks last
-   * microseconds and Git retries for `core.filesRefLockTimeout`. Signalling the
-   * child there buys nothing and strands a lock file about one time in five.
-   *
-   * Free when no pack is running, which is almost always.
-   */
+  /** Wait out the short rewrite instead of killing the pack: concurrent ref edits succeed during pruning,
+   * while killing can strand packed-refs.lock (observed roughly one in five kills). */
   awaitPackedRefsLockRelease(): Promise<void> {
     return this.lockGate.whenReleased(PACKED_REFS_LOCK_WAIT_MS)
   }
 
-  /**
-   * Push every armed repository's attempt out by a full quiet period.
-   *
-   * User-initiated ref work is evidence the user is active in the app, not just
-   * in one repo, and it is free -- no key to resolve, no subprocess, nothing at
-   * all when nothing is armed.
-   */
+  /** User ref work proves app-wide activity; postpone all armed repos without resolving individual targets. */
   postponeAll(): void {
     if (this.disposed) {
       return
@@ -147,14 +118,7 @@ export class RepoRefMaintenance {
     }
   }
 
-  /**
-   * Hold the repository open for work that is about to touch refs.
-   *
-   * Two things at once: no *new* attempt can start for any repository until the
-   * returned release is called, and the caller waits out any `packed-refs`
-   * rewrite already in progress. A prune already running is left alone to
-   * finish -- it does not block the caller.
-   */
+  /** Block new attempts until release and await any packed-refs rewrite; ongoing pruning can finish concurrently. */
   async pause(_reason: string): Promise<() => void> {
     this.suspensions += 1
     let released = false
@@ -197,15 +161,10 @@ export class RepoRefMaintenance {
     tracked.timer = timer
   }
 
-  /**
-   * `counted` spends the give-up budget. Waiting behind another repository's
-   * pack, or yielding to work Orca asked us to yield to, does not: both end on
-   * their own, so charging for them would let a busy machine starve a repo
-   * until its next fetch. Only app activity and failed probes are charged.
-   */
+  /** Charge only activity/failed probes against the give-up budget; waiting behind other packs or requested yields
+   * ends independently and must not starve maintenance until the next fetch. */
   private defer(key: string, tracked: TrackedRepo, counted: boolean): void {
-    // A fetch that landed while this attempt was probing already re-armed the
-    // repo; that entry is fresher, so the deferral must not overwrite it.
+    // Do not overwrite a fresher arm from a fetch that landed during the probe.
     if (this.disposed || tracked.superseded || this.tracked.has(key)) {
       return
     }
@@ -323,8 +282,7 @@ export class RepoRefMaintenance {
     const startedAt = this.now()
     let partial = false
     try {
-      // Only admission is cancellable. Callers that need the refs wait
-      // out the rewrite window through `pause()` instead of killing it.
+      // Only admission cancels; pause waits out the rewrite instead of killing the writer.
       await tracked.target.packRefs(this.lockGate, signal, canWrite)
     } catch (error) {
       span.setAttribute('repo.maintenance_error', String(error))
@@ -343,10 +301,7 @@ export class RepoRefMaintenance {
     if (!canWrite()) {
       return this.yieldTo(key, tracked, span, signal)
     }
-    // Judge by the backlog, not by the exit code. On a machine running several
-    // Orca sessions a branch moving mid-pack is the normal case, and Git's
-    // response -- leave that one ref loose, pack the rest -- is the correct one.
-    // Measured in the field: 36,688 loose refs down to 3, reported as an error.
+    // Judge the remaining backlog: concurrent ref movement may report failure after packing almost everything.
     const after = await countLooseRefs(refsDirectory, budget, signal)
     if (!canWrite()) {
       return this.yieldTo(key, tracked, span, signal)

@@ -1,18 +1,15 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
   ForceReconnect,
   RpcClientContextValue
 } from '../transport/rpc-client-context-contract'
 
-/**
- * The panel's Retry while the host is unreachable, mounted under the page's own provider.
- *
- * `client-context` and `route-handoff` resolve to their `.web` siblings, as the page bundle does.
- * `useForceReconnect` forwards to the provider this suite mounts rather than re-exporting the real
- * hook: the sibling imports the hooks back, and an awaited mock of it deadlocks.
- */
+// Mount Retry under page web provider with .web handoff/client context; forward useForceReconnect to provider, since awaiting real hooks cyclic import deadlocks.
 
 const doubles = vi.hoisted(
   (): {
@@ -129,8 +126,7 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
   })
 
   it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
-    // The premise of hiding it: nothing on the page re-dials, so the load has to re-run on the
-    // client and state the shell's own reconnect delivers.
+    // Page never redials itself; rerun load against client/state delivered by shell reconnect.
     const pair = createFakeBridgePortPair()
     const rendered = await mountPanel(pair)
     expect(retryControls(rendered)).toHaveLength(0)
@@ -142,3 +138,88 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
     expect(client.requests.map((request) => request.method)).toContain('status.get')
   })
 })
+
+it.each([
+  ['host-b', 0, false],
+  ['host-a', 1, true]
+] as const)(
+  'owns the history catalog across a client replacement for %s',
+  async (hostId, retainedLists, alreadyScanning) => {
+    const pair = createFakeBridgePortPair()
+    await pair.flush()
+    const session: AiVaultSession = {
+      id: 'claude:host-a',
+      executionHostId: 'local',
+      agent: 'claude',
+      sessionId: 'host-a-session',
+      title: 'Host A session',
+      cwd: '/host-a/workspace',
+      branch: null,
+      model: null,
+      filePath: '/host-a/session.jsonl',
+      codexHome: null,
+      createdAt: null,
+      updatedAt: null,
+      modifiedAt: '2026-10-21T00:00:00.000Z',
+      messageCount: 2,
+      totalTokens: 10,
+      previewMessages: [],
+      queuedMessageCount: 0,
+      subagentTranscriptCount: 0,
+      resumeCommand: '',
+      subagent: null
+    }
+    const reply = (result: unknown): RpcResponse => ({ id: 'history', ok: true, result })
+    const previous = new FakeSession('connected')
+    previous.sendRequest.mockImplementation(async (method) =>
+      reply(
+        method === 'status.get'
+          ? { capabilities: ['aiVault.v1'], hostPlatform: 'darwin' }
+          : method === 'worktree.ps'
+            ? { worktrees: [{ worktreeId: 'wt-1', repoId: 'repo', path: '/host-a/workspace' }] }
+            : { sessions: [session], issues: [] }
+      )
+    )
+    doubles.connection = { client: previous, state: 'connected' }
+    const renderHost = (hostId: string) => (
+      <RpcClientProvider client={pair.client}>
+        <MobileAgentSessionHistoryPanel hostId={hostId} worktreeId="wt-1" />
+      </RpcClientProvider>
+    )
+    await act(async () => {
+      tree = create(renderHost('host-a'))
+    })
+    expect(tree?.root.findAll((node) => String(node.type) === 'SectionList')).toHaveLength(1)
+    const next = new FakeSession('connected')
+    let answerWorktrees: (reply: RpcResponse) => void = () => {}
+    const worktrees = new Promise<RpcResponse>((resolve) => {
+      answerWorktrees = resolve
+    })
+    next.sendRequest.mockImplementation(async (method) => {
+      if (method === 'worktree.ps') {
+        return worktrees
+      }
+      if (method === 'status.get') {
+        return reply({ capabilities: ['aiVault.v1'], hostPlatform: 'linux' })
+      }
+      return new Promise<RpcResponse>(() => {})
+    })
+    doubles.connection = { client: next, state: 'connected' }
+    await act(async () => tree?.update(renderHost(hostId)))
+    expect(tree?.root.findAll((node) => String(node.type) === 'SectionList')).toHaveLength(
+      retainedLists
+    )
+    expect(next.sendRequest.mock.calls.some(([method]) => method === 'aiVault.listSessions')).toBe(
+      alreadyScanning
+    )
+    await act(async () =>
+      answerWorktrees(
+        reply({ worktrees: [{ worktreeId: 'wt-1', repoId: 'repo', path: '/host-b/workspace' }] })
+      )
+    )
+    expect(next.sendRequest).toHaveBeenCalledWith(
+      'aiVault.listSessions',
+      expect.objectContaining({ scopePaths: ['/host-b/workspace'] })
+    )
+  }
+)

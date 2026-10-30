@@ -37,14 +37,11 @@ export function closeTerminalTab(
     force?: boolean
     rejectPinned?: boolean
     reason?: TerminalTabCloseReason
-    /** Close reason sent to the host only. Unlike `reason`, it does not skip
-     *  local guards (pinned confirmation keys off `reason === 'pty-exit'`),
-     *  so lifecycle echoes that still need those guards can tag the wire. */
+    /** Host-only lifecycle reason; local pin guards still use reason, so this must not bypass them. */
     hostCloseReason?: TerminalTabCloseReason
     /** PTY whose lifecycle event initiated the host close. */
     lifecyclePtyId?: string
-    /** Set by callers that must never raise a modal (bulk closes, CLI/RPC, lifecycle
-     *  fallbacks) and by the re-entry that runs once the user confirmed. */
+    /** Skip modals for unattended/bulk/CLI/RPC paths and confirmed re-entry. */
     skipRunningProcessConfirm?: boolean
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
@@ -79,26 +76,23 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
-  // Why no early return: an unrouted close still prunes locally and reaches main's close record;
-  // teardown of a PTY whose host is unproven fails closed on its own.
+  // Unrouted closes still prune and record locally; unproven-host PTY teardown fails closed independently.
   const worktreeRoute = resolveTerminalCloseRoute(state, owningWorktreeId, terminalTabId)
 
-  // Why: a pinned tab routes through the confirmation guard instead of closing
-  // outright. `force` is the post-confirmation re-entry, which skips the guard.
+  // Why: with the pin prompt turned off, the close itself is the user's consent.
+  let pinnedCloseConsented = false
+  // Pinned confirmation re-enters with force; ordinary closes must wait for consent.
   if (
     options?.reason !== 'pty-exit' &&
     !options?.force &&
     isUnifiedTabPinned(state, owningWorktreeId, terminalTabId)
   ) {
-    // Why: background lifecycle callers cannot safely wait on a modal whose
-    // owner may be unattended; reject pinned tabs without bypassing the guard.
+    // Unattended lifecycle callers cannot wait on a modal; reject pinned closes without bypassing consent.
     if (options?.rejectPinned) {
       options.onCancel?.()
       return
     }
-    // Why: the pin prompt supersedes the running-process one only when it actually
-    // appears. With `confirmClosePinnedTab` off it says nothing, so fall through and let
-    // a busy pinned tab still get asked — Cmd+W did exactly that before #10142.
+    // Disabling pin prompts must not bypass running-process confirmation for busy pinned tabs (#10142).
     if (shouldConfirmPinnedTabClose(state)) {
       guardPinnedTabClose({
         isPinned: true,
@@ -108,17 +102,15 @@ export function closeTerminalTab(
       })
       return
     }
+    pinnedCloseConsented = true
   }
 
-  // Why: the X button, middle-click and the tab menu used to skip the running-process
-  // prompt that Cmd+W enforced (#10142). Guarding here — above the web-runtime branch so
-  // host-backed tabs are covered too — gives every close path one shared policy.
+  // Guard before web routing so X, middle-click, menu, keyboard and host-backed closes share running-process policy (#10142).
   if (shouldConfirmRunningTerminalClose(options)) {
     guardRunningTerminalClose({
       terminalTabId,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
-      // Why: re-enter instead of continuing inline so pinned/route/precomputed state is
-      // re-validated against fresh state after an arbitrarily long dialog.
+      // Re-enter after consent to revalidate pinned, route, and precomputed state against the latest store.
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
@@ -131,15 +123,7 @@ export function closeTerminalTab(
       // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
       return
     }
-    // Why: a remote-owned worktree's tabs are host-authoritative, so the close
-    // MUST reach the host or its next snapshot re-adds the tab (the "close then
-    // snaps back" bug). When the local→host map has no entry, decode the id
-    // itself (toHostSessionTabId is a no-op for non-mirrored host ids like plain
-    // UUIDs) — mirroring what activate/move do. The old
-    // `isWebTerminalSurfaceTabId ? id : null` gate returned null for plain-UUID
-    // host tabs, so close silently fell back to a local-only prune and the host's
-    // next snapshot re-added the tab. A truly local id the host doesn't know is
-    // harmless: the host close no-ops and the local prune still stands.
+    // Send closes to the authoritative host even for unmapped/plain-UUID IDs, or its next snapshot resurrects the tab; unknown local IDs safely no-op there.
     const hostBackedTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {
         environmentId: runtimeEnvironmentId,
@@ -155,8 +139,7 @@ export function closeTerminalTab(
       wireReason === 'user'
         ? null
         : getLatestWebSessionTabsPublicationEpoch(runtimeEnvironmentId, owningWorktreeId)
-    // Why: prune local mirrors immediately so close feels responsive while the
-    // host session snapshot catches up.
+    // Prune local mirrors while awaiting the host snapshot so close feels immediate.
     closeLocalTerminalTabState(terminalTabId, {
       reason: options?.reason,
       ...(options?.captureRecentlyClosed !== undefined
@@ -174,15 +157,17 @@ export function closeTerminalTab(
       worktreeId: owningWorktreeId,
       tabId: hostBackedTabId,
       environmentId: runtimeEnvironmentId,
-      // Why: lifecycle evidence binds this stale-prone echo to the exact host
-      // publication and terminal incarnation that the renderer observed.
+      // Bind lifecycle evidence to the exact observed host publication and terminal incarnation.
       reason: wireReason,
       ...(wireReason !== 'user'
         ? {
             publicationEpoch,
             terminalHandle: lifecycleTerminalHandle
           }
-        : {})
+        : // Why: a confirmed pinned close (this window's prompt, a phone's, or the prompt turned off).
+          options?.force || pinnedCloseConsented
+          ? { force: true }
+          : {})
     })
     options?.onClosed?.()
     return
@@ -193,9 +178,7 @@ export function closeTerminalTab(
     : getWorktreeTerminalTabIds(state, owningWorktreeId)
   const terminalCountBeforeClose =
     precomputedCloseState?.terminalCountBeforeClose ?? currentTerminalTabIds!.length
-  // Why: a terminal with a unified row must leave successor choice to closeUnifiedTab's
-  // MRU/neighbor repair — a terminal-only pre-pick skips agent-session/simulator neighbors
-  // and re-stamps the group active before the canonical repair can run.
+  // closeUnifiedTab owns MRU/neighbor repair across all tab types; terminal-only preselection would overwrite it.
   const hasUnifiedRow = (state.unifiedTabsByWorktree?.[owningWorktreeId] ?? []).some(
     (tab) =>
       tab.contentType === 'terminal' && (tab.entityId === terminalTabId || tab.id === terminalTabId)
@@ -216,7 +199,8 @@ export function closeTerminalTab(
   }
 
   closeLocalTerminalTabState(terminalTabId, {
-    reason: options?.reason,
+    // A parked tab's process exit carries only the host reason, to keep the pin guard above.
+    reason: options?.reason ?? (options?.hostCloseReason === 'pty-exit' ? 'pty-exit' : undefined),
     ...(options?.captureRecentlyClosed !== undefined
       ? { captureRecentlyClosed: options.captureRecentlyClosed }
       : {}),
@@ -226,13 +210,10 @@ export function closeTerminalTab(
       : {})
   })
   if (terminalCountBeforeClose <= 1 && state.activeWorktreeId === owningWorktreeId) {
-    // Why: re-read after the close — closeUnifiedTab may have already deactivated or
-    // repaired the surface, and the pre-close snapshot must not clobber that outcome.
+    // Re-read after closeUnifiedTab repairs/deactivates the surface; stale state must not clobber it.
     const current = useAppStore.getState()
     if (current.activeWorktreeId === owningWorktreeId) {
-      // Why: agent-session and simulator tabs render without a terminal/editor/browser
-      // entity, so only the unified renderable count can prove the worktree is empty
-      // (mirrors leaveWorktreeIfEmpty in workspace-emptied-reaction.ts).
+      // Only unified renderable count includes agent-session/simulator tabs when proving the worktree empty.
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
       if (renderableTabCount === 0) {
         const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)

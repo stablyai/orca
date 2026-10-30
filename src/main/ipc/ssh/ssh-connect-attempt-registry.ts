@@ -5,11 +5,10 @@ import {
   rotateSshProviderAuthority
 } from '../../ssh/ssh-provider-authority'
 
-// Why: keep this outside registerSshHandlers so a BrowserWindow recreation mid-connect doesn't split credential tracking.
+// Preserve credential tracking across macOS window recreation.
 export const credentialRequestedForTarget = new Set<string>()
 
-// Why: tabs must share one connect, while a disconnect must invalidate that
-// attempt so its late continuation cannot clobber a replacement.
+// Coalesce tab connects; disconnect must invalidate late continuations before replacement.
 export type ConnectAttempt = {
   authority: DirectSshAuthority
   promise: Promise<SshConnectionState>
@@ -17,9 +16,7 @@ export type ConnectAttempt = {
 
 export const connectInFlight = new Map<string, ConnectAttempt>()
 
-// Why the quit gate rather than a local latch: "the committed quit has begun" already has an owner,
-// and a private copy could be set by something that is not actually quitting — leaving SSH connects
-// refused for the rest of the process lifetime.
+// Reuse committed-quit authority; a private latch could permanently fence connects without an actual quit.
 export function assertSshConnectsNotFenced(): void {
   if (quitTeardownStartGate.hasStarted()) {
     throw new Error('SSH connects are closed for app shutdown')
@@ -36,7 +33,7 @@ export function isCurrentConnectAttempt(targetId: string, authority: DirectSshAu
   return authority.targetId === targetId && isCurrentSshProviderAuthority(authority)
 }
 
-// Why: ssh:testConnection connects then disconnects; suppressing broadcasts during the test avoids worktree cards flashing connected → disconnected.
+// Test probes must not flash worktree cards through connected/disconnected broadcasts.
 export const testingTargets = new Set<string>()
 export const testConnectionProbes = new Set<Promise<unknown>>()
 const testConnectionProbesByTarget = new Map<string, Set<Promise<unknown>>>()

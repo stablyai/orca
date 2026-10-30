@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { encodeNdjson } from './ndjson'
@@ -13,14 +14,10 @@ import {
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
-// Why: e2e forces the failed-health preserve path without SIGSTOP races —
-// a stopped daemon also blocks listSessions, so the unhealthy guard cannot
-// verify live sessions until SIGCONT, which is flaky under CI load.
+// SIGSTOP also blocks listSessions; inject failure so e2e can test preserving live sessions reliably.
 export const E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV = 'ORCA_E2E_FORCE_DAEMON_HEALTH_UNREACHABLE'
 
-// 'rejected' means the daemon answered and refused the handshake (bad token,
-// foreign protocol) — it can never be adopted, unlike 'unreachable', which
-// also covers a live-but-wedged daemon that simply missed the RPC budget.
+// Rejected means handshake refusal or malformed reply; unreachable includes live but slow daemons.
 export type DaemonHealth = 'healthy' | 'unreachable' | 'rejected' | 'pty-spawn-unhealthy'
 
 export type DaemonHealthCheck = {
@@ -44,8 +41,7 @@ export function checkDaemonHealthWithCoverage(
   tokenPath: string
 ): Promise<DaemonHealthCheck> {
   return new Promise((resolve) => {
-    // Older Windows daemons answered this RPC without spawning; an absent optional coverage
-    // field must preserve that weaker meaning during adoption.
+    // Missing coverage from older Windows daemons proves only the handshake, never PTY spawning.
     const fallbackCoverage = ptySpawnHealthPlatformCoverage()
     const resolveVerdict = (verdict: DaemonHealth): void =>
       resolve({ verdict, coverage: fallbackCoverage })
@@ -124,9 +120,7 @@ export function checkDaemonHealthWithCoverage(
             settle({ verdict: 'rejected', coverage: fallbackCoverage })
             return
           }
-          // Why: a protocol-live daemon with a stale cwd or node-pty helper
-          // will answer ping but cannot create terminals, so reuse must check
-          // the PTY spawn prerequisites too.
+          // Ping cannot detect stale cwd or PTY-helper failures; check spawn prerequisites before reuse.
           sock?.write(encodeNdjson({ id: 'health-1', type: 'ptySpawnHealth' }))
           continue
         }
@@ -210,6 +204,7 @@ export function getMacDaemonSystemResolverHealth(
     }
     const removeSocketListeners = (): void => {
       sock?.off('error', onError)
+      sock?.off('close', onError)
       sock?.off('connect', onConnect)
       sock?.off('data', onData)
     }
@@ -219,7 +214,8 @@ export function getMacDaemonSystemResolverHealth(
         type: 'hello',
         version: protocolVersion,
         token,
-        clientId: 'resolver-health-check',
+        // Unique per probe: the daemon evicts an older control socket that reuses a clientId.
+        clientId: `resolver-health-check-${randomUUID()}`,
         role: 'control'
       }
       sock?.write(encodeNdjson(hello))
@@ -253,8 +249,7 @@ export function getMacDaemonSystemResolverHealth(
             settle('unknown')
             return
           }
-          // Why: the daemon must report health from inside its own process;
-          // external launchctl bsexec probes can misclassify healthy PTYs.
+          // Probe inside the daemon: external launchctl bsexec can misclassify its resolver health.
           sock?.write(
             encodeNdjson({
               id: 'resolver-health-1',
@@ -283,6 +278,7 @@ export function getMacDaemonSystemResolverHealth(
     }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
+    sock.on('close', onError)
     sock.on('connect', onConnect)
 
     let buffer = ''

@@ -1,20 +1,13 @@
 import { appendFile, mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-/**
- * Append-only audit trail for host-API mutations performed on a plugin's
- * behalf, with actor `plugin:<qualifiedKey>`. One JSONL file so support and
- * enterprise policy tooling can replay exactly what plugins did through the
- * gated API. (Honest scope: worker code acting through its own Node access
- * bypasses this — stated in the consent UI.) Mutation intents are awaited
- * before their handler runs so an API-mediated write cannot outrun the log.
- */
+// Await host-API mutation intents before executing; plugin workers' own Node access bypasses this log.
 
 export type PluginAuditEntry = {
   ts: number
   actor: `plugin:${string}`
   method: string
-  /** Bounded summary — never full params (they may contain user content). */
+  /** Bounded summary only; full parameters may contain user content. */
   summary: string
   outcome: 'attempt' | 'ok' | 'error'
 }
@@ -55,8 +48,7 @@ export class PluginAuditLog {
       await appendFile(this.filePath, line, 'utf8')
       this.fileBytes += lineBytes
     })
-    // Keep the serialization chain usable after a failed append while still
-    // exposing this write's failure to the mutation chokepoint.
+    // Report this failure to the caller without poisoning later appends.
     this.writeChain = write.catch(() => undefined)
     return write
   }

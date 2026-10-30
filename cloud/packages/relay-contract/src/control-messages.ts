@@ -44,14 +44,11 @@ export const HostChallengeAckSchema = z
   .object({ challengeId: OpaqueIdSchema, proofB64: Base6432ByteSchema })
   .strict()
 
-// Advertised on the control upgrade rather than in host-hello: HostHelloSchema
-// is strict, so a new hello key is refused by every already-deployed cell.
+// Advertise via upgrade header: strict deployed HostHelloSchema rejects new hello keys.
 export const RELAY_HOST_CAPABILITIES_HEADER = 'x-orca-host-capabilities'
-// The director's `/v1/assign` lease, echoed on the control upgrade. Optional: cells
-// that predate it ignore unknown headers, and today a cell only shadow-checks it.
+// Echo director assignment lease on upgrade; older cells ignore unknown headers, current cells shadow-check.
 export const RELAY_ASSIGNMENT_LEASE_HEADER = 'x-orca-relay-assignment-lease'
-// The host accepts kind/relayDeviceId on a pendingConns entry. A host that does
-// not advertise this parses those entries strictly and would drop the whole ack.
+// Advertise before sending pendingConns details: legacy strict parsers would reject the entire ack.
 export const RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS = 'pending-conn-details'
 export const RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME = 'idle-regional-rehome-v1'
 
@@ -68,8 +65,7 @@ export function parseRelayHostCapabilities(
   )
 }
 
-// kind/relayDeviceId are optional so an entry stays readable by a host that
-// predates them; the cell only emits them to a host that advertised support.
+// Optional details support older cells; emit only to hosts advertising support.
 const PendingConnectionSchema = z
   .object({
     connId: OpaqueIdSchema,

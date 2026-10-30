@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithWorktreeSleepResumeRecording } from './worktree-sleep-resume-recording'
+import { OrcaRuntimeWithAgentGeneratedTabTitles } from '../layout/agent-generated-tab-titles-runtime'
 import {
   includeTargetResolvedWorktree,
   type ResolvedWorktree
@@ -9,7 +9,7 @@ import { teardownRpcDeadline } from '../../worktree-teardown-deadline'
 import { sleptNothing } from './worktree-terminal-sleep-result'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
 
-export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithWorktreeSleepResumeRecording {
+export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithAgentGeneratedTabTitles {
   protected async sleepResolvedWorktreeTerminals(
     worktree: ResolvedWorktree,
     scope: WorktreeSleepScope,

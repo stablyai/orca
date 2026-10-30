@@ -1,6 +1,4 @@
-// Editor tabs in a layout-owner build (ORCA_LAYOUT_OWNER=main): the window sends each open, close
-// and promotion to main and draws the tab only from main's frame. With the switch off the window
-// draws its own tabs and sends nothing; those cases run in the plain run.
+// Layout-owner editor opens/closes/promotions draw only from main frames; switch-off cases draw locally without main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -13,7 +11,6 @@ import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore, makeLayout, makeTab, makeWorktree } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -361,6 +358,29 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
     await main.settle()
     expect(tabFor(a)).toBeDefined()
     expect(store.getState().openFiles.map((file) => file.id)).toContain(a)
+  })
+
+  it('drops a tab’s content when main lost its workspace before the close came in', async () => {
+    const a = openFile('/a.ts')
+    await main.settle()
+    store.getState().setEditorDraft(a, 'draft')
+    const tabId = tabFor(a)!.id
+    layoutApplyTestTransport.answerWith((command) =>
+      command.type === 'closeTabs' ? 'pending' : 'apply'
+    )
+
+    store.getState().closeFile(a)
+    // Main drops the tab on its own (its workspace went away), then answers the window's close.
+    layoutApplyTestTransport.answerWith('apply')
+    await layoutApplyTestTransport.call({
+      command: { type: 'closeTabs', workspace: WT, tabIds: [tabId] }
+    })
+    layoutApplyTestTransport.answerPending({ ok: false, code: 'workspace_not_found' })
+    await main.settle()
+
+    expect(tabFor(a)).toBeUndefined()
+    expect(store.getState().openFiles.map((file) => file.id)).not.toContain(a)
+    expect(store.getState().editorDrafts[a]).toBeUndefined()
   })
 
   it('reopens a closed tab at its place with one open (index)', async () => {

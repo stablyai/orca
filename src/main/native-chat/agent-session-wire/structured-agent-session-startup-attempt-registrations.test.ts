@@ -1,7 +1,3 @@
-// Every agent this build registers starts under the host's one startup attempt and its hold on
-// delivery. Iterates the runtime's real registration list, so an agent registered later is covered
-// without being named here.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,7 +47,6 @@ function handle(definition: StructuredAgentDefinition): AgentSessionProviderHand
   return { transport: definition.handleTransport, agent: definition.agent, nativeId: 'native-1' }
 }
 
-/** A host driving `definition` over a scripted adapter that publishes its child at spawn. */
 async function hostFor(definition: StructuredAgentDefinition): Promise<{
   host: StructuredAgentSessionHost
   store: AgentSessionRecordStore
@@ -99,7 +94,7 @@ async function hostFor(definition: StructuredAgentDefinition): Promise<{
   }
   const declared: StructuredAgentDefinition = {
     ...definition,
-    // The double implements none of the optional capabilities' methods.
+    // Capabilities require methods this adapter double does not implement.
     capabilities: { ...definition.capabilities, rewind: false, compact: false, threadGoal: false }
   }
   const host = new StructuredAgentSessionHost({
@@ -129,7 +124,6 @@ describe.each(
           provider: agent,
           agent,
           accountHome: accountHome(definition),
-          // A new chat: the provider mints its handle at acquire.
           providerHandle: undefined
         })
       )

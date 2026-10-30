@@ -91,10 +91,7 @@ const ONE_SHOT_PROVIDER = String.raw`
   })
 `
 
-// Stands in for Orca: launches the supervisor as its own child, then can be killed outright. A
-// second child holds the supervisor's stdin open, so only the parent-death watch can notice.
-// A clean-quit owner has no holder and exits normally on SIGUSR2, the way Orca quits. A one-shot
-// owner ends the supervisor's stdin at once, as Orca does after writing a one-shot's request.
+// A sibling holds stdin open to isolate parent-death detection; other modes model clean quit and one-shot requests.
 const OWNER = String.raw`
   const { spawn } = require('node:child_process')
   const quitsCleanly = Boolean(process.env.ORCA_TEST_OWNER_QUITS_CLEANLY)
@@ -192,7 +189,7 @@ function readPids(child: ChildProcess, keys: readonly string[]): Promise<Record<
       }
       if (keys.every((key) => key in pids)) {
         clearTimeout(timeout)
-        // Later output is not pids; the stream keeps flowing without a listener.
+        // Removing the data listener leaves the stream flowing; later output is not PID metadata.
         child.stdout!.off('data', onData)
         resolve(pids)
       }
@@ -283,7 +280,7 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     supervisor.kill('SIGTERM')
 
     await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-    // The grandchild ignores SIGTERM; waiting out the 3 s grace for it would be the old cost.
+    // One-shot helpers must not impose the session grace after provider exit.
     expect(Date.now() - signalledAt).toBeLessThan(PROVIDER_SIGTERM_GRACE_MS / 3)
     expect(alive(provider)).toBe(false)
     expect(alive(grandchild)).toBe(false)
@@ -385,7 +382,6 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     owner.kill('SIGKILL')
 
     expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    // The grandchild ignores SIGTERM, so the group lasts until the grace ends in SIGKILL.
     expect(Date.now() - killedAt).toBeGreaterThanOrEqual(graceMs)
     expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
     expect(alive(pids.grandchild)).toBe(false)
@@ -476,11 +472,11 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     const killedAt = Date.now()
     owner.kill('SIGKILL')
 
-    // Non-empty, not just present: a read between create and write would pass any bound.
+    // Wait for nonempty content: observing file creation alone could produce a false timing result.
     const signalledAt = (): number =>
       existsSync(signalFile) ? Number(readFileSync(signalFile, 'utf8')) : 0
     expect(await waitFor(() => signalledAt() > 0, 3_000)).toBe(true)
-    // No unwatched stdin-end grace: the owner-death watch's 100 ms poll is the whole delay.
+    // Owner death uses the 100ms poll, without the normal stdin-end grace.
     expect(signalledAt() - killedAt).toBeGreaterThanOrEqual(0)
     expect(signalledAt() - killedAt).toBeLessThan(PROVIDER_STDIN_END_GRACE_MS / 2)
     expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)

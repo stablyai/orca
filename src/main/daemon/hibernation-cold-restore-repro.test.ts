@@ -7,14 +7,9 @@ import { HistoryReader } from './history-reader'
 import { HeadlessEmulator } from './headless-emulator'
 import { POST_REPLAY_MODE_RESET } from '../../shared/terminal-mode-reset-profiles'
 
-// Reproduces the "blank pane after agent hibernation" bug: alt-screen TUI snapshots have scrollbackAnsi='', so the adapter's
-// `if (scrollback)` gate (daemon-pty-adapter.ts:230) dropped the cold-restore payload and repainted blank despite an intact snapshotAnsi.
-// Not the meta.endedAt gate: hibernation's immediate kill never fires onExit, so endedAt stays null (session not rejected).
-// This test inlines the adapter's decision, so it'd pass even if the fix were reverted; the real end-to-end guard is daemon-pty-adapter.test.ts.
+// This inlines the restore decision; adapter tests separately guard the production path.
 
 const ALT_SCREEN_ON = '\x1b[?1049h'
-
-// Note: checkpoint() stamps generation/checkpointedAt itself, so em.getSnapshot() is passed as-is.
 
 describe('agent hibernation cold-restore (alt-screen TUI)', () => {
   let dir: string
@@ -40,9 +35,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
 
     const info = await reader.detectColdRestore(sessionId)
     expect(info).not.toBeNull()
-    // Adapter uses rehydrateSequences + snapshotAnsi for non-alt-screen → non-empty.
     expect(info!.modes.alternateScreen).toBe(false)
-    // Normal-screen restores carry their buffer as scrollback; assert both so a regression emptying scrollbackAnsi can't slip past.
     expect(info!.scrollbackAnsi).toContain('hello')
     expect(info!.snapshotAnsi).toContain('hello')
   })
@@ -51,7 +44,6 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     const manager = new HistoryManager(dir)
     const reader = new HistoryReader(dir)
     const em = new HeadlessEmulator({ cols: 80, rows: 24 })
-    // Why: in alt-screen (Claude/Codex TUIs) the serialized snapshot is the TUI buffer and scrollbackAnsi is empty.
     em.writeSync(ALT_SCREEN_ON)
     em.writeSync('\x1b[2J\x1b[H Claude Code — Opus 4.8\r\n > ')
     expect(em.isAlternateScreen).toBe(true)
@@ -61,20 +53,18 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     em.dispose()
 
     const info = await reader.detectColdRestore(sessionId)
-    // Session is eligible (endedAt null) and the agent's snapshot is intact.
     expect(info).not.toBeNull()
     expect(info!.modes.alternateScreen).toBe(true)
     expect(info!.snapshotAnsi.length).toBeGreaterThan(0)
 
-    // scrollbackAnsi is empty for alt-screen — the bug's trigger; pre-fix the adapter dropped the payload here, leaving the pane blank.
+    // Empty alternate-screen scrollback must not suppress the intact snapshot.
     expect(info!.scrollbackAnsi).toBe('')
 
-    // Replicate the adapter's post-fix decision: alt-screen falls back to snapshotAnsi when scrollbackAnsi is empty, so the pane isn't blank.
     const isAltScreen = info!.modes.alternateScreen
     const adapterScrollback = isAltScreen
       ? info!.scrollbackAnsi || info!.snapshotAnsi || null
       : info!.rehydrateSequences + info!.snapshotAnsi
-    expect(adapterScrollback).not.toBeNull() // → adapter sends a coldRestore payload
+    expect(adapterScrollback).not.toBeNull()
     expect(adapterScrollback).toContain('Claude Code')
   })
 
@@ -95,7 +85,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
       : info!.rehydrateSequences + info!.snapshotAnsi
     expect(adapterScrollback).not.toBeNull()
 
-    // Must end in the normal buffer (no alt-screen re-entry) so it won't fight the agent's own repaint when resume relaunches it.
+    // Return to the normal buffer so restoration cannot fight the resumed agent’s repaint.
     const fresh = new HeadlessEmulator({ cols: 80, rows: 24 })
     fresh.writeSync('\x1b[2J\x1b[3J\x1b[H')
     fresh.writeSync(adapterScrollback as string)
@@ -109,7 +99,6 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     const manager = new HistoryManager(dir)
     const reader = new HistoryReader(dir)
     const em = new HeadlessEmulator({ cols: 80, rows: 24 })
-    // Alt-screen but nothing drawn: SerializeAddon emits only a bare cursor-home, so the payload never re-enters alt-screen.
     em.writeSync(ALT_SCREEN_ON)
 
     await manager.openSession(sessionId, { cwd: '/home/user/project', cols: 80, rows: 24 })

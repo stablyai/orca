@@ -6,7 +6,7 @@ import {
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-} from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type {
   MobileE2EEOutboundMemoryBudget,
   MobileE2EEOutboundSocketMemory

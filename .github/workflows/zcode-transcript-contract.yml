@@ -38,5 +38,6 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
       - name: Verify SQLite ordering, legacy readers, and host routing
         run: pnpm test src/main/native-chat/transcript-zcode.test.ts src/main/native-chat/transcript-opencode.test.ts src/main/native-chat/transcript-opencode-sqlite-query.test.ts src/main/native-chat/transcript-opencode2-sqlite.test.ts src/main/native-chat/transcript-opencode-semantic-fidelity.test.ts src/main/native-chat/transcript-opencode-read-bounds.test.ts src/main/native-chat/transcript-opencode-subscribe.test.ts src/main/ai-vault/session-scanner-zcode.test.ts src/main/ai-vault/session-scanner-zcode-sources.test.ts src/main/ai-vault/opencode-wsl-runtime-preparation.test.ts src/main/ai-vault/session-scanner-opencode-wsl-routing.test.ts src/shared/native-chat-transcript-projection.test.ts src/renderer/src/components/native-chat/structured-agent-session-transcript-order.test.ts

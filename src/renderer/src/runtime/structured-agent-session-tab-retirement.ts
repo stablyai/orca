@@ -1,14 +1,10 @@
-import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
+import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import {
-  markStructuredAgentSessionLaunchesPublished,
-  publishedStructuredSessions
-} from '@/lib/structured-agent-session-launch-publication'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled
-} from '@/lib/structured-agent-session-launch-registry'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
@@ -23,6 +19,7 @@ import type { WebSessionIntentOwner } from './web-session-intent-owner'
 import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const inFlightRetirements = new Map<string, Promise<boolean>>()
@@ -42,6 +39,7 @@ export function retireStructuredAgentSessionTab(args: {
   onError?: (error: unknown) => void
 }): Promise<boolean> {
   retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
+  forgetStructuredSessionSelection(args.sessionId, args.target)
   const key = retirementKey(args.target, args.worktreeId, args.sessionId)
   const existing = inFlightRetirements.get(key)
   if (existing) {
@@ -83,7 +81,9 @@ export function retireStructuredAgentSessionTab(args: {
 function reacceptHostSessionTabs(
   target: RuntimeClientTarget,
   worktreeId: string,
-  intentOwner: WebSessionIntentOwner
+  intentOwner: WebSessionIntentOwner,
+  /** This machine's host still lists the chat. */
+  stillListed?: { sessionId: string; reopen: () => void }
 ): void {
   // Lazy imports: both refresh paths apply frames through this module.
   const reread =
@@ -97,8 +97,19 @@ function reacceptHostSessionTabs(
           })
         )
       : import('./local-structured-session-tabs-sync/inventory-refresh').then(
-          ({ refreshLocalStructuredSessionWorktreeTabs }) =>
-            refreshLocalStructuredSessionWorktreeTabs(worktreeId, { reacceptCurrentVersion: true })
+          async ({ refreshLocalStructuredSessionWorktreeTabs }) => {
+            const listed = await refreshLocalStructuredSessionWorktreeTabs(worktreeId, {
+              reacceptCurrentVersion: true
+            })
+            if (
+              stillListed &&
+              listed?.tabs.some(
+                (tab) => tab.type === 'agent-session' && tab.sessionId === stillListed.sessionId
+              )
+            ) {
+              stillListed.reopen()
+            }
+          }
         )
   reread.catch((error: unknown) =>
     console.warn('[structured-agent-session] tab re-read after a close failed', error)
@@ -113,7 +124,10 @@ export function beginStructuredAgentSessionTabClose(args: {
   provisional: boolean
   layoutOwner: StructuredLaunchSlotOwner
   onError?: (error: unknown) => void
+  /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
+  reopen?: () => void
 }): void {
+  forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(
       args.worktreeId,
@@ -123,8 +137,7 @@ export function beginStructuredAgentSessionTabClose(args: {
     )
     discardStructuredAgentSessionChatSends(args.sessionId)
   } else {
-    // Nothing more goes out, and nothing is dropped: one on its way settles from its answer, and
-    // the rest goes back to the conversation's draft.
+    // Withdraw unsent sends back to draft; in-flight work settles from its own answer.
     stopStructuredAgentSessionSends(args.sessionId)
   }
   // Pinned to the pairing at close start, so a re-pair mid-close can't miss the clear.
@@ -132,40 +145,25 @@ export function beginStructuredAgentSessionTabClose(args: {
     structuredAgentSessionFocusOwner(args.target).environmentId
   )
   const hostTabId = `agent-session:${args.sessionId}`
-  // Why: a host frame sent before the host handles the close still lists the chat and would re-add
-  // it at the end of the strip; the intent lifts once a host frame stops listing it.
+  // Hold close intent until a host frame omits the chat; pre-close frames would otherwise reappend it.
   recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {
     if (!hostTabClosed) {
       // The host may still have the chat: let its list show it again.
       clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
     }
-    // Why: this machine's host emits its removal frame before the close answers, so only a failure
-    // needs a read; a paired server's frames travel apart from its answer, so, as for its terminal
-    // closes, every close is followed by a read.
+    // Local removal frames precede close replies, so refetch only on failure. Paired frames race replies; always refetch like terminal close.
     if (!hostTabClosed || args.target.kind === 'environment') {
-      reacceptHostSessionTabs(args.target, args.worktreeId, intentOwner)
+      reacceptHostSessionTabs(
+        args.target,
+        args.worktreeId,
+        intentOwner,
+        !hostTabClosed && args.reopen
+          ? { sessionId: args.sessionId, reopen: args.reopen }
+          : undefined
+      )
     }
   })
-}
-
-/**
- * A paired host's frame, as this client may apply it: chats cancelled before their create landed
- * are retired on that host, and the rest settle any launch still waiting to learn they exist.
- */
-export function acceptPairedHostStructuredSessions(
-  frame: RuntimeMobileSessionTabsResult,
-  environmentId: string
-): RuntimeMobileSessionTabsResult {
-  const snapshot = suppressCancelledStructuredSessionTabs(frame, {
-    kind: 'environment',
-    environmentId
-  })
-  markStructuredAgentSessionLaunchesPublished(
-    toRuntimeExecutionHostId(environmentId),
-    publishedStructuredSessions([snapshot])
-  )
-  return snapshot
 }
 
 /** A host snapshot containing a cancelled session is suppressed and retired again idempotently. */

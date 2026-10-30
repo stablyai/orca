@@ -27,6 +27,7 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -39,11 +40,7 @@ type PublisherRow = {
   runtimeOwnerEnvironmentId?: string
 }
 
-/**
- * For one targeted id: hosts outside the purge that still publish it, and the host each purged
- * target's state is attributed to. Rows match by the listing's host matching, so an unstamped
- * legacy row or a paired runtime's SSH row counts as the purged copy, not a twin.
- */
+/** Resolve surviving publishers and purged attribution with listing rules; legacy unstamped and runtime-proxied SSH rows may be the purged copy, not twins. */
 function resolvePurgedPublishers(
   s: AppState,
   workspaceId: string,
@@ -142,7 +139,8 @@ export function collectHostTwinPurgeScopes(
 export function buildHostTwinPurgeState(
   s: AppState,
   hostId: ExecutionHostId,
-  twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>
+  twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const twinIds = new Set(twinHostIds.keys())
   const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
@@ -200,6 +198,7 @@ export function buildHostTwinPurgeState(
       }
     }
   }
+  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, new Set(), doomed)
   const tabPrefixedSleeping = {
     sleepingAgentSessionsByPaneKey: omitters.omitByPaneKeyTabPrefix(
@@ -239,13 +238,20 @@ export function buildHostTwinPurgeState(
         (group, index) => group.activeTabId !== s.groupsByWorktree[active]?.[index]?.activeTabId
       ))
   return {
+    editorBufferKeepRequest,
     ...layout,
     // Why: a group may now show a surviving tab of another kind, so selection is derived again.
     ...(selectionRemoved ? buildActiveSurfacePatch({ ...s, ...layout }, active) : {}),
-    ...buildWorktreePurgeSurfacePatch(s, omitters, doomed.doomedTabIds, {
-      ...tabPrefixedSleeping,
-      ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, new Set(), sshRecordPaneKeys)
-    }),
+    ...buildWorktreePurgeSurfacePatch(
+      s,
+      omitters,
+      doomed.doomedTabIds,
+      {
+        ...tabPrefixedSleeping,
+        ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, new Set(), sshRecordPaneKeys)
+      },
+      changedPaneKeys
+    ),
     ...twinSelectionPatch(s, twinHostIds, hostId)
   }
 }

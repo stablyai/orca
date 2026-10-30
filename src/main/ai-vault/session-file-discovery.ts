@@ -1,8 +1,6 @@
 import { dirname, extname, relative } from 'node:path'
 import type { AiVaultAgentSource } from './session-scanner-agent-sources'
 
-/** Whether a walked path is a session file this source owns. Split from the source table
- *  so adding an agent does not push that module past its line budget. */
 export function isDiscoverableSessionFile(
   source: AiVaultAgentSource,
   rootDir: string,
@@ -18,7 +16,7 @@ export function isDiscoverableSessionFile(
   if (!directoryPredicate) {
     return true
   }
-  // Indexed like walkSessionFiles: depth 0 is a child of rootDir.
+  // Match walkSessionFiles: root children have depth 0.
   return pathSegments(relative(rootDir, dirname(filePath)))
     .filter(Boolean)
     .every((name, depth) => directoryPredicate(name, depth))

@@ -250,8 +250,7 @@ describe('orchestration.send between terminals in no Run', () => {
   afterEach(() => h.cleanup())
 
   it('delivers terminal-to-terminal mail when neither terminal is in a Run', async () => {
-    // Two plain panes and `send --to <handle>`: the first command the guide teaches. #19542
-    // refused this with a bare "Run is required"; it files under the unbound Run instead.
+    // Plain handle-to-handle mail uses the unbound Run; #19542 incorrectly refused it as Run-required.
     const { db, runtime, ctx } = h.setup(false)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_a' ? 'tab_a:leaf_a' : handle === 'term_b' ? 'tab_b:leaf_b' : null

@@ -2,12 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { homeHostAccountsSchema, homeHostStatsSchema } from './home-host-reply-schema'
 
-/**
- * The Home card's per-host counts. Decorative: a refused summary leaves the card on whatever it
- * already showed, so refusal is a skip, and the skip is what carries an unreadable summary to the
- * fetch's own `.catch` rather than seating it in the card's per-host slot. Its glab and Linear probes are the task-tooling reads in
- * ../tasks/mobile-task-runtime-operations.ts — the same question, asked by a second screen.
- */
+// Decorative counts skip refusals to retain the displayed snapshot; accepted unreadable rows decode as absent to preserve the host slot. Reuse Tasks operations for glab/Linear probes.
 export const homeHostStatsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'stats.home-summary-or-skip',
@@ -18,11 +13,7 @@ export const homeHostStatsRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The Home card's per-host accounts snapshot. Decorative like the counts above: a refused list
- * leaves the card on the snapshot it already holds, so refusal is a skip. The payload stays
- * unchecked because `decodeAccountsSnapshot` is what validates it, at the call site.
- */
+// Skip refused accounts to retain the snapshot; decodeAccountsSnapshot validates the forwarded payload at the call site.
 export const homeHostAccountsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'accounts.home-snapshot-or-skip',

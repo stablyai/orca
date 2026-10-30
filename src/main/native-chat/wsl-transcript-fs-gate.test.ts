@@ -146,8 +146,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     const transcript = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\live.jsonl'
     const statTask = (priority: 'exact' | 'scan', task: () => Promise<string>): Promise<string> =>
       runWslTranscriptFsTask({ operation: 'stat', path: transcript, priority }, task)
-    // Hold the single scan slot on another distro so the same-file scan stat
-    // cannot run — a joiner would inherit exactly that queued position.
+    // Occupy the scan slot elsewhere so a same-file scan join would inherit its queued delay.
     const blocked = deferred<string>()
     const holderTask = vi.fn(() => blocked.promise)
     const holder = run('\\\\wsl.localhost\\Debian\\tree', 'scan', holderTask)
@@ -409,9 +408,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     }
   })
 
-  // Why: production tasks reject promptly on abort (the isolated process is
-  // killed). The sole waiter's timeout must not pre-empt the deadline timer —
-  // that would settle the task first and skip the route quarantine entirely.
+  // Abort-responsive process tasks must not settle before deadline quarantine is recorded.
   it('quarantines the route when a sole-waiter abort-responsive task hits the deadline', async () => {
     vi.useFakeTimers()
     try {
@@ -436,7 +433,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   })
 
   it('lifts a first-strike quarantine quickly and escalates on repeat stalls', async () => {
-    // performance.now drives the quarantine clock, so it must be faked too.
+    // Quarantine uses performance.now; advance it with fake timers.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const path = '\\\\wsl.localhost\\Ubuntu\\cold-start'
     const stallOnce = (): Promise<string> =>
@@ -456,14 +453,12 @@ describe('WSL transcript filesystem task scheduling', () => {
         code: 'unavailable'
       })
 
-      // A cold-booted distro recovers here: admitted again after the base window.
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
       const second = stallOnce()
       const secondRejected = expect(second).rejects.toMatchObject({ code: 'timeout' })
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS)
       await secondRejected
 
-      // Second strike doubles the back-off: still blocked after one base window.
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
       await expect(run(path, 'exact', async () => 'still-blocked')).rejects.toMatchObject({
         code: 'unavailable'
@@ -471,8 +466,6 @@ describe('WSL transcript filesystem task scheduling', () => {
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
       await expect(run(path, 'exact', async () => 'recovered')).resolves.toBe('recovered')
 
-      // The success reset the strikes: the next stall quarantines for the base
-      // window again instead of continuing the escalation.
       const third = stallOnce()
       const thirdRejected = expect(third).rejects.toMatchObject({ code: 'timeout' })
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS)
@@ -484,8 +477,6 @@ describe('WSL transcript filesystem task scheduling', () => {
     }
   })
 
-  // Why: a helper transport fault (child died, fork failed) consulted nothing
-  // about the mount, so it must not erase a live quarantine or its strikes.
   it('keeps the quarantine when a same-route transport fault settles', async () => {
     vi.useFakeTimers()
     const stalledExact = deferred<string>()
@@ -501,7 +492,6 @@ describe('WSL transcript filesystem task scheduling', () => {
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS)
       await stalledRejected
 
-      // The still-running scan's helper dies: a transport fault, not an answer.
       scanWork.reject(new WslTranscriptFsError('unavailable', 'helper process died'))
       await vi.advanceTimersByTimeAsync(0)
       await scanRejected
@@ -540,7 +530,6 @@ describe('WSL transcript filesystem task scheduling', () => {
     const reason = new Error('caller moved on')
     controller.abort(reason)
     await expect(pending).rejects.toBe(reason)
-    // A healthy in-flight process op keeps running; only the deadline kills.
     expect(sawAbort).not.toHaveBeenCalled()
     work.resolve('late')
     await Promise.resolve()
@@ -622,7 +611,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   })
 
   it('ignores a late result after admitting replacement work', async () => {
-    // performance.now drives the quarantine clock, so it must be faked too.
+    // Quarantine uses performance.now; advance it with fake timers.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const stalled = deferred<string>()
     try {
@@ -634,8 +623,6 @@ describe('WSL transcript filesystem task scheduling', () => {
         run('\\\\wsl.localhost\\Ubuntu\\recovering-next', 'exact', async () => 'blocked')
       ).rejects.toMatchObject({ code: 'unavailable' })
 
-      // A value that only lands past the deadline is the stall itself, not
-      // proof of health: it must not cut the back-off short.
       stalled.resolve('late')
       await vi.advanceTimersByTimeAsync(0)
       await expect(
@@ -655,7 +642,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   })
 
   it('starts a new generation after shared work reaches its deadline', async () => {
-    // performance.now drives the quarantine clock, so it must be faked too.
+    // Quarantine uses performance.now; advance it with fake timers.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const work = deferred<string>()
     const task = vi.fn(() => work.promise)
@@ -670,7 +657,6 @@ describe('WSL transcript filesystem task scheduling', () => {
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS - 10_000)
       await Promise.all([firstRejected, secondRejected])
       work.resolve('late')
-      // The late value settles nothing, so the deadline's back-off still runs.
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
       const joinTask = vi.fn(async () => 'join')
       await expect(run(path, 'exact', joinTask)).resolves.toBe('join')
@@ -690,9 +676,7 @@ describe('WSL transcript filesystem task scheduling', () => {
       const stuck = run('\\\\wsl.localhost\\Ubuntu\\trap-hung', 'exact', () => stalled.promise)
       const stuckRejected = expect(stuck).rejects.toMatchObject({ code: 'timeout' })
       await vi.advanceTimersByTimeAsync(5_000)
-      // Queued behind the same route before the hang is detected. Left queued
-      // it would strand a full waiter deadline; a sequential multi-file scan
-      // would then pay one deadline per file.
+      // Queue before hang detection; sequential files must not each pay another full waiter deadline.
       const queuedPath = '\\\\wsl.localhost\\Ubuntu\\trap-queued'
       const queued = run(queuedPath, 'exact', queuedTask)
       const queuedRejected = expect(queued).rejects.toMatchObject({ code: 'unavailable' })
@@ -729,7 +713,6 @@ describe('WSL transcript filesystem task scheduling', () => {
       await vi.advanceTimersByTimeAsync(35_000)
       await exactDRejected
 
-      // Queued before Ubuntu's hang is detected at the 60s scan deadline.
       const queuedU = run('\\\\wsl.localhost\\Ubuntu\\queued-route-file', 'exact', ubuntuTask)
       await expect(queuedU).resolves.toBe('ubuntu')
       await vi.advanceTimersByTimeAsync(25_000)
@@ -826,7 +809,6 @@ describe('WSL transcript filesystem task coalescing opt-out', () => {
     await expect(reads).resolves.toEqual([first, second])
     expect(first.toString()).toBe('AAAA')
     expect(second.toString()).toBe('BBBB')
-    // Neither caller kept its sentinel nor received the other's bytes.
     expect(first.equals(second)).toBe(false)
   })
 

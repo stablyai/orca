@@ -3,9 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -35,10 +32,7 @@ import { RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS } from './renderer-launch-failu
 const LAUNCH_FAILED: Electron.RenderProcessGoneDetails = { reason: 'launch-failed', exitCode: 1003 }
 const CRASHED: Electron.RenderProcessGoneDetails = { reason: 'crashed', exitCode: 5 }
 
-/**
- * Field shape (v1.4.218, bundle F0C6NHQF4C8): while the OS refuses spawns, every load emits launch-failed and then
- * rejects ERR_FAILED within ~10ms, before any did-finish-load. Once headroom returns the same webContents loads.
- */
+/** Reproduce spawn refusal: launch-failed then ERR_FAILED before a document; the same WebContents loads once process headroom returns. */
 function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
   const handlers: Record<string, (...args: any[]) => void> = {}
   const spawn = { refused: true }
@@ -51,6 +45,7 @@ function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn()
@@ -119,7 +114,7 @@ describe('renderer launch-failed recovery', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(load).toHaveBeenCalledTimes(1)
 
-    // Field: 3 reloads in ~750ms, then the breaker opened. Now retries spread out: 250ms, 1s, 2s, 4s, ...
+    // Spread retries across backoff instead of exhausting the breaker in ~750ms.
     await vi.advanceTimersByTimeAsync(250)
     expect(load).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(999)
@@ -136,7 +131,7 @@ describe('renderer launch-failed recovery', () => {
   it('recovers in place once spawn headroom returns, without any prompt', async () => {
     const { handlers, load, spawn } = createSpawnRefusingWindow()
     const { onRendererRecoveryExhausted, onRecoveryReloadOutcome } = open()
-    // Field: the process table stayed full for minutes.
+    // Reproduce process-table exhaustion lasting minutes.
     await vi.advanceTimersByTimeAsync(250 + 1_000 + 2_000 + 4_000 + 8_000 + 15_000)
     expect(load).toHaveBeenCalledTimes(7)
     spawn.refused = false
@@ -150,7 +145,7 @@ describe('renderer launch-failed recovery', () => {
     expect(load).toHaveBeenCalledTimes(8)
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
-    // A loaded document starts a fresh schedule: the next launch failure retries after 250ms again.
+    // A loaded document resets the launch-failure backoff.
     spawn.refused = true
     handlers['render-process-gone']?.({}, LAUNCH_FAILED)
     await vi.advanceTimersByTimeAsync(250)
@@ -163,7 +158,7 @@ describe('renderer launch-failed recovery', () => {
     await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS - 1)
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
-    // The last retry fails too; its prompt follows on the usual 250ms recovery tick.
+    // Prompt on the next recovery tick after the final retry fails.
     await vi.advanceTimersByTimeAsync(251)
     expect(BACKOFF_TOTAL_MS).toBeLessThanOrEqual(125_000)
     expect(load).toHaveBeenCalledTimes(1 + RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS.length)

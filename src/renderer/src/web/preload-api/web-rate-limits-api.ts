@@ -5,9 +5,7 @@ import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accoun
 import { callRuntimeResult } from './web-runtime-calls'
 import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
 
-// Why: the paired server owns provider accounts and usage; its accounts.list /
-// accounts.subscribe snapshot already carries RateLimitState, so the web bridge
-// reads and streams that instead of polling locally.
+// Paired server accounts snapshots already carry usage; share that stream instead of polling providers here.
 
 const ACCOUNTS_REFRESH_TIMEOUT_MS = 30_000
 const RESUBSCRIBE_DELAY_MS = 5_000
@@ -70,8 +68,7 @@ function startStream(): void {
   }
   streamStarting = true
   let handle: { unsubscribe: () => void } | null = null
-  // Why: getClientForEnvironment throws synchronously while manually disconnected;
-  // starting inside the chain always resets streamStarting so a reconnect can resubscribe.
+  // Start in the promise chain: disconnected getClientForEnvironment throws synchronously, but streamStarting must reset for resubscribe.
   void Promise.resolve()
     .then(() =>
       getClientForEnvironment(environment).subscribe('accounts.subscribe', null, {
@@ -132,8 +129,7 @@ async function readRateLimits(refreshUsage: boolean): Promise<RateLimitState> {
 
 let pendingRefresh: Promise<RateLimitState> | null = null
 
-// Why shared: a forced refresh can hold a call slot until provider fetches finish on the
-// server, and the Accounts pane fires several at once.
+// Share forced refresh slots; Accounts fires concurrent requests that wait for server provider fetches.
 function refreshRateLimits(): Promise<RateLimitState> {
   pendingRefresh ??= readRateLimits(true).finally(() => {
     pendingRefresh = null
@@ -157,11 +153,8 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
       state: await readRateLimits(false)
     }),
     refreshClaudeForTarget: refresh,
-    // Why: the server owns its poll cadence; a web tab must not retune it.
-    setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: refreshInactive,
     fetchInactiveCodexAccounts: refreshInactive,
-    refreshMiniMax: refresh,
     refreshGrok: refresh,
     onUpdate: (callback) => {
       listeners.add(callback)

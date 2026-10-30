@@ -103,7 +103,7 @@ describe('Windows orcad commands run node.exe directly', () => {
     expect(command).not.toMatch(
       /EncodedCommand|powershell|pwsh|cmd\.exe|ExecutionPolicy|Cim|Wmi|taskkill|SIGTERM|kill -/iu
     )
-    // Nothing either DefaultShell expands, and nothing a script would need quoting for.
+    // Neither DefaultShell may expand or reinterpret arguments.
     expect(command).not.toMatch(/[%$`']/u)
   })
 
@@ -181,7 +181,7 @@ describe('the active-slot readiness probe on Windows', () => {
       { buildHash: 'bb01', fullVersion: '0.2.0+bb01' }
     )
 
-    // The identity gate may still refuse this payload; the point is that the host is asked.
+    // Identity may still be refused; launch support must allow the probe to reach the host.
     await probe.catch((error: unknown) => {
       expect(error).not.toMatchObject({ name: 'OrcadRemoteLaunchUnsupportedError' })
     })
@@ -234,7 +234,6 @@ describe('Windows launch report', () => {
         'ORCA_ORCAD_LAUNCH {"method":"failed","reason":"failed","step":"open-stdout","code":32}'
       )
     ).toThrow('open-stdout (code 32)')
-    // The relay's report is not orcad's.
     expect(() =>
       readWindowsOrcadLaunchReport('ORCA_RELAY_LAUNCH {"method":"breakaway","pid":9,"inJob":false}')
     ).toThrow('no launch report')

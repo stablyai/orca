@@ -1,4 +1,14 @@
+import {
+  onboardingLanguagePickerOpenedSchema,
+  onboardingLanguageChangedSchema,
+  onboardingLanguageRequestedSchema
+} from './telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './telemetry-agent-token-usage-schema'
+import {
+  agentDashboardActiveSchema,
+  agentDashboardEnabledSchema,
+  agentDashboardOpenedSchema
+} from './telemetry-agent-dashboard-event-schemas'
 import {
   agentErrorSchema,
   agentPromptSentSchema,
@@ -16,6 +26,7 @@ import {
   agentHookUnattributedSchema,
   codexTrustGrantSchema,
   daemonAdoptedSchema,
+  daemonAsyncIoHealthSchema,
   daemonAuditEligibilitySchema,
   daemonFolderAccessNoticeSchema,
   daemonLifecycleSchema,
@@ -92,7 +103,9 @@ import {
   setupScriptPromptShownSchema,
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
+import { pluginInstalledSchema, pluginUninstalledSchema } from './telemetry-plugin-event-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
+import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
   sshHostServerConversionSchema,
   sshHostServerDecidedSchema,
@@ -100,10 +113,17 @@ import {
   sshHostServerMoveSchema,
   sshHostServerLegacyRelayBridgeSchema
 } from './telemetry-ssh-host-server-event-schemas'
+import {
+  wslMoveOrchestratorSchema,
+  wslMoveUndoSchema,
+  wslMoveSchema
+} from './telemetry-wsl-move-event-schemas'
 
-// ── Event registry: the one record the validator consumes ───────────────
-// Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
+// Breaking payload changes require a new event name to keep historical rows distinguishable; optional additions are safe.
 export const eventSchemas = {
+  agent_dashboard_active: agentDashboardActiveSchema,
+  agent_dashboard_enabled: agentDashboardEnabledSchema,
+  agent_dashboard_opened: agentDashboardOpenedSchema,
   app_opened: appOpenedSchema,
   app_starred_orca: appStarredOrcaSchema,
   star_nag_outcome: starNagOutcomeEventSchema,
@@ -133,6 +153,7 @@ export const eventSchemas = {
   main_thread_hang_detected: mainThreadHangDetectedSchema,
   daemon_lifecycle: daemonLifecycleSchema,
   daemon_adopted: daemonAdoptedSchema,
+  daemon_async_io_health: daemonAsyncIoHealthSchema,
   daemon_pty_cwd_denied: daemonPtyCwdVerdictSchema,
   daemon_pty_cwd_readable: daemonPtyCwdVerdictSchema,
   daemon_folder_access_notice: daemonFolderAccessNoticeSchema,
@@ -169,6 +190,9 @@ export const eventSchemas = {
   feature_wall_feature_selected: featureWallFeatureSelectedSchema,
   feature_wall_docs_clicked: featureWallDocsClickedSchema,
 
+  onboarding_language_picker_opened: onboardingLanguagePickerOpenedSchema,
+  onboarding_language_changed: onboardingLanguageChangedSchema,
+  onboarding_language_requested: onboardingLanguageRequestedSchema,
   onboarding_started: onboardingStartedSchema,
   onboarding_step_viewed: onboardingStepViewedSchema,
   onboarding_step_completed: onboardingStepCompletedSchema,
@@ -205,5 +229,14 @@ export const eventSchemas = {
   ssh_host_server_conversion: sshHostServerConversionSchema,
   ssh_host_server_deploy_failed: sshHostServerDeployFailedSchema,
   ssh_host_server_move: sshHostServerMoveSchema,
-  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema
+  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema,
+
+  wsl_move: wslMoveSchema,
+  wsl_move_orchestrator: wslMoveOrchestratorSchema,
+  wsl_move_undo: wslMoveUndoSchema,
+
+  wsl_usage_snapshot: wslUsageSnapshotSchema,
+
+  plugin_installed: pluginInstalledSchema,
+  plugin_uninstalled: pluginUninstalledSchema
 } as const

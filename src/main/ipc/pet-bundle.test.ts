@@ -65,13 +65,10 @@ describe('applyCodexPetDefaults', () => {
   })
 
   it('bakes uniform per-frame durations when a Codex-layout bundle pins an explicit fps', () => {
-    // The requested fps is baked as durations so it is honored rather than
-    // overridden by the timed table, and so the sprite never enters the
-    // no-durations legacy retiming path.
+    // Baked durations honor explicit fps and avoid legacy retiming.
     const manifest = applyCodexPetDefaults({ id: 'zippy', displayName: 'Zippy', fps: 4 })
 
     expect(manifest.fps).toBe(4)
-    // 4 fps → 250ms per frame; idle keeps its six frames.
     expect(manifest.animations?.idle).toEqual({
       row: 0,
       frames: 6,
@@ -80,8 +77,7 @@ describe('applyCodexPetDefaults', () => {
   })
 
   it('keeps an explicit fps=8 bundle out of the legacy retiming path', () => {
-    // fps=8 matches the Codex default and the legacy geometry, but baking
-    // durations makes it a non-match so the uniform pacing is preserved.
+    // Even the default fps needs baked durations to preserve uniform pacing instead of legacy retiming.
     const manifest = applyCodexPetDefaults({ id: 'octo', displayName: 'Octo', fps: 8 })
     const sprite = {
       frameWidth: 192,

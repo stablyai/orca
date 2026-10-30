@@ -1,10 +1,4 @@
-/**
- * Settling a dispatched decommission stop: proven exit, a clean cancellation, or a fence.
- *
- * Used by the decommission and by its crash recovery, so both read the host the same way. A
- * lost answer is `unverifiable`, never exit; cancelling is how a stop that did not finish is
- * withdrawn, and only an orcad-confirmed cancellation lets the fence go.
- */
+// Lost stop answers are unverifiable; only confirmed exit or cancellation releases the fence.
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
   cancelRemoteOrcadManagedStop,
@@ -17,11 +11,11 @@ import type {
 } from '../../../shared/orcad-stop-request'
 import { errorMessage } from '../../../shared/error-message'
 
-export type OrcadDecommissionStopSettlement =
+type OrcadDecommissionStopSettlement =
   | { state: 'exited'; retirement: OrcadDaemonRetirementVerdict }
-  /** orcad never acted on the request and keeps serving; the verdict says why it was withdrawn. */
+  /** Confirmed cancellation leaves the incumbent serving. */
   | { state: 'withdrawn'; verdict: 'live' | 'unverifiable'; reason: string }
-  /** orcad began stopping, or the host could not say: the fence must stay. */
+  /** Stop underway or unconfirmed; retain the fence. */
   | { state: 'unsettled'; verdict: 'live' | 'unverifiable'; reason: string }
 
 export async function settleOrcadDecommissionStop(

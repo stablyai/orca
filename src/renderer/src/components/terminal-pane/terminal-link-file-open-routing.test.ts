@@ -49,8 +49,9 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
-  it('opens local .html file paths in Orca browser tabs with the platform modifier', async () => {
+  it('opens local .html file paths in Orca browser tabs when links route to Orca', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
 
     openDetectedFilePath('/tmp/report.html', null, null, deps)
 
@@ -65,16 +66,15 @@ describe('handleOscLink', () => {
       expect.objectContaining({ title: 'report.html', activate: true })
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
-    // Why: the browser tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
+    // The browser is the surface; activation must not seed a shell into an emptied workspace.
     expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true,
-      executionHostId: 'local'
+      providesInitialSurface: true
     })
   })
 
-  it('also opens local .htm paths in Orca browser tabs with the platform modifier', async () => {
+  it('also opens local .htm paths in Orca browser tabs when links route to Orca', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
 
     openDetectedFilePath('/tmp/legacy.HTM', null, null, deps)
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -89,17 +89,25 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('opens an HTML line link in source and reveals the requested line', async () => {
-    openDetectedFilePath('/tmp/report.html', 12, 3, deps)
+  it('opens local .html file paths in the system browser when links route there', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+
+    openDetectedFilePath('/tmp/report.html', null, null, deps)
     await flushAsyncWork()
-    await flushDoubleRaf()
+
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/report.html', mode: 'edit' }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ line: 12, column: 3, filePath: '/tmp/report.html' })
+
+    // Shift takes the other destination, as it does for http links.
+    openDetectedFilePath('/tmp/report.html', null, null, { ...deps, openWithSystemDefault: true })
+    await flushAsyncWork()
+
+    expect(openFilePathMock).toHaveBeenCalledTimes(1)
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'wt-1',
+      'file:///tmp/report.html',
+      expect.objectContaining({ title: 'report.html', activate: true })
     )
   })
 

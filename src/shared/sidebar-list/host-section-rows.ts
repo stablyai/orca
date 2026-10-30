@@ -1,7 +1,7 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId,
+  getRepoExecutionHostIdOrDefault,
   getWorktreeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostKind,
@@ -11,9 +11,10 @@ import type { ExecutionHostHealth } from '../execution-host-registry'
 import type { RuntimeCompatVerdict } from '../protocol-compat'
 import type { RuntimeHostBlockedReason } from '../runtime-host-status'
 import type { SshConnectionStatus } from '../ssh-types'
-import type { Repo } from '../repo-types'
 import type { Row } from './row-types'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+import { countWorkspaceRows } from './host-section-workspace-count'
+import { localizeProjectHeader, localizeRowsToHost } from './project-header-localization'
 
 export type HostHeaderRow = {
   type: 'host-header'
@@ -23,8 +24,7 @@ export type HostHeaderRow = {
   label: string
   detail: string
   health: ExecutionHostHealth
-  // Why: blocked-host guidance in the header menu needs the verdict reason so
-  // it can deep-link an "Update server/client required" row per skew direction.
+  // Keep skew direction to deep-link the appropriate client/server update guidance.
   compatibility?: RuntimeCompatVerdict
   // Why: a revoked pairing needs "Re-pair", not the update guidance a version block gets.
   blockedReason?: RuntimeHostBlockedReason
@@ -46,18 +46,6 @@ export type HostSectionOption = {
   connectionStatus?: SshConnectionStatus
 }
 
-function getRepoHostId(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
-  defaultHostId: ExecutionHostId
-): ExecutionHostId {
-  // Why: explicit executionHostId must win over the focused/default host, or
-  // runtime-owned repos group under whichever host happens to be focused.
-  if (repo?.connectionId || repo?.executionHostId) {
-    return getRepoExecutionHostId(repo)
-  }
-  return defaultHostId
-}
-
 function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId | null {
   switch (row.type) {
     case 'item':
@@ -65,11 +53,11 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
     case 'pending-creation':
     case 'imported-worktrees-card':
     case 'new-external-worktrees-inbox':
-      return getRepoHostId(row.repo, defaultHostId)
+      return getRepoExecutionHostIdOrDefault(row.repo, defaultHostId)
     case 'folder-workspace':
       return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
     case 'header':
-      return row.repo ? getRepoHostId(row.repo, defaultHostId) : null
+      return row.repo ? getRepoExecutionHostIdOrDefault(row.repo, defaultHostId) : null
   }
 }
 
@@ -82,56 +70,6 @@ function getFallbackHost(hostId: ExecutionHostId, localHostLabel: string): HostS
     detail: isLocal ? 'This computer' : 'Host',
     health: isLocal ? 'local' : 'available'
   }
-}
-
-function countWorkspaceRows(rows: readonly Row[]): number {
-  // Why: a collapsed repo group contributes a header row but no item rows;
-  // fall back to the header's own count so the host badge doesn't read 0
-  // while a visibly populated project sits right under it.
-  let count = 0
-  const seenWorktreeIds = new Set<string>()
-  let pendingHeader: Extract<Row, { type: 'header' }> | null = null
-  let pendingHeaderHadWorkspaces = false
-  const flushHeader = (): void => {
-    if (pendingHeader && !pendingHeaderHadWorkspaces) {
-      if (pendingHeader.worktreeIds) {
-        const headerWorktreeIds = new Set(pendingHeader.worktreeIds)
-        for (const worktreeId of pendingHeader.worktreeIds) {
-          if (!seenWorktreeIds.has(worktreeId)) {
-            count += 1
-            seenWorktreeIds.add(worktreeId)
-          }
-        }
-        // Folder workspaces contribute to the header count but have no worktree id.
-        count += Math.max(0, pendingHeader.count - headerWorktreeIds.size)
-      } else {
-        count += pendingHeader.count
-      }
-    }
-    pendingHeader = null
-    pendingHeaderHadWorkspaces = false
-  }
-  for (const row of rows) {
-    if (row.type === 'header') {
-      flushHeader()
-      pendingHeader = row
-      continue
-    }
-    if (row.type === 'item') {
-      if (!seenWorktreeIds.has(row.worktree.id)) {
-        count += 1
-        seenWorktreeIds.add(row.worktree.id)
-      }
-      pendingHeaderHadWorkspaces = pendingHeader !== null
-      continue
-    }
-    if (row.type === 'folder-workspace') {
-      count += 1
-      pendingHeaderHadWorkspaces = pendingHeader !== null
-    }
-  }
-  flushHeader()
-  return count
 }
 
 function localizePendingRowsForHost(
@@ -176,13 +114,10 @@ export function addHostSectionRows(args: {
   defaultHostId: ExecutionHostId
   /** The listed host's own name for itself; a phone reader must not derive it from its own platform. */
   localHostLabel: string
-  // Why: host sections reuse the sidebar's persisted collapsed-group keys
-  // (`host:<hostId>`) so collapse state survives restarts like other groups.
+  // Reuse persisted host:<hostId> collapsed-group keys across restarts.
   collapsedHostKeys?: ReadonlySet<string>
   forceCollapseHosts?: boolean
-  // Why: in the default Projects view, project is the user's primary object
-  // and host is context inside it. Explicit host filters still keep host
-  // headers as an operational/troubleshooting view.
+  // Projects remain primary in the default view; explicit host filters retain operational host headers.
   preferProjectGrouping?: boolean
 }): HostSectionRow[] {
   const visibleHostIds =
@@ -195,8 +130,11 @@ export function addHostSectionRows(args: {
   ) {
     return [...args.rows]
   }
-  if ((visibleHostIds && visibleHostIds.length <= 1) || args.hostOptions.length <= 1) {
-    return [...args.rows]
+  if (visibleHostIds && visibleHostIds.length <= 1) {
+    return localizeRowsToHost(args.rows, visibleHostIds[0])
+  }
+  if (args.hostOptions.length <= 1) {
+    return localizeRowsToHost(args.rows, args.hostOptions[0]?.id)
   }
 
   const hostOptionsById = new Map(args.hostOptions.map((host) => [host.id, host]))
@@ -235,39 +173,57 @@ export function addHostSectionRows(args: {
     }
   }
 
+  const pushHostRow = (row: Row, rowHostId: ExecutionHostId): void => {
+    const hostRows = rowsByHostId.get(rowHostId) ?? []
+    const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
+    const path = localizedPendingRows.map(getPendingRowKey)
+    const emitted = emittedPathByHostId.get(rowHostId) ?? []
+    let shared = 0
+    while (shared < path.length && path[shared] === emitted[shared]) {
+      shared += 1
+    }
+    if (shared < path.length || path.length !== emitted.length) {
+      hostRows.push(...localizedPendingRows.slice(shared))
+      emittedPathByHostId.set(rowHostId, path)
+    }
+    if (localizedPendingRows.length > 0) {
+      pendingRows.forEach((pendingRow) => usedPendingRows.add(pendingRow))
+    }
+    hostRows.push(row)
+    rowsByHostId.set(rowHostId, hostRows)
+  }
+
+  // Pending headers that do not enclose a header at `depth` end before it.
+  const retainPendingAncestors = (depth: number): void => {
+    const kept =
+      depth > 0
+        ? pendingRows.filter((pending) => (getProjectGroupHeaderDepth(pending) ?? depth) < depth)
+        : []
+    flushUnusedPendingRows(pendingRows.filter((pending) => !kept.includes(pending)))
+    pendingRows = kept
+  }
+
   for (const row of args.rows) {
-    const rowHostId = getRowHostId(row, args.defaultHostId)
-    if (rowHostId) {
-      const hostRows = rowsByHostId.get(rowHostId) ?? []
-      const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
-      const path = localizedPendingRows.map(getPendingRowKey)
-      const emitted = emittedPathByHostId.get(rowHostId) ?? []
-      let shared = 0
-      while (shared < path.length && path[shared] === emitted[shared]) {
-        shared += 1
+    if (row.type === 'header' && row.repo) {
+      retainPendingAncestors(row.projectGroupDepth ?? 0)
+    }
+    if (row.type === 'header' && row.hostRepos) {
+      // A project on several hosts heads each host's own rows, including when collapsed.
+      for (const hostId of row.hostRepos.keys()) {
+        pushHostRow(localizeProjectHeader(row, hostId), hostId)
       }
-      if (shared < path.length || path.length !== emitted.length) {
-        hostRows.push(...localizedPendingRows.slice(shared))
-        emittedPathByHostId.set(rowHostId, path)
-      }
-      if (localizedPendingRows.length > 0) {
-        pendingRows.forEach((pendingRow) => usedPendingRows.add(pendingRow))
-      }
-      hostRows.push(row)
-      rowsByHostId.set(rowHostId, hostRows)
       continue
     }
-    // Why: status/"All" headers describe the rows that follow. Buffer them
-    // for every host-owned run so host remains above the existing grouping.
+    const rowHostId = getRowHostId(row, args.defaultHostId)
+    if (rowHostId) {
+      pushHostRow(row, rowHostId)
+      continue
+    }
+    // Buffer grouping headers for each host run so host headers enclose existing grouping.
     if (row.type === 'header') {
-      const depth = getProjectGroupHeaderDepth(row)
       // A nested group keeps its ancestors pending, so each host section gets the whole path.
-      const kept =
-        depth !== null && depth > 0
-          ? pendingRows.filter((pending) => (getProjectGroupHeaderDepth(pending) ?? depth) < depth)
-          : []
-      flushUnusedPendingRows(pendingRows.filter((pending) => !kept.includes(pending)))
-      pendingRows = [...kept, row]
+      retainPendingAncestors(getProjectGroupHeaderDepth(row) ?? 0)
+      pendingRows = [...pendingRows, row]
     } else {
       globalRows.push(row)
     }
@@ -287,14 +243,13 @@ export function addHostSectionRows(args: {
     }
   }
 
-  // Why: a lone host section is pure noise — the grouping only earns its keep
-  // when there are at least two host sections to tell apart. Registered-but-
-  // empty hosts stay visible in the scope picker, not as headers.
+  // Show host headers only for mixed hosts; registered empty hosts remain in the scope picker.
   if (rowsByHostId.size <= 1) {
-    return [...args.rows]
+    return localizeRowsToHost(args.rows, rowsByHostId.keys().next().value)
   }
 
   const result: HostSectionRow[] = [...globalRows]
+  const drawnHeaderKeys = new Set<string>()
   for (const hostId of hostOrder) {
     const hostRows = rowsByHostId.get(hostId)
     if (!hostRows || hostRows.length === 0) {
@@ -318,7 +273,23 @@ export function addHostSectionRows(args: {
       count: countWorkspaceRows(hostRows)
     })
     if (!collapsed) {
-      result.push(...hostRows)
+      result.push(
+        ...hostRows.map((row): Row => {
+          // A header names its section's host, so repeated copies stay distinct and act on that host.
+          if (row.type === 'header') {
+            const repeated = drawnHeaderKeys.has(row.key)
+            drawnHeaderKeys.add(row.key)
+            if (row.hostId && !repeated) {
+              return row
+            }
+            return { ...row, hostId: row.hostId ?? hostId, ...(repeated ? { repeated: true } : {}) }
+          }
+          // The enclosing host header already names the owner of cards and notices.
+          return 'hostContextLabel' in row && row.hostContextLabel
+            ? { ...row, hostContextLabel: undefined }
+            : row
+        })
+      )
     }
   }
 

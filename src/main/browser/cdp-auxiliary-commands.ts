@@ -42,8 +42,7 @@ type ActiveCdpContext = {
 
 export type CdpAuxiliaryCommandHost = {
   run: <T>(operation: (context: ActiveCdpContext) => Promise<T>) => Promise<T>
-  // Why: captureStop must not attach the debugger — stopping a capture on a tab whose
-  // debugger detached (DevTools opened) would otherwise throw before clearing state.
+  // Stop capture without reattaching: DevTools may own the detached debugger.
   runOnState: <T>(
     operation: (context: Pick<ActiveCdpContext, 'guest' | 'state'>) => Promise<T>
   ) => Promise<T>

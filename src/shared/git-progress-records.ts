@@ -8,22 +8,17 @@ export type GitProgressRecord = {
 }
 
 const COUNTERS = /^\s*(\d+)% \((\d+)\/(\d+)\)(, done\.)?/
-// Why: git redraws with a bare `\r` and only ends a line when done, so a stream
-// without separators is never progress; keeping its tail bounds the buffer.
+// Git redraws with CR; separator-free text is not progress, so retain only a bounded tail.
 const MAX_PENDING_CHARS = 256
 
-/**
- * Reads git's progress meter for one title out of stderr chunks. Records may
- * span chunks; everything else on stderr is ignored.
- */
+/** Read one title’s progress records across stderr chunks, ignoring other diagnostics. */
 export function createGitProgressRecordReader(
   title: string,
   onRecord: (record: GitProgressRecord) => void
 ): (chunk: string) => void {
   const prefix = `${title}:`
   let pending = ''
-  // Why: when the title and counters are wider than COLUMNS (80 by default in
-  // a pipe), git prints the title once on its own line and then bare counters.
+  // Meters wider than COLUMNS (80 by default in pipes) print the title once, then bare counters.
   let titleOnOwnLine = false
 
   const readLine = (line: string): void => {

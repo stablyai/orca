@@ -1,6 +1,3 @@
-// Why structured chats are refused in this process: its chat journal would not open at install
-// (damaged or unavailable). Everything else goes on without a host.
-
 import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
@@ -8,12 +5,10 @@ import {
 
 let installRefusal: AgentSessionRefusalError | null = null
 
-/** Why structured chats are refused in this process, or null when nothing refuses them. */
 export function structuredAgentSessionHostRefusal(): AgentSessionRefusalError | null {
   return installRefusal
 }
 
-/** Whether `error` is the refusal structured requests are getting right now. */
 function isStructuredAgentSessionHostRefusal(error: unknown): boolean {
   const refusal = installRefusal
   return (
@@ -24,8 +19,7 @@ function isStructuredAgentSessionHostRefusal(error: unknown): boolean {
   )
 }
 
-/** For work that goes on without chats: the refusal chats are getting leaves this process with no
- *  host, and any other install failure still throws. */
+/** Non-chat work may proceed without a refused host; other installation errors still throw. */
 export async function ensureStructuredAgentSessionHostUnlessRefused(
   ensureHost: () => Promise<unknown>
 ): Promise<void> {
@@ -57,8 +51,7 @@ export async function tryEnsureStructuredAgentSessionHostForResume(
   }
 }
 
-/** Set when the journal database would not open; cleared by a later install. The install retries
- *  on the next call, so a refusal that can clear does. */
+/** A journal-open refusal clears on successful installation; the next call retries. */
 export function recordStructuredAgentSessionHostInstallRefusal(
   refusal: AgentSessionRefusalError | null
 ): void {

@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
-import type { JiraProject } from '../../../shared/jira-types'
+import type { JiraProject } from '../../../shared/jira/jira-types'
 import {
   normalizeJiraProjectReference,
   matchesJiraProject,
   type JiraProjectReference
-} from '../../../shared/jira-project-reference'
+} from '../../../shared/jira/jira-project-reference'
 import { Button } from './ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from './ui/command'
-import { getJiraProjectSelectionKey } from './task-page-jira-project-selection'
+import { getJiraProjectSelectionKey } from './task-page/jira/task-page-jira-project-selection'
 import { translate } from '@/i18n/i18n'
 
 export function JiraProjectPicker({

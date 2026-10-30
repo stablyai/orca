@@ -1,9 +1,7 @@
 import { GoogleAuth } from 'google-auth-library'
 import { FCM_SCOPE } from './fcm-client.js'
 
-// Resolves the runtime service account credential from the GCE metadata server
-// in Cloud Run and from GOOGLE_APPLICATION_CREDENTIALS locally; the library
-// caches and refreshes the token itself.
+// GoogleAuth handles metadata credentials on Cloud Run and GOOGLE_APPLICATION_CREDENTIALS locally, including cache/refresh.
 export function createFcmAccessTokenProvider(): () => Promise<string> {
   const auth = new GoogleAuth({ scopes: [FCM_SCOPE] })
   return async () => {

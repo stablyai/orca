@@ -42,7 +42,6 @@ afterEach(() => {
   tree = null
 })
 
-/** The review body as the screen view wires it, for a host the shell has not reached. */
 function ReviewWhileUnreachable({
   onReconnect,
   client = null,
@@ -127,6 +126,7 @@ describe('the review Retry while the host is unreachable', () => {
         createElement(ReviewWhileUnreachable, { onReconnect: null, client, connState: 'connected' })
       )
     })
-    expect(loadSnapshot.mock.calls).toEqual([[client, 'wt-1']])
+    expect(loadSnapshot).toHaveBeenCalledTimes(1)
+    expect(loadSnapshot.mock.calls[0]?.slice(0, 2)).toEqual([client, 'wt-1'])
   })
 })

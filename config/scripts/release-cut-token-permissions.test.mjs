@@ -51,6 +51,15 @@ const EXPECTED_MATRIX = {
   [`${RELEASE_WORKFLOW}#verify-mac-build`]: { actions: 'read', contents: 'read' },
   [`${RELEASE_WORKFLOW}#create-release`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#cut`]: { contents: 'write' },
+  [`${RELEASE_WORKFLOW}#dependency-security`]: { contents: 'read' },
+  [`${RELEASE_WORKFLOW}#dependency-security -> .github/workflows/dependency-security.yml#javascript`]:
+    { contents: 'read' },
+  [`${RELEASE_WORKFLOW}#dependency-security -> .github/workflows/dependency-security.yml#rust`]: {
+    contents: 'read'
+  },
+  [`${RELEASE_WORKFLOW}#dependency-security -> .github/workflows/dependency-security.yml#notify`]: {
+    contents: 'read'
+  },
   [`${RELEASE_WORKFLOW}#docs-production-dispatch`]: { actions: 'write' },
   [`${RELEASE_WORKFLOW}#homebrew-bump`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#homebrew-bump -> .github/workflows/homebrew-bump.yml#bump-cask`]: {
@@ -131,7 +140,9 @@ function normalizePermissions(permissions) {
   )
 }
 
-function intersectPermissions(granted, requested) {
+const permissionEscalations = []
+
+function intersectPermissions(granted, requested, identity) {
   const rank = { none: 0, read: 1, write: 2 }
   const scopes = new Set([...Object.keys(granted), ...Object.keys(requested)])
   return Object.fromEntries(
@@ -139,6 +150,14 @@ function intersectPermissions(granted, requested) {
       .map((scope) => {
         const grantedLevel = granted[scope] ?? 'none'
         const requestedLevel = requested[scope] ?? 'none'
+        if (rank[requestedLevel] > rank[grantedLevel]) {
+          permissionEscalations.push({
+            identity,
+            scope,
+            granted: grantedLevel,
+            requested: requestedLevel
+          })
+        }
         return [scope, rank[grantedLevel] < rank[requestedLevel] ? grantedLevel : requestedLevel]
       })
       .filter(([, level]) => level !== 'none')
@@ -156,12 +175,12 @@ function resolveWorkflowMatrix(workflow, workflowPath, inheritedPermissions, pre
     if (!requested) {
       throw new Error(`${workflowPath}#${jobName} has no resolvable permissions`)
     }
-    const effective = inheritedPermissions
-      ? intersectPermissions(inheritedPermissions, requested)
-      : requested
     const identity = prefix
       ? `${prefix} -> ${workflowPath}#${jobName}`
       : `${workflowPath}#${jobName}`
+    const effective = inheritedPermissions
+      ? intersectPermissions(inheritedPermissions, requested, identity)
+      : requested
     matrix[identity] = effective
 
     if (job.uses?.startsWith('./.github/workflows/')) {
@@ -240,6 +259,7 @@ describe('release-cut token permissions', () => {
   )
 
   it('keeps the complete effective job and reusable-workflow matrix least-privileged', () => {
+    expect(permissionEscalations).toEqual([])
     expect(matrix).toEqual(EXPECTED_MATRIX)
   })
 

@@ -114,7 +114,6 @@ describe('guarded editor saves under races', () => {
 
     const cleanup = attachEditorAutosaveController(store)
     try {
-      // An Overwrite is already writing when the user clicks Keep.
       const save = requestEditorFileSave({ fileId: GUARDED_PATH, overwrite: true })
       await vi.advanceTimersByTimeAsync(0)
       keepTabEditsOverExternalChange(store.getState().openFiles[0])
@@ -155,7 +154,7 @@ describe('guarded editor saves under races', () => {
     for (const tab of [saver, sibling]) {
       store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('A'))
     }
-    // The panel's per-tab text cache, kept the way the panel keeps it.
+    // Model the panel’s per-tab text cache.
     const cache = new Map([
       [saver.id, 'A'],
       [sibling.id, 'A']
@@ -165,7 +164,7 @@ describe('guarded editor saves under races', () => {
         cache.set(event.detail.fileId, event.detail.content)
       }
     }
-    // A dropped cache reloads from disk on the next mount; no text is pushed between tabs.
+    // Eviction reloads disk on remount without pushing text between tabs.
     const drop = (event: Event): void => {
       if (event instanceof CustomEvent) {
         cache.delete(event.detail.fileId)
@@ -181,7 +180,6 @@ describe('guarded editor saves under races', () => {
       await requestEditorFileSave({ fileId: saver.id })
       expect(cache.has(sibling.id)).toBe(false)
 
-      // Remount the sibling (its cache reloads from disk), edit, and save.
       const reloaded = cache.get(sibling.id) ?? disk.files.get(GUARDED_PATH)
       expect(reloaded).toBe('B')
       store.getState().setEditorDraft(sibling.id, `${reloaded} edited`)
@@ -222,7 +220,7 @@ describe('guarded editor saves under races', () => {
     return { store, a, b }
   }
 
-  it('finishes queued identical sibling saves the same way, ending on the saved text', async () => {
+  it('coalesces saves from two views of one record into one write, ending on the saved text', async () => {
     const gate = deferred()
     const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' }, () => gate.promise)
     const { store, a, b } = openSharedModelTabs('A')
@@ -230,7 +228,7 @@ describe('guarded editor saves under races', () => {
       store.getState().setEditorDraft(tab.id, 'X')
       store.getState().markFileDirty(tab.id, true)
     }
-    // A mounted consumer: the panel's per-tab text, fed by saved events, is what a model mounts.
+    // Mount from per-tab text updated by saved events, matching panel consumers.
     const shown = new Map([
       [a.id, 'A'],
       [b.id, 'A']
@@ -251,10 +249,9 @@ describe('guarded editor saves under races', () => {
       gate.resolve()
       await saves
 
-      // Each save is guarded against the advanced baseline and rewrites identical bytes.
-      expect(disk.writeFile).toHaveBeenCalledTimes(2)
+      expect(disk.writeFile).toHaveBeenCalledTimes(1)
       expect(disk.files.get(GUARDED_PATH)).toBe('X')
-      expect([...shown.values()]).toEqual(['X', 'X'])
+      expect(shown.get(a.id)).toBe('X')
       for (const tab of store.getState().openFiles) {
         expect(tab.isDirty).toBe(false)
         expect(tab.externalMutation).toBeUndefined()
@@ -289,7 +286,7 @@ describe('guarded editor saves under races', () => {
     }
   })
 
-  it('after Keep, pushes no text to a clean sibling, keeps its cache, and saves the kept edits', async () => {
+  it('after Keep, every view keeps the kept edits and its cache, and the save writes them', async () => {
     const disk = stubGuardedDisk({ [GUARDED_PATH]: 'agent rewrite' })
     const { store, a, b } = openSharedModelTabs('A')
     store.getState().setEditorDraft(a.id, 'kept edits')
@@ -308,8 +305,8 @@ describe('guarded editor saves under races', () => {
     try {
       keepTabEditsOverExternalChange(store.getState().openFiles[0])
       await vi.advanceTimersByTimeAsync(0)
-      expect(store.getState().editorDrafts[b.id]).toBeUndefined()
-      // The model holds the unsaved kept edits, so the sibling's cache is not dropped for disk.
+      expect(store.getState().editorDrafts[b.id]).toBe('kept edits')
+      // Kept unsaved text must prevent cache eviction in every view.
       expect(dropped).toEqual([])
 
       await requestEditorFileSave({ fileId: a.id })

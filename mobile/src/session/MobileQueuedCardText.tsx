@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
-import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { queuedMessageStyles } from './native-chat/input/mobile-native-chat-queued-message-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-/** Two lines, opening on tap when it clips: a card can hold another agent's message the person
- *  never read, and Steer or Delete must not be a blind choice. Opened, the queue's own capped list
- *  scrolls through a long one: a second scroll box inside it would be taller than its viewport. */
+// Expand clipped queued text before Steer/Delete; use the queue’s capped scroller rather than nesting another scroll box.
 export function MobileQueuedCardText({
   text,
   expanded,
@@ -15,8 +16,9 @@ export function MobileQueuedCardText({
   expanded: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [clipped, setClipped] = useState(false)
-  // The whole text laid out unseen at the card's width: more than two lines is what clips.
   const measure = (
     <Text
       style={[queuedMessageStyles.bodyText, styles.measure]}
@@ -43,7 +45,11 @@ export function MobileQueuedCardText({
       testID="queued-card-text"
       accessibilityRole="button"
       accessibilityState={{ expanded }}
-      accessibilityHint={expanded ? 'Shows less of the message' : 'Shows the whole message'}
+      accessibilityHint={
+        expanded
+          ? t('session.queuedCardText.showLessHint', 'Shows less of the message')
+          : t('session.queuedCardText.showMoreHint', 'Shows the whole message')
+      }
       onPress={onToggle}
     >
       {expanded ? null : (
@@ -51,7 +57,11 @@ export function MobileQueuedCardText({
           {text}
         </Text>
       )}
-      <Text style={styles.caption}>{expanded ? 'Show less' : 'Show more'}</Text>
+      <Text style={styles.caption}>
+        {expanded
+          ? t('session.queuedCardText.showLess', 'Show less')
+          : t('session.queuedCardText.showMore', 'Show more')}
+      </Text>
     </Pressable>
   )
   return (
@@ -62,7 +72,7 @@ export function MobileQueuedCardText({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   measure: {
     position: 'absolute',
     left: 0,
@@ -73,4 +83,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   }
-})
+}))

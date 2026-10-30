@@ -18,7 +18,7 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))
-vi.mock('@/lib/workspace-browser-tab-open', () => ({
+vi.mock('@/lib/workspace-browser-route-eligibility', () => ({
   canOpenWorkspaceBrowserTabOnRuntime: mocks.canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh: mocks.canOpenWorkspaceBrowserTabOnSsh
 }))
@@ -57,8 +57,7 @@ describe('resolveNativeChatHttpLinkSourceOwner', () => {
     expect(resolveNativeChatHttpLinkSourceOwner(state, 'wt-1')).toEqual({ kind: 'local' })
   })
 
-  // An unresolved owner must not be mistaken for local: a remote link would then
-  // open against the wrong host.
+  // Unknown ownership cannot default local because remote links would route to the wrong host.
   it('reports an unresolved owner as unknown', () => {
     mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
     mocks.getConnectionIdFromState.mockReturnValue(undefined)

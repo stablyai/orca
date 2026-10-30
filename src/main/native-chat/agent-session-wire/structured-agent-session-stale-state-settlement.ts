@@ -1,11 +1,9 @@
-// What a generation that can no longer write left unfinished, settled from the journal, the
-// lease's death evidence and the runtimes this one replaced each time it is asked. Either proof ends
-// a turn interrupted; anything else is `unverifiable`, until a proof naming its owner revises it. Working subagents and background
-// tasks become `unverifiable`. Planned at the batch's own turn in the write queue, so an answer or
-// a Stop queued ahead of it is what it settles from.
+import { providerTimelineExecutionItems } from '../agent-session-timeline/provider-timeline-history'
+// Plan against queued journal state; death/replacement proof interrupts only matching owners,
+// otherwise settle unverifiable and revise when later proof arrives.
 
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
@@ -36,7 +34,6 @@ import { settledRootTurnScope } from './structured-agent-session-exit-turn-scope
 import { isUnverifiableTurn, staleStopRow } from './structured-agent-session-stale-stop-row'
 import { isInProgressStructuredAgentSessionItem } from './structured-agent-session-unfinished-work'
 
-/** What the settlement reads and writes of a chat's journal. */
 export type StaleStructuredAgentSessionStateJournal = Pick<
   AgentSessionJournal,
   | 'snapshot'
@@ -52,25 +49,21 @@ export type StaleStructuredAgentSessionStateJournal = Pick<
 export type StaleStructuredAgentSessionStateInput = {
   journal: StaleStructuredAgentSessionStateJournal
   sessionId: string
-  /** The fence the settlement's rows are written at: the lease's current one. */
   fence: number
   acquisitionGeneration: string | null
   deathEvidence: AgentSessionDeathEvidence | null
-  /** The runtimes this one replaced for this chat: every owner they held lost its pipes with them. */
+  /** Replaced owners lost their transports with their runtime. */
   replaced?: AgentSessionReplacedRuntime
-  /** Who the exit row names. */
   failureTextContext?: AgentSessionFailureWordsContext
-  /** Only what generations below this fence wrote, which can no longer write, is settled; their
-   *  sends handed over and never answered become doubt. Absent: every item, and no send. */
+  /** Settle owners below this fence, including unanswered handoffs; absent settles all items but no sends. */
   below?: number
 }
 
-/** Settles it, and answers how many items it revised. */
 export async function settleStaleStructuredAgentSessionState(
   input: StaleStructuredAgentSessionStateInput
 ): Promise<number> {
   const { journal } = input
-  // A successful settlement leaves terminal items; a failed transaction leaves the same prefix.
+  // Terminal results make retries no-ops; failed transactions retain the same identity prefix.
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   let planned = 0
   await journal.appendPlannedLifecycleBatch({
@@ -86,7 +79,6 @@ export async function settleStaleStructuredAgentSessionState(
   return planned
 }
 
-/** The settlement's rows, read from the journal as it stands. */
 export function planStaleStructuredAgentSessionState(
   input: StaleStructuredAgentSessionStateInput
 ): {
@@ -96,14 +88,16 @@ export function planStaleStructuredAgentSessionState(
   const { journal, below } = input
   const ended = (fence: number | undefined) =>
     below === undefined || (fence !== undefined && fence < below)
-  const items = journal.snapshot().items.filter((item) => ended(journal.itemFence(item.itemId)))
+  const items = providerTimelineExecutionItems(journal.snapshot().items).filter((item) =>
+    ended(journal.itemFence(item.itemId))
+  )
   const dispatches =
     below === undefined
       ? []
       : journalPendingSubmissionResolutions(
           journal.submissions().filter((entry) => ended(entry.fence)),
           input.fence,
-          // Doubt, never non-delivery: what a gone owner was handed and never answered.
+          // Unanswered handover proves uncertainty, never non-delivery.
           { reason: DISPATCH_DOUBT_PROVIDER_EXITED }
         )
   return { mutations: staleMutations(input, items), dispatches }
@@ -114,7 +108,6 @@ function staleMutations(
   items: readonly AgentJournalRenderItem[]
 ): JournalLifecycleMutationInput[] {
   const { journal, replaced } = input
-  // Each turn is judged by the evidence only if it names that turn's owner.
   const deathVerdictFor = (item: AgentJournalRenderItem) =>
     turnVerdictFromDeathEvidence(
       input.deathEvidence,
@@ -131,14 +124,11 @@ function staleMutations(
     const byDeath = deathVerdictFor(item)
     return byDeath.state === 'interrupted' ? byDeath : replacedVerdictFor(item)
   }
-  // Calls an earlier settle closed with no proof, revised once a proof names their owner.
   const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal, replaced)
   for (const item of items) {
-    // A turn already settled (a person's Stop) ends its calls as it ended; only a turn still running
-    // leaves them to the evidence.
+    // Honor existing personal Stop; only running turns need new evidence.
     const end = runningCallEnd(item.turnScope, (id) => journal.itemBody(id), verdictFor(item).state)
     const terminal = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
-    // One revision per item: a live subagent or background task it holds ends with it.
     const body = lostLiveWorkJournalBody(terminal ?? item.body) ?? terminal
     if (body) {
       mutations.push({
@@ -161,8 +151,6 @@ function staleMutations(
       return null
     }
     const fence = journal.itemFence(item.itemId)
-    // An earlier settle's `unverifiable` turn is revised by a death naming its owner or by its
-    // replaced runtime.
     if (
       unverifiable
         ? fence !== undefined && fence === input.deathEvidence?.ownerFence

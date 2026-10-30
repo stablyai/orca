@@ -1,15 +1,21 @@
-// What `agentSession.subscribeAvailability` publishes: one health snapshot of this host's agents,
-// shared by every reader and kept without them. Each agent's location rule and installed-release
-// check run once, in the server's home rather than a workspace; a launch checks again in its own.
+// Share/cache this host's agent health independently of readers. Probe each registration in server home; launches recheck in their workspace.
 
 import { homedir } from 'node:os'
+import { delimiter, isAbsolute } from 'node:path'
 import type { AgentSessionAgentAvailability } from '../../shared/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { onManagedRuntimeReleasesChanged } from '../node-runtime/managed-runtime-installation'
 import { onAgentsRefreshedOnHost } from '../preflight/workspace-agent-detection'
-import { observeStructuredAgentLaunch } from './structured-agent-launch-support'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from './structured-agent-runtime-metadata'
+import {
+  observeStructuredAgentLaunch,
+  resolveHostStructuredAgentLaunchEnvironment
+} from './structured-agent-launch-support'
+import {
+  STRUCTURED_AGENT_RUNTIME_METADATA,
+  structuredAgentRuntimeMetadata
+} from './structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from './structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from './structured-agent-shell-environment'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -52,17 +58,53 @@ async function observeHostAgent(
     async () => homedir(),
     runtime,
     false
-  ).catch(() => 'inconclusive' as const)
-  if (seen === 'inconclusive') {
-    return { agent, state: 'unknown' }
+  ).catch(() => ({ status: 'unknown' as const }))
+  if (seen === null || seen.status === 'ready') {
+    return { agent, state: 'available' }
   }
-  return seen === 'supported'
-    ? { agent, state: 'available' }
-    : { agent, state: 'refused', reason: 'agent' }
+  return seen.status === 'tooOld'
+    ? { agent, state: 'refused', reason: 'agent' }
+    : { agent, state: 'unknown' }
 }
 
-/** The runtime's snapshot: taken after a fresh shell capture, initially and on launch settings or
- *  agent Refresh. No reader gates it, so a later one reads it at once. */
+/** Resolve chat program without spawn; bare names miss unless relative PATH entries require workspace resolution. */
+async function observeChatProgram(
+  { definition: { agent }, chatProgram }: StructuredAgentRuntimeMetadata,
+  runtime: HealthRuntime
+): Promise<NonNullable<AgentSessionAgentAvailability['chatProgram']>> {
+  if (!chatProgram) {
+    return 'unknown'
+  }
+  try {
+    const settings = runtime.requireStore().getSettings()
+    const shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+    const { command, env } = chatProgram.resolve(shellEnv, settings)
+    if (isAbsolute(command)) {
+      return 'available'
+    }
+    const path = (env.PATH ?? env.Path ?? '').split(delimiter)
+    if (/[\\/]/.test(command) || path.some((entry) => entry.trim() && !isAbsolute(entry.trim()))) {
+      return 'unknown'
+    }
+  } catch {
+    return 'unknown'
+  }
+  return chatProgram.installable?.() ? 'installable' : 'missing'
+}
+
+/** True when a chat start would fail until Orca installs the agent's chat program on this host. */
+export async function structuredAgentChatProgramNeedsInstall(
+  agent: string,
+  runtime: HealthRuntime
+): Promise<boolean> {
+  const metadata = structuredAgentRuntimeMetadata(agent)
+  return Boolean(
+    metadata?.chatProgram?.installable &&
+    (await observeChatProgram(metadata, runtime)) === 'installable'
+  )
+}
+
+/** Refresh shell facts on install, settings or agent Refresh; retain health without readers for immediate later subscription. */
 export function installStructuredAgentAvailability(
   store: Pick<RuntimeStore, 'onSettingsChanged'> | null,
   runtime: HealthRuntime
@@ -77,7 +119,12 @@ export function installStructuredAgentAvailability(
       .catch(() => undefined)
       .then(() =>
         Promise.all(
-          STRUCTURED_AGENT_RUNTIME_METADATA.map((agent) => observeHostAgent(agent, runtime))
+          STRUCTURED_AGENT_RUNTIME_METADATA.map(
+            async (agent): Promise<AgentSessionAgentAvailability> => ({
+              ...(await observeHostAgent(agent, runtime)),
+              chatProgram: await observeChatProgram(agent, runtime)
+            })
+          )
         )
       )
       .then((agents) => {
@@ -94,6 +141,7 @@ export function installStructuredAgentAvailability(
     }
   })
   onAgentsRefreshedOnHost(() => derive(false))
+  onManagedRuntimeReleasesChanged(() => derive(false))
   derive()
   return {
     /** Reads the latest snapshot and every later one; returns the release. */

@@ -2,11 +2,13 @@ import {
   getLinearAttachmentByUuidForAgent,
   getLinearCommentByUuidForAgent,
   getLinearIssueByUuidForAgent,
-  LinearAgentAccessError,
-  linearError,
-  sanitizeLinearErrorMessage,
   sameStringSet
 } from './runtime-linear-command-dependencies'
+import {
+  LinearAgentAccessError,
+  linearError,
+  sanitizeLinearErrorMessage
+} from '../linear/issue-context/errors'
 import type { LinearCreateFieldIntent } from './runtime-linear-command-dependencies'
 import { RuntimeLinearCommentLookupCommands } from './runtime-linear-comment-lookup-commands'
 
@@ -16,10 +18,12 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     issueId: string,
     parentId: string | null,
     workspaceId: string,
-    required: boolean
+    required: boolean,
+    signal?: AbortSignal
   ): Promise<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>> | null> {
+    signal?.throwIfAborted()
     const comment = await this.readLinearWriteLookup(() =>
-      getLinearCommentByUuidForAgent(writeId, workspaceId)
+      getLinearCommentByUuidForAgent(writeId, workspaceId, signal)
     )
     if (!comment) {
       return null
@@ -40,10 +44,12 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     writeId: string,
     issueId: string,
     workspaceId: string,
-    required: boolean
+    required: boolean,
+    signal?: AbortSignal
   ): Promise<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>> | null> {
+    signal?.throwIfAborted()
     const attachment = await this.readLinearWriteLookup(() =>
-      getLinearAttachmentByUuidForAgent(writeId, workspaceId)
+      getLinearAttachmentByUuidForAgent(writeId, workspaceId, signal)
     )
     if (!attachment) {
       return null
@@ -66,10 +72,12 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     parentId: string | null,
     workspaceId: string,
     required: boolean,
-    intent: LinearCreateFieldIntent = {}
+    intent: LinearCreateFieldIntent = {},
+    signal?: AbortSignal
   ): Promise<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>> | null> {
+    signal?.throwIfAborted()
     const issue = await this.readLinearWriteLookup(() =>
-      getLinearIssueByUuidForAgent(writeId, workspaceId)
+      getLinearIssueByUuidForAgent(writeId, workspaceId, signal)
     )
     if (!issue) {
       return null
@@ -95,16 +103,19 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     issueId: string,
     parentId: string | null,
     workspaceId: string,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
+    unconfirmed: (cause?: string) => LinearAgentAccessError,
+    signal?: AbortSignal
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>> {
+    signal?.throwIfAborted()
     try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
+      // Duplicate id may mean the original write landed; only the exact target relationship proves this retry.
       const comment = await this.getMatchingLinearCommentWrite(
         writeId,
         issueId,
         parentId,
         workspaceId,
-        true
+        true,
+        signal
       )
       if (comment) {
         return comment
@@ -126,15 +137,18 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     writeId: string,
     issueId: string,
     workspaceId: string,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
+    unconfirmed: (cause?: string) => LinearAgentAccessError,
+    signal?: AbortSignal
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>> {
+    signal?.throwIfAborted()
     try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
+      // Duplicate id may mean the original write landed; only the exact target relationship proves this retry.
       const attachment = await this.getMatchingLinearAttachmentWrite(
         writeId,
         issueId,
         workspaceId,
-        true
+        true,
+        signal
       )
       if (attachment) {
         return attachment
@@ -158,17 +172,20 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     parentId: string | null,
     workspaceId: string,
     intent: LinearCreateFieldIntent,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
+    unconfirmed: (cause?: string) => LinearAgentAccessError,
+    signal?: AbortSignal
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
+    signal?.throwIfAborted()
     try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
+      // Duplicate id may mean the original write landed; only the exact target relationship proves this retry.
       const issue = await this.getMatchingLinearCreatedIssue(
         writeId,
         teamId,
         parentId,
         workspaceId,
         true,
-        intent
+        intent,
+        signal
       )
       if (issue) {
         return issue

@@ -13,10 +13,7 @@ type CoreServiceAccess = {
   }
 }
 
-// These tests run against the real vendored @xterm/xterm build on purpose:
-// the subscription reaches a core-internal API, so an xterm upgrade that
-// removes or reshapes it must fail here loudly instead of silently dropping
-// terminal activity tracking to the onData fallback.
+// Use vendored xterm so private input-signal API drift fails here instead of silently disabling activity tracking.
 describe('subscribeToTerminalUserInput', () => {
   it('fires for real user input and not for parser auto-replies', () => {
     const terminal = new Terminal({ allowProposedApi: true })
@@ -29,8 +26,7 @@ describe('subscribeToTerminalUserInput', () => {
     coreService.triggerDataEvent('a', true)
     expect(listener).toHaveBeenCalledTimes(1)
 
-    // Parser-generated replies (focus reports, DA/DSR/CPR responses) are not
-    // user input and must not fire the signal, while still flowing to onData.
+    // Parser replies still reach onData but must not count as user input.
     const onData = vi.fn()
     terminal.onData(onData)
     coreService.triggerDataEvent('\x1b[O', false)
@@ -64,8 +60,7 @@ describe('subscribeToTerminalUserInput', () => {
         listener
       )
     ).toBeNull()
-    // A reshaped internal that subscribes but returns no usable disposable
-    // must read as unavailable, so callers keep their onData fallback.
+    // A subscription without usable disposal is unavailable; preserve callers’ onData fallback.
     expect(
       subscribeToTerminalUserInput(
         { _core: { coreService: { onUserInput: () => undefined } } } as never,

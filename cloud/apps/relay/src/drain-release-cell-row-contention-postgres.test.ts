@@ -19,12 +19,7 @@ import {
   type StatementDelay
 } from './test-fixtures/delayed-postgres-database.js'
 
-// Reproduces the Asia drain: a draining cell's releases each end with a one-row
-// UPDATE of the source relay_cells row, held for a round trip to COMMIT, while
-// the directors re-place its reconnecting hosts. Placement used to lock every
-// relay_cells row and starved (about 9/s at 6 releases/s, 5/s at 18/s, every
-// director backend lock-waiting); it now locks only the targets. Prints one
-// line per run and asserts the after picture.
+// Reproduce Asia source-row release locks during reconnect placement: fleet locking fell to ~9/s at 6 releases/s and ~5/s at 18/s. Assert/report target-only locking avoids that contention.
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
@@ -294,6 +289,28 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
     }
   }
 
+  // Holds `cellIds`' relay_cells rows in an open transaction until the returned release runs.
+  async function holdCellRows(cellIds: string[]): Promise<() => Promise<void>> {
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    let held!: () => void
+    const acquired = new Promise<void>((resolve) => (held = resolve))
+    const holder = observer.transaction(async (transaction) => {
+      await transaction.queryLocked(
+        `SELECT cell_id FROM relay_cells WHERE cell_id IN (${cellIds.map(() => '?').join(', ')})
+         ORDER BY cell_id ASC`,
+        cellIds
+      )
+      held()
+      await released
+    })
+    await acquired
+    return async () => {
+      release()
+      await holder
+    }
+  }
+
   // Every host holds a live control lease on the source, then the source is
   // isolated for a roll: the state an Asia drain starts from.
   async function seed(hosts: Identity[]): Promise<void> {
@@ -328,6 +345,7 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
     let samples = 0
     let waiting = 0
     let active = 0
+    let samplingError: unknown
     const loop = (async () => {
       while (running) {
         const rows = await observer.query(
@@ -340,11 +358,16 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
         waiting += rows.filter((row) => row['wait_event_type'] === 'Lock').length
         await new Promise((resolve) => setTimeout(resolve, 20))
       }
-    })()
+    })().catch((error: unknown) => {
+      samplingError = error
+    })
     return {
       stop: async () => {
         running = false
         await loop
+        if (samplingError) {
+          throw samplingError
+        }
         return { waiting: mean(waiting, samples), active: mean(active, samples) }
       }
     }
@@ -387,106 +410,133 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
     delay.enabled = true
     const sampler = sampleDirectorWaits()
     const startedAt = performance.now()
-
-    const releaseWork = paced(releaseRate, releaseCount, async (index) => {
-      releases.attempted += 1
-      const began = performance.now()
-      try {
-        const released = await servingCell(SOURCE.id).store.releaseActivity(
-          releasing[index]!,
-          RELEASED_ACTIVITY
-        )
-        if (released) releases.ok += 1
-        else count(releases.failed, 'lease_missing')
-      } catch (error) {
-        count(releases.failed, failureCode(error))
-      }
-      releaseLatencies.push(performance.now() - began)
-    })
-    // The reconnect path, round-robin over directors: sticky-lane admission,
-    // the durable-pin check, then the assign the route calls, which re-places
-    // off the isolated cell. The host then attaches to its new Asia cell.
-    const dialWork = paced(DIAL_RATE_PER_SECOND, dialCount, async (index) => {
-      const identity = dialling[index]!
-      const director = directors[index % directors.length]!
-      dials.attempted += 1
-      let rejection = 'unknown'
-      const lease = await stickyLanes[index % directors.length]!.acquire(
-        identity.relayHostId,
-        (reason) => {
-          rejection = reason
+    try {
+      const releaseWork = paced(releaseRate, releaseCount, async (index) => {
+        releases.attempted += 1
+        const began = performance.now()
+        try {
+          const released = await servingCell(SOURCE.id).store.releaseActivity(
+            releasing[index]!,
+            RELEASED_ACTIVITY
+          )
+          if (released) {
+            releases.ok += 1
+          } else {
+            count(releases.failed, 'lease_missing')
+          }
+        } catch (error) {
+          count(releases.failed, failureCode(error))
         }
-      )
-      if (!lease) {
-        count(dials.admissionRejected, rejection)
-        return
-      }
-      try {
-        if (!(await director.store.resolve(identity))) {
-          count(dials.failed, 'unverified')
+        releaseLatencies.push(performance.now() - began)
+      })
+      // The reconnect path, round-robin over directors: sticky-lane admission,
+      // the durable-pin check, then the assign the route calls, which re-places
+      // off the isolated cell. The host then attaches to its new Asia cell.
+      const dialWork = paced(DIAL_RATE_PER_SECOND, dialCount, async (index) => {
+        const identity = dialling[index]!
+        const director = directors[index % directors.length]!
+        dials.attempted += 1
+        let rejection = 'unknown'
+        const lease = await stickyLanes[index % directors.length]!.acquire(
+          identity.relayHostId,
+          (reason) => {
+            rejection = reason
+          }
+        )
+        if (!lease) {
+          count(dials.admissionRejected, rejection)
           return
         }
-        const grant = await director.store.assign(identity, 'asia-east2', 'asia-east2')
-        if (grant.cellId === SOURCE.id) {
-          count(dials.failed, 'kept_on_source')
-          return
+        try {
+          if (!(await director.store.resolve(identity))) {
+            count(dials.failed, 'unverified')
+            return
+          }
+          const grant = await director.store.assign(identity, 'asia-east2', 'asia-east2')
+          if (grant.cellId === SOURCE.id) {
+            count(dials.failed, 'kept_on_source')
+            return
+          }
+          dials.placed += 1
+          if (grant.region !== SOURCE.region) {
+            dials.placedCrossRegion += 1
+          }
+          if (performance.now() - startedAt <= WINDOW_MS) {
+            dials.placedInWindow += 1
+          }
+          activationWork.push(
+            servingCell(grant.cellId)
+              .store.activateControl(identity, {
+                cellId: grant.cellId,
+                assignmentEpoch: grant.assignmentEpoch,
+                generation: 1
+              })
+              .then(
+                () => {
+                  activations.ok += 1
+                },
+                (error: unknown) => count(activations.failed, failureCode(error))
+              )
+          )
+        } catch (error) {
+          count(dials.failed, failureCode(error))
+        } finally {
+          lease.release()
         }
-        dials.placed += 1
-        if (grant.region !== SOURCE.region) dials.placedCrossRegion += 1
-        if (performance.now() - startedAt <= WINDOW_MS) dials.placedInWindow += 1
-        activationWork.push(
-          servingCell(grant.cellId)
-            .store.activateControl(identity, {
-              cellId: grant.cellId,
-              assignmentEpoch: grant.assignmentEpoch,
-              generation: 1
-            })
-            .then(
-              () => {
-                activations.ok += 1
-              },
-              (error: unknown) => count(activations.failed, failureCode(error))
-            )
-        )
-      } catch (error) {
-        count(dials.failed, failureCode(error))
-      } finally {
-        lease.release()
+      })
+      const outcomes = await Promise.allSettled([...(await releaseWork), ...(await dialWork)])
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') {
+          throw outcome.reason
+        }
       }
-    })
-    await Promise.allSettled([...(await releaseWork), ...(await dialWork)])
-    await Promise.allSettled(activationWork)
-    const waits = await sampler.stop()
-    delay.enabled = false
-    if (neighboursCapped) await heartbeatAll()
+      expect(releases.attempted).toBe(releaseCount)
+      expect(dials.attempted).toBe(dialCount)
+      expect(dials.placed + total(dials.failed) + total(dials.admissionRejected)).toBe(dialCount)
+      expect(dials.placed).toBeGreaterThan(0)
+      const activationOutcomes = await Promise.allSettled(activationWork)
+      for (const outcome of activationOutcomes) {
+        if (outcome.status === 'rejected') {
+          throw outcome.reason
+        }
+      }
+      const waits = await sampler.stop()
+      delay.enabled = false
+      if (neighboursCapped) {
+        await heartbeatAll()
+      }
 
-    const holds = directors.map((instance) => consumeRelayCellInventoryHold(instance.database))
-    const report: RunReport = {
-      roundTripMs,
-      releaseRate,
-      neighboursCapped,
-      releases: {
-        ...releases,
-        p50Ms: percentile(releaseLatencies, 0.5),
-        p95Ms: percentile(releaseLatencies, 0.95)
-      },
-      dials,
-      activations,
-      placementsPerSecond: Number(((dials.placedInWindow * 1_000) / WINDOW_MS).toFixed(1)),
-      director: {
-        lockUnavailable: holds.reduce((sum, hold) => sum + hold.cellInventoryLockUnavailable, 0),
-        lockTimeouts: holds.reduce((sum, hold) => sum + hold.cellInventoryLockTimeouts, 0),
-        holds: holds.reduce((sum, hold) => sum + hold.cellInventoryHolds, 0),
-        holdMsMax: Math.round(Math.max(...holds.map((hold) => hold.cellInventoryHoldMsMax))),
-        lockWaitingMean: waits.waiting,
-        activeMean: waits.active
-      },
-      sourcePoolWaitersMax: consumeRelayDatabasePoolPressure(servingCell(SOURCE.id).database)
-        .databasePoolWaitersMax
+      const holds = directors.map((instance) => consumeRelayCellInventoryHold(instance.database))
+      const report: RunReport = {
+        roundTripMs,
+        releaseRate,
+        neighboursCapped,
+        releases: {
+          ...releases,
+          p50Ms: percentile(releaseLatencies, 0.5),
+          p95Ms: percentile(releaseLatencies, 0.95)
+        },
+        dials,
+        activations,
+        placementsPerSecond: Number(((dials.placedInWindow * 1_000) / WINDOW_MS).toFixed(1)),
+        director: {
+          lockUnavailable: holds.reduce((sum, hold) => sum + hold.cellInventoryLockUnavailable, 0),
+          lockTimeouts: holds.reduce((sum, hold) => sum + hold.cellInventoryLockTimeouts, 0),
+          holds: holds.reduce((sum, hold) => sum + hold.cellInventoryHolds, 0),
+          holdMsMax: Math.round(Math.max(...holds.map((hold) => hold.cellInventoryHoldMsMax))),
+          lockWaitingMean: waits.waiting,
+          activeMean: waits.active
+        },
+        sourcePoolWaitersMax: consumeRelayDatabasePoolPressure(servingCell(SOURCE.id).database)
+          .databasePoolWaitersMax
+      }
+      reports.push(report)
+      console.info(JSON.stringify({ event: 'drain_release_cell_row_contention', ...report }))
+      return report
+    } finally {
+      delay.enabled = false
+      await sampler.stop()
     }
-    reports.push(report)
-    console.info(JSON.stringify({ event: 'drain_release_cell_row_contention', ...report }))
-    return report
   }
 
   // Production's shape: the host whose socket the draining cell closes is the
@@ -519,106 +569,151 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
     delay.enabled = true
     const sampler = sampleDirectorWaits()
     const startedAt = performance.now()
-
-    // One dial through the sticky lane; 'placed', or the reason it was not.
-    async function dial(identity: Identity, director: number): Promise<string> {
-      let rejection = 'unknown'
-      const lease = await stickyLanes[director]!.acquire(identity.relayHostId, (reason) => {
-        rejection = reason
-      })
-      if (!lease) return `rejected:${rejection}`
-      try {
-        if (!(await directors[director]!.store.resolve(identity))) return 'failed:unverified'
-        const grant = await directors[director]!.store.assign(identity, 'asia-east2', 'asia-east2')
-        if (grant.cellId === SOURCE.id) return 'failed:kept_on_source'
-        activationWork.push(
-          servingCell(grant.cellId)
-            .store.activateControl(identity, {
+    try {
+      // One dial through the sticky lane; 'placed', or the reason it was not.
+      async function dial(identity: Identity, director: number): Promise<string> {
+        let rejection = 'unknown'
+        const lease = await stickyLanes[director]!.acquire(identity.relayHostId, (reason) => {
+          rejection = reason
+        })
+        if (!lease) {
+          return `rejected:${rejection}`
+        }
+        try {
+          if (!(await directors[director]!.store.resolve(identity))) {
+            return 'failed:unverified'
+          }
+          const grant = await directors[director]!.store.assign(
+            identity,
+            'asia-east2',
+            'asia-east2'
+          )
+          if (grant.cellId === SOURCE.id) {
+            return 'failed:kept_on_source'
+          }
+          activationWork.push(
+            servingCell(grant.cellId).store.activateControl(identity, {
               cellId: grant.cellId,
               assignmentEpoch: grant.assignmentEpoch,
               generation: 1
             })
-            .catch(() => undefined)
-        )
-        return 'placed'
-      } catch (error) {
-        if (error instanceof RelayAssignmentRowBusyError) return `rejected:${error.message}`
-        return `failed:${failureCode(error)}`
-      } finally {
-        lease.release()
+          )
+          return 'placed'
+        } catch (error) {
+          if (error instanceof RelayAssignmentRowBusyError) {
+            return `rejected:${error.message}`
+          }
+          return `failed:${failureCode(error)}`
+        } finally {
+          lease.release()
+        }
       }
-    }
 
-    const work = paced(releaseRate, hosts.length, async (index) => {
-      const identity = hosts[index]!
-      const releasedAt = performance.now()
-      const release = servingCell(SOURCE.id)
-        .store.releaseActivity(identity, RELEASED_ACTIVITY)
-        .then(
-          (released) => {
-            if (released) releases.ok += 1
-            else count(releases.failed, 'lease_missing')
-          },
-          (error: unknown) => count(releases.failed, failureCode(error))
-        )
-      await new Promise((resolve) => setTimeout(resolve, dialDelayMs))
-      const director = index % directors.length
-      for (let attempt = 0; ; attempt += 1) {
-        const sentAt = performance.now()
-        const outcome = await dial(identity, director)
-        if (outcome === `rejected:${new RelayAssignmentRowBusyError().message}`) busyRefusals += 1
-        if (outcome.startsWith('failed:')) count(unexpected, outcome.slice(7))
-        if (attempt === 0) {
-          if (outcome === 'placed') firstAttempt.placed += 1
-          else if (outcome.startsWith('rejected:')) count(firstRejected, outcome.slice(9))
-          else count(firstFailed, outcome.slice(7))
+      const work = paced(releaseRate, hosts.length, async (index) => {
+        const identity = hosts[index]!
+        const releasedAt = performance.now()
+        const release = servingCell(SOURCE.id)
+          .store.releaseActivity(identity, RELEASED_ACTIVITY)
+          .then(
+            (released) => {
+              if (released) {
+                releases.ok += 1
+              } else {
+                count(releases.failed, 'lease_missing')
+              }
+            },
+            (error: unknown) => count(releases.failed, failureCode(error))
+          )
+        await new Promise((resolve) => setTimeout(resolve, dialDelayMs))
+        const director = index % directors.length
+        for (let attempt = 0; ; attempt += 1) {
+          const sentAt = performance.now()
+          const outcome = await dial(identity, director)
+          if (outcome === `rejected:${new RelayAssignmentRowBusyError().message}`) {
+            busyRefusals += 1
+          }
+          if (outcome.startsWith('failed:')) {
+            count(unexpected, outcome.slice(7))
+          }
+          if (attempt === 0) {
+            if (outcome === 'placed') {
+              firstAttempt.placed += 1
+            } else if (outcome.startsWith('rejected:')) {
+              count(firstRejected, outcome.slice(9))
+            } else {
+              count(firstFailed, outcome.slice(7))
+            }
+          }
+          if (outcome === 'placed') {
+            const placedAt = performance.now()
+            timeToPlaced.push(placedAt - releasedAt)
+            if (placedAt - startedAt <= WINDOW_MS + dialDelayMs) {
+              placedInWindow += 1
+            }
+            break
+          }
+          if (!outcome.startsWith('rejected:')) {
+            break
+          }
+          if (attempt === 1) {
+            hostsRefusedTwice += 1
+          }
+          const nextAt =
+            sentAt + HOST_ASSIGN_MIN_INTERVAL_MS + Math.random() * HOST_ASSIGN_INTERVAL_JITTER_MS
+          if (nextAt - releasedAt > REDIAL_GIVE_UP_MS) {
+            break
+          }
+          redials += 1
+          await new Promise((resolve) => setTimeout(resolve, nextAt - performance.now()))
         }
-        if (outcome === 'placed') {
-          const placedAt = performance.now()
-          timeToPlaced.push(placedAt - releasedAt)
-          if (placedAt - startedAt <= WINDOW_MS + dialDelayMs) placedInWindow += 1
-          break
+        await release
+      })
+      const outcomes = await Promise.allSettled(await work)
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') {
+          throw outcome.reason
         }
-        if (!outcome.startsWith('rejected:')) break
-        if (attempt === 1) hostsRefusedTwice += 1
-        const nextAt =
-          sentAt +
-          HOST_ASSIGN_MIN_INTERVAL_MS +
-          Math.random() * HOST_ASSIGN_INTERVAL_JITTER_MS
-        if (nextAt - releasedAt > REDIAL_GIVE_UP_MS) break
-        redials += 1
-        await new Promise((resolve) => setTimeout(resolve, nextAt - performance.now()))
       }
-      await release
-    })
-    await Promise.allSettled(await work)
-    await Promise.allSettled(activationWork)
-    const waits = await sampler.stop()
-    delay.enabled = false
-    if (neighboursCapped) await heartbeatAll()
-    const report: DepartingReport = {
-      dialDelayMs,
-      neighboursCapped,
-      hosts: hosts.length,
-      placed: timeToPlaced.length,
-      firstAttempt,
-      busyRefusals,
-      hostsRefusedTwice,
-      unexpected,
-      redials,
-      timeToPlacedMs: {
-        p50: percentile(timeToPlaced, 0.5),
-        p95: percentile(timeToPlaced, 0.95),
-        max: percentile(timeToPlaced, 1)
-      },
-      placementsPerSecond: Number(((placedInWindow * 1_000) / WINDOW_MS).toFixed(1)),
-      releases,
-      lockWaitingMean: waits.waiting,
-      activeMean: waits.active
+      expect(firstAttempt.placed + total(firstRejected) + total(firstFailed)).toBe(hosts.length)
+      expect(timeToPlaced.length).toBeGreaterThan(0)
+      const activationOutcomes = await Promise.allSettled(activationWork)
+      for (const outcome of activationOutcomes) {
+        if (outcome.status === 'rejected') {
+          throw outcome.reason
+        }
+      }
+      const waits = await sampler.stop()
+      delay.enabled = false
+      if (neighboursCapped) {
+        await heartbeatAll()
+      }
+      const report: DepartingReport = {
+        dialDelayMs,
+        neighboursCapped,
+        hosts: hosts.length,
+        placed: timeToPlaced.length,
+        firstAttempt,
+        busyRefusals,
+        hostsRefusedTwice,
+        unexpected,
+        redials,
+        timeToPlacedMs: {
+          p50: percentile(timeToPlaced, 0.5),
+          p95: percentile(timeToPlaced, 0.95),
+          max: percentile(timeToPlaced, 1)
+        },
+        placementsPerSecond: Number(((placedInWindow * 1_000) / WINDOW_MS).toFixed(1)),
+        releases,
+        lockWaitingMean: waits.waiting,
+        activeMean: waits.active
+      }
+      departingReports.push(report)
+      console.info(JSON.stringify({ event: 'drain_departing_host_redial', ...report }))
+      return report
+    } finally {
+      delay.enabled = false
+      await sampler.stop()
     }
-    departingReports.push(report)
-    console.info(JSON.stringify({ event: 'drain_departing_host_redial', ...report }))
-    return report
   }
 
   beforeAll(async () => {
@@ -689,10 +784,42 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
     }
   }, 120_000)
 
+  it('places a reconnecting host off the isolated source while that source row is held', async () => {
+    delay.enabled = false
+    await heartbeatAll()
+    const host = hostIdentity(9_000)
+    await seed([host])
+    // A drain release holds the source row for its whole transaction; target-only placement never asks for it.
+    const sourceHeld = await holdCellRows([SOURCE.id])
+    try {
+      const grant = await Promise.race([
+        directors[1]!.store.assign(host, 'asia-east2', 'asia-east2'),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 3_000))
+      ])
+      expect(grant).not.toBe('blocked')
+      expect(TARGETS.map(({ id }) => id)).toContain(grant === 'blocked' ? null : grant.cellId)
+    } finally {
+      await sourceHeld()
+    }
+    // Control: the same hold on the target rows does block a placement, so the hold above was real.
+    const other = hostIdentity(9_001)
+    await seed([other])
+    const targetsHeld = await holdCellRows(TARGETS.map(({ id }) => id))
+    const placement = directors[2]!.store.assign(other, 'asia-east2', 'asia-east2')
+    try {
+      const raced = await Promise.race([
+        placement.then(() => 'placed' as const),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
+      expect(raced).toBe('blocked')
+    } finally {
+      await targetsHeld()
+    }
+    expect((await placement).cellId).not.toBe(SOURCE.id)
+  }, 30_000)
+
   it('keeps placing while an Asia drain holds the source row', async () => {
-    // Before the fix: 90 and 140 of 200 dials rejected by the sticky lane and
-    // about 3.5 of 3.5 active director backends lock-waiting. Pass bars are on
-    // those, not on placements/s, which a slow runner's pacing alone can move.
+    // Baseline sticky rejects were 90–140/200; assert outcomes, since runner pacing alone changes placements/s and the sampled lock-wait mean (reported, not asserted).
     for (const [rate, neighboursCapped] of [
       [6, false],
       [18, false],
@@ -701,12 +828,9 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
       const report = await run(ASIA_ROUND_TRIP_MS, rate, neighboursCapped)
       expect(report.dials.failed).toEqual({})
       expect(total(report.dials.admissionRejected)).toBeLessThan(0.1 * report.dials.attempted)
-      expect(report.director.lockWaitingMean).toBeLessThan(0.5)
       expect(report.dials.placedCrossRegion).toBe(neighboursCapped ? report.dials.placed : 0)
       if (rate === 18) {
-        // The release commits with its counter write, so the source row is no longer
-        // held for a round trip and releases stop shedding to lease expiry. With the
-        // separate COMMIT, 79 of 180 landed and the rest timed out waiting for the pool.
+        // Fused counter/COMMIT removes the lock-held reply round trip; separate COMMIT once completed only 79/180 releases before pool timeouts.
         expect(report.releases.ok).toBe(report.releases.attempted)
       }
     }
@@ -720,11 +844,10 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
         expect(report.placed).toBe(report.hosts)
         // A busy own row is refused at once by design; what must not happen is
         // the sticky slot backing up behind it. Before: 72-143 wait-timeouts at
-        // 400ms and 1s, 2.4-3.6 director backends lock-waiting.
+        // 400ms and 1s (the sampled lock-wait mean is reported, not asserted).
         const { relay_assignment_row_busy: _refused, ...slotRejections } =
           report.firstAttempt.rejected
         expect(total(slotRejections)).toBeLessThan(0.1 * report.hosts)
-        expect(report.lockWaitingMean).toBeLessThan(0.5)
         // A redial that beats its own release meets its own row (16-80 of 180, by how many
         // releases are still in flight at the dial) and is answered at once. That release
         // has finished by the next dial, so no host is refused twice. Measured p95 5.6-6.5s;

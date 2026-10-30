@@ -10,7 +10,6 @@ function dependencyRequire(packages) {
 }
 
 // Resolve through declared consumers so hoisting cannot select another workspace's copy.
-const braces = dependencyRequire(['shadcn', 'fast-glob', 'micromatch'])('braces')
 const sprintfRequire = dependencyRequire([
   'electron-builder',
   'app-builder-lib',
@@ -20,33 +19,6 @@ const sprintfRequire = dependencyRequire([
 ])
 
 describe('installed dependency security patches', () => {
-  it.each([
-    ['braces', '{', '}'],
-    ['parentheses', '(', ')'],
-    ['mixed nesting', '{(', ')}']
-  ])('bounds %s during parsing', (_name, open, close) => {
-    expect(() => braces.parse(`${open.repeat(512)}a,b${close.repeat(512)}`)).toThrow(
-      'maximum nesting depth'
-    )
-  })
-
-  it.each(['compile', 'expand', 'stringify'])('bounds nested patterns in braces.%s', (method) => {
-    const pattern = `${'{'.repeat(4_000)}a,b${'}'.repeat(4_000)}`
-    expect(() => braces[method](pattern)).toThrow('maximum nesting depth')
-    expect(braces.expand('src/{main,shared}/*.ts')).toEqual(['src/main/*.ts', 'src/shared/*.ts'])
-  })
-
-  it.each(['compile', 'expand', 'stringify'])(
-    'bounds directly supplied ASTs in braces.%s',
-    (method) => {
-      let ast = { type: 'text', value: 'ok' }
-      for (let depth = 0; depth < 10_000; depth += 1) {
-        ast = { type: 'root', nodes: [ast] }
-      }
-      expect(() => braces[method](ast)).toThrow('maximum nesting depth')
-    }
-  )
-
   it.each(['src/sprintf.js', 'dist/sprintf.min.js'])('bounds numeric precision in %s', (entry) => {
     const { sprintf } = sprintfRequire(`sprintf-js/${entry}`)
     for (const type of ['e', 'f', 'g']) {

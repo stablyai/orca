@@ -41,13 +41,13 @@ import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import { useWslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
 import { translate } from '@/i18n/i18n'
-import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
+  useUiLanguageRevision()
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
-  const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
-  const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
+  const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const runtimeEnvironmentId = useAppStore((s) =>
@@ -117,17 +117,6 @@ function FileExplorerFiles(): React.JSX.Element {
     handleClearNameFilter
   } = useFileExplorerNameFilter({ isFilesViewActive, activeWorktreeId })
 
-  const handleSelectExplorerView = useCallback(
-    (view: RightSidebarExplorerView) => {
-      if (view === 'files') {
-        showRightSidebarFiles()
-        return
-      }
-      const trimmedQuery = nameFilterQuery.trim()
-      showRightSidebarSearch(trimmedQuery ? { query: trimmedQuery } : undefined)
-    },
-    [nameFilterQuery, showRightSidebarFiles, showRightSidebarSearch]
-  )
   const {
     rowProjection,
     ignoredByRelativePath,
@@ -169,7 +158,7 @@ function FileExplorerFiles(): React.JSX.Element {
     }
   }, [activeWorktreeId, toggleShowDotfilesForWorktree])
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
-  const selection = useFileExplorerSelection(rowProjection, isMac)
+  const selection = useFileExplorerSelection(rowProjection, isMac, openInOwner)
   const selectedNode = selection.selectedPath
     ? rowProjection.getRowByPath(selection.selectedPath)
     : null
@@ -189,9 +178,7 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [setNameFilterCollapsedPaths]
   )
-  // Why: every explorer effect lives here, above the `!worktreePath` early
-  // return, so a transient null worktree cannot unmount the tree's reset guard
-  // and SSH generation refs and trigger a full cache-dropping reload on return.
+  // Keep effects above the null-path return so transient missing ownership cannot reset cache guards or SSH generations.
   const paneState = useFileExplorerTreePaneState({
     onRevealOutsideRoot: rootNavigation.revealOutsideRoot,
     activeWorktreeId,
@@ -211,7 +198,8 @@ function FileExplorerFiles(): React.JSX.Element {
     selectedNode,
     rowProjection,
     rowExpandedPaths,
-    visibleRowCount
+    visibleRowCount,
+    pathOwner: openInOwner
   })
   const { inlineInputState, rowScrolling } = paneState
   const {
@@ -299,15 +287,10 @@ function FileExplorerFiles(): React.JSX.Element {
             sparse={!!activeWorktree?.isSparse}
           />
         )}
-        <FileExplorerQueryStrip view={explorerView} onSelectView={handleSelectExplorerView}>
-          {/* Why: keep both query rows mounted and cross-fade so the Names/Contents
-             switch does not remount or shift when changing modes. */}
-          <div className="relative min-h-7">
-            <div
-              className={cn(
-                explorerView !== 'files' && 'pointer-events-none invisible absolute inset-x-0 top-0'
-              )}
-            >
+        <FileExplorerQueryStrip view={explorerView} onSelectView={setRightSidebarExplorerView}>
+          {/* Keep query rows mounted to preserve input selection when switching modes. */}
+          <div className="relative min-h-8">
+            <div hidden={explorerView !== 'files'}>
               <FileExplorerNameFilter
                 query={nameFilterQuery}
                 scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
@@ -316,27 +299,15 @@ function FileExplorerFiles(): React.JSX.Element {
                 onClear={handleClearNameFilter}
               />
             </div>
-            <div
-              className={cn(
-                explorerView !== 'search' &&
-                  'pointer-events-none invisible absolute inset-x-0 top-0'
-              )}
-            >
+            <div hidden={explorerView !== 'search'}>
               <SearchQueryRow {...searchPanel.queryRowProps} />
+            </div>
+            <div hidden={explorerView !== 'search'}>
+              <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
             </div>
           </div>
         </FileExplorerQueryStrip>
-        <div
-          className={cn(
-            'border-b border-border px-2 pb-1.5',
-            explorerView !== 'search' &&
-              'pointer-events-none invisible h-0 overflow-hidden border-b-0 p-0'
-          )}
-        >
-          <SearchFilters {...searchPanel.filtersProps} />
-        </div>
-        {/* Why: the Files and Contents views share one body slot; layering them
-           avoids remounting heavy virtualized panes while preserving full height. */}
+        {/* Layer Files/Contents in one body slot to retain heavy virtualized panes at full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerFilesTreePane
             displayRootPath={displayRootPath}

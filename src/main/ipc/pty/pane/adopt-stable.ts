@@ -1,10 +1,16 @@
+import type { PtySpawnOutcome } from '../spawn-outcome'
+import { isClosedPaneFenced } from '../../../persistence/terminal-topology/closed-pane-binding-fence'
+import { hasClosedTerminalTabRecord } from '../../../../shared/closed-terminal-tab-tombstones'
+import {
+  toSshExecutionHostId,
+  getConnectionExecutionHostId
+} from '../../../../shared/execution-host'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { reconcilePaneOwner } from './stable-pane-attach'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { getProvider } from '../provider/registry'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import {
   joinPaneSpawn,
   makePaneSpawnReservationKey,
@@ -15,7 +21,11 @@ import {
 } from './spawn-reservation'
 import { resolveStablePaneOwner } from './stable-owner'
 import { completePaneAdoption } from './complete-pane-adoption'
-import { assertPaneStillExists, type AbsentPaneBinding } from './pane-spawn-operation'
+import {
+  assertPaneStillExists,
+  type AbsentPaneBinding,
+  type PaneSpawnOperation
+} from './pane-spawn-operation'
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
 
 /** Owns attachment through publication, including the lazy fresh path, under one reservation. */
@@ -40,6 +50,12 @@ export async function adoptStablePane(
     return owner?.ptyId === args.stoppedPtyId ? null : owner
   }
   let remaining = 1
+  if (args.completed?.outcome?.kind === 'registration-exited') {
+    if (!args.completed.operation) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    return consumeExitedPaneOperation(runtime, store, args, args.completed.operation)
+  }
   if (args.completed?.materialized) {
     const owner = resolveOwner()
     if (!owner) {
@@ -70,6 +86,12 @@ export async function adoptStablePane(
       }
       if (!joined) {
         continue
+      }
+      if (pending.outcome?.kind === 'registration-exited') {
+        const operation = pending.operation!
+        const exited = consumeExitedPaneOperation(runtime, store, args, operation)
+        args.onOutcome?.(pending.outcome, operation)
+        return exited
       }
       if (!args.worktreeId) {
         const successor = paneSpawnReservationsByOwnerKey.get(key)
@@ -109,6 +131,15 @@ export async function adoptStablePane(
       // Recheck after the await; a new holder may already have reserved the pane.
     }
   }
+  const settle = (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => {
+    if (reservation.outcome) {
+      return
+    }
+    reservation.outcome = outcome
+    reservation.operation = operation
+    resolvePaneSpawnReservation(key, reservation, outcome.result)
+    args.onOutcome?.(outcome, operation)
+  }
   let mustExist = false
   let absentOwner: AbsentPaneBinding | undefined
   try {
@@ -138,19 +169,25 @@ export async function adoptStablePane(
           spawnOptions: { cols: args.cols, rows: args.rows, cwd: args.cwd, signal: args.signal },
           resolveOwner,
           preAllocatedHandle: args.preAllocatedHandle,
-          renderer: args.renderer,
-          keepAbsentBinding: args.keepAbsentBinding
+          keepAbsentBinding: args.keepAbsentBinding,
+          attachOnlyView: args.attachOnlyView
         })
         if (adopted) {
-          args.onAdopted?.(adopted.result)
-          resolvePaneSpawnReservation(key, reservation, adopted.result)
-        } else {
-          absentOwner = {
-            ptyId: owner.ptyId,
-            incarnationIds: [owner.runtimeIncarnationId, owner.persistedIncarnationId].filter(
-              (id): id is string => id !== undefined
-            )
+          const operation: PaneSpawnOperation = {
+            mustExist,
+            acquisition: { key, reservation, settle: (outcome) => settle(outcome, operation) }
           }
+          if (adopted.outcome.kind !== 'registration-exited') {
+            args.onAdopted?.(adopted.result)
+          }
+          settle(adopted.outcome, operation)
+          return { ...adopted, operation }
+        }
+        absentOwner = {
+          ptyId: owner.ptyId,
+          incarnationIds: [owner.runtimeIncarnationId, owner.persistedIncarnationId].filter(
+            (id): id is string => id !== undefined
+          )
         }
         return adopted
       },
@@ -165,13 +202,77 @@ export async function adoptStablePane(
           rejectPaneSpawnReservation(key, reservation, new Error('terminal_pane_unbound'))
           return null
         }
-        const result = await args.spawnFresh({ mustExist, ...(absentOwner ? { absentOwner } : {}) })
-        resolvePaneSpawnReservation(key, reservation, result)
+        const operation: PaneSpawnOperation = {
+          mustExist,
+          ...(absentOwner ? { absentOwner } : {}),
+          acquisition: { key, reservation, settle: (outcome) => settle(outcome, operation) }
+        }
+        const result = await args.spawnFresh(operation)
+        settle(
+          {
+            kind: result.agentSessionEnsure?.disposition === 'adopted' ? 'adopted' : 'committed',
+            result
+          },
+          operation
+        )
         return null
       }
     })
   } catch (error) {
     rejectPaneSpawnReservation(key, reservation, error)
     throw error
+  }
+}
+
+/** An observed exit needs the same surface and acquisition, rather than a now-retired live owner. */
+export function consumeExitedPaneOperation(
+  runtime: OrcaRuntimeService | undefined,
+  store: Store | undefined,
+  args: Pick<AdoptStablePaneArgs, 'worktreeId' | 'connectionId' | 'tabId' | 'leafId' | 'renderer'>,
+  operation: PaneSpawnOperation
+): AdoptStablePaneResult {
+  const acquisition = operation.acquisition
+  const outcome = acquisition?.reservation.outcome
+  if (!acquisition || outcome?.kind !== 'registration-exited') {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  const successor = paneSpawnReservationsByOwnerKey.get(acquisition.key)
+  const incarnation = ptyIncarnationById.get(outcome.result.id)
+  const owner = resolveStablePaneOwner(
+    runtime,
+    store,
+    makePaneKey(args.tabId, args.leafId),
+    args.worktreeId,
+    args.connectionId
+  )
+  if (
+    (successor && successor !== acquisition.reservation) ||
+    (incarnation && outcome.result.incarnationId && incarnation !== outcome.result.incarnationId) ||
+    (owner &&
+      (owner.ptyId !== outcome.result.id || owner.incarnationId !== outcome.result.incarnationId))
+  ) {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  if (args.renderer && args.worktreeId) {
+    const session = store?.getWorkspaceSession(
+      args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+    )
+    if (
+      acquisition.surfaceWithdrawn ||
+      isClosedPaneFenced(makePaneKey(args.tabId, args.leafId)) ||
+      hasClosedTerminalTabRecord(session?.closedTerminalTabTombstonesByTabId, args.tabId)
+    ) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    if (!runtime?.hasTerminalPaneView?.(args.worktreeId, args.tabId, args.leafId)) {
+      assertPaneStillExists(store, args.worktreeId, args.tabId, args.leafId, args.connectionId)
+    }
+  }
+  return {
+    operation,
+    outcome,
+    result: outcome.result,
+    owner: { ptyId: outcome.result.id, tabId: args.tabId, leafId: args.leafId },
+    materialized: true
   }
 }

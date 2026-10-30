@@ -45,7 +45,7 @@ describe('OpenCode 1 shared-server reattribution (#21359)', () => {
     expect(result?.paneKey).toBe(PANE_A)
   })
 
-  it('substitutes the bound pane live token so its fence passes', () => {
+  it('uses the bound pane live launch token', () => {
     const state = createHookListenerState()
     // A tokened post teaches the listener pane B's live token.
     normalizeHookPayload(

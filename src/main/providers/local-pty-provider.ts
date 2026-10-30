@@ -74,11 +74,6 @@ export class LocalPtyProvider implements IPtyProvider {
     this.opts = opts
   }
 
-  /**
-   * Spawns or reattaches a local PTY session for the renderer process.
-   *
-   * Windows launches can pre-deliver startup commands in argv, so the stdin fallback only runs when needed.
-   */
   spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     return spawnLocalPty(args, () => this.opts)
   }
@@ -88,11 +83,13 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
+  getPtyAvailability = (id: string): boolean => this.hasPty(id)
+
   write(id: string, data: string): boolean {
     return writeLocalPty(id, data)
   }
 
-  // In-process node-pty is its own sole owner, so its synchronous answer is the settlement.
+  // In-process node-pty owns the write endpoint; its synchronous answer settles delivery.
   writeWithSettlement(id: string, data: string): WriteSettlement {
     return writeLocalPty(id, data) ? WRITE_ACCEPTED : writeRefused('provider_refused_write')
   }
@@ -162,7 +159,9 @@ export class LocalPtyProvider implements IPtyProvider {
         childProcessEvidence: 'unverifiable'
       }
     }
-    const foregroundProcess = await getLocalPtyForegroundProcess(id)
+    const foregroundProcess = await (process.platform === 'win32' && options?.steadyState !== true
+      ? confirmLocalPtyForegroundProcess(id, true)
+      : getLocalPtyForegroundProcess(id))
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     const childProcessEvidence = await inspectLocalPtyChildProcesses(
       id,
@@ -228,24 +227,18 @@ export class LocalPtyProvider implements IPtyProvider {
     return onLocalPtyExit(callback)
   }
 
-  // ─── Local-only helpers (not part of IPtyProvider interface) ───────
-
-  /** Kill orphaned PTYs from previous page loads. */
   killOrphanedPtys(currentGeneration: number): { id: string }[] {
     return killOrphanedLocalPtys(currentGeneration)
   }
 
-  /** Advance the load generation counter (called on renderer reload). */
   advanceGeneration(): number {
     return advanceLoadGeneration()
   }
 
-  /** Get a writable reference to a PTY (for runtime controller). */
   getPtyProcess(id: string): pty.IPty | undefined {
     return getLocalPtyProcess(id)
   }
 
-  /** Kill all in-process local PTYs. Call on app quit. */
   killAll(): void {
     killAllLocalPtys()
   }

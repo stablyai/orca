@@ -235,7 +235,7 @@ describe('layout command refusals', () => {
     ).toBe('invalid_params')
   })
 
-  it('startPane refuses a missing or sleeping pane; restartPane a missing one', () => {
+  it('startPane refuses a missing pane and starts a slept one from its record; restartPane refuses a missing one', () => {
     const { model, tabB, leafB } = setup()
     const paneKey = `${tabB}:${leafB}`
     expect(refusal(model, { type: 'startPane', workspace: WS, paneKey: 'nope:x' })).toBe(
@@ -260,13 +260,24 @@ describe('layout command refusals', () => {
       [{ type: 'sleep', workspace: WS, records: [record] }],
       model
     ).model
-    expect(refusal(slept, { type: 'startPane', workspace: WS, paneKey })).toBe('pane_sleeping')
-    const woken = build(testContext(), [{ type: 'wake', workspace: WS }], slept)
-    expect(woken.results[0]!.woken).toEqual([paneKey])
-    expect(refusal(woken.model, { type: 'startPane', workspace: WS, paneKey })).toBe('applied')
+    // The runtime's start resumes the agent the record names, so a slept pane starts from it.
+    expect(
+      applyLayoutCommand(slept, { type: 'startPane', workspace: WS, paneKey }, context)
+    ).toMatchObject({ ok: true, effects: { startPaneKeys: [paneKey] } })
+    // A wake starts the pane and keeps its record; a record-only wake drops it.
+    const woken = applyLayoutCommand(slept, { type: 'wake', workspace: WS }, context)
+    expect(woken).toMatchObject({
+      ok: true,
+      result: { woken: [paneKey] },
+      effects: { startPaneKeys: [paneKey] }
+    })
+    expect(woken.ok && woken.model).toEqual(slept)
+    const dropped = build(testContext(), [{ type: 'wake', workspace: WS, recordOnly: true }], slept)
+    expect(dropped.results[0]!.woken).toEqual([paneKey])
+    expect(dropped.model.workspaces[WS]!.leaves?.[leafB]?.sleeping).toBeUndefined()
   })
 
-  it('startPane leaves a bound pane with a live resume record alone, and refuses an unbound one', () => {
+  it('startPane leaves a live pane with a resume record alone, and starts one restoring from its record', () => {
     const { model, tabB, leafB } = setup()
     const paneKey = `${tabB}:${leafB}`
     const sleeping = {
@@ -293,8 +304,42 @@ describe('layout command refusals', () => {
       ok: true,
       effects: { startPaneKeys: [] }
     })
-    // Its terminal is gone: a plain start would lose how the agent resumes.
-    expect(refusal(withLeaf({}), start)).toBe('pane_sleeping')
+    // Its terminal is gone, or a start status says its binding is what it restores from.
+    expect(applyLayoutCommand(withLeaf({}), start, context)).toMatchObject({
+      ok: true,
+      effects: { startPaneKeys: [paneKey] }
+    })
+    expect(
+      applyLayoutCommand(withLeaf({ ptyId: 'pty-b' }), start, {
+        ...context,
+        isBindingLive: (key) => key !== paneKey
+      })
+    ).toMatchObject({ ok: true, effects: { startPaneKeys: [paneKey] } })
+  })
+
+  it('startPane replaces an empty shell a hibernated agent left, as a restart does', () => {
+    const { model, tabB, leafB } = setup()
+    const paneKey = `${tabB}:${leafB}`
+    const workspace = model.workspaces[WS]!
+    const bound: WorkspaceLayoutModel = {
+      ...model,
+      workspaces: {
+        ...model.workspaces,
+        [WS]: { ...workspace, leaves: { ...workspace.leaves, [leafB]: { ptyId: 'pty-b' } } }
+      }
+    }
+    const start = { type: 'startPane', workspace: WS, paneKey } as const
+
+    const applied = applyLayoutCommand(bound, start, {
+      ...context,
+      retiresBinding: (key, ptyId) => key === paneKey && ptyId === 'pty-b'
+    })
+
+    expect(applied).toMatchObject({
+      ok: true,
+      effects: { stopPtyIds: ['pty-b'], startPaneKeys: [paneKey] }
+    })
+    expect(applied.ok && applied.model.workspaces[WS]!.leaves?.[leafB]?.ptyId).toBeUndefined()
   })
 
   it('a record-only sleep and wake change the resume record and stop or start nothing', () => {
@@ -517,8 +562,7 @@ describe('layout command effects', () => {
       incarnationId: 'inc'
     })
 
-    // Main's copy lacks the window's other panes, so the tab stays for them (no rule check: to
-    // main's copy alone it reads as the tab re-ided).
+    // Main lacks the window’s sibling panes, so retain their tab; main alone sees only a re-ID and cannot run the structural check.
     const last = applyLayoutCommand(
       model,
       {

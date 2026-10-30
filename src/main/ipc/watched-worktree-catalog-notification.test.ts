@@ -47,16 +47,4 @@ describe('watched worktree catalog notifications', () => {
       error
     )
   })
-
-  it('keeps nested SSH discoveries local until the event can carry owner identity', () => {
-    const notifyRemote = vi.fn()
-    setWorktreeCatalogRemoteClientNotifier({
-      notifyWorktreeCatalogChangedForRemoteClients: notifyRemote
-    })
-
-    notifyWatchedWorktreeCatalogChanged(mainWindow as never, 'repo-1', 'ssh-target-1')
-
-    expect(notifyWorktreesChanged).toHaveBeenCalledWith(mainWindow, 'repo-1')
-    expect(notifyRemote).not.toHaveBeenCalled()
-  })
 })

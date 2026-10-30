@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// Editor records in a layout-owner build (ORCA_LAYOUT_OWNER=main): main's frames draw the editor
-// tabs, and a diff, preview or conflict tab is drawn from the view its open sent.
+// Main frames draw editor tabs; opens carry view data for diff/preview/conflict in layout-owner builds.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
@@ -14,7 +13,6 @@ import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -452,14 +450,10 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open files renamed on disk, layout-ow
       expect.objectContaining({
         id: '/repo-a/lib/a.ts',
         isDirty: true,
-        pendingLiveDiskVerification: true,
         pendingSelfMoveEcho: { operationId: 'move-1', targetPath: '/repo-a/lib/a.ts' }
       })
     ])
     expect(state.editorDrafts).toEqual({ '/repo-a/lib/a.ts': 'unsaved' })
-    expect(state.editorBuffers['/repo-a/lib/a.ts']).toMatchObject({
-      pendingLiveDiskVerification: true
-    })
   })
 
   it('changes nothing when main refuses the rename', async () => {

@@ -5,8 +5,7 @@ import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 
-/** Antigravity lists its models only in a session, so the checking session's list is saved as a
- *  chat's would be: the first chat after signing in then has a model picker. */
+/** Cache session-only models so the first chat has a model picker. */
 export function saveSignInModels(
   spec: AcpLaunchSpec,
   accountHome: AgentSessionAccountHome,
@@ -22,5 +21,22 @@ export function saveSignInModels(
       { models, origin: 'live-session' },
       'live'
     )
+  }
+}
+
+export function captureSignInModelPublisher(spec: AcpLaunchSpec, current: () => boolean) {
+  const revision = agentModelCatalogStore.retirementRevision(spec.agent)
+  return (
+    accountHome: AgentSessionAccountHome,
+    started: AcpSessionStarted,
+    connected: boolean
+  ): void => {
+    if (
+      connected &&
+      current() &&
+      agentModelCatalogStore.retirementRevision(spec.agent) === revision
+    ) {
+      saveSignInModels(spec, accountHome, started)
+    }
   }
 }

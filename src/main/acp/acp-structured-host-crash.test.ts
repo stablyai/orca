@@ -1,8 +1,3 @@
-// A Grok crash mid-reply, through the real host: the host's settlement of the proven exit writes one
-// `provider-exit:` batch whose cut-short row reports on the turn the crash ended, carrying the
-// adapter's failure with Grok's last words. Whether Grok's pipes closed before its exit was seen
-// changes only what the chat shows in between.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
 import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-row-builders'
@@ -20,7 +15,6 @@ afterEach(async () => {
 
 const LAST_WORDS = 'qa-cell20-last-words'
 
-/** Grok mid-reply ("Oak") with a command running, every lifecycle batch the journal takes recorded. */
 async function midReply() {
   const rig = await openAttachedHostRig()
   const { host } = rig
@@ -38,8 +32,7 @@ async function midReply() {
     batches.push(batch)
     return append(batch)
   })
-  // A settlement plans its batch at its own turn in the write queue: recorded as it is planned, and
-  // only when it writes something (an empty plan writes no row).
+  // Capture nonempty settlements when planned in the write queue.
   const appendPlanned = journal.appendPlannedLifecycleBatch
   vi.spyOn(journal, 'appendPlannedLifecycleBatch').mockImplementation((input) =>
     appendPlanned({
@@ -78,7 +71,10 @@ function expectOneTurnScopedCutShortRow(settled: Awaited<ReturnType<typeof settl
   expect(row?.turnScope).toEqual({ kind: 'turn', turnItemId: turn?.itemId })
   expect(
     readAgentSessionFailureFact(row?.body.kind === 'status' ? row.body.failure : undefined)
-  ).toEqual({ kind: 'providerExited', detail: { text: LAST_WORDS, audience: 'person' } })
+  ).toEqual({
+    kind: 'providerExited',
+    detail: { text: `(code 0)\n${LAST_WORDS}`, audience: 'log' }
+  })
   expect(rows.find((item) => item.body.kind === 'tool-call')?.body).toMatchObject({
     state: 'failed',
     endedAs: 'interrupted'
@@ -91,8 +87,7 @@ describe('a Grok crash with its exit seen first', () => {
     rig.child.exit()
     const settled = await settledCrash(rig)
     expectOneTurnScopedCutShortRow(settled)
-    // The child's own end landed first, interrupted at the exit and never `unverifiable`: the host
-    // has no turn or call of it left to revise.
+    // Provider exit already interrupted the turn; only its notice remains to write.
     expect(
       settled.batch.mutations.map((mutation) => mutation.kind === 'item' && mutation.body.kind)
     ).toEqual(['status'])
@@ -103,7 +98,7 @@ describe('a Grok crash with its exit seen first', () => {
 describe('a Grok crash whose pipes close before its exit is seen', () => {
   it('is unverifiable only until the exit is proven; the provider-exit batch then revises the turn', async () => {
     const rig = await midReply()
-    // The child outlives its stream until Orca's close of it is proven.
+    // Keep the process alive after stream loss until close is proven.
     let exitNow: () => void = () => undefined
     rig.child.proveClose = () =>
       new Promise((resolve) => {
@@ -121,14 +116,12 @@ describe('a Grok crash whose pipes close before its exit is seen', () => {
     exitNow()
     const settled = await settledCrash(rig)
     expectOneTurnScopedCutShortRow(settled)
-    // The turn's revision, its call's and the row land together.
     const turnKey = settled.turn!.itemId
     expect(
       settled.batch.mutations.flatMap((mutation) =>
         mutation.kind === 'item' ? [journalLifecycleMutationItemId(mutation)] : []
       )
     ).toEqual(expect.arrayContaining([settled.statuses[0]!.itemId, turnKey]))
-    // No later stale-session pass rewrites it: nothing is left for one.
     expect(rig.batches.filter((batch) => batch.settlementId.includes('stale-session'))).toEqual([])
     await rig.host.close(SESSION, 'user-close')
   })

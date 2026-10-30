@@ -86,10 +86,7 @@ export function createGitHubIpcHarness(mocks: GitHubIpcMocks): GitHubIpcHarness 
         delete handlers[key]
       }
 
-      // Reset fixture repos to the default single-repo fixture each test, so
-      // individual tests can mutate the list without leaking preferences across
-      // tests (e.g. a preference-threading test could otherwise shadow the
-      // default-undefined assertions in sibling tests).
+      // Reset repo preferences between tests so one routing fixture cannot shadow another.
       harness.repos = defaultRepos()
       harness.projects = []
 

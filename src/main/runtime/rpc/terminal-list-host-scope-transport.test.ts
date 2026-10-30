@@ -4,9 +4,7 @@ import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 
-// Request options in this codebase have been dropped by a transport that
-// forgot to forward them. The host-scope answer must survive the RPC boundary
-// the same way, so assert it on the far side of the dispatcher.
+// Assert host-scope replies across dispatch: transports have previously dropped request options.
 const LIST_RESULT: RuntimeTerminalListResult = {
   terminals: [
     {

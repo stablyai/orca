@@ -87,9 +87,7 @@ describe('linkedIssue template substitution', () => {
     }
   })
 
-  // Why: a fixture-unique sentinel — a short number like 42 also appears in the
-  // character counts that truncateDiffForPrompt/limitSection emit, so growing any
-  // fixture past its limit would fail these guards for reasons unrelated to leakage.
+  // Use a unique issue sentinel; small numbers can also occur in prompt-truncation character counts.
   const BUILT_IN_PROMPT_SENTINEL_ISSUE = 987654
   const builtInPromptParams = {
     agentId: 'custom' as const,

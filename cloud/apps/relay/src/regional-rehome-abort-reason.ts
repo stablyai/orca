@@ -7,11 +7,7 @@ export const REGIONAL_REHOME_ABORT_REASONS = ['host_not_arrived', 'max_refresh_e
 
 export type RegionalRehomeAbortReason = (typeof REGIONAL_REHOME_ABORT_REASONS)[number]
 
-// One whole migration lease with the host absent from the target and owning
-// nothing on the source. Nothing legitimately takes that long: the attach
-// deadline is seconds, and a host that is still moving holds a lease at one end
-// or the other. The control's `drain_grace_ms` does not fit — idle rehome
-// commits with a grace of zero, so these attempts never carry one.
+// One migration lease with neither target arrival nor source ownership proves abandonment; attach takes seconds. Drain grace cannot bound idle rehomes, which commit with zero grace.
 export const REGIONAL_REHOME_ARRIVAL_WINDOW_MS = ASSIGNMENT_LIMITS.migrationLeaseMs
 
 // The window the inventory line and the preview both report aborts over.

@@ -60,8 +60,7 @@ export function SkillShareDialog({
 }: SkillShareDialogProps): React.JSX.Element {
   const selectedSkills = useMemo(() => skills ?? (skill ? [skill] : []), [skill, skills])
   const [preview, setPreview] = useState<SkillSharePreview | null>(null)
-  // Why: the dialog never shows who is publishing — it only needs to know that a
-  // Cloud account exists, since publishing fails without one.
+  // Publishing requires a Cloud account; this dialog needs presence, not publisher identity.
   const [hasCloudAccount, setHasCloudAccount] = useState(false)
   const [releaseNotes, setReleaseNotes] = useState('')
   const [progress, setProgress] = useState<SkillShareProgress | null>(null)
@@ -103,6 +102,8 @@ export function SkillShareDialog({
       }
       const nextPreview = await window.api.skills.prepareShare({
         skillIds: selectedSkills.map((skill) => skill.id),
+        // Only these folders' roots may start a stopped WSL distro.
+        skillDirectories: selectedSkills.map((skill) => skill.directoryPath),
         bundleName,
         ...(managedInstall ? { packageId: managedInstall.packageId } : {})
       })
@@ -171,8 +172,7 @@ export function SkillShareDialog({
     })
   }, [preview])
 
-  // Why: nothing has to be typed to publish, so the primary action takes focus
-  // as soon as there is something to publish — Enter then completes the flow.
+  // Focus the primary action once preview loads so Enter can publish without filling another field.
   useEffect(() => {
     if (preview && !shareUrl) {
       publishButtonRef.current?.focus()
@@ -264,8 +264,7 @@ export function SkillShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !publishing && void close()}>
-      {/* Why: the review scrolls on its own so progress, errors, and the primary
-          action stay visible on a short window instead of below the fold. */}
+      {/* Scroll review independently so progress, errors and publishing controls stay visible in short windows. */}
       <DialogContent
         className="grid max-h-[calc(100vh-3rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl [&>*]:min-w-0"
         {...(skillShareDialogHasDescription(Boolean(shareUrl), publishingNewVersion)

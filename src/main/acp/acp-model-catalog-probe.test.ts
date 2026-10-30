@@ -13,8 +13,12 @@ import { AgentModelCatalogListingStoppedError } from '../native-chat/agent-model
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 
+const PREFIX = ['run', '--', 'agent']
+const launcherSettings = (agent: string) => ({
+  agentCmdOverrides: { [agent]: `"${process.execPath}" ${PREFIX.join(' ')}` }
+})
 const GROK = acpLaunchSpecFor('grok')!
-// The user's own OpenCode environment, read without the app's managed-account service.
+// Bypass the app's managed-account service for this fixture.
 const OPENCODE: AcpLaunchSpec = {
   ...acpLaunchSpecFor('opencode')!,
   account: openCodeAcpAccountBinding(() => ({
@@ -33,7 +37,7 @@ const MODEL_STATE = {
       name: 'Grok Build',
       _meta: {
         supportsReasoningEffort: true,
-        // The session's own pick, which must not become a catalog default.
+        // A session pick must not become a catalog default.
         reasoningEffort: 'low',
         reasoningEfforts: [
           { value: 'low', id: 'fast', label: 'Fast' },
@@ -48,6 +52,7 @@ const MODEL_STATE = {
 
 const agents: AcpScriptedAgent[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const agent of agents.splice(0)) {
     agent.close()
   }
@@ -140,7 +145,7 @@ function scriptedOpenCode2(canDelete: boolean): {
     deps: {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
       resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async (_launch, supports) => supports('2.0.29'),
+      probeVersion: async () => ({ version: '2.0.29' }),
       homePath: '/home/user',
       dataDirectory: '/orca-data',
       runListing: vi.fn<NonNullable<AcpModelCatalogProbeDeps['runListing']>>(),
@@ -164,6 +169,7 @@ function scriptedOpenCode2(canDelete: boolean): {
 describe('ACP model catalog probes', () => {
   it('lists Grok from initialize alone, under its pinned account, and closes the child', async () => {
     const { agent, deps, launches, closed } = scriptedGrok({ modelState: MODEL_STATE })
+    deps.resolveCommandSettings = () => launcherSettings('grok')
     const success = await createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)
     expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
     expect(agent.frames[0]!.params).toMatchObject({
@@ -171,8 +177,8 @@ describe('ACP model catalog probes', () => {
     })
     expect(launches).toEqual([
       expect.objectContaining({
-        command: '/opt/grok/bin/grok',
-        args: ['agent', 'stdio'],
+        command: process.execPath,
+        args: [...PREFIX, 'agent', 'stdio'],
         env: expect.objectContaining({ GROK_HOME: '/homes/grok-a', XAI_API_KEY: 'from-settings' })
       })
     ])
@@ -181,9 +187,7 @@ describe('ACP model catalog probes', () => {
       {
         id: 'grok-build',
         label: 'Grok Build',
-        // `initialize`'s currentModelId is not what a session runs, so it names no default.
         isDefault: false,
-        // Grok's option ids, which its effort config option takes, and its own default only.
         efforts: [
           { value: 'fast', label: 'Fast' },
           { value: 'deep', label: 'Deep' }
@@ -228,8 +232,8 @@ describe('ACP model catalog probes', () => {
     const probe = createAcpModelCatalogProbe(OPENCODE, {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
       dataDirectory: '/orca-data',
-      resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async (_launch, supports) => supports('1.18.35'),
+      resolveCommandSettings: () => launcherSettings('opencode'),
+      probeVersion: async () => ({ version: '1.18.35' }),
       homePath: '/home/user',
       runListing,
       connect
@@ -241,9 +245,8 @@ describe('ACP model catalog probes', () => {
     expect(connect).not.toHaveBeenCalled()
     expect(runListing).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: '/opt/opencode/bin/opencode',
-        args: ['models', '--verbose'],
-        // Where the project's opencode.json is read, so it lists what a chat there offers.
+        command: process.execPath,
+        args: [...PREFIX, 'models', '--verbose'],
         cwd: '/work/project',
         env: expect.objectContaining({ OPENCODE_CLIENT: 'acp' })
       }),
@@ -254,9 +257,9 @@ describe('ACP model catalog probes', () => {
     ])
   })
 
-  // Every 2.x release rejects `--verbose`, and its own listings omit providers that report late.
   it('lists OpenCode 2.x from a session it opens and deletes, with no listing command', async () => {
     const { agent, deps, launches } = scriptedOpenCode2(true)
+    deps.resolveCommandSettings = () => launcherSettings('opencode')
     const success = await createAcpModelCatalogProbe(OPENCODE, deps)(
       { kind: 'opencode', locator: { kind: 'unmanaged' } },
       { workspacePath: '/work/project' }
@@ -269,7 +272,9 @@ describe('ACP model catalog probes', () => {
     // In the asking chat's folder, so OpenCode records no project the person never opened.
     expect(agent.frames[1]!.params).toMatchObject({ cwd: '/work/project' })
     expect(agent.frames[2]!.params).toEqual({ sessionId: 'probe-session' })
-    expect(launches).toEqual([expect.objectContaining({ args: ['acp'] })])
+    expect(launches).toEqual([
+      expect.objectContaining({ command: process.execPath, args: [...PREFIX, 'acp'] })
+    ])
     expect(deps.runListing).not.toHaveBeenCalled()
     expect(success.models.map((model) => [model.id, model.label])).toEqual([
       ['opencode/big-pickle', 'Big Pickle'],
@@ -288,7 +293,6 @@ describe('ACP model catalog probes', () => {
     expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
   })
 
-  // `omp acp` advertises no delete, so its listing session goes to a folder the probe removes.
   it('lists OMP from a session kept in a folder it removes, in the chat folder', async () => {
     const { agent, deps, launches } = scriptedOpenCode2(false)
     const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-omp-listing-'))
@@ -297,7 +301,7 @@ describe('ACP model catalog probes', () => {
         ...deps,
         dataDirectory,
         resolveCommand: () => '/opt/omp/bin/omp',
-        probeVersion: async (_launch, supports) => supports('18.12.2')
+        probeVersion: async () => ({ version: '18.12.2' })
       })(
         { variable: 'PI_CODING_AGENT_DIR', path: '/homes/omp' },
         { workspacePath: '/work/project' }
@@ -323,14 +327,16 @@ describe('ACP model catalog probes', () => {
 
   it('opens no session on OpenCode 2.x without a chat folder, as at a prewarm', async () => {
     const { agent, deps, launches } = scriptedOpenCode2(true)
+    const probeVersion = vi.fn(deps.probeVersion)
     await expect(
-      createAcpModelCatalogProbe(
-        OPENCODE,
-        deps
-      )({ kind: 'opencode', locator: { kind: 'unmanaged' } })
+      createAcpModelCatalogProbe(OPENCODE, { ...deps, probeVersion })({
+        kind: 'opencode',
+        locator: { kind: 'unmanaged' }
+      })
     ).rejects.toBeInstanceOf(AgentModelCatalogListingStoppedError)
     expect(launches).toEqual([])
     expect(agent.frames).toEqual([])
+    expect(probeVersion).not.toHaveBeenCalled()
   })
 
   it('keeps the models, and says so, when OpenCode 2.x refuses to delete the listing session', async () => {
@@ -349,7 +355,7 @@ describe('ACP model catalog probes', () => {
     warn.mockRestore()
   })
 
-  // OpenCode may already have saved the session it never named; nothing is left to delete it by.
+  // An interrupted create can save a session without returning its ID.
   it('stops a listing cut off while OpenCode 2.x creates its session, without deleting', async () => {
     const { agent, deps, closed } = scriptedOpenCode2(true)
     agent.on('session/new', () => {})
@@ -387,7 +393,7 @@ describe('ACP model catalog probes', () => {
       resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
       dataDirectory: '/orca-data',
       resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async () => false,
+      probeVersion: async () => ({ version: '1.0.0' }),
       runListing
     })
     await expect(
@@ -397,20 +403,5 @@ describe('ACP model catalog probes', () => {
       )
     ).rejects.toThrow(/does not run structured chats/)
     expect(runListing).not.toHaveBeenCalled()
-  })
-
-  // The binary may be 2.x, which lists only in a chat's folder; nothing is spawned to find out.
-  it('asks `opencode` nothing, not even its version, without a chat folder', async () => {
-    const probeVersion = vi.fn(async () => true)
-    const probe = createAcpModelCatalogProbe(OPENCODE, {
-      resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-      dataDirectory: '/orca-data',
-      resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion
-    })
-    await expect(
-      probe({ kind: 'opencode', locator: { kind: 'unmanaged' } })
-    ).rejects.toBeInstanceOf(AgentModelCatalogListingStoppedError)
-    expect(probeVersion).not.toHaveBeenCalled()
   })
 })

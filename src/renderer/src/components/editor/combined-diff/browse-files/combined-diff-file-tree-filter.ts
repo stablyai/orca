@@ -45,10 +45,7 @@ function getEntrySearchText(entry: CombinedDiffFileTreeEntry): string {
     .toLowerCase()
 }
 
-/**
- * Applies filters that describe the file set itself. Viewed state is deliberately not included:
- * section loading changes viewed flags without changing the tree's path structure.
- */
+/** Exclude volatile viewed flags from structural filtering so section loads cannot rebuild the path tree. */
 export function getCombinedDiffFileTreeEntriesMatchingStaticFilters({
   entries,
   query,

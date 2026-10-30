@@ -12,7 +12,6 @@ export function hasProfileStateDatabaseFiles(databaseFile: string): boolean {
   return profileStateDatabaseFiles(databaseFile).some(existsSync)
 }
 
-/** Classify storage without opening SQLite or changing either representation. */
 export function classifyProfileStateStorage(
   dataFile: string,
   databaseFile: string

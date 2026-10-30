@@ -1,13 +1,4 @@
-/**
- * The typed conflicts an authority returns when a request's captured owner no
- * longer matches its stored automation.
- *
- * These cross two transports that keep nothing but a string: Electron IPC
- * rewraps the message ("Error invoking remote method 'x': Error: …") and an
- * older runtime maps unknown error classes to `runtime_error`. So every message
- * ends with `: <code>`, the machine-token convention `hasRuntimeRpcErrorCode`
- * already matches, and callers strip the tail before display.
- */
+/** End messages with : <code> so owner conflicts survive Electron IPC wrapping and old runtime_error flattening. hasRuntimeRpcErrorCode reads the token; strip it before display. */
 
 import { hasRuntimeRpcErrorCode } from './runtime-rpc-error-code'
 
@@ -60,13 +51,7 @@ export function isAutomationOwnerConflictCode(
   return typeof value === 'string' && CODE_VALUES.includes(value as AutomationOwnerConflictCode)
 }
 
-/**
- * The conflict an authority returned, whatever the transport left of it.
- *
- * The single classifier for every client: matching `.code` alone reads only the
- * hop that preserves the error class, and a flattened `runtime_error` would
- * then lose the recovery the user needs.
- */
+/** Classify across transports by preserved code/message token; .code alone loses recovery after runtime_error flattening. */
 export function matchAutomationOwnerConflict(error: unknown): AutomationOwnerConflictCode | null {
   for (const code of CODE_VALUES) {
     if (hasRuntimeRpcErrorCode(error, code)) {

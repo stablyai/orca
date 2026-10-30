@@ -85,7 +85,6 @@ describe('resolveChildWorkspacesToggleGroupKey', () => {
   })
 
   it('does nothing when the sidebar renders no chip for the target or its parent', () => {
-    // e.g. every child is hidden by a sidebar filter, so the chip is gone
     expect(resolve(toggleState(family), hoveredDocument(parent), new Set())).toBeNull()
     expect(resolve(toggleState(family), hoveredDocument(child), new Set())).toBeNull()
   })
@@ -151,7 +150,6 @@ describe('resolveChildWorkspacesToggleGroupKey', () => {
     })
 
     expect(resolve(state, hoveredDocument(), new Set([remoteKey]))).toBe(remoteKey)
-    // Why: the local row sharing the parent's id has no chip of its own to fold.
     expect(resolve(state, hoveredDocument(), new Set(['lineage:parent']))).toBeNull()
     expect(resolve(state, hoveredDocument(remoteParent), new Set([remoteKey]))).toBe(remoteKey)
   })

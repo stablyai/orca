@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -38,7 +39,7 @@ export function DeleteNestedWorktreesDialog({
   const [deleting, setDeleting] = useState(false)
   const request = useRef(0)
   const worktreesByRepo = useAppStore((s) => (open ? selectWorktreesByRepo(s) : null))
-  // Why path containment: nested worktrees are the parent's rows on its host inside its folder.
+  // Nested worktrees must share the parent’s host and lie inside its folder.
   const unsavedTargets = useMemo(() => {
     const hostId = target.executionHostId ?? undefined
     const rows = worktreesByRepo ? getAllWorktreesFromState({ worktreesByRepo }) : []
@@ -61,7 +62,12 @@ export function DeleteNestedWorktreesDialog({
     try {
       const preview = window.api.worktrees.previewNestedRemoval
       if (!preview) {
-        throw new Error('This host does not support nested worktree deletion.')
+        throw new Error(
+          translate(
+            'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
+            'This host does not support nested worktree deletion.'
+          )
+        )
       }
       const result = await preview({
         worktreeId: target.id,
@@ -81,6 +87,7 @@ export function DeleteNestedWorktreesDialog({
     if (!plan || deleting) {
       return
     }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     setDeleting(true)
     setOpen(false)
     setError(null)
@@ -96,7 +103,10 @@ export function DeleteNestedWorktreesDialog({
     })
     state.markWorktreesDeleting(nestedRows)
     try {
-      const result = await state.removeWorktree(target, true, { approvedNestedWorktrees: plan })
+      const result = await state.removeWorktree(target, true, {
+        approvedNestedWorktrees: plan,
+        confirmedDiscards
+      })
       if (!result.ok) {
         setPlan(null)
         toast.error(

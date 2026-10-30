@@ -8,8 +8,9 @@ import { projectHydratedBrowserSession } from './browser-hydration-state'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { findWorkspace } from '../browser-page-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { recordLayoutApply } from '@/runtime/layout-apply-send'
+import { sendBrowserLayoutCommand } from './browser-layout-owner-commands'
 import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 
 export function createBrowserHydrationActions(
   set: BrowserSliceSet,
@@ -56,10 +57,13 @@ export function createBrowserHydrationActions(
       })
 
       const state = get()
-      // Why here and not in the startup chain: the seeded handles are the only record that this
-      // desktop was hosting pages, and the runtime only hands them back once it sees an attach.
+      // Seeded handles alone prove prior desktop hosting; attach is required for runtime to hand those pages back.
       void ensureBrowserClientHostsForRestoredPages(state)
       for (const [worktreeId, browserTabs] of Object.entries(state.browserTabsByWorktree)) {
+        // Switch point: main's layout load gives a tabless record its tab; its frame draws it.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN && !runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
+          continue
+        }
         for (const bt of browserTabs) {
           const exists = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
             (t) => t.contentType === 'browser' && t.entityId === bt.id
@@ -76,38 +80,48 @@ export function createBrowserHydrationActions(
     },
 
     switchBrowserTabProfile: (workspaceId, profileId, sessionPartition) => {
-      set((s) => {
-        for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
-          const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
-          if (tabIndex !== -1) {
-            const updatedTabs = [...tabs]
-            updatedTabs[tabIndex] = {
-              ...updatedTabs[tabIndex],
-              sessionProfileId: profileId,
-              sessionPartition: sessionPartition ?? null
-            }
-            return {
-              browserTabsByWorktree: {
-                ...s.browserTabsByWorktree,
-                [worktreeId]: updatedTabs
+      const switchHere = (): void =>
+        set((s) => {
+          for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
+            const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
+            if (tabIndex !== -1) {
+              const updatedTabs = [...tabs]
+              updatedTabs[tabIndex] = {
+                ...updatedTabs[tabIndex],
+                sessionProfileId: profileId,
+                sessionPartition: sessionPartition ?? null
+              }
+              return {
+                browserTabsByWorktree: {
+                  ...s.browserTabsByWorktree,
+                  [worktreeId]: updatedTabs
+                }
               }
             }
           }
-        }
-        return s
-      })
-      // Switch point: main records the tab's new profile.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        const tab = findWorkspace(get().browserTabsByWorktree, workspaceId)
-        if (tab) {
-          recordLayoutApply(get(), tab.worktreeId, {
+          return s
+        })
+      // Switch point: main switches the tab's profile; its frame shows the change.
+      const tab = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? findWorkspace(get().browserTabsByWorktree, workspaceId)
+        : null
+      if (
+        tab &&
+        sendBrowserLayoutCommand(
+          get,
+          tab.worktreeId,
+          {
             type: 'setBrowserTabProfile',
             browserTabId: workspaceId,
             profileId,
             sessionPartition: sessionPartition ?? null
-          })
-        }
+          },
+          { here: switchHere }
+        )
+      ) {
+        return
       }
+      switchHere()
     }
   }
 }

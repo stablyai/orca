@@ -3,10 +3,7 @@ import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signa
 import { notifyEditorFileCacheStale } from './editor-autosave'
 import { isEditorModelDirty } from './editor-save-disk-precondition'
 
-/**
- * A clean tab's text (cache, or a leftover draft) that no longer matches its disk version, such as
- * a cache kept across another tab's write. It must never be pushed into a live model.
- */
+/** Never push clean cached text that disagrees with its current disk baseline into a live model. */
 export function isStaleCachedEditorText(fileId: string, content: string): boolean {
   const state = useAppStore.getState()
   const file = state?.openFiles?.find((openFile) => openFile.id === fileId)
@@ -43,20 +40,17 @@ export function settleStaleCacheReload(fileId: string): void {
   requestedReloads.delete(fileId)
 }
 
-/**
- * The one rule for pushing a tab's text into its live model: a clean tab's text (disk-derived, or a
- * leftover draft) never enters a dirty model. Reload and Overwrite clear the model's edits first.
- */
+/** Protect shared dirty models from clean tab text; Reload and Overwrite clear model edits first. */
 export function mayPushTabTextIntoModel(fileId: string): boolean {
   const state = useAppStore.getState()
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
-  if (!file || file.isDirty) {
-    // Why: a dirty tab's text is its own edits.
+  if (!file) {
     return true
   }
-  // Why backstop: a clean tab's leftover draft is never restored into the model, whatever its state.
-  if (state.editorDrafts[fileId] !== undefined) {
-    return false
+  if (file.isDirty) {
+    // Dirty views without drafts have disk-derived text that must not replace the shared model’s edits.
+    return state.editorDrafts[fileId] !== undefined
   }
+  // A clean record draft is still shared text, e.g. rich undo differing from disk only in trailing space.
   return !isEditorModelDirty(state, file)
 }

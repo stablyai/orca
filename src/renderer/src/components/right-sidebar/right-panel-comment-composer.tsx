@@ -15,6 +15,7 @@ import {
   scheduleRightPanelCommentFocusTimer
 } from './right-panel-comment-focus-timers'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 
@@ -110,8 +111,7 @@ export function RightPanelCommentComposer({
   const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
     textareaRef.current = node
     if (node === null) {
-      // Why: markdown toolbar selection restoration is scoped to this textarea;
-      // clearing here prevents stale focus after the composer unmounts.
+      // Cancel selection restoration on unmount so toolbar callbacks cannot focus a stale textarea.
       clearRightPanelCommentFocusTimer(selectionTimerRef)
     }
   }, [])
@@ -161,7 +161,7 @@ export function RightPanelCommentComposer({
         setBody('')
         onCancel?.()
       } else {
-        setError(result.error)
+        setError(codeHostErrorText(result))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to post comment.')
@@ -173,8 +173,7 @@ export function RightPanelCommentComposer({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Why: the Enter that only confirms a CJK candidate still reports the held
-      // modifier, so submitting here posts the comment without its last syllable.
+      // IME confirm Enter may retain the modifier; submitting then would omit the final CJK syllable.
       if (isImeCompositionKeyDown(event)) {
         return
       }

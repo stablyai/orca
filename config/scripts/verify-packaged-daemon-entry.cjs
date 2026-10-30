@@ -10,12 +10,7 @@ const {
   daemonProtocolVersion
 } = require('../../src/shared/local-build-compatibility-contract.json')
 
-// Why: `asarUnpack` in config/electron-builder.config.cjs lists
-// out/main/daemon-entry.js on every platform, and the packaged daemon fork
-// (src/main/daemon/daemon-launch-paths.ts) resolves exactly this unpacked path. A
-// missing entry means the package layout regressed, so the check throws
-// instead of skipping — a silent skip false-passed exactly the layout bug
-// this gate exists to catch.
+// Require exact asar-unpacked daemon entry on every platform; missing path indicates layout regression and must not silently skip.
 function assertPackagedDaemonEntryExists(resourcesDir) {
   const entryPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
   if (!existsSync(entryPath)) {
@@ -231,10 +226,7 @@ function beforeDeadline(promise, deadline, what) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
-/**
- * One NDJSON daemon connection. `ready` settles on the hello reply; `broken` rejects when the
- * connection errors, closes or sends a line that is not JSON, at any point.
- */
+// NDJSON ready settles on hello; broken rejects any later error/close/non-JSON response.
 function openDaemonConnection(socketPath, hello) {
   const socket = connect(socketPath)
   const listeners = []
@@ -404,9 +396,7 @@ async function runTerminalHostRoundTrip({
   }
 }
 
-// Why: the helper's own Node must load node-pty and serve a PTY; a `Usage:` boot never loads
-// node-pty. Release builds run it under hardened runtime, so allow-jit and same-team library
-// validation are exercised before notarization.
+// Probe helper’s own Node/node-pty round trip under release hardened runtime to exercise allow-jit and same-team library validation before notarization.
 async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
   const paths = macTerminalHostPaths(appPath)
   const prefix = macCommandPrefixForArch(arch)
@@ -419,8 +409,7 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
     return
   }
   const stderr = []
-  // Boot a clone outside the build tree, as installs do, so no ancestor node_modules can
-  // satisfy a require the helper lacks.
+  // Boot clone outside build tree so ancestor node_modules cannot satisfy missing packaged dependency.
   const isolated = mkdtempSync(join(tmpdir(), 'orca-terminal-host-boot-'))
   const clone = join(isolated, 'Orca Terminal Host.app')
   try {

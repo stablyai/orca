@@ -5,11 +5,7 @@ import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivenessUnverifiable {
   abstract applyMobileDisplayMode(ptyId: string): Promise<boolean>
 
-  // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
-  // resizeForClient / fresh subscribe with auto). Records the actor as the
-  // most recent mobile driver and re-applies phone-fit if we were previously
-  // in `desktop` mode (mobile reclaims a take-back). Mobile-to-mobile hand-offs
-  // are no-ops for resize.
+  // Mobile gestures reclaim desktop take-back and fit the active viewport; mobile-to-mobile handoffs preserve resize.
   async mobileTookFloor(
     ptyId: string,
     clientId: string,
@@ -33,10 +29,7 @@ export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMark
     }
     const prev = previousFloor ?? this.getDriver(ptyId)
     const currentMode = this.mobileDisplayModes.get(ptyId)
-    // Why: a deliberate mobile action implies mobile is resuming control.
-    // If the display mode is currently 'desktop' (set by an earlier
-    // take-back), flip it back to 'auto' (= map absence) and re-apply so
-    // phone-fit takes hold again. See docs/mobile-presence-lock.md.
+    // A deliberate mobile gesture clears desktop mode so phone-fit can reclaim the PTY (docs/mobile-presence-lock.md).
     if (prev.kind === 'desktop' || currentMode === 'desktop') {
       if (currentMode === 'desktop') {
         this.mobileDisplayModes.delete(ptyId)
@@ -54,16 +47,7 @@ export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMark
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
 
-  // Why: in-place viewport update on the existing mobile subscription —
-  // used when the mobile keyboard opens/closes and shrinks/grows the
-  // visible terminal area. We refresh the subscriber's viewport, re-fit
-  // the PTY to the new dims, and emit a 'resized' event so the mobile
-  // xterm reinits inline at the new dims without re-subscribing. This
-  // avoids the unsubscribe → resubscribe cycle which would (a) flash the
-  // desktop lock banner during the brief idle gap and (b) cause the new
-  // subscribe to capture the already-phone-fitted PTY size as its
-  // restore baseline (stuck-dim bug on later disconnect).
-  // No-op when the client isn't actually subscribed to this PTY.
+  // Update subscribed viewports inline to avoid banner flashes and recapturing phone-fit restore baselines during resubscribe.
   async updateMobileViewport(
     ptyId: string,
     clientId: string,
@@ -98,8 +82,7 @@ export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMark
     )
 
     sub.wasResizedToPhone = true
-    // The driver is already mobile{this client} when we got here; refresh
-    // to update lastActedAt-based ordering on later actor selection.
+    // Refresh the current driver's lastActedAt ordering for later actor selection.
     this.setDriver(ptyId, { kind: 'mobile', clientId })
 
     const needsFreshSubscribeGuard = !this.layouts.has(ptyId)

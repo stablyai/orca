@@ -15,8 +15,7 @@ function subscribe(onChange: () => void): () => void {
 const subscribeToNothing = (): (() => void) => () => {}
 const notFocused = (): boolean => false
 
-/** Whether the Orca window is the one in front and focused. `enabled` off reads false and
- *  listens to nothing, so a pane that is not showing never re-renders on a window switch. */
+/** Track foreground focus only while enabled; hidden panes return false without window-switch subscriptions. */
 export function useOrcaWindowForegroundFocused(enabled: boolean): boolean {
   return useSyncExternalStore(
     enabled ? subscribe : subscribeToNothing,

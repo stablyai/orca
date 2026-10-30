@@ -168,7 +168,6 @@ describe('restartManagedOrcadEnvironment', () => {
 })
 
 describe('restartManagedOrcadEnvironment terminal admission', () => {
-  // The first count is unfenced; only the one under the host lock closes admission.
   const closes = () => mocks.census.mock.calls.map((call) => call[4]?.closeAdmissionForMs)
   const FENCED = [undefined, ORCAD_UPDATE_ADMISSION_FENCE_MS]
 

@@ -64,7 +64,6 @@ describe('agent prompt receipt correlation', () => {
     await expect(
       runtime.observeTerminalAgentPrompt(handle, first.prompt!, 0)
     ).resolves.toMatchObject({ stages: ['input_accepted', 'turn_started'] })
-    // Observing a queued receipt must never write to the PTY again.
     expect(writes).toHaveLength(writesAfterSubmission)
   })
 })

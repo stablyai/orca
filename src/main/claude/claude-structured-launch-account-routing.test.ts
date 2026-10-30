@@ -48,7 +48,7 @@ it('launches each acquisition under the current selection, not the account it wa
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveLaunchArgs: () => [],
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
     resolveAuthPolicy: () => ({ account: 'system' })
   })
@@ -60,7 +60,6 @@ it('launches each acquisition under the current selection, not the account it wa
     providerHandle: claudeProviderHandle('unused', null)
   }
 
-  // A missing folder is set up first; typed when that fails, so the chat names the situation.
   await expect(resolve({ identity })).rejects.toMatchObject({
     name: 'AgentSessionPreSpawnError',
     reason: 'claudeAccountSetupFailed',
@@ -69,7 +68,6 @@ it('launches each acquisition under the current selection, not the account it wa
 
   const home = join(root, 'claude-profiles', 'a', 'home')
   mkdirSync(home, { recursive: true })
-  // Already set up, so the launch does not wait for setup.
   writeFileSync(join(root, 'claude-profiles', 'a', 'profile.json'), '{}')
   const routed = await resolve({ identity })
   expect(routed.claudeConfigDir).toBe(home)
@@ -115,7 +113,7 @@ function routedResumeFixture(rewind?: AgentSessionRewindRecord) {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveLaunchArgs: () => [],
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
     resolveAuthPolicy: () => ({ account: 'system' }),
     hasTranscript: async ({ claudeConfigDir }) => transcriptHomes.has(claudeConfigDir)

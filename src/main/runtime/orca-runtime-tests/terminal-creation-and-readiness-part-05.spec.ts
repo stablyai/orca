@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   getDefaultWorkspaceSession,
@@ -85,6 +86,10 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+      registerLivePty(runtime, 'pty-source', TEST_WORKTREE_ID, null, {
+        tabId,
+        leafId: sourceLeafId
+      })
       const sourceHandle = runtime.getTerminalHandleForPaneKey(makePaneKey(tabId, sourceLeafId))
       expect(sourceHandle).not.toBeNull()
 
@@ -93,14 +98,12 @@ describe('OrcaRuntimeService', () => {
         runtime.splitTerminal(sourceHandle!, { direction: 'vertical' })
       ])
 
-      // Main splits itself: no window is asked, and each split names its own pane.
       expect(splitTerminal).not.toHaveBeenCalled()
       expect(horizontal.leafId).not.toBe(vertical.leafId)
       const leafIds = collectLeafIds(getSession().terminalLayoutsByTabId[tabId]?.root)
       expect(leafIds).toEqual(
         expect.arrayContaining([sourceLeafId, horizontal.leafId, vertical.leafId])
       )
-      // Each started under its own pane key, in the tab it split.
       for (const split of [horizontal, vertical]) {
         expect(split.tabId).toBe(tabId)
         const leafId = split.leafId ?? ''
@@ -209,7 +212,7 @@ describe('OrcaRuntimeService', () => {
     const splitTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -224,7 +227,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -258,7 +260,7 @@ describe('OrcaRuntimeService', () => {
       splitDirection: 'vertical'
     })
 
-    // Why: client renders the tab from one sibling's parentLayout, so all siblings must carry the direction or Split Right flips down.
+    // Every sibling must carry parentLayout direction for paired clients to render Split Right correctly.
     const publishedTabs = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!.tabs
     const siblingSurfaces = publishedTabs.filter(
       (tab): tab is Extract<typeof tab, { type: 'terminal' }> =>
@@ -328,8 +330,7 @@ describe('OrcaRuntimeService', () => {
     const splitSpawn = spawn.mock.calls[0]?.[0] as
       | { expectedSourceBinding?: { incarnationId?: string } }
       | undefined
-    // Why: persistence never recorded an incarnation for this pane, so sending the live-only id
-    // would make the store's fence reject every split from a restored session.
+    // An unsaved incarnation cannot satisfy the store's persisted-binding fence.
     expect(splitSpawn?.expectedSourceBinding).not.toHaveProperty('incarnationId')
 
     runtime.syncWindowGraph(1, {
@@ -455,7 +456,10 @@ describe('OrcaRuntimeService', () => {
           })
       )
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService(store)
+    const { runtimeStore, setSession } = makeRuntimeStoreWithWorkspaceSession(
+      getDefaultWorkspaceSession()
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -469,6 +473,7 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
+    setSession(getDefaultWorkspaceSession())
     resolveSplitSpawn({ id: 'retired-projected-split-pty' })
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
@@ -489,7 +494,7 @@ describe('OrcaRuntimeService', () => {
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -504,7 +509,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -649,7 +653,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

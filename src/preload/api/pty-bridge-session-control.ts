@@ -1,3 +1,9 @@
+import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
+import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
@@ -8,6 +14,8 @@ import type {
   TerminalLeafMoveResult
 } from '../../shared/terminal-leaf-move'
 import type {
+  SavedResumeDecision,
+  TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
@@ -35,6 +43,7 @@ export const ptySessionControlApi = {
     commandDelivery?: 'renderer' | 'provider'
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -45,26 +54,20 @@ export const ptySessionControlApi = {
     projectRuntime?: ProjectExecutionRuntimeResolution
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
-    // Why: marks the PTY hidden before its first byte so the delivery gate + model responder own spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
-    // Why: closes the SIGKILL race (INVESTIGATION.md) — main sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before pty:spawn returns.
     tabId?: string
     leafId?: string
-    // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
     replacesPtyId?: string
-    // Which tab and leaf a fresh PTY joins; older mains ignore it.
     placement?: TerminalPanePlacement
-    // Visible restores are `user-resume`, hidden ones `automatic-restore`; the fork gate validates.
     spawnIntent?: SpawnIntent
-    // The agent launch this pane's spawn starts; main admits and plans it.
+    wslPassiveRestore?: true
     agentLaunch?: AgentPaneLaunchRequest
-    // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
     id: string
-    /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
     incarnationId?: string
     launchConfig?: SleepingAgentLaunchConfig
+    launchAgent?: TuiAgent
     snapshot?: string
     snapshotCols?: number
     snapshotRows?: number
@@ -81,7 +84,11 @@ export const ptySessionControlApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
-    /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
+    agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
+    savedResumeDecision?: SavedResumeDecision
+    refusedResume?: TerminalLaunchResult['refusedResume']
+    launchToken?: string
+    resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {
@@ -118,8 +125,8 @@ export const ptySessionControlApi = {
   resetInputModes: (id: string): void => {
     ipcRenderer.send('pty:resetInputModes', { id })
   },
-  ackColdRestore: (id: string): void => {
-    ipcRenderer.send('pty:ackColdRestore', { id })
+  ackColdRestore: (id: string, pane?: PaintedRestorePane): void => {
+    ipcRenderer.send('pty:ackColdRestore', pane ? { id, pane } : { id })
   },
   ackHiddenOutputRestoreApplied: (id: string, hiddenDropEpisode?: number): void => {
     ipcRenderer.send('pty:hiddenOutputRestoreApplied', { id, hiddenDropEpisode })
@@ -166,10 +173,14 @@ export const ptySessionControlApi = {
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
     ipcRenderer.send('pty:terminalViewAttributes', attributes)
   },
+  killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
+    ipcRenderer.invoke('pty:killFenced', request),
   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
-  listSessions: (scope?: PtySessionListScope): Promise<PtyListedSession[]> =>
-    ipcRenderer.invoke('pty:listSessions', scope),
+  listSessions: (
+    scope?: PtySessionListScope,
+    admission?: ResourceViewAdmission
+  ): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions', scope, admission),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>

@@ -1,9 +1,4 @@
-/**
- * Small JSON records Orca keeps on an orcad host (activation, transactions, stop receipts).
- *
- * Reads are bounded and never swallow a failure: a record that could not be read is not an
- * absent one, and treating it as absent is how a client deploys over a live install.
- */
+// Unreadable host records must not look absent: deploying over an unknown live install is unsafe.
 import { randomUUID } from 'node:crypto'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { removeRemoteFileCommand } from '../../ssh/ssh-remote-commands'
@@ -20,10 +15,9 @@ import {
   ORCAD_RECORD_PRESENT_MARKER as PRESENT_MARKER
 } from '../host-state/orcad-windows-host-script'
 
-/** `present` carries raw bytes; schema checks belong to the caller that owns the format. */
-export type OrcadRemoteRecordRead = { state: 'absent' } | { state: 'present'; raw: string }
+/** Callers validate the schema of present records. */
+type OrcadRemoteRecordRead = { state: 'absent' } | { state: 'present'; raw: string }
 
-/** `~/.orca-remote`, where the host script and the pinned runtime live. */
 function windowsBaseDir(target: OrcadRemoteExecTarget): string {
   if (!target.remoteHome) {
     throw new Error(
@@ -42,7 +36,7 @@ export async function readBoundedOrcadRemoteRecord(
     return readWindowsRecord(target, path, maxBytes)
   }
   const file = quotePosixShell(path)
-  // Why markers: an empty stdout must never be mistaken for "no record" when the read failed.
+  // Explicit markers distinguish absent records from failed reads with empty stdout.
   const output = await execOrcadRemote(
     target,
     `if [ ! -e ${file} ] && [ ! -L ${file} ]; then printf '%s\\n' ${ABSENT_MARKER}; exit 0; fi; ` +
@@ -108,7 +102,7 @@ export async function writeAtomicOrcadRemoteRecord(
         `mv -f ${quotePosixShell(partialPath)} ${quotePosixShell(path)}`
     )
   } catch (error) {
-    // Why keep the partial on an unconfirmed termination: the write may still be running there.
+    // Unconfirmed writes may still be running; preserve their partial file.
     if (!isUnconfirmedSshCommandTermination(error)) {
       const discard = baseDir
         ? orcadWindowsHostOpCommand(target.host, baseDir, 'remove-file', [partialPath])

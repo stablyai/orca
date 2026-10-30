@@ -1,147 +1,146 @@
-import i18next, {
-  type BackendModule,
-  type i18n as I18nInstance,
-  type ReadCallback,
-  type TOptions
-} from 'i18next'
+import type { TOptions } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
 import enRuntimeRequired from './en-runtime-required.json'
-import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
-import { advanceTranslationResourceVersion } from './translation-resource-version'
-import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
+import deCatalogUrl from './locales/de.json?url'
+import esCatalogUrl from './locales/es.json?url'
+import frCatalogUrl from './locales/fr.json?url'
+import jaCatalogUrl from './locales/ja.json?url'
+import koCatalogUrl from './locales/ko.json?url'
+import ptCatalogUrl from './locales/pt.json?url'
+import ruCatalogUrl from './locales/ru.json?url'
+import trCatalogUrl from './locales/tr.json?url'
+import zhCatalogUrl from './locales/zh.json?url'
+import zhHantCatalogUrl from './locales/zh-Hant.json?url'
+import {
+  advanceTranslationResourceVersion,
+  getTranslationResourceVersion
+} from './translation-resource-version'
+import { resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
-import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
-import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
+import type { UiLanguage } from '../../../shared/ui-language'
+import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { supportedIntlLocale } from './intl-locale-support'
+import { createOrcaI18n } from '../../../shared/orca-i18n-instance'
 
-export const i18n: I18nInstance = i18next.createInstance()
-
-// Why: only the English catalog is bundled eagerly. The other four locales add
-// ~2MB to the renderer's startup chunk (parsed on every launch) even though the
-// app always boots in English and only switches after the persisted UI language
-// loads. A lazy backend fetches each non-English catalog on demand, so any
-// changeLanguage() call (UI switch or test) transparently loads its bundle
-// instead of paying the parse cost at cold start.
-const NON_DEFAULT_LOCALE_LOADERS: Record<
-  Exclude<SupportedUiLocale, 'en'>,
-  () => Promise<{ default: Record<string, unknown> }>
-> = {
-  es: () => import('./locales/es.json'),
-  fr: () => import('./locales/fr.json'),
-  ja: () => import('./locales/ja.json'),
-  ko: () => import('./locales/ko.json'),
-  pt: () => import('./locales/pt.json'),
-  zh: () => import('./locales/zh.json')
+// Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
+const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
+  de: deCatalogUrl,
+  es: esCatalogUrl,
+  fr: frCatalogUrl,
+  ja: jaCatalogUrl,
+  ko: koCatalogUrl,
+  pt: ptCatalogUrl,
+  ru: ruCatalogUrl,
+  tr: trCatalogUrl,
+  zh: zhCatalogUrl,
+  'zh-Hant': zhHantCatalogUrl
 }
 
-const lazyLocaleBackend: BackendModule = {
-  type: 'backend',
-  init: () => {},
-  read: (language: string, _namespace: string, callback: ReadCallback) => {
-    const loader = NON_DEFAULT_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
-    if (!loader) {
-      // English (and unknown locales) are served from bundled resources; signal
-      // "nothing to load" so i18next falls back to the in-memory catalog.
-      callback(null, false)
-      return
-    }
-    loader().then(
-      (mod) => callback(null, mod.default),
-      (error) => callback(error instanceof Error ? error : new Error(String(error)), false)
-    )
+const LOCALE_CATALOG_URLS = new Map<string, string>(Object.entries(NON_DEFAULT_LOCALE_URLS))
+
+// Built-in catalogs ship every CLDR plural form (sync:localization-catalog), so they load as-is.
+async function fetchLocaleCatalog(url: string): Promise<Record<string, unknown>> {
+  const response = await fetch(url, { cache: 'no-cache' })
+  if (!response.ok) {
+    throw new Error(`Language catalog request failed: ${response.status}`)
   }
+  return response.json()
 }
 
-void i18n
-  .use(lazyLocaleBackend)
-  .use(initReactI18next)
-  .init({
-    fallbackLng: DEFAULT_LOCALE,
-    lng: DEFAULT_LOCALE,
-    // Why: `resources` seeds the eager English catalog while
-    // `partialBundledLanguages` lets the backend supply the lazy locales — so
-    // i18next uses bundled `en` immediately and only hits the backend for the
-    // languages that aren't already in memory.
-    partialBundledLanguages: true,
-    resources: {
-      en: {
-        // Why the pruned catalog: every renderer string goes through
-        // translate(key, fallback), and for `en` i18next resolves the same
-        // English text from that inline default. Only entries a default can
-        // never produce — plural forms, dynamically keyed lookups, and values
-        // the translator edited away from the inline default — have to ship in
-        // the boot bundle. Generated by
-        // `pnpm run sync:localization-runtime-catalog`; en.json stays the
-        // translator source and the input to the four lazy catalogs.
-        translation: enRuntimeRequired
-      }
-    },
-    interpolation: {
-      escapeValue: false
-    },
-    react: {
-      useSuspense: false
+// The provider, onboarding switcher and backend can ask for one locale at once; share the fetch.
+const catalogRequests = new Map<string, Promise<Record<string, unknown>>>()
+
+/** Undefined for English and unknown locales, which need no catalog load. */
+function loadLocaleCatalog(language: string): Promise<Record<string, unknown>> | undefined {
+  const pending = catalogRequests.get(language)
+  const url = LOCALE_CATALOG_URLS.get(language)
+  if (pending || !url) {
+    return pending
+  }
+  const request = fetchLocaleCatalog(url).finally(() => {
+    if (catalogRequests.get(language) === request) {
+      catalogRequests.delete(language)
     }
   })
+  catalogRequests.set(language, request)
+  return request
+}
+
+const orcaI18n = createOrcaI18n({
+  loadCatalog: loadLocaleCatalog,
+  // Inline defaults cover most English; sync:localization-runtime-catalog retains plural/dynamic/edited entries. en.json remains the translator source for lazy catalogs.
+  englishResources: enRuntimeRequired,
+  modules: [initReactI18next],
+  initOptions: { react: { useSuspense: false } }
+})
+
+export const i18n = orcaI18n.i18n
 
 // Plugin packs can replace translations without changing the active language.
 i18n.store.on('added', advanceTranslationResourceVersion)
 i18n.store.on('removed', advanceTranslationResourceVersion)
+i18n.on('languageChanged', advanceTranslationResourceVersion)
+
+// Re-rendered chrome resolves hundreds of option-free strings per workspace switch; they only change with language or resources.
+const PLAIN_TRANSLATION_CACHE_LIMIT = 5000
+const plainTranslationCache = new Map<string, string>()
+let plainTranslationCacheScope = ''
 
 export function translate(key: string, fallback: string, options?: TOptions): string {
-  const value = i18n.t(key, { defaultValue: fallback, ...options })
-  return isPseudoLocalizationLocale(i18n.language) ? pseudoLocalizeString(value) : value
-}
-
-export async function setRendererUiLanguage(language: UiLanguage): Promise<void> {
-  const resolved = resolveUiLocale(language)
-  const resourceLanguage = resolveRendererResourceLanguage(resolved)
-  const locale =
-    isPluginUiLanguage(language) && resourceLanguage === resolved
-      ? DEFAULT_LOCALE
-      : resourceLanguage
-  if (i18n.language !== locale) {
-    // changeLanguage triggers the lazy backend load for non-English locales and
-    // resolves once the catalog is in memory.
-    await i18n.changeLanguage(locale)
+  if (options !== undefined) {
+    return orcaI18n.translate(key, fallback, options)
   }
+  const scope = `${i18n.isInitialized}\0${i18n.language}\0${getTranslationResourceVersion()}`
+  if (
+    scope !== plainTranslationCacheScope ||
+    plainTranslationCache.size >= PLAIN_TRANSLATION_CACHE_LIMIT
+  ) {
+    plainTranslationCache.clear()
+    plainTranslationCacheScope = scope
+  }
+  const cacheKey = `${key}\0${fallback}`
+  const cached = plainTranslationCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const value = orcaI18n.translate(key, fallback)
+  plainTranslationCache.set(cacheKey, value)
+  return value
 }
 
-const registeredPluginLanguages = new Set<string>()
-let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
+export async function loadRendererUiLanguage(language: UiLanguage): Promise<string> {
+  const locale = orcaI18n.resolveResourceLanguage(resolveUiLocale(language))
+  const request = i18n.hasResourceBundle(locale, 'translation')
+    ? undefined
+    : loadLocaleCatalog(locale)
+  if (request) {
+    const catalog = await withTimeout(request, 5000, null)
+    if (catalog === null) {
+      // A retry after a timeout must start a fresh request instead of joining the stalled one.
+      if (catalogRequests.get(locale) === request) {
+        catalogRequests.delete(locale)
+      }
+      throw new Error('Language catalog unavailable')
+    }
+    if (!i18n.hasResourceBundle(locale, 'translation')) {
+      // Freshly parsed and never mutated, so skip i18next's defensive deep copy.
+      i18n.addResourceBundle(locale, 'translation', catalog, false, false, { skipCopy: true })
+    }
+  }
+  return locale
+}
 
-/**
- * BCP-47 tag for `Intl` formatting. Plugin catalogs register under a synthetic
- * `plugin<hex>` resource language that `Intl` rejects, so fall back to the tag
- * the pack declares (for example `ru-RU`) and finally to the default locale.
- */
+/** Resolve an Intl-compatible BCP-47 tag: plugin pack resources use the pack’s declared tag, then the default locale. */
 export function getIntlLocale(): string {
   const active = i18n.language
-  const pack = pluginLanguagePacks.find((entry) => entry.resourceLanguage === active)
-  const candidate = pack?.locale ?? active
-  try {
-    // Why: an empty result means Intl has no data for the tag, so fall through
-    // to the default locale instead of letting Intl pick the runtime one.
-    return Intl.DateTimeFormat.supportedLocalesOf(candidate)[0] ?? DEFAULT_LOCALE
-  } catch {
-    return DEFAULT_LOCALE
-  }
-}
-
-export function resolveRendererResourceLanguage(language: string): string {
-  return pluginLanguagePacks.find((pack) => pack.id === language)?.resourceLanguage ?? language
+  const pack = orcaI18n.getPluginLanguagePacks().find((entry) => entry.resourceLanguage === active)
+  return supportedIntlLocale(pack?.locale ?? active, Intl.DateTimeFormat)
 }
 
 export function setRendererPluginLanguagePacks(
   packs: readonly PluginLanguagePackRegistration[]
 ): void {
-  for (const language of registeredPluginLanguages) {
-    i18n.removeResourceBundle(language, 'translation')
-  }
-  registeredPluginLanguages.clear()
-  pluginLanguagePacks = packs
-  for (const pack of packs) {
-    i18n.addResourceBundle(pack.resourceLanguage, 'translation', pack.catalog, true, true)
-    registeredPluginLanguages.add(pack.resourceLanguage)
-  }
+  orcaI18n.setPluginLanguagePacks(packs)
 }

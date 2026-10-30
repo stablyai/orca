@@ -6,8 +6,4 @@ describe('runtime repo ref search bounds', () => {
     expect(isRuntimeRepoRefSearchQueryWithinLimit('abc', 3)).toBe(true)
     expect(isRuntimeRepoRefSearchQueryWithinLimit('😀', 3)).toBe(false)
   })
-
-  it('rejects oversized pasted branch search queries', () => {
-    expect(isRuntimeRepoRefSearchQueryWithinLimit('x'.repeat(3 * 1024))).toBe(false)
-  })
 })

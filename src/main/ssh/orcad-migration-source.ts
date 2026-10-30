@@ -1,10 +1,4 @@
-/**
- * Where a dormant catalog migrates out of, into a managed orcad.
- *
- * The destination half (catalog stage/commit and the cutover coordinator) reaches a source only
- * through `OrcadMigrationSourceCutoverPort`; the conversion drives the rest. The relay-era SSH
- * target (orcad-migration-ssh-relay-source.ts) is the only implementation.
- */
+/** Expose fenced-source checks/release through the cutover port; conversion owns terminal assessment, export and fence acquisition. */
 import type { OrcadMigrationSourceKind } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type {
   OrcadMigrationCatalogPayload,
@@ -18,7 +12,6 @@ import type {
 } from './orcad-migration-source-fence'
 import type { OrcadMigrationTerminalVerdict } from './orcad-migration-terminal-gate'
 
-/** What a cutover needs from its source once fenced, keyed by the journaled cutover alone. */
 export type OrcadMigrationSourceCutoverPort = {
   /** Before every stage and commit; throws unless the fenced source still matches the journal. */
   verifyFence: (cutover: OrcadMigrationSourceCutover) => void
@@ -26,10 +19,9 @@ export type OrcadMigrationSourceCutoverPort = {
   releaseFence: (cutover: OrcadMigrationSourceCutover) => Promise<void>
 }
 
-export type OrcadMigrationFenceAcquireArgs = {
+type OrcadMigrationFenceAcquireArgs = {
   destinationEnvironmentId: string
   destinationName: string
-  /** Taken by `assessTerminals` while the source could still answer. */
   terminalProof: OrcadMigrationTerminalVerdict
   now?: () => Date
   signal?: AbortSignal
@@ -37,15 +29,12 @@ export type OrcadMigrationFenceAcquireArgs = {
 
 export type OrcadMigrationSource = OrcadMigrationSourceCutoverPort & {
   readonly kind: OrcadMigrationSourceKind
-  /** What every journal entry of this source is keyed by. */
   readonly journalKey: string
-  /** Scope selection: the catalog rows this source owns. Read-only. */
   collectCatalog: () => OrcadMigrationCatalogPayload
-  /** The signed manifest, after the source's path-rewrite stage. Read-only. */
+  /** Rewrite paths before signing; export must not mutate source. */
   exportManifest: (options?: OrcadMigrationManifestExportOptions) => OrcadMigrationManifest
   /** Before the fence. Loss of contact is `unverifiable`, never `exited`. */
   assessTerminals: () => Promise<OrcadMigrationTerminalVerdict>
-  /** Marks what an exited proof covers as ended, so later checks stop counting it. */
   retireProvenExitedTerminals: (proof: OrcadMigrationTerminalVerdict) => void
   /** Throws when the journal cannot be read: an unreadable record keeps the source fenced. */
   resolveFence: () => OrcadMigrationFenceState

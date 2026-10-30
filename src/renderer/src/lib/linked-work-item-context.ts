@@ -22,8 +22,7 @@ function getUsableLinkedContext(
   return linkedContext
 }
 
-// Why: linked provider prose is untrusted source data; any prompt surface that
-// carries it needs a visible wrapper and delimiter escaping.
+// Wrap/delimit provider prose as untrusted source data on every prompt surface.
 export function buildContainedLinkedContextBlock(
   linkedContext: LinkedWorkItemContext | null | undefined
 ): string | null {
@@ -53,8 +52,7 @@ export function buildContainedLinkedContextBlock(
 }
 
 function formatDraftContextBlock(value: string): string {
-  // Why: Codex keeps the cursor on the final pasted line unless the draft ends
-  // with a newline; leave linked source blocks visually separated for review.
+  // End linked blocks with newline so Codex’s cursor leaves the pasted text visually separated for review.
   return `${value.trimEnd()}\n`
 }
 
@@ -82,8 +80,7 @@ function isLinearWorkItemReference(
   )
 }
 
-// Why: Linear ticket prose is third-party source data; terminal drafts may
-// carry only stable identity/link fields from the selected issue.
+// Linear prose is untrusted; terminal drafts carry only the selected issue’s stable identity/link fields.
 export function buildLinearLaunchContextBlock(args: LinearLaunchContextArgs): string | null {
   const identifier = args.identifier?.trim()
   const url = args.url?.trim()
@@ -114,8 +111,7 @@ function escapeLinkedContextControlChars(value: string): string {
 function escapeLinkedContextSourceLine(value: string): string {
   const escaped = escapeLinkedContextControlChars(value)
   const trimmed = escaped.trim()
-  // Why: source content can mention our delimiters; keep those mentions from
-  // becoming visually indistinguishable from the trusted wrapper boundaries.
+  // Escape source mentions of delimiters so they cannot impersonate trusted wrapper boundaries.
   if (
     trimmed.startsWith(LINKED_CONTEXT_BEGIN_DELIMITER) ||
     trimmed.startsWith(LINKED_CONTEXT_END_DELIMITER)

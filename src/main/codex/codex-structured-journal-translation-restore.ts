@@ -21,9 +21,7 @@ import { readCodexTurnDurationMs, readCodexTurnStatus } from './codex-structured
 
 type CodexHistoryItemEvent = { threadId: string; method: string; params: unknown }
 
-/** One replayed item. History never runs the live item router, so a helper the replay announces
- *  is registered here for its name and membership only: `register` starts no execution, so no
- *  strip entry, record or roster row claims it runs until a live turn of its own says so. */
+/** Restore helper names and membership without marking historical helpers as running. */
 export function restoreCodexHistoryItem(
   event: CodexHistoryItemEvent,
   input: {
@@ -46,12 +44,10 @@ export function restoreCodexHistoryItem(
   return translated.handled ? translated.admission : { accepted: false, reason: 'untranslated' }
 }
 
-/** Old providers may return the complete thread from resume. Keep that fallback
- * bounded before admitting any rows to the asynchronous sink. */
+/** Bound full-thread resume payloads from older providers before queueing rows. */
 export const CODEX_RESTORE_MAX_OPERATIONS = 1_024
 export const CODEX_RESTORE_MAX_BYTES = 16 * 1024 * 1024
 
-/** One import's size against the restore budget: its items, lifecycle rows and any extra rows. */
 export function codexRestoreFits(turns: readonly unknown[], extraOperations = 0): boolean {
   const items = turns.flatMap((rawTurn) => {
     const turn = readCodexJournalRecord(rawTurn)
@@ -72,12 +68,12 @@ export function codexRestoreFits(turns: readonly unknown[], extraOperations = 0)
 export function restoreCodexJournalThread(input: {
   threadId: string
   thread: Record<string, unknown>
-  /** The isolated recorder bounds actual translated mutations instead of the old raw fallback. */
+  /** Imports bound translated mutations in an isolated recorder. */
   historyImport?: true
   currentTurnIds: Map<string, Set<string>>
   ordinals: CodexTurnOrdinals
   handleItem: (event: CodexHistoryItemEvent) => CodexJournalTranslationAdmission
-  /** Absent when the caller has no session identity to key lifecycle rows by. */
+  /** Requires a session identity to key lifecycle rows. */
   restoreTurnLifecycle?: (
     turnLifecycle: AgentJournalTurnLifecycle
   ) => CodexJournalTranslationAdmission
@@ -93,8 +89,7 @@ export function restoreCodexJournalThread(input: {
     if (!turnId) {
       continue
     }
-    // Ahead of the turn's items, as the live path writes it: readers credit every
-    // row to the nearest turn record before it.
+    // Readers assign items to the nearest preceding turn record.
     const lifecycle = input.restoreTurnLifecycle
       ? historicalTurnLifecycle(input.threadId, turn)
       : null
@@ -141,8 +136,7 @@ function restoreTurnItems(
   }
 }
 
-/** Codex reports both endpoints in unix seconds, each optional; the row keeps the turn's status
- *  and marks it known to the journal even without them. */
+/** Preserve the turn's status even when its optional timestamps are absent. */
 function historicalTurnLifecycle(
   threadId: string,
   turn: Record<string, unknown>

@@ -7,8 +7,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
-// Pass the root of a checkout (or `git archive <base> src` extract) of the base commit: each arm is
-// bundled whole from its own tree and writes its own fixture, since the two store history differently.
+// Pass base checkout/git-archive root: bundle each arm’s tree and create its fixture, since storage formats differ.
 const baselineDir = process.argv[2]
 assert.ok(
   baselineDir,

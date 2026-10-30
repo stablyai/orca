@@ -1,9 +1,8 @@
-// Why: shared rig for autosave-controller suites — the controller needs a
-// real editor store slice plus a window stub (event target, timers, fs
-// bridge), and duplicating that per test file bloats suites past max-lines.
+// Use a real editor slice and isolated window/filesystem bridge across autosave suites.
 import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
+import { withEditorBufferRecords } from '@/store/editor-buffer-record-lifecycle'
 import type { AppState } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { emptyTabLayoutState } from '@/store/slices/editor-slice-test-harness'
@@ -22,7 +21,7 @@ export type FakeEditorDisk = {
   }
 }
 
-/** In-memory stand-in for window.api.fs, so tests assert what is actually on disk. */
+/** Back the filesystem stub with in-memory disk contents so assertions observe landed writes. */
 export function createFakeEditorDisk(initialFiles: Record<string, string> = {}): FakeEditorDisk {
   const files = new Map(Object.entries(initialFiles))
   return {
@@ -39,8 +38,11 @@ export function createFakeEditorDisk(initialFiles: Record<string, string> = {}):
           diskPrecondition?: FileWriteDiskPrecondition
         }) => {
           const diskConflict = diskPrecondition
-            ? compareDiskWritePrecondition(diskPrecondition, files.get(filePath) ?? null)
+            ? compareDiskWritePrecondition(diskPrecondition, files.get(filePath) ?? null, content)
             : null
+          if (diskConflict === 'identical') {
+            return { ok: true, unchanged: true }
+          }
           if (diskConflict) {
             return { ok: false, diskConflict }
           }
@@ -87,33 +89,38 @@ export function stubEditorWindowWithDisk(
   return disk
 }
 
-/** Stubs the global window with an isolated event target and fs bridge;
- *  returns the writeFile mock for assertions. */
+/** Return the isolated window filesystem’s write mock. */
 export function stubEditorWindow(): ReturnType<typeof vi.fn> {
   return stubEditorWindowWithDisk().fs.writeFile
 }
 
 export function createEditorStore(): StoreApi<AppState> {
-  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
-  return createStore<any>()((...args: any[]) => ({
-    ...emptyTabLayoutState(),
-    activeWorktreeId: 'wt-1',
-    repos: [],
-    worktreesByRepo: {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
-    },
-    detectedWorktreesByRepo: {},
-    runtimeEnvironments: [],
-    runtimeEnvironmentCatalogHydrated: true,
-    removedRuntimeEnvironmentIds: new Set(),
-    sshConnectionStates: {},
-    sshStateByEnvironment: {},
-    settings: {
-      editorAutoSave: true,
-      editorAutoSaveDelayMs: 1000
-    },
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  // Use the app’s record middleware so views of one file share a buffer.
+  // oxlint-disable-next-line typescript/no-explicit-any -- a partial store; tests read only the slices it builds.
+  const create = withEditorBufferRecords<any>(
+    (...args: any[]) => ({
+      ...emptyTabLayoutState(),
+      activeWorktreeId: 'wt-1',
+      repos: [],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
+      },
+      detectedWorktreesByRepo: {},
+      runtimeEnvironments: [],
+      runtimeEnvironmentCatalogHydrated: true,
+      removedRuntimeEnvironmentIds: new Set(),
+      sshConnectionStates: {},
+      sshStateByEnvironment: {},
+      settings: {
+        editorAutoSave: true,
+        editorAutoSaveDelayMs: 1000
+      },
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    }),
+    true
+  )
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: as above.
+  return createStore<any>()(create) as unknown as StoreApi<AppState>
 }
 
 /** Store with a local worktree at /repo and an open, untouched untitled note at /repo/`fileName`. */
@@ -139,10 +146,7 @@ export function createUntitledNoteStore(fileName: string): StoreApi<AppState> {
   return store
 }
 
-/**
- * Suites whose tabs stand for files already loaded from disk: give each tab without one the
- * baseline a load would stamp, since saves with no known disk version are refused.
- */
+/** Stamp loaded-file baselines in fixtures; saves without known disk versions are refused. */
 export function withLoadedBaselines<T extends Pick<StoreApi<AppState>, 'getState'>>(
   store: T,
   disk?: FakeEditorDisk

@@ -1,9 +1,10 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PRComment } from '../../../../src/shared/github/comment-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import { PRCommentsSection } from './PRCommentsSection'
+import { findAllByHostType } from '../../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -36,6 +37,7 @@ vi.mock('./PRCommentComposer', () => ({ PRCommentComposer: 'PRCommentComposer' }
 vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: {} }))
 vi.mock('./mobile-pr-sidebar-styles', () => ({ mobilePrSidebarStyles: {} }))
 vi.mock('../../theme/mobile-theme', () => ({ colors: { textSecondary: '#999' } }))
+vi.mock('../../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'dark' }))
 
 function comment(id: number): PRComment {
   return {
@@ -68,22 +70,22 @@ async function renderComments(details: GitHubWorkItemDetails): Promise<ReactTest
 }
 
 function audienceTabs(renderer: ReactTestRenderer) {
-  return renderer.root
-    .findAllByType('Pressable')
-    .filter((node) => node.props.accessibilityState !== undefined)
+  return findAllByHostType(renderer.root, 'Pressable').filter(
+    (node) => node.props.accessibilityState !== undefined
+  )
 }
 
 function showMoreButton(renderer: ReactTestRenderer) {
-  const button = renderer.root
-    .findAllByType('Pressable')
-    .find((node) => node.props.accessibilityState === undefined)
+  const button = findAllByHostType(renderer.root, 'Pressable').find(
+    (node) => node.props.accessibilityState === undefined
+  )
   if (!button) {
     throw new Error('Show more button not found')
   }
   return button
 }
 
-async function press(node: { props: { onPress: () => void } }): Promise<void> {
+async function press(node: ReactTestInstance): Promise<void> {
   await act(async () => {
     node.props.onPress()
   })
@@ -99,20 +101,20 @@ describe('PRCommentsSection', () => {
 
   it('resets pagination only when the user chooses a different audience filter', async () => {
     renderer = await renderComments(detailsWithComments(25))
-    expect(renderer.root.findAllByType('PRCommentCard')).toHaveLength(12)
+    expect(findAllByHostType(renderer.root, 'PRCommentCard')).toHaveLength(12)
 
     await press(showMoreButton(renderer))
-    expect(renderer.root.findAllByType('PRCommentCard')).toHaveLength(24)
+    expect(findAllByHostType(renderer.root, 'PRCommentCard')).toHaveLength(24)
 
     // The second tab is Humans; moving from All to Humans resets the page limit.
     await press(audienceTabs(renderer)[1])
-    expect(renderer.root.findAllByType('PRCommentCard')).toHaveLength(12)
+    expect(findAllByHostType(renderer.root, 'PRCommentCard')).toHaveLength(12)
 
     await press(showMoreButton(renderer))
-    expect(renderer.root.findAllByType('PRCommentCard')).toHaveLength(24)
+    expect(findAllByHostType(renderer.root, 'PRCommentCard')).toHaveLength(24)
 
     // Retapping the active tab used to leave the page size alone; retain that behavior.
     await press(audienceTabs(renderer)[1])
-    expect(renderer.root.findAllByType('PRCommentCard')).toHaveLength(24)
+    expect(findAllByHostType(renderer.root, 'PRCommentCard')).toHaveLength(24)
   })
 })

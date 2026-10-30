@@ -12,9 +12,21 @@ const build = (params: Record<string, unknown>) =>
   buildManagedWorktreeCreateArgs(WorktreeCreate.parse(params), PROVENANCE)
 
 describe('buildManagedWorktreeCreateArgs', () => {
+  it('carries explicit existing intent through the RPC schema without inferring it for legacy names', () => {
+    const request = {
+      repo: 'repo-1',
+      name: 'feature/test',
+      baseBranch: 'origin/main',
+      branchNameOverride: 'feature/test'
+    }
+    expect(build(request)).not.toHaveProperty('branchIntent')
+    for (const branchIntent of ['open-existing', 'open-existing-v2', 'create-new']) {
+      expect(build({ ...request, branchIntent })).toMatchObject({ branchIntent })
+    }
+  })
+
   it('omits name provenance when the client did not claim a generated name', () => {
-    // Why: absent must mean user-typed. A truthy default would let the host permanently retire
-    // names people chose on purpose — the pool contains ordinary words like "orca" and "molly".
+    // Absent means user-typed: default true would permanently retire deliberate names such as orca and molly.
     expect(build({ repo: 'id:repo-1', name: 'nautilus' })).not.toHaveProperty('nameWasGenerated')
     expect(
       build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: false })
@@ -41,7 +53,7 @@ describe('buildManagedWorktreeCreateArgs', () => {
   })
 
   it('carries the parent-pick provenance only when the client marked it manual', () => {
-    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
+    // Older clients omit this and retain CLI-flag behavior.
     expect(
       build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
     ).not.toHaveProperty('parentWorkspaceOrigin')
@@ -77,6 +89,9 @@ describe('buildManagedWorktreeCreateArgs', () => {
       }
     )
     expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
+    // E9: a person's create may start a stopped WSL distro for its terminals; an automation's never.
+    expect(build({ repo: 'id:repo-1', name: 'feature' })).toMatchObject({ wslUserAct: true })
+    expect(automationRun).not.toHaveProperty('wslUserAct')
   })
 })
 

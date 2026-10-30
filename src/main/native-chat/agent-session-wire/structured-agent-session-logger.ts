@@ -1,16 +1,11 @@
-// Where the structured chat host and its runtime report a failure they carry on past.
-//
-// One required dependency rather than a callback per failure: a host built without it does not
-// compile, so no failure path can quietly drop what went wrong. The default writes each entry to
-// the host's local trace file (the desktop's `<userData>/logs/main.trace.ndjson`, collected by the
-// diagnostic bundle; orcad's `<data-root>/logs/orcad.trace.ndjson`) and to the console.
+// Require failure reporting for errors hidden from UI; production writes local traces and console.
 
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { startSpan } from '../../observability/tracer'
 import { createStructuredAgentSessionLogRepeats } from './structured-agent-session-log-repeats'
 
 export type StructuredAgentSessionLogFields = {
-  /** The step that failed; a stable name a log search can find. */
+  /** Stable failure-step name for log searches. */
   readonly scope: string
   readonly sessionId?: string
   readonly error?: unknown
@@ -26,7 +21,7 @@ type LogLevel = keyof StructuredAgentSessionLogger
 
 const guarded = new WeakSet<StructuredAgentSessionLogger>()
 
-/** Reporting is bookkeeping: a logger that throws must never fail the operation it reports. */
+/** Reporting failures must never fail the reported operation. */
 export function neverThrowingStructuredAgentSessionLogger(
   logger: StructuredAgentSessionLogger
 ): StructuredAgentSessionLogger {
@@ -51,14 +46,13 @@ export function neverThrowingStructuredAgentSessionLogger(
   return safe
 }
 
-/** A copy of `deps` whose logger cannot throw; every collaborator built from it inherits that. */
 export function withNeverThrowingLogger<T extends { logger: StructuredAgentSessionLogger }>(
   deps: T
 ): T {
   return { ...deps, logger: neverThrowingStructuredAgentSessionLogger(deps.logger) }
 }
 
-/** The logger `resolve` returns at each call, for a collaborator built before the host's deps. */
+/** Resolve lazily for collaborators built before host dependencies. */
 export function deferredStructuredAgentSessionLogger(
   resolve: () => StructuredAgentSessionLogger
 ): StructuredAgentSessionLogger {
@@ -68,8 +62,7 @@ export function deferredStructuredAgentSessionLogger(
   }
 }
 
-/** The production logger: a failed span in the local trace file, plus the console. A repeat of
- *  the same entry is written at most once per window, carrying how many were swallowed. */
+/** Write trace/console at most once per repeat window, including suppressed count. */
 export function createStructuredAgentSessionLogger(options?: {
   now?: () => number
 }): StructuredAgentSessionLogger {
@@ -84,7 +77,7 @@ export function createStructuredAgentSessionLogger(options?: {
         ...rest,
         ...errorAttributes(error)
       }
-      // Keyed on all the entry writes but its stack and timing: only the same failure repeats.
+      // Exclude stack and timing so equivalent failures share a repeat key.
       const { openMs: _openMs, ...keyed } = attributes
       const suppressed = repeats.admit(
         stableJson([
@@ -111,8 +104,7 @@ export function createStructuredAgentSessionLogger(options?: {
 
 const MAX_LOGGED_CAUSES = 3
 
-/** The span's failure carries an Error's name, message and stack; its code and causes ride here.
- *  A value that is not an Error is written whole, as it would serialize. */
+/** Span failures carry name/message/stack; retain error codes/causes here, or whole non-Errors. */
 function errorAttributes(error: unknown): Record<string, unknown> {
   if (error === undefined) {
     return {}
@@ -122,7 +114,7 @@ function errorAttributes(error: unknown): Record<string, unknown> {
   }
   const causes: string[] = []
   let cause: unknown = error.cause
-  // Name and message only: a cause's own fields can carry what the failing step was handling.
+  // Limit causes to name/message; custom fields may contain handled data.
   while (cause !== undefined && causes.length < MAX_LOGGED_CAUSES) {
     if (cause instanceof Error) {
       causes.push(`${cause.name}: ${cause.message}${codeSuffix(cause)}`)
@@ -133,9 +125,9 @@ function errorAttributes(error: unknown): Record<string, unknown> {
     }
   }
   const code = errorCode(error)
-  // node:sqlite's `code` is one generic value; `errcode` tells SQLITE_BUSY from SQLITE_FULL.
+  // node:sqlite code is generic; errcode distinguishes SQLite failure kinds.
   const sqliteCode = codeValue('errcode' in error ? error.errcode : undefined)
-  // A refusal's message is its bare code; its reason is wire-safe and tells refusals apart.
+  // Refusal messages contain only the code; wire-safe reason distinguishes them.
   const details = isAgentSessionRefusalError(error) ? error.refusal.details : undefined
   const reason = details && 'reason' in details ? details.reason : undefined
   return {
@@ -146,7 +138,7 @@ function errorAttributes(error: unknown): Record<string, unknown> {
   }
 }
 
-/** The same value always renders the same: object keys sorted, and no throw on a cycle. */
+/** Stable key order with a fallback for cycles. */
 function stableJson(value: unknown): string {
   try {
     return JSON.stringify(value, (_key, inner: unknown) => {

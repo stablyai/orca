@@ -57,11 +57,7 @@ export function createGoldenWorktree(repoPath: string, label: string): GoldenWor
     cwd: repoPath,
     stdio: 'pipe'
   })
-  // Callers only register cleanup once this returns, so roll back here or the
-  // half-built worktree and branch leak into every later run.
-  // Why: Windows CI tmpdir is often the 8.3 alias (RUNNER~1) while Git lists
-  // the long path (runneradmin). Seeded repos already realpath; this extra
-  // worktree must too or activateGoldenWorktree never matches the sidebar.
+  // Roll back here until callers can register cleanup; canonicalize Windows 8.3 paths so sidebar identity matches Git.
   let worktreePath: string
   try {
     worktreePath = realpathSync.native(requestedPath)
@@ -94,9 +90,7 @@ export function createGoldenWorktree(repoPath: string, label: string): GoldenWor
 function rollbackGoldenWorktree(repoPath: string, fixture: GoldenWorktree): void {
   try {
     cleanupGoldenWorktree(repoPath, fixture)
-  } catch {
-    // Intentionally ignored.
-  }
+  } catch {}
 }
 
 export function cleanupGoldenWorktree(repoPath: string, fixture: GoldenWorktree): void {
@@ -181,8 +175,7 @@ export async function activateGoldenWorktree(
           }
           return repos
         })
-        // Why: compare on the Node side so realpath can expand Windows 8.3
-        // aliases. page.evaluate cannot call realpathSync.
+        // Compare in Node because only it can expand Windows 8.3 aliases with realpath.
         const repo = listed.find((entry) => goldenWorktreePathsMatch(entry.path, repoPath))
         const worktree = repo?.worktrees.find((entry) =>
           goldenWorktreePathsMatch(entry.path, worktreePath)

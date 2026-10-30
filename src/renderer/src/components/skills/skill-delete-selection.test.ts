@@ -26,8 +26,6 @@ function skill(overrides: Partial<DiscoveredSkill> & { id: string }): Discovered
 
 describe('delete selection', () => {
   it('keeps two rows sharing a name independently selectable', () => {
-    // Share collapses duplicate names because two skills cannot publish under
-    // one name. Delete has no such constraint — these are two distinct files.
     const skills = [
       skill({ id: 'a', rootPath: '/home/.agents/skills' }),
       skill({ id: 'b', rootPath: '/repo/.claude/skills' })

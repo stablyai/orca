@@ -1,11 +1,4 @@
-/**
- * A phone paired with a desktop that has a workspace on a managed SSH host lists that workspace
- * from the host's sidebar feed, row for row as the desktop sidebar draws it: the SSH host's section,
- * its workspace, and the single highlight while it is the open workspace.
- *
- * The phone side is the page's own feed reader and list builder (helpers/phone-feed-list.ts) over a
- * real paired socket; the desktop side is the sidebar's rendered rows.
- */
+// Compare real phone feed/list modules over a paired socket to rendered desktop SSH rows, including host section and active highlight.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'

@@ -1,16 +1,8 @@
+import { NativeChatResumeDialogHeader } from './NativeChatResumeDialogHeader'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { useNativeChatRestartOfferEnabled } from './native-chat-restart-offer-gate'
-import { RotateCcw } from 'lucide-react'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from './ui/dialog'
+import { Dialog, DialogContent, DialogFooter } from './ui/dialog'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
@@ -28,48 +20,19 @@ import {
   type ResumeFailure
 } from './native-chat-resume-on-restart-grouping'
 import {
-  consumeNativeChatResumeOnRestartDialogRequest,
-  getNativeChatResumeOnRestartDialogRequest,
-  subscribeNativeChatResumeOnRestartDialog
-} from './native-chat-resume-on-restart-dialog'
-import {
-  continueNativeChatRestartOffer,
-  dismissNativeChatRestartOffer,
-  markFinishedNativeChatRestartRunShown,
-  releaseFinishedNativeChatRestartRun,
   useNativeChatRestartOffer,
   useNativeChatRestartResuming,
-  useNativeChatRestartRun
+  useNativeChatRestartRun,
+  type NativeChatRestartStore
 } from './native-chat-resume-on-restart-store'
 import { useResumeRunPanel } from './NativeChatResumeRunPanel'
+import { resumeRunFailures } from './native-chat-resume-run-view'
 import { NativeChatResumeAutoNote } from './NativeChatResumeAutoNote'
+import { NativeChatRemoteResumeActions } from './NativeChatRemoteResumeActions'
 import { moveInTree } from './native-chat-resume-tree-keys'
 
-/**
- * What would be resumed, shown before anything runs.
- *
- * Resuming reattaches a chat AND asks the agent to carry on, so the list is the point: the user
- * sees which chats the last teardown recorded as mid-turn before a message goes anywhere. Every
- * string here has to say that a message is sent and that the user's own prompt is not re-sent.
- *
- * The "don't ask again" box removes the PROMPT, never a safety check — an opted-in launch calls
- * the same RPC, which re-derives the same predicate and staggers the same way.
- *
- * Resume closes the dialog at once and the status-bar entry carries the run, then any chat it could
- * not carry on. The run lives in the store, as a skill update's does, so the dialog is one view of it:
- * reopened mid-run, each chat in it shows where it stands in its checkbox's place, and the dialog
- * stays on that run until it is closed after the run has finished. Once no chat is left to choose,
- * it is a result: no Select all and no checkbox column. The "don't ask again" box stays while
- * the setting is off.
- *
- * A chat an earlier resume could not carry on is listed too, as the same row plus what went wrong
- * and what to do; selecting it and resuming is a retry, unless the host says a retry cannot run.
- * Row actions (Retry, Dismiss) act on their row and leave the dialog open. It closes only on the
- * user's own way out, or once the host confirms nothing is left; a resume settling never closes it.
- *
- * Closing is a SNOOZE, so looking around before deciding cannot remove the recovery. Dismiss all is
- * the explicit path that deletes the durable records.
- */
+/** Resume reattaches and sends a continuation, never the original user prompt; disclose this before sending. Automatic preference skips the prompt but uses the same host safety checks.
+ * The store owns runs across dialog closes. Closing snoozes; Dismiss all deletes durable offers. Row Retry/Dismiss keep the dialog open, and settled runs cannot close a user-reopened dialog. Unretryable failures stay outside Resume. */
 
 /** Pre-selected unless it is a failure a retry cannot fix; resuming that would only fail again. */
 function selectedByDefault(failure: ResumeFailure | undefined): boolean {
@@ -80,16 +43,30 @@ function selectedByDefault(failure: ResumeFailure | undefined): boolean {
   return guidance.primary === 'retry' || guidance.secondary === 'retry'
 }
 
-export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
-  const offerEnabled = useNativeChatRestartOfferEnabled()
-  const { candidates, failed, listedAt } = useNativeChatRestartOffer(offerEnabled)
+export function NativeChatResumeOccurrenceModal({
+  store,
+  machineName,
+  offerEnabled
+}: {
+  store: NativeChatRestartStore
+  machineName?: string
+  offerEnabled: boolean
+}): React.JSX.Element | null {
+  const {
+    continueNativeChatRestartOffer,
+    dismissNativeChatRestartOffer,
+    markFinishedNativeChatRestartRunShown,
+    releaseFinishedNativeChatRestartRun,
+    consumeNativeChatResumeOnRestartDialogRequest,
+    getNativeChatResumeOnRestartDialogRequest,
+    subscribeNativeChatResumeOnRestartDialog
+  } = store
+  const remote = store.target.kind === 'environment'
+  const { candidates, failed, listedAt } = useNativeChatRestartOffer(offerEnabled, store)
+  const run = useNativeChatRestartRun(store)
   const rows = useMemo<ResumeCandidate[]>(() => [...candidates, ...failed], [candidates, failed])
-  const failureBySession = useMemo(
-    () => new Map(failed.map((failure) => [failure.sessionId, failure])),
-    [failed]
-  )
-  // Open is an external one-shot request, never mirrored into local state: the launch load and the
-  // status-bar entry both raise it, and a copy here would go stale against whichever raised it last.
+  const failureBySession = useMemo(() => resumeRunFailures(run, failed), [run, failed])
+  // Read one-shot open requests directly; a local mirror could go stale between launch and status-bar requests.
   const open = useSyncExternalStore(
     subscribeNativeChatResumeOnRestartDialog,
     getNativeChatResumeOnRestartDialogRequest,
@@ -102,14 +79,11 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   )
   const resumeButtonRef = useRef<HTMLButtonElement>(null)
   // The store's: the resume outlives this dialog, which can close or reopen mid-run.
-  const resuming = useNativeChatRestartResuming()
+  const resuming = useNativeChatRestartResuming(store)
   const busy = resuming.length > 0
-  /** The user's own ticks and unticks, over each row's default. Tracked as OVERRIDES rather than a
-   *  selection because the list is the host's and arrives — and shrinks — under an open dialog; a
-   *  stored selection would need seeding from an effect every time it changed. */
+  /** Track overrides over host-derived defaults because the live offer can arrive/shrink while open; avoid effect-seeded selections. */
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map())
-  // Each opening starts from the rows' defaults. This component never unmounts, so an untick made
-  // before a close would otherwise greet a reopen, e.g. as "Resume 0 chats" over what a run left.
+  // Reset overrides each opening; this retained component would otherwise reopen with stale unticks.
   const [openedWith, setOpenedWith] = useState(open)
   if (openedWith !== open) {
     setOpenedWith(open)
@@ -146,7 +120,6 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     (sessionId: string) => failureBySession.get(sessionId),
     [failureBySession]
   )
-  const run = useNativeChatRestartRun()
   const runPanel = useResumeRunPanel({
     run,
     rows,
@@ -158,11 +131,17 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     if (offerEnabled && open && run && runPanel?.finishedRowsVisible) {
       markFinishedNativeChatRestartRunShown(run)
     }
-  }, [offerEnabled, open, run, runPanel?.finishedRowsVisible])
+  }, [
+    offerEnabled,
+    open,
+    run,
+    runPanel?.finishedRowsVisible,
+    markFinishedNativeChatRestartRunShown
+  ])
   const allSelection = resumeSelectionState(selectable, ticked)
   const choosing = runPanel?.choosing ?? true
   // While the setting is off the box stays, before and after Resume; an automatic run explains itself.
-  const showDontAskAgain = !autoResumeOn && runPanel?.startedBy !== 'launch'
+  const showDontAskAgain = !remote && !autoResumeOn && runPanel?.startedBy !== 'launch'
 
   const toggleSelected = useCallback((sessionId: string, checked: boolean) => {
     setOverrides((current) => new Map(current).set(sessionId, checked))
@@ -182,7 +161,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
       void persistPreference()
       await continueNativeChatRestartOffer(sessionIds)
     },
-    [persistPreference]
+    [persistPreference, continueNativeChatRestartOffer]
   )
 
   /** Closing is a snooze: the host keeps the offer and the status bar keeps the way back to it. */
@@ -190,16 +169,24 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     consumeNativeChatResumeOnRestartDialogRequest()
     releaseFinishedNativeChatRestartRun()
     void persistPreference()
-  }, [persistPreference])
+  }, [
+    persistPreference,
+    consumeNativeChatResumeOnRestartDialogRequest,
+    releaseFinishedNativeChatRestartRun
+  ])
 
   const dismissAll = useCallback(async (): Promise<void> => {
     void persistPreference()
-    // Bookkeeping never gates the user's own action: the dialog closes here whatever the host
-    // answers, rather than being trapped open behind a rejected promise.
+    // Close regardless of dismissal bookkeeping failure; rejected promises must not trap the dialog.
     consumeNativeChatResumeOnRestartDialogRequest()
     releaseFinishedNativeChatRestartRun()
     await dismissNativeChatRestartOffer()
-  }, [persistPreference])
+  }, [
+    persistPreference,
+    consumeNativeChatResumeOnRestartDialogRequest,
+    releaseFinishedNativeChatRestartRun,
+    dismissNativeChatRestartOffer
+  ])
 
   const actOnFailure = async (action: ResumeFailureAction, sessionId: string): Promise<void> => {
     if (action === 'dismiss') {
@@ -214,13 +201,13 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     if (!failure) {
       return
     }
-    // Opening is read-only and keeps the record: the user's own send in that chat settles it. The
-    // dialog gets out of the way of the chat it just opened.
+    // Opening is read-only; the user’s send settles the record. Clear the dialog so the chat is visible.
     consumeNativeChatResumeOnRestartDialogRequest()
     releaseFinishedNativeChatRestartRun()
-    await activateAiVaultStructuredSession({
-      structuredSession: { workspaceId: failure.workspaceId, sessionId }
-    })
+    const session = { structuredSession: { workspaceId: failure.workspaceId, sessionId } }
+    await (remote
+      ? activateAiVaultStructuredSession(session, undefined, store.target)
+      : activateAiVaultStructuredSession(session))
   }
 
   if (!offerEnabled || !open || (rows.length === 0 && !runPanel)) {
@@ -242,9 +229,8 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
         }
       }}
     >
-      {/* Height is capped, never the data: the list scrolls inside the dialog so the header and
-          the primary action stay put however many chats were interrupted. */}
-      {/* Wide enough for a nested chat row to keep its name, model and age on one line. */}
+      {/* Scroll the full list while retaining header/actions; allow width for nested chat name/model/age. */}
+      {/* Keep nested chat names, models and ages on one line. */}
       <DialogContent
         className="grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-3xl max-h-[85vh]"
         // Keep the scrollable list out of initial focus, including while Resume is disabled.
@@ -258,33 +244,12 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
           }
         }}
       >
-        <DialogHeader>
-          <DialogTitle>
-            {/* Plain wrapper owns the icon spacing; DialogTitle owns its own. */}
-            {runPanel?.title ?? (
-              <span className="flex items-center gap-2">
-                <RotateCcw className="size-4 text-muted-foreground" />
-                {translate(
-                  'auto.components.NativeChatResumeOnRestartModal.title',
-                  'Resume interrupted chats?'
-                )}
-              </span>
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            {runPanel?.description ??
-              (interruptedByUpdate
-                ? translate(
-                    'auto.components.NativeChatResumeOnRestartModal.updateBody',
-                    'These chats were working when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.'
-                  )
-                : translate(
-                    'auto.components.NativeChatResumeOnRestartModal.body',
-                    'These chats were working when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.'
-                  ))}
-          </DialogDescription>
-          {runPanel?.summary}
-        </DialogHeader>
+        <NativeChatResumeDialogHeader
+          runPanel={runPanel}
+          machineName={machineName}
+          remote={remote}
+          interruptedByUpdate={interruptedByUpdate}
+        />
 
         <div
           role="tree"
@@ -300,13 +265,12 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
                   'Chats in this resume'
                 )
           }
-          // The sidebar's own surface, so its workspaces read here as they do there.
+          // Match the sidebar’s workspace surface.
           className="min-h-0 overflow-y-auto scrollbar-sleek rounded-md bg-worktree-sidebar p-1.5 pb-2"
           onKeyDown={moveInTree}
         >
-          {/* Here, not in the groups: a list may hold one set of groups per machine. The tree's one
-              divider sets it apart from the nodes. */}
-          {choosing && (
+          {/* One Select all divider for the whole tree, including multiple machines. */}
+          {choosing && !remote && (
             <div className="mb-1 border-b border-worktree-sidebar-border pb-0.5">
               <ResumeTreeRow
                 depth={0}
@@ -345,17 +309,17 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             onFailureAction={(action, sessionId) => void actOnFailure(action, sessionId)}
             renderStatus={runPanel?.renderStatus}
             selectableIds={selectableIds}
-            selecting={choosing}
+            selecting={choosing && !remote}
           />
         </div>
 
-        {/* Two controls: one deletes the offer, one acts on it. Closing snoozes, so it needs none. */}
+        {/* Closing already snoozes; footer actions explicitly dismiss or resume. */}
         <DialogFooter className="sm:items-center">
           {runPanel?.startedBy === 'launch' ? (
             <NativeChatResumeAutoNote inFlight={busy} onOpenSettings={snooze} />
           ) : (
             showDontAskAgain && (
-              // Why order-last: the narrow footer stacks bottom-up, so this keeps the option above the actions.
+              // Narrow footers stack bottom-up; order-last keeps the preference above actions.
               <label className="order-last flex min-w-0 items-start gap-2.5 sm:order-none sm:mr-auto">
                 <Checkbox
                   checked={dontAskAgain}
@@ -369,11 +333,11 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
                       "Don't ask again (resume automatically)"
                     )}
                   </span>
-                  {/* Where to undo it; what it does is the body copy's job. */}
+                  {/* Link to reversal settings; body copy explains the action. */}
                   <span className="block text-xs text-muted-foreground">
                     {translate(
                       'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
-                      'You can turn this off in Settings → Experimental → Chat UI.'
+                      'You can turn this off in Settings → Chat → Behavior.'
                     )}
                   </span>
                 </span>
@@ -384,9 +348,22 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             <Button ref={resumeButtonRef} variant="default" size="sm" onClick={snooze}>
               {translate('auto.components.NativeChatResumeOnRestartModal.done', 'Done')}
             </Button>
+          ) : remote ? (
+            <NativeChatRemoteResumeActions
+              resumeButtonRef={resumeButtonRef}
+              store={store}
+              machineName={machineName ?? ''}
+              chosen={chosen}
+              busy={busy}
+              resume={(ids) => {
+                consumeNativeChatResumeOnRestartDialogRequest()
+                void resume(ids)
+              }}
+              dismiss={snooze}
+            />
           ) : (
             <>
-              {/* Quiet, explicit cleanup of the durable records. */}
+              {/* Dismiss deletes durable records rather than snoozing them. */}
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => void dismissAll()}>
                 {translate(
                   'auto.components.NativeChatResumeOnRestartModal.dismissAll',
@@ -409,16 +386,11 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
                       'auto.components.NativeChatResumeOnRestartModal.resuming',
                       'Resuming…'
                     )
-                  : chosen.length === 1
-                    ? translate(
-                        'auto.components.NativeChatResumeOnRestartModal.resumeSelectedOne',
-                        'Resume 1 chat'
-                      )
-                    : translate(
-                        'auto.components.NativeChatResumeOnRestartModal.resumeSelected',
-                        'Resume {{value0}} chats',
-                        { value0: chosen.length }
-                      )}
+                  : translate(
+                      'auto.components.NativeChatResumeOnRestartModal.resumeChats',
+                      'Resume {{count}} chats',
+                      { count: chosen.length, defaultValue_one: 'Resume {{count}} chat' }
+                    )}
               </Button>
             </>
           )}

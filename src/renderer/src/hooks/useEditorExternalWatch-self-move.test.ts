@@ -92,9 +92,7 @@ describe('self-move source suppression (in-flight)', () => {
   })
 
   it('does not tombstone a tab opened UNDER a moving directory mid-rename', () => {
-    // A directory move registers the root; a file opened under it during the
-    // in-flight window is not in the registered tab list but must still be
-    // recognized as the move's own echo (prefix match) — no false conflict.
+    // Root move provenance must cover files opened during the move, even absent from its original tab list.
     const lateTab = {
       id: 'file-late',
       worktreeId: 'wt-1',
@@ -118,7 +116,6 @@ describe('self-move source suppression (in-flight)', () => {
     })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
-    // The rename echo arrives as a delete+create pair for the old subtree path.
     handleFsChanged(
       payload([
         { kind: 'delete', absolutePath: '/repo/src/late.md' },
@@ -147,7 +144,6 @@ describe('self-move source suppression (in-flight)', () => {
 
 describe('self-move echo verification (content identity)', () => {
   const setExternalMutation = vi.fn()
-  const setPendingLiveDiskVerification = vi.fn()
   const clearSelfMoveEcho = vi.fn()
 
   const BASELINE_CONTENT = 'the file on disk\n'
@@ -164,7 +160,6 @@ describe('self-move echo verification (content identity)', () => {
       mode: 'edit' as const,
       isDirty: true,
       lastKnownDiskSignature: baselineSignature,
-      // Installed on the tab by the rekey; routes the echo into verification.
       pendingSelfMoveEcho: { operationId: 'op-1', targetPath: TARGET_PATH },
       ...overrides
     }
@@ -175,7 +170,6 @@ describe('self-move echo verification (content identity)', () => {
       ...createTestStore().getState(),
       openFiles: [file],
       setExternalMutation,
-      setPendingLiveDiskVerification,
       clearSelfMoveEcho
     })
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file])
@@ -205,17 +199,15 @@ describe('self-move echo verification (content identity)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('suspends autosave synchronously and suppresses when disk matches the baseline', async () => {
+  it('suppresses when disk matches the baseline', async () => {
     mockState(movedDirtyTab())
     stubDiskRead({ isBinary: false, content: BASELINE_CONTENT })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payloadFor())
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', true)
     await vi.advanceTimersByTimeAsync(100)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', false)
     expect(clearSelfMoveEcho).toHaveBeenCalledWith('file-notes')
     dispose()
   })
@@ -253,7 +245,6 @@ describe('self-move echo verification (content identity)', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', false)
     dispose()
   })
 
@@ -277,21 +268,18 @@ describe('self-move echo verification (content identity)', () => {
     handleFsChanged(payloadFor())
     await vi.advanceTimersByTimeAsync(100)
 
-    // No provenance -> not treated as a move echo -> normal path marks it changed.
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
     dispose()
   })
 })
 
 describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () => {
-  const setPendingLiveDiskVerification = vi.fn()
   const clearSelfMoveEcho = vi.fn()
   const setExternalMutation = vi.fn()
 
   const CONTENT = 'the echoed file on disk\n'
   const baseline = getDiskBaselineSignature(CONTENT)
-  // A floating-workspace tab: relativePath is relative to its OWN root (`../…`)
-  // and must NOT be joined onto the initiating worktree path.
+  // Floating tabs use their own root-relative paths, never the initiating workspace root.
   const FLOATING_FILE_PATH = '/elsewhere/notes/readme.md'
   const floatingTab = {
     id: 'file-x',
@@ -316,7 +304,6 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     vi.mocked(useAppStore.getState).mockReturnValue({
       ...createTestStore().getState(),
       openFiles: [floatingTab],
-      setPendingLiveDiskVerification,
       clearSelfMoveEcho,
       setExternalMutation
     })
@@ -332,10 +319,8 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     await vi.advanceTimersByTimeAsync(50)
 
     expect(readFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: FLOATING_FILE_PATH }))
-    // Disk == baseline -> echo -> suppress + release the gate, no false banner.
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-x', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-x', false)
-    // Safety net does NOT consume provenance (a later watcher event still needs it).
+    // Proactive verification must retain provenance for later watcher echoes.
     expect(clearSelfMoveEcho).not.toHaveBeenCalled()
   })
 })

@@ -6,6 +6,41 @@ import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 type InFlightWorktreeCreate = { repoId: string; paths: string[] }
 
 const inFlightCreates = new Set<InFlightWorktreeCreate>()
+const claimedCreatePaths = new Set<string>()
+
+export type WorktreeCreatePathClaim = {
+  /** Synchronous, so the path check that calls it cannot interleave with another create's. */
+  claim: (worktreePath: string) => boolean
+  release: () => void
+}
+
+/** Concurrent creates can both find a path free before either adds it; the later one must take its next candidate. */
+export function openWorktreeCreatePathClaim(): WorktreeCreatePathClaim {
+  let held: string | null = null
+  const release = (): void => {
+    if (held !== null) {
+      claimedCreatePaths.delete(held)
+      held = null
+    }
+  }
+  return {
+    claim: (worktreePath) => {
+      if (held !== null && areWorktreePathsEqual(held, worktreePath)) {
+        return true
+      }
+      for (const claimed of claimedCreatePaths) {
+        if (areWorktreePathsEqual(claimed, worktreePath)) {
+          return false
+        }
+      }
+      release()
+      claimedCreatePaths.add(worktreePath)
+      held = worktreePath
+      return true
+    },
+    release
+  }
+}
 
 // Git lists real paths even when creation uses a symlink and the leaf does not exist yet.
 async function resolveCreatePathAlias(worktreePath: string): Promise<string> {

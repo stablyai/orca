@@ -7,6 +7,7 @@ import { rekeyEditorBuffers } from '../buffers/editor-buffer-record'
 import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-file-ids'
 import { renameEditorFilesThroughLayoutOwner } from '../tabs/editor-file-rename-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { rekeyEditorBytesDocuments } from '@/components/editor/editor-bytes-document-boxes'
 
 // The store change is pure, so a layout-owner build applies it in the frame that shows main's rename.
 export type RekeyOpenFilesPatch =
@@ -27,8 +28,7 @@ export function rekeyOpenFilesPatch(
   }
   const openById = new Map(s.openFiles.map((f) => [f.id, f]))
 
-  // Preflight (atomic with apply): every source still open, target ids unique,
-  // and no target id belongs to an UNAFFECTED live session (never merge two).
+  // Preflight atomically: all sources open, unique targets and no target owned by unaffected sessions; never merge two.
   const seenNewIds = new Set<string>()
   for (const rekey of rekeys) {
     if (!openById.has(rekey.oldFileId)) {
@@ -44,29 +44,25 @@ export function rekeyOpenFilesPatch(
     }
   }
 
-  const echoGatedIds = new Set<string>()
   const nextOpenFiles = s.openFiles.map((f) => {
     const rekey = rekeyByOldId.get(f.id)
     if (!rekey) {
       return f
     }
     // Spread the whole OpenFile so fields this action doesn't know about survive; change only the path-derived ones.
-    // Gate atomically here so autosave is suspended before any echo can be verified (only a dirty autosave-capable tab can be clobbered).
-    const gatesEcho =
+    // Only a dirty autosave-capable tab needs its destination echo verified.
+    const verifiesEcho =
       moveOperationId !== undefined &&
       f.isDirty &&
-      // A 'changed' tab is already autosave-suspended via externalMutation; gating it would strand the gate (verification skips a 'changed' tab), so leave the banner as terminal.
+      // A 'changed' tab already shows the banner, which verification would only repeat.
       f.externalMutation !== 'changed' &&
       (f.mode === 'edit' || (f.mode === 'diff' && f.diffSource === 'unstaged'))
-    if (gatesEcho) {
-      echoGatedIds.add(f.id)
-    }
     return {
       ...f,
       id: rekey.newFileId,
       filePath: rekey.newFilePath,
       relativePath: rekey.newRelativePath,
-      // A moved tab's id no longer matches the host snapshot, so leaving it host-owned would cull it (losing the draft); the coordinator close-notifies the host's old-path tab. (Re-homing the host tab in place is a follow-up.)
+      // After move, host snapshot IDs no longer match: detach host ownership to protect draft, and coordinator closes old-path host tab. In-place host rehome remains follow-up.
       mirroredFromRuntimeSession: undefined,
       ...(rekey.newLanguage !== undefined ? { language: rekey.newLanguage } : {}),
       ...(rekey.newMarkdownPreviewSourceFileId !== undefined
@@ -75,9 +71,8 @@ export function rekeyOpenFilesPatch(
       ...(rekey.consumeUntitled
         ? { isUntitled: undefined, deleteUntouchedOnClose: undefined }
         : {}),
-      ...(gatesEcho
+      ...(verifiesEcho
         ? {
-            pendingLiveDiskVerification: true,
             pendingSelfMoveEcho: {
               operationId: moveOperationId,
               targetPath: rekey.newFilePath
@@ -92,7 +87,7 @@ export function rekeyOpenFilesPatch(
     activeFileIdByWorktree[wtId] = activeId ? (migrations.get(activeId) ?? activeId) : activeId
   }
 
-  // Partition by each moved file's OWN worktree: the same path can be open in more than one worktree (e.g. a floating workspace), and tab-bar / group state is per-worktree.
+  // Partition by each file’s workspace; same paths can be open in multiple workspaces with independent tab/group state.
   const migrationsByWorktree: Record<string, Map<string, string>> = {}
   for (const rekey of rekeys) {
     const wtId = openById.get(rekey.oldFileId)!.worktreeId
@@ -119,9 +114,7 @@ export function rekeyOpenFilesPatch(
     ok: true,
     patch: {
       openFiles: nextOpenFiles,
-      editorBuffers: rekeyEditorBuffers(s.editorBuffers, s.openFiles, migrations, (f) =>
-        echoGatedIds.has(f.id) ? { pendingLiveDiskVerification: true } : undefined
-      ),
+      ...rekeyEditorBuffers(s, s.openFiles, migrations, 'rename'),
       editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
       editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
       markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
@@ -141,8 +134,7 @@ export function rekeyOpenFilesPatch(
             pendingEditorReveal: {
               ...reveal,
               filePath: rekeyForReveal.newFilePath,
-              // matchesPendingEditorReveal prefers fileId, so migrate it too or
-              // the reveal would never match the rekeyed tab.
+              // Migrate fileId too; pending reveals prefer it and otherwise never match moved tabs.
               ...(reveal.fileId ? { fileId: migrations.get(reveal.fileId) ?? reveal.fileId } : {})
             }
           }
@@ -177,6 +169,7 @@ export function createRekeyOpenFilesAction(
           result = next
           return s
         }
+        rekeyEditorBytesDocuments(rekeys)
         return next.patch
       })
       return result

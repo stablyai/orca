@@ -80,7 +80,7 @@ let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = {
 }
 
 export function getEditorExternalWatchTargetKey(target: EditorExternalWatchTarget): string {
-  // Why: include connectionId so a local placeholder watch is replaced by the real SSH watch once an SSH worktree's provider metadata hydrates.
+  // Include connectionId so hydrated SSH metadata replaces temporary local placeholder watch.
   return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}::${target.allowLocalWindowsWslAliases === true ? 'wsl-aliases' : 'literal'}`
 }
 
@@ -177,7 +177,7 @@ export function selectEditorExternalWatchTargets(
     openFiles: state.openFiles,
     exists: (id) => resolveEditorExternalWatchTargetRows(state, id, null) !== null
   })
-  // Why: watcher ownership is scoped by worktree + execution host — the same workspace id can be open locally, over SSH and in a runtime, and reads/saves already route per host.
+  // Key watchers by workspace and execution host, matching reads/saves: same id may be open locally, over SSH and in a runtime.
   for (const file of state.openFiles) {
     // Why: a virtual tab (CI details, chat visual) has no file in the workspace to watch.
     if (isVirtualEditorFile(file)) {

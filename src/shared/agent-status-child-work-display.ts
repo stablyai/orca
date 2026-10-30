@@ -9,9 +9,7 @@ import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { AgentStatusState } from './agent-status-types'
 import { groupedBy } from './grouped-by'
 
-// What a surface derives from child views. Kept apart from the projection, which resolves owners
-// against status subjects and so reaches host-only code: every surface, renderer included, loads
-// this module.
+// Keep renderer-safe display policy separate from projection, whose status-subject owner resolution reaches host-only code.
 
 type AgentChildWorkOwnershipView = Pick<
   AgentChildWorkView,
@@ -61,11 +59,7 @@ const SETTLED_DISPLAY_STATE: Record<AgentChildWorkOutcome, AgentChildDisplayStat
   unknown: 'idle'
 }
 
-/**
- * A child's display state, through the same fold that decides a parent row's: work that is idle
- * or finished enters it as `done`, so a live shell the child owns reads `monitoring` exactly as it
- * would under a CLI agent. `unverifiable` is a freshness verdict and bypasses the fold.
- */
+/** Use the parent fold: idle/finished children enter as done, so owned live shells yield monitoring. unverifiable bypasses it as a freshness verdict. */
 export function deriveAgentChildDisplayState(
   view: Pick<AgentChildWorkView, 'state' | 'membership' | 'outcome'>,
   ownedLiveness: AgentChildWorkLiveness
@@ -90,10 +84,7 @@ export function deriveAgentChildDisplayState(
   return view.membership === 'live' ? 'idle' : SETTLED_DISPLAY_STATE[view.outcome ?? 'unknown']
 }
 
-/**
- * A display state in the run-state words a host publishes and every older reader already speaks:
- * a failure reads as `blocked`, a cancel as `idle`. The row's own dot keeps the real outcome.
- */
+/** Legacy run vocabulary maps failure to blocked and cancellation to idle; the child dot retains the actual outcome. */
 export function agentChildRunStateFor(
   displayState: AgentChildDisplayState
 ): AgentSessionBackgroundTaskRunState {

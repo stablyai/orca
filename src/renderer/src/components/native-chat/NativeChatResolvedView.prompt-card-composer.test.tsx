@@ -32,8 +32,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', async (importOriginal) => ({
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: pty.verified
 }))
-// Stand-in field over the production send lifecycle, queue and observed writes, wired as the
-// composer wires them.
+// Stub only the field; retain the production send lifecycle, queue and observed writes.
 vi.mock('./NativeChatComposer', async () => {
   const { forwardRef, useEffect, useImperativeHandle, useRef } = await import('react')
   const { useNativeChatSendLifecycle } = await import('./use-native-chat-send-lifecycle')

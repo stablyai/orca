@@ -5,11 +5,7 @@ import {
   type PtySizeReconcileOptions
 } from './pty-size-reconcile'
 
-/**
- * Reproduction harness for the terminal column-desync bug: the PTY spawns wide and the split/sidebar
- * narrows the pane frames later, so the fix must converge to the settled narrow width whenever the
- * layout lands (the prior fixed 12-frame budget expired early), watching while hidden until authoritative.
- */
+// Late split/sidebar narrowing must converge beyond the former fixed 12-frame limit, including while hidden before resize authority.
 
 /** A deterministic frame scheduler: callbacks queue, then run() drains them. */
 function createFrameScheduler() {
@@ -99,7 +95,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
   })
 
   it('forwards a late settle that lands just before the pane becomes authoritative', () => {
-    // Forwards the narrow width while hidden (resize bypasses the visibility gate), then stops once authoritative+stable.
     const NARROW_AT = 40
     const AUTHORITATIVE_AT = 45
     let frameSeen = 0
@@ -117,12 +112,10 @@ describe('reconcilePtySizeAcrossFrames', () => {
   })
 
   it('hands off after the pane is visible+stable, leaving later reflows to the live onResize', () => {
-    // Once authoritative + stable, onResize owns further reflow, so the reconcile stops here (later splits hit that backstop).
     const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
     const { resize, framesRun } = runReconcile({ measure: pane.measure })
     expect(resize).toHaveBeenCalledTimes(1)
     expect(resize).toHaveBeenLastCalledWith(79, 50)
-    // Frame 1 forwards the change; frames 2..9 stable → settles at SETTLE_FRAMES(8), i.e. 9 total (far short of the 180 cap).
     expect(framesRun).toBe(9)
   })
 
@@ -136,15 +129,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
     expect(resize).toHaveBeenLastCalledWith(80, 24)
   })
 
-  it('hands off (stops) once authoritative and the grid has been stable', () => {
-    // Once visible and stable, the live onResize owns future corrections, so the reconcile stops (no polling to the cap).
-    const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
-    const { framesRun } = runReconcile({ measure: pane.measure })
-    // Should settle a few frames after the single resize, well short of the cap.
-    expect(framesRun).toBeGreaterThan(0)
-    expect(framesRun).toBeLessThan(180)
-  })
-
   it('does NOT hand off while hidden — keeps watching until the hard cap', () => {
     // While never authoritative, a stable grid is no safe stop (onResize can't back us up), so it runs to the hard cap.
     const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
@@ -156,14 +140,12 @@ describe('reconcilePtySizeAcrossFrames', () => {
   })
 
   it('forwards no resize when the settled size never changes from spawn dims', () => {
-    // If xterm already matches the spawn width the whole time, no SIGWINCH at all.
     const pane = createTimelinePane(() => ({ cols: 203, rows: 50 }))
     const { resize } = runReconcile({ measure: pane.measure })
     expect(resize).not.toHaveBeenCalled()
   })
 
   it('does not loop forever — terminates within the hard frame cap', () => {
-    // Pane that never stabilizes (oscillates) must still hit the hard cap.
     const pane = createTimelinePane((frame) =>
       frame % 2 === 0 ? { cols: 100, rows: 30 } : { cols: 101, rows: 30 }
     )
@@ -218,7 +200,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
       cancelFrame: scheduler.cancelFrame
     })
     scheduler.run()
-    // While parked, measure()/resize() are skipped; after take-back the desktop width is forwarded exactly once.
     expect(resize).toHaveBeenCalledTimes(1)
     expect(resize).toHaveBeenLastCalledWith(79, 50)
   })
@@ -240,7 +221,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
       requestFrame: scheduler.requestFrame,
       cancelFrame: scheduler.cancelFrame
     })
-    // Run a few frames, then cancel — no further frames should be scheduled.
     scheduler.run(3)
     handle.cancel()
     expect(scheduler.pending()).toBe(0)
@@ -284,7 +264,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
       while (scheduler.pending() > 0 && ran < maxFrames) {
         scheduler.run(1)
         ran += 1
-        // Let any getAppliedSize().then(...) settle before the next frame.
         await Promise.resolve()
         await Promise.resolve()
       }
@@ -319,7 +298,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
       const resize = vi.fn()
       const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
       let applied = { cols: 203, rows: 50 }
-      // The PTY applies the narrow size after the first corrective forward.
       reconcilePtySizeAcrossFrames({
         spawnCols: 203,
         spawnRows: 50,
@@ -337,7 +315,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
       })
       await runAsync(scheduler, 400)
 
-      // It converges and then STOPS (no pending frames) well before the hard cap.
       expect(resize).toHaveBeenLastCalledWith(79, 50)
       expect(scheduler.pending()).toBe(0)
     })
@@ -402,7 +379,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
         resize,
         // Stale wide applied size — a parked-blind loop would re-forward the narrow desktop grid on resolution.
         getAppliedSize: async () => {
-          // Park the PTY while this read is in flight.
           parked = true
           return { cols: 203, rows: 50 }
         },
