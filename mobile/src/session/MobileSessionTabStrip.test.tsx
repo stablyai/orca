@@ -143,6 +143,7 @@ vi.mock('./MobileSessionContentRow', () => ({
   }
 }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('./MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 vi.mock('./MobileSessionTab', async (original) => {
   const actual = await original<typeof TabModule>()
   return {

@@ -1858,7 +1858,8 @@
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
       "renameTerminal": "Rename Terminal",
-      "terminalName": "Terminal name"
+      "terminalName": "Terminal name",
+      "allowAutoClose": "Allow Auto-Close"
     },
     "tabStrip": {
       "tabStatus": "{{title}}, {{status}}",
@@ -2484,6 +2485,11 @@
       "chatNotFound": "Orca can't find this chat.",
       "startNewChat": "Start a new chat to continue.",
       "tryAgain": "Try again."
+    },
+    "workerAutoClose": {
+      "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
+      "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
+      "keepOpen": "Keep open"
     },
     "terminalArrowPad": {
       "label": "Arrow keys",

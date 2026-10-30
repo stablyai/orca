@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db/orchestration-db'
-import { OrchestrationMailboxOwner, type OrchestrationMailboxLeaf } from './mailbox-owner'
+import { OrchestrationMailboxOwner, type OrchestrationMailboxTerminal } from './mailbox-owner'
 
 let db: OrchestrationDb | undefined
 
@@ -9,24 +9,21 @@ afterEach(() => {
   db = undefined
 })
 
-function leafFor(tabId: string, leafId: string): OrchestrationMailboxLeaf {
+function terminalFor(tabId: string, leafId: string): OrchestrationMailboxTerminal {
+  const paneKey = `${tabId}:${leafId}`
   return {
-    tabId,
-    leafId,
     ptyId: `pty_${leafId}`,
-    writable: true,
+    handle: `term_${paneKey}`,
+    paneKeys: [paneKey],
     lastAgentStatus: 'idle',
-    lastAgentStatusObservedLive: true,
-    lastOscTitle: null
+    lastAgentStatusObservedLive: true
   }
 }
 
 function ownerFor(database: OrchestrationDb): OrchestrationMailboxOwner {
   return new OrchestrationMailboxOwner({
     getDb: () => database,
-    getLeaf: () => undefined,
-    getLeafKey: (tabId, leafId) => `${tabId}:${leafId}`,
-    getTerminalHandleForLeafKey: (leafKey) => `term_${leafKey}`,
+    getTerminal: () => null,
     getTerminalProcessIncarnation: () => 'process_worker',
     onRoutedMessageTypes: () => {},
     onForeignMailboxRouted: () => {}
@@ -66,7 +63,7 @@ describe('OrchestrationMailboxOwner.resolve', () => {
     ['a pane with a remote Dispatch', true]
   ])('reuses every statement it prepares for %s', (_label, attached) => {
     db = new OrchestrationDb(':memory:')
-    const leaf = leafFor('tab_a', 'leaf_a')
+    const terminal = terminalFor('tab_a', 'leaf_a')
     if (attached) {
       attachRemoteDispatch(db, 'tab_a:leaf_a')
     }
@@ -78,7 +75,7 @@ describe('OrchestrationMailboxOwner.resolve', () => {
       return prepare(sql)
     })
 
-    const mailbox = owner.resolve(leaf)
+    const mailbox = owner.resolve(terminal)
 
     expect(mailbox).toBe(attached ? 'dispatch:ctx_remote' : 'term_tab_a:leaf_a')
     expect(prepared.size).toBeGreaterThan(0)
