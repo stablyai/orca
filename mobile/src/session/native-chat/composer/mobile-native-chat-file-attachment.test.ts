@@ -4,6 +4,7 @@ import {
   type PickedMobileFile
 } from '../../../platform/media-picker-contract'
 import {
+  nativeChatDraftWithFile,
   nativeChatTextWithFileReferences,
   uploadPickedNativeChatFiles,
   type PendingNativeChatFile
@@ -21,6 +22,24 @@ async function* pickedFiles(files: PickedMobileFile[], thenThrow?: Error) {
     throw thenThrow
   }
 }
+
+describe('nativeChatDraftWithFile', () => {
+  const path = '/tmp/a.pdf'
+  const reference = '[File from my phone, saved on this computer as `/tmp/a.pdf`]'
+
+  it('sets the reference off from the draft and from what is typed next', () => {
+    expect(nativeChatDraftWithFile('', path)).toBe(`${reference} `)
+    expect(nativeChatDraftWithFile('Read', path)).toBe(`Read ${reference} `)
+    expect(nativeChatDraftWithFile('Read ', path)).toBe(`Read ${reference} `)
+    expect(nativeChatDraftWithFile('Read\n', path)).toBe(`Read\n${reference} `)
+  })
+
+  it('keeps a path with spaces whole', () => {
+    expect(nativeChatDraftWithFile('', 'C:\\Temp\\my notes.md')).toBe(
+      '[File from my phone, saved on this computer as `C:\\Temp\\my notes.md`] '
+    )
+  })
+})
 
 describe('nativeChatTextWithFileReferences', () => {
   it('references each stored file on a line after the text', () => {

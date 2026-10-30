@@ -110,6 +110,7 @@ type ChatViewProps = {
   draftKey: string | null
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
+  onAttachFiles?: () => void
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
@@ -177,6 +178,7 @@ export function MobileNativeChatView({
   composerScopeKey,
   onComposerTextChange,
   onAttachImage,
+  onAttachFiles,
   attachments,
   onRemoveAttachment,
   isAttaching,
@@ -403,10 +405,7 @@ export function MobileNativeChatView({
           {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef }}
           agent={agent}
           sessionOptions={sessionOptions}
-          onAttachImage={onAttachImage}
-          attachments={attachments}
-          onRemoveAttachment={onRemoveAttachment}
-          isAttaching={isAttaching}
+          {...{ onAttachImage, onAttachFiles, attachments, onRemoveAttachment, isAttaching }}
           onMicPress={onMicPress}
           micActive={micActive}
           micStarting={micStarting}

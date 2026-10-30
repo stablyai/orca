@@ -20,7 +20,10 @@ import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
-import { mobileNativeChatAttachActions } from '../../mobile-native-chat-attach-actions'
+import {
+  mobileNativeChatAttachActions,
+  mobileNativeChatTerminalAttachActions
+} from '../../mobile-native-chat-attach-actions'
 import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatPickerPresentation,
@@ -60,7 +63,7 @@ type Props = MobileNativeChatMicProps & {
   editSession?: { cancel: () => void; refuseCommand: (text: string) => boolean; locked: boolean }
   onPickSkill?: (skill: { name: string; path: string }) => void
   inputRef?: React.RefObject<TextInput | null>
-  // Terminal-backed chats keep curated commands and image-only attachment actions.
+  // Terminal-backed chats keep curated commands and add only photos and files.
   structured?: MobileNativeChatStructuredComposer | null
   value: string
   onChangeText: (text: string) => void
@@ -73,6 +76,8 @@ type Props = MobileNativeChatMicProps & {
   agent?: string | null
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
+  /** A terminal-backed chat's Files row; a structured chat brings its own. */
+  onAttachFiles?: () => void
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
@@ -105,6 +110,7 @@ export function MobileNativeChatComposer({
   structured = null,
   sessionOptions,
   onAttachImage,
+  onAttachFiles,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
   isAttaching = false,
@@ -249,9 +255,10 @@ export function MobileNativeChatComposer({
     }
   }
 
-  // A terminal-backed chat has only photos to add, so its + opens the library at once.
-  const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
-  const attachLabel = structured
+  // With only photos to add, the + opens the library at once.
+  const attachOpensSheet = structured !== null || onAttachFiles !== undefined
+  const attachPress = attachOpensSheet ? () => setAttachOpen(true) : onAttachImage
+  const attachLabel = attachOpensSheet
     ? t('chat.composer.addToMessage', 'Add to message')
     : t('chat.composer.attachImage', 'Attach image')
 
@@ -396,6 +403,15 @@ export function MobileNativeChatComposer({
             onSkills: () => menu.openSlashMenu('skill'),
             onCommands: () => menu.openSlashMenu('command'),
             skillCount: menu.skillCount
+          })}
+        />
+      ) : onAttachFiles ? (
+        <ActionSheetModal
+          visible={attachOpen}
+          onClose={() => setAttachOpen(false)}
+          actions={mobileNativeChatTerminalAttachActions({
+            onPhotos: onAttachImage,
+            onFiles: onAttachFiles
           })}
         />
       ) : null}
