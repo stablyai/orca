@@ -130,12 +130,15 @@ no `orca.panel`.
   bytes of text; a reply is at most 256 KiB, enough for a small image as a `data:` URL. Past either,
   the call rejects with `too_large`.
 - **Rate.** A plugin's panels share one budget of 30 messages per 10 seconds, host calls included.
-  Past it the call rejects with `rate_limited`; `retryAfterMs` is not always set, so wait a second
-  before retrying. Poll no faster than once a second, and debounce input such as a slider.
+  Past it the call rejects with `rate_limited`. `retryAfterMs` is not always set, and after a burst
+  of 30 the window takes up to 10 seconds to free a slot, so back off up to that long. Poll no
+  faster than once a second, and debounce input such as a slider.
 - **Errors.** `unknown_method`: the plugin has no worker, or its worker registered no handler for
-  this panel. `unavailable`: the worker could not start or stopped before answering; send again.
-  `action_failed`: the handler threw; the message is its `message`, never its stack. `timeout`: the
-  handler did not answer within 30 seconds. `cancelled`: your `signal` aborted.
+  this panel. `unavailable`: the worker could not start or stopped before answering, so send
+  again; or the panel's session is stale because the plugin changed or is no longer approved, so
+  reopen the panel, since resending cannot recover. `action_failed`: the handler threw; the message
+  is its `message`, never its stack. `timeout`: the handler did not answer within 30 seconds.
+  `cancelled`: your `signal` aborted.
 - **Cancelling.** Aborting the panel's `signal` rejects the promise at once but does not stop the
   handler; its own `signal` aborts when Orca stops waiting (the 30 second timeout or the worker
   stopping).
