@@ -250,6 +250,37 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBeUndefined()
   })
 
+  // A hand-typed `claude --dangerously-skip-permissions` records no flags, but its hooks report the mode.
+  it('keeps the bypass a hand-started Claude reports running in', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+      `claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
+    )
+  })
+
+  it.each(['', '--model opus', '--dangerously-skip-permissions --model opus'])(
+    'adds a live bypass to recorded arguments %j once, keeping them',
+    (agentArgs) => {
+      seedAgentStatus({
+        agentType: 'claude',
+        state: 'done',
+        providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
+      })
+      useAppStore
+        .getState()
+        .registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), { agentArgs, agentEnv: {} })
+
+      const command = buildPaneAccountRestartStartup('claude', pane)?.command ?? ''
+      expect(command.split('--dangerously-skip-permissions')).toHaveLength(2)
+      expect(command.includes('--model')).toBe(agentArgs.includes('--model'))
+    }
+  )
+
   it('still applies the configured default arguments to an unrecorded Codex launch', () => {
     seedAgentStatus({
       agentType: 'codex',

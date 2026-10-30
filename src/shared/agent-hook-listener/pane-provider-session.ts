@@ -1,5 +1,6 @@
 import type { AgentHookSource } from '../agent-hook-relay'
 import { readAgentEffortLevel } from '../agent-effort-level'
+import { readClaudePermissionMode } from '../agent-provider-session-live-settings'
 import {
   extractAgentProviderSession,
   readPathFromKeys,
@@ -41,10 +42,12 @@ export function readPaneProviderSession(
   )
   const cwd = readAgentCwd(source, hookPayload, continued)
   const effort = readClaudeEffort(source, hookPayload, continued)
+  const permissionMode = readClaudeLivePermissionMode(source, hookPayload, continued)
   return {
     ...providerSession,
     ...(cwd ? { cwd } : {}),
-    ...(effort ? { effort } : {})
+    ...(effort ? { effort } : {}),
+    ...(permissionMode ? { permissionMode } : {})
   }
 }
 
@@ -97,4 +100,19 @@ function readClaudeEffort(
       ? readAgentEffortLevel(effort.level)
       : undefined
   return reported ?? continued?.effort
+}
+
+/** Claude names its permission mode on its hooks; a subagent's hook names the subagent's own. */
+function readClaudeLivePermissionMode(
+  source: AgentHookSource,
+  hookPayload: Record<string, unknown>,
+  continued: AgentProviderSessionMetadata | undefined
+): string | undefined {
+  if (source !== 'claude') {
+    return undefined
+  }
+  const reported = readString(hookPayload, 'agent_id')
+    ? undefined
+    : readClaudePermissionMode(hookPayload.permission_mode)
+  return reported ?? continued?.permissionMode
 }

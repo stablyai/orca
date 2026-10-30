@@ -186,6 +186,21 @@ describe('agent session resume metadata', () => {
       })
     }
   })
+
+  it('round-trips a Claude permission mode and drops malformed values', () => {
+    expect(
+      normalizeAgentProviderSession({
+        key: 'session_id',
+        id: 'ok',
+        permissionMode: 'bypassPermissions'
+      })
+    ).toEqual({ key: 'session_id', id: 'ok', permissionMode: 'bypassPermissions' })
+    for (const permissionMode of ['--dangerously-skip-permissions', 'bypass\nmode', '', 3]) {
+      expect(
+        normalizeAgentProviderSession({ key: 'session_id', id: 'ok', permissionMode })
+      ).toEqual({ key: 'session_id', id: 'ok' })
+    }
+  })
 })
 
 describe('OMP recorded resume locators', () => {
