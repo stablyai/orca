@@ -82,4 +82,35 @@ export abstract class AgentBrowserBridgeState {
       return null
     }
   }
+
+  protected registeredTabsWithoutPopups(worktreeId?: string): Map<string, number> {
+    const tabs = new Map<string, number>()
+    for (const [tabId, wcId] of this.browserManager.getWebContentsIdByTabId()) {
+      if (!worktreeId || this.browserManager.getWorktreeIdForTab(tabId) === worktreeId) {
+        tabs.set(tabId, wcId)
+      }
+    }
+    return tabs
+  }
+
+  /** Moves every route at one webContents to another; true when the agent's route moved. */
+  protected retargetRouting(fromWebContentsId: number, toWebContentsId: number): boolean {
+    let moved = false
+    if (this.activeWebContentsId === fromWebContentsId) {
+      this.activeWebContentsId = toWebContentsId
+      moved = true
+    }
+    for (const [worktreeId, routedWebContentsId] of this.activeWebContentsPerWorktree) {
+      if (routedWebContentsId === fromWebContentsId) {
+        this.activeWebContentsPerWorktree.set(worktreeId, toWebContentsId)
+        moved = true
+      }
+    }
+    for (const [key, heldWebContentsId] of this.heldPersonSelections) {
+      if (heldWebContentsId === fromWebContentsId) {
+        this.heldPersonSelections.set(key, toWebContentsId)
+      }
+    }
+    return moved
+  }
 }
