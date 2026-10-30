@@ -8,7 +8,17 @@ import type {
   AutomationPrecheckResult,
   AutomationRun
 } from '../../../shared/automations-types'
-import type { AgentStateHistoryEntry, AgentStatusEntry } from '../../../shared/agent-status-types'
+import type {
+  AgentStateHistoryEntry,
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../shared/agent-status-types'
+import {
+  buildAutomationRunCompletionAttribution,
+  createAutomationAgentSessionTracker,
+  noteAutomationAgentStatus,
+  resolveAutomationRunUsageProvider
+} from '@/lib/automation-agent-session-attribution'
 import {
   selectAutomationAgentStatusEntryChange,
   UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
@@ -22,6 +32,7 @@ type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 export function createAutomationDispatchCompletion(args: {
   run: AutomationRun
   worktree: Worktree
+  agentId?: string
   precheckResult: AutomationPrecheckResult | null
   markDispatchResult: MarkDispatchResult
   releaseTerminalOwnership: () => void
@@ -36,6 +47,18 @@ export function createAutomationDispatchCompletion(args: {
   let pendingDone = false
   let completionMarked = false
   let contactLost = false
+  // Why: bind completion to the primary provider session so nested same-pane
+  // agents (SessionStart `claude -p`) cannot finalize the run early (#10999).
+  const agentSessionTracker = createAutomationAgentSessionTracker()
+  let completionTerminalPaneKey: string | null = null
+  let completionTerminalPtyId: string | null = null
+  const buildCompletionAttribution = () =>
+    buildAutomationRunCompletionAttribution({
+      tracker: agentSessionTracker,
+      provider: resolveAutomationRunUsageProvider(args.agentId ?? ''),
+      terminalPtyId: completionTerminalPtyId,
+      terminalPaneKey: completionTerminalPaneKey
+    })
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
   let releaseReuseDispatchTab = (): void => {}
@@ -60,6 +83,7 @@ export function createAutomationDispatchCompletion(args: {
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
+        completionAttribution: buildCompletionAttribution(),
         precheckResult: args.precheckResult,
         error: null
       })
@@ -118,6 +142,7 @@ export function createAutomationDispatchCompletion(args: {
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
+        completionAttribution: code === 0 ? buildCompletionAttribution() : null,
         precheckResult: args.precheckResult,
         error: code === 0 ? null : `Automation process exited with code ${code}.`
       })
@@ -187,10 +212,21 @@ export function createAutomationDispatchCompletion(args: {
         }
         if (historicalState.state === 'working') {
           sawWorkingAfterStart = true
+          // Why: history entries have no providerSession. Binding here
+          // would attach the live session to a past working sample.
         }
         if (
           historicalState.state === 'done' &&
-          (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
+          entry.sessionBoundary !== true &&
+          (!options?.requireWorkingAfterStart || sawWorkingAfterStart) &&
+          noteAutomationAgentStatus(
+            agentSessionTracker,
+            {
+              state: 'done',
+              providerSession: entry.providerSession
+            },
+            options
+          )
         ) {
           // The done edge left live history; only the entry’s completed slot retains its output.
           latestAssistantMessage =
@@ -203,15 +239,30 @@ export function createAutomationDispatchCompletion(args: {
       if (entry.state === 'working') {
         sawWorkingAfterStart = true
       }
-      if (
+      const shouldFinalize =
         entry.state === 'done' &&
         // SessionStart boundary-done means connection before prompt submission; finishing here would record empty output and close the new tab.
         entry.sessionBoundary !== true &&
-        (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
-      ) {
-        latestAssistantMessage = entry.lastAssistantMessage?.trim() || latestAssistantMessage
-        handleAgentDone()
+        (!options?.requireWorkingAfterStart || sawWorkingAfterStart) &&
+        noteAutomationAgentStatus(
+          agentSessionTracker,
+          {
+            state: entry.state,
+            providerSession: entry.providerSession
+          },
+          options
+        )
+      if (!shouldFinalize) {
+        if (entry.state !== 'done') {
+          noteAutomationAgentStatus(agentSessionTracker, {
+            state: entry.state,
+            providerSession: entry.providerSession
+          })
+        }
+        return
       }
+      latestAssistantMessage = entry.lastAssistantMessage?.trim() || latestAssistantMessage
+      handleAgentDone()
     }
     // Codex/Claude completion normally comes from global hook IPC rather than hidden PTY OSC.
     unsubscribeAgentStatus = useAppStore.subscribe(checkCurrentStatus)
@@ -226,7 +277,41 @@ export function createAutomationDispatchCompletion(args: {
     cleanupRunObservers,
     handleAgentDone,
     handleExit,
+    noteFreshOscAgentStatus: (payload: {
+      state: AgentStatusState
+      sessionBoundary?: boolean
+    }): boolean => {
+      if (payload.state !== 'done' || payload.sessionBoundary === true) {
+        if (payload.state !== 'done') {
+          noteAutomationAgentStatus(agentSessionTracker, { state: payload.state })
+        }
+        return false
+      }
+      // OSC payloads lack providerSession; once hooks bound a primary session, wait for store-attributed done.
+      if (agentSessionTracker.boundFingerprint) {
+        return false
+      }
+      return noteAutomationAgentStatus(agentSessionTracker, { state: 'done' })
+    },
+    noteReusableOscAgentStatus: (payload: { state: AgentStatusState }): boolean => {
+      if (payload.state !== 'done') {
+        noteAutomationAgentStatus(agentSessionTracker, { state: payload.state })
+        return false
+      }
+      if (agentSessionTracker.boundFingerprint) {
+        return false
+      }
+      return noteAutomationAgentStatus(
+        agentSessionTracker,
+        { state: 'done' },
+        { requireWorkingAfterStart: true }
+      )
+    },
     observeAgentStatus,
+    setCompletionTerminal: (paneKey: string | null, ptyId: string | null) => {
+      completionTerminalPaneKey = paneKey
+      completionTerminalPtyId = ptyId
+    },
     setReuseDispatchTabRelease: (release: () => void) => {
       releaseReuseDispatchTab = release
     },

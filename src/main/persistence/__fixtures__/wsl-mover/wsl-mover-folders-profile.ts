@@ -90,6 +90,7 @@ export function foldersAndAutomationsWslMoverProfile(paths: WslMoverPaths): WslM
     terminalSessionId: null,
     terminalPaneKey: null,
     terminalPtyId: null,
+    completionAttribution: null,
     outputSnapshot: null,
     precheckResult: null,
     usage: null,

@@ -65,6 +65,7 @@ const run: AutomationRun = {
   terminalPaneKey: `${HOST_TAB}:${LEAF}`,
   // The server's own PTY id, which this client never sees.
   terminalPtyId: 'pty-on-server-7',
+  completionAttribution: null,
   outputSnapshot: null,
   precheckResult: null,
   usage: null,

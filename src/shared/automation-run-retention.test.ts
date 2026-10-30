@@ -21,6 +21,7 @@ function run(overrides: Partial<AutomationRun> & Pick<AutomationRun, 'id' | 'aut
     terminalSessionId: null,
     terminalPaneKey: null,
     terminalPtyId: null,
+    completionAttribution: null,
     outputSnapshot: null,
     precheckResult: null,
     usage: null,
