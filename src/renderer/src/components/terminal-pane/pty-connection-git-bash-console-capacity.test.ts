@@ -509,7 +509,7 @@ describe('Git Bash console-capacity pane retention', () => {
         startup: kind === 'captured-draft' ? { command: 'codex' } : null
       })
       const view = await launch.mount()
-      let accepted: Promise<boolean> | undefined
+      let accepted: boolean | Promise<boolean> | undefined
       if (kind === 'quick-command') {
         const { sendTerminalQuickCommandToPane } = await import('./terminal-quick-command-dispatch')
         expect(
