@@ -1,22 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  MoreHorizontal,
-  PanelRight,
-  PanelRightClose
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { ChevronDown, ChevronRight, ExternalLink, PanelRight, PanelRightClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
@@ -34,7 +20,7 @@ import {
   CrewRowAvatar as Avatar,
   CrewRowStatusDot as CrewStatusIndicator
 } from './CrewRowDetails'
-import { useCrewMenuFocus } from './use-crew-menu-focus'
+import { CrewRowMenu } from './CrewRowMenu'
 
 function IconButton({
   label,
@@ -69,6 +55,7 @@ type PanelProps = {
   party: string
   canMention: boolean
   mention: (rows: OrchestrationCrewRow[]) => void
+  isVisible?: boolean
 }
 export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | null {
   const snapshot = useOrchestrationCrew(props.target, props.party)
@@ -79,7 +66,8 @@ export function CrewPanelContent({
   target,
   canMention,
   mention,
-  snapshot
+  snapshot,
+  isVisible = true
 }: PanelProps & { snapshot: OrchestrationCrewSnapshot }): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -208,6 +196,7 @@ export function CrewPanelContent({
                       key={row.partyKey}
                       row={row}
                       target={target}
+                      isVisible={isVisible}
                       canMention={canMention}
                       mention={() => mention([row])}
                     />
@@ -274,15 +263,16 @@ function CrewRowView({
   row,
   target,
   canMention,
-  mention
+  mention,
+  isVisible
 }: {
   row: OrchestrationCrewRow
   target: RuntimeClientTarget
   canMention: boolean
   mention: () => void
+  isVisible: boolean
 }) {
   const [disclosure, setDisclosure] = useState<{ question?: string; expanded: boolean }>()
-  const menu = useCrewMenuFocus()
   const question = row.pendingQuestion?.at
   const expanded =
     disclosure?.question === question
@@ -333,53 +323,9 @@ function CrewRowView({
             >
               <ExternalLink />
             </IconButton>
-            <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  ref={menu.triggerRef}
-                  aria-label={translate('components.orchestrationCrew.more', 'More for {{name}}', {
-                    name: row.label
-                  })}
-                >
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                ref={menu.contentRef}
-                align="end"
-                onPointerDownOutside={menu.onPointerDownOutside}
-                onCloseAutoFocus={menu.onCloseAutoFocus}
-              >
-                <DropdownMenuItem disabled={!canMention || !row.sendAddress} onSelect={mention}>
-                  {translate('components.orchestrationCrew.mentionInMessage', 'Mention in message')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={open}>
-                  {translate('components.orchestrationCrew.openChat', 'Open its chat')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!row.sendAddress}
-                  onSelect={() => {
-                    if (row.sendAddress) {
-                      void window.api.ui
-                        .writeTerminalClipboardText(row.sendAddress)
-                        .then(() =>
-                          toast.success(
-                            translate(
-                              'components.orchestrationCrew.copiedAddress',
-                              "Copied {{name}}'s address",
-                              { name: row.label }
-                            )
-                          )
-                        )
-                    }
-                  }}
-                >
-                  {translate('components.orchestrationCrew.copyAddress', 'Copy address')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {isVisible ? (
+              <CrewRowMenu row={row} open={open} canMention={canMention} mention={mention} />
+            ) : null}
             <IconButton
               label={translate(
                 'components.orchestrationCrew.showDetails',

@@ -5,13 +5,37 @@ import {
   getAgentRowConversationName,
   type ConversationNameTab
 } from '../../../shared/agent-row-conversation-name'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
 import type { Tab } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+
+export type SenderHookRow = Pick<
+  AgentStatusIpcPayload,
+  | 'paneKey'
+  | 'worktreeId'
+  | 'agentType'
+  | 'providerSession'
+  | 'receivedAt'
+  | 'connectionId'
+  | 'launchToken'
+>
+
+export type MirroredTabs = {
+  unifiedTabs?: Readonly<
+    Record<string, readonly Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>[]>
+  >
+  tabsByWorktree?: Readonly<
+    Record<string, readonly (Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>)[]>
+  >
+  terminalLayoutsByTabId?: Readonly<
+    Record<string, Pick<TerminalLayoutSnapshot, 'root' | 'titlesByLeafId'>>
+  >
+}
 
 export type TerminalSenderNaming = {
   /** The tab as this host mirrors the workspace session. */
@@ -45,7 +69,7 @@ export function orchestrationSenderName(
   const federated = party.address.startsWith('dispatch:')
   const terminal =
     !federated && party.terminalHandle ? sources.terminal(party.terminalHandle) : null
-  const chat = party.orcaSessionId ? chatNaming(party.orcaSessionId, sources) : null
+  const chat = party.orcaSessionId ? structuredChatNaming(party.orcaSessionId, sources) : null
   const terminalName = terminal?.tab
     ? getAgentRowConversationName(
         terminal.tab,
@@ -67,9 +91,9 @@ export function orchestrationSenderName(
 }
 
 /** A chat's own name (the person's rename, else its saved name) and the label its tab falls back to. */
-function chatNaming(
+export function structuredChatNaming(
   sessionId: string,
-  sources: SenderNamingSources
+  sources: Pick<SenderNamingSources, 'records' | 'chatTab'>
 ): { ownName: string | null; fallback: string } | null {
   const record = sources.records ? lineageLiveSession(sources.records, sessionId) : null
   if (!record) {

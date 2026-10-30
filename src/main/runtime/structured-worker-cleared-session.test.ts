@@ -430,7 +430,7 @@ describe.each(['live', 'at-rest'] as const)(
 
     it('stops the worker by closing the successor, and can then release it', async () => {
       const identity = registerWorker()
-      const stop = await stopStructuredWorker(identity, 'ctx_1')
+      const stop = await stopStructuredWorker(identity)
       expect(closed).toEqual([SUCCESSOR])
       expect(stop.stopped).toBe(true)
       // Never-started successors have no death evidence; retiring their tab must still let release prove exit.
@@ -633,14 +633,14 @@ describe('stopping a worker while a /clear commits', () => {
   })
 
   it('closes the successor the clear handed the worker to', async () => {
-    const stop = await stopStructuredWorker(registerWorker(), 'ctx_1')
+    const stop = await stopStructuredWorker(registerWorker())
     expect(closed).toEqual([MINTED, SUCCESSOR])
     expect(stop.stopped).toBe(true)
   })
 
   it('keeps an earlier close on the receipt when a later one fails', async () => {
     failHideOf = SUCCESSOR
-    const stop = await stopStructuredWorker(registerWorker(), 'ctx_1')
+    const stop = await stopStructuredWorker(registerWorker())
     expect(closed).toEqual([MINTED])
     expect(stop).toMatchObject({ stopped: false, closeAttempted: true })
   })
@@ -752,14 +752,14 @@ describe('a worker cleared twice', () => {
     expect(resolveStructuredWorkerAuthority(identity.handle, null)?.running.sessionId).toBe(SECOND)
     await readJournal(identity)
     expect(historyAsked).toEqual([SECOND, SUCCESSOR, MINTED])
-    await stopStructuredWorker(identity, 'ctx_1')
+    await stopStructuredWorker(identity)
     expect(closed).toEqual([SECOND])
   })
 
   it('forgets parked mail on every session of the lineage at settlement, binding or not', () => {
     const forgetStructuredSessionMail = vi.fn()
     // No binding: what a restarted runtime holds when the worker settles.
-    releaseStructuredWorkerSession('ctx_after_restart', { forgetStructuredSessionMail }, MINTED)
+    releaseStructuredWorkerSession(MINTED, { forgetStructuredSessionMail })
     expect(forgetStructuredSessionMail.mock.calls.map(([sessionId]) => sessionId)).toEqual([
       MINTED,
       SUCCESSOR,
@@ -804,7 +804,7 @@ describe('a running session that cannot be verified is refused, never declared e
     await expect(
       readStructuredWorkerTerminal({ handle: identity.handle, db: null })
     ).rejects.toMatchObject({ code })
-    const stop = await stopStructuredWorker(identity, 'ctx_1')
+    const stop = await stopStructuredWorker(identity)
     expect(stop).toMatchObject({ stopped: false, closeAttempted: false })
     expect(stop.reason).toContain('No effects were applied')
     expect(historyAsked).toEqual([])

@@ -19,6 +19,9 @@ type CrewPaneController = Pick<
   | 'worktreeId'
   | 'managerRef'
   | 'paneTransportsRef'
+  | 'isRendererVisible'
+  | 'expandedPaneId'
+  | 'isolatedPaneKey'
   | 'managedPanes'
   | 'effectiveChatViewMode'
   | 'chatPane'
@@ -51,6 +54,11 @@ function TerminalCrewPortal({
     <OrchestrationCrewPanel
       target={target}
       party={party}
+      isVisible={
+        controller.isRendererVisible &&
+        (controller.expandedPaneId === null || controller.expandedPaneId === pane.id) &&
+        (controller.isolatedPaneKey === null || controller.isolatedPaneKey === paneKey)
+      }
       canMention={transport.isConnected()}
       mention={(rows) => {
         const manager = managerRef.current

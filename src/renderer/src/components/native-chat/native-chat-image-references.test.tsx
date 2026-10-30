@@ -22,7 +22,7 @@ import { writeNativeChatDraftCache } from './native-chat-draft-cache'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
 import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
-import { promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
+import { changePrompt, promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
 import { imageReferenceToken as chip } from '../../../../shared/native-chat/native-chat-image-reference'
 import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 
@@ -197,6 +197,25 @@ describe('composer image chips', () => {
     expect(readNativeChatComposerDraft('chat-b').text).toBe('B draft')
     expect(readNativeChatComposerDraft('chat-a').text).toBe('')
   })
+
+  it.each(['start', 'end'] as const)(
+    'cancels an uploading image at the %s of a hidden draft with its space, in text and box alike',
+    (caret) => {
+      const composer = renderComposer('chat-a')
+      changePrompt(composer.textbox(), 'look at this')
+      act(() => promptEditor(composer.textbox()).commands.focus(caret))
+      const uploading = begin(composer)
+      const fromA = composer.api()
+      composer.show('chat-b')
+
+      act(() => fromA.removeImageAttachment(uploading))
+
+      const stored = readNativeChatComposerDraft('chat-a')
+      expect(stored.text).toBe(caret === 'start' ? 'look at this' : 'look at this ')
+      composer.show('chat-a')
+      expect(promptValue(composer.textbox())).toBe(stored.text)
+    }
+  )
 
   it('gives a message returned while an image uploads distinct, correct numbers at send', () => {
     const scope = structuredAgentSessionDraftScopeKey('s1')

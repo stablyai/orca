@@ -6,6 +6,12 @@ export function imageReferenceToken(attachmentId: string): string {
   return `[Image](orca-image:${attachmentId})`
 }
 
+/** Each chip goes with the space inserted after it, as the editor deletes it. */
+export function withoutImageReference(text: string, attachmentId: string): string {
+  const token = imageReferenceToken(attachmentId)
+  return text.replaceAll(`${token} `, '').replaceAll(token, '')
+}
+
 /** Spaces keep inserted chips separate from the words on either side of the caret. */
 export function imageReferenceInsertion(
   before: string,
