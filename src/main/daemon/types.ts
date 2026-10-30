@@ -19,11 +19,8 @@ import type {
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 import type { TerminalSnapshot } from './terminal-snapshot'
-import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 export {
   type CreateOrAttachRequest,
-  type CreateOrAttachSettlement,
-  type CancelCreateOrAttachResult,
   type CancelCreateOrAttachRequest
 } from './daemon-create-or-attach-contract'
 
@@ -116,7 +113,6 @@ export type KillRequest = {
     expectedIncarnationId?: string
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
-    switchCondition?: PtyFencedTerminationRequest['switchCondition']
   }
 }
 

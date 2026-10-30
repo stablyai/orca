@@ -27,7 +27,6 @@ import {
   ptyInitialCwd,
   ptyLoadGeneration,
   ptyPhysicalExits,
-  noteLocalPtyUse,
   ptyProcesses,
   ptyReportsChildExitStatus,
   ptyShellPath,
@@ -112,9 +111,7 @@ export function activateLocalPtySession(args: {
       wslDistro: spawnedWslDistro
     }),
     write: (data) => {
-      if (noteLocalPtyUse(id)) {
-        proc.write(data)
-      }
+      proc.write(data)
     },
     onEmission: emitIngressData
   })
@@ -204,10 +201,6 @@ export function activateLocalPtySession(args: {
         reason: staging.failure
       })
     }
-    const physical = ptyPhysicalExits.get(id)
-    if (physical) {
-      physical.pendingCommand = true
-    }
     writeStartupCommandWhenShellReady(
       readiness.shellReadyPromise,
       proc,
@@ -217,17 +210,7 @@ export function activateLocalPtySession(args: {
       },
       {
         bracketedPasteSafe,
-        beforeWrite: () => {
-          if (physical) {
-            physical.pendingCommand = false
-          }
-          try {
-            spawn.switchExecution?.check()
-          } catch {
-            return false
-          }
-          return ptyProcesses.get(id) === proc && noteLocalPtyUse(id)
-        }
+        beforeWrite: () => ptyProcesses.get(id) === proc
       }
     )
   }
@@ -235,21 +218,10 @@ export function activateLocalPtySession(args: {
   // Memory collection needs a proven positive OS PID; node-pty can briefly publish zero during spawn.
   const rawPid = proc.pid
   const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
-  const physical = ptyPhysicalExits.get(id)
-  if (spawn.switchExecution && physical) {
-    physical.witness = {
-      token: spawn.switchExecution.invocationId,
-      revision: physical.useRevision,
-      at: performance.now()
-    }
-  }
   return {
     id,
     incarnationId,
     pid,
-    ...(spawn.switchExecution && physical?.witness
-      ? { switchCleanupWitness: physical.witness.token }
-      : {}),
     startupCwdSource: 'request',
     ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {}),
     ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})

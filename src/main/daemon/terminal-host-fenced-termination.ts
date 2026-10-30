@@ -15,10 +15,7 @@ export function beginTerminalHostFencedTermination(
     sessions: ReadonlyMap<string, Session>
     pendingCreations: ReadonlyMap<string, unknown>
     owners: ClaimedAgentPtyOwnerRegistry
-    kill: (
-      id: string,
-      options: { immediate: true; switchCheck?: () => boolean; ownedSpawn?: true }
-    ) => Promise<void>
+    kill: (id: string, options: { immediate: true }) => Promise<void>
   }
 ): FencedTermination {
   const session = deps.sessions.get(request.id)
@@ -39,33 +36,10 @@ export function beginTerminalHostFencedTermination(
   if (request.requireUnattached && session.hasAttachedClients) {
     return { accepted: false, result: { outcome: 'refused', reason: 'attached' } }
   }
-  if (request.switchCondition && !request.switchCondition.ownedSpawn) {
-    return { accepted: false, result: { outcome: 'refused', reason: 'unsupported' } }
-  }
-  const physicalCheck = request.switchCondition
-    ? session.switchCloseCondition(request.switchCondition)
-    : undefined
-  const switchCheck = physicalCheck
-    ? () =>
-        deps.sessions.get(request.id) === session &&
-        !deps.pendingCreations.has(request.id) &&
-        (!request.requireNoAgentOwner || deps.owners.listForPty(request.id).length === 0) &&
-        (!request.switchCondition?.ownedSpawn ||
-          deps.owners
-            .listForPty(request.id)
-            .every((owner) => owner.generation === request.switchCondition?.claimGeneration)) &&
-        physicalCheck()
-    : undefined
-  if (switchCheck && !switchCheck()) {
-    return { accepted: false, result: { outcome: 'refused', reason: 'unverifiable' } }
-  }
   try {
     // kill reserves the exact Session synchronously, before its first OS probe.
     const completion = deps
-      .kill(request.id, {
-        immediate: true,
-        ...(switchCheck ? { switchCheck, ownedSpawn: request.switchCondition?.ownedSpawn } : {})
-      })
+      .kill(request.id, { immediate: true })
       .then((): PtyFencedTerminationOutcome =>
         session.isAlive ? { outcome: 'refused', reason: 'unverifiable' } : { outcome: 'ended' }
       )

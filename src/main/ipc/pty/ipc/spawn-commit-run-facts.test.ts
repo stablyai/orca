@@ -7,32 +7,19 @@ import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcDeps } from './spawn-types'
-import { createPaneBindingStore } from '../pty-launch-race-test-fixture'
-import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/pty-binding-persistence'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const PTY_ID = 'orca-ipc-pty-run-facts'
 const INCARNATION_ID = 'inc-ipc-run-facts'
-const LEAF_ID = 'a1111111-1111-4111-8111-111111111111'
 
 async function commit(
-  persistPtyBinding: (
-    input: PersistPtyBindingArgs | (() => PersistPtyBindingArgs | null)
-  ) => Promise<boolean>,
+  persistPtyBinding: ReturnType<typeof vi.fn>,
   prepare?: (ctx: ReturnType<typeof createPtyIpcSpawnState>) => void
 ) {
   const facts = new TerminalRunFactsRegister()
   const stops = new TerminalIntentionalStops()
   stops.mark(PTY_ID, 'reversible', null)(true)
-  const store = createPaneBindingStore()
-  const saveBinding = store.persistPtyBinding.getMockImplementation()!
-  store.persistPtyBinding.mockImplementation(async (input) => {
-    if ((await persistPtyBinding(input)) === false) {
-      return false
-    }
-    return saveBinding(input)
-  })
   const runtime = {
     terminalRunFacts: facts,
     intentionalPtyStops: stops,
@@ -47,7 +34,7 @@ async function commit(
   }
   const ports = {
     runtime,
-    store,
+    store: { persistPtyBinding },
     options: {},
     sendPtySpawnedToRenderer: vi.fn()
   }
@@ -56,11 +43,11 @@ async function commit(
   const ctx = createPtyIpcSpawnState(deps, {
     worktreeId: 'wt-1',
     tabId: 'tab-1',
-    leafId: LEAF_ID,
+    leafId: 'leaf-1',
     cols: 120,
     rows: 40
   })
-  ctx.validatedLeafId = LEAF_ID
+  ctx.validatedLeafId = 'leaf-1'
   ctx.provider = { ...ctx.provider, shutdown: vi.fn().mockResolvedValue(undefined) }
   ctx.result = { id: PTY_ID, incarnationId: INCARNATION_ID }
   prepare?.(ctx)
@@ -100,7 +87,7 @@ describe('renderer spawn commit: run facts', () => {
       const { outcome, reply } = await commit(vi.fn().mockResolvedValue(true), (ctx) => {
         ctx.resumeAdmission = { verdict: 'chat-home', refused }
         if (earlyExit) {
-          ctx.metadataLeafId = LEAF_ID
+          ctx.metadataLeafId = 'leaf-1'
           ctx.deps.runtime!.getPtyLivenessVerdict = vi.fn(() => ({ status: 'exited' as const }))
           ctx.deps.store!.runDurableMutation = vi.fn().mockResolvedValue(true)
           ctx.deps.runtime!.registerPty = vi.fn(() => {

@@ -97,14 +97,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       replacedByRestart: true
     })
     expect(order).toEqual(['fanout', 'unbind'])
-    expect(originalAdapter.settleSwitchWorkForReplacement).toHaveBeenCalledOnce()
-    expect(originalAdapter.settleSwitchWorkForReplacement.mock.invocationCallOrder[0]).toBeLessThan(
-      originalAdapter.fanoutSyntheticExits.mock.invocationCallOrder[0]
-    )
-    expect(adapterInstances[1].inheritSwitchReleaseCleanup).toHaveBeenCalledWith(originalAdapter)
-    expect(
-      adapterInstances[1].inheritSwitchReleaseCleanup.mock.invocationCallOrder[0]
-    ).toBeLessThan(originalAdapter.dispose.mock.invocationCallOrder[0])
     expect(recoverRetired).toHaveBeenCalledOnce()
     expect(recoverRetired.mock.invocationCallOrder[0]).toBeLessThan(
       originalAdapter.fanoutSyntheticExits.mock.invocationCallOrder[0]

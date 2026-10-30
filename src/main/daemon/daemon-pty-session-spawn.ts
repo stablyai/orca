@@ -51,36 +51,16 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       identityChanged: false
     }
     try {
-      const create = async () => {
-        const retained = operation.switchSettlement
-        if (retained) {
-          await retained.recover()
-          throw new Error('Terminal creation was interrupted; try again')
-        }
-        return this.doSpawn({ ...spawnOpts, sessionId }, operation, historyRecovery)
-      }
-      return await this.withHistorySpawnLock(sessionId, () =>
-        // Switch authority already owns the source proof; an uncertain ordinary send cannot replay.
-        opts.switchExecution ? create() : this.withDaemonRetry(create)
-      )
+      const create = () => this.doSpawn({ ...spawnOpts, sessionId }, operation, historyRecovery)
+      return await this.withHistorySpawnLock(sessionId, () => this.withDaemonRetry(create))
     } finally {
       if (historyRecovery.freeze) {
         this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)
       }
-      const forget = () => {
-        this.pendingClaimSpawnOperations.delete(operation)
-        operations.delete(operation)
-        if (operations.size === 0) {
-          this.pendingSpawnOperationsBySessionId.delete(sessionId)
-        }
-      }
-      const retained = this.switchSpawnSettlements.get(operation)
-      if (retained) {
-        void retained.completion.then(forget)
-        // This is the same receiver join; it cannot replay the failed creation.
-        void retained.recover().catch(() => {})
-      } else {
-        forget()
+      this.pendingClaimSpawnOperations.delete(operation)
+      operations.delete(operation)
+      if (operations.size === 0) {
+        this.pendingSpawnOperationsBySessionId.delete(sessionId)
       }
     }
   }

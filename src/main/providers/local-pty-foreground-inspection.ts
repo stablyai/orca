@@ -37,8 +37,7 @@ import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-
 export async function inspectLocalPtyChildProcesses(
   id: string,
   fresh = true,
-  ignoreDetached = false,
-  strict = false
+  ignoreDetached = false
 ): Promise<PtyChildProcessVerdict> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
@@ -57,7 +56,7 @@ export async function inspectLocalPtyChildProcesses(
       )
       return ptyProcesses.get(id) === proc ? verdict : 'unverifiable'
     }
-    if (strict || ptyProcessNameIsSpawnFile(proc)) {
+    if (ptyProcessNameIsSpawnFile(proc)) {
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       return ptyProcesses.get(id) === proc
         ? inspectSpawnFileChildProcessesFromRows(

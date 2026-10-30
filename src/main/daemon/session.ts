@@ -71,13 +71,6 @@ export class Session extends SessionProcessInspection {
       shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
       installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
       releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
-      beforeCommandWrite: () => {
-        if (this.switchClosing) {
-          return false
-        }
-        this.noteUse()
-        return true
-      },
       acceptStartupIngress: (data) => this.startupIngress.accept(data)
     })
 
@@ -85,10 +78,6 @@ export class Session extends SessionProcessInspection {
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => {
-        if (this.switchClosing) {
-          return
-        }
-        this.noteUse()
         this.subprocess.write(data)
       },
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
@@ -156,10 +145,9 @@ export class Session extends SessionProcessInspection {
   }
 
   write(data: string): void {
-    if (this._state === 'exited' || this._disposed || this.switchClosing) {
+    if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.noteUse()
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (!this.startupIngress.answerLiveQueryReply(data)) {
       this.subprocess.write(data)
@@ -168,10 +156,9 @@ export class Session extends SessionProcessInspection {
 
   /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
   writeStartupCommand(data: string): void {
-    if (this._state === 'exited' || this._disposed || this.switchClosing) {
+    if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.noteUse()
     if (!this.shellReady.tryEnqueue(data)) {
       this.subprocess.write(data)
     }
@@ -202,15 +189,10 @@ export class Session extends SessionProcessInspection {
   /** Arm escalation after a coordinator begins snapshot-first teardown. */
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
-    if (this.switchClosing) {
-      throw new Error('Terminal is closing')
-    }
-    this.noteUse()
     return this.output.attachClient(client)
   }
 
   detachClient(token: symbol): void {
-    this.noteUse()
     this.output.detachClient(token)
     // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
@@ -219,7 +201,6 @@ export class Session extends SessionProcessInspection {
   }
 
   detachAllClients(): void {
-    this.noteUse()
     this.output.clearClients()
     this.producerPause.release({ resume: true })
   }

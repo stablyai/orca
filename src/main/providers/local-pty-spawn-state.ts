@@ -1,6 +1,5 @@
 import type { PtySpawnResult } from './pty-provider-contract'
 import {
-  noteLocalPtyUse,
   pendingLocalPtySpawns,
   ptyIncarnations,
   ptyProcesses,
@@ -29,9 +28,6 @@ export async function runCancelableLocalPtySpawn<T>(
   id: string,
   operation: (throwIfCanceled: () => void, signal: AbortSignal) => Promise<T>
 ): Promise<T> {
-  if (!noteLocalPtyUse(id)) {
-    throw new Error('terminal_handle_stale')
-  }
   const cancellation = new AbortController()
   const pendingSpawn: PendingLocalPtySpawn = { cancellation }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()

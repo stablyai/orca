@@ -1,4 +1,3 @@
-import { registerDaemonSwitchCompatibilityTests } from './daemon-pty-adapter-switch-compatibility.test-fixture'
 import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
@@ -15,6 +14,7 @@ import type { DaemonServer } from './daemon-server'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from './daemon-health'
 import type * as DaemonTccAttributionModule from './daemon-tcc-attribution'
+
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
     getMacDaemonSystemResolverHealthMock: vi.fn(
@@ -796,31 +796,5 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
       current.dispose()
     })
-  })
-  registerDaemonSwitchCompatibilityTests({
-    get server() {
-      return server
-    },
-    set server(value) {
-      server = value
-    },
-    get adapter() {
-      return adapter
-    },
-    set adapter(value) {
-      adapter = value
-    },
-    get socketPath() {
-      return socketPath
-    },
-    set socketPath(value) {
-      socketPath = value
-    },
-    get tokenPath() {
-      return tokenPath
-    },
-    set tokenPath(value) {
-      tokenPath = value
-    }
   })
 })

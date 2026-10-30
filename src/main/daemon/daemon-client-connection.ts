@@ -35,10 +35,6 @@ export class DaemonClientConnection {
 
   private streamSocket: Socket | null = null
 
-  private connectionBorrowers = 0
-
-  private ownerReleased = false
-
   protected connected = false
 
   private disconnectArmed = false
@@ -189,25 +185,6 @@ export class DaemonClientConnection {
       this.daemonIdentity = null
       this.disconnectArmed = false
       throw error
-    }
-  }
-
-  async withRetainedConnection<T>(operation: () => Promise<T>): Promise<T> {
-    this.connectionBorrowers++
-    try {
-      return await operation()
-    } finally {
-      this.connectionBorrowers--
-      if (this.ownerReleased && this.connectionBorrowers === 0) {
-        this.disconnect()
-      }
-    }
-  }
-
-  releaseOwner(): void {
-    this.ownerReleased = true
-    if (this.connectionBorrowers === 0) {
-      this.disconnect()
     }
   }
 

@@ -1,4 +1,3 @@
-import { SESSION_SWITCH_PHYSICAL_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { isShellProcess } from '../../shared/agent-detection'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
@@ -47,10 +46,6 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     }
     return this.client.request<PtyProcessInspection>('inspectProcess', {
       sessionId: id,
-      ...(options?.captureSwitchWitness &&
-      this.protocolVersion >= SESSION_SWITCH_PHYSICAL_PROTOCOL_VERSION
-        ? { captureSwitchWitness: options.captureSwitchWitness }
-        : {}),
       ...(options?.expectedIncarnationId
         ? { expectedIncarnationId: options.expectedIncarnationId }
         : {}),

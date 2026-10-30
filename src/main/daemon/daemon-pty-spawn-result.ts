@@ -32,16 +32,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     let result = initialResult
     const finalizeSpawnResult = (spawnResult: PtySpawnResult): PtySpawnResult => {
       const exited = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
-      if (!result.switchOutcomeUnknown && result.incarnationId) {
-        operation.switchSettlement?.consume(exited ? 'exited' : 'adopted', result.incarnationId)
-      }
-      if (!result.switchOutcomeUnknown && result.incarnationId) {
-        for (const pending of this.pendingSpawnOperationsBySessionId.get(sessionId) ?? []) {
-          if (pending !== operation) {
-            pending.switchSettlement?.adopt?.(result.incarnationId)
-          }
-        }
-      }
       return (
         exited ??
         (result.isNew && !historyRecovery.identityChanged
@@ -91,7 +81,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     this.ptyInventory.spawned(sessionId, result.incarnationId)
     const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
     if (exitedResult) {
-      operation.switchSettlement?.consume('exited')
       return exitedResult
     }
     if (result.incarnationId) {
@@ -167,7 +156,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         this.ptyInventory.spawned(sessionId, result.incarnationId)
         const exitedRetryResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
         if (exitedRetryResult) {
-          operation.switchSettlement?.consume('exited')
           return exitedRetryResult
         }
         if (result.incarnationId) {

@@ -8,9 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DaemonClient } from './client'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { DaemonServer } from './daemon-server'
-import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import * as transport from './daemon-client-socket-connect'
-import type { DaemonClientConnections } from './daemon-client-connections'
 import { getDaemonSocketPath } from './daemon-spawner'
 const nativePty = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node-pty', () => nativePty)
@@ -76,117 +73,6 @@ describe('daemon async spawn cancellation', () => {
     vi.restoreAllMocks()
     rmSync(directory, { recursive: true, force: true })
   })
-
-  it.each(['healthy', 'release-reply-lost'] as const)(
-    'consumes only after actual adoption and reclaims without a physical hold: %s',
-    async (loss) => {
-      const adapter = new DaemonPtyAdapter({
-        socketPath: getDaemonSocketPath(directory),
-        tokenPath: join(directory, 'daemon.token')
-      })
-      let owner: { work: Promise<unknown>; recover: () => Promise<void> } | undefined
-      let blocked = false
-      let releaseReplyDropped = false
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inspect only this fixture's receiver connections.
-      const receiver = server as unknown as {
-        connections: DaemonClientConnections
-      }
-      const connect = transport.connectDaemonSocket
-      vi.spyOn(transport, 'connectDaemonSocket').mockImplementation(async (...args) => {
-        if (blocked) {
-          throw new Error('Connection lost')
-        }
-        const socket = await connect(...args)
-        const write = socket.write.bind(socket)
-        vi.spyOn(socket, 'write').mockImplementation(
-          (...values: Parameters<typeof socket.write>) => {
-            const frame = JSON.parse(String(values[0]))
-            if (frame.payload?.switchExecution?.phase === 'commit') {
-              const peer = [...receiver.connections.values()].at(-1)?.controlSocket
-              if (!peer) {
-                throw new Error('fixture control missing')
-              }
-              const respond = peer.write.bind(peer)
-              vi.spyOn(peer, 'write').mockImplementation(
-                (...bytes: Parameters<typeof peer.write>) => {
-                  const result = JSON.parse(String(bytes[0]))
-                  if (
-                    loss === 'release-reply-lost' &&
-                    !releaseReplyDropped &&
-                    result.payload?.released === true
-                  ) {
-                    releaseReplyDropped = true
-                    blocked = true
-                    peer.destroy()
-                    return true
-                  }
-                  return respond(...bytes)
-                }
-              )
-            }
-            return write(...values)
-          }
-        )
-        return socket
-      })
-      const starting = adapter.spawn({
-        sessionId: 'receipt-pane',
-        cols: 80,
-        rows: 24,
-        switchExecution: {
-          invocationId: 'adoption-click',
-          signal: new AbortController().signal,
-          remaining: () => 60_000,
-          check: () => {},
-          trackPhysical: (work, recover) => {
-            if (recover) {
-              owner = { work, recover }
-            }
-            return work
-          }
-        }
-      })
-      const observed = starting.then(
-        (result) => ({ result }),
-        (error: unknown) => ({ error })
-      )
-      try {
-        await spawnStarted
-        releaseSpawn()
-        expect(await observed).toMatchObject({ result: { id: 'receipt-pane' } })
-        if (!owner) {
-          throw new Error('receiver completion was not tracked')
-        }
-        await owner.work
-        if (loss !== 'healthy') {
-          await vi.waitFor(() => expect(blocked).toBe(true))
-          blocked = false
-          await adapter.listProcesses()
-          await expect(
-            adapter.spawn({ sessionId: 'receipt-pane', cols: 80, rows: 24 })
-          ).resolves.toMatchObject({ id: 'receipt-pane', isReattach: true })
-        }
-        expect(server.host.listSessions()).toMatchObject([
-          { sessionId: 'receipt-pane', isAlive: true }
-        ])
-        expect(subprocess.forceKill).not.toHaveBeenCalled()
-        expect(spawned).toBe(1)
-        const exit = vi.fn()
-        adapter.onExit(exit)
-        subprocess._simulateExit(0)
-        await vi.waitFor(() => expect(exit).toHaveBeenCalledOnce())
-      } finally {
-        blocked = false
-        releaseSpawn()
-        await observed
-        subprocess?._simulateExit(0)
-        await owner?.recover().catch(() => {})
-        await owner?.work
-        adapter.dispose()
-      }
-    },
-    15_000
-  )
 
   it.each(['cancelCreateOrAttach', 'kill'] as const)(
     'reaps a subprocess canceled by %s during async spawn',

@@ -52,18 +52,12 @@ export const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 export const ptyExitDisposables = new Map<string, { dispose: () => void }>()
 export const ptyCleanupCallbacks = new Map<string, () => void>()
 export const ptyTerminationMode = new Map<string, 'graceful' | 'force'>()
-export class LocalPtyPhysicalExit extends PhysicalExitTracker {
-  useRevision = 0
-  closing = false
-  pendingCommand = false
-  witness?: { token: string; revision: number; at: number }
-}
-export const ptyPhysicalExits = new Map<string, LocalPtyPhysicalExit>()
+export const ptyPhysicalExits = new Map<string, PhysicalExitTracker>()
 
 export const LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
 
 export function createPtyPhysicalExit(id: string): void {
-  ptyPhysicalExits.set(id, new LocalPtyPhysicalExit())
+  ptyPhysicalExits.set(id, new PhysicalExitTracker())
 }
 
 export function waitForPtyPhysicalExit(
@@ -79,16 +73,6 @@ export function waitForPtyPhysicalExit(
   )
 }
 
-export function noteLocalPtyUse(id: string): boolean {
-  const owner = ptyPhysicalExits.get(id)
-  if (owner?.closing) {
-    return false
-  }
-  if (owner) {
-    owner.useRevision++
-  }
-  return true
-}
 // macOS TCC wrapper status is not the shell/agent exit status (STA-4536).
 export const ptyReportsChildExitStatus = new Map<string, boolean>()
 export const ptyForceKillTimers = new Map<string, ReturnType<typeof setTimeout>>()

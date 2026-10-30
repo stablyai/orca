@@ -1,14 +1,12 @@
 import './mock-descendant-sweep'
 import { expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { getDaemonSocketPath } from './daemon-spawner'
-import type { DaemonClientConnections } from './daemon-client-connections'
-import { agentSessionSwitchDeadline } from '../../shared/agent-session-switch-execution'
 
 it('recovers concurrent spawns rejected by an adapter-initiated disconnect', async () => {
   const concurrentSpawnCount = 70
@@ -79,93 +77,3 @@ it('recovers concurrent spawns rejected by an adapter-initiated disconnect', asy
     rmSync(dir, { recursive: true, force: true })
   }
 })
-
-it.skipIf(process.platform === 'win32')(
-  'keeps an exact dispatched owner unknown across an authenticated empty endpoint replacement',
-  async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'daemon-switch-replacement-'))
-    const socketPath = getDaemonSocketPath(directory)
-    const tokenPath = join(directory, 'test.token')
-    const entered = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<void>()
-    const child = createMockSubprocess()
-    const originalSpawn = vi.fn(async () => {
-      entered.resolve()
-      await release.promise
-      return child
-    })
-    const original = new DaemonServer({
-      socketPath,
-      tokenPath,
-      launchNonce: 'original',
-      preparePtySpawn: async () => {},
-      spawnSubprocess: originalSpawn
-    })
-    await original.start()
-    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
-    const deadline = agentSessionSwitchDeadline()
-    let settled = false
-    let recover: (() => Promise<void>) | undefined
-    const operation = adapter
-      .spawn({
-        sessionId: 'exact-owner',
-        cols: 80,
-        rows: 24,
-        signal: deadline.signal,
-        switchExecution: {
-          invocationId: 'original-click',
-          ...deadline,
-          trackPhysical: (work, recovery) => {
-            recover = recovery
-            void work.then(() => {
-              settled = true
-            })
-            return work
-          }
-        }
-      })
-      .catch((error: unknown) => error)
-    let replacement: DaemonServer | undefined
-    try {
-      await entered.promise
-      // Replace only this fixture's POSIX socket; the original receiver and pending child remain alive.
-      unlinkSync(socketPath)
-      const replacementSpawn = vi.fn(() => createMockSubprocess())
-      replacement = new DaemonServer({
-        socketPath,
-        tokenPath,
-        launchNonce: 'replacement',
-        spawnSubprocess: replacementSpawn
-      })
-      await replacement.start()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this is the exact owned fixture server's authenticated connection registry.
-      const connections = (original as unknown as { connections: DaemonClientConnections })
-        .connections
-      connections.values().next().value?.controlSocket.destroy()
-      expect(await operation).toBeInstanceOf(Error)
-      await vi.waitFor(() =>
-        expect(adapter.getLastAuthenticatedDaemonIdentity()?.launchNonce).toBe('replacement')
-      )
-      expect(await adapter.listProcesses()).toEqual([])
-      if (!recover) {
-        throw new Error('dispatched settlement recovery missing')
-      }
-      await expect(recover()).rejects.toThrow('Terminal owner unavailable')
-      expect(settled).toBe(false)
-      expect(replacementSpawn).not.toHaveBeenCalled()
-      expect(originalSpawn).toHaveBeenCalledOnce()
-      release.resolve()
-      await vi.waitFor(() => expect(child.forceKill).toHaveBeenCalled())
-      // An empty new daemon still cannot answer for the old receiver's exact child.
-      expect(settled).toBe(false)
-    } finally {
-      release.resolve()
-      deadline.dispose()
-      adapter.dispose()
-      await operation
-      await original.shutdown()
-      await replacement?.shutdown()
-      rmSync(directory, { recursive: true, force: true })
-    }
-  }
-)

@@ -36,7 +36,6 @@ export async function handleDaemonFencedTermination(
     expectedIncarnationId?: string
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
-    switchCondition?: PtyFencedTerminationRequest['switchCondition']
   },
   deps: {
     host: TerminalHost
@@ -51,15 +50,12 @@ export async function handleDaemonFencedTermination(
     id: payload.sessionId,
     expectedIncarnationId: payload.expectedIncarnationId,
     requireNoAgentOwner: payload.requireNoAgentOwner === true,
-    requireUnattached: payload.requireUnattached === true,
-    ...(payload.switchCondition ? { switchCondition: payload.switchCondition } : {})
+    requireUnattached: payload.requireUnattached === true
   })
   if (!termination.accepted) {
     return termination.result
   }
-  if (!payload.switchCondition) {
-    deps.preparations.cancel(payload.sessionId)
-    deps.attachments.clearInput(payload.sessionId)
-  }
+  deps.preparations.cancel(payload.sessionId)
+  deps.attachments.clearInput(payload.sessionId)
   return termination.completion
 }

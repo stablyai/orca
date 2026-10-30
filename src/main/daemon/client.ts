@@ -16,8 +16,7 @@ export class DaemonClient extends DaemonClientConnection {
     type: string,
     payload: unknown,
     timeoutMs = REQUEST_TIMEOUT_MS,
-    signal?: AbortSignal,
-    onSent?: (requestId: string) => void
+    signal?: AbortSignal
   ): Promise<T> {
     if (!this.connected || !this.controlSocket) {
       // No socket is a transport failure, distinct from a daemon refusing the request.
@@ -33,7 +32,6 @@ export class DaemonClient extends DaemonClientConnection {
       payload,
       timeoutMs,
       ...(signal ? { signal } : {}),
-      ...(onSent ? { onSent } : {}),
       unmatchedCancelGraceMs: NOTIFY_SETTLEMENT_TIMEOUT_MS,
       onCreateCancellationFailure: () => this.handleDisconnect(generation),
       settleCreateCancellation: (sessionId, requestId) =>

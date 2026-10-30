@@ -154,21 +154,7 @@ export async function spawnAndPublishSession(
       deps.onDeadSessionRemoved(opts.sessionId)
       deps.spawnGate?.onSessionExit(opts.sessionId)
     }
-    if (!opts.retainCanceledChild || !session.isAlive) {
-      throw new TerminalAttachCanceledError(opts.sessionId)
-    }
-    deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, true)
-    return {
-      isNew: true,
-      switchOutcomeUnknown: true,
-      switchCleanupWitness: session.captureSwitchWitness(),
-      snapshot: session.getSnapshot(),
-      pid: session.pid,
-      shellState: session.shellState,
-      incarnationId: session.incarnationId,
-      ...getDaemonSessionResultMetadata(session),
-      attachToken: Symbol('retained-switch-child')
-    }
+    throw new TerminalAttachCanceledError(opts.sessionId)
   }
 
   deps.sessions.set(opts.sessionId, session)
@@ -220,7 +206,6 @@ export async function spawnAndPublishSession(
 
   return {
     isNew: true,
-    ...(opts.retainCanceledChild ? { switchCleanupWitness: session.captureSwitchWitness() } : {}),
     snapshot: null,
     pid: subprocess.pid,
     shellState: session.shellState,

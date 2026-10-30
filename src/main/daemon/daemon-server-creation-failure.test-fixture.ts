@@ -1,14 +1,9 @@
 import { registerDaemonNativeFailureTests } from './daemon-server-native-failure.test-fixture'
 import './mock-descendant-sweep'
-import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import type { DaemonClient } from './client'
 import type { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import type { DaemonServer } from './daemon-server'
-import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import * as transport from './daemon-client-socket-connect'
-import type { DaemonClientConnections } from './daemon-client-connections'
-import { getDaemonSocketPath } from './daemon-spawner'
 type DaemonServerInternals = {
   preparations: { pending: Map<string, Set<{ canceled: boolean }>> }
 }
@@ -102,91 +97,6 @@ export function registerDaemonCreationFailureTests(fixture: DaemonCreationFailur
     }
   )
 
-  it.each(['authority', 'canceled-before-send'] as const)(
-    'finishes a known successful prepare when %s refuses before commit',
-    async (failure) => {
-      const adapter = new DaemonPtyAdapter({
-        socketPath: getDaemonSocketPath(fixture.directory),
-        tokenPath: join(fixture.directory, 'daemon.token')
-      })
-      const abort = new AbortController()
-      let checks = 0
-      let owner: { work: Promise<unknown>; recover: () => Promise<void> } | undefined
-      const frames: {
-        type: string
-        payload?: { switchExecution?: { phase: string }; settlement?: unknown; release?: unknown }
-      }[] = []
-      const connect = transport.connectDaemonSocket
-      vi.spyOn(transport, 'connectDaemonSocket').mockImplementation(async (...args) => {
-        const socket = await connect(...args)
-        const write = socket.write.bind(socket)
-        vi.spyOn(socket, 'write').mockImplementation(
-          (...bytes: Parameters<typeof socket.write>) => {
-            frames.push(JSON.parse(String(bytes[0])))
-            return write(...bytes)
-          }
-        )
-        return socket
-      })
-      try {
-        await expect(
-          adapter.spawn({
-            sessionId: 'known-prepared',
-            cols: 80,
-            rows: 24,
-            signal: abort.signal,
-            switchExecution: {
-              invocationId: 'abandoned-click',
-              signal: abort.signal,
-              remaining: () => 60_000,
-              check: () => {
-                if (++checks !== 2) {
-                  return
-                }
-                if (failure === 'authority') {
-                  throw new Error('fixture newer authority')
-                }
-                abort.abort()
-              },
-              trackPhysical: (work, recover) => {
-                if (recover) {
-                  owner = { work, recover }
-                }
-                return work
-              }
-            }
-          })
-        ).rejects.toThrow(failure === 'authority' ? 'fixture newer authority' : /abort|disconnect/i)
-        if (!owner) {
-          throw new Error('known preparation lost its ordinary owner')
-        }
-        await owner.work
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inspect only this fixture receiver's actual outcome owner.
-        const receiver = fixture.server as unknown as {
-          preparations: { hasOwedOutcomes(): boolean }
-          connections: DaemonClientConnections
-        }
-        await vi.waitFor(() => expect(receiver.preparations.hasOwedOutcomes()).toBe(false))
-        expect(
-          frames.filter((frame) => frame.payload?.switchExecution?.phase === 'prepare')
-        ).toHaveLength(1)
-        expect(
-          frames.filter((frame) => frame.payload?.switchExecution?.phase === 'commit')
-        ).toHaveLength(0)
-        expect(frames.some((frame) => frame.payload?.settlement)).toBe(true)
-        expect(frames.some((frame) => frame.payload?.release)).toBe(true)
-        expect(fixture.spawned).toBe(0)
-        await owner.recover()
-        adapter.dispose()
-        await vi.waitFor(() => expect(receiver.connections.size).toBe(1))
-        expect(await fixture.client.request('shutdownIfIdle', undefined)).toMatchObject({
-          retiring: true
-        })
-      } finally {
-        adapter.dispose()
-      }
-    }
-  )
   it('matches a cancel for an attach-only request queued behind a hung create', async () => {
     const create = fixture.client.request('createOrAttach', {
       sessionId: 'shared-session',

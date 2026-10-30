@@ -14,7 +14,6 @@ export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   creationWork?: TerminalCreationWork
   onCreationDisposition?: (disposition: PtyCreationDisposition) => void
   onPhysicalOwner?: (completion: Promise<void>, exitCode: () => number | null) => void
-  retainCanceledChild?: boolean
   isCanceled?: () => boolean
   cancelSignal?: AbortSignal
 }
@@ -22,7 +21,6 @@ export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
 export async function createOrAttachClaimedAgentSession(args: {
   options: InternalCreateOrAttachOptions
   owners: ClaimedAgentPtyOwnerRegistry
-  check?: () => void
   isLive: (owner: AgentSessionOwnerBinding) => boolean
   createOrAttach: (options: InternalCreateOrAttachOptions) => Promise<CreateOrAttachResult>
 }): Promise<CreateOrAttachResult> {
@@ -49,15 +47,7 @@ export async function createOrAttachClaimedAgentSession(args: {
       })
       return { ptyId: args.options.sessionId }
     },
-    isLive: args.isLive,
-    check: args.check,
-    onDispatchedRevoked: args.options.retainCanceledChild
-      ? () => {
-          if (created) {
-            created.switchOutcomeUnknown = true
-          }
-        }
-      : undefined
+    isLive: args.isLive
   })
   if (ensured.disposition === 'created' && created) {
     return { ...(created as CreateOrAttachResult), agentSessionEnsure: ensured }

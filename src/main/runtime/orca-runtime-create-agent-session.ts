@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './session-construction/agent-session/get-agent-session-execution-namespace'
+import { OrcaRuntimeWithSpawnSwitchTerminal } from './session-construction/agent-session/switch-terminal-spawn'
 import type {
   RuntimeAgentSessionRpcCaller,
   RuntimeCreateAgentSessionRequest,
@@ -24,7 +24,7 @@ import {
 } from './runtime-agent-launch-resolution'
 import { AgentLaunchUnbuildableError } from './runtime-agent-terminal-startup'
 
-export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
+export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithSpawnSwitchTerminal {
   abstract resolveWorkspaceTerminalStartupCwd(
     workspace: Pick<TerminalWorkspaceLaunchScope, 'path'>,
     requestedCwd?: string | null

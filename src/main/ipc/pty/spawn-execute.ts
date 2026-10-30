@@ -76,7 +76,6 @@ export async function executePtySpawn(
       : 0
     ctx.spawnTiming?.mark('options')
     const validateDispatch = (): void => {
-      args.switchExecution?.check()
       facts.validateDispatch?.()
       if (ctx.paneSpawnOperation?.mustExist && args.worktreeId && args.tabId && args.leafId) {
         assertPaneStillExists(
@@ -149,14 +148,6 @@ export async function executePtySpawn(
             }
           },
           isLive: isRegisteredAgentSessionOwnerLive,
-          check: args.switchExecution?.check,
-          onDispatchedRevoked: args.switchExecution
-            ? () => {
-                if (providerResult) {
-                  providerResult.switchOutcomeUnknown = true
-                }
-              }
-            : undefined,
           onJoin: () => {
             awaitingAnotherStart = true
           }

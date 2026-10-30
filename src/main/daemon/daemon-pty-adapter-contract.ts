@@ -4,12 +4,6 @@ import type { TakePendingOutputResult } from './types'
 import type { HistoryCheckpointResult, HistoryRecoveryFreeze } from './history-manager'
 import type { ReadRunningWslDistros } from './daemon-wsl-bridge-exit'
 export type PendingDaemonSpawnOperation = {
-  switchSettlement?: {
-    adopt?: (incarnationId: string) => void
-    completion: Promise<void>
-    recover: () => Promise<void>
-    consume: (outcome: 'exited' | 'adopted' | 'failed', incarnationId?: string) => void
-  }
   exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
   ignoredExitIncarnationIds: Set<string>
   ignoreNextExit: boolean

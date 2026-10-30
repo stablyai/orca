@@ -1,4 +1,3 @@
-import { retireChatForAdmittedTerminalLaunch } from '../../runtime/session-tabs/structured-session-terminal-launch-retirement'
 import { agentHookServer } from '../../agent-hooks/server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
@@ -29,20 +28,10 @@ export type PtySpawnPaneKeyAliases = {
   opaqueRemintedSpawnPaneKey: string | null
 }
 
-/** Everything a registered spawn publishes, in one order for both lanes. */
-export async function publishCommittedPtySpawn(
-  input: PtySpawnCommitInput
-): Promise<PtySpawnOutcome> {
+/** Everything a registered spawn publishes, in one order for both lanes; nothing here awaits. */
+export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOutcome {
   const { state } = input
   const { deps, args, result } = state
-  let switchRevoked = result.switchOutcomeUnknown === true
-  try {
-    args.switchExecution?.check()
-  } catch {
-    switchRevoked = true
-  }
-  // A dispatched result still needs its ordinary binding and visible inventory.
-
   const runtime = deps.runtime
   runtime?.noteTerminalSpawnCommit?.(
     { ...result, spawnRequestedAt: state.spawnRequestedAt },
@@ -108,18 +97,16 @@ export async function publishCommittedPtySpawn(
         : null
   })
   // Rejected spawns must not leave a published resume identity.
-  if (!switchRevoked) {
-    seedResumeLaunchIdentityFromSpawn({
-      paneKey: input.paneKey,
-      launchAgent: args.launchAgent,
-      resumeProviderSession: args.resumeProviderSession,
-      connectionId: args.connectionId,
-      worktreeId: args.worktreeId,
-      launchedAt: state.codexHomeLaunchStartedAt,
-      resumeArgvDropped: input.resumeArgvDropped,
-      result
-    })
-  }
+  seedResumeLaunchIdentityFromSpawn({
+    paneKey: input.paneKey,
+    launchAgent: args.launchAgent,
+    resumeProviderSession: args.resumeProviderSession,
+    connectionId: args.connectionId,
+    worktreeId: args.worktreeId,
+    launchedAt: state.codexHomeLaunchStartedAt,
+    resumeArgvDropped: input.resumeArgvDropped,
+    result
+  })
   // Inventory cannot infer background/reattached PTYs from mounted views.
   deps.sendPtySpawnedToRenderer(result.id)
   deps.options?.onCodexHomePtySpawned?.({
@@ -138,9 +125,6 @@ export async function publishCommittedPtySpawn(
         ? { launchEnv: input.codexLaunchEnv }
         : {})
   })
-  if (!switchRevoked) {
-    await retireChatForAdmittedTerminalLaunch(runtime, args, input.response)
-  }
   return { kind: 'committed', result: input.response }
 }
 

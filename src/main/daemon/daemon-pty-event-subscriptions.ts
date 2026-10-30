@@ -82,7 +82,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     for (const cleanup of this.disconnectedListenerCleanups.splice(0)) {
       cleanup()
     }
-    this.client.releaseOwner()
+    this.client.disconnect()
   }
 
   async establishLifecycleLease(): Promise<void> {
@@ -257,6 +257,6 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     for (const cleanup of this.disconnectedListenerCleanups.splice(0)) {
       cleanup()
     }
-    this.client.releaseOwner()
+    this.client.disconnect()
   }
 }

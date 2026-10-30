@@ -178,9 +178,7 @@ function requestTrackedPtyShutdown(id: string, proc: pty.IPty, immediate: boolea
 async function shutdownTrackedPty(
   id: string,
   proc: pty.IPty,
-  operation: PtyShutdownOperation,
-  switchCheck?: () => boolean,
-  switchOwnedSpawn = false
+  operation: PtyShutdownOperation
 ): Promise<void> {
   const physicalExit = ptyPhysicalExits.get(id)
   const signalRoot = (): void => {
@@ -197,24 +195,6 @@ async function shutdownTrackedPty(
     // Typed agents also detach tool process groups; immediate close must snapshot before root exit.
     await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
-      ...(switchCheck
-        ? {
-            admitClose: async () => {
-              if (!switchCheck()) {
-                return false
-              }
-              if (!switchOwnedSpawn || !switchCheck()) {
-                return false
-              }
-              const owner = ptyPhysicalExits.get(id)
-              if (!owner || ptyProcesses.get(id) !== proc) {
-                return false
-              }
-              owner.closing = true
-              return true
-            }
-          }
-        : {}),
       terminateOwnedTree: () => terminatePtyJob(proc),
       terminateDescendants: terminateShutdownDescendants,
       // Group SIGKILL must wait out the SIGTERM grace so agents can run exit hooks (Claude SessionEnd).
@@ -223,9 +203,7 @@ async function shutdownTrackedPty(
   } else {
     signalRoot()
   }
-  if (!switchCheck || operation.rootSignalled || ptyPhysicalExits.get(id)?.closing) {
-    await waitForPtyPhysicalExit(id, physicalExit)
-  }
+  await waitForPtyPhysicalExit(id, physicalExit)
 }
 
 export async function shutdownLocalPty(
@@ -234,25 +212,14 @@ export async function shutdownLocalPty(
     immediate?: boolean
     keepHistory?: boolean
     expectedIncarnationId?: string
-    switchCheck?: () => boolean
-    switchOwnedSpawn?: boolean
   }
 ): Promise<void> {
   if (opts.expectedIncarnationId && ptyIncarnations.get(id) !== opts.expectedIncarnationId) {
     throw new Error('terminal_handle_stale')
   }
-  if (opts.switchCheck) {
-    if (!opts.switchCheck()) {
-      return
-    }
-  } else {
-    cancelPendingLocalPtySpawns(id)
-  }
+  cancelPendingLocalPtySpawns(id)
   const pending = ptyShutdownOperations.get(id)
   if (pending) {
-    if (opts.switchCheck) {
-      return
-    }
     if (opts.immediate === true) {
       pending.immediate = true
       if (pending.rootSignalled && ptyProcesses.get(id) === pending.proc) {
@@ -272,7 +239,7 @@ export async function shutdownLocalPty(
     rootSignalled: false,
     proc
   }
-  entry.promise = shutdownTrackedPty(id, proc, entry, opts.switchCheck, opts.switchOwnedSpawn)
+  entry.promise = shutdownTrackedPty(id, proc, entry)
   ptyShutdownOperations.set(id, entry)
   try {
     await entry.promise

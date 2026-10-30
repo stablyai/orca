@@ -1,9 +1,6 @@
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-context'
-import { DaemonPtySpawnSettlement } from './daemon-pty-spawn-settlement'
-import {
-  SESSION_SWITCH_PHYSICAL_PROTOCOL_VERSION,
-  HISTORY_SEED_TRANSFER_PROTOCOL_VERSION
-} from './daemon-protocol-version'
+import { DaemonPtyRuntimeState } from './daemon-pty-runtime-state'
+import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from './daemon-protocol-version'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import type { DaemonAuditObservation } from './daemon-audit-classifier'
@@ -11,7 +8,6 @@ import type {
   PendingDaemonSpawnOperation,
   SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
-import type { DaemonClient } from './client'
 import { isDaemonGoneError } from './daemon-endpoint-errors'
 import type { ColdRestoreInfo } from './history-reader'
 import { NdjsonLineTooLongError } from './ndjson'
@@ -31,7 +27,7 @@ function forwardedSpawnIntent(intent: SpawnIntent, claim: unknown): SpawnIntent 
   return intent === 'interactive' && claim !== undefined ? 'automatic-restore' : intent
 }
 
-export abstract class DaemonPtySpawnRequest extends DaemonPtySpawnSettlement {
+export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract takeSnapshotAndCheckpoint(
     sessionId: string,
     opts: {
@@ -91,137 +87,55 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtySpawnSettlement {
     context: DaemonPtySpawnContext,
     historySeedSegments: readonly string[] | null
   ): Promise<CreateOrAttachResult> {
-    let anchor: string | undefined
     const requestCreateOrAttach = async (
       historySeed: string | undefined,
       historySeedTransferId: string | undefined
     ) => {
       const { opts } = context
-      let strong = Boolean(
-        opts.switchExecution && this.protocolVersion >= SESSION_SWITCH_PHYSICAL_PROTOCOL_VERSION
-      )
-      let preparedEndpoint: ReturnType<DaemonClient['getDaemonIdentity']> = null
-      const observeDispatch = (requestId: string, contract = 'creation-settlement-v1') =>
-        this.observeSwitchSpawn(context, requestId, anchor, preparedEndpoint, contract)
-
-      try {
-        if (context.operation.switchSettlement) {
-          throw new Error('Terminal creation was interrupted; try again')
-        }
-        if (opts.signal?.aborted) {
-          throw new Error('client_disconnected')
-        }
-        opts.switchExecution?.check()
-        if (opts.switchExecution && strong && !anchor) {
-          preparedEndpoint = this.client.getDaemonIdentity()
-          const prepared = await this.client.request<{ anchor: string; retention?: string }>(
+      if (opts.signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      const payload = {
+        sessionId: context.sessionId,
+        cols: context.effectiveCols,
+        rows: context.effectiveRows,
+        cwd: context.attachOnly ? undefined : context.effectiveCwd,
+        env: context.attachOnly ? undefined : opts.env,
+        envToDelete: context.attachOnly ? undefined : opts.envToDelete,
+        command: context.attachOnly ? undefined : opts.command,
+        startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
+        launchAgent: context.attachOnly ? undefined : opts.launchAgent,
+        ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
+        shellOverride: context.attachOnly ? undefined : opts.shellOverride,
+        terminalShellArgs: context.attachOnly ? undefined : opts.terminalShellArgs,
+        terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,
+        terminalWindowsPowerShellImplementation: context.attachOnly
+          ? undefined
+          : opts.terminalWindowsPowerShellImplementation,
+        shellReadySupported: context.attachOnly ? false : context.shellReadySupported,
+        ...(!context.attachOnly && context.shellReadyTimeoutMs !== undefined
+          ? { shellReadyTimeoutMs: context.shellReadyTimeoutMs }
+          : {}),
+        ...(historySeed ? { historySeed } : {}),
+        ...(historySeedTransferId ? { historySeedTransferId } : {}),
+        ...(this.supportsStartupIngress && !context.attachOnly && opts.startupIngress
+          ? { startupIngress: opts.startupIngress }
+          : {}),
+        ...(!context.attachOnly && opts.spawnIntent
+          ? { spawnIntent: forwardedSpawnIntent(opts.spawnIntent, opts.agentSessionEnsure) }
+          : {}),
+        ...(!context.attachOnly && opts.agentSessionEnsure
+          ? { agentSessionEnsure: opts.agentSessionEnsure }
+          : {})
+      }
+      return opts.signal
+        ? this.client.request<CreateOrAttachResult>(
             'createOrAttach',
-            {
-              sessionId: context.sessionId,
-              cols: context.effectiveCols,
-              rows: context.effectiveRows,
-              switchExecution: { phase: 'prepare', invocationId: opts.switchExecution.invocationId }
-            },
-            Math.max(1, opts.switchExecution.remaining()),
+            payload,
+            undefined,
             opts.signal
           )
-          if (
-            prepared.retention !== 'creation-settlement-v1' ||
-            typeof prepared.anchor !== 'string' ||
-            !prepared.anchor
-          ) {
-            // Negotiate before destination dispatch; an unaware peer keeps its ordinary route.
-            if (typeof prepared.anchor === 'string' && prepared.anchor) {
-              if (prepared.retention === 'consumer-release-v1' && preparedEndpoint) {
-                // Known old prepared-only cleanup uses the same exact owner, never a strong commit.
-                anchor = prepared.anchor
-                observeDispatch(anchor, 'consumer-release-v1')
-                await context.operation.switchSettlement!.recover()
-                context.operation.switchSettlement = undefined
-                anchor = undefined
-              } else {
-                await this.client.request(
-                  'cancelCreateOrAttach',
-                  { sessionId: context.sessionId, requestId: prepared.anchor },
-                  Math.max(1, opts.switchExecution.remaining())
-                )
-              }
-            }
-            strong = false
-          }
-          if (strong) {
-            anchor = prepared.anchor
-          }
-          opts.switchExecution.check()
-        }
-        const payload = {
-          ...(opts.switchExecution && strong
-            ? {
-                switchExecution: {
-                  phase: 'commit' as const,
-                  contract: 'creation-settlement-v1' as const,
-                  invocationId: opts.switchExecution.invocationId,
-                  anchor,
-                  remainingMs: opts.switchExecution.remaining()
-                }
-              }
-            : {}),
-          sessionId: context.sessionId,
-          cols: context.effectiveCols,
-          rows: context.effectiveRows,
-          cwd: context.attachOnly ? undefined : context.effectiveCwd,
-          env: context.attachOnly ? undefined : opts.env,
-          envToDelete: context.attachOnly ? undefined : opts.envToDelete,
-          command: context.attachOnly ? undefined : opts.command,
-          startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
-          launchAgent: context.attachOnly ? undefined : opts.launchAgent,
-          ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
-          shellOverride: context.attachOnly ? undefined : opts.shellOverride,
-          terminalShellArgs: context.attachOnly ? undefined : opts.terminalShellArgs,
-          terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,
-          terminalWindowsPowerShellImplementation: context.attachOnly
-            ? undefined
-            : opts.terminalWindowsPowerShellImplementation,
-          shellReadySupported: context.attachOnly ? false : context.shellReadySupported,
-          ...(!context.attachOnly && context.shellReadyTimeoutMs !== undefined
-            ? { shellReadyTimeoutMs: context.shellReadyTimeoutMs }
-            : {}),
-          ...(historySeed ? { historySeed } : {}),
-          ...(historySeedTransferId ? { historySeedTransferId } : {}),
-          ...(this.supportsStartupIngress && !context.attachOnly && opts.startupIngress
-            ? { startupIngress: opts.startupIngress }
-            : {}),
-          ...(!context.attachOnly && opts.spawnIntent
-            ? { spawnIntent: forwardedSpawnIntent(opts.spawnIntent, opts.agentSessionEnsure) }
-            : {}),
-          ...(!context.attachOnly && opts.agentSessionEnsure
-            ? { agentSessionEnsure: opts.agentSessionEnsure }
-            : {})
-        }
-        const result = await (opts.switchExecution
-          ? this.client.request<CreateOrAttachResult>(
-              'createOrAttach',
-              payload,
-              Math.max(1, opts.switchExecution.remaining()),
-              opts.signal,
-              (requestId) =>
-                observeDispatch(requestId, strong ? 'creation-settlement-v1' : 'ordinary')
-            )
-          : opts.signal
-            ? this.client.request<CreateOrAttachResult>(
-                'createOrAttach',
-                payload,
-                undefined,
-                opts.signal
-              )
-            : this.client.request<CreateOrAttachResult>('createOrAttach', payload))
-        return result
-      } catch (error) {
-        if (anchor && !context.operation.switchSettlement) {
-          observeDispatch(anchor)
-        }
-        throw error
-      }
+        : this.client.request<CreateOrAttachResult>('createOrAttach', payload)
     }
 
     let historySeedUnavailable = false

@@ -7,11 +7,6 @@ import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
 export type PtySpawnResult = TerminalLaunchResult & {
-  /** A dispatched child remains owned after its initiating handoff lost authority. */
-  switchOutcomeUnknown?: true
-  switchCleanupWitness?: string
-  /** Main-only placement reconciliation of the same dispatched process; never a provider identity. */
-  switchRecoveredSurface?: { tabId: string; leafId: string }
   /** Execution-host probe; absent on older hosts and reattachments. */
   openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult

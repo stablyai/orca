@@ -2,8 +2,7 @@ import type { SessionTerminationController } from './session-termination-control
 import type { SessionOutputPlane } from './session-output-plane'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { SubprocessHandle, ChildProcessVerdictRead } from './session-subprocess-handle'
-import { SessionSwitchUse } from './session-switch-use'
-export abstract class SessionProcessInspection extends SessionSwitchUse {
+export abstract class SessionProcessInspection {
   protected abstract subprocess: SubprocessHandle
   protected abstract readonly output: SessionOutputPlane
   protected abstract readonly recoveryBarrier: TerminalShellRecoveryBarrier

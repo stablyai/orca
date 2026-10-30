@@ -117,9 +117,6 @@ export class DaemonRequestRouter {
         }
       case 'inspectProcess': {
         const options = {
-          ...(request.payload.captureSwitchWitness
-            ? { captureSwitchWitness: request.payload.captureSwitchWitness }
-            : {}),
           ...(request.payload.expectedIncarnationId
             ? { expectedIncarnationId: request.payload.expectedIncarnationId }
             : {}),
@@ -214,7 +211,6 @@ export class DaemonRequestRouter {
       client.streamSocket !== null &&
       this.options.connections.size === 1 &&
       this.options.admission.inFlight === 0 &&
-      !this.options.preparations.hasOwedOutcomes() &&
       this.options.host.listSessions().length === 0 &&
       this.options.connections.hasOnlyTransportsFor(client)
     if (retiring) {

@@ -44,10 +44,7 @@ export function attachSessionInputViewer(
 }
 
 export function isSessionInputClosed(session: Session): boolean {
-  return (
-    session.isAlive &&
-    (session.isSwitchClosing || inputPaths.get(session)?.subprocess.isInputClosed?.() === true)
-  )
+  return session.isAlive && inputPaths.get(session)?.subprocess.isInputClosed?.() === true
 }
 
 /** Dropping bytes a retired master cannot take would let every caller report delivery. */

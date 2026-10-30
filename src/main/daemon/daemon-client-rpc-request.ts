@@ -15,7 +15,6 @@ type DaemonRpcRequestOptions = {
   type: string
   payload: unknown
   timeoutMs: number
-  onSent?: (requestId: string) => void
   signal?: AbortSignal
   /** Bound late-response waits after unmatched cancellation, including attach-only requests with no reply coming. */
   unmatchedCancelGraceMs: number
@@ -40,15 +39,6 @@ function wedgedDaemonError(requestError: Error, cancelError: unknown): Error | n
 export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
   // A stalled event loop can deliver a daemon cancellation before its overdue timer runs.
   const { payload, type } = opts
-  const retainSwitchOutcome =
-    type === 'createOrAttach' &&
-    payload !== null &&
-    typeof payload === 'object' &&
-    'switchExecution' in payload &&
-    payload.switchExecution !== null &&
-    typeof payload.switchExecution === 'object' &&
-    'phase' in payload.switchExecution &&
-    payload.switchExecution.phase === 'commit'
   const createTimeoutError = (): DaemonRequestTimeoutError =>
     new DaemonRequestTimeoutError(`Request ${type} timed out after ${opts.timeoutMs}ms`)
   const createSessionId =
@@ -119,11 +109,6 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       void opts
         .settleCreateCancellation(createSessionId, opts.id)
         .then((result) => {
-          // The acknowledged revocation is not proof that a dispatched child exited.
-          if (retainSwitchOutcome) {
-            awaitLateResponseThenReject(error)
-            return
-          }
           if (result.canceled) {
             rejectAndDrop(error)
             return
@@ -184,7 +169,6 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       return
     }
     try {
-      opts.onSent?.(opts.id)
       opts.socket.write(encoded)
       sent = true
     } catch (err) {

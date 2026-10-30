@@ -1,10 +1,10 @@
-import type { SessionTabOpenPlacement } from './session-tab-placement'
 import type { AgentSessionWireRefusal } from './agent-session-wire'
 import { agentSessionRefusalError } from './agent-session-wire-refusals'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
 
-export const AGENT_SESSION_SWITCH_HOST_MS = 720_000
-export const AGENT_SESSION_SWITCH_CLIENT_MS = 735_000
+/** Stop (≤15 s) + at-rest prepare + one layout replace; the client allows one IPC round trip more. */
+export const AGENT_SESSION_SWITCH_HOST_MS = 90_000
+export const AGENT_SESSION_SWITCH_CLIENT_MS = 105_000
 
 export type AgentSessionSwitchResult =
   | {
@@ -88,24 +88,3 @@ export function agentSessionSwitchDeadline(
   }
 }
 export type AgentSessionSwitchDeadline = ReturnType<typeof agentSessionSwitchDeadline>
-
-/** In-process authority; never serialize the callbacks as a transport permit. */
-export type AgentSessionSwitchAuthority = {
-  invocationId: string
-  openPlacement?: SessionTabOpenPlacement
-  /** View freshness is independent of process authority. */
-  selectionCurrent?: (consume?: boolean) => boolean
-  check: () => void
-  remaining: () => number
-  signal: AbortSignal
-  /** Existing acquisition/creation settlement only; logical failure never proves source exit. */
-  trackPhysical?: <T>(work: Promise<T>, recover?: () => Promise<void>) => Promise<T>
-}
-
-export type SessionSwitchProjection = {
-  invocationId: string
-  generation: string
-  sessionId: string
-  tabId: string
-  phase: 'prepare' | 'retire' | 'retain'
-}

@@ -36,7 +36,6 @@ export async function spawnLocalPty(
     if (pendingShutdown) {
       await pendingShutdown.promise
     }
-    args.switchExecution?.check()
     const existing = reattachLocalPty(reattachId, args.cols, args.rows)
     if (existing) {
       return existing
@@ -100,7 +99,6 @@ export async function spawnLocalPty(
     return reserveLocalPtySpawn(id, async () => {
       const checkCanceled = (): void => {
         throwIfCanceled()
-        args.switchExecution?.check()
         if (args.signal?.aborted) {
           throw new Error('client_disconnected')
         }
@@ -133,16 +131,12 @@ export async function spawnLocalPty(
       try {
         checkCanceled()
       } catch (error) {
-        if (args.switchExecution) {
-          args = { ...args, command: undefined }
-        } else {
-          try {
-            spawnResult.process.kill('SIGKILL')
-          } finally {
-            destroyPtyProcess(spawnResult.process)
-          }
-          throw error
+        try {
+          spawnResult.process.kill('SIGKILL')
+        } finally {
+          destroyPtyProcess(spawnResult.process)
         }
+        throw error
       }
       args.onPtySpawnCommitted?.()
       plan.shellPath = spawnResult.shellPath

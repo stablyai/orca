@@ -20,7 +20,6 @@ import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
-import type { AgentSessionSwitchAuthority } from '../../shared/agent-session-switch-execution'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -112,7 +111,6 @@ export type PtySpawnOptions = {
   onPtySpawnCommitted?: () => void
   /** Cancels only before physical dispatch; operation identity fences later ambiguity. */
   signal?: AbortSignal
-  switchExecution?: AgentSessionSwitchAuthority
 }
 
 export type { PtyProcessInfo, PtySpawnResult }

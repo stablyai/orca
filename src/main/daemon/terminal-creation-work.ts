@@ -95,7 +95,7 @@ export function reconcileUnpublishedTerminalCreation(
   sessionId: string
 ): (release: () => Promise<void>) => Promise<void> {
   return async (release) => {
-    // Registered Sessions retain their ordinary current/use-fenced close authority.
+    // Registered Sessions retain their ordinary teardown owner.
     if (!sessions.has(sessionId)) {
       await release()
     }
@@ -205,7 +205,6 @@ export async function runTerminalCreation<Result>(
     }
     assertCreateAllowed(opts)
 
-    sessions.get(opts.sessionId)?.noteUse()
     const finishPending = registerPendingTerminalCreation(
       pendingCreations,
       opts.sessionId,

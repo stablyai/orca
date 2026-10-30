@@ -35,7 +35,6 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       this.releasePendingRespawnAdoptionLease()
     }
     this.recordAuthenticatedIdentity()
-    this.drainSwitchReleaseCleanup()
     // Sample before installing routing so a fresh connection resyncs daemon-local background state.
     const isFreshConnection = this.removeEventListener === null
     this.setupEventRouting()

@@ -45,9 +45,6 @@ export type CreateOrAttachOptions = {
 }
 
 export type CreateOrAttachResult = {
-  /** A dispatched child remains owned after its initiating handoff lost authority. */
-  switchOutcomeUnknown?: true
-  switchCleanupWitness?: string
   isNew: boolean
   snapshot: TerminalSnapshot | null
   pid: number | null

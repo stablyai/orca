@@ -36,7 +36,6 @@ import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../shared/pty-fenced-termination'
-import type { AgentSessionSwitchAuthority } from '../../shared/agent-session-switch-execution'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
@@ -53,7 +52,6 @@ export type RuntimePtyController = {
   adoptStablePane?(opts: {
     onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
     signal?: AbortSignal
-    switchExecution?: AgentSessionSwitchAuthority
     spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
     cols: number
     rows: number
@@ -120,7 +118,6 @@ export type RuntimePtyController = {
     agentSessionCreateOperationId?: string
     spawnIntent?: SpawnIntent
     signal?: AbortSignal
-    switchExecution?: AgentSessionSwitchAuthority
     refuseSleptWorktree?: boolean
     onPtySpawnCommitted?: () => void
     /** Layout-owner build: whether a fresh start resumed its agent, told before its bind is written. */

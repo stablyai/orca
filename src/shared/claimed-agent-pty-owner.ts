@@ -1,10 +1,11 @@
-import type { ClaimedAgentPtyEnsureOptions } from './claimed-agent-pty-ensure-options'
 import type { PtyCreationDisposition } from './pty-creation-disposition'
+export type { PtyCreationDisposition } from './pty-creation-disposition'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
-  AgentSessionOwnerBinding
+  AgentSessionOwnerBinding,
+  AgentSessionSurfaceBinding
 } from './agent-session-host-authority'
 import {
   agentSessionClaimKey,
@@ -13,14 +14,12 @@ import {
   buildClaimedAgentPtyOwnerIndex,
   cloneAgentSessionClaim,
   cloneAgentSessionOwner,
-  cloneAgentSessionOwnerBinding,
   cloneAgentSessionSurface,
   prepareRegisteredAgentSessionOwner,
   reconcileClaimedAgentPtyOwnerSnapshot,
   scopedAgentSessionClaimsEqual,
   type LiveAgentSessionOwner
 } from './claimed-agent-pty-owner-snapshot'
-export { type PtyCreationDisposition } from './pty-creation-disposition'
 
 export { agentSessionOwnerBindingsEqual } from './claimed-agent-pty-owner-snapshot'
 
@@ -37,17 +36,40 @@ type ReservedOwner = {
 
 type LiveOwner = LiveAgentSessionOwner
 
+function cloneClaim(claim: AgentSessionExecutionClaim): AgentSessionExecutionClaim {
+  return cloneAgentSessionClaim(claim)
+}
+
+function cloneSurface(surface: AgentSessionSurfaceBinding): AgentSessionSurfaceBinding {
+  return cloneAgentSessionSurface(surface)
+}
+
+function cloneOwner(owner: LiveOwner): LiveOwner {
+  return cloneAgentSessionOwner(owner)
+}
+
 export class ClaimedAgentPtyOwnerRegistry {
   private readonly reserved = new Map<string, ReservedOwner>()
   private readonly live = new Map<string, LiveOwner>()
   private readonly conflicts = new Map<string, LiveOwner[]>()
   private keysByPtyId = new Map<string, Set<string>>()
 
-  async ensure(args: ClaimedAgentPtyEnsureOptions): Promise<AgentSessionClaimedSpawnResult> {
+  async ensure(args: {
+    claim: AgentSessionExecutionClaim
+    surface: AgentSessionSurfaceBinding
+    spawn: (reservation: { generation: string }) => Promise<{
+      ptyId: string
+      owner?: AgentSessionOwnerBinding
+      disposition?: AgentSessionClaimedSpawnResult['disposition']
+    }>
+    isLive?: (owner: LiveAgentSessionOwner) => boolean | Promise<boolean>
+    /** Called when this request waits on another request's start instead of starting its own. */
+    onJoin?: (creation?: Promise<PtyCreationDisposition>) => void
+    creation?: Promise<PtyCreationDisposition>
+  }): Promise<AgentSessionClaimedSpawnResult> {
     // Snapshot reused retry arguments before awaits so caller mutations cannot change registry keys.
-    args.check?.()
-    const requestedClaim = cloneAgentSessionClaim(args.claim)
-    const requestedSurface = cloneAgentSessionSurface(args.surface)
+    const requestedClaim = cloneClaim(args.claim)
+    const requestedSurface = cloneSurface(args.surface)
     const key = agentSessionClaimKey(requestedClaim)
     if (this.conflicts.has(key)) {
       throw new Error('agent_session_conflict')
@@ -60,15 +82,13 @@ export class ClaimedAgentPtyOwnerRegistry {
       if (live.claim.worktreeScopeDigest !== requestedClaim.worktreeScopeDigest) {
         throw new Error('agent_session_conflict')
       }
-      if (!args.isLive || (await args.isLive(cloneAgentSessionOwner(live)))) {
-        args.check?.()
+      if (!args.isLive || (await args.isLive(cloneOwner(live)))) {
         const current = this.live.get(key)
         if (current?.ptyId === live.ptyId && current.generation === live.generation) {
-          return { disposition: 'adopted', owner: cloneAgentSessionOwner(current) }
+          return { disposition: 'adopted', owner: cloneOwner(current) }
         }
         return await this.ensure(args)
       }
-      args.check?.()
       this.release(live.ptyId, live.generation)
     }
 
@@ -79,11 +99,9 @@ export class ClaimedAgentPtyOwnerRegistry {
       }
       args.onJoin?.(reserved.creation)
       const result = await reserved.promise
-      args.check?.()
-      return { disposition: 'adopted', owner: cloneAgentSessionOwnerBinding(result.owner) }
+      return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
     }
 
-    args.check?.()
     this.assertCapacityForNewOwner()
     const generation = randomUUID()
     let resolveReservation!: (result: AgentSessionClaimedSpawnResult) => void
@@ -108,11 +126,11 @@ export class ClaimedAgentPtyOwnerRegistry {
       const spawned = await args.spawn({ generation })
       const owner: LiveOwner = spawned.owner
         ? {
-            claim: cloneAgentSessionClaim(spawned.owner.claim),
+            claim: cloneClaim(spawned.owner.claim),
             generation: spawned.owner.generation,
             phase: 'live',
             ptyId: spawned.owner.ptyId,
-            surface: cloneAgentSessionSurface(spawned.owner.surface)
+            surface: cloneSurface(spawned.owner.surface)
           }
         : {
             claim: requestedClaim,
@@ -138,36 +156,23 @@ export class ClaimedAgentPtyOwnerRegistry {
       if (reservation?.generation !== generation) {
         throw new Error('agent_session_ownership_unknown')
       }
-      const checkDispatched = () => {
-        try {
-          args.check?.()
-        } catch (error) {
-          if (!args.onDispatchedRevoked) {
-            throw error
-          }
-          args.onDispatchedRevoked()
-        }
-      }
-      checkDispatched()
       this.live.set(key, owner)
       const keys = this.keysByPtyId.get(owner.ptyId) ?? new Set<string>()
       keys.add(key)
       this.keysByPtyId.set(owner.ptyId, keys)
       // Index before awaited proof so an exit beating spawn completion can remove the matching generation.
-      if (args.isLive && !(await args.isLive(cloneAgentSessionOwner(owner)))) {
+      if (args.isLive && !(await args.isLive(cloneOwner(owner)))) {
         this.release(owner.ptyId, owner.generation)
         throw new Error('agent_session_exited_during_start')
       }
-      checkDispatched()
       const current = this.live.get(key)
       if (current?.ptyId !== owner.ptyId || current.generation !== owner.generation) {
         throw new Error('agent_session_exited_during_start')
       }
       const result: AgentSessionClaimedSpawnResult = {
         disposition: spawned.disposition ?? 'created',
-        owner: cloneAgentSessionOwner(owner)
+        owner: cloneOwner(owner)
       }
-      // Dispatch already happened: reconcile its real owner even if this observer expired.
       resolveReservation(result)
       published = true
       return result
@@ -277,7 +282,7 @@ export class ClaimedAgentPtyOwnerRegistry {
   }
 
   list(): AgentSessionOwnerBinding[] {
-    return [...this.live.values()].map(cloneAgentSessionOwner)
+    return [...this.live.values()].map(cloneOwner)
   }
 
   listForPty(ptyId: string): AgentSessionOwnerBinding[] {
@@ -288,14 +293,12 @@ export class ClaimedAgentPtyOwnerRegistry {
     return [...keys]
       .map((key) => this.live.get(key))
       .filter((owner): owner is LiveOwner => owner !== undefined)
-      .map(cloneAgentSessionOwner)
+      .map(cloneOwner)
   }
 
   find(claim: AgentSessionExecutionClaim): AgentSessionOwnerBinding | null {
     const owner = this.live.get(agentSessionClaimKey(claim))
-    return owner && scopedAgentSessionClaimsEqual(owner.claim, claim)
-      ? cloneAgentSessionOwner(owner)
-      : null
+    return owner && scopedAgentSessionClaimsEqual(owner.claim, claim) ? cloneOwner(owner) : null
   }
 
   private rebuildPtyIndex(): void {

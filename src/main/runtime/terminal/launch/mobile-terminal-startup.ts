@@ -1,9 +1,3 @@
-import type { AiVaultChatForkSource } from '../../../../shared/ai-vault-resume-preparation'
-import {
-  buildAiVaultLocalResumeStartup,
-  getAiVaultResumeCodexHome
-} from '../../../../shared/ai-vault-resume-startup'
-import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
@@ -74,59 +68,6 @@ function normalizeOriginConnectionId(connectionId: string | null | undefined): s
 }
 
 export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
-  async createSessionSwitchTerminal(
-    workspaceId: string,
-    args: {
-      source?: AiVaultChatForkSource
-      agent: TuiAgent
-      options?: Record<string, string>
-      commandOverride?: string
-      invocationId: string
-      sessionId: string
-      afterTabId?: string
-      groupId?: string
-      execution: NonNullable<MobileTerminalCreateOptions['switchExecution']>
-    }
-  ) {
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${workspaceId}`)
-    args.execution.check()
-    const source = args.source
-    const runtime = this.resolveAgentLaunchRuntime(workspace, args.agent)
-    const startup = source
-      ? buildAiVaultLocalResumeStartup({
-          session: source,
-          settings: this.store?.getSettings(),
-          commandOverride: args.commandOverride,
-          host: {
-            platform: runtime.platform,
-            liveShell: agentLaunchQuotingShell(runtime),
-            codexHome: getAiVaultResumeCodexHome(source.codexHome, runtime.platform)
-          },
-          embedCwd: false
-        })
-      : undefined
-    args.execution.check()
-    return this.createMobileSessionTerminal(`id:${workspaceId}`, {
-      ...(startup
-        ? {
-            ...startup,
-            launchRuntime: runtime,
-            resumeProviderSession: startup.providerSession,
-            resumeOrigin: 'switch' as const,
-            launchAgent: args.agent
-          }
-        : {
-            agent: args.agent,
-            commandOverride: args.commandOverride,
-            sessionOptions: args.options
-          }),
-      afterTabId: args.afterTabId ? `agent-session:${args.sessionId}` : undefined,
-      targetGroupId: args.groupId,
-      clientMutationId: args.invocationId,
-      switchExecution: { ...args.execution, afterTabId: args.afterTabId }
-    })
-  }
-
   /** The `--resume` launch for a pane's recorded agent session, as the host window's cold restore builds it. */
   protected resolveMobileSessionResumeCommand(
     workspace: TerminalWorkspaceLaunchScope,

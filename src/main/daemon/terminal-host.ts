@@ -62,7 +62,6 @@ export class TerminalHost extends TerminalHostInspection {
     if (session?.isTerminating) {
       throw new SessionNotFoundError(sessionId)
     }
-    session?.noteUse()
   }
 
   createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -75,9 +74,6 @@ export class TerminalHost extends TerminalHostInspection {
         createOrAttachClaimedAgentSession({
           options: opts,
           owners: this.agentSessionOwners,
-          check: opts.retainCanceledChild
-            ? () => this.assertCreateOrAttachAllowed(opts)
-            : undefined,
           isLive: (owner) => {
             const session = this.sessions.get(owner.ptyId)
             const live = this.agentSessionGenerations.isCurrent(
@@ -160,35 +156,17 @@ export class TerminalHost extends TerminalHostInspection {
     this.sessions.get(sessionId)?.resumeProducer(source)
   }
 
-  kill(
-    sessionId: string,
-    opts: { immediate?: boolean; switchCheck?: () => boolean; ownedSpawn?: true } = {}
-  ): Promise<void> {
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
     const pending = this.sessionTeardown.get(sessionId)
     if (pending) {
-      if (opts.switchCheck) {
-        return Promise.resolve()
-      }
       return Promise.resolve(
         opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
       )
     }
     const session = getAliveTerminalHostSession(this.sessions, sessionId)
-    const killed = this.sessionTeardown.killSession(
-      sessionId,
-      session,
-      opts.immediate === true,
-      opts.switchCheck,
-      opts.ownedSpawn
-    )
-    if (!opts.switchCheck) {
-      this.killedTombstones.record(sessionId)
-    }
-    return Promise.resolve(killed).then(() => {
-      if (opts.switchCheck && (!session.isAlive || session.isTerminating)) {
-        this.killedTombstones.record(sessionId)
-      }
-    })
+    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
+    this.killedTombstones.record(sessionId)
+    return Promise.resolve(killed)
   }
 
   beginFencedTermination(request: PtyFencedTerminationRequest) {

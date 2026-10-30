@@ -20,8 +20,6 @@ import { SessionNotFoundError } from './types'
 import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 
 export type TerminalHostProcessInspection = {
-  switchWitness?: string
-
   foregroundProcess: string | null
   hasChildProcesses: boolean
   childProcessEvidence?: PtyChildProcessVerdict
@@ -41,7 +39,6 @@ export async function inspectTerminalHostProcess(args: {
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
   ignoreDetached?: boolean
-  strictChildren?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
   nextObservationEpoch: () => number
@@ -107,7 +104,7 @@ export async function inspectTerminalHostProcess(args: {
   } else {
     try {
       const snapshot = await getStrictProcessTableSnapshotWithAge()
-      if (session.processNameIsSpawnFile || args.strictChildren) {
+      if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
         childProcessEvidence = inspectSpawnFileChildProcessesFromRows(
@@ -214,16 +211,13 @@ export function inspectTerminalHostSession(
     sessionId,
     options?.expectedIncarnationId
   )
-  const witness =
-    options?.captureSwitchWitness && session?.isAlive ? session.captureSwitchWitness() : undefined
   return inspectTerminalHostProcess({
     sessionId,
     currentSession: () => sessions.get(sessionId),
     session: session?.isAlive ? session : null,
     ...options,
-    strictChildren: Boolean(options?.captureSwitchWitness),
     retiredIncarnation: retired.get(sessionId),
     authorityGeneration,
     nextObservationEpoch
-  }).then((result) => ({ ...result, ...(witness ? { switchWitness: witness } : {}) }))
+  })
 }

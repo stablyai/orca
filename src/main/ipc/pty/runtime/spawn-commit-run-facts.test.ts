@@ -8,11 +8,9 @@ import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { commitRuntimePtySpawn } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import { createPaneBindingStore } from '../pty-launch-race-test-fixture'
 
 const PTY_ID = 'orca-pty-run-facts'
 const INCARNATION_ID = 'inc-run-facts'
-const LEAF_ID = 'b1111111-1111-4111-8111-111111111111'
 
 const ADOPTED = {
   disposition: 'adopted',
@@ -21,7 +19,7 @@ const ADOPTED = {
     generation: 'g1',
     phase: 'live',
     ptyId: PTY_ID,
-    surface: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: LEAF_ID, terminalHandle: 'h1' }
+    surface: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1', terminalHandle: 'h1' }
   }
 }
 
@@ -118,15 +116,7 @@ describe('runtime spawn commit: run facts', () => {
     'reports unavailable before binding even when the request was erased (%s)',
     async (erased) => {
       const onResumeOutcome = vi.fn()
-      const store = createPaneBindingStore()
-      await store.admitTerminalPane({
-        type: 'createTerminalTab',
-        workspace: 'wt-1',
-        tabId: 'tab-1',
-        leafId: LEAF_ID
-      })
-      const persistPtyBinding = store.persistPtyBinding
-      store.bindingWrites.mockImplementation(() => {
+      const persistPtyBinding = vi.fn(async () => {
         expect(onResumeOutcome.mock.calls).toEqual(
           ORCA_LAYOUT_OWNER_IS_MAIN ? [[PTY_ID, 'resume-unavailable']] : []
         )
@@ -142,11 +132,13 @@ describe('runtime spawn commit: run facts', () => {
         ctx.codexResumeUnavailable = !erased
         ctx.codexResumeArgvDropped = true
         ctx.hostSessionBinding = {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the binding session and durable callback contract used here.
-          store: store as unknown as NonNullable<typeof ctx.hostSessionBinding>['store'],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this boundary pin observes the bind write without invoking its stored callback.
+          store: { persistPtyBinding } as unknown as NonNullable<
+            typeof ctx.hostSessionBinding
+          >['store'],
           worktreeId: 'wt-1',
           tabId: 'tab-1',
-          leafId: LEAF_ID
+          leafId: 'leaf-1'
         }
       })
 
@@ -158,24 +150,19 @@ describe('runtime spawn commit: run facts', () => {
     const facts = new TerminalRunFactsRegister()
     const stops = new TerminalIntentionalStops()
     stops.mark(PTY_ID, 'reversible', null)(true)
-    const store = createPaneBindingStore()
-    await store.admitTerminalPane({
-      type: 'createTerminalTab',
-      workspace: 'wt-1',
-      tabId: 'tab-1',
-      leafId: LEAF_ID
-    })
-    const persistPtyBinding = store.persistPtyBinding.mockRejectedValue(new Error('disk full'))
+    const persistPtyBinding = vi.fn().mockRejectedValue(new Error('disk full'))
 
     await expect(
       commit({}, facts, stops, (ctx) => {
         ctx.provider = { ...ctx.provider, shutdown: vi.fn().mockResolvedValue(undefined) }
         ctx.hostSessionBinding = {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the binding session and failing durable writer used here.
-          store: store as unknown as NonNullable<typeof ctx.hostSessionBinding>['store'],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the commit calls only persistPtyBinding on this store.
+          store: { persistPtyBinding } as unknown as NonNullable<
+            typeof ctx.hostSessionBinding
+          >['store'],
           worktreeId: 'wt-1',
           tabId: 'tab-1',
-          leafId: LEAF_ID
+          leafId: 'leaf-1'
         }
       })
     ).rejects.toThrow()

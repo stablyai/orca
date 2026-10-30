@@ -3,7 +3,17 @@ import type {
   DaemonPtyAdapterOptions,
   DaemonIdentityChangeEvent,
   DaemonIdleRetirementResult
-} from './daemon-pty-operation-state'
+} from './daemon-pty-adapter-contract'
+export type {
+  PendingDaemonSpawnOperation,
+  HistoryRecoveryContext,
+  SnapshotCheckpointResult,
+  DaemonPtyShutdownOptions,
+  DaemonPtyAdapterOptions,
+  DaemonRespawnReason,
+  DaemonIdentityChangeEvent,
+  DaemonIdleRetirementResult
+} from './daemon-pty-adapter-contract'
 import { DaemonClient } from './client'
 import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
 import { DaemonPtyInventoryObservation } from './daemon-pty-inventory-observation'
@@ -35,17 +45,6 @@ import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contrac
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import type { ReadRunningWslDistros } from './daemon-wsl-bridge-exit'
 import { WslBridgeBootIdentity } from './daemon-wsl-bridge-boot-identity'
-export {
-  type PendingDaemonSpawnOperation,
-  type HistoryRecoveryContext,
-  type SnapshotCheckpointResult,
-  type DaemonPtyShutdownOptions,
-  type DaemonPtyAdapterOptions,
-  type DaemonRespawnReason,
-  type DaemonIdentityChangeEvent,
-  type DaemonIdleRetirementResult
-} from './daemon-pty-operation-state'
-
 export abstract class DaemonPtyRuntimeState {
   protected readonly readRunningWslDistros: ReadRunningWslDistros | undefined
   protected readonly wslBridgeBootIdentity: WslBridgeBootIdentity
