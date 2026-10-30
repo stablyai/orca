@@ -53,6 +53,7 @@ type Kind = 'browser' | 'editor' | 'terminal'
 let worktree = GIT_KEY
 let stopFrames = () => {}
 let drag: string[] = []
+let activations = 0
 const browser = {
   id: ENTITY,
   worktreeId: GIT_KEY,
@@ -88,7 +89,10 @@ function Harness({ kind, singleton }: { kind: Kind; singleton: boolean }) {
     hasTabsToLeft: false,
     hasTabsToRight: !singleton,
     tabCount: singleton ? 1 : 2,
-    onActivate: () => pane.current?.focus(),
+    onActivate: () => {
+      activations += 1
+      pane.current?.focus()
+    },
     onClose: () => useAppStore.getState().closeUnifiedTab(TAB),
     onCloseOthers: () => {},
     onCloseToLeft: () => {},
@@ -167,6 +171,7 @@ const settle = async () => {
 async function mount(kind: Kind = 'browser', workspace = GIT_KEY, singleton = false) {
   worktree = workspace
   drag = []
+  activations = 0
   const api = createStoreSessionMockApi()
   globalThis.window = domWindow
   Object.assign(window, { api })
@@ -243,8 +248,12 @@ afterEach(async () => {
   cleanup()
   stopFrames()
   endLayoutFramePositions()
-  // Activated drags retain their existing click shield for 50ms after settlement.
-  await new Promise((resolve) => setTimeout(resolve, 60))
+  if (vi.isFakeTimers()) {
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync()
+    })
+    vi.useRealTimers()
+  }
 })
 
 it.each(['browser', 'editor', 'terminal'] as const)(
@@ -269,6 +278,8 @@ it.each(['browser', 'editor', 'terminal'] as const)(
 it('retains a large still-held primary drag and settles its release', async () => {
   await mount()
   await open(0)
+  // Drive the sensor's existing post-drag click-shield cleanup deterministically.
+  vi.useFakeTimers()
   fireEvent.pointerMove(document, pointer(0, 1, 60))
   fireEvent.pointerMove(document, pointer(0, 1, 90))
   expect(drag).toContain('start')
@@ -345,7 +356,10 @@ it('starts editor rename only after menu close autofocus and preserves ordinary 
   await mount('editor')
   await open()
   fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Rename', exact: true }), { key: 'Enter' })
-  await screen.findByRole('textbox', { name: /Rename file/ })
+  const renameInput = await screen.findByRole('textbox', { name: /Rename file/ })
+  await waitFor(() => expect(document.activeElement).toBe(renameInput))
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(renameInput.isConnected).toBe(true)
 })
 
 // These are renderer event contracts; native/physical ordering remains targeted QA.
@@ -393,4 +407,116 @@ it('keeps primary and Ctrl-primary activation without contextmenu, and middle-cl
     useAppStore.getState().groupsByWorktree[GIT_KEY]?.find((group) => group.id === GROUP)?.tabOrder
   ).toEqual([OTHER])
   expect(screen.getByLabelText('Pane layout').textContent).not.toContain(TAB)
+})
+
+// Reuses the reviewed long-press characterization with correct-result assertions.
+it.each([
+  ['browser', 'touch'],
+  ['editor', 'touch'],
+  ['terminal', 'touch'],
+  ['browser', 'pen']
+] as const)(
+  '%s %s fallback opening retires activation while retaining usable menu and sensor settlement',
+  async (kind, pointerType) => {
+    await mount(kind, GIT_KEY, true)
+    vi.useFakeTimers()
+    const event = { ...pointer(), pointerType, ctrlKey: false }
+    fireEvent.pointerDown(source(), event)
+    expect(isTabStripPointerGestureActive()).toBe(true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700)
+    })
+    expect(screen.getByRole('menu')).toBeTruthy()
+    expect(isTabStripPointerGestureActive()).toBe(false)
+    expect(activations).toBe(0)
+    fireEvent.pointerUp(source(), { ...event, buttons: 0 })
+    fireEvent.pointerMove(document, { ...pointer(0, 0, 60), pointerType })
+    fireEvent.pointerMove(document, { ...pointer(0, 0, 90), pointerType })
+    expect(drag).toEqual(['pending', 'abort'])
+    expect(activations).toBe(0)
+    expect(document.activeElement).not.toBe(screen.getByRole('textbox'))
+    const pin = screen.getByRole('menuitem', { name: 'Pin Tab', exact: true })
+    fireEvent.pointerDown(pin, pointer())
+    fireEvent.pointerUp(pin, pointer(0, 0))
+    fireEvent.click(pin)
+    await settle()
+    expect(
+      useAppStore.getState().unifiedTabsByWorktree[GIT_KEY]?.find((tab) => tab.id === TAB)?.isPinned
+    ).toBe(true)
+  }
+)
+
+it.each([
+  ['touch', false],
+  ['pen', false],
+  ['touch', true],
+  ['pen', true]
+] as const)(
+  'short %s press activates after an open=%s start and clears the primitive timer',
+  async (pointerType, alreadyOpen) => {
+    await mount('browser', GIT_KEY, true)
+    if (alreadyOpen) {
+      await open()
+    }
+    vi.useFakeTimers()
+    const event = { ...pointer(), pointerType, ctrlKey: false }
+    fireEvent.pointerDown(source(), event)
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(isTabStripPointerGestureActive()).toBe(true)
+    fireEvent.pointerUp(source(), { ...event, buttons: 0 })
+    expect(activations).toBe(1)
+    expect(isTabStripPointerGestureActive()).toBe(false)
+    expect(document.activeElement).toBe(screen.getByRole('textbox'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700)
+    })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(activations).toBe(1)
+  }
+)
+
+it('revalidates original split eligibility when another tab closes with Right already open', async () => {
+  await mount()
+  await open()
+  const item = await right()
+  let beforeRelease: string | undefined
+  let sentBeforeRelease = 0
+  let releasedConnectedItem = false
+  const snapshot = () =>
+    JSON.stringify({
+      groups: useAppStore.getState().groupsByWorktree[worktree],
+      layout: useAppStore.getState().layoutByWorktree[worktree],
+      tabs: useAppStore.getState().unifiedTabsByWorktree[worktree]
+    })
+  // Deliver the release at publication of the legitimate close, before React replaces stale content.
+  const unsubscribe = useAppStore.subscribe((state) => {
+    if (
+      beforeRelease ||
+      state.groupsByWorktree[worktree]?.find((group) => group.id === GROUP)?.tabOrder.length !== 1
+    ) {
+      return
+    }
+    beforeRelease = snapshot()
+    sentBeforeRelease = layoutApplyTestTransport.sent.length
+    releasedConnectedItem = item.isConnected
+    fireEvent.pointerUp(item, pointer(2, 0))
+  })
+  try {
+    act(() => {
+      useAppStore.getState().closeUnifiedTab(OTHER)
+    })
+    await settle()
+    expect(releasedConnectedItem).toBe(true)
+    expect(beforeRelease).toBeDefined()
+    expect(layoutApplyTestTransport.sentOfType('splitGroup')).toEqual([])
+    expect(layoutApplyTestTransport.sent).toHaveLength(sentBeforeRelease)
+    expect(snapshot()).toBe(beforeRelease)
+    expect(
+      useAppStore.getState().groupsByWorktree[worktree]?.find((group) => group.id === GROUP)
+        ?.tabOrder
+    ).toEqual([TAB])
+    expect(screen.getByLabelText('Pane layout').textContent).toContain(TAB)
+  } finally {
+    unsubscribe()
+  }
 })

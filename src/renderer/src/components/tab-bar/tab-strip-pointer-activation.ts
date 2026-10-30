@@ -14,6 +14,7 @@ export function useTabStripPointerActivation({
   onActivate: () => void
   disabled?: boolean
 }): {
+  retirePendingActivation: () => void
   onPointerDown: (
     event: React.PointerEvent,
     dragListener?: (event: React.PointerEvent<Element>) => void
@@ -22,6 +23,8 @@ export function useTabStripPointerActivation({
   const onActivateRef = useRef(onActivate)
   onActivateRef.current = onActivate
   const cleanupRef = useRef<(() => void) | null>(null)
+
+  const retirePendingActivation = useCallback(() => cleanupRef.current?.(), [])
 
   // Retire window listeners on unmount so held presses cannot activate dead tabs.
   useEffect(() => () => cleanupRef.current?.(), [])
@@ -81,5 +84,5 @@ export function useTabStripPointerActivation({
     [disabled]
   )
 
-  return { onPointerDown }
+  return { onPointerDown, retirePendingActivation }
 }

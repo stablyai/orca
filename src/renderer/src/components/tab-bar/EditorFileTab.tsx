@@ -33,6 +33,7 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 import { useTabCustomEditor } from '@/store/plugin-custom-editors'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
@@ -224,11 +225,11 @@ export default function EditorFileTab({
   }, [menuOpen])
 
   const dragListeners = isRenaming ? undefined : listeners
-  // Activate on pointer-up so drag gestures cannot switch tabs mid-drag.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+  const { onPointerDown, retirePendingActivation } = useTabStripPointerActivation({
     onActivate,
     disabled: isRenaming
   })
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
 
   const tabRoot = (
@@ -241,7 +242,7 @@ export default function EditorFileTab({
       {...dragListeners}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
-        onTabPointerDown(
+        onPointerDown(
           e,
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
@@ -369,13 +370,13 @@ export default function EditorFileTab({
   )
 
   return (
-    <ContextMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
       <ContextMenuTrigger asChild>
         <div
           {...slotProps}
           onContextMenu={() => {
             window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-            setMenuOpen(true)
+            handleMenuOpenChange(true)
           }}
         >
           {isRenaming || menuOpen ? (

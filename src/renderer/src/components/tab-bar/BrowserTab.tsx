@@ -28,6 +28,7 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
@@ -146,7 +147,10 @@ export default function BrowserTab({
   }, [menuOpen])
 
   // Activate on pointer-up so drag gestures cannot switch tabs mid-drag.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+  const { onPointerDown: onTabPointerDown, retirePendingActivation } = useTabStripPointerActivation(
+    { onActivate }
+  )
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
 
   const tabRoot = (
@@ -238,13 +242,13 @@ export default function BrowserTab({
   )
 
   return (
-    <ContextMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
       <ContextMenuTrigger asChild>
         <div
           {...slotProps}
           onContextMenu={() => {
             window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-            setMenuOpen(true)
+            handleMenuOpenChange(true)
           }}
         >
           {menuOpen ? (

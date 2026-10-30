@@ -27,6 +27,7 @@ import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import {
   isTerminalTabActivityLive,
@@ -191,10 +192,13 @@ export default function SortableTab({
     onActivate(tab.id)
   }, [onActivate, tab.id])
   // Why: defer activation to pointer-up so a drag doesn't switch tabs or steal focus mid-gesture (tab-strip-pointer-activation).
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
-    onActivate: handleActivate,
-    disabled: isEditing
-  })
+  const { onPointerDown: onTabPointerDown, retirePendingActivation } = useTabStripPointerActivation(
+    {
+      onActivate: handleActivate,
+      disabled: isEditing
+    }
+  )
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
@@ -350,7 +354,7 @@ export default function SortableTab({
   )
 
   return (
-    <ContextMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
       <ContextMenuTrigger asChild>
         <div
           ref={renameOwnerRef}
@@ -359,7 +363,7 @@ export default function SortableTab({
             // The hover card is portalled: React still routes its events through this slot.
             if (event.target instanceof Node && event.currentTarget.contains(event.target)) {
               window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-              setMenuOpen(true)
+              handleMenuOpenChange(true)
             }
           }}
         >
