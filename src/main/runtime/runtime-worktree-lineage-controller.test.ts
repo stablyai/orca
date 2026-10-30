@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ALL_TUI_AGENTS } from '../../shared/tui-agent-display-names'
-import { buildWorktree } from '../../cli/test-fixtures'
+import type { CliWorktreeBuilder } from './rpc/methods/agent-launch-cwd-cli.test-fixture'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { WorktreeCreate } from '../../shared/rpc-contract/worktree-create-params'
 import { WorktreeCreate as PreObservationCreate } from '../../shared/rpc-contract/worktree-create-params.pre-observation.test-fixture'
@@ -19,7 +19,14 @@ import { makeRuntimeOrchestrationDb, taskLineageRow } from './runtime-orchestrat
 import { buildManagedWorktreeCreateArgs } from './rpc/methods/worktree-create-args'
 import { mapRuntimeError } from './rpc/errors'
 
-const root = buildWorktree('/tmp/owner-choice', 'main', 'abc', 'repo-a')
+const fixturesPath = '../../cli/test-fixtures'
+const { buildWorktree }: { buildWorktree: CliWorktreeBuilder } = await import(fixturesPath)
+const root: Omit<ReturnType<typeof buildWorktree>, 'identity'> = buildWorktree(
+  '/tmp/owner-choice',
+  'main',
+  'abc',
+  'repo-a'
+)
 const siblingId = `${root.id}::workspace:11111111-1111-4111-8111-111111111111`
 const choices = [`id:${siblingId}`, `id:${root.id}`]
 const unresolved = {

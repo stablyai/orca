@@ -297,9 +297,7 @@ describe('cwd workspace owner election and reporting at N and 10N', () => {
             platform: process.platform,
             node: process.version,
             base: '3bfcda1bf043af8d83371b2f131a65f2056f7970',
-            sourceInputSha256: createHash('sha256')
-              .update(readFileSync(new URL(import.meta.url)))
-              .digest('hex'),
+            sourceInputSha256: createHash('sha256').update(readFileSync(__filename)).digest('hex'),
             format: json ? 'json' : 'text',
             caller,
             samplesPerPopulation: 1,

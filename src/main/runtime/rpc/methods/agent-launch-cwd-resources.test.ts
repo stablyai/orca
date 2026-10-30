@@ -20,7 +20,10 @@ const {
 }))
 
 vi.mock('../../../../cli/runtime-client', async () => {
-  const { createRuntimeClientModuleMock } = await import('../../../../cli/index-test-harness.js')
+  const harnessPath = '../../../../cli/index-test-harness.js'
+  const {
+    createRuntimeClientModuleMock
+  }: { createRuntimeClientModuleMock: RuntimeClientModuleMockFactory } = await import(harnessPath)
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -41,10 +44,15 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { main } from '../../../../cli/index'
-import { useWorktreeAwarenessEnvironment as configureWorktreeAwarenessEnvironment } from '../../../../cli/index-test-harness'
-import { buildWorktree, okFixture, worktreeListFixture } from '../../../../cli/test-fixtures'
-import { agentLaunchHostFixture } from '../../../../cli/agent-launch-test-fixtures'
+import {
+  main,
+  configureWorktreeAwarenessEnvironment,
+  buildWorktree,
+  okFixture,
+  worktreeListFixture,
+  agentLaunchHostFixture,
+  type RuntimeClientModuleMockFactory
+} from './agent-launch-cwd-cli.test-fixture'
 import { RuntimeRpcFailureError } from '../../../../cli/runtime/types'
 import { RpcDispatcher } from '../dispatcher'
 import { UnixSocketTransport } from '../unix-socket-transport'
@@ -483,7 +491,12 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
         resolveWorktree: async (selector) => {
           lineageReads++
           expect([`id:${first.id}`, expectedSelector]).toContain(selector)
-          const base = buildWorktree(first.path, 'main', 'abc', 'repo-1')
+          const base: Omit<ReturnType<typeof buildWorktree>, 'identity'> = buildWorktree(
+            first.path,
+            'main',
+            'abc',
+            'repo-1'
+          )
           const resolved: ResolvedWorktree = {
             ...base,
             ...base.git,
