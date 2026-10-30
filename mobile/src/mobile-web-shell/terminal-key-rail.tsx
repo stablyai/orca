@@ -216,7 +216,7 @@ export function TerminalKeyRail({
   }
   // The pad sends the arrows while it shows, so the column lists them only without it.
   const renderedKeys = keys.flatMap((id) => {
-    if (showPad && (ARROW_IDS as readonly string[]).includes(id)) {
+    if (showPad && ARROW_IDS.some((arrow) => arrow === id)) {
       return []
     }
     const key = railKey(id)
