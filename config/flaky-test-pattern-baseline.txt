@@ -881,7 +881,6 @@
 2 test-no-wall-clock:src/main/ipc/native-chat-subscribe-lifecycle.test.ts
 2 test-no-wall-clock:src/main/ipc/native-chat.test.ts
 1 test-no-wall-clock:src/main/ipc/pty/provider/liveness-inventory.test.ts
-1 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged-exit.test.ts
 2 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged.test.ts
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts
