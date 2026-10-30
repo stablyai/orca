@@ -52,7 +52,6 @@ export function structuredAgentSessionShownSnapshot(
   const snapshot = structuredAgentSessionOptionSnapshot(view)
   const model = structuredAgentSessionModelId(view.record, 'any')
   if (
-    view.record.agent !== 'codex' ||
     !model ||
     !snapshot.some(
       (descriptor) =>

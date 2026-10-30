@@ -37,7 +37,7 @@ const MODEL_STATE = {
       name: 'Grok Build',
       _meta: {
         supportsReasoningEffort: true,
-        // A session pick must not become a catalog default.
+        // Reported model defaults take precedence over the menu's recommendation.
         reasoningEffort: 'low',
         reasoningEfforts: [
           { value: 'low', id: 'fast', label: 'Fast' },
@@ -192,7 +192,7 @@ describe('ACP model catalog probes', () => {
           { value: 'fast', label: 'Fast' },
           { value: 'deep', label: 'Deep' }
         ],
-        defaultEffort: 'deep'
+        defaultEffort: 'fast'
       },
       {
         id: 'grok-mini',

@@ -34,6 +34,7 @@ const effortEntrySchema = z.union([
 ])
 const modelMetaSchema = z.looseObject({
   supportsReasoningEffort: z.boolean().optional(),
+  reasoningEffort: z.string().optional(),
   reasoningEfforts: z.array(z.unknown()).optional()
 })
 const modelsListReplySchema = z.looseObject({
@@ -56,6 +57,7 @@ export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
   }
   const efforts: AgentSessionOptionChoice[] = []
   let defaultEffort: string | undefined
+  let reportedDefaultEffort: string | undefined
   for (const raw of meta.data.reasoningEfforts ?? []) {
     const entry = effortEntrySchema.safeParse(raw)
     if (!entry.success) {
@@ -63,9 +65,15 @@ export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
     }
     if (typeof entry.data === 'string') {
       efforts.push({ value: entry.data, label: EFFORT_LABELS[entry.data] ?? entry.data })
+      if (entry.data === meta.data.reasoningEffort) {
+        reportedDefaultEffort ??= entry.data
+      }
       continue
     }
     const id = entry.data.id ?? entry.data.value
+    if (entry.data.value === meta.data.reasoningEffort) {
+      reportedDefaultEffort ??= id
+    }
     const label =
       entry.data.label ??
       (entry.data.id ? capitalized(id) : (EFFORT_LABELS[entry.data.value] ?? entry.data.value))
@@ -79,10 +87,12 @@ export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
     }
   }
   if (efforts.length === 0) {
-    return {
-      efforts: BUILT_IN_EFFORTS.map((value) => ({ value, label: EFFORT_LABELS[value] ?? value }))
-    }
+    efforts.push(
+      ...BUILT_IN_EFFORTS.map((value) => ({ value, label: EFFORT_LABELS[value] ?? value }))
+    )
+    reportedDefaultEffort = efforts.find(({ value }) => value === meta.data.reasoningEffort)?.value
   }
+  defaultEffort = reportedDefaultEffort ?? defaultEffort
   return { efforts, ...(defaultEffort ? { defaultEffort } : {}) }
 }
 

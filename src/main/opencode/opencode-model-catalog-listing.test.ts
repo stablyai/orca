@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { parseOpenCodeModelListing } from './opencode-model-catalog-listing'
 
 // Match opencode models --verbose: ID followed by pretty-printed model JSON.
@@ -9,6 +10,24 @@ function listing(models: Record<string, unknown>): string {
 }
 
 describe('OpenCode verbose model listing', () => {
+  it('does not claim that a recorded listing runs its first variant by default', () => {
+    // OpenCode 1.18.31 models --verbose capture, 2026-10-30; one complete model row.
+    const stdout = readFileSync(
+      new URL('../acp/fixtures/opencode-v1-model-listing.txt', import.meta.url),
+      'utf8'
+    )
+    const [model] = parseOpenCodeModelListing(stdout)
+    expect(model?.efforts.map(({ value }) => value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'default'
+    ])
+    expect(model).not.toHaveProperty('defaultEffort')
+  })
+
   it('reads every model and its variants through multiline metadata', () => {
     const stdout = listing({
       'anthropic/claude-sonnet': {
@@ -35,9 +54,7 @@ describe('OpenCode verbose model listing', () => {
           { value: 'high', label: 'High' },
           { value: 'max', label: 'Max' },
           { value: 'default', label: 'Default' }
-        ],
-        // With no default variant, OpenCode ACP selects the first variant.
-        defaultEffort: 'high'
+        ]
       },
       {
         id: 'opencode/grok-code',

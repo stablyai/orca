@@ -212,6 +212,32 @@ describe('what a send carries', () => {
     ).toBeUndefined()
   })
 
+  it.each(['claude', 'codex', 'opencode', 'grok', 'pi', 'omp'])(
+    'shows %s declared effort after a reply without changing its send selection',
+    (agent) => {
+      const seed = structuredAgentSessionSeedCatalog(agent)
+      const row = { ...SONNET, defaultEffort: 'low' }
+      for (const listedModelIds of [['sonnet'], undefined]) {
+        const state = applyStructuredAgentSessionOptions(
+          createStructuredAgentSessionOptionState(agent, seed),
+          seed,
+          {
+            models: [row],
+            listedModelIds,
+            current: { model: 'sonnet', defaulted: [], acceptedInputSources: { model: 'saved' } }
+          }
+        )
+        const captured = structuredAgentSessionMessageSelection(state)
+        const shown = structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')
+        expect(shown?.valueSource).toBe(listedModelIds ? 'default' : 'unknown')
+        expect(shown?.kind.currentValue).toBe(listedModelIds ? 'low' : undefined)
+        expect(structuredAgentSessionMessageSelection(state)).toEqual(captured)
+        expect(captured).toEqual({ model: 'sonnet' })
+        expect(state.record.values.effort).toBeUndefined()
+      }
+    }
+  )
+
   it('carries the default it shows when nothing names a model', () => {
     const named = { ...SONNET, isDefault: true }
     const listing = { ...LISTED, models: [OPUS, named], listingNamesConfiguredModel: true }

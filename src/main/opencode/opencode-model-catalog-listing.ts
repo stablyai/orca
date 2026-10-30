@@ -38,8 +38,7 @@ function modelOption(id: string, metadata: unknown): AgentSessionModelOption {
             value,
             label: variantLabel(value)
           })),
-          // New OpenCode sessions use default when offered, otherwise the first variant.
-          defaultEffort: variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : variants[0]
+          ...(variants.includes(DEFAULT_VARIANT) ? { defaultEffort: DEFAULT_VARIANT } : {})
         }
       : { efforts: [] })
   }
