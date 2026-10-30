@@ -80,8 +80,10 @@ gap or contradiction.
 
 ## Safety
 
-Stop, retry, or abandon a worker only on proof its agent stopped; silence or an
-`unverifiable` reading proves nothing.
+Silence, a timeout, or `unverifiable` liveness alone never proves exit or authorizes
+autonomous recovery. For explicit user cancellation or assignment abandonment,
+load `references/recovery-and-cleanup.md`: requesting a guarded stop or fencing an
+assignment does not prove its agent stopped.
 
 ## References
 

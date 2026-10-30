@@ -957,7 +957,13 @@
       "empty": "尚未設定自訂快速鍵。",
       "removeShortcut": "移除 {{label}}",
       "resetDefaults": "還原預設值",
-      "resetDescription": "依原始順序顯示所有內建快速鍵"
+      "resetDescription": "依原始順序顯示所有內建快速鍵",
+      "moreKeys": "更多按鍵",
+      "moreKeysDescription": "這些按鍵位於終端機按鍵列的 ⋯ 下。切換按鍵以顯示或隱藏，按住拖曳控制柄即可調整順序。已在按鍵列中的按鍵（例如 Esc 或方向鍵）不會顯示在 ⋯ 下。",
+      "directionPad": "方向鍵盤",
+      "showDirectionPad": "顯示方向鍵盤",
+      "showDirectionPadDescription": "將方向鍵盤固定在側邊欄。關閉後，側邊欄會列出各個方向鍵。",
+      "showShortcut": "顯示 {{label}} 快捷鍵"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "要使用速率限制重設額度嗎？",
@@ -1399,7 +1405,8 @@
       "reconnect": "重新連線",
       "searchWorkspaces": "搜尋工作區",
       "tasks": "任務",
-      "workspaceOptions": "工作區選項"
+      "workspaceOptions": "工作區選項",
+      "newWorkspace": "新增工作區"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
@@ -1827,7 +1834,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "收起鍵盤",
-      "sendKey": "傳送 {{label}}"
+      "sendKey": "傳送 {{label}}",
+      "modifierHint": "套用至下一個按鍵。點兩下可保持啟用。",
+      "typeCharacter": "輸入 {{character}}",
+      "interrupt": "中斷終端機",
+      "keysModeLabel": "按鍵模式：輸入內容會直接傳送至終端機。切換至訊息模式",
+      "messageModeLabel": "訊息模式：輸入後再傳送。切換至按鍵模式",
+      "keysMode": "按鍵",
+      "messageMode": "訊息",
+      "moreKeys": "更多按鍵與操作",
+      "showKeyboard": "顯示鍵盤"
     },
     "activeContent": {
       "createTab": "建立分頁",
@@ -1939,7 +1955,10 @@
     "commandDock": {
       "liveInputHint": "輸入的文字會直接傳送至目前使用中的終端機",
       "liveInputLabel": "終端機即時輸入",
-      "sendCommand": "傳送命令"
+      "sendCommand": "傳送命令",
+      "messageAgentPlaceholder": "傳送訊息給 {{agent}}",
+      "writeCommandPlaceholder": "輸入指令後傳送",
+      "theAgent": "代理程式"
     },
     "contentRow": {
       "dismissCreationWarning": "關閉工作區建立警告"
@@ -2120,7 +2139,12 @@
       "openSourceControl": "開啟原始碼控制",
       "reconnectToDesktop": "重新連線至電腦",
       "showSidebar": "顯示側邊欄",
-      "terminalTitle": "終端機"
+      "terminalTitle": "終端機",
+      "terminalLayout": "終端機版面配置",
+      "fileExplorer": "檔案總管",
+      "sourceControl": "原始碼控制",
+      "newTab": "新分頁",
+      "quickCommands": "快速命令"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "代理程式歷史紀錄",
@@ -2320,7 +2344,8 @@
       "terminal": "終端機",
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
-      "urlPrompt": "請輸入網址，或留空以開啟新分頁。"
+      "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
+      "allowAutoClose": "允許自動關閉"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作區主機上未偵測到已啟用的 AI 代理程式。",
@@ -2337,7 +2362,8 @@
       "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
       "newTab": "新分頁",
       "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令",
-      "tabStatus": "{{title}}，{{status}}"
+      "tabStatus": "{{title}}，{{status}}",
+      "terminalLayout": "終端機版面配置"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清除終端機",
@@ -2599,6 +2625,56 @@
       "waitForStart": "請等待代理程式完成啟動。",
       "waitForTurn": "請等待代理程式完成回覆，或將其停止。",
       "waitMoment": "請稍候。"
+    },
+    "workerAutoClose": {
+      "running": "暫時的協作工作者 · 完成 2 分鐘後關閉",
+      "finished": "暫時的協作工作者已完成 · 將在 {{countdown}} 後關閉",
+      "keepOpen": "保持開啟"
+    },
+    "terminalLayoutSheet": {
+      "title": "終端機版面配置",
+      "oneTerminal": "一個終端機",
+      "selected": "已選取",
+      "auto": "自動",
+      "autoHint": "依可用空間分割",
+      "sideBySide": "並排",
+      "sideBySideHint": "即使側邊欄開啟也顯示為兩欄",
+      "stacked": "上下排列",
+      "stackedHint": "任何螢幕方向皆顯示為兩列",
+      "selectedHint": "已選取 · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "無法儲存版面配置",
+      "saveFailedMessage": "此版面配置暫時生效。請再次選取以重試儲存。"
+    },
+    "terminalArrowPad": {
+      "label": "方向鍵",
+      "hint": "點按一側可按一次方向鍵，或按住並拖曳以重複",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "傳送 {{label}}",
+      "paste": "貼上",
+      "sending": "傳送中…",
+      "photo": "照片",
+      "file": "檔案",
+      "desktopWidth": "桌面寬度",
+      "phoneWidth": "手機寬度",
+      "keys": "按鍵",
+      "combos": "組合鍵",
+      "yourKeys": "你的按鍵",
+      "deleteKeyHint": "長按以刪除此按鍵",
+      "addCustomKey": "新增自訂按鍵",
+      "addKey": "新增按鍵"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}，已聚焦",
+      "terminal": "終端機",
+      "tapToFocusPane": "{{title}}，點一下以聚焦",
+      "inputPane": "{{title}} · 輸入"
     }
   },
   "settings": {
@@ -2790,7 +2866,9 @@
       "cherryPickState": "挑選",
       "mergeState": "合併",
       "rebaseState": "變基",
-      "stagedCount": "已暫存 {{count}} 項"
+      "stagedCount": "已暫存 {{count}} 項",
+      "completingMerge": "正在完成…",
+      "completeMerge": "完成合併"
     },
     "branchCompare": {
       "commits_one": "{{count}} 筆提交",
@@ -3229,6 +3307,13 @@
       "branchUnavailable": "無法取得分支狀態",
       "commitFailed": "提交失敗",
       "waitingForDesktop": "等待電腦…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "請更新執行此工作區的電腦上的 Orca，才能從手機解決合併衝突。",
+      "markResolved": "標記為已解決",
+      "keepFile": "保留檔案",
+      "keepDeletion": "保留刪除",
+      "completeMergeFailed": "無法完成合併"
     }
   },
   "tasks": {
@@ -3895,6 +3980,15 @@
       "inProgress": "進行中",
       "inReview": "審查中",
       "pinned": "已固定"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "方向控制鍵上",
+      "left": "方向控制鍵左",
+      "right": "方向控制鍵右",
+      "down": "方向控制鍵下",
+      "hint": "傳送方向鍵。按住以重複。"
     }
   }
 }

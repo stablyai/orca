@@ -152,7 +152,7 @@ const styles = themedStyleSheet(() => ({
   },
   pill: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },

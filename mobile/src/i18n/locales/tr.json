@@ -961,7 +961,13 @@
       "empty": "Henüz özel kısayol tanımlanmadı.",
       "removeShortcut": "{{label}} kısayolunu kaldır",
       "resetDefaults": "Varsayılanlara Sıfırla",
-      "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster"
+      "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster",
+      "moreKeys": "DİĞER TUŞLAR",
+      "moreKeysDescription": "Bu tuşlar, terminal tuş satırındaki ⋯ altında bulunur. Tuşları göstermek veya gizlemek için açıp kapatın; istediğiniz sıraya sürüklemek için tutamacı basılı tutun. Esc veya oklar gibi satırda zaten bulunan tuşlar ⋯ altında gösterilmez.",
+      "directionPad": "YÖN TUŞ TAKIMI",
+      "showDirectionPad": "Yön tuş takımını göster",
+      "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",
+      "showShortcut": "{{label}} kısayolunu göster"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Hız sınırı sıfırlama hakkı kullanılsın mı?",
@@ -1403,7 +1409,8 @@
       "reconnect": "Yeniden bağlan",
       "searchWorkspaces": "Çalışma alanlarını ara",
       "tasks": "Görevler",
-      "workspaceOptions": "Çalışma alanı seçenekleri"
+      "workspaceOptions": "Çalışma alanı seçenekleri",
+      "newWorkspace": "Yeni çalışma alanı"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "“{{name}}” ({{branch}}) silinsin mi?",
@@ -1831,7 +1838,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Klavyeyi gizle",
-      "sendKey": "{{label}} gönder"
+      "sendKey": "{{label}} gönder",
+      "modifierHint": "Sonraki tuşa uygulanır. Açık tutmak için iki kez dokunun.",
+      "typeCharacter": "{{character}} yaz",
+      "interrupt": "Terminali kesintiye uğrat",
+      "keysModeLabel": "Tuş modu: yazılanlar doğrudan terminale gider. Mesaj moduna geç",
+      "messageModeLabel": "Mesaj modu: yazın, ardından gönderin. Tuş moduna geç",
+      "keysMode": "Tuşlar",
+      "messageMode": "Mesaj",
+      "moreKeys": "Diğer tuşlar ve işlemler",
+      "showKeyboard": "Klavyeyi göster"
     },
     "activeContent": {
       "createTab": "Sekme Oluştur",
@@ -1943,7 +1959,10 @@
     "commandDock": {
       "liveInputHint": "Yazılan metin doğrudan etkin terminale gönderilir",
       "liveInputLabel": "Canlı terminal girişi",
-      "sendCommand": "Komut gönder"
+      "sendCommand": "Komut gönder",
+      "messageAgentPlaceholder": "{{agent}} için mesaj",
+      "writeCommandPlaceholder": "Bir komut yazın ve gönderin",
+      "theAgent": "ajan"
     },
     "contentRow": {
       "dismissCreationWarning": "Çalışma alanı oluşturma uyarısını kapat"
@@ -2124,7 +2143,12 @@
       "openSourceControl": "Kaynak kontrolünü aç",
       "reconnectToDesktop": "Masaüstüne yeniden bağlan",
       "showSidebar": "Kenar çubuğunu göster",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Terminal düzeni",
+      "fileExplorer": "Dosya gezgini",
+      "sourceControl": "Kaynak kontrolü",
+      "newTab": "Yeni sekme",
+      "quickCommands": "Hızlı komutlar"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Ajan Geçmişi",
@@ -2324,7 +2348,8 @@
       "terminal": "Terminal",
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
-      "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın."
+      "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",
+      "allowAutoClose": "Otomatik kapatmaya izin ver"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",
@@ -2341,7 +2366,8 @@
       "checkingCapabilities": "Masaüstü özellikleri kontrol ediliyor — birazdan tekrar deneyin",
       "newTab": "Yeni sekme",
       "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "Terminal düzeni"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminali Temizle",
@@ -2603,6 +2629,56 @@
       "waitForStart": "Ajanın başlatılmasının tamamlanmasını bekleyin.",
       "waitForTurn": "Ajanın yanıtını tamamlamasını bekleyin veya durdurun.",
       "waitMoment": "Biraz bekleyin."
+    },
+    "workerAutoClose": {
+      "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
+      "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+      "keepOpen": "Açık tut"
+    },
+    "terminalLayoutSheet": {
+      "title": "Terminal düzeni",
+      "oneTerminal": "Tek terminal",
+      "selected": "Seçili",
+      "auto": "Otomatik",
+      "autoHint": "Kullanılabilir alana sığacak şekilde böl",
+      "sideBySide": "Yan yana",
+      "sideBySideHint": "Kenar çubuğu açıkken bile iki sütun",
+      "stacked": "Alt alta",
+      "stackedHint": "Her yönlendirmede iki satır",
+      "selectedHint": "Seçili · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Düzen kaydedilemedi",
+      "saveFailedMessage": "Bu düzen şimdilik uygulanır. Kaydetmeyi yeniden denemek için tekrar seçin."
+    },
+    "terminalArrowPad": {
+      "label": "Ok tuşları",
+      "hint": "Bir oka bir kez basmak için bir tarafa dokunun; tekrarlamak için basılı tutup sürükleyin",
+      "up": "Yukarı",
+      "down": "Aşağı",
+      "left": "Sol",
+      "right": "Sağ"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}} gönder",
+      "paste": "Yapıştır",
+      "sending": "Gönderiliyor…",
+      "photo": "Fotoğraf",
+      "file": "Dosya",
+      "desktopWidth": "Masaüstü genişliği",
+      "phoneWidth": "Telefon genişliği",
+      "keys": "Tuşlar",
+      "combos": "Kombinasyonlar",
+      "yourKeys": "Tuşlarınız",
+      "deleteKeyHint": "Bu tuşu silmek için uzun basın",
+      "addCustomKey": "Özel tuş ekle",
+      "addKey": "Tuş ekle"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, odakta",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, odaklamak için dokunun",
+      "inputPane": "{{title}} · Girdi"
     }
   },
   "settings": {
@@ -2794,7 +2870,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "{{count}} stage edildi"
+      "stagedCount": "{{count}} stage edildi",
+      "completingMerge": "Tamamlanıyor…",
+      "completeMerge": "Birleştirmeyi tamamla"
     },
     "branchCompare": {
       "commits_one": "{{count}} commit",
@@ -3233,6 +3311,13 @@
       "branchUnavailable": "Branch durumu alınamadı",
       "commitFailed": "Commit'lenemedi",
       "waitingForDesktop": "Masaüstü bekleniyor…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Birleştirme çakışmalarını telefonunuzdan çözmek için bu çalışma alanının çalıştığı bilgisayarda Orca’yı güncelleyin.",
+      "markResolved": "Çözüldü olarak işaretle",
+      "keepFile": "Dosyayı koru",
+      "keepDeletion": "Silmeyi koru",
+      "completeMergeFailed": "Birleştirme tamamlanamadı"
     }
   },
   "tasks": {
@@ -3899,6 +3984,15 @@
       "inProgress": "Devam ediyor",
       "inReview": "İncelemede",
       "pinned": "Sabitlenenler"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Yön tuşu yukarı",
+      "left": "Yön tuşu sol",
+      "right": "Yön tuşu sağ",
+      "down": "Yön tuşu aşağı",
+      "hint": "Bir ok tuşu gönderir. Tekrarlamak için basılı tutun."
     }
   }
 }

@@ -36,6 +36,7 @@ import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import { rebindReusedStructuredWorker } from '../../orchestration-structured-worker-session'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -232,10 +233,11 @@ export async function startLocalWorker(args: {
         )
       }
     }
-    // A chat has no pane or process; its Dispatch names it by its Orca session ID alone.
-    const terminalAuthority = chat
-      ? CHAT_WORKER_AUTHORITY
-      : requireWorkerAuthority(runtime, terminalHandle)
+    // A structured worker's chat keeps the pane and process its custody is held under.
+    const terminalAuthority =
+      terminal && terminal.terminalHandle === null
+        ? CHAT_WORKER_AUTHORITY
+        : requireWorkerAuthority(runtime, terminalHandle)
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,
@@ -245,6 +247,9 @@ export async function startLocalWorker(args: {
       setupState: setupReceipt.state,
       terminalOwnership: params.terminal ? 'external' : 'created'
     })
+    if (chat) {
+      rebindReusedStructuredWorker(runtime, terminalHandle, db)
+    }
 
     result = await deliverAndSettleWorkerStartReadiness({
       runtime,
