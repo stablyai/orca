@@ -57,14 +57,6 @@ const ports = vi.hoisted((): Ports => ({
 vi.mock('expo/fetch', () => ({
   fetch: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)
 }))
-vi.mock('../transport/rpc-client', () => ({
-  connect: () => {
-    if (!ports.session) {
-      throw new Error('Missing external RPC session port')
-    }
-    return ports.session
-  }
-}))
 const storagePort = {
   read: async (key: string) => {
     if (key === 'orca:pushServiceNotificationsEnabled') {

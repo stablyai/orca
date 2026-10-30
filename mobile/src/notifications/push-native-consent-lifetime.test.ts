@@ -19,6 +19,14 @@ let registration: typeof Registration
 let native: typeof Native
 let consent: typeof Consent
 const ports = pushOwnerNativePorts()
+vi.mock('../transport/rpc-client', () => ({
+  connect: () => {
+    if (!ports.session) {
+      throw new Error('Missing external RPC session port')
+    }
+    return ports.session
+  }
+}))
 const T2 = { platform: 'ios', token: 'c'.repeat(64), apnsEnvironment: 'production' } as const
 let stop: (() => void) | undefined
 const detach: (() => void)[] = []
