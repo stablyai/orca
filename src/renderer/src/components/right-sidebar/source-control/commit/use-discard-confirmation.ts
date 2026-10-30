@@ -125,30 +125,22 @@ export function useSourceControlDiscardConfirmation({
           const hiddenCount = result.failed.length - 3
           const samplePaths =
             hiddenCount > 0
-              ? hiddenCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.SourceControl.discardFailedSampleMore_one',
-                    '{{paths}}, +{{count}} more',
-                    { paths: sample, count: hiddenCount }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.SourceControl.discardFailedSampleMore_other',
-                    '{{paths}}, +{{count}} more',
-                    { paths: sample, count: hiddenCount }
-                  )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.discardFailedSampleMore',
+                  '{{paths}}, +{{count}} more',
+                  {
+                    paths: sample,
+                    count: hiddenCount,
+                    defaultValue_one: '{{paths}}, +{{count}} more'
+                  }
+                )
               : sample
           toast.error(
-            result.failed.length === 1
-              ? translate(
-                  'auto.components.right.sidebar.SourceControl.discardFailed_one',
-                  'Failed to discard {{count}} file',
-                  { count: result.failed.length }
-                )
-              : translate(
-                  'auto.components.right.sidebar.SourceControl.discardFailed_other',
-                  'Failed to discard {{count}} files',
-                  { count: result.failed.length }
-                ),
+            translate(
+              'auto.components.right.sidebar.SourceControl.discardFailed',
+              'Failed to discard {{count}} files',
+              { count: result.failed.length, defaultValue_one: 'Failed to discard {{count}} file' }
+            ),
             {
               description: firstMsg
                 ? translate(

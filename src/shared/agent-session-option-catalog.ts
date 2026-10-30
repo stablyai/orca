@@ -1,3 +1,4 @@
+import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
 import type { AgentType } from './agent-status-types'
 import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
@@ -97,4 +98,10 @@ export function mergeDiscoveredAuthoritativeModels(
 
 export function sessionOptionValueIsValid(value: unknown): value is SessionOptionValue {
   return typeof value === 'string' || typeof value === 'boolean'
+}
+
+export function getAgentSessionOptionLaunchCatalog(
+  agent: AgentType
+): AgentSessionOptionCatalog | null {
+  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
 }

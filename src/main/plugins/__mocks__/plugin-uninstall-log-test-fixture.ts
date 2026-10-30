@@ -6,12 +6,12 @@ import type * as ChildProcess from 'node:child_process'
 import { PluginContentVerifier } from '../plugin-content-integrity'
 import { PluginService } from '../plugin-service'
 import { registerPluginHandlers } from '../../ipc/plugins'
-import { installPluginFromLocalPath, installBundledPlugin } from '../plugin-install'
-import { installStagedPluginTree } from '../plugin-install-staging'
+import { installPluginFromLocalPath, installBundledPlugin } from '../installation/plugin-install'
+import { installStagedPluginTree } from '../installation/plugin-install-staging'
 import { getUserPluginsDir } from '../plugin-discovery'
-import { PluginWorkerController } from '../plugin-worker-controller'
+import { PluginWorkerController } from '../workers/plugin-worker-controller'
 import { UninstallWorkerPort } from '../plugin-uninstall-worker-fixture'
-import type { PluginManifest } from '../../../shared/plugins/plugin-manifest'
+import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 
 const ports = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -113,7 +113,7 @@ export async function createUninstallFixture() {
       pluginApi: 1,
       main: 'worker.js',
       contributes: { commands: [{ id: 'run', title: 'Run' }], ...contributes },
-      capabilities: contributes.events ? [{ kind: 'events:subscribe' }] : []
+      capabilities: contributes.events ? [{ kind: 'workspace:read' }, { kind: 'agent:read' }] : []
     }
     await writeFile(join(sourcePath, 'orca-plugin.json'), JSON.stringify(manifest))
     await writeFile(join(sourcePath, 'worker.js'), 'export default function () {}')
@@ -125,7 +125,15 @@ export async function createUninstallFixture() {
           pluginsDir: getUserPluginsDir(root),
           stagingDir: sourcePath,
           hostVersion: '1.4.0',
-          source: { kind: 'git', url: 'https://github.com/stablyai/orca-plugins.git', ref: 'main' },
+          source: {
+            kind: 'marketplace',
+            marketplace: {
+              url: 'https://github.com/stablyai/orca-plugins.git',
+              ref: 'main',
+              resolvedCommit: '2'.repeat(40)
+            },
+            plugin: { url: `https://github.com/stablyai/${id}.git`, ref: 'main' }
+          },
           resolvedCommit: '1'.repeat(40)
         })
       : await installPluginFromLocalPath({

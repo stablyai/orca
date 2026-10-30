@@ -48,3 +48,12 @@ it('checks a no-boot reconnect against a settled read of its own distro (E9)', a
   mocks.readSettled.mockResolvedValue({ status: 'confirmed', distros: [] })
   await expect(mocks.captured.deps?.requireRunning?.('Ubuntu')).resolves.toBe(false)
 })
+
+it('makes each stopping-window poll take a fresh probe, never the list read before it', async () => {
+  await mocks.captured.deps?.readRunning({ distro: 'Ubuntu', exitedAt: 1_000, probedAfter: 4_000 })
+  expect(mocks.readSettled).toHaveBeenLastCalledWith('Ubuntu', 4_000)
+
+  // A poll is never older than the exit's settle window.
+  await mocks.captured.deps?.readRunning({ distro: 'Ubuntu', exitedAt: 1_000, probedAfter: 1_200 })
+  expect(mocks.readSettled).toHaveBeenLastCalledWith('Ubuntu', 1_000 + EXIT_SETTLE_MS)
+})

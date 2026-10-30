@@ -140,16 +140,21 @@ function uploadThroughConnection(
   )
 }
 
+async function openLocalFiles(dir: string): Promise<string[]> {
+  const targets = await Promise.allSettled(
+    (await readdir('/proc/self/fd')).map((fd) => readlink(`/proc/self/fd/${fd}`))
+  )
+  return targets.flatMap((target) =>
+    target.status === 'fulfilled' && target.value.startsWith(dir) ? [target.value] : []
+  )
+}
+
 async function expectLocalFilesClosed(dir: string): Promise<void> {
   if (process.platform !== 'linux') {
     return
   }
-  const targets = await Promise.allSettled(
-    (await readdir('/proc/self/fd')).map((fd) => readlink(`/proc/self/fd/${fd}`))
-  )
-  expect(
-    targets.filter((target) => target.status === 'fulfilled' && target.value.startsWith(dir))
-  ).toEqual([])
+  // /proc/self/fd can list an fd for a few ms after FileHandle.close() resolves; a leaked handle never clears.
+  await vi.waitFor(async () => expect(await openLocalFiles(dir)).toEqual([]), { timeout: 2_000 })
 }
 
 describe('directory upload pipeline', () => {
@@ -268,7 +273,12 @@ describe('directory upload pipeline', () => {
       await vi.waitFor(() => expect(fixture.closes.size).toBe(4))
       controller.abort()
 
-      expect(await outcome).toMatchObject({ name: 'AbortError', sshChannelCloseConfirmed: true })
+      // Teardown confirmation pins abort settling only after every transfer closed its local file.
+      expect(await outcome).toMatchObject({
+        name: 'AbortError',
+        sshChannelCloseConfirmed: true,
+        sshTransferTeardownConfirmed: true
+      })
       expect(fixture.opened).toHaveLength(4)
       await expectLocalFilesClosed(dir)
     } finally {

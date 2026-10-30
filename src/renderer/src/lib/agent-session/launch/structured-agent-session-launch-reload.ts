@@ -13,7 +13,10 @@ import {
   structuredLaunchIdentity,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
-import { initialStructuredLaunchSelection } from '../../structured-agent-session-launch-options'
+import {
+  initialStructuredLaunchSelection,
+  structuredLaunchSelectionController
+} from '../../structured-agent-session-launch-options'
 
 export function restorePersistedStructuredLaunchState(
   worktreeId: string,
@@ -70,6 +73,7 @@ export function restorePersistedStructuredLaunchState(
   }
   callers.outcome = record.lifecycle === 'failed' ? 'failed' : 'unknown'
   callers.failedAt = record.failedAt
+  structuredLaunchSelectionController(state)
   setStructuredLaunchState(state)
   return state
 }

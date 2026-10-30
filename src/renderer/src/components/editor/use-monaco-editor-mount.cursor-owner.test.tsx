@@ -219,6 +219,7 @@ it('keeps cursor and gutter copy on the current file owner after migration', asy
         point: { x: 0, y: 0 },
         line,
         selection: snapshot,
+        fileId: result.fileId,
         filePath,
         relativePath: 'file.ts'
       })

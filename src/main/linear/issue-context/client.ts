@@ -75,12 +75,15 @@ export async function searchLinearIssuesForAgents(args: {
 
 export async function resolveIssue(
   identifier: string,
-  selectors: { workspaceId?: string | null; organizationUrlKey?: string | null }
+  selectors: { workspaceId?: string | null; organizationUrlKey?: string | null },
+  signal?: AbortSignal
 ): Promise<ResolvedIssue> {
   const workspace = resolveWorkspaceSelector(selectors, getConnectedWorkspaces())
   const selection = workspace?.id ?? selectors.workspaceId ?? 'all'
   const { entries, failures: entryFailures } =
-    selection === 'all' ? getFanoutClientEntries() : getExplicitClientEntries(selection)
+    selection === 'all'
+      ? getFanoutClientEntries(signal)
+      : getExplicitClientEntries(selection, signal)
   if (entries.length === 0) {
     throwIfExplicitWorkspaceHasConnectedAlternatives(selection)
     if (entryFailures[0]) {
@@ -91,7 +94,7 @@ export async function resolveIssue(
     })
   }
 
-  const results = await readIssueWorkspaces(entries, identifier, selection, entryFailures)
+  const results = await readIssueWorkspaces(entries, identifier, selection, entryFailures, signal)
 
   if (results.length === 0) {
     throw linearError('linear_issue_not_found', `Linear issue ${identifier} was not found.`)
@@ -118,12 +121,15 @@ export function getRequiredEntry(
   return entry
 }
 
-function getExplicitClientEntries(workspaceId?: string): {
+function getExplicitClientEntries(
+  workspaceId?: string,
+  signal?: AbortSignal
+): {
   entries: LinearClientForWorkspace[]
   failures: WorkspaceReadFailure[]
 } {
   try {
-    return { entries: getClients(workspaceId), failures: [] }
+    return { entries: getClients(workspaceId, signal), failures: [] }
   } catch (error) {
     if (error instanceof LinearAgentAccessError) {
       throw error
@@ -161,11 +167,13 @@ function throwIfExplicitWorkspaceHasConnectedAlternatives(
 export async function withLinearRead<T>(
   entry: LinearClientForWorkspace,
   read: () => Promise<T>,
-  selection?: (string & {}) | 'all'
+  selection?: (string & {}) | 'all',
+  signal?: AbortSignal
 ): Promise<T> {
   void selection
-  await acquire()
+  await acquire(signal)
   try {
+    signal?.throwIfAborted()
     return await read()
   } catch (error) {
     if (isAuthError(error)) {
@@ -182,16 +190,22 @@ export async function withLinearRead<T>(
 
 async function readIssueWorkspace(
   entry: LinearClientForWorkspace,
-  identifier: string
+  identifier: string,
+  signal?: AbortSignal
 ): Promise<ResolvedIssue | null> {
-  const response = await withLinearRead(entry, async () => {
-    const client = getPublicFileUrlClient(entry)
-    const raw = await client.client.rawRequest<RawIssueResponse, Record<string, unknown>>(
-      ISSUE_QUERY,
-      { id: identifier }
-    )
-    return raw.data?.issue ?? null
-  })
+  const response = await withLinearRead(
+    entry,
+    async () => {
+      const client = getPublicFileUrlClient(entry, signal)
+      const raw = await client.client.rawRequest<RawIssueResponse, Record<string, unknown>>(
+        ISSUE_QUERY,
+        { id: identifier }
+      )
+      return raw.data?.issue ?? null
+    },
+    undefined,
+    signal
+  )
   return response ? { issue: mapIssue(response), workspace: entry.workspace } : null
 }
 
@@ -199,15 +213,16 @@ async function readIssueWorkspaces(
   entries: LinearClientForWorkspace[],
   identifier: string,
   selection: (string & {}) | 'all',
-  initialFailures: WorkspaceReadFailure[] = []
+  initialFailures: WorkspaceReadFailure[] = [],
+  signal?: AbortSignal
 ): Promise<ResolvedIssue[]> {
   if (selection !== 'all') {
-    const selected = await readIssueWorkspace(entries[0], identifier)
+    const selected = await readIssueWorkspace(entries[0], identifier, signal)
     return selected ? [selected] : []
   }
 
   const settled = await Promise.allSettled(
-    entries.map((entry) => readIssueWorkspace(entry, identifier))
+    entries.map((entry) => readIssueWorkspace(entry, identifier, signal))
   )
   const results: ResolvedIssue[] = []
   const failures: LinearAgentAccessError[] = initialFailures.map((failure) => failure.error)

@@ -13,6 +13,7 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   commitChanges,
+  completeMerge,
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
@@ -72,6 +73,7 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
+    completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead) =>
       getDiff(worktreePath, filePath, staged, compareAgainstHead, interactive),

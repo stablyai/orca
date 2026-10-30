@@ -5,7 +5,7 @@ import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ShareUsageCard, type ShareUsageCardProps } from './ShareUsageCard'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 type ShareUsageButtonProps = ShareUsageCardProps
 
@@ -101,7 +101,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
       if (v >= 1_000) {
         return `${(v / 1_000).toFixed(1)}k`
       }
-      return v.toLocaleString()
+      return v.toLocaleString(getIntlLocale())
     }
 
     const lines = [

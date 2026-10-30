@@ -1,3 +1,4 @@
+import { registerStructuredSelectionCatalogStore } from '@/lib/structured-agent-session-selection-controller'
 import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
@@ -59,6 +60,7 @@ import {
   registerHttpLinkGroupActionAvailability,
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
+import { registerAppHttpLinkStateAccessor } from '@/lib/app-http-link-open'
 import { installStoreListenerCensus } from './store-listener-census'
 import { installSettledSortEpoch } from './settled-sort-epoch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
@@ -149,10 +151,15 @@ export const useAppStore = create<AppState>()(
   )
 )
 
+registerStructuredSelectionCatalogStore({
+  read: useAppStore.getState,
+  subscribe: useAppStore.subscribe
+})
 registerHttpLinkStoreAccessor(() => useAppStore.getState(), useAppStore.subscribe)
 registerHttpLinkGroupActionAvailability((request) =>
   canOfferHttpLinkGroupAction(useAppStore.getState(), request)
 )
+registerAppHttpLinkStateAccessor(() => useAppStore.getState())
 attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {

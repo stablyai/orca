@@ -1,19 +1,4 @@
-import {
-  UI_LANGUAGE_CHINESE,
-  UI_LANGUAGE_CHINESE_TRADITIONAL,
-  UI_LANGUAGE_ENGLISH,
-  UI_LANGUAGE_FRENCH,
-  UI_LANGUAGE_GERMAN,
-  UI_LANGUAGE_JAPANESE,
-  UI_LANGUAGE_KOREAN,
-  UI_LANGUAGE_PORTUGUESE,
-  UI_LANGUAGE_RUSSIAN,
-  UI_LANGUAGE_SPANISH,
-  UI_LANGUAGE_SYSTEM,
-  UI_LANGUAGE_TURKISH,
-  isPluginUiLanguage,
-  type UiLanguage
-} from './ui-language'
+import { UI_LANGUAGE_SYSTEM, isPluginUiLanguage, type UiLanguage } from './ui-language'
 
 export const SUPPORTED_UI_LOCALES = [
   'en',
@@ -146,40 +131,11 @@ export function resolveUiLocale(
   if (isPluginUiLanguage(language)) {
     return language
   }
-  if (language === UI_LANGUAGE_ENGLISH) {
-    return DEFAULT_UI_LOCALE
-  }
-  if (language === UI_LANGUAGE_CHINESE) {
-    return 'zh'
-  }
-  if (language === UI_LANGUAGE_CHINESE_TRADITIONAL) {
-    return 'zh-Hant'
-  }
-  if (language === UI_LANGUAGE_KOREAN) {
-    return 'ko'
-  }
-  if (language === UI_LANGUAGE_JAPANESE) {
-    return 'ja'
-  }
-  if (language === UI_LANGUAGE_SPANISH) {
-    return 'es'
-  }
-  if (language === UI_LANGUAGE_FRENCH) {
-    return 'fr'
-  }
-  if (language === UI_LANGUAGE_PORTUGUESE) {
-    return 'pt'
-  }
-  if (language === UI_LANGUAGE_RUSSIAN) {
-    return 'ru'
-  }
-  if (language === UI_LANGUAGE_TURKISH) {
-    return 'tr'
-  }
-  if (language === UI_LANGUAGE_GERMAN) {
-    return 'de'
-  }
-  return normalizeSupportedUiLocale(systemLocale)
+  // Built-in UI language values are their own locale codes; only 'system' needs detection.
+  return (
+    SUPPORTED_UI_LOCALES.find((locale) => locale === language) ??
+    normalizeSupportedUiLocale(systemLocale)
+  )
 }
 
 export function getRendererSystemLocale(): string {

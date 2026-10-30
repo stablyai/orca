@@ -178,6 +178,17 @@ export async function writeLocalTextFileWithDiskPrecondition(
   }))
 }
 
+/** Runs one compare-and-write under the path and inode locks every editor save of the file shares. */
+export function runLocalEditorWrite(
+  filePath: string,
+  compareAndWrite: () => Promise<FileWriteResult>
+): Promise<FileWriteResult> {
+  return runSerializedLocalFileWrite(filePath, compareAndWrite, () => ({
+    ok: false,
+    diskConflict: 'changed'
+  }))
+}
+
 /** Every in-process writer that checks a file before replacing it shares this lock, so no two pass the check together. */
 export async function runSerializedLocalFileWrite<T>(
   filePath: string,

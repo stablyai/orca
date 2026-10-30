@@ -31,8 +31,20 @@ describe('plugin theme settings', () => {
       ]
     })
     expect(
-      normalizePluginThemeSettings({ pluginAppTheme: 'plugin:../x', themeBeforePlugin: 'neon' })
-    ).toEqual({ pluginAppTheme: null, themeBeforePlugin: null })
+      normalizePluginThemeSettings({
+        pluginAppTheme: 'plugin:../x',
+        pluginAppThemeLight: 'plugin:samples.dawn/dawn',
+        pluginAppThemeDark: 42,
+        pluginIconTheme: 'x'.repeat(10_000),
+        themeBeforePlugin: 'neon'
+      })
+    ).toEqual({
+      pluginAppTheme: null,
+      pluginAppThemeLight: 'plugin:samples.dawn/dawn',
+      pluginAppThemeDark: null,
+      pluginIconTheme: null,
+      themeBeforePlugin: null
+    })
     const unrelated: Partial<GlobalSettings> = { editorAutoSave: true }
     expect(normalizePluginThemeSettings(unrelated)).toEqual({})
   })
@@ -44,6 +56,7 @@ describe('plugin theme settings', () => {
           theme: 'dark',
           themeBeforePlugin: 'system',
           pluginAppTheme: 'plugin:samples.dusk/dusk',
+          pluginIconTheme: 'plugin:samples.dusk/icons',
           terminalThemeDark: 'plugin:samples.dusk/dusk',
           terminalThemeLight: 'Builtin Tango Light',
           terminalPluginPalettes: [{ id: 'plugin:samples.dusk/dusk', colors }]
@@ -54,6 +67,7 @@ describe('plugin theme settings', () => {
       pluginAppTheme: null,
       themeBeforePlugin: null,
       theme: 'system',
+      pluginIconTheme: null,
       terminalThemeDark: '',
       terminalPluginPalettes: []
     })
@@ -68,5 +82,20 @@ describe('plugin theme settings', () => {
         'samples.dusk'
       )
     ).toEqual({})
+  })
+
+  it("clears only the removed plugin's light or dark slot", () => {
+    expect(
+      pluginThemeSettingsAfterRemoval(
+        {
+          theme: 'system',
+          pluginAppThemeLight: 'plugin:other.dawn/dawn',
+          pluginAppThemeDark: 'plugin:samples.dusk/dusk',
+          terminalThemeDark: '',
+          terminalThemeLight: ''
+        },
+        'samples.dusk'
+      )
+    ).toEqual({ pluginAppThemeDark: null })
   })
 })

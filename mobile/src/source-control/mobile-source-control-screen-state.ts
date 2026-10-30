@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import {
   ArrowDown,
   ArrowDownUp,
@@ -130,7 +131,7 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
   }
-  return branch || head?.slice(0, 7) || 'No branch'
+  return branch || head?.slice(0, 7) || translate('sourceControl.screenState.noBranch', 'No branch')
 }
 
 export function statusColor(status: MobileGitFileStatus): string {

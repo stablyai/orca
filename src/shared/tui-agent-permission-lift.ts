@@ -1,9 +1,6 @@
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
-import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
 import type { GlobalSettings } from './global-settings-types'
 import {
-  agentPermissionArgs,
-  agentPermissionChoices,
   agentPermissionEnv,
   hasTypedAgentPermission,
   normalizeAgentPermissionOverrides,
@@ -11,7 +8,7 @@ import {
   resolveAgentPermission,
   type AgentPermissionChoice
 } from './tui-agent-permission-choice'
-import { permissionRecipeCut } from './agent-permission-args'
+import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
 import { planAgentCliArgsSuffix, type AgentStartupShell } from './tui-agent-startup-shell'
 export { agentArgsSetPermission } from './agent-permission-args'
 import type { TuiAgent } from './tui-agent'
@@ -20,18 +17,15 @@ import type { TuiAgent } from './tui-agent'
 export function liftAgentPermissionArgs(
   agent: TuiAgent,
   text: string | null | undefined
-): { choice: AgentChatPermissionMode | null; args: string } {
-  const original = text?.trim() ?? ''
-  for (const choice of agentPermissionChoices(agent)) {
-    if (choice === 'own') {
-      continue
-    }
-    const cut = permissionRecipeCut(agent, original, agentPermissionArgs(agent, choice))
-    if (cut) {
-      return { choice, args: cut.args }
-    }
-  }
-  return { choice: null, args: original }
+): { choice: AgentPermissionChoice | null; args: string } {
+  const result = reconcileAgentChoiceArgs({
+    agent,
+    userArgs: text?.trim() ?? '',
+    choices: {},
+    mode: 'load',
+    keys: new Set(['permissionMode'])
+  })
+  return { choice: result.choices.permissionMode ?? null, args: result.userArgs }
 }
 
 /** A recorded launch without Orca's permission flag; recorded text it cannot rebuild stays whole. */

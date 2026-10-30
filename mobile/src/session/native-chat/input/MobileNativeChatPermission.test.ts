@@ -190,7 +190,7 @@ describe('MobileNativeChatPermission', () => {
       const children = Array.isArray(node.props.children)
         ? node.props.children
         : [node.props.children]
-      return children.includes('/repo/PLAN.md')
+      return children.some((child) => typeof child === 'string' && child.includes('/repo/PLAN.md'))
     })
     expect(planFileShown).toBe(true)
     expect(content.findAllByProps({ children: 'raw json that must not be shown' })).toHaveLength(0)

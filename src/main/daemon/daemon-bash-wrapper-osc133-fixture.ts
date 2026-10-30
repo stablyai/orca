@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { writeFileSync } from 'node:fs'
 import { expect } from 'vitest'
 
-export function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
+export function runInteractiveBashRcfile(
+  rcfileContent: string,
+  tempDir: string,
+  inheritedEnv: Record<string, string> = {}
+): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
   writeFileSync(rcfile, rcfileContent)
 
@@ -16,6 +20,7 @@ export function runInteractiveBashRcfile(rcfileContent: string, tempDir: string)
       encoding: 'utf8',
       env: {
         ...process.env,
+        ...inheritedEnv,
         HOME: tempDir,
         ORCA_SHELL_FEATURES: 'ready',
         TERM: process.env.TERM || 'xterm'

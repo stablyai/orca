@@ -128,7 +128,7 @@ describe('registerAppMenu', () => {
 
     expect(buildFromTemplateMock).toHaveBeenCalledTimes(1)
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedForceReloadLabel = `Force Reload\t${isMac ? '⌘⇧R' : 'Ctrl+Shift+R'}`
+    const expectedForceReloadLabel = `Force Reload\t${isMac ? '⌘⇧R' : 'Ctrl+⇧+R'}`
 
     expect(viewSubmenu).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: 'Reload' })])
@@ -254,7 +254,7 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+Shift+J'}`
+    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+⇧+J'}`
     const paletteItem = viewSubmenu.find((item) => item.label === expectedLabel)
 
     expect(paletteItem).toBeDefined()
@@ -461,7 +461,7 @@ describe('registerAppMenu', () => {
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
+    expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+⇧+E'}`)
     expect(fileLabels[0]).toBe('Settings')
     expect(fileLabels).toEqual(expect.arrayContaining(['Settings', 'Exit']))
 

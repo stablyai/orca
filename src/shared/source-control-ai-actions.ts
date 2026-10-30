@@ -1,8 +1,19 @@
+import {
+  normalizeActionArgumentDocument,
+  trimActionArgumentDocument,
+  demoteActionArgumentChoices,
+  type ActionArgumentChoices
+} from './source-control-action-argument-choices'
 import { isCustomAgentId, type CustomAgentId } from './commit-message-agent-spec'
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
-import { isAgentSessionOptions } from './agent-session-record'
-import { agentPermissionChoices, type AgentPermissionChoice } from './tui-agent-permission-choice'
+import type { AgentPermissionChoice } from './tui-agent-permission-choice'
+import {
+  isRecord,
+  normalizeSourceControlActionLaunchPreferences,
+  readActionModelSelection
+} from './source-control-action-model-selection'
+export { normalizeSourceControlActionLaunchPreferences } from './source-control-action-model-selection'
 
 // Keep the variable registry separate for max-lines headroom; no re-export so consumer searches stay complete.
 
@@ -20,8 +31,16 @@ export type SourceControlActionId = SourceControlTextActionId | SourceControlLau
 export type AiActionId = AiTextActionId | SourceControlLaunchActionId
 
 /** The bound agent namespace is independent of the recipe’s default-agent selection. */
+export type ActionChoiceValue = { agentId: TuiAgent; value: string | null }
+export type ActionModelSelection = {
+  base: 'inherit' | 'default'
+  model?: ActionChoiceValue
+  options?: Record<string, ActionChoiceValue>
+}
+
 export type SourceControlActionLaunchPreferences = {
   agentId: TuiAgent
+  modelSelection?: ActionModelSelection
   /** Absent: a chat starts on the agent's remembered selection, a terminal on its arguments. */
   model?: string
   options?: Record<string, string>
@@ -36,10 +55,18 @@ export type SourceControlActionRecipe = {
   agentId?: TuiAgent | CustomAgentId | null
   commandInputTemplate?: string
   agentArgs?: string
+  argumentChoices?: ActionArgumentChoices
   /** Only the bound agent receives these values, on a chat or a terminal. */
   launchPreferences?: SourceControlActionLaunchPreferences
   /** Bound to `agentId` like `launchPreferences`; absent follows the agent's settings route. */
   surface?: SourceControlActionSurface
+  /** Source bindings exist only in the resolved projection, never in writable recipes. */
+  resolvedChoiceSources?: {
+    model?: ActionModelSelection
+    permission?: SourceControlActionLaunchPreferences
+    canonicalAgentId?: TuiAgent
+    literalKeys: readonly string[]
+  }
   /** Resolved only, never saved: the choice is inherited from Global while this repository sets
    *  its own CLI arguments, so on terminals a flag those arguments set wins over the choice. */
   launchPreferencesYieldToAgentArgs?: true
@@ -109,10 +136,6 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<AiActionId,
 
 const ACTION_ID_SET = new Set<string>(AI_ACTION_IDS)
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function isSafeRecordKey(key: string): boolean {
   return key !== '' && key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
 }
@@ -122,7 +145,8 @@ function isAiActionId(value: string): value is AiActionId {
 }
 
 export function normalizeSourceControlActionRecipe(
-  value: unknown
+  value: unknown,
+  launchAction = false
 ): SourceControlActionRecipe | undefined {
   if (!isRecord(value)) {
     return undefined
@@ -148,49 +172,27 @@ export function normalizeSourceControlActionRecipe(
     agentId
   )
   if (launchPreferences) {
-    normalized.launchPreferences = launchPreferences
+    normalized.launchPreferences = launchAction
+      ? canonicalActionLaunchPreferences(launchPreferences)
+      : launchPreferences
   }
   if (value.surface === 'chat' || value.surface === 'terminal') {
     normalized.surface = value.surface
   }
-  return Object.keys(normalized).length > 0 ? normalized : undefined
+  const document = normalizeActionArgumentDocument(normalized, value.argumentChoices, agentId)
+  return Object.keys(document).length > 0 ? document : undefined
 }
 
-export function normalizeSourceControlActionLaunchPreferences(
-  value: unknown,
-  recipeAgent?: unknown
+export function canonicalActionLaunchPreferences(
+  value: SourceControlActionLaunchPreferences | undefined
 ): SourceControlActionLaunchPreferences | undefined {
-  if (!isRecord(value)) {
+  const normalized = normalizeSourceControlActionLaunchPreferences(value)
+  if (!normalized) {
     return undefined
   }
-  const agentId = value.agentId ?? recipeAgent
-  if (!isTuiAgent(agentId)) {
-    return undefined
-  }
-  const model = typeof value.model === 'string' ? value.model.trim() : ''
-  const permissionMode = agentPermissionChoices(agentId).find(
-    (mode) => mode === value.permissionMode
-  )
-  // Options belong to a model; the permission mode has its own field.
-  const options = model
-    ? (value.options ?? (typeof value.effort === 'string' ? { effort: value.effort } : {}))
-    : {}
-  if (
-    !isAgentSessionOptions(options) ||
-    Object.keys(options).some(
-      (key) => !isSafeRecordKey(key) || ['agentId', 'model', 'permissionMode'].includes(key)
-    ) ||
-    (model && !isAgentSessionOptions({ ...options, model })) ||
-    (!model && !permissionMode)
-  ) {
-    return undefined
-  }
-  return {
-    agentId,
-    ...(model ? { model } : {}),
-    ...(Object.keys(options).length ? { options } : {}),
-    ...(permissionMode ? { permissionMode } : {})
-  }
+  const { model: _model, options: _options, ...preferences } = normalized
+  const modelSelection = readActionModelSelection(normalized)
+  return { ...preferences, ...(modelSelection ? { modelSelection } : {}) }
 }
 
 export function normalizeSourceControlAiActionDefaults(
@@ -205,7 +207,16 @@ export function normalizeSourceControlAiActionDefaults(
     if (!isSafeRecordKey(key) || !isAiActionId(key)) {
       continue
     }
-    const defaultValue = normalizeSourceControlActionRecipe(item)
+    const defaultValue = normalizeSourceControlActionRecipe(
+      item,
+      SOURCE_CONTROL_LAUNCH_ACTION_IDS.some((id) => id === key)
+    )
+    if (
+      (defaultValue?.argumentChoices || defaultValue?.launchPreferences?.modelSelection) &&
+      !SOURCE_CONTROL_LAUNCH_ACTION_IDS.some((id) => id === key)
+    ) {
+      throw new Error('Action choices require a launch action')
+    }
     if (defaultValue) {
       normalized[key] = defaultValue
     }
@@ -218,15 +229,16 @@ export function readSourceControlActionDefault(
   actionId: AiActionId
 ): SourceControlActionRecipe {
   const value = defaults?.[actionId]
-  return {
+  return trimActionArgumentDocument({
     ...(value?.agentId !== undefined ? { agentId: value.agentId } : {}),
     ...(typeof value?.commandInputTemplate === 'string'
       ? { commandInputTemplate: value.commandInputTemplate.trim() }
       : {}),
-    ...(typeof value?.agentArgs === 'string' ? { agentArgs: value.agentArgs.trim() } : {}),
+    ...(typeof value?.agentArgs === 'string' ? { agentArgs: value.agentArgs } : {}),
+    ...(value?.argumentChoices ? { argumentChoices: value.argumentChoices } : {}),
     ...(value?.launchPreferences ? { launchPreferences: value.launchPreferences } : {}),
     ...(value?.surface ? { surface: value.surface } : {})
-  }
+  })
 }
 
 export function resolveSourceControlActionCommandTemplate(
@@ -248,7 +260,11 @@ export function setSourceControlActionDefault(
     ...defaults,
     [actionId]: {
       ...defaults?.[actionId],
-      ...value
+      ...value,
+      ...(SOURCE_CONTROL_LAUNCH_ACTION_IDS.some((id) => id === actionId) &&
+      'launchPreferences' in value
+        ? { launchPreferences: canonicalActionLaunchPreferences(value.launchPreferences) }
+        : {})
     }
   }
 }
@@ -259,11 +275,19 @@ export function setSourceControlActionAgentDefault(
   agentId: TuiAgent | CustomAgentId | null
 ): SourceControlAiActionDefaults {
   const current = defaults?.[actionId]
-  if (!current || current.agentId === agentId || (!current.launchPreferences && !current.surface)) {
+  if (
+    !current ||
+    current.agentId === agentId ||
+    (!current.launchPreferences && !current.surface && !current.argumentChoices)
+  ) {
     return setSourceControlActionDefault(defaults, actionId, { agentId })
   }
   // A model, permission mode and chat-or-CLI pick name one agent's choices; none survives a change.
-  const { launchPreferences: _previousAgentModel, surface: _previousSurface, ...rest } = current
+  const {
+    launchPreferences: _previousAgentModel,
+    surface: _previousSurface,
+    ...rest
+  } = demoteActionArgumentChoices(current)
   return { ...defaults, [actionId]: { ...rest, agentId } }
 }
 

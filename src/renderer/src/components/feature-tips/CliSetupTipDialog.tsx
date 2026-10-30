@@ -14,6 +14,7 @@ import { Trans } from 'react-i18next'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
 import { CliSkillSetupPanel } from './CliSkillSetupPanel'
 import { FeatureTipActions } from './FeatureTipActions'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 
 function WorktreePromptTerm({ children }: { children?: ReactNode }): JSX.Element {
   return (
@@ -40,6 +41,7 @@ export function CliSetupTipDialog({
   onPrimaryAction: () => void
   onSkip: () => void
 }): JSX.Element {
+  const copy = getLocalizedFeatureTipCopy(tip)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Why: the CLI tip sits over terminal surfaces, so it needs a local token-mixed surface. */}
@@ -59,10 +61,10 @@ export function CliSetupTipDialog({
                   skillTerminalOpen ? 'max-w-2xl' : 'max-w-[22rem]'
                 }`}
               >
-                {tip.title}
+                {copy.title}
               </DialogTitle>
               <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
-                {tip.description}
+                {copy.description}
               </DialogDescription>
               <div
                 aria-hidden={skillTerminalOpen}

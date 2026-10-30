@@ -47,7 +47,7 @@
     },
     {
       "file": "src/platform/text-input-content-height.web.ts",
-      "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the queued-message edit field grows from one line to four; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
+      "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the chat composer grows with its draft, placeholder, and dictation preview; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
     },
     {
       "file": "src/platform/haptics.web.ts",
@@ -119,7 +119,7 @@
     },
     {
       "file": "src/session/native-chat/composer/MobileNativeChatComposerField.web.tsx",
-      "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll."
+      "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll. It also measures the shown text to grow the textarea, whose default two rows do not grow with content, and caps it to the space above the keyboard."
     },
     {
       "file": "src/session/native-chat/composer/mobile-native-chat-input-styles.web.ts",

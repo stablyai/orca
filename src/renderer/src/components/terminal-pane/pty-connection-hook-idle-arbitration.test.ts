@@ -271,7 +271,10 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('allows an explicit idle title from a different agent than fresh hook status', async () => {
+  it.each([
+    { title: '* Claude cross-agent done', completion: false },
+    { title: '✳ Claude Code', completion: true }
+  ])('requires replacement identity over a fresh hook: $title', async ({ title, completion }) => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
@@ -300,12 +303,22 @@ describe('connectPanePty', () => {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
 
-    idleHandler('* Claude cross-agent done')
+    idleHandler(title)
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+    if (!completion) {
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      expect(deps.setCacheTimerStartedAt).not.toHaveBeenCalledWith(paneKey, expect.any(Number))
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        RESET_TERMINAL_CURSOR_STYLE,
+        expect.any(Function)
+      )
+      return
+    }
 
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
-      terminalTitle: '* Claude cross-agent done',
+      terminalTitle: title,
       ptyId: 'tab-pty',
       paneKey
     })

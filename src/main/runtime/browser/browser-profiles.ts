@@ -1,4 +1,5 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../browser/cookies/browser-google-cookie-clear'
+import { browserCookieImportFailure } from '../../../shared/browser-cookie-import-failure-copy'
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type {
   BrowserDetectProfilesResult,
@@ -262,28 +263,27 @@ export class RuntimeBrowserProfiles {
   }): Promise<BrowserProfileImportFromBrowserResult> {
     const profile = browserSessionRegistry.getProfile(params.profileId)
     if (!profile) {
-      return { ok: false, reason: 'Session profile not found.' }
+      return browserCookieImportFailure('profileNotFound')
     }
     if (
       params.browserProfile &&
       (/[/\\]/.test(params.browserProfile) || params.browserProfile.includes('..'))
     ) {
-      return { ok: false, reason: 'Invalid browser profile name.' }
+      return browserCookieImportFailure('invalidBrowserProfile')
     }
 
     const browsers = detectInstalledBrowsers()
     let browser = browsers.find((candidate) => candidate.family === params.browserFamily)
     if (!browser) {
-      return { ok: false, reason: 'Browser not found on this system.' }
+      return browserCookieImportFailure('browserNotFound')
     }
 
     if (params.browserProfile && params.browserProfile !== browser.selectedProfile) {
       const reselected = selectBrowserProfile(browser, params.browserProfile)
       if (!reselected) {
-        return {
-          ok: false,
-          reason: `No cookies database found for profile "${params.browserProfile}".`
-        }
+        return browserCookieImportFailure('browserProfileDatabaseMissing', {
+          profile: params.browserProfile
+        })
       }
       browser = reselected
     }

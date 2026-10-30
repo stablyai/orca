@@ -14,6 +14,8 @@ import {
 } from '../../../shared/execution-host'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../../git/repo'
 import { getProjectRuntimeReadGitOptions } from '../../project-runtime-git-options'
+import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 
 export function registerBaseRefQueryHandlers(store: Store): void {
   ipcMain.handle(
@@ -33,6 +35,12 @@ export function registerBaseRefQueryHandlers(store: Store): void {
       }
       // Where the project's runtime runs Git; a runtime needing repair reads with host Git.
       const git = getProjectRuntimeReadGitOptions(store, repo)
+      // Opening Settings must not start a stopped distro (E9); the renderer re-asks once it runs.
+      const blocked = await blockedWslDistroForPath(repo.path, git.wslDistro)
+      if (blocked) {
+        broadcastWhenWslDistroRunning(blocked.distro, `base-ref-default:${repo.id}`)
+        return { defaultBaseRef: null, remoteCount: 0, refusedWslDistro: blocked.distro }
+      }
       const [defaultBaseRef, remoteCount] = await Promise.all([
         getBaseRefDefault(repo.path, git),
         getRemoteCount(repo.path, git)

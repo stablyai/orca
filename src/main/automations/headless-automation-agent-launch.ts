@@ -30,7 +30,7 @@ export async function launchHeadlessAutomationAgent(
   runtime: OrcaRuntimeService,
   request: {
     automation: Automation
-    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
+    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
     runs: readonly AutomationRun[]
   }
@@ -103,7 +103,9 @@ export async function launchHeadlessAutomationAgent(
           prompt: startupPrompt ?? '',
           title: run.title,
           suppressStartupUpdatePrompt: true,
-          ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
+          ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+          // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
+          ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
         })
         terminal = launched
         const shown = await runtime.showManagedWorktree(`id:${launched.worktreeId}`)

@@ -130,6 +130,11 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
 vi.mock('../../../shared/openssh-default-shell', () => ({
   readOpenSshDefaultShell: vi.fn(() => '')
 }))
+// Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
+vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
 
 // Exercise real window-lane spawning through provider, telemetry and pane binding.
 describe('window lane: pty:spawn request -> provider', () => {

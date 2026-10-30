@@ -3524,12 +3524,6 @@
   "auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd": {
     "ko": "실행 안 함"
   },
-  "auto.components.sidebar.OrcaYamlTrustDialog.531689199b": {
-    "ko": "항상 신뢰"
-  },
-  "auto.components.sidebar.OrcaYamlTrustDialog.831f2cd9f0": {
-    "ko": "내 컴퓨터에서 실행"
-  },
   "auto.components.sidebar.PendingWorktreeRow.af21e953d1": {
     "ko": "워크트리 만들기 취소"
   },

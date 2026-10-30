@@ -28,7 +28,6 @@ vi.mock('@/store', () => ({
       settingsSearchQuery: fake.query,
       browserDefaultUrl: '',
       browserSessionProfiles: fake.profiles,
-      defaultBrowserSessionProfileIdByHostId: {},
       repos: fake.repos,
       sshTargetLabels: fake.map,
       sshConnectionStates: fake.map,

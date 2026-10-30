@@ -1,3 +1,4 @@
+import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
 import React from 'react'
 import { Info, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
@@ -13,10 +14,7 @@ import {
 } from '@/components/ui/select'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type {
-  SourceControlActionRecipe,
-  SourceControlLaunchActionId
-} from '../../../../shared/source-control-ai-actions'
+import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -28,6 +26,7 @@ import { describeSourceControlActionModel } from '../settings/source-control-act
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 import { translate } from '@/i18n/i18n'
+import { selectedSourceControlActionPreferences } from '../../../../shared/source-control-action-launch-preferences'
 
 /** Expose only delivery errors the user can fix before launch. */
 export type SourceControlAgentActionDeliveryPlanState =
@@ -47,7 +46,7 @@ type SourceControlAgentActionDialogFormProps = {
   agentArgs: string
   /** False when the launch would be structured native chat; the field is then absent, not disabled. */
   agentArgsApply: boolean
-  recipe: SourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   commandTemplate: string
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
@@ -120,6 +119,9 @@ export function SourceControlAgentActionDialogForm({
   const defaultCommandTemplate = savedCommandInputTemplate ?? '{basePrompt}'
   const commandTemplateIncludesBasePrompt = commandTemplate.includes('{basePrompt}')
   const selectedRecipe = recipe
+  const selectedPreferences = selectedAgent
+    ? selectedSourceControlActionPreferences(selectedRecipe, selectedAgent)
+    : undefined
   const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
   // Copy describes only the selected save target, which is the only one start/save writes.
   const selectedLaunchRecipeAlreadySaved = Boolean(
@@ -192,9 +194,9 @@ export function SourceControlAgentActionDialogForm({
               <TriangleAlert className="mt-px size-3 shrink-0" />
               <span>{statusCopy}</span>
             </p>
-          ) : selectedAgent && selectedRecipe.launchPreferences?.agentId === selectedAgent ? (
+          ) : selectedAgent && selectedPreferences ? (
             <p className="text-[11px] text-muted-foreground">
-              {describeSourceControlActionModel(selectedAgent, selectedRecipe.launchPreferences)}
+              {describeSourceControlActionModel(selectedAgent, selectedPreferences)}
             </p>
           ) : null}
         </div>

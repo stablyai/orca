@@ -1,6 +1,5 @@
-import { translate } from '@/i18n/i18n'
 import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
-import { RemoteRuntimeRecoveryCard } from './RemoteRuntimeRecoveryCard'
+import { WslDistroStoppedCard } from './WslDistroStoppedCard'
 
 /**
  * In place of "Reconnecting…" on a pane whose WSL distro stopped: retries never boot it (E9), so
@@ -16,21 +15,15 @@ export function WslHostStoppedCard({
   onStarted: () => void
 }): React.JSX.Element {
   return (
-    <RemoteRuntimeRecoveryCard
-      icon="stopped"
+    <WslDistroStoppedCard
+      distro={distro}
       data={{ 'data-terminal-wsl-host-stopped': environmentId }}
-      title={translate('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
-        distro
-      })}
-      action={{
-        label: translate('components.native-chat.hostOutage.start', 'Start'),
-        onClick: () => {
-          void startWslHostAndReloadProjects(environmentId).then((started) => {
-            if (started) {
-              onStarted()
-            }
-          })
-        }
+      onStart={() => {
+        void startWslHostAndReloadProjects(environmentId).then((started) => {
+          if (started) {
+            onStarted()
+          }
+        })
       }}
     />
   )

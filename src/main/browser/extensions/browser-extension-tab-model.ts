@@ -99,41 +99,70 @@ export function mainWindowTabIds(): number[] {
   return [...browserManager.getWebContentsIdByTabId().values()].filter((id) => liveContents(id))
 }
 
+/** Reuse only within one synchronous tab enumeration. */
+export function createBrowserExtensionTabResolver(
+  mainTabIds?: readonly number[]
+): (tabId: number) => BrowserExtensionTabEntry | null {
+  let tabIndices: Map<number, number> | undefined
+  let tabCount = 0
+  let activeTabId: number | null | undefined
+  return (tabId) => {
+    const contents = liveContents(tabId)
+    if (!contents) {
+      return null
+    }
+    const popout = getPopoutWindowForWebContents(contents)
+    if (popout) {
+      return { contents, windowId: popout.id, windowType: 'popup', index: 0, active: true }
+    }
+    const mainWindow = getBrowserExtensionMainWindow()
+    if (!mainWindow) {
+      return null
+    }
+    if (!tabIndices) {
+      const ids = mainTabIds ?? mainWindowTabIds()
+      tabCount = ids.length
+      tabIndices = new Map()
+      for (const [index, id] of ids.entries()) {
+        if (!tabIndices.has(id)) {
+          tabIndices.set(id, index)
+        }
+      }
+    }
+    const index = tabIndices.get(tabId)
+    // Why the host check: a page's first script runs before the renderer registers its guest.
+    const isMainWindowGuest =
+      contents.getType() === 'webview' && contents.hostWebContents === mainWindow.webContents
+    if (index === undefined && !isMainWindowGuest) {
+      return null
+    }
+    if (activeTabId === undefined) {
+      activeTabId = getActiveBrowserTabId()
+    }
+    return {
+      contents,
+      windowId: mainWindow.id,
+      windowType: 'normal',
+      index: index ?? tabCount,
+      active: tabId === activeTabId
+    }
+  }
+}
+
 export function resolveBrowserExtensionTab(tabId: number): BrowserExtensionTabEntry | null {
-  const contents = liveContents(tabId)
-  if (!contents) {
-    return null
-  }
-  const popout = getPopoutWindowForWebContents(contents)
-  if (popout) {
-    return { contents, windowId: popout.id, windowType: 'popup', index: 0, active: true }
-  }
-  const mainWindow = getBrowserExtensionMainWindow()
-  const tabIds = mainWindowTabIds()
-  const index = tabIds.indexOf(tabId)
-  // Why the host check: a page's first script runs before the renderer registers its guest.
-  const isMainWindowGuest =
-    contents.getType() === 'webview' && contents.hostWebContents === mainWindow?.webContents
-  if (!mainWindow || (index === -1 && !isMainWindowGuest)) {
-    return null
-  }
-  return {
-    contents,
-    windowId: mainWindow.id,
-    windowType: 'normal',
-    index: index === -1 ? tabIds.length : index,
-    active: tabId === getActiveBrowserTabId()
-  }
+  return createBrowserExtensionTabResolver()(tabId)
 }
 
 /** Tabs an extension in this session can address: Orca tabs in the session plus its popouts. */
 export function listBrowserExtensionTabs(sess: Electron.Session): BrowserExtensionTabEntry[] {
+  const mainTabIds = mainWindowTabIds()
+  const resolveTab = createBrowserExtensionTabResolver(mainTabIds)
   const ids = [
-    ...mainWindowTabIds(),
+    ...mainTabIds,
     ...listPopoutWindowsInSession(sess).map((window) => window.webContents.id)
   ]
   return ids.flatMap((id) => {
-    const entry = resolveBrowserExtensionTab(id)
+    const entry = resolveTab(id)
     return entry && entry.contents.session === sess ? [entry] : []
   })
 }

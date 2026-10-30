@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { AcpStructuredOptions, readAcpLiveOptions } from './acp-structured-options'
+import { writeAcpSessionOption } from './acp-session-option-write'
 import { grokModelEfforts } from './acp-dialects/grok-model-catalog'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
@@ -107,38 +108,71 @@ describe('ACP session options', () => {
     }
   )
 
-  it('keeps the session’s picks out of the catalog facts', () => {
-    // OpenCode refuses an effort the selected model lacks, so another model's empty menu stays strict.
-    const options = new AcpStructuredOptions(OPENCODE_ACP_DIALECT)
-    options.adoptSession({ configOptions })
-    const { models, current } = options.read()
-    // Current values supply an effort menu, never a catalog default.
-    expect(models).toEqual([
-      { id: 'model-a', label: 'Model A', isDefault: false, efforts: [] },
-      {
-        id: 'model-b',
-        label: 'Model B',
-        isDefault: false,
-        efforts: [
-          { value: 'low', label: 'Low' },
-          { value: 'high', label: 'High' }
-        ]
+  it.each([OPENCODE_ACP_DIALECT, OMP_ACP_DIALECT])(
+    'keeps native menus and observations separate from applied inputs',
+    async (dialect) => {
+      const options = new AcpStructuredOptions(dialect)
+      options.adoptSession({
+        configOptions,
+        models: { currentModelId: 'legacy', availableModels: [] }
+      })
+      const { models, current } = options.read()
+      // Current values supply an effort menu, never a catalog default.
+      expect(models).toEqual([
+        { id: 'model-a', label: 'Model A', isDefault: false, efforts: [], effortsKnown: false },
+        {
+          id: 'model-b',
+          label: 'Model B',
+          isDefault: false,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ])
+      expect(current).toEqual({ model: 'model-b', effort: 'high', confirmed: ['model', 'effort'] })
+      options.notePick('model')
+      options.adoptModel('')
+      options.adoptConfigOptions(null)
+      options.adoptConfigOptions(undefined)
+      expect(options.reported()).toEqual({ model: 'model-b', effort: 'high' })
+      options.adoptConfigOptions(configOptions)
+      expect([...options.appliedInput]).toEqual([])
+      await writeAcpSessionOption(
+        {
+          setConfigOption: async () => ({ configOptions }),
+          setModel: async () => ({})
+        },
+        options,
+        options.write('model', 'raw/retired')!,
+        {
+          agent: 'test',
+          key: 'model',
+          value: 'raw/retired',
+          timeoutMs: 1000
+        }
+      )
+      expect([...options.appliedInput]).toEqual([['model', 'raw/retired']])
+      const reports = [
+        { model: 'model-a' },
+        { model: 'model-b', effort: 'high' },
+        {},
+        { model: 'model-b', effort: 'high' }
+      ]
+      for (const [index, next] of [
+        [{ ...configOptions[0]!, currentValue: 'model-a' }],
+        configOptions,
+        [],
+        configOptions
+      ].entries()) {
+        options.adoptConfigOptions(next)
+        expect([...options.appliedInput]).toEqual([['model', 'raw/retired']])
+        expect(options.reported()).toEqual(reports[index])
       }
-    ])
-    expect(current).toEqual({ model: 'model-b', effort: 'high', confirmed: ['model', 'effort'] })
-  })
-
-  it('leaves another model’s menu unknown for an agent that clamps unlisted efforts', () => {
-    const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
-    options.adoptSession({ configOptions })
-    expect(options.read().models[0]).toEqual({
-      id: 'model-a',
-      label: 'Model A',
-      isDefault: false,
-      efforts: [],
-      effortsKnown: false
-    })
-  })
+      options.adoptSession({ configOptions })
+      expect([...options.appliedInput]).toEqual([])
+    }
+  )
 
   it('reads each model’s own menu where the agent advertises one', () => {
     const options = new AcpStructuredOptions(GROK_ACP_DIALECT)

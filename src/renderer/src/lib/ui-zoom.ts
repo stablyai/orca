@@ -6,7 +6,7 @@ const isMac = navigator.userAgent.includes('Mac')
 const UI_ZOOM_FACTOR_CSS_VAR = '--ui-zoom-factor'
 
 /** Scale applied to this renderer's CSS pixels, or the persisted level in the web client. */
-function getUIZoomFactor(): number {
+export function getUIZoomFactor(): number {
   return uiZoomFactorFromLevel(window.api?.ui?.getZoomLevel?.() ?? 0)
 }
 

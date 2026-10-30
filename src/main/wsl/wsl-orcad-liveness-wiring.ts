@@ -47,11 +47,14 @@ export function createWslOrcadLivenessSupervisor(options: {
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,
-    readRunning: ({ distro, exitedAt }) =>
-      readSettledConfirmedRunningWslDistros(
-        distro,
+    readRunning: ({ distro, exitedAt, probedAfter }) => {
+      const settled =
         exitedAt === null || exitedAt === undefined ? undefined : exitedAt + EXIT_SETTLE_MS
-      ),
+      return readSettledConfirmedRunningWslDistros(
+        distro,
+        probedAfter === undefined ? settled : Math.max(settled ?? -Infinity, probedAfter)
+      )
+    },
     readIdentity: (distro, orcadPid) => readWslGuestIdentity(transportFor(distro), orcadPid),
     openWatch: (connection) =>
       probeThenWatchWslOrcadBridges(
@@ -71,7 +74,15 @@ export function createWslOrcadLivenessSupervisor(options: {
         await readSettledConfirmedRunningWslDistros(distro),
         wslDistroHolderKey(distro)
       ),
-    ensureHolder: (distro) => options.holder.ensureHeld(distro),
+    // Liveness is background work: the holder may re-spawn only into a distro that runs (E9).
+    ensureHolder: (distro) =>
+      options.holder.ensureHeld(distro, {
+        requireRunning: async () =>
+          confirmsRunning(
+            await readSettledConfirmedRunningWslDistros(distro),
+            wslDistroHolderKey(distro)
+          )
+      }),
     subscribePower: subscribeSystemPowerLifecycle
   })
 }

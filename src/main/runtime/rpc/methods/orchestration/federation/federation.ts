@@ -28,6 +28,7 @@ import { prepareFederatedAttachmentAuthority } from './federation-attachment-aut
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
     name: 'orchestration.federationAttachStart',
+    requires: ['accounts'],
     permission: 'workspace',
     params: FederationAttachStartParams,
     handler: async (params, { runtime, orchestrationMutation }) => {

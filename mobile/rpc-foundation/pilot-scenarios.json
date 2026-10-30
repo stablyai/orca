@@ -14549,7 +14549,8 @@
           "params": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           },
           "reply": {
             "ok": true,
@@ -18476,6 +18477,17 @@
                 "side": "modified"
               }
             ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
             "mobileDiffReview": {
               "completedAt": 1767225600000,
               "files": {
@@ -18532,6 +18544,17 @@
           "complete": "worktree.set#1",
           "params": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -20717,7 +20740,8 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p"
+            "worktree": "id:repo42::/p",
+            "includeLineStats": false
           },
           "reply": {
             "ok": true,

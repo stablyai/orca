@@ -692,7 +692,9 @@ describe('registerWorktreeHandlers', () => {
           launch_source: 'new_workspace_composer',
           request_kind: 'new'
         },
-        surfaceOwner: false
+        surfaceOwner: false,
+        // The window's own create is the user's act (E9).
+        wslUserAct: true
       },
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
@@ -707,7 +709,8 @@ describe('registerWorktreeHandlers', () => {
           ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
         },
         activate: false,
-        surfaceOwner: false
+        surfaceOwner: false,
+        wslUserAct: true
       },
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
@@ -826,15 +829,10 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
     expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
+    // The setup command itself is pinned in the startup-and-setup test above.
     expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
       'id:repo-1::/workspace/improve-dashboard',
-      {
-        title: 'Setup',
-        command: expect.stringContaining('setup-runner.sh'),
-        env: expect.any(Object),
-        activate: false,
-        surfaceOwner: false
-      },
+      expect.objectContaining({ title: 'Setup', activate: false, surfaceOwner: false }),
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
   })

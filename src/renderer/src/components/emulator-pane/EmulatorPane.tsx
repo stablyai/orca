@@ -4,6 +4,7 @@ import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type EmulatorPaneProps = {
   tab?: Tab
@@ -13,6 +14,7 @@ type EmulatorPaneProps = {
 }
 
 export default function EmulatorPane({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
+  useUiLanguageRevision()
   const {
     devices,
     selectedUdid,

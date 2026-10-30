@@ -11,7 +11,7 @@ import { releaseStoredStructuredAgentSessionOwnerAfterExit } from './structured-
 import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session/ownership/agent-session-surface-release-transition'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 
-/** A surviving root after kill remains unverifiable, never exited. */
+/** A writer without exit or delivered-kill evidence remains unverifiable. */
 export type StructuredAgentSessionChildCloseVerdict = 'exited' | 'unverifiable'
 
 export async function joinStructuredAgentSessionChildClose(
@@ -22,10 +22,14 @@ export async function joinStructuredAgentSessionChildClose(
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
   // Capture startup state before provider release loses that evidence.
   const unanswered = child.phase === 'starting'
-  if (!(await closeProviderRoot(context, sessionId, observeClose))) {
+  const closed = await closeProviderRoot(context, sessionId, observeClose)
+  if (!closed) {
     return 'unverifiable'
   }
-  await endClosedStructuredAgentSessionChild(context, sessionId, child, unanswered)
+  if (closed === 'kill-delivered') {
+    observeClose?.({ deathEvidenceKind: closed })
+  }
+  await endClosedStructuredAgentSessionChild(context, sessionId, child, unanswered, closed)
   return 'exited'
 }
 
@@ -33,10 +37,12 @@ async function endClosedStructuredAgentSessionChild(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   child: StructuredAgentSessionProviderChild,
-  unanswered: boolean
+  unanswered: boolean,
+  closed: boolean | 'kill-delivered'
 ): Promise<void> {
   await context.endExitedChild(sessionId, child, {
     expected: true,
+    ...(closed === 'kill-delivered' ? { deathEvidenceKind: closed } : {}),
     reason: 'closed by Orca',
     ...(unanswered ? { startupUnanswered: true } : {})
   })
@@ -64,8 +70,10 @@ export async function joinClosingStructuredAgentSessionChild(
   }
   const unanswered = child.phase === 'starting'
   const closing = closeProviderRoot(context, sessionId)
-  if (await (lock ? lock.wait(closing) : closing)) {
-    const end = () => endClosedStructuredAgentSessionChild(context, sessionId, child, unanswered)
+  const closed = await (lock ? lock.wait(closing) : closing)
+  if (closed) {
+    const end = () =>
+      endClosedStructuredAgentSessionChild(context, sessionId, child, unanswered, closed)
     await (lock
       ? lock.commit(async () => {
           if (context.sessions.get(sessionId)?.child === child) {
@@ -87,7 +95,7 @@ function closeProviderRoot(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   observeClose?: AgentSessionCloseObserver
-): Promise<boolean> {
+): Promise<boolean | 'kill-delivered'> {
   const { adapter, logger } = context.deps
   // Missing close means no owned process; implemented closes must prove exit.
   if (!adapter.disposeSession && !adapter.closeSession) {
@@ -145,6 +153,7 @@ export async function releaseLeaseOfEndedStructuredAgentSessionChild(
     sessionId,
     expectedFence: ended.fence,
     now: context.now(),
+    ...(ended.deathEvidenceKind ? { deathEvidenceKind: ended.deathEvidenceKind } : {}),
     ...(ended.reason ? { exitReason: ended.reason } : {})
   }).catch((error: unknown) =>
     context.deps.logger.warn("releasing an exited agent's lease failed", {

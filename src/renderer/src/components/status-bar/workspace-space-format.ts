@@ -5,13 +5,14 @@ import type {
 } from '../../../../shared/workspace-space-types'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 export { formatBytes } from '../../../../shared/format-bytes'
 
-const fullDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+const FULL_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   dateStyle: 'medium',
   timeStyle: 'short'
-})
+}
 
 export function formatCompactCount(count: number): string {
   if (!Number.isFinite(count) || count <= 0) {
@@ -31,7 +32,7 @@ export function getWorkspaceSpaceScanTimeLabel(scannedAt: number, now = Date.now
 }
 
 export function getWorkspaceSpaceScanDateTimeLabel(scannedAt: number): string {
-  return fullDateTimeFormatter.format(new Date(scannedAt))
+  return uiDateTimeFormat(FULL_DATE_TIME_OPTIONS).format(new Date(scannedAt))
 }
 
 export function getWorkspaceSpaceProgressLabel(
@@ -63,25 +64,16 @@ export function getWorkspaceSpaceProgressLabel(
     )
   }
   if (progress.totalRepoCount > 0) {
-    return progress.totalRepoCount === 1
-      ? translate(
-          'auto.components.status.bar.workspaceSpaceFormat.scanningRepos_one',
-          'Scanning {{scanned}} of {{count}} repo · {{current}}',
-          {
-            scanned: progress.scannedRepoCount,
-            count: progress.totalRepoCount,
-            current
-          }
-        )
-      : translate(
-          'auto.components.status.bar.workspaceSpaceFormat.scanningRepos_other',
-          'Scanning {{scanned}} of {{count}} repos · {{current}}',
-          {
-            scanned: progress.scannedRepoCount,
-            count: progress.totalRepoCount,
-            current
-          }
-        )
+    return translate(
+      'auto.components.status.bar.workspaceSpaceFormat.scanningRepos',
+      'Scanning {{scanned}} of {{count}} repos · {{current}}',
+      {
+        scanned: progress.scannedRepoCount,
+        count: progress.totalRepoCount,
+        current,
+        defaultValue_one: 'Scanning {{scanned}} of {{count}} repo · {{current}}'
+      }
+    )
   }
   return getWorkspaceSpaceScanningFallbackLabel()
 }

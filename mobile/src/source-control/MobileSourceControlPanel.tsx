@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
@@ -50,6 +51,7 @@ export function MobileSourceControlPanel({
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
     () => new Set<SourceControlHubTab>([initialTab])
@@ -155,7 +157,7 @@ export function MobileSourceControlPanel({
   const actionSheetActions = useMobileSourceControlActionSheet(state, review)
   const primaryAction = useMemo(
     () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }),
-    [primaryActionArgs, review]
+    [primaryActionArgs, review, t]
   )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
@@ -205,7 +207,7 @@ export function MobileSourceControlPanel({
         ? countUnresolvedReviewThreads(prController.prSidebarState.data.details?.comments)
         : null
     return buildMobilePrChipSummary(prController.prSidebarState, commentCount)
-  }, [isHostedRepo, prBranch, prController.prSidebarState])
+  }, [isHostedRepo, prBranch, prController.prSidebarState, t])
 
   const onRefresh = useCallback(() => {
     void loadStatus({ preserveReadyOnFailure: true, rereadSettings: true })
@@ -262,12 +264,14 @@ export function MobileSourceControlPanel({
     ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
       <View style={styles.state}>
         <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
+          {screenState.kind === 'unavailable'
+            ? t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')
+            : t('sourceControl.panel.loadFailedTitle', 'Unable to Load')}
         </Text>
         <Text style={styles.stateText}>{screenState.message}</Text>
         {screenState.kind === 'error' && statusRetry ? (
           <Pressable style={styles.retryButton} onPress={statusRetry}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
           </Pressable>
         ) : null}
       </View>

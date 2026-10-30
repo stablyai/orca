@@ -6,7 +6,7 @@ import {
   installPluginFromLocalPath,
   readPluginLockfile,
   removeInstalledPlugin
-} from './plugin-install'
+} from './installation/plugin-install'
 import {
   createUninstallFixture,
   holdNextUninstallRefresh,

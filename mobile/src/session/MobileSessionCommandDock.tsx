@@ -1,17 +1,23 @@
 import { View, TextInput, Pressable } from 'react-native'
 import { hostOs } from '../platform/host-os'
-import { ArrowUp, Keyboard as KeyboardIcon } from 'lucide-react-native'
+import { ArrowUp } from 'lucide-react-native'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
+import { MobileTerminalCommandDictationPreview } from './MobileTerminalCommandDictationPreview'
+import { readMobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+
+// Both fields must remain focusable during the tap that hands the keyboard to the other mode.
+const inactiveFieldStyle = { position: 'absolute', left: 0, right: 0, opacity: 0 } as const
 
 // Markdown, file, browser and chat tabs bring their own input; only terminals get the dock and its keys.
 export function sessionCommandDockShown(controller: MobileSessionController): boolean {
@@ -31,6 +37,7 @@ export function MobileSessionCommandDock({
   keysInRail: boolean
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     insets,
     bufferedTerminalDraftState,
@@ -46,8 +53,11 @@ export function MobileSessionCommandDock({
     canSend,
     canCompose,
     liveInputEnabled,
-    focusLiveInput,
     dictation,
+    commandDictationPreview,
+    liveDictationText,
+    commandFieldAnchorRef,
+    activeHandle,
     cancelDictation,
     handleDictationToggle,
     handleDictationPressIn,
@@ -68,52 +78,33 @@ export function MobileSessionCommandDock({
         {}
         {keysInRail ? null : <MobileSessionAccessoryKeys controller={controller} />}
         {}
-        {liveInputEnabled ? (
-          <View style={[styles.inputBar, styles.liveInputBar]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.liveInputFocusTarget,
-                pressed && styles.liveInputFocusTargetPressed,
-                !canSend && styles.liveInputFocusTargetDisabled
-              ]}
-              disabled={!canSend}
-              onPress={focusLiveInput}
-              accessibilityRole="button"
-              accessibilityLabel="Show keyboard for live terminal input"
-              accessibilityHint="Typed text is sent directly to the active terminal"
-            >
-              <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
-              <MobileTerminalLiveInputStatus
-                dictation={dictation}
-                dictationMode={dictationMode}
-                isAttaching={isAttaching}
-                liveInputText={liveInputCapture}
-              />
-            </Pressable>
-            <MobileTerminalInputActions
-              canSend={canSend}
-              isAttaching={isAttaching}
-              dictation={dictation}
-              dictationMode={dictationMode}
-              dictationEnabled={dictationEnabled}
-              buttonStyle={styles.dictationButton}
-              activeButtonStyle={styles.dictationButtonActive}
-              disabledButtonStyle={styles.sendButtonDisabled}
-              onAttachImage={() => void attachImage('library')}
-              onAttachFile={() => void attachImage('files')}
-              onDictationToggle={handleDictationToggle}
-              onDictationPressIn={handleDictationPressIn}
-              onDictationPressOut={handleDictationPressOut}
-              onDictationCancel={cancelDictation}
-            />
+        <View style={styles.inputBar}>
+          <View
+            style={[styles.liveInputField, !liveInputEnabled && inactiveFieldStyle]}
+            pointerEvents={liveInputEnabled ? 'auto' : 'none'}
+            aria-hidden={!liveInputEnabled}
+            accessibilityElementsHidden={!liveInputEnabled}
+            importantForAccessibility={liveInputEnabled ? 'auto' : 'no-hide-descendants'}
+          >
             <TextInput
               ref={bindLiveInputField}
-              style={styles.liveInputCapture}
+              style={[
+                styles.textInput,
+                styles.liveInputCapture,
+                !canSend && styles.liveInputCaptureDisabled
+              ]}
               value={liveInputCapture}
               onChange={handleLiveInputChange}
               onKeyPress={handleLiveInputKeyPress}
               onSubmitEditing={submitLiveInput}
-              placeholder=""
+              placeholder={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accentBlue}
+              accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
+              accessibilityHint={t(
+                'session.commandDock.liveInputHint',
+                'Typed text is sent directly to the active terminal'
+              )}
               showSoftInputOnFocus
               autoCapitalize="none"
               autoCorrect={false}
@@ -126,10 +117,24 @@ export function MobileSessionCommandDock({
               blurOnSubmit={false}
               editable={canSend}
               importantForAutofill="no"
+              tabIndex={liveInputEnabled ? 0 : -1}
             />
+            {liveInputEnabled ? (
+              <MobileTerminalLiveInputStatus
+                dictation={dictation}
+                dictationMode={dictationMode}
+                heard={liveDictationText}
+                isAttaching={isAttaching}
+              />
+            ) : null}
           </View>
-        ) : (
-          <View style={styles.inputBar}>
+          <View
+            style={[styles.commandField, liveInputEnabled && inactiveFieldStyle]}
+            pointerEvents={liveInputEnabled ? 'none' : 'auto'}
+            aria-hidden={liveInputEnabled}
+            accessibilityElementsHidden={liveInputEnabled}
+            importantForAccessibility={liveInputEnabled ? 'no-hide-descendants' : 'auto'}
+          >
             <TextInput
               ref={bindCommandField}
               // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
@@ -140,11 +145,26 @@ export function MobileSessionCommandDock({
                     : 'cmd-input-ac-off'
                   : 'cmd-input'
               }
-              style={styles.textInput}
+              style={[
+                styles.textInput,
+                styles.commandFieldInput,
+                commandDictationPreview && styles.commandFieldInputHidden
+              ]}
               value={bufferedTerminalDraftState.input}
               // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
               onChangeText={bufferedTerminalDraftState.setInput}
-              placeholder="Type a command…"
+              onSelectionChange={(e) => {
+                commandFieldAnchorRef.current = {
+                  handle: activeHandle,
+                  anchor: readMobileDictationAnchor(e, bufferedTerminalDraftState.input)
+                }
+              }}
+              // The preview stands in for an empty draft, so its placeholder must not show through.
+              placeholder={
+                commandDictationPreview
+                  ? undefined
+                  : t('session.commandDock.commandPlaceholder', 'Type a command…')
+              }
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={autocompleteEnabled}
@@ -157,34 +177,44 @@ export function MobileSessionCommandDock({
               blurOnSubmit={false}
               // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
               editable={canCompose}
+              tabIndex={liveInputEnabled ? -1 : 0}
               onSubmitEditing={() => void handleSend()}
             />
-            <MobileTerminalInputActions
-              canSend={canSend}
-              isAttaching={isAttaching}
-              dictation={dictation}
-              dictationMode={dictationMode}
-              dictationEnabled={dictationEnabled}
-              buttonStyle={styles.dictationButton}
-              activeButtonStyle={styles.dictationButtonActive}
-              disabledButtonStyle={styles.sendButtonDisabled}
-              onAttachImage={() => void attachImage('library')}
-              onAttachFile={() => void attachImage('files')}
-              onDictationToggle={handleDictationToggle}
-              onDictationPressIn={handleDictationPressIn}
-              onDictationPressOut={handleDictationPressOut}
-              onDictationCancel={cancelDictation}
-            />
+            {!liveInputEnabled && commandDictationPreview ? (
+              <MobileTerminalCommandDictationPreview
+                draft={bufferedTerminalDraftState.input}
+                preview={commandDictationPreview}
+              />
+            ) : null}
+          </View>
+          <MobileTerminalInputActions
+            canSend={canSend}
+            isAttaching={isAttaching}
+            dictation={dictation}
+            dictationMode={dictationMode}
+            dictationEnabled={dictationEnabled}
+            meterHalo={liveInputEnabled ? undefined : dictation.meter}
+            buttonStyle={styles.dictationButton}
+            activeButtonStyle={styles.dictationButtonActive}
+            disabledButtonStyle={styles.sendButtonDisabled}
+            onAttachImage={() => void attachImage('library')}
+            onAttachFile={() => void attachImage('files')}
+            onDictationToggle={handleDictationToggle}
+            onDictationPressIn={handleDictationPressIn}
+            onDictationPressOut={handleDictationPressOut}
+            onDictationCancel={cancelDictation}
+          />
+          {liveInputEnabled ? null : (
             <Pressable
               style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
               disabled={!canSend}
               onPress={() => void handleSend()}
-              accessibilityLabel="Send command"
+              accessibilityLabel={t('session.commandDock.sendCommand', 'Send command')}
             >
               <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
             </Pressable>
-          </View>
-        )}
+          )}
+        </View>
       </View>
     )
   )

@@ -60,17 +60,15 @@ export function SourceControlBranchSection({
   // Counts measure current base differences, not historical touches; omit the total label when filters narrow the list.
   const countTitle =
     baseRef && fileCount === totalBranchEntryCount
-      ? fileCount === 1
-        ? translate(
-            'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBase_one',
-            '{{count}} file changed vs {{ref}}',
-            { count: fileCount, ref: formatSourceControlRefLabel(baseRef) }
-          )
-        : translate(
-            'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBase_other',
-            '{{count}} files changed vs {{ref}}',
-            { count: fileCount, ref: formatSourceControlRefLabel(baseRef) }
-          )
+      ? translate(
+          'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBase',
+          '{{count}} files changed vs {{ref}}',
+          {
+            count: fileCount,
+            ref: formatSourceControlRefLabel(baseRef),
+            defaultValue_one: '{{count}} file changed vs {{ref}}'
+          }
+        )
       : undefined
 
   return (

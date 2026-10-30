@@ -1,14 +1,19 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { tearDownRuntime, type InstalledRuntime } from './structured-agent-session-runtime-teardown'
 
 // An exit that settles while teardown drains recovery wakes delivery; a fresh child started then
 // would only be killed by the teardown after it.
 it('stops delivery before it drains the recovery of exits already observed', async () => {
   const order: string[] = []
+  const drained = Promise.withResolvers<void>()
   const installed: InstalledRuntime = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `stopDelivery` and `flushAllStreamedEvents` on the host.
     host: {
       stopDelivery: () => order.push('stop-delivery'),
+      drainStatusWrites: async () => {
+        order.push('drain-status')
+        await drained.promise
+      },
       flushAllStreamedEvents: async () => {
         order.push('flush')
       }
@@ -21,7 +26,18 @@ it('stops delivery before it drains the recovery of exits already observed', asy
     }
   }
 
-  await tearDownRuntime(installed, 'quit')
+  const stopping = tearDownRuntime(installed, 'quit')
+  await vi.waitFor(() => expect(order).toContain('drain-status'))
+  expect(order).not.toContain('close-database')
+  drained.resolve()
+  await stopping
 
-  expect(order.slice(0, 2)).toEqual(['stop-delivery', 'wait-for-recovery'])
+  expect(order).toEqual([
+    'stop-delivery',
+    'wait-for-recovery',
+    'flush',
+    'wait-for-recovery',
+    'drain-status',
+    'close-database'
+  ])
 })

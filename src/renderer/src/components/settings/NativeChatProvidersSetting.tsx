@@ -25,6 +25,7 @@ import {
   antigravityProviderSignInShown
 } from './AntigravityProviderSignInArea'
 import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 // The agents listed here are this computer's, so their downloaded programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
@@ -63,6 +64,7 @@ function ProviderStatus({
           <a
             href={homepageUrl}
             target="_blank"
+            onClick={openAppHttpLinkFromAnchor}
             rel="noopener noreferrer"
             className="text-foreground underline-offset-2 hover:underline"
           >

@@ -19,7 +19,7 @@ function restingJournal() {
   }
 }
 
-it('bounds legacy saved-scope preparation without changing saved Auto', async () => {
+it('keeps one legacy deadline across an optional join and current resting read', async () => {
   vi.useFakeTimers()
   const args = Promise.withResolvers<string[]>()
   const resolving = vi.fn(() => args.promise)
@@ -44,16 +44,19 @@ it('bounds legacy saved-scope preparation without changing saved Auto', async ()
       claude: createClaudeModelCatalogProbe({
         resolveLaunchArgs: resolving,
         resolveInheritedEnv: environment,
-        resolveCommand: () => '/fixture/claude',
+        resolveCommand: () => ({ command: '/fixture/claude', prefixArgs: [] }),
         resolveAuthPolicy: () => ({ account: 'system' })
       })
     }
   })
+  const completion = Promise.withResolvers<void>()
+  const optionsReady = vi.fn(() => completion.promise)
+  let child: { phase: 'ready'; fence: number } | null = { phase: 'ready', fence: 1 }
   const resting = { child: null, params: { provider: 'claude' }, journal: restingJournal() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the full read only uses these context members.
   const context = {
     deps: {
-      adapter: {},
+      adapter: { readOptions: async () => ({ models: [], current: {} }) },
       agents: claudeAndCodexAgents(),
       store: {
         getConversation: () => {
@@ -64,8 +67,9 @@ it('bounds legacy saved-scope preparation without changing saved Auto', async ()
       },
       modelCatalog: catalog
     },
+    deliveryOrder: { optionsReady },
     serialize: (_id: string, task: () => Promise<unknown>) => task(),
-    openConversation: async () => resting,
+    openConversation: async () => ({ ...resting, child }),
     conversation: async () => resting
   } as unknown as StructuredAgentSessionMutationContext
   try {
@@ -73,14 +77,21 @@ it('bounds legacy saved-scope preparation without changing saved Auto', async ()
       readsWithoutModel: false
     })
     await vi.advanceTimersByTimeAsync(0)
+    expect(resolving).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(10_000)
+    child = null
+    completion.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(optionsReady).toHaveBeenCalledExactlyOnceWith(SESSION)
     expect(resolving).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(30_001)
+    await vi.advanceTimersByTimeAsync(20_001)
     await expect(answer).resolves.toMatchObject({ current: { permissionMode: 'auto' } })
     expect(resolving).toHaveBeenCalledOnce()
     args.resolve([])
     await vi.advanceTimersByTimeAsync(0)
     expect(environment).not.toHaveBeenCalled()
   } finally {
+    completion.resolve()
     args.resolve([])
     catalog.stop()
     vi.useRealTimers()

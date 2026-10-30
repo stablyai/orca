@@ -20,22 +20,17 @@ function cautionDescription(summary: SkillInstallRiskSummary): string {
         count: remainingCount
       })
     : names
-  const values = {
-    affectedCount: summary.cautionSkillNames.length,
-    count: summary.selectedSkillCount,
-    affected
-  }
-  return summary.selectedSkillCount === 1
-    ? translate(
-        'auto.components.skills.install.runnableWarningOfSelected_one',
-        '{{affectedCount}} of {{count}} selected skill include scripts or binary files: {{affected}}.',
-        values
-      )
-    : translate(
-        'auto.components.skills.install.runnableWarningOfSelected_other',
-        '{{affectedCount}} of {{count}} selected skills include scripts or binary files: {{affected}}.',
-        values
-      )
+  return translate(
+    'auto.components.skills.install.runnableWarningOfSelected',
+    '{{affectedCount}} of {{count}} selected skills include scripts or binary files: {{affected}}.',
+    {
+      affectedCount: summary.cautionSkillNames.length,
+      count: summary.selectedSkillCount,
+      affected,
+      defaultValue_one:
+        '{{affectedCount}} of {{count}} selected skill include scripts or binary files: {{affected}}.'
+    }
+  )
 }
 
 export function SkillInstallRiskNotice({

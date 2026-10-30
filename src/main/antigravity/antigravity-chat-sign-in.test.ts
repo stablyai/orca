@@ -484,6 +484,7 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
         spec: ANTIGRAVITY_LAUNCH_SPEC,
         resolveLaunch: async () => ({
           ...launch,
+          prefixArgs: [],
           env,
           cwd,
           envToDelete: [...envToDelete],

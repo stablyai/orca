@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   stopServer: vi.fn(async () => ({ stopped: true })),
   verify: vi.fn(),
   ready: vi.fn(() => false),
+  lastSeenRunning: vi.fn((_distro: string) => true),
   managerGet: vi.fn((): unknown => null),
   managerEnsure: vi.fn(),
   managerIsConnecting: vi.fn(() => false)
@@ -24,6 +25,8 @@ vi.mock('./wsl-orcad-connection', async (importOriginal) => ({
 vi.mock('../wsl-background-distro-gate', () => ({
   // Settled per distro: a list taken while it stops still names it (E9).
   readSettledConfirmedRunningWslDistros: mocks.readRunning,
+  wasWslDistroLastSeenRunningSettled: mocks.lastSeenRunning,
+  noteWslDistroMayHaveStopped: vi.fn(),
   listConfirmedRunningWslDistros: vi.fn(async () => [])
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-tunnel-identity', async (importOriginal) => ({
@@ -70,6 +73,24 @@ it('uses owned readiness without discovery and coalesces cold cleanup without wa
   await expect(connector.stopServer('Ubuntu', 'wsl:ubuntu')).resolves.toEqual({ stopped: true })
   expect(mocks.connect).toHaveBeenCalledOnce()
   expect(mocks.stopServer).toHaveBeenCalledOnce()
+})
+
+it('a ready client never stands in for a running read once the distro may have stopped (E9)', async () => {
+  const connector = createWslHostConnector({
+    userDataPath: '/unused',
+    onChange: vi.fn(),
+    hasUserVisibleWork: () => false,
+    isKnownDistro: () => true,
+    runtime: { isReady: mocks.ready, call: vi.fn(), census: vi.fn() }
+  })
+  mocks.ready.mockReturnValue(true)
+  // Its control socket has not closed yet, but the last settled list no longer names it.
+  mocks.lastSeenRunning.mockReturnValueOnce(false).mockReturnValueOnce(false)
+  mocks.readRunning.mockReset().mockResolvedValue({ status: 'confirmed', distros: [] })
+  await expect(connector.reachability('Ubuntu', 'wsl:ubuntu')).resolves.toBe('stopped')
+  await expect(connector.isReachable('Ubuntu', 'wsl:ubuntu')).resolves.toBe(false)
+  expect(mocks.readRunning).toHaveBeenCalledWith('Ubuntu')
+  mocks.ready.mockReturnValue(false)
 })
 
 function joinFixture() {

@@ -9,13 +9,13 @@ import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-opti
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { mapPRState } from '../../mappers'
 import type { MergedPRCommitMembership } from '../../merged-pr-commit-membership'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import {
   normalizePRMergeable,
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 export type PullRequestLookupData = {
   number: number
@@ -162,10 +162,21 @@ export function pullRequestMatchesHeadRepository(
   expectedHeadRepo: OwnerRepo | null
 ): boolean {
   const actualHeadRepo = pullRequestHeadRepository(data, prRepo)
-  return (
-    !actualHeadRepo ||
-    !expectedHeadRepo ||
-    githubRepoIdentityKey(actualHeadRepo) === githubRepoIdentityKey(expectedHeadRepo)
+  if (!actualHeadRepo || !expectedHeadRepo || sameOwnerRepo(actualHeadRepo, expectedHeadRepo)) {
+    return true
+  }
+  // A renamed repository still answers at its old remote URL; its own PRs report the new name.
+  return sameOwnerRepo(expectedHeadRepo, prRepo) && isSameRepositoryPullRequest(data, prRepo)
+}
+
+// Canonical PR URLs name the current base repository even when remote URLs are stale.
+export function isSameRepositoryPullRequest(
+  data: PullRequestLookupData,
+  prRepo: OwnerRepo | null
+): boolean {
+  return sameOwnerRepo(
+    pullRequestHeadRepository(data, prRepo),
+    ownerRepoFromPullRequestUrl(data.url)
   )
 }
 

@@ -5,31 +5,19 @@ import type { WorkspaceDecisionDetails } from './workspace-space-decision-detail
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 
 function formatActiveAgents(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.status.bar.workspaceSpaceDecision.activeAgents_one',
-        '{{count}} active agent',
-        { count: count }
-      )
-    : translate(
-        'auto.components.status.bar.workspaceSpaceDecision.activeAgents_other',
-        '{{count}} active agents',
-        { count: count }
-      )
+  return translate(
+    'auto.components.status.bar.workspaceSpaceDecision.activeAgents',
+    '{{count}} active agents',
+    { count: count, defaultValue_one: '{{count}} active agent' }
+  )
 }
 
 function formatCompletedAgents(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.status.bar.workspaceSpaceDecision.completedAgents_one',
-        '{{count}} completed agent',
-        { count: count }
-      )
-    : translate(
-        'auto.components.status.bar.workspaceSpaceDecision.completedAgents_other',
-        '{{count}} completed agents',
-        { count: count }
-      )
+  return translate(
+    'auto.components.status.bar.workspaceSpaceDecision.completedAgents',
+    '{{count}} completed agents',
+    { count: count, defaultValue_one: '{{count}} completed agent' }
+  )
 }
 
 export function getAgentDecisionLabel(details: WorkspaceDecisionDetails): string {
@@ -48,17 +36,11 @@ export function getAgentDecisionLabel(details: WorkspaceDecisionDetails): string
     return formatActiveAgents(activeAgentCount)
   }
   if (completedAgentCount > 0) {
-    return completedAgentCount === 1
-      ? translate(
-          'auto.components.status.bar.workspaceSpaceDecision.completedAgentsRetained_one',
-          '{{count}} completed agent retained',
-          { count: completedAgentCount }
-        )
-      : translate(
-          'auto.components.status.bar.workspaceSpaceDecision.completedAgentsRetained_other',
-          '{{count}} completed agents retained',
-          { count: completedAgentCount }
-        )
+    return translate(
+      'auto.components.status.bar.workspaceSpaceDecision.completedAgentsRetained',
+      '{{count}} completed agents retained',
+      { count: completedAgentCount, defaultValue_one: '{{count}} completed agent retained' }
+    )
   }
   return translate(
     'auto.components.status.bar.workspaceSpaceDecision.noTrackedAgents',
@@ -74,23 +56,15 @@ export function getTerminalDecisionLabel(details: WorkspaceDecisionDetails): str
       'No terminal tabs'
     )
   }
-  return terminalTabCount === 1
-    ? translate(
-        'auto.components.status.bar.workspaceSpaceDecision.liveTerminalTabs_one',
-        '{{live}} live of {{count}} terminal tab',
-        {
-          live: liveTerminalCount,
-          count: terminalTabCount
-        }
-      )
-    : translate(
-        'auto.components.status.bar.workspaceSpaceDecision.liveTerminalTabs_other',
-        '{{live}} live of {{count}} terminal tabs',
-        {
-          live: liveTerminalCount,
-          count: terminalTabCount
-        }
-      )
+  return translate(
+    'auto.components.status.bar.workspaceSpaceDecision.liveTerminalTabs',
+    '{{live}} live of {{count}} terminal tabs',
+    {
+      live: liveTerminalCount,
+      count: terminalTabCount,
+      defaultValue_one: '{{live}} live of {{count}} terminal tab'
+    }
+  )
 }
 
 export function getGitDecisionLabel(
@@ -117,17 +91,11 @@ export function getGitDecisionLabel(
       'No uncommitted files'
     )
   }
-  return changedFileCount === 1
-    ? translate(
-        'auto.components.status.bar.workspaceSpaceDecision.changedFiles_one',
-        '{{count}} changed file',
-        { count: changedFileCount }
-      )
-    : translate(
-        'auto.components.status.bar.workspaceSpaceDecision.changedFiles_other',
-        '{{count}} changed files',
-        { count: changedFileCount }
-      )
+  return translate(
+    'auto.components.status.bar.workspaceSpaceDecision.changedFiles',
+    '{{count}} changed files',
+    { count: changedFileCount, defaultValue_one: '{{count}} changed file' }
+  )
 }
 
 export function getEditorDecisionLabel(details: WorkspaceDecisionDetails): string {
@@ -139,46 +107,26 @@ export function getEditorDecisionLabel(details: WorkspaceDecisionDetails): strin
     )
   }
   if (dirtyEditorBufferCount === 0) {
-    return openEditorFileCount === 1
-      ? translate(
-          'auto.components.status.bar.workspaceSpaceDecision.editorFilesOpen_one',
-          '{{count}} editor file open',
-          { count: openEditorFileCount }
-        )
-      : translate(
-          'auto.components.status.bar.workspaceSpaceDecision.editorFilesOpen_other',
-          '{{count}} editor files open',
-          { count: openEditorFileCount }
-        )
+    return translate(
+      'auto.components.status.bar.workspaceSpaceDecision.editorFilesOpen',
+      '{{count}} editor files open',
+      { count: openEditorFileCount, defaultValue_one: '{{count}} editor file open' }
+    )
   }
   return translate(
     'auto.components.status.bar.workspaceSpaceDecision.dirtyOfOpen',
     '{{dirty}} of {{open}}',
     {
-      dirty:
-        dirtyEditorBufferCount === 1
-          ? translate(
-              'auto.components.status.bar.workspaceSpaceDecision.dirtyEditorBuffers_one',
-              '{{count}} dirty editor buffer',
-              { count: dirtyEditorBufferCount }
-            )
-          : translate(
-              'auto.components.status.bar.workspaceSpaceDecision.dirtyEditorBuffers_other',
-              '{{count}} dirty editor buffers',
-              { count: dirtyEditorBufferCount }
-            ),
-      open:
-        openEditorFileCount === 1
-          ? translate(
-              'auto.components.status.bar.workspaceSpaceDecision.openFiles_one',
-              '{{count}} open file',
-              { count: openEditorFileCount }
-            )
-          : translate(
-              'auto.components.status.bar.workspaceSpaceDecision.openFiles_other',
-              '{{count}} open files',
-              { count: openEditorFileCount }
-            )
+      dirty: translate(
+        'auto.components.status.bar.workspaceSpaceDecision.dirtyEditorBuffers',
+        '{{count}} dirty editor buffers',
+        { count: dirtyEditorBufferCount, defaultValue_one: '{{count}} dirty editor buffer' }
+      ),
+      open: translate(
+        'auto.components.status.bar.workspaceSpaceDecision.openFiles',
+        '{{count}} open files',
+        { count: openEditorFileCount, defaultValue_one: '{{count}} open file' }
+      )
     }
   )
 }

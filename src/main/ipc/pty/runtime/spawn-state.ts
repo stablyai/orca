@@ -58,6 +58,7 @@ export type RuntimePtySpawnState = {
   effectiveSessionAppId: string | undefined
   ownsNewIncarnation: boolean
   expectedWslDistro: string | null
+  wslHoldReadAnchor: number | undefined
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
@@ -129,6 +130,8 @@ export type RuntimePtySpawnArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string
@@ -204,6 +207,7 @@ export function createRuntimePtySpawnState(
     effectiveSessionAppId: undefined,
     ownsNewIncarnation: false,
     expectedWslDistro: null,
+    wslHoldReadAnchor: undefined,
     resumeAdmission: null,
     codexSelectionTarget: { runtime: 'host' },
     launchCommand: undefined,

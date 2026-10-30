@@ -1,4 +1,5 @@
 import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
@@ -335,7 +336,15 @@ export function createRemoteRuntimePtyTransport(
     })
   }
 
-  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({
+    holdBeforeFirstConnect: true,
+    // A closed pane has nobody left to tell.
+    onTypingDiscardedBeforeBind: () => {
+      if (!destroyed) {
+        opts.onTypingDiscardedBeforeBind?.()
+      }
+    }
+  })
   let isFirstConnect = true
   let heldInputRelease: {
     stream: RemoteRuntimeMultiplexedTerminal
@@ -2943,6 +2952,9 @@ export function createRemoteRuntimePtyTransport(
               ...(meta?.terminalOwner && meta.seq !== undefined
                 ? { terminalOwner: meta.terminalOwner }
                 : {}),
+              ...(meta?.lastTitle !== undefined && meta.seq !== undefined
+                ? { lastTitle: meta.lastTitle }
+                : {}),
               ...(meta?.alternateScreen !== undefined && meta.seq !== undefined
                 ? { alternateScreen: meta.alternateScreen }
                 : {}),
@@ -3509,6 +3521,9 @@ export function createRemoteRuntimePtyTransport(
         ...originOptions,
         ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
         ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
+        ...(REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE && opts.shellOverride
+          ? { shell: opts.shellOverride }
+          : {}),
         ...spawnIntentParams,
         ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),

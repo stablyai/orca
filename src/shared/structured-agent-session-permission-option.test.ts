@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionOptionsResult } from './agent-session-wire'
 import { sortNativeChatSessionOptions } from './native-chat/input/native-chat-session-option-snapshot'
 import {
+  canSetStructuredAgentSessionOption,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionPicks,
@@ -63,6 +64,43 @@ describe('the permission mode picker', () => {
     expect(
       permission({ ...capable, permissionMode: 'full-access', reportedPermissionMode: null })
     ).toMatchObject({ settable: false, kind: { currentValue: undefined } })
+  })
+
+  it('admits supported Own reset through the same descriptor/readiness predicate', () => {
+    const state = { ...live('codex', { permissionMode: 'ask' }), permissionOwnSupported: true }
+    expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'own')).toBe(true)
+    for (const permissionOwnSupported of [false, null]) {
+      const unsupported = { ...state, permissionOwnSupported }
+      expect(canSetStructuredAgentSessionOption(unsupported, 'permissionMode', 'own')).toBe(false)
+      expect(canSetStructuredAgentSessionOption(unsupported, 'permissionMode', 'full-access')).toBe(
+        permissionOwnSupported === false
+      )
+    }
+    expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'invalid')).toBe(false)
+    expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'own', [], true)).toBe(false)
+    expect(
+      canSetStructuredAgentSessionOption(
+        state,
+        'permissionMode',
+        'own',
+        structuredAgentSessionOptionSnapshot(state),
+        false
+      )
+    ).toBe(false)
+    expect(
+      canSetStructuredAgentSessionOption(
+        { ...state, pendingId: 'permissionMode' },
+        'permissionMode',
+        'own'
+      )
+    ).toBe(false)
+    expect(
+      canSetStructuredAgentSessionOption(
+        { ...state, reportedPermissionMode: null },
+        'permissionMode',
+        'own'
+      )
+    ).toBe(false)
   })
 
   it('shows the seeded mode before the agent starts, beside the quiet model pill', () => {

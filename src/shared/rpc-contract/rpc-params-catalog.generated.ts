@@ -42,7 +42,7 @@ import {
   OrcadPeerDesktopsParamsSchema
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
-import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
+import { pluginConsentRequestSchema } from '../plugins/approval/plugin-consent-request'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
@@ -218,13 +218,16 @@ import {
   FileDelete,
   FileMutationOpen,
   FileRename,
+  FileReplaceWithUpload,
   FileWrite,
   FileWriteBase64,
   FileWriteBase64Chunk,
   FileWriteIfUnchanged
 } from './files-mutation-params'
 import {
+  ChatImageRead,
   DocPreviewFileRead,
+  DocPreviewFileReadChunk,
   FileDirRead,
   FileListAll,
   FileOpenDiff,
@@ -319,7 +322,7 @@ import {
   UpdatePrState,
   UpdatePrTitle
 } from './github-pull-request-update-params'
-import { RepoSelector, RepoShow, SlugRepo } from './github-repo-target-params'
+import { RepoIssueCommandRead, RepoSelector, RepoShow, SlugRepo } from './github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
@@ -417,6 +420,7 @@ import {
   WorkspaceSelection
 } from './linear-params'
 import { CreateProject } from './linear-project-create-params'
+import { LinkPreviewGetParams } from './link-preview-params'
 import {
   ManagedRuntimeAgentParams,
   ManagedRuntimeCancelParams
@@ -519,6 +523,7 @@ import {
   ProjectGroupUpdate,
   RepoClone,
   RepoCreate,
+  RepoHooksCheck,
   RepoIssueCommandWrite,
   RepoPath,
   RepoReorder,
@@ -605,6 +610,7 @@ import {
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
+import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
@@ -969,13 +975,16 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.openDiff': FileOpenDiff,
   'files.pathsExist': FilePathsExist,
   'files.read': FileOpen,
+  'files.readChatImage': ChatImageRead,
   'files.readChunk': FileReadChunk,
   'files.readDir': FileDirRead,
   'files.readDocPreview': DocPreviewFileRead,
+  'files.readDocPreviewChunk': DocPreviewFileReadChunk,
   'files.readPreview': FileOpen,
   'files.readTerminalArtifact': TerminalArtifactFile,
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
+  'files.replaceWithUpload': FileReplaceWithUpload,
   'files.resolveTerminalPath': ResolveTerminalPath,
   'files.saveAbort': FileSaveAbort,
   'files.saveBegin': FileSaveBegin,
@@ -1010,6 +1019,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.commit': GitCommit,
   'git.commitCompare': GitCommitCompare,
   'git.commitDiff': GitCommitDiff,
+  'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -1149,6 +1159,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'layout.getRemoteSnapshots': null,
   'layout.reopenHeldPanes': LayoutReopenHeldPanesParams,
   'layout.reportView': LayoutReportViewParams,
+  'layout.startWslHeldPanes': LayoutReopenHeldPanesParams,
   'layout.subscribe': LayoutSubscribeParams,
   'layout.unsubscribe': LayoutUnsubscribeParams,
   'linear.addIssueComment': IssueCommentOfLinearParams,
@@ -1194,6 +1205,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.teamStates': TeamId,
   'linear.testConnection': WorkspaceSelection,
   'linear.updateIssue': IssueUpdateOfLinearParams,
+  'linkPreview.get': LinkPreviewGetParams,
   'managedRuntime.cancel': ManagedRuntimeCancelParams,
   'managedRuntime.install': ManagedRuntimeAgentParams,
   'managedRuntime.remove': ManagedRuntimeAgentParams,
@@ -1314,8 +1326,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
   'repo.hooks': RepoSelector,
-  'repo.hooksCheck': RepoSelector,
-  'repo.issueCommandRead': RepoSelector,
+  'repo.hooksCheck': RepoHooksCheck,
+  'repo.issueCommandRead': RepoIssueCommandRead,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
   'repo.list': null,
   'repo.reorder': RepoReorder,
@@ -1449,7 +1461,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.viewClaudeAgent': TerminalViewClaudeAgent,
   'terminal.wait': TerminalWait,
+  'terminalDaemon.limit': null,
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
+  'terminalDaemon.setLimit': TerminalLimitUpdateParams,
   'terminalDaemon.severedStatus': null,
   'ui.get': null,
   'ui.getJiraQuickFilters': null,

@@ -43,6 +43,8 @@ async function clear() {
     envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
   })
   expect(result).toMatchObject({ ok: true })
+  await rig.host.drainStatusWrites()
+  expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
 }
 
 async function send(text: string, turn: string) {
@@ -239,12 +241,14 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
     db().exec('DROP TRIGGER fail_rewind')
-    await recoverStructuredRewind(
-      rig.host.deps,
-      SESSION,
-      journal(),
-      rig.store.getRecord(SESSION)!.lease.runtimeFence
-    )
+    await rig.host.close(SESSION, 'evict')
+    await rig.host.revealSession(SESSION)
+    await rig.host.drainStatusWrites()
+    expect(rig.host.readStatusSummary(SESSION)).toMatchObject({
+      status: 'idle',
+      latestPrompt: 'kept after clear'
+    })
+    expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
     const recovered = journal().snapshot()
     await recoverStructuredRewind(
       rig.host.deps,

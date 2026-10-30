@@ -100,7 +100,14 @@ export function collectExtractionProblems(references, englishCatalog, keyEvidenc
     }
   }
   const result = compareExtraction(nestCatalog(extracted), englishCatalog)
-  const unreferenced = findUnreferencedKeys(result.orphans, result.extracted, keyEvidence)
+  // A family is live when any form is named: a counted `items_one` call still resolves `items_other`.
+  const familyOf = (key) => PLURAL_SUFFIX_RE.exec(key)?.[1]
+  const liveFamilies = new Set(
+    [...result.extracted.keys(), ...keyEvidence.literals].map(familyOf).filter(Boolean)
+  )
+  const unreferenced = findUnreferencedKeys(result.orphans, result.extracted, keyEvidence).filter(
+    (key) => !liveFamilies.has(familyOf(key))
+  )
   return {
     fallbackDrift: result.fallbackDrift.map(
       (key) =>

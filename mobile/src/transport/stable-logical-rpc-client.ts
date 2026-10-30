@@ -173,6 +173,11 @@ export function createStableLogicalRpcClient(
         activeSession.notifyForeground(reason)
       }
     },
+    probeLivenessNow: () => {
+      if (!suspended) {
+        activeSession.probeLivenessNow?.()
+      }
+    },
     close() {
       if (closed) {
         return

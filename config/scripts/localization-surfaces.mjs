@@ -6,6 +6,8 @@ export const LOCALIZATION_SURFACES = {
     localesDir: path.join('src', 'renderer', 'src', 'i18n', 'locales'),
     sourceRoots: [path.join('src', 'renderer', 'src'), path.join('src', 'main')],
     runtimeRequiredPath: path.join('src', 'renderer', 'src', 'i18n', 'en-runtime-required.json'),
+    // Desktop runtimes load built-in catalogs as-is; plural forms CLDR adds beyond `_other` are committed.
+    fillsPluralForms: true,
     syncCatalogCommand: 'pnpm run sync:localization-catalog',
     syncRuntimeCatalogCommand: 'pnpm run sync:localization-runtime-catalog'
   },

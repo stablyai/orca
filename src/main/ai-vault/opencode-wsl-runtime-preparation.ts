@@ -21,6 +21,7 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
 import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
 import { admitWslTranscriptPath } from '../native-chat/wsl-transcript-running-admission'
+import { AI_VAULT_SCAN_ISSUE_COPY } from '../../shared/ai-vault-scan-issue-copy'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 const preparation = new Map<string, { value: OpenCodeWslRuntime; expires: number }>()
@@ -58,7 +59,7 @@ export async function prepareOpenCodeWslReaders(
         ? previous.value
         : {
             distro,
-            error: 'Preparing the WSL SQLite reader. Refresh Vault after setup finishes.'
+            error: AI_VAULT_SCAN_ISSUE_COPY.openCodeWslReaderPreparing
           }
     }
     preparation.set(key, entry)

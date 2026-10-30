@@ -35,7 +35,11 @@ export function EditorConflictReviewSurface({
   openFiles: OpenFile[]
   worktreeEntries: GitStatusEntry[]
   pendingEditorReveal: PendingEditorReveal | null
-  getConflictNavigation: (file: OpenFile, content: string) => EditorConflictNavigation | undefined
+  getConflictNavigation: (
+    file: OpenFile,
+    content: string,
+    viewStateId: string
+  ) => EditorConflictNavigation | undefined
   handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
@@ -190,9 +194,13 @@ export function EditorConflictReviewSurface({
     const monacoLanguage = selectedLanguage === 'notebook' ? 'json' : selectedLanguage
     const selectedViewStateKey = `${contentFile.filePath}::${viewStateScopeId}:${viewStateKeySuffix}`
     const selectedContent = editBuffers[contentFile.id] ?? fileContent.content
-    // Read-only overviews must not consume reveals intended for the borrowed tab.
+    const editorViewStateId = readOnly
+      ? `${viewStateScopeId}:${viewStateKeySuffix}`
+      : viewStateScopeId
+    // Overview navigation stays in its own mirror; borrowed-tab reveals belong to that tab.
     const reveal =
-      !readOnly && matchesPendingEditorReveal(pendingEditorReveal, contentFile)
+      matchesPendingEditorReveal(pendingEditorReveal, contentFile, editorViewStateId) &&
+      (!readOnly || pendingEditorReveal.viewStateId === editorViewStateId)
         ? pendingEditorReveal
         : null
 
@@ -202,7 +210,11 @@ export function EditorConflictReviewSurface({
           <ConflictBanner
             file={contentFile}
             entry={entry}
-            conflictNavigation={getConflictNavigation(contentFile, selectedContent)}
+            conflictNavigation={getConflictNavigation(
+              contentFile,
+              selectedContent,
+              editorViewStateId
+            )}
           />
         )}
         <div className={autoHeight ? 'shrink-0' : 'min-h-0 flex-1'}>
@@ -211,6 +223,7 @@ export function EditorConflictReviewSurface({
             fileId={contentFile.id}
             filePath={contentFile.filePath}
             viewStateKey={selectedViewStateKey}
+            viewStateId={editorViewStateId}
             relativePath={contentFile.relativePath}
             content={selectedContent}
             language={monacoLanguage}
@@ -300,9 +313,10 @@ export function EditorConflictReviewSurface({
 
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
-  file: Pick<OpenFile, 'id' | 'filePath'>
+  file: Pick<OpenFile, 'id' | 'filePath'>,
+  viewStateId: string
 ): reveal is PendingEditorReveal {
-  if (!reveal) {
+  if (!reveal || (reveal.viewStateId && reveal.viewStateId !== viewStateId)) {
     return false
   }
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath

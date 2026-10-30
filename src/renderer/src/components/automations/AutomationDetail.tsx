@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
-import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 import {
   AutomationRunErrorNotice,
   formatAutomationDateTimeWithRelative
@@ -23,6 +23,7 @@ import { getAutomationHostDetailDisplay } from './automation-host-detail-display
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
+import { automationRunErrorText } from './automation-run-error-copy'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -65,28 +66,17 @@ function formatGrace(minutes: number): string {
     return translate('auto.components.automations.AutomationDetail.noGrace', 'No grace')
   }
   if (minutes < 60) {
-    return minutes === 1
-      ? translate(
-          'auto.components.automations.AutomationDetail.graceMinutes_one',
-          '{{count}} minute',
-          { count: minutes }
-        )
-      : translate(
-          'auto.components.automations.AutomationDetail.graceMinutes_other',
-          '{{count}} minutes',
-          { count: minutes }
-        )
+    return translate(
+      'auto.components.automations.AutomationDetail.graceMinutes',
+      '{{count}} minutes',
+      { count: minutes, defaultValue_one: '{{count}} minute' }
+    )
   }
   const hours = minutes / 60
-  return hours === 1
-    ? translate('auto.components.automations.AutomationDetail.graceHours_one', '{{count}} hour', {
-        count: hours
-      })
-    : translate(
-        'auto.components.automations.AutomationDetail.graceHours_other',
-        '{{count}} hours',
-        { count: hours }
-      )
+  return translate('auto.components.automations.AutomationDetail.graceHours', '{{count}} hours', {
+    count: hours,
+    defaultValue_one: '{{count}} hour'
+  })
 }
 
 function ToolbarIconButton({
@@ -149,17 +139,15 @@ export function AutomationDetail({
   const usageSummary = summarizeAutomationRunUsage(runs)
   const usageCoverage =
     usageSummary.knownRuns > 0
-      ? runs.length === 1
-        ? translate(
-            'auto.components.automations.AutomationDetail.usageCoverageRuns_one',
-            '{{known}}/{{count}} run',
-            { known: usageSummary.knownRuns, count: runs.length }
-          )
-        : translate(
-            'auto.components.automations.AutomationDetail.usageCoverageRuns_other',
-            '{{known}}/{{count}} runs',
-            { known: usageSummary.knownRuns, count: runs.length }
-          )
+      ? translate(
+          'auto.components.automations.AutomationDetail.usageCoverageRuns',
+          '{{known}}/{{count}} runs',
+          {
+            known: usageSummary.knownRuns,
+            count: runs.length,
+            defaultValue_one: '{{known}}/{{count}} run'
+          }
+        )
       : usageSummary.unavailableRuns > 0
         ? translate('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
         : translate('auto.components.automations.AutomationDetail.noRuns', 'No runs')
@@ -179,7 +167,8 @@ export function AutomationDetail({
   })
   const runNowDisabled = runNowAvailability?.canRunNow === false
   const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
-  const latestRunError = latestRun?.status === 'dispatch_failed' ? latestRun.error : null
+  const latestRunError =
+    latestRun?.status === 'dispatch_failed' ? automationRunErrorText(latestRun) : null
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -339,7 +328,7 @@ export function AutomationDetail({
               ? translate(
                   'auto.components.automations.AutomationDetail.precheckEnabled',
                   'Enabled, {{timeout}}',
-                  { timeout: formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds) }
+                  { timeout: formatUiNarrowDuration(automation.precheck.timeoutSeconds, 'second') }
                 )
               : translate('auto.components.automations.AutomationDetail.precheckNone', 'None')
           }

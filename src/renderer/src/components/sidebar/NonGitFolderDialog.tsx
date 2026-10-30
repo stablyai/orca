@@ -34,7 +34,13 @@ async function addSshFolderProject(args: {
   ownerOptions: ReturnType<typeof worktreeRefreshOptions>
 }> {
   if (!args.runtimeEnvironmentId) {
-    throw new Error(`SSH connection "${args.connectionId}" not found or not connected`)
+    throw new Error(
+      translate(
+        'auto.components.sidebar.NonGitFolderDialog.sshConnectionUnavailable',
+        'SSH connection "{{connection}}" not found or not connected',
+        { connection: args.connectionId }
+      )
+    )
   }
   const added = await addRuntimeSshRepo(args.runtimeEnvironmentId, {
     connectionId: args.connectionId,

@@ -240,6 +240,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     id: string,
     opts: { keepHistory?: boolean }
   ): Promise<void> {
+    this.ptyInventory.retire(id, this.ptyInventory.currentIncarnation(id))
     this.activeSessionIds.delete(id)
     this.hostLossSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)

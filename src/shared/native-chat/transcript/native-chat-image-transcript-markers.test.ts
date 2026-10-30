@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../native-chat-types'
-import { imageReferenceToken } from '../../native-chat-image-reference'
+import { imageReferenceToken } from '../native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
+  imageSourcePathFromText,
   promptMarkersToImageReferences,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
@@ -22,6 +23,24 @@ function userText(id: string, text: string): NativeChatMessage {
     source: 'transcript'
   }
 }
+
+describe('imageSourcePathFromText', () => {
+  it.each([
+    ['[Image: source: /tmp/a.png]', '/tmp/a.png'],
+    ['[Image:\nsource:\n\t/tmp/a.png] \n', '/tmp/a.png'],
+    ['[Image: source: /tmp/with ] brackets.png]', '/tmp/with ] brackets.png'],
+    ['[Image: source: ]', ''],
+    ['[Image: source:\n ]', ''],
+    ['[Image: source:\t]', ''],
+    ['[Image: source:]', null],
+    ['[Image: source:\n]', null],
+    ['[Image: source: /tmp/a\nb.png]', null],
+    ['[Image: source: /tmp/a.png\n]', null],
+    ['[Image: source: /tmp/a.png] trailing text', null]
+  ])('preserves marker whitespace and bracket rules for %j', (text, path) => {
+    expect(imageSourcePathFromText(text)).toBe(path)
+  })
+})
 
 describe('normalizeImageTranscriptMessages', () => {
   it('merges the paired [Image: source]/[Image #1] turns into one image-ref turn', () => {
@@ -175,6 +194,31 @@ describe('normalizeImageTranscriptMessages', () => {
       [{ type: 'image-ref', path: '/tmp/a.png' }],
       [{ type: 'image-ref', path: '/tmp/b.png' }]
     ])
+  })
+
+  it.each([10, 100])('reads %i unpaired image source turns once', (count) => {
+    let reads = 0
+    const messages = Array.from({ length: count }, (_, index): NativeChatMessage => ({
+      ...userText(`image-${index}`, ''),
+      blocks: [
+        {
+          type: 'text',
+          get text() {
+            reads += 1
+            return `[Image: source: /tmp/image-${index}.png]`
+          }
+        }
+      ]
+    }))
+    const out = normalizeImageTranscriptMessages(messages)
+
+    expect(reads).toBeLessThanOrEqual(count * 2)
+    expect(out.map((message) => ({ id: message.id, blocks: message.blocks }))).toEqual(
+      messages.map((message, index) => ({
+        id: message.id,
+        blocks: [{ type: 'image-ref', path: `/tmp/image-${index}.png` }]
+      }))
+    )
   })
 
   it('folds a multi-block companion turn into one turn carrying every ref', () => {

@@ -644,7 +644,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(retryId).not.toBe(firstId)
   })
 
-  it('does not commit a structured option change after unknown delivery, as desktop does', async () => {
+  it('keeps unknown intent until a current query, without accepted memory or resend', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -656,20 +656,38 @@ describe('useMobileStructuredAgentSession', () => {
         settable: true
       })
     })
+    let reconcile!: (response: Awaited<ReturnType<typeof defaultSendRequest>>) => void
     sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.setOption') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
+      }
+      if (method === 'agentSession.options') {
+        return new Promise<Awaited<ReturnType<typeof defaultSendRequest>>>((resolve) => {
+          reconcile = resolve
+        })
       }
       return defaultSendRequest(method, params)
     })
     onSendError.mockClear()
 
     await act(async () => {
-      expect(await hook!.setStructuredOption('model', 'gpt-slow')).toBe(false)
+      expect(await hook!.setStructuredOption('model', 'gpt-slow')).toBe(true)
     })
 
     const model = hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')
-    expect(model?.kind).not.toMatchObject({ currentValue: 'gpt-slow' })
+    expect(model?.kind).toMatchObject({ currentValue: 'gpt-slow' })
+    expect(
+      sendRequest.mock.calls.filter(([method]) => method === 'agentSession.setOption')
+    ).toHaveLength(1)
+    expect(
+      sendRequest.mock.calls.filter(
+        ([method]) => method === 'settings.mutateNativeChatSessionOptions'
+      )
+    ).toHaveLength(0)
+    await act(async () => reconcile(await defaultSendRequest('agentSession.options')))
+    expect(hook!.optionSnapshot.find((row) => row.id === 'model')?.kind).toMatchObject({
+      currentValue: 'gpt-fast'
+    })
     expect(onSendError).not.toHaveBeenCalled()
   })
 

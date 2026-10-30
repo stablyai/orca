@@ -59,7 +59,14 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
    * Facts the caller already read on this host. `loginHome` serves only login-home placement;
    * `firstLibcProbeOutput` answers the libc probe's first command, whose fallbacks still run.
    */
-  known: { loginHome?: string; firstLibcProbeOutput?: string } = {}
+  known: {
+    loginHome?: string
+    firstLibcProbeOutput?: string
+    /** Replaces the plain activation record read; WSL reads its connect snapshot here. */
+    readActivationRecord?: (
+      target: OrcadRemoteExecTarget & { remoteHome: string; userDataDir: string }
+    ) => Promise<OrcadActivationRecord>
+  } = {}
 ): Promise<OrcadRemoteContext<Target>> {
   const host = detectedHost ?? (await detectRemoteHostPlatform(connection, { signal }))
   if (!host) {
@@ -107,9 +114,10 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
       signal
     })
   }
-  const activationRecord = await readOrcadActivationRecord({
+  const activationRecord = await (known.readActivationRecord ?? readOrcadActivationRecord)({
     ...remote,
-    remoteHome
+    remoteHome,
+    userDataDir
   })
   return {
     activationRecord,

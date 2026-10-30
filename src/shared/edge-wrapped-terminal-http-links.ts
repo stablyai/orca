@@ -8,6 +8,8 @@ const HTTP_STATUS_ROW_PATTERN = /^HTTP\/\d(?:\.\d)?:\d{3}(?:\s|$)/i
 const VERTICAL_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
 const EMPTY_LABEL_ROW_PATTERN = /^[^\s:][^:]*:$/
 const LABEL_WITH_SPACING_ROW_PATTERN = /^[^\s:][^:]*:\s/
+const NON_BLANK_ROW_PATTERN = /\S/
+const SINGLE_TOKEN_ROW_PATTERN = /^ *\S+\s*$/
 
 function maxEdgeWrappedHttpRows(lineLength: number, padding: number): number {
   // Width-2 cells give at least floor(columns / 2) characters per continued row; add two fragment rows to bound scanning by URL length.
@@ -147,8 +149,21 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
     return translated
   }
   const minY = Math.max(0, currentY - maxRows + 1)
+  let laterRowText: string | undefined
   for (let startY = currentY; startY >= minY; startY--) {
+    // Earlier starts must continue through the later row: frame-free, and one token unless it is the hovered row.
+    if (
+      startY < currentY &&
+      (!laterRowText ||
+        VERTICAL_LAYOUT_FRAME_PATTERN.test(laterRowText) ||
+        !(startY + 1 === currentY ? NON_BLANK_ROW_PATTERN : SINGLE_TOKEN_ROW_PATTERN).test(
+          laterRowText
+        ))
+    ) {
+      break
+    }
     const startText = buffer.getLine(startY)?.translateToString(false)
+    laterRowText = startText
     const schemeIndex = startText ? findHttpSchemeIndex(startText) : -1
     if (!startText || schemeIndex === -1 || VERTICAL_LAYOUT_FRAME_PATTERN.test(startText)) {
       continue

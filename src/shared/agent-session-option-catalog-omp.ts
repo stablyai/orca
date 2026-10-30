@@ -1,4 +1,4 @@
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
 import { parseOmpModelList } from './omp-model-list-probe'
 
@@ -12,12 +12,21 @@ export const OMP_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // OMP models depend on configured provider keys; unknown /model IDs fail. Seed none, discover picker rows, and retain the hook-reported current model.
   models: [],
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('omp', tokens, ['--model']),
+    ...agentChoiceCliApply(
+      'omp',
+      [
+        {
+          kind: 'value',
+          names: ['--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    ),
     // OMP only opens its TUI picker for /model; our extension applies the exact selector.
     midSession: { kind: 'command', build: (value) => `/orca-model ${String(value)}` }
   },
-  // Discovery must retire persisted IDs no longer listed: --model fails launch on them and there is no seed fallback.
+  // Saved model IDs remain launch selections even when discovery no longer lists them.
   discoveredModelsAreAuthoritative: true,
   listModels: { command: 'omp models --json', parse: parseOmpCatalogModels }
 }

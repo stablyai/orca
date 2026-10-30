@@ -104,6 +104,8 @@ export type Repo = {
 export type BaseRefDefaultResult = {
   defaultBaseRef: string | null
   remoteCount: number
+  /** This stopped (or unverifiable) WSL distro refused the read (E9); re-ask once it runs. */
+  refusedWslDistro?: string
 }
 
 export type BaseRefSearchResult = {

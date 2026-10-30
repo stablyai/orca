@@ -28,6 +28,8 @@ export type RpcDispatchStreamingOptions = Pick<
 > & {
   /** What the transport proved the caller may do; absent means this host's owner. */
   callerScope?: RpcCallerScope
+  /** Aborts when the caller's connection closes; only for the dispatcher's own waits, never handlers. */
+  connectionSignal?: AbortSignal
 }
 
 export function rpcContextFromTransport(

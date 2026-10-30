@@ -9,10 +9,10 @@ import type {
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 import type { ClaudeInitProof } from './structured/claude-structured-init-proof'
 import type {
   ClaudeAcquisitionAttempt,
+  ClaudeSession,
   ClaudeAcquireCallbacks
 } from './structured/claude-structured-session-state'
 
@@ -20,15 +20,25 @@ export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
   fallbackIdPrefix: string,
   failure: Parameters<typeof createClaudeJournalFailureHandler>[0],
-  goalBackgroundWork: () => ClaudeGoalBackgroundWork
+  currentSession: () => ClaudeSession | null
 ): ClaudeJournalTranslator | null {
   const { attempt } = failure
   return sink
     ? createClaudeJournalTranslator({
         sink,
         account: () => attempt.account,
+        model: () => {
+          const session = currentSession()
+          return (
+            session?.appliedInputOptions.get('model') ??
+            session?.options.get('model') ??
+            session?.launchIntent?.model ??
+            session?.reportedOptions.model
+          )
+        },
         fallbackIdPrefix,
-        goalBackgroundWork,
+        goalBackgroundWork: () =>
+          currentSession()?.backgroundTasks.goalBackgroundWork ?? 'unverifiable',
         onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey)

@@ -28,11 +28,11 @@ describe('a chat program on a WSL host with only a Windows copy', () => {
     const refresh = vi.fn(async () => {})
     await expect(
       resolveAgainAfterRefreshOnMissingProgram(
-        async () => ({ command: resolveStructuredAgentCommand('claude', {}) }),
+        async () => resolveStructuredAgentCommand('claude', {}),
         refresh,
         { env: () => ({}) }
       )
-    ).resolves.toEqual({ command: '/home/me/bin/claude' })
+    ).resolves.toEqual({ command: '/home/me/bin/claude', prefixArgs: [] })
     expect(refresh).toHaveBeenCalledOnce()
   })
 })

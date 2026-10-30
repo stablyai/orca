@@ -137,6 +137,16 @@ describe('WSL process-group termination', () => {
       expect(runWslProcessMock).not.toHaveBeenCalled()
     })
 
+    it('trusts a stop only from a probe started after the guest proved it ran', async () => {
+      readWslDistroRunningStateMock.mockResolvedValue('stopped')
+      const before = performance.now()
+      const termination = reportedGroup()
+      await termination.force(child)
+      const [distro, options] = readWslDistroRunningStateMock.mock.lastCall ?? []
+      expect(distro).toBe('Ubuntu')
+      expect(options?.startedAfter).toBeGreaterThanOrEqual(before)
+    })
+
     it('kills in a running distro as before', async () => {
       readWslDistroRunningStateMock.mockResolvedValue('running')
       await expect(reportedGroup().signal(child)).resolves.toBe(true)
