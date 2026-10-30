@@ -5,7 +5,7 @@ import {
   isHostModelListingWaitInFlight
 } from '../../../shared/host-model-listing-waits'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentModelCatalogFingerprint,
@@ -694,3 +694,68 @@ it('shares account rows while keeping workspace default provenance separate', as
     service.stop()
   }
 })
+
+it.each(['pi', 'grok'])(
+  '%s applies live publication policy to both inventory and configured defaults',
+  async (agent) => {
+    const saved = agentSessionRecordFixture({
+      ...record('/same-account'),
+      provider: agent,
+      accountHome: {
+        variable: agent === 'pi' ? 'PI_CODING_AGENT_DIR' : 'GROK_HOME',
+        path: '/same-account'
+      }
+    })
+    const store = new AgentModelCatalogStore()
+    const fingerprint = agentModelCatalogFingerprintForRecord(saved)
+    const service = createAgentModelCatalogService({
+      store,
+      getRecord: () => saved,
+      getConversation: () => agentSessionConversationView(saved),
+      drivesRecord: () => true,
+      resolveAccountHome: async () => saved.accountHome,
+      recordWorkspacePath: async () => '/workspace',
+      workspaceMayOverrideDefaultModel: async () => false
+    })
+    onTestFinished(() => service.stop())
+    const defaultWrite = vi.spyOn(store, 'recordConfiguredDefault')
+    const inventoryWrite = vi.spyOn(store, 'recordSuccess')
+    const publish = (id: string) =>
+      service.recordLiveListing(saved.sessionId, {
+        models: listing(id).models,
+        configuredDefault: { modelId: id, effort: 'high' }
+      })
+    publish('first')
+    if (agent === 'pi') {
+      await Promise.resolve()
+      expect(inventoryWrite).not.toHaveBeenCalled()
+      expect(defaultWrite).not.toHaveBeenCalled()
+      expect(store.get(fingerprint)).toBeNull()
+    } else {
+      await vi.waitFor(() => expect(store.get(fingerprint)?.configured?.modelId).toBe('first'))
+    }
+    store.recordSuccess(fingerprint, agent, listing('account'), 'discovery')
+    const good = store.get(fingerprint)
+    publish('late-project')
+    service.recordLiveListing(saved.sessionId, {
+      models: listing('late-project').models,
+      configuredDefault: null
+    })
+    if (agent === 'pi') {
+      await Promise.resolve()
+      expect(store.get(fingerprint)).toBe(good)
+      expect(defaultWrite).not.toHaveBeenCalled()
+      expect(inventoryWrite).toHaveBeenCalledOnce()
+    } else {
+      await vi.waitFor(() => expect(store.get(fingerprint)?.configured).toBeNull())
+      expect(store.get(fingerprint)?.models[0]?.id).toBe('late-project')
+      expect(defaultWrite).toHaveBeenCalledTimes(3)
+    }
+    await store.refresh(fingerprint, agent, async () => {
+      throw new Error('probe failed')
+    })
+    expect(store.hasActiveFailure(fingerprint)).toBe(true)
+    service.providerStarted(saved)
+    await vi.waitFor(() => expect(store.hasActiveFailure(fingerprint)).toBe(false))
+  }
+)

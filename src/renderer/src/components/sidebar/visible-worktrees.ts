@@ -4,7 +4,8 @@ export {
   computeVisibleWorktrees,
   type VisibleWorktreeOptions
 } from './compute-visible-worktrees'
-import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
+import { computeVisibleWorktrees } from './compute-visible-worktrees'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 export { sidebarHasActiveFilters } from './sidebar-filter-actions'
 import {
   getVisibleWorkspaceHostIdSet,
@@ -54,20 +55,17 @@ export function getPublishedVisibleWorktreeShortcutTargets():
   return _publishedVisibleShortcutTargets
 }
 
-export function getVisibleWorktreeIds(): string[] {
-  if (_publishedVisibleIds) {
-    return _publishedVisibleIds
-  }
-
+/** The unmounted list's visible rows in sidebar sort order, ranked per host copy like the mounted list. */
+function computeUnmountedVisibleWorktrees(): Worktree[] {
   const state = useAppStore.getState()
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
   const repoMap = getRepoMapFromState(state)
 
-  let sortedIds: string[]
+  let sortedKeys: string[]
 
   if (state.sortBy === 'smart') {
-    sortedIds = sortWorktreesSmart(
+    sortedKeys = sortWorktreesSmart(
       allWorktrees,
       state.tabsByWorktree,
       repoMap,
@@ -76,33 +74,36 @@ export function getVisibleWorktreeIds(): string[] {
       state.ptyIdsByTabId,
       state.migrationUnsupportedByPtyId,
       state.terminalLayoutsByTabId
-    ).map((w) => w.id)
+    ).map(getWorktreeHostIdentity)
   } else {
     // Non-smart comparators ignore attention; the required argument protects smart-mode callers.
     const sorted = [...allWorktrees].sort(
       buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map())
     )
-    sortedIds = sorted.map((w) => w.id)
+    sortedKeys = sorted.map(getWorktreeHostIdentity)
   }
 
-  const visibleIds = computeVisibleWorktreeIds(
-    selectWorktreesByRepo(state),
-    sortedIds,
-    buildVisibleWorktreeOptionsFromState(state, repoMap)
-  )
-
-  const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
   const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
-  const visibleWorktrees = allWorktrees
-    .filter(
-      (worktree) =>
-        visibleIdRank.has(worktree.id) &&
-        worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
-    )
-    .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
+  return computeVisibleWorktrees(selectWorktreesByRepo(state), sortedKeys, {
+    ...buildVisibleWorktreeOptionsFromState(state, repoMap),
+    sortedByHostIdentity: true
+  }).filter(
+    (worktree) =>
+      !worktree.isArchived &&
+      worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
+  )
+}
+
+export function getVisibleWorktreeIds(): string[] {
+  if (_publishedVisibleIds) {
+    return _publishedVisibleIds
+  }
   // Grouping, pinning and main-worktree hoisting must also govern shortcut numbering.
-  return computeRenderedSidebarWorktreeOrder(state, visibleWorktrees)
+  return computeRenderedSidebarWorktreeOrder(
+    useAppStore.getState(),
+    computeUnmountedVisibleWorktrees()
+  )
 }
 
 export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarget[] {
@@ -110,7 +111,12 @@ export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarg
     return _publishedVisibleShortcutTargets
   }
   const state = useAppStore.getState()
-  const visibleIds = getVisibleWorktreeIds()
+  if (!_publishedVisibleIds) {
+    return toShortcutTargets(
+      computeRenderedSidebarWorktrees(state, computeUnmountedVisibleWorktrees())
+    )
+  }
+  const visibleIds = _publishedVisibleIds
   const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
   const repoMap = getRepoMapFromState(state)
   const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
@@ -123,7 +129,11 @@ export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarg
         worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
     )
     .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
-  return computeRenderedSidebarWorktrees(state, worktrees).map((worktree) => ({
+  return toShortcutTargets(computeRenderedSidebarWorktrees(state, worktrees))
+}
+
+function toShortcutTargets(worktrees: readonly Worktree[]): VisibleWorktreeShortcutTarget[] {
+  return worktrees.map((worktree) => ({
     id: worktree.id,
     ...(worktree.hostId ? { executionHostId: worktree.hostId } : {})
   }))

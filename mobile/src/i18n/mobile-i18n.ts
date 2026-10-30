@@ -1,4 +1,3 @@
-import './plural-rules-polyfill'
 import i18next, { type TOptions } from 'i18next'
 import { resolvePluralFamilyKey } from '../../../src/shared/i18n-plural-family'
 import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'

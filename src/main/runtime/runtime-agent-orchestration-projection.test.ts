@@ -750,6 +750,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
     const before = runtime['agentOrchestrationProjection'].buildByPaneKey()
     expect(before?.[chatRow(SESSION_Y)]?.parentPaneKey).toBe(chatRow(SESSION_X))
     await openAgentSessionRecordStoreOnce({
+      legacySessionTabIds: [],
       stateDirectory: directory,
       hostId: 'local',
       logger: recordingStructuredAgentSessionLogger().logger

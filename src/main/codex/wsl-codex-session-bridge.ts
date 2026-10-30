@@ -3,8 +3,10 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
-import { onRunningWslDistrosStopped } from '../wsl-running-distro-cache'
+import type { onRunningWslDistrosStopped } from '../wsl-running-distro-cache'
+import { onWslDistroGateNote } from '../wsl-background-distro-gate'
 import { isCodexAccountSessionBridgeStopping } from './codex-account-session-bridge'
+import { runCodexAppServerSession } from './codex-app-server-session'
 import {
   createCodexAccountStateDb,
   healPendingCodexAccountThreads
@@ -68,7 +70,13 @@ const defaultWslBridgeDependencies: WslBridgeDependencies = {
   openStateDb: createCodexAccountStateDb,
   healPending: healPendingCodexAccountThreads,
   requireRunning: (distro) => assertWslUncPathRunning('', distro),
-  subscribeStops: onRunningWslDistrosStopped
+  // Gate notes carry running-list stops and explicit ones (a relay or watcher exit) no list saw yet.
+  subscribeStops: (listener) =>
+    onWslDistroGateNote((note) => {
+      if (note.kind === 'stopped') {
+        listener([note.distro], [])
+      }
+    })
 }
 
 const emptySummary: WslCodexSessionBridgeSummary = {
@@ -178,6 +186,14 @@ async function bridgeAndIndexWslCodexSessions(
     try {
       await dependencies.healPending(target.managedCodexHomePath, pendingThreads, {
         buildInvocation,
+        // Each batch spawns a guest codex; the inter-batch delay leaves time for the user to stop it.
+        runSession: async (invocation, body) => {
+          await requireRunning().catch((error: unknown) => {
+            distroStopped = true
+            throw error
+          })
+          return runCodexAppServerSession(invocation, body)
+        },
         shouldStop: () => distroStopped || isCodexAccountSessionBridgeStopping(),
         afterBatch: async (settled) => {
           // Also the check before the next batch: a refused read ends the heal there.

@@ -62,7 +62,9 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
   const attributionChanged =
     existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
   const sortRelevantChange =
-    isSmartSortRelevantAgentChange(existing, entry, updatedAt) || commandCodeNewTurn
+    isSmartSortRelevantAgentChange(existing, entry, updatedAt) ||
+    commandCodeNewTurn ||
+    existing?.firstStateStartedAt !== entry.firstStateStartedAt
   const doneRetentionFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&

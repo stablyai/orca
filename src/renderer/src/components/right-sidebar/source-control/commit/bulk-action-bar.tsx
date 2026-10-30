@@ -27,21 +27,11 @@ export function BulkActionBar({
             <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
           ) : (
             <span className="tabular-nums">
-              {selectedCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.BulkActionBar.selectedCount_one',
-                    '{{count}} selected',
-                    {
-                      count: selectedCount
-                    }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.BulkActionBar.selectedCount_other',
-                    '{{count}} selected',
-                    {
-                      count: selectedCount
-                    }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.BulkActionBar.selectedCount',
+                '{{count}} selected',
+                { count: selectedCount, defaultValue_one: '{{count}} selected' }
+              )}
             </span>
           )}
         </div>

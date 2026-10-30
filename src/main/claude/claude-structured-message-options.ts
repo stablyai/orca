@@ -9,7 +9,7 @@ import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { setClaudeStructuredOption } from './claude-structured-options'
+import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 import {
   isAbortSignalReason,
@@ -35,7 +35,12 @@ export async function applyClaudeMessageOptions(
   }
 
   throwIfSignalAborted(signal)
-  const effort = options.effort
+  // Saved choices stay saved for a CLI that can apply them; this one runs on its own.
+  const takesFlagSettings =
+    (options.effort !== undefined || options.fastMode !== undefined) &&
+    (await claudeTakesFlagSettings(session))
+  throwIfSignalAborted(signal)
+  const effort = takesFlagSettings ? options.effort : undefined
   if (effort && session.appliedInputOptions.get('effort') !== effort) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'effort', value: effort }, timeoutMs),
@@ -44,7 +49,7 @@ export async function applyClaudeMessageOptions(
   }
 
   throwIfSignalAborted(signal)
-  const fastMode = options.fastMode
+  const fastMode = takesFlagSettings ? options.fastMode : undefined
   if (fastMode !== undefined && session.appliedInputOptions.get('fastMode') !== fastMode) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'fastMode', value: fastMode }, timeoutMs),

@@ -1,6 +1,14 @@
+import {
+  agentChoiceSettingsOccurrences,
+  rewriteAgentChoiceSettings,
+  readAgentChoiceSettings
+} from './agent-choice-settings'
 import type { AgentType } from './agent-status-types'
-import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
+import {
+  findCatalogModel,
+  getAgentSessionOptionLaunchCatalog
+} from './agent-session-option-catalog'
+export { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
@@ -9,7 +17,7 @@ import type {
 } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
-import { agentPermissionArgsForLaunch } from './tui-agent-launch-defaults'
+import { agentPermissionArgsForLaunch } from './agent-permission-args'
 import {
   readLaunchPermissionChoice,
   agentPermissionHasTerminalChoice
@@ -24,15 +32,19 @@ export type ResolvedSessionOptionLaunch = {
   appliedValues: Record<string, SessionOptionValue>
 }
 
-function isOverriddenByAgentArgs(apply: CatalogOptionApply, tokens: readonly string[]): boolean {
+function isOverriddenByAgentArgs(
+  agent: AgentType,
+  apply: CatalogOptionApply,
+  tokens: readonly string[]
+): boolean {
+  const settings = apply.cli?.filter((form) => form.kind === 'settings')
+  if (settings?.length) {
+    return settings.some(
+      (form) => agentChoiceSettingsOccurrences(agent, form.names, tokens).length > 0
+    )
+  }
   const kept = apply.removeAgentArgs?.(tokens)
   return kept !== undefined && kept.length < tokens.length
-}
-
-export function getAgentSessionOptionLaunchCatalog(
-  agent: AgentType
-): AgentSessionOptionCatalog | null {
-  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
 }
 
 export function removeOverriddenAgentSessionArgs(
@@ -50,8 +62,15 @@ export function removeOverriddenAgentSessionArgs(
     result = catalog.modelApply.removeAgentArgs?.(result) ?? result
   }
   for (const option of launchOptionsFor(catalog, modelId).options) {
-    if (values[option.id] !== undefined && option.apply.removeAgentArgs) {
-      result = option.apply.removeAgentArgs(result)
+    const value = values[option.id]
+    if (value !== undefined && option.apply.removeAgentArgs) {
+      const settings = option.apply.cli?.find((form) => form.kind === 'settings')
+      const decoded = decodeCatalogOptionValue(option.kind, value)
+      result = settings
+        ? decoded === undefined
+          ? result
+          : rewriteAgentChoiceSettings(agent, settings.names, result, settings.key, decoded)
+        : option.apply.removeAgentArgs(result)
     }
   }
   return result
@@ -63,7 +82,19 @@ function launchOptionsFor(
   modelId: string | null
 ): { model: CatalogModel | null; options: CatalogOption[] } {
   const model = (modelId ? findCatalogModel(catalog, modelId) : null) ?? null
-  return { model, options: model?.options ?? catalog.unknownModelOptions ?? [] }
+  const options = model?.options ?? catalog.unknownModelOptions ?? []
+  return {
+    model,
+    options: [
+      ...options,
+      ...(catalog.unknownModelOptions ?? []).filter(
+        (option) =>
+          option.kind.type === 'select' &&
+          option.kind.choices.length === 0 &&
+          !options.some((existing) => existing.id === option.id)
+      )
+    ]
+  }
 }
 
 export function resolveAgentSessionOptionLaunch(
@@ -77,7 +108,8 @@ export function resolveAgentSessionOptionLaunch(
     agent,
     values,
     trailingAgentArgs,
-    includeCatalogDefaults
+    includeCatalogDefaults,
+    permissionTrailingArgs
   )
   const permission = readLaunchPermissionChoice(values)
   if (!permission || !isTuiAgent(agent) || !agentPermissionHasTerminalChoice(agent, permission)) {
@@ -101,7 +133,8 @@ function resolveModelOptionLaunch(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[],
-  includeCatalogDefaults: boolean
+  includeCatalogDefaults: boolean,
+  originalArgs: readonly string[]
 ): ResolvedSessionOptionLaunch {
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   const modelId = typeof values?.model === 'string' ? values.model : null
@@ -114,7 +147,7 @@ function resolveModelOptionLaunch(
   const args: string[] = []
   const modelValues = launchModelValues(model, modelOptions, values, includeCatalogDefaults)
   const modelOverridden =
-    modelId !== null && isOverriddenByAgentArgs(catalog.modelApply, trailingAgentArgs)
+    modelId !== null && isOverriddenByAgentArgs(agent, catalog.modelApply, trailingAgentArgs)
   const appliesModel = Boolean(modelId && catalog.modelApply.launchArgs && !modelOverridden)
 
   // Why: a repeated model flag can prevent the CLI from starting.
@@ -140,11 +173,18 @@ function resolveModelOptionLaunch(
     if (
       !option.apply.launchArgs ||
       modelOverridden ||
-      isOverriddenByAgentArgs(option.apply, trailingAgentArgs)
+      isOverriddenByAgentArgs(agent, option.apply, trailingAgentArgs)
     ) {
       continue
     }
-    args.push(...option.apply.launchArgs(value))
+    const settings = option.apply.cli?.find((form) => form.kind === 'settings')
+    const effective =
+      settings && agentChoiceSettingsOccurrences(agent, settings.names, originalArgs).at(-1)
+    if (effective && !readAgentChoiceSettings(effective.value)) {
+      continue
+    }
+    const compiled = option.apply.launchArgs(value, originalArgs)
+    args.push(...compiled)
     appliedValues[option.id] = value
   }
   return { args, appliedValues }
@@ -167,13 +207,19 @@ function launchModelValues(
         if (
           !model &&
           option.kind.type === 'select' &&
+          option.kind.choices.length > 0 &&
           !option.kind.choices.some((choice) => choice.value === explicitValue)
         ) {
           return []
         }
         return [[option.id, explicitValue]]
       }
-      return model && includeCatalogDefaults ? [[option.id, option.kind.defaultValue]] : []
+      const launchDefault =
+        !option.apply.cli?.some((form) => form.kind === 'settings') &&
+        !(option.kind.type === 'select' && option.kind.choices.length === 0)
+      return model && includeCatalogDefaults && launchDefault
+        ? [[option.id, option.kind.defaultValue]]
+        : []
     })
   )
 }

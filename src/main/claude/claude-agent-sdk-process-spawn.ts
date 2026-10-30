@@ -32,16 +32,21 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
 // POSIX supervisors stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] }
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
     spawn: (options) => {
+      const args = [...options.args]
+      // The SDK runs script programs through a runtime, keeping the script at argv[0].
+      const script = launch && /\.(?:js|mjs|ts|tsx|jsx)$/.test(launch.pathToClaudeCodeExecutable)
+      args.splice(script ? 1 : 0, 0, ...(launch?.prefixArgs ?? []))
       // SDK abort would kill the child outside Orca's ladder, losing observed exit proof.
       managed = spawnManagedProviderProcess(
         {
           command: options.command,
-          args: [...options.args],
+          args,
           ...(options.cwd === undefined ? {} : { cwd: options.cwd })
         },
         {

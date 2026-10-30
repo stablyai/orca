@@ -230,7 +230,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)}`
     )
   }
-  return manifest
+  return { ...manifest, catalogBytes: first.catalogBytes }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
@@ -239,7 +239,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest))}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
+        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
+        `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )
   } catch (error) {

@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { formatDiffComments } from '../../../src/shared/diff-comments-format'
+import { translate } from '../i18n/mobile-i18n'
 import { useClipboardWriter } from '../platform/clipboard'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import type { SendRequestOptions } from '../transport/unvalidated-rpc-request-port'
@@ -95,7 +96,9 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       try {
         await enqueueReviewNotesRequest(sync, async () => {
           if (!client || connState !== 'connected') {
-            throw new Error('Waiting for desktop...')
+            throw new Error(
+              translate('session.useDiffComments.waitingForDesktop', 'Waiting for desktop...')
+            )
           }
           // Why: send the host's list plus only this change; an older host stores the list whole.
           const base = sync.host
@@ -111,7 +114,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
           )
           const saved = interpretOrThrowRefusalMessage(
             () => sessionWorktreeNotesWrite.interpret(response),
-            'Failed to save review notes'
+            translate('session.useDiffComments.saveNotesFailed', 'Failed to save review notes')
           )
           sync.pending = sync.pending.filter((pending) => pending !== save)
           sync.host =
@@ -162,11 +165,16 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       try {
         await saveDiffComments(result.comments)
         triggerSuccess()
-        showToast('Note added')
+        showToast(translate('session.useDiffComments.noteAdded', 'Note added'))
         return true
       } catch (err) {
         triggerError()
-        showToast(err instanceof Error ? err.message : 'Failed to save note', 1600)
+        showToast(
+          err instanceof Error
+            ? err.message
+            : translate('session.useDiffComments.saveNoteFailed', 'Failed to save note'),
+          1600
+        )
         return false
       } finally {
         setDiffCommentBusy(false)
@@ -191,7 +199,12 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
         triggerSelection()
       } catch (err) {
         triggerError()
-        showToast(err instanceof Error ? err.message : 'Failed to delete note', 1600)
+        showToast(
+          err instanceof Error
+            ? err.message
+            : translate('session.useDiffComments.deleteNoteFailed', 'Failed to delete note'),
+          1600
+        )
       } finally {
         setDiffCommentBusy(false)
       }
@@ -207,10 +220,10 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
     try {
       await clipboard.writeText(formatDiffComments(comments))
       triggerSuccess()
-      showToast('Notes copied')
+      showToast(translate('session.useDiffComments.notesCopied', 'Notes copied'))
     } catch {
       triggerError()
-      showToast("Couldn't copy notes", 1600)
+      showToast(translate('session.useDiffComments.copyNotesFailed', "Couldn't copy notes"), 1600)
     }
   }, [clipboard, showToast])
 

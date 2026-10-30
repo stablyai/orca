@@ -79,7 +79,9 @@ export function UiLanguageSettingsSection() {
               }}
             >
               {/* Development-only layout check; never shipped. */}
-              <Text style={styles.rowLabel}>Pseudo (en-XA)</Text>
+              <Text style={styles.rowLabel}>
+                {t('settings.uiLanguageSettingsSection.pseudoLanguage', 'Pseudo (en-XA)')}
+              </Text>
               {pseudo && <Check size={18} color={colors.textPrimary} />}
             </Pressable>
           </View>

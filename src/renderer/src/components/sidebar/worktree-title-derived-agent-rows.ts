@@ -26,6 +26,7 @@ import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import {
   resolveTitleDerivedAgentType,
   resolveTitleDerivedPaneAgent,
+  TITLE_AGENT_LABEL_TO_TYPE,
   type TitleDerivedPaneForeground
 } from './title-derived-pane-agent-identity'
 import { translate } from '@/i18n/i18n'
@@ -179,7 +180,12 @@ function buildTitleDerivedAgentRow(args: {
   }
   // Why: the title sets activity only; a plain title on a process-identified pane is idle.
   const status = titleStatus ?? 'idle'
-  const rowLabel = agentType === titleAgentType && label ? label : formatAgentTypeLabel(agentType)
+  const rowLabel =
+    agentType === titleAgentType &&
+    label &&
+    (agentType === 'unknown' || TITLE_AGENT_LABEL_TO_TYPE[label] === agentType)
+      ? label
+      : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission'

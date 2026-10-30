@@ -8,6 +8,7 @@ import {
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { FeatureTipActions } from './FeatureTipActions'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import {
   FeatureTipDialogFrame,
   FeatureTipEyebrow,
@@ -21,8 +22,10 @@ function stageCopy(
   stage: SessionSearchTipStage
 ): { title: string; description: string; cta: string } {
   switch (stage) {
-    case 'offer':
-      return { title: tip.title, description: tip.description, cta: tip.ctaLabel }
+    case 'offer': {
+      const offer = getLocalizedFeatureTipCopy(tip)
+      return { title: offer.title, description: offer.description, cta: offer.ctaLabel }
+    }
     case 'indexing':
       return {
         title: translate('featureTips.sessionSearch.indexingTitle', 'Indexing your agent sessions'),
@@ -113,7 +116,7 @@ export function SessionSearchTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          <FeatureTipEyebrow label={tip.eyebrow} />
+          <FeatureTipEyebrow label={getLocalizedFeatureTipCopy(tip).eyebrow} />
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {copy.title}
           </DialogTitle>

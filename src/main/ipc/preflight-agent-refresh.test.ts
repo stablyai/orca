@@ -12,6 +12,7 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
+  findCommandsOnLocalPathMock,
   isCommandOnLocalPathMock,
   listLocalCommandPathsMock,
   mergePersistedWindowsPathAsyncMock,
@@ -26,6 +27,7 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
+  findCommandsOnLocalPathMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
   listLocalCommandPathsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
@@ -33,6 +35,12 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
+}))
+
 // WSL detection uses runWslProcess, so child_process mocks cannot observe it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
@@ -66,6 +74,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 // Route filesystem PATH resolution through the existing command-lookup mock.
 vi.mock('./command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
+  findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
@@ -109,6 +118,7 @@ describe('preflight', () => {
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
+        findCommandsOnLocalPathMock,
         isCommandOnLocalPathMock,
         listLocalCommandPathsMock,
         mergePersistedWindowsPathAsyncMock,

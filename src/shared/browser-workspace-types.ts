@@ -1,3 +1,4 @@
+import type { BrowserCookieImportFailure } from './browser-cookie-import-failure-copy'
 import type { GoogleCookieClearLocalReceipt } from './browser-google-cookie-clear'
 import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
 export type BrowserHistoryEntry = {
@@ -194,4 +195,4 @@ export type BrowserCookieImportResult =
       summary: BrowserCookieImportSummary
       googleCookieClearTarget?: GoogleCookieClearLocalReceipt
     }
-  | { ok: false; reason: string }
+  | BrowserCookieImportFailure

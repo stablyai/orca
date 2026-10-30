@@ -54,6 +54,7 @@ async function bridgedHost(
     transport,
     {
       environmentId: ENV,
+      distro: 'Ubuntu',
       remotePort,
       localPort: 0,
       label: 'Ubuntu',

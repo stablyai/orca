@@ -7,17 +7,11 @@ import { translate } from '@/i18n/i18n'
 function formatTimeout(timeoutMs: number): string {
   if (timeoutMs >= 1000 && timeoutMs % 1000 === 0) {
     const count = timeoutMs / 1000
-    return count === 1
-      ? translate(
-          'auto.components.repo.NestedRepoScanLimitNotice.seconds_one',
-          '{{count}} second',
-          { count }
-        )
-      : translate(
-          'auto.components.repo.NestedRepoScanLimitNotice.seconds_other',
-          '{{count}} seconds',
-          { count }
-        )
+    return translate(
+      'auto.components.repo.NestedRepoScanLimitNotice.seconds',
+      '{{count}} seconds',
+      { count, defaultValue_one: '{{count}} second' }
+    )
   }
   return translate('auto.components.repo.NestedRepoScanLimitNotice.milliseconds', '{{count}} ms', {
     count: timeoutMs
@@ -25,31 +19,19 @@ function formatTimeout(timeoutMs: number): string {
 }
 
 function folderLevelsLabel(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.repo.NestedRepoScanLimitNotice.folderLevels_one',
-        '{{count}} folder level',
-        { count }
-      )
-    : translate(
-        'auto.components.repo.NestedRepoScanLimitNotice.folderLevels_other',
-        '{{count}} folder levels',
-        { count }
-      )
+  return translate(
+    'auto.components.repo.NestedRepoScanLimitNotice.folderLevels',
+    '{{count}} folder levels',
+    { count, defaultValue_one: '{{count}} folder level' }
+  )
 }
 
 function repositoriesLabel(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.repo.NestedRepoScanLimitNotice.repositories_one',
-        '{{count}} repository',
-        { count }
-      )
-    : translate(
-        'auto.components.repo.NestedRepoScanLimitNotice.repositories_other',
-        '{{count}} repositories',
-        { count }
-      )
+  return translate(
+    'auto.components.repo.NestedRepoScanLimitNotice.repositories',
+    '{{count}} repositories',
+    { count, defaultValue_one: '{{count}} repository' }
+  )
 }
 
 export function nestedRepoScanLimitText(scan: NestedRepoScanResult): string {

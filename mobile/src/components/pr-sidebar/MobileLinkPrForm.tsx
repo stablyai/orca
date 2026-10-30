@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -10,7 +10,8 @@ import {
   parseGitHubIssueOrPRNumber
 } from '../../../../src/shared/github/links'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { TextField } from '../composer-input/TextField'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
   client: RpcClient | null
@@ -31,6 +32,7 @@ function parsePrReference(input: string): number | null {
 // Use inline View inside sidebar ScrollView; nested BottomDrawer overlay clips, matching compose-form constraint.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,24 +62,29 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   return (
     <View>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>Link existing pull request</Text>
+        <Text style={styles.heading}>
+          {t('pullRequest.linkPrForm.title', 'Link existing pull request')}
+        </Text>
         <Pressable
           onPress={onCancel}
           disabled={submitting}
           accessibilityRole="button"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t('common.cancel', 'Cancel')}
           hitSlop={8}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
       </View>
-      <Text style={styles.label}>PR number or GitHub URL</Text>
-      <TextInput
-        style={styles.input}
+      <Text style={styles.label}>
+        {t('pullRequest.linkPrForm.referenceLabel', 'PR number or GitHub URL')}
+      </Text>
+      <TextField
         value={input}
         onChangeText={setInput}
-        placeholder="#123 or https://github.com/owner/repo/pull/123"
-        placeholderTextColor={colors.textMuted}
+        placeholder={t(
+          'pullRequest.linkPrForm.referencePlaceholder',
+          '#123 or https://github.com/owner/repo/pull/123'
+        )}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!submitting}
@@ -95,7 +102,11 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
         {submitting ? (
           <ActivityIndicator size="small" color={colors.bgBase} />
         ) : (
-          <Text style={styles.submitText}>{parsed ? `Link #${parsed}` : 'Link pull request'}</Text>
+          <Text style={styles.submitText}>
+            {parsed
+              ? t('pullRequest.linkPrForm.linkNumber', 'Link #{{number}}', { number: parsed })
+              : t('pullRequest.linkPrForm.linkButton', 'Link pull request')}
+          </Text>
         )}
       </Pressable>
     </View>
@@ -124,14 +135,6 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     marginTop: spacing.sm,
     marginBottom: spacing.xs
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE
   },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md },
   submit: {

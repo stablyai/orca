@@ -1,6 +1,7 @@
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import type {
   HeadlessSeedMetadata,
+  ProviderTerminalBufferWait,
   RuntimeHeadlessTerminal
 } from '../../runtime-terminal-state-records'
 import type { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
@@ -59,6 +60,11 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     opts?: { scrollbackRows?: number },
     wait?: { timeoutMs?: number; retireOnTimeout?: boolean }
   ): Promise<PtyProviderBufferSnapshot | null>
+  protected abstract awaitProviderTerminalBuffer(
+    ptyId: string,
+    opts?: { scrollbackRows?: number },
+    wait?: { timeoutMs?: number; retireOnTimeout?: boolean }
+  ): Promise<ProviderTerminalBufferWait>
   abstract resolveLeafForHandle(handle: string): { ptyId: string | null } | null
   abstract clearHeadlessTerminalBuffer(ptyId: string): Promise<void>
   abstract resetHeadlessTerminalInputModes(ptyId: string): Promise<void>

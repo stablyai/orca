@@ -33,6 +33,9 @@ vi.mock('./orcad-profile-preflight', () => ({
   forgetBundledOrcadStartupQualification: () => {
     order.push('forget-qualification')
   },
+  discardBundledOrcadStartupQualification: async () => {
+    order.push('discard-qualification')
+  },
   confirmBundledOrcadStartupQualified: async () => {
     order.push('qualified')
   },
@@ -126,6 +129,16 @@ describe('orcad entry', () => {
     await vi.waitFor(() => expect(order).toContain('qualified'))
 
     expect(order).toEqual(['profile-admission', 'preflight-qualified', 'main', 'qualified'])
+  })
+
+  it('discards the slot qualification when node-pty later fails to load in this process', async () => {
+    await import('./main')
+    await vi.waitFor(() => expect(order).toContain('qualified'))
+    const { reportNodePtyLoadFailure } = await import('../providers/node-pty-load-failure')
+
+    reportNodePtyLoadFailure(new Error('pty.node failed to load'))
+
+    await vi.waitFor(() => expect(order).toContain('discard-qualification'))
   })
 
   it('drops the qualification when the node-pty probe does not pass cleanly', async () => {

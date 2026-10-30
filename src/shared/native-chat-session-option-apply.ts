@@ -22,6 +22,7 @@ import type {
   NativeChatSessionOptionDispatchCommand,
   NativeChatSessionOptionDispatchResult
 } from './native-chat-session-option-dispatch'
+import { SessionOptionApplyError } from './native-chat-session-option-apply-failure'
 import {
   resolveEffectiveNativeChatModelId,
   type NativeChatSessionOptionMode
@@ -134,7 +135,7 @@ async function dispatchLiveCommand(
     record
   })
   if (!command) {
-    throw new Error('This option can only be set when the session starts.')
+    throw new SessionOptionApplyError('startOnly')
   }
   const detectAgentInteraction =
     args.apply.midSession?.kind === 'command'
@@ -159,12 +160,12 @@ function applyDispatchOutcome(
   dispatchResult: NativeChatSessionOptionDispatchResult | void
 ): SessionOptionSetResult | null {
   if (dispatchResult?.outcome === 'rejected') {
-    throw new Error('Claude kept the current model.')
+    throw new SessionOptionApplyError('modelRejected')
   }
   if (dispatchResult?.outcome === 'unknown') {
     ctx.clearModelTruth()
     ctx.publish()
-    throw new Error('Could not verify the model change; open the terminal to check.')
+    throw new SessionOptionApplyError('modelUnverified')
   }
   return null
 }
@@ -176,11 +177,11 @@ async function applySetOption(
 ): Promise<SessionOptionSetResult> {
   const resolved = currentApply(ctx, id)
   if (!resolved) {
-    throw new Error(`Unknown session option: ${id}`)
+    throw new SessionOptionApplyError('unknownOption', id)
   }
   const { apply, modelId: previousModelId } = resolved
   if (ctx.mode === 'live' && apply.midSession?.kind === 'agent-picker') {
-    throw new Error('This option must be changed in the agent picker.')
+    throw new SessionOptionApplyError('agentPickerOnly')
   }
 
   const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
@@ -189,7 +190,7 @@ async function applySetOption(
     : undefined
   if (liveFlipOnly && !trackedToggle) {
     // An unknown baseline cannot honor an absolute flip target.
-    throw new Error('Current value is unknown; use the Toggle action instead.')
+    throw new SessionOptionApplyError('toggleBaselineUnknown')
   }
   // Retrying an already reached flip target would invert it.
   if (liveFlipOnly && trackedToggle?.value === value) {
@@ -214,7 +215,7 @@ async function applySetOption(
       modelId: previousModelId
     })
   } else if (!apply.launchArgs && !apply.composedIntoModel) {
-    throw new Error('This option is only available after the session starts.')
+    throw new SessionOptionApplyError('afterStartOnly')
   }
 
   const early = applyDispatchOutcome(ctx, dispatchResult)
@@ -264,23 +265,23 @@ async function applyInvokeAction(
 ): Promise<SessionOptionSetResult> {
   const resolved = currentApply(ctx, id)
   if (!resolved) {
-    throw new Error(`Unknown session option: ${id}`)
+    throw new SessionOptionApplyError('unknownOption', id)
   }
   const { apply, modelId } = resolved
   if (apply.midSession?.kind === 'agent-picker') {
     if (ctx.mode !== 'live') {
-      throw new Error('This option is only available after the session starts.')
+      throw new SessionOptionApplyError('afterStartOnly')
     }
     return handleAgentPicker(ctx, apply.midSession)
   }
   if (!isFlipOnlyMidSession(apply.midSession)) {
-    throw new Error('This option requires a value.')
+    throw new SessionOptionApplyError('valueRequired')
   }
   if (ctx.mode !== 'live') {
-    throw new Error('This option is only available after the session starts.')
+    throw new SessionOptionApplyError('afterStartOnly')
   }
   if (getTrackedOption(ctx.getRecord(), modelId, id)) {
-    throw new Error('This option has a known value; choose On or Off instead.')
+    throw new SessionOptionApplyError('toggleValueKnown')
   }
   // Inverting an unknown baseline still leaves an unknown absolute value.
   await ctx.dispatchCommand(apply.midSession.command)

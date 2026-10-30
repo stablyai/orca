@@ -24,7 +24,8 @@ const gitConflictOperationSchema = z.enum(GIT_CONFLICT_OPERATION)
 const gitSubmoduleStatusSchema = z.looseObject({
   commitChanged: z.boolean(),
   trackedChanges: z.boolean().catch(false),
-  untrackedChanges: z.boolean().catch(false)
+  untrackedChanges: z.boolean().catch(false),
+  restoreRecurses: z.boolean().optional().catch(undefined)
 })
 
 // Unknown area withholds stage/unstage/commit, but retain the row for unresolved-conflict gating.

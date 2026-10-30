@@ -24,22 +24,15 @@ type SearchResultsPaneProps = {
 }
 
 function formatSearchResultSummary(matchCount: number, fileCount: number): string {
-  const results =
-    matchCount === 1
-      ? translate('auto.components.right.sidebar.Search.resultCount_one', '{{count}} result', {
-          count: matchCount
-        })
-      : translate('auto.components.right.sidebar.Search.resultCount_other', '{{count}} results', {
-          count: matchCount
-        })
-  const files =
-    fileCount === 1
-      ? translate('auto.components.right.sidebar.Search.fileCount_one', '{{count}} file', {
-          count: fileCount
-        })
-      : translate('auto.components.right.sidebar.Search.fileCount_other', '{{count}} files', {
-          count: fileCount
-        })
+  const results = translate(
+    'auto.components.right.sidebar.Search.resultCount',
+    '{{count}} results',
+    { count: matchCount, defaultValue_one: '{{count}} result' }
+  )
+  const files = translate('auto.components.right.sidebar.Search.fileCount', '{{count}} files', {
+    count: fileCount,
+    defaultValue_one: '{{count}} file'
+  })
   return translate(
     'auto.components.right.sidebar.Search.resultsInFiles',
     '{{results}} in {{files}}',

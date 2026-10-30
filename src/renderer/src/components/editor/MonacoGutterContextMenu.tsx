@@ -13,6 +13,8 @@ import { getConnectionId } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-client'
 import { formatPathLineReference } from './line-copy-path'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { translate } from '@/i18n/i18n'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { getRemoteUrlLineRange } from './selection-copy'
@@ -52,7 +54,14 @@ export function MonacoGutterContextMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent sideOffset={0} align="start">
         <DropdownMenuItem
-          onSelect={() => window.api.ui.writeClipboardText(formatPathLineReference(filePath, line))}
+          onSelect={() => {
+            const state = useAppStore.getState()
+            const file = state.openFiles.find((openFile) => openFile.id === fileId)
+            const owner = file ? getOpenFileRevealOwner(state, file) : 'unresolved'
+            void window.api.ui.writeClipboardText(
+              formatPathLineReference(formatClipboardFilePath(filePath, owner), line)
+            )
+          }}
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" />
           {translate(

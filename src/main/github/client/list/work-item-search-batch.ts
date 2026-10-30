@@ -20,20 +20,25 @@ const envelopeSchema = z.object({
     .optional()
 })
 type Envelope = z.infer<typeof envelopeSchema>
+export type WorkItemSearchType = 'ISSUE' | 'ISSUE_ADVANCED'
 type SearchRequest = {
   search: string
+  searchType?: WorkItemSearchType
   first: number
   after?: string
   selection: string
+  countSearch?: string
   options: GitHubRepoExecOptions
   environment?: NodeJS.ProcessEnv
   noCache?: boolean
+  cacheResults?: boolean
 }
 type PendingSearch = {
   request: SearchRequest
   environment: NodeJS.ProcessEnv
   resolve: (value: unknown) => void
   reject: (error: unknown) => void
+  countReaders?: PendingSearch[]
 }
 
 export const WORK_ITEM_SEARCH_CACHE_MS = 120_000
@@ -49,18 +54,58 @@ const responses = new BoundedMap<string, { at: number; value: unknown }>({
   sizeOf: (value, key) => Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(value))
 })
 
-export function requestWorkItemSearch<T>(request: SearchRequest): Promise<SearchResponse<T>> {
-  const environment = { ...(request.environment ?? request.options.env ?? process.env) }
-  const scope = workItemSearchScope(request.options, environment)
-  const key = JSON.stringify([
+function responseKey(
+  scope: string,
+  request: Pick<SearchRequest, 'search' | 'searchType' | 'first' | 'after' | 'selection'>
+): string {
+  return JSON.stringify([
     scope,
+    request.searchType ?? 'ISSUE',
     request.search,
     request.first,
     request.after,
     request.selection
   ])
-  const cached = request.noCache ? undefined : responses.get(key)
+}
+
+function countFromResponse(value: unknown): { issueCount: number } | undefined {
+  if (value && typeof value === 'object' && 'issueCount' in value) {
+    const count = value.issueCount
+    if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) {
+      return { issueCount: count }
+    }
+  }
+  return undefined
+}
+
+function rememberCount(
+  scope: string,
+  request: SearchRequest,
+  response: SearchResponse<unknown>
+): void {
+  const count = countFromResponse(response.value)
+  if (!request.countSearch || !count) {
+    return
+  }
+  const key = responseKey(scope, {
+    search: request.countSearch,
+    searchType: request.searchType,
+    first: 1,
+    selection: 'issueCount'
+  })
+  const previous = responses.get(key)
+  if (!previous || previous.at <= response.at) {
+    responses.set(key, { at: response.at, value: count })
+  }
+}
+
+export function requestWorkItemSearch<T>(request: SearchRequest): Promise<SearchResponse<T>> {
+  const environment = { ...(request.environment ?? request.options.env ?? process.env) }
+  const scope = workItemSearchScope(request.options, environment)
+  const key = responseKey(scope, request)
+  const cached = request.noCache || request.cacheResults === false ? undefined : responses.get(key)
   if (cached && Date.now() - cached.at < WORK_ITEM_SEARCH_CACHE_MS) {
+    rememberCount(scope, request, cached)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The cache key includes the complete selection; callers validate its response shape.
     return Promise.resolve(cached as SearchResponse<T>)
   }
@@ -78,7 +123,10 @@ export function requestWorkItemSearch<T>(request: SearchRequest): Promise<Search
     })
     const response = { at: Date.now(), value }
     if (!request.noCache && ownsKey()) {
-      responses.set(key, response)
+      if (request.cacheResults !== false) {
+        responses.set(key, response)
+      }
+      rememberCount(scope, request, response)
     }
     return response
   }) as Promise<SearchResponse<T>>
@@ -90,9 +138,31 @@ function flushSearches(key: string): void {
   if (!queue) {
     return
   }
+  const countSources = new Map<string, PendingSearch>()
+  for (const entry of queue) {
+    if (entry.request.countSearch) {
+      countSources.set(
+        JSON.stringify([entry.request.searchType ?? 'ISSUE', entry.request.countSearch]),
+        entry
+      )
+    }
+  }
+  const independent = queue.filter((entry) => {
+    const source =
+      entry.request.selection === 'issueCount' && entry.request.first === 1 && !entry.request.after
+        ? countSources.get(
+            JSON.stringify([entry.request.searchType ?? 'ISSUE', entry.request.search])
+          )
+        : undefined
+    if (source) {
+      ;(source.countReaders ??= []).push(entry)
+      return false
+    }
+    return true
+  })
   let batch: PendingSearch[] = []
   let characters = 0
-  for (const entry of queue) {
+  for (const entry of independent) {
     const size = searchSelection(entry.request, batch.length).length
     if (batch.length && (batch.length === MAX_BATCH || characters + size > MAX_BATCH_QUERY_CHARS)) {
       void executeSearches(batch)
@@ -109,7 +179,7 @@ function flushSearches(key: string): void {
 
 function searchSelection(request: SearchRequest, index: number): string {
   const after = request.after ? `, after: ${JSON.stringify(request.after)}` : ''
-  return `r${index}: search(type: ISSUE, query: ${JSON.stringify(request.search)}, first: ${request.first}${after}) { ${request.selection} }`
+  return `r${index}: search(type: ${request.searchType ?? 'ISSUE'}, query: ${JSON.stringify(request.search)}, first: ${request.first}${after}) { ${request.selection} }`
 }
 
 async function executeSearches(batch: PendingSearch[]): Promise<void> {
@@ -160,6 +230,17 @@ async function executeSearches(batch: PendingSearch[]): Promise<void> {
         (error) => !error.path?.length || error.path[0] === alias
       )
       const value = envelope.data?.[alias]
+      const count = countFromResponse(value)
+      for (const reader of entry.countReaders ?? []) {
+        if (
+          count &&
+          !errors?.some(({ path }) => !path || path.length < 2 || path[1] === 'issueCount')
+        ) {
+          reader.resolve(count)
+        } else {
+          reader.reject(new Error('GitHub search response missing count'))
+        }
+      }
       if (errors?.length || value === undefined || value === null) {
         entry.reject(
           new Error(
@@ -174,6 +255,9 @@ async function executeSearches(batch: PendingSearch[]): Promise<void> {
   } catch (error) {
     for (const entry of batch) {
       entry.reject(error)
+      for (const reader of entry.countReaders ?? []) {
+        reader.reject(error)
+      }
     }
   }
 }

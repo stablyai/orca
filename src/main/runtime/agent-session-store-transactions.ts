@@ -94,7 +94,8 @@ export class AgentSessionStoreTransactions {
   constructor(
     private readonly journalDatabase: JournalHostDatabase,
     loaded: AgentSessionStoreState,
-    hostId: string
+    hostId: string,
+    readonly legacySessionTabIds: readonly string[]
   ) {
     freezeRows(loaded, null)
     this.published = {

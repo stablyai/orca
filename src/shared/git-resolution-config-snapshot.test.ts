@@ -8,7 +8,7 @@ import { resolveConfiguredGitPushTarget } from './git-push-target-resolution'
 function createRunner(config = new Map<string, string>(), snapshotFails = false) {
   return vi.fn(async (args: string[]) => {
     if (args[0] === 'symbolic-ref') {
-      return { stdout: 'feature\n' }
+      return { stdout: 'refs/heads/feature\n' }
     }
     if (args[0] === 'config' && args[1] === '--list') {
       if (snapshotFails) {
@@ -100,7 +100,7 @@ describe('resolution config snapshots', () => {
   it('skips config reads when the configured upstream resolves directly', async () => {
     const runGit = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse') {
         return { stdout: 'origin/feature\n' }

@@ -1,9 +1,11 @@
 import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
+import { translate } from '../i18n/mobile-i18n'
 import {
   dictationSessionCancel,
   dictationSessionStart
 } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
+import { rpcPayloadMember } from '../transport/rpc-reader-payload'
 import type { RpcClient } from '../transport/rpc-client'
 
 type StartMobileDictationDesktopSessionOptions = {
@@ -15,7 +17,7 @@ type StartMobileDictationDesktopSessionOptions = {
   getActiveId: () => string | null
   clearActiveId: (dictationId: string) => void
   setIdle: () => void
-  commitRecordingStart: () => boolean
+  commitRecordingStart: (hostDedupesResends: boolean) => boolean
   rollbackRecordingStart: () => void
 }
 
@@ -60,6 +62,7 @@ export async function startMobileDictationDesktopSession(
   options: StartMobileDictationDesktopSessionOptions
 ): Promise<boolean> {
   const { client, dictationId } = options
+  let hostDedupesResends = false
 
   try {
     // The mic is already open, so a start stalled by a drop must give up rather than hold it.
@@ -68,7 +71,9 @@ export async function startMobileDictationDesktopSession(
       { dictationId },
       { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS }
     )
-    dictationSessionStart.interpret(reply)
+    const started = dictationSessionStart.interpret(reply)
+    hostDedupesResends =
+      started != null && rpcPayloadMember(started, 'dedupesResentChunks') === true
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
     // Capture already holds the screen; roll both back only while this start is current. A stale start could otherwise stop its replacement’s microphone. Capture itself has no start identity.
@@ -99,8 +104,13 @@ export async function startMobileDictationDesktopSession(
 
   try {
     // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
-    if (!options.commitRecordingStart()) {
-      throw new Error('Failed to start microphone recording')
+    if (!options.commitRecordingStart(hostDedupesResends)) {
+      throw new Error(
+        translate(
+          'hooks.dictationDesktopStart.recordingFailed',
+          'Failed to start microphone recording'
+        )
+      )
     }
   } catch (err) {
     const wasCurrent = isCurrentStart(options)

@@ -9,8 +9,7 @@ The Orca mobile companion is an iOS/Android app that pairs with your desktop Orc
 
 <Callout title="Beta">
   The mobile companion is in beta. Install iOS from the [App
-  Store](https://apps.apple.com/us/app/orca-ide/id6766130217), join the [TestFlight preview
-  channel](https://testflight.apple.com/join/YjeGMQBA), or install Android from the [current
+  Store](https://apps.apple.com/us/app/orca-ide/id6766130217), or install Android from the [current
   APK](https://www.onorca.dev/download/android).
 </Callout>
 
@@ -104,6 +103,23 @@ The mobile terminal has a dedicated **Terminal settings** screen (Settings → T
 - **Autocomplete & autocorrect** — off by default so the OS never rewrites commands, flags, or paths in the command bar. Turn it on for phone-style typing; the live keyboard-capture input still streams raw keystrokes either way.
 
 ## Troubleshooting
+
+### Firewalls and Orca Relay
+
+For Orca Relay and sign-in, allow outbound TCP port `443` from the desktop and phone to these hosts:
+
+| Host                                                                             | Purpose                                       | Protocol                          |
+| -------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------- |
+| `login.onorca.dev`                                                               | Orca sign-in and Relay credentials            | HTTPS                             |
+| `auth.onorca.dev`                                                                | Hosted sign-in pages                          | HTTPS                             |
+| `relay.onorca.dev`                                                               | Relay director, which assigns a regional cell | HTTPS and secure WebSockets (WSS) |
+| `*.relay.onorca.dev`, including `c1.relay.onorca.dev` and `c27.relay.onorca.dev` | Regional Relay cells                          | HTTPS and secure WebSockets (WSS) |
+
+Allow WebSocket upgrades and long-lived connections to both `relay.onorca.dev` and the Relay cells. Cell assignments can change, so allow the cell hostname pattern as well as the director. Relay uses outbound connections; it does not need an inbound port or router port forwarding.
+
+For a direct LAN or Tailscale connection, allow the paired desktop's listening port instead. The default is `6768`, but a desktop using another port needs that port allowed. **Settings → Troubleshooting** shows the paired endpoint's port in its firewall advice.
+
+### Common issues
 
 - **Stuck spinner on a worktree** — the phone tracks a heartbeat from the desktop agent process. If the desktop says idle but the phone shows working, force-refresh the worktree row to sync state.
 - **Pairing fails** — make sure your desktop and phone are signed into the same Orca account. Pairing codes expire after a few minutes; generate a fresh one if it's been sitting on the screen.

@@ -30,7 +30,8 @@ const pageRouteSchema = z.looseObject({
     .max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
     .optional(),
   // A value this build cannot read is no declaration, never a refused bundle.
-  canOwnHostArea: z.boolean().optional().catch(undefined)
+  canOwnHostArea: z.boolean().optional().catch(undefined),
+  canOwnHostAreaAcrossLayouts: z.boolean().optional().catch(undefined)
 })
 
 const assetSchema = z.looseObject({

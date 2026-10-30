@@ -13,7 +13,13 @@ import {
   CLAUDE_STRUCTURED_BASE_OPTIONS
 } from './claude-structured-launch-resolution'
 import { claudeSessionIdForOrcaSession } from './structured/claude-structured-session-id'
-import { CLAUDE_THINKING_DISPLAY_FLAG, type ClaudeCliFlag } from './claude-cli-flag-support'
+import {
+  CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
+  CLAUDE_EFFORT_FLAG,
+  CLAUDE_THINKING_DISPLAY_FLAG,
+  createClaudeCliFlagSupport,
+  type ClaudeCliFlag
+} from './claude-cli-flag-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-1'
@@ -63,7 +69,7 @@ function resolverFor(
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveAuthPolicy: () => ({ account }),
     hasTranscript,
     resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
@@ -426,7 +432,7 @@ describe('claude structured launch resolution', () => {
       resolveLaunchArgs: () => [],
       store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       resolveInheritedEnv: async () => ({ PATH: '/shell/bin', SHELL_ONLY_MARKER: 'from-shell' })
     })({ identity: IDENTITY })
@@ -439,7 +445,7 @@ describe('claude structured launch resolution', () => {
       resolveLaunchArgs: () => [],
       store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       resolveInheritedEnv: async () => ({
         PATH: '/shell/bin',
@@ -458,7 +464,7 @@ describe('claude structured launch resolution', () => {
       resolveLaunchArgs: () => [],
       store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       resolveEnv: () => ({ CLAUDE_CONFIG_DIR: '/accounts/selected/home' }),
       resolveInheritedEnv: async () => ({ PATH: '/shell/bin', CLAUDE_CONFIG_DIR: '/shell/claude' })
@@ -472,7 +478,7 @@ describe('claude structured launch resolution', () => {
       resolveLaunchArgs: () => [],
       store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'managed' }),
       resolveInheritedEnv: async () => ({
         PATH: '/shell/bin',
@@ -517,7 +523,7 @@ describe('claude structured launch resolution', () => {
       resolveLaunchArgs: () => [],
       store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
-      resolveCommand: () => claudeCommand,
+      resolveCommand: () => ({ command: claudeCommand, prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       resolveEnv: () => ({
         PATH: '/usr/bin',
@@ -566,7 +572,7 @@ describe('readable Claude thinking', () => {
       store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveLaunchArgs: () => launchArgs,
-      resolveCommand: () => command,
+      resolveCommand: () => ({ command: command, prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       resolveEnv: () => ({ PROJECT_SHIM: '1', ANTHROPIC_API_KEY: 'sk-user' }),
       hasTranscript: async () => false,
@@ -580,11 +586,11 @@ describe('readable Claude thinking', () => {
   ])(
     'probes the CLI the launch runs, on its PATH and shims, without its credentials (%s)',
     async (_, sibling) => {
-      const supports = vi.fn(
+      const check = vi.fn(
         async (
           _flag: ClaudeCliFlag,
           _launch: { command: string; cwd: string; env: Record<string, string> }
-        ) => true
+        ) => 'supported' as const
       )
       const binDir = join(mkdtempSync(join(tmpdir(), 'orca-claude-probe-')), 'bin')
       const command = join(binDir, process.platform === 'win32' ? 'claude.cmd' : 'claude')
@@ -592,8 +598,8 @@ describe('readable Claude thinking', () => {
       if (sibling) {
         makeExecutable(join(binDir, process.platform === 'win32' ? 'node.cmd' : 'node'))
       }
-      const launch = await launchWith({ supports }, command)
-      const asked = supports.mock.calls[0]?.[1]
+      const launch = await launchWith({ check }, command)
+      const asked = check.mock.calls[0]?.[1]
       expect(asked).toMatchObject({ command, cwd: '/repos/workspace-1' })
       const segments = (env: Record<string, string> | undefined) =>
         (env?.PATH ?? env?.Path ?? '').split(delimiter)
@@ -613,14 +619,36 @@ describe('readable Claude thinking', () => {
   )
 
   it('passes nothing when the CLI is not known to take the flag, or nothing can say', async () => {
-    const launch = await launchWith({ supports: async () => false })
+    const launch = await launchWith({ check: async () => 'unsupported' })
     expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
     expect((await launchWith()).options.extraArgs).toEqual({ 'replay-user-messages': null })
   })
 
+  it.each([
+    ['2.1.31', 'unsupported', 'unsupported'],
+    ['2.1.38', 'supported', 'unsupported'],
+    ['2.1.50', 'supported', 'supported'],
+    [null, 'unknown', 'unknown']
+  ] as const)(
+    'answers for the CLI it launches (%s) whether it takes --effort and the live control',
+    async (version, effort, control) => {
+      const cliFlags = createClaudeCliFlagSupport({
+        probe: async () => version,
+        keyOf: async (command, cwd) => `${command}\n${cwd}`,
+        budgetMs: 1_000,
+        now: () => performance.now()
+      })
+      const { cliFlag } = await launchWith(cliFlags)
+      await expect(cliFlag(CLAUDE_EFFORT_FLAG)).resolves.toBe(effort)
+      await expect(cliFlag(CLAUDE_APPLY_FLAG_SETTINGS_CONTROL)).resolves.toBe(control)
+    }
+  )
+
   it('keeps saved Arguments beside readable thinking, with the display left to Orca', async () => {
     const launch = await launchWith(
-      { supports: async (flag) => flag === CLAUDE_THINKING_DISPLAY_FLAG },
+      {
+        check: async (flag) => (flag === CLAUDE_THINKING_DISPLAY_FLAG ? 'supported' : 'unsupported')
+      },
       undefined,
       ['--effort', 'high', '--thinking-display', 'omitted']
     )

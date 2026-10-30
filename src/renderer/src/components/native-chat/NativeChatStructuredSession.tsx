@@ -18,7 +18,7 @@ import { NativeChatContextClearFade } from './NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
-import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
+import { nativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
 import { useNativeChatFontSize } from './use-native-chat-font-size'
@@ -58,7 +58,7 @@ import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent
 import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
-import { useNativeChatHostPermissionGate } from './use-native-chat-host-permission-gate'
+import { useNativeChatHostSendGate } from './use-native-chat-host-send-gate'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
@@ -123,8 +123,8 @@ export function NativeChatStructuredSession(
     hostOutage === null
   )
   const agentLabel = structuredAgentLabel(props.agent)
-  const hostPermission = useNativeChatHostPermissionGate(props.target, props.agent, agentLabel)
-  const hostHeld = hostPermission.sendBlockedReason !== null
+  const hostSendGate = useNativeChatHostSendGate(props.target, props.agent, hostOutage)
+  const hostHeld = hostSendGate.sendBlockedReason !== null
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
   const needsFailureFacts =
@@ -217,9 +217,8 @@ export function NativeChatStructuredSession(
     setOptionPickerRequest,
     onError: reportComposerError,
     onSubmitted: submits.revealLatest,
-    sendBlockedReason: hostPermission.sendBlockedReason ?? install.sendBlockedReason
+    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason
   })
-  const asyncQuestion = { paneKey, session, send: transport.send }
   const continuation = useNativeChatInterruptedContinuation({
     ...controller,
     target: props.target,
@@ -238,7 +237,7 @@ export function NativeChatStructuredSession(
   const availability = useNativeChatAvailabilityNotice({
     unavailable: controller.unavailable,
     agent: props.agent,
-    agentLabel,
+    wslDistro: continuation.view.wslDistro,
     launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
     journalItems: controller.journalItems,
     submissions: controller.submissions,
@@ -258,7 +257,7 @@ export function NativeChatStructuredSession(
     composerError: composerError ?? continuation.continueError,
     claudeSignIn,
     availability,
-    hostPermission: hostPermission.notice
+    hostPermission: hostSendGate.notice
   })
   if (hostNotice) {
     notices.push(hostNotice)
@@ -386,7 +385,7 @@ export function NativeChatStructuredSession(
               answerInputRef={questionAnswerInputRef}
             />
           ) : null}
-          {prompt ? null : <NativeChatStructuredAsyncQuestion {...asyncQuestion} />}
+          {nativeChatStructuredAsyncQuestion(props, controller, session, transport.send)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer

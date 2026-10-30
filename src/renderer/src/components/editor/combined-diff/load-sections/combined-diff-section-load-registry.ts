@@ -51,7 +51,9 @@ export function useCombinedDiffSectionLoadRegistry(
   const requestSectionReloadRef = useRef<(index: number) => void>(() => {})
   const loadSchedulerRef = useRef<ReturnType<typeof createCombinedDiffLoadScheduler>>(undefined!)
   loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
-    loadSection: (index) => loadSectionRef.current(index)
+    loadSection: (index) => loadSectionRef.current(index),
+    getRenderedIndices: () => renderedIndicesRef.current,
+    isSectionExpanded: (index) => sectionsRef.current[index]?.collapsed === false
   })
   sectionsRef.current = sections
 

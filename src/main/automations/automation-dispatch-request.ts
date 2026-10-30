@@ -13,10 +13,14 @@ import {
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import { createAutomationDispatchToken } from './dispatch-tokens'
 import {
-  NO_DISPATCH_HOST,
   describeScheduledRefusal,
+  describeStoppedWslDistroRefusal,
   sendRendererDispatch
 } from './dispatch-refusal'
+import {
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 
@@ -81,7 +85,7 @@ export async function requestAutomationDispatch(
   const resolveCurrentTarget = (): AutomationRunTargetResult => {
     const current = ctx.store.listAutomations().find((entry) => entry.id === automation.id)
     if (!current || !isDeepStrictEqual(expectedDefinition, definition(current))) {
-      return { ok: false, error: 'The automation changed before this run could launch.' }
+      return { ok: false, ...automationRunFailure('automationChanged') }
     }
     const target = ctx.resolveTarget(current)
     if (
@@ -89,19 +93,16 @@ export async function requestAutomationDispatch(
       expectedDestination &&
       !isDeepStrictEqual(expectedDestination, destination(target))
     ) {
-      return {
-        ok: false,
-        error: 'The automation destination changed before this run could launch.'
-      }
+      return { ok: false, ...automationRunFailure('destinationChanged') }
     }
     return target
   }
-  const refuse = (error: string) =>
+  const refuse = (failure: AutomationRunFailure) =>
     ctx.runs.updateRun({
       runId: run.id,
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
-      error
+      ...failure
     })
   const returnDurable = async (current: AutomationRun) => {
     await ctx.store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
@@ -118,7 +119,13 @@ export async function requestAutomationDispatch(
     canDispatch: Boolean(ctx.getRenderer() || ctx.headlessDispatcher)
   })
   if (refusal || !target.ok) {
-    return refuse(refusal ?? NO_DISPATCH_HOST)
+    return refuse(refusal ?? automationRunFailure('noDispatchHost'))
+  }
+  // The distro may have stopped since the tick decided; a manual run may start it.
+  const stopped =
+    run.trigger === 'scheduled' ? await describeStoppedWslDistroRefusal(ctx.store, target) : null
+  if (stopped) {
+    return refuse(stopped)
   }
   await ctx.runs.updateRun({
     runId: run.id,
@@ -135,7 +142,7 @@ export async function requestAutomationDispatch(
   // A WSL move can start while the durable claim is pending.
   const lateRefusal = describeScheduledRefusal({ target, canDispatch: true })
   if (lateRefusal || !target.ok) {
-    return refuse(lateRefusal ?? NO_DISPATCH_HOST)
+    return refuse(lateRefusal ?? automationRunFailure('noDispatchHost'))
   }
   const renderer = ctx.getRenderer()
   if (renderer) {
@@ -152,7 +159,7 @@ export async function requestAutomationDispatch(
   }
   const dispatcher = ctx.headlessDispatcher
   if (!dispatcher) {
-    return refuse(NO_DISPATCH_HOST)
+    return refuse(automationRunFailure('noDispatchHost'))
   }
   return runHeadlessAutomationDispatch({
     ...ctx,

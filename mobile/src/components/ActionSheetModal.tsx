@@ -7,6 +7,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type ActionSheetAction = {
+  id?: string
   label: string
   icon?: LucideIcon
   renderIcon?: () => ReactNode
@@ -68,7 +69,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
           const Icon = iconForAction(action.label, action.destructive, action.icon)
           const customIcon = action.renderIcon?.()
           return (
-            <View key={action.label}>
+            <View key={action.id ?? action.label}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
                 style={({ pressed }) => [

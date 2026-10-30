@@ -8,17 +8,15 @@ function managedRemovalNotice(removed: number, preserved: number): string {
       removed
     })
   }
-  return preserved === 1
-    ? translate(
-        'auto.components.skills.managedRemoval.removedPreserved_one',
-        '{{removed}} removed · {{count}} modified skill preserved.',
-        { removed, count: preserved }
-      )
-    : translate(
-        'auto.components.skills.managedRemoval.removedPreserved_other',
-        '{{removed}} removed · {{count}} modified skills preserved.',
-        { removed, count: preserved }
-      )
+  return translate(
+    'auto.components.skills.managedRemoval.removedPreserved',
+    '{{removed}} removed · {{count}} modified skills preserved.',
+    {
+      removed,
+      count: preserved,
+      defaultValue_one: '{{removed}} removed · {{count}} modified skill preserved.'
+    }
+  )
 }
 
 export function summarizeManagedSkillRemoval(

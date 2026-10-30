@@ -10,9 +10,11 @@ import {
   subscribePendingHostCredentialCleanup
 } from '../transport/host-credential-cleanup'
 import { retryPendingHostCredentialCleanup } from '../transport/host-store'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function PendingCredentialCleanupCard() {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [pendingCredentialIds, setPendingCredentialIds] = useState<string[]>([])
   const [credentialStorageUnreadable, setCredentialStorageUnreadable] = useState(false)
   const [retryingCredentialCleanup, setRetryingCredentialCleanup] = useState(false)
@@ -64,9 +66,9 @@ export function PendingCredentialCleanupCard() {
     }
   }, [retryingCredentialCleanup])
 
-  const pendingCredentialCount = pendingCredentialIds.length
+  const count = pendingCredentialIds.length
   // Unreadable durable queues may hide orphaned tokens; keep cleanup and Retry visible.
-  if (pendingCredentialCount === 0 && !credentialStorageUnreadable) {
+  if (count === 0 && !credentialStorageUnreadable) {
     return null
   }
 
@@ -75,18 +77,39 @@ export function PendingCredentialCleanupCard() {
       <View style={styles.credentialCleanupRow}>
         <KeyRound size={16} color={colors.statusAmber} />
         <View style={styles.credentialCleanupCopy}>
-          <Text style={styles.credentialCleanupTitle}>Pairing credential cleanup</Text>
+          <Text style={styles.credentialCleanupTitle}>
+            {t('settings.pendingCredentialCleanupCard.title', 'Pairing credential cleanup')}
+          </Text>
           <Text accessibilityLiveRegion="polite" style={styles.rowHint}>
             {credentialRetryFailed
-              ? "Cleanup still couldn't be confirmed. Try again later."
-              : pendingCredentialCount > 0
-                ? `Couldn't confirm cleanup for ${pendingCredentialCount} credential${pendingCredentialCount === 1 ? '' : 's'} on this device.`
-                : "Couldn't check cleanup status on this device. Retry to be safe."}
+              ? t(
+                  'settings.pendingCredentialCleanupCard.retryFailed',
+                  "Cleanup still couldn't be confirmed. Try again later."
+                )
+              : count > 0
+                ? count === 1
+                  ? t(
+                      'settings.pendingCredentialCleanupCard.cleanupUnconfirmed_one',
+                      "Couldn't confirm cleanup for {{count}} credential on this device.",
+                      { count }
+                    )
+                  : t(
+                      'settings.pendingCredentialCleanupCard.cleanupUnconfirmed_other',
+                      "Couldn't confirm cleanup for {{count}} credentials on this device.",
+                      { count }
+                    )
+                : t(
+                    'settings.pendingCredentialCleanupCard.statusCheckFailed',
+                    "Couldn't check cleanup status on this device. Retry to be safe."
+                  )}
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Retry clearing pairing credentials"
+          accessibilityLabel={t(
+            'settings.pendingCredentialCleanupCard.retryCleanup',
+            'Retry clearing pairing credentials'
+          )}
           accessibilityState={{
             busy: retryingCredentialCleanup,
             disabled: retryingCredentialCleanup
@@ -102,7 +125,7 @@ export function PendingCredentialCleanupCard() {
           {retryingCredentialCleanup ? (
             <ActivityIndicator size="small" color={colors.textSecondary} />
           ) : (
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry', 'Retry')}</Text>
           )}
         </Pressable>
       </View>

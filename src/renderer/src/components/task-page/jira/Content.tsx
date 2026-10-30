@@ -9,12 +9,12 @@ import { jiraListGridStyle } from '../../jira-list-columns'
 import { JiraListColumnsMenu } from '../../jira-list-columns-menu'
 import { TaskPageJiraSortControls } from '../../task-page-jira-sort-controls'
 import { TaskPageJiraErrorBanner } from '../linear/task-page-linear-jira-list-model'
-import { TaskPageJiraTextFallbackNotice } from '../../task-page-jira-text-fallback-notice'
+import { TaskPageJiraTextFallbackNotice } from './task-page-jira-text-fallback-notice'
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
 import { TaskPageJiraBoardView } from '@/components/task-page-jira-board-view'
 import { TaskPageJiraViewControls } from '@/components/task-page-jira-view-controls'
 import { formatRelativeTime } from '../task-page-source-context'
-import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
+import { getJiraStatusTone } from '@/components/task-page/jira/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
 import {
@@ -118,13 +118,10 @@ export function TaskPageJiraContent({
           />
           <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
             <span>
-              {displayedJiraIssues.length === 1
-                ? translate('auto.components.TaskPage.shownCount_one', '{{count}} shown', {
-                    count: displayedJiraIssues.length
-                  })
-                : translate('auto.components.TaskPage.shownCount_other', '{{count}} shown', {
-                    count: displayedJiraIssues.length
-                  })}
+              {translate('auto.components.TaskPage.shownCount', '{{count}} shown', {
+                count: displayedJiraIssues.length,
+                defaultValue_one: '{{count}} shown'
+              })}
             </span>
             {jiraViewMode === 'list' ? (
               <JiraListColumnsMenu ids={jiraColumnIds} onToggle={toggleJiraColumn} />

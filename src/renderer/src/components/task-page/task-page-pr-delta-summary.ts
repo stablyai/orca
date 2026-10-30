@@ -11,13 +11,10 @@ export function formatPRDelta(item: GitHubWorkItem): string | null {
   }
   if (typeof item.changedFiles === 'number') {
     parts.push(
-      item.changedFiles === 1
-        ? translate('auto.components.TaskPage.changedFileCount_one', '{{count}} file', {
-            count: item.changedFiles
-          })
-        : translate('auto.components.TaskPage.changedFileCount_other', '{{count}} files', {
-            count: item.changedFiles
-          })
+      translate('auto.components.TaskPage.changedFileCount', '{{count}} files', {
+        count: item.changedFiles,
+        defaultValue_one: '{{count}} file'
+      })
     )
   }
   return parts.length > 0 ? parts.join(' ') : null

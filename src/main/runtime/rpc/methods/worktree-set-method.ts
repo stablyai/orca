@@ -10,6 +10,9 @@ export const WORKTREE_SET_METHOD = defineMethod({
   handler: async (params, { runtime }) => {
     const worktree = await runtime.updateManagedWorktreeMeta(params.worktree, {
       displayName: params.displayName,
+      ...(params.firstAgentMessageRenameError === null
+        ? { firstAgentMessageRenameError: null }
+        : {}),
       ...(params.displayName !== undefined
         ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
         : {}),

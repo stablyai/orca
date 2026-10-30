@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { ConnectionState } from '../transport/types'
@@ -74,7 +75,12 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       reviewState: MobileDiffReviewState
     ) => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(
+          translate(
+            'session.useDiffReviewCommentActions.waitingForDesktop',
+            'Waiting for desktop...'
+          )
+        )
       }
       const response = await sessionWorktreeNotesWrite.request(client, {
         worktree: `id:${worktreeId}`,
@@ -84,7 +90,10 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       })
       return interpretOrThrowRefusalMessage(
         () => sessionWorktreeNotesWrite.interpret(response),
-        'Failed to save review state'
+        translate(
+          'session.useDiffReviewCommentActions.saveStateFailed',
+          'Failed to save review state'
+        )
       )?.diffComments
     },
     [client, connState, worktreeId]
@@ -121,7 +130,11 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
           setScreenState(previous)
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to save review')
+        setActionError(
+          err instanceof Error
+            ? err.message
+            : translate('session.useDiffReviewCommentActions.saveFailed', 'Failed to save review')
+        )
         throw err
       }
     },

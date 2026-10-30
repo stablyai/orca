@@ -7,6 +7,7 @@ const LOAD_EARLIER_HEIGHT = 44
 const LOAD_EARLIER_RETRY_HEIGHT = 28
 
 export const styles = themedStyleSheet(() => ({
+  hidden: { display: 'none' },
   root: {
     flex: 1,
     backgroundColor: colors.bgBase

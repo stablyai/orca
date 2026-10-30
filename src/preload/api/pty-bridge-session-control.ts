@@ -60,6 +60,7 @@ export const ptySessionControlApi = {
     replacesPtyId?: string
     placement?: TerminalPanePlacement
     spawnIntent?: SpawnIntent
+    wslPassiveRestore?: true
     agentLaunch?: AgentPaneLaunchRequest
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{

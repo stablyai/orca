@@ -205,7 +205,7 @@ function SessionOptionPopover(props: {
             ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel)}`
             : modelName
         }
-        disabled={props.isWorking}
+        disabled={props.isWorking && model.transport !== 'agent-session'}
         disabledReason={modelReason ?? optionsReason}
         dispatched={
           sessionOptionDispatchUnconfirmed(model) || options.some(sessionOptionDispatchUnconfirmed)

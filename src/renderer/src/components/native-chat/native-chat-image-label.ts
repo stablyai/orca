@@ -9,7 +9,10 @@ export function nativeChatImageLabelCopy(): NativeChatImageLabelCopy {
   return {
     pastedImage: translate('components.native-chat.composer.pastedImageLabel', 'Pasted image'),
     imageCount: (count) =>
-      translate('components.native-chat.queuedMessages.imageCount', '{{count}} images', { count })
+      translate('components.native-chat.queuedMessages.imageCount', '{{count}} images', {
+        count,
+        defaultValue_one: '{{count}} image'
+      })
   }
 }
 

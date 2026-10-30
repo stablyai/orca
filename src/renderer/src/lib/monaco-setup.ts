@@ -9,6 +9,7 @@ import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
+import { registerCMakeLanguage } from './monaco-languages/register-cmake'
 import { registerCudaLanguage } from './monaco-languages/register-cuda'
 import { registerDotenvLanguage } from './monaco-languages/register-dotenv'
 import { registerGlimmerLanguages } from './monaco-languages/register-glimmer'
@@ -82,6 +83,7 @@ runMonacoSetupSteps([
   ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['Zig language registration', () => registerZigLanguage(monaco)],
   ['Groovy language registration', () => registerGroovyLanguage(monaco)],
+  ['CMake language registration', () => registerCMakeLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['dotenv language registration', () => registerDotenvLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
