@@ -1,5 +1,11 @@
 // Compatibility entrypoint: reliability gates invoke this path directly; fragments stay side-effect ordered.
-export {}
+import type * as Filesystem from 'node:fs/promises'
+import { vi } from 'vitest'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof Filesystem>()
+  return { ...actual, mkdir: vi.fn(actual.mkdir) }
+})
 
 await import('./rpc/unused-default-rpc-methods.test-fixture')
 await import('./orca-runtime-test-mocks.spec')

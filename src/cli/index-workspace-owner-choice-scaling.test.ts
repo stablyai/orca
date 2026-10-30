@@ -356,6 +356,7 @@ describe('cwd workspace owner election and reporting at N and 10N', () => {
                 new Proxy(row, {
                   get(target, key, receiver) {
                     visit()
+                    // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
                     return Reflect.get(target, key, receiver)
                   }
                 })
