@@ -27,10 +27,16 @@ function provider(overrides: Partial<ProviderRateLimits>): ProviderRateLimits {
   }
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('UsageDashboardQuotaStrip', () => {
   it('renders one row per provider with its windows and reset countdown', () => {
+    // Fake the clock so the countdown label is derived from a fixed "now" instead of the wall clock.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-15T12:00:00Z'))
     const resetsAt = Date.now() + 2 * 60 * 60 * 1000
     const view = render(
       <UsageDashboardQuotaStrip

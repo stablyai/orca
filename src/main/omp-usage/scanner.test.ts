@@ -302,7 +302,8 @@ describe('scanOmpUsageFiles', () => {
     expect(rewritten).not.toBe(original)
     expect(Buffer.byteLength(rewritten)).toBe(Buffer.byteLength(original))
     await writeFile(file, rewritten)
-    await utimes(file, new Date(), new Date(Date.now() + 2_000))
+    // Fixed timestamps: the scan only compares mtime against the first scan, so the wall clock is irrelevant.
+    await utimes(file, new Date('2026-10-07T00:00:00Z'), new Date('2026-10-07T00:00:02Z'))
     expect((await stat(file)).mtimeMs).not.toBe(firstSources.sources[0]?.mtimeMs)
 
     const second = await scanOmpUsageFiles(worktrees(), sourceCache)

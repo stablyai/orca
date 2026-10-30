@@ -90,6 +90,7 @@ const disabledScanState: ClaudeUsageScanState = {
   hasAnyClaudeData: false
 }
 
+// ast-grep-ignore: test-no-wall-clock-tsx -- the drawer zero-fills from the real local date, so fixture days must match it
 function localDay(date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
