@@ -134,7 +134,25 @@ export function registerMobileHandlers(
 
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
-    async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
+    async (
+      _event,
+      args?: {
+        address?: string
+        rotate?: boolean
+        reach?: RuntimePairingReach
+        connectionMode?: 'direct' | 'relay'
+      }
+    ) => {
+      if (args?.connectionMode === 'relay') {
+        const offer = await rpcServer.createMobilePairingOffer({
+          address: '127.0.0.1',
+          rotate: args.rotate,
+          scope: 'runtime',
+          connectionMode: 'automatic',
+          name: `Orca client ${new Date().toLocaleDateString()}`
+        })
+        return offer.available ? { ...offer, webClientUrl: null } : offer
+      }
       const ip =
         args?.address ??
         (await getDefaultPairingAddress(

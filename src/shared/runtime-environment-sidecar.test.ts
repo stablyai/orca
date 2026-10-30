@@ -19,7 +19,12 @@ import {
   linkVerifiedRuntimeEnvironmentSshAccess,
   prepareRuntimeEnvironmentSshAccessLink
 } from './runtime-environment-ssh-access-store'
-import { readPersistedEnvironmentStore } from './runtime-environment-store-file'
+import {
+  readPersistedEnvironmentStore,
+  writeEnvironmentStore
+} from './runtime-environment-store-file'
+import { stageRuntimeEnvironmentRelay } from './runtime-environment-pairing-store'
+import type { RuntimeRelayConnection } from './runtime-relay-connection'
 import { shippedBuildRewrite } from './runtime-environment-shipped-store.test-fixture'
 
 const pairing = {
@@ -64,6 +69,49 @@ describe('runtime environment sidecar across a downgrade', () => {
       now: 90
     })
   }
+
+  it('preserves Relay credentials through a registry rewrite and a half-committed re-pair', () => {
+    const route: RuntimeRelayConnection = {
+      v: 1,
+      directorUrl: 'https://director.example',
+      cellUrl: 'https://cell.example',
+      assignmentEpoch: 1,
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      e2eeFraming: 2,
+      credential: 'R'.repeat(43),
+      credentialKind: 'resume'
+    }
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'Relay desktop',
+      now: 100,
+      pairingCode: encodePairingOffer({
+        ...pairing,
+        scope: 'runtime',
+        relay: {
+          v: 1,
+          directorUrl: route.directorUrl,
+          cellUrl: route.cellUrl,
+          assignmentEpoch: 1,
+          relayHostId: route.relayHostId,
+          e2eeFraming: 2,
+          inviteToken: 'I'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000
+        }
+      }),
+      relayConnection: route
+    })
+    shippedBuildRewrite(userDataPath, (environments) => environments)
+    expect(listEnvironments(userDataPath)[0]?.relayConnection).toEqual(route)
+    expect(readFileSync(getEnvironmentStorePath(userDataPath), 'utf8')).not.toContain(
+      route.credential
+    )
+    const next = { ...environment, pairingRevision: 101 }
+    const replacement = { ...route, credential: 'S'.repeat(43) }
+    stageRuntimeEnvironmentRelay(userDataPath, [environment], environment, replacement, next)
+    expect(listEnvironments(userDataPath)[0]?.relayConnection).toEqual(route)
+    writeEnvironmentStore(userDataPath, { version: 1, environments: [next] })
+    expect(listEnvironments(userDataPath)[0]?.relayConnection).toEqual(replacement)
+  })
 
   it('keeps SSH access after a shipped build rewrites orca-environments.json', () => {
     const access = linked()

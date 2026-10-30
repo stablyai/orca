@@ -1,13 +1,22 @@
+import type {
+  AddEnvironmentArgs,
+  AddEnvironmentOutcome,
+  UpdateEnvironmentPairingArgs,
+  ReplaceEnvironmentPairingOptions
+} from './runtime-environment-pairing-types'
+import {
+  assertRuntimeRelayVerified,
+  stageRuntimeEnvironmentRelay,
+  getPairingConnectionDependency
+} from './runtime-environment-pairing-store'
 import { randomUUID } from 'node:crypto'
 import { parsePairingCode, type PairingOffer } from './pairing'
-import { classifyRemotePairingHostname } from './remote-pairing-address'
 import { isProfileRuntimePublicKey } from './runtime-e2ee-keypair-file'
 import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment,
-  type PersistedRuntimeEnvironment,
-  type RuntimeEnvironmentSource
+  type PersistedRuntimeEnvironment
 } from './runtime-environments'
 import {
   readEnvironmentStore,
@@ -41,21 +50,7 @@ export function listEnvironments(
   return readEnvironmentStore(userDataPath, options).environments
 }
 
-export type AddEnvironmentArgs = {
-  name: string
-  pairingCode: string
-  now?: number
-  source?: RuntimeEnvironmentSource
-  connectionDependency?: 'ssh-tunnel'
-  /** Recorded only when the code turns out to be for an already saved server. */
-  runtimeId?: string
-}
-
-export type AddEnvironmentOutcome = {
-  environment: KnownRuntimeEnvironment
-  /** The code was for a saved server, whose pairing it replaced instead of adding a second entry. */
-  updatedExisting: boolean
-}
+export type { AddEnvironmentArgs, AddEnvironmentOutcome } from './runtime-environment-pairing-types'
 
 /** Reject duplicate host keys: two saved entries publish identical workspaces and make writes ambiguous. */
 export function addEnvironmentFromPairingCode(
@@ -79,6 +74,7 @@ function saveEnvironmentFromPairingCode(
   refreshSameServer: boolean
 ): AddEnvironmentOutcome {
   const offer = parseRemotePairingCode(userDataPath, args.pairingCode)
+  assertRuntimeRelayVerified(offer, args.relayConnection)
   const now = args.now ?? Date.now()
   const store = readPersistedEnvironmentStore(userDataPath, { recoverBlankStore: true })
   const samePersisted = findEnvironmentWithHostKey(store.environments, offer.publicKeyB64)
@@ -95,7 +91,8 @@ function saveEnvironmentFromPairingCode(
     const environment = replaceEnvironmentPairing(userDataPath, samePaired.id, sameSpelling, {
       now,
       runtimeId: args.runtimeId,
-      connectionDependency: args.connectionDependency
+      connectionDependency: args.connectionDependency,
+      relayConnection: args.relayConnection
     })
     return { environment, updatedExisting: true }
   }
@@ -108,6 +105,7 @@ function saveEnvironmentFromPairingCode(
     name: args.name,
     now,
     offer,
+    relayConnection: args.relayConnection,
     runtimeId: null,
     ...(args.source ? { source: args.source } : {}),
     ...getPairingConnectionDependency(args.connectionDependency, offer)
@@ -119,6 +117,7 @@ function saveEnvironmentFromPairingCode(
       environment
     ].sort((a, b) => a.name.localeCompare(b.name))
   }
+  stageRuntimeEnvironmentRelay(userDataPath, next.environments, environment, args.relayConnection)
   writeEnvironmentStore(userDataPath, next)
   return { environment, updatedExisting: false }
 }
@@ -150,15 +149,17 @@ export function removeEnvironment(userDataPath: string, selector: string): Known
 export function updateEnvironmentFromPairingCode(
   userDataPath: string,
   selector: string,
-  args: { pairingCode: string; now?: number; runtimeId?: string }
+  args: UpdateEnvironmentPairingArgs
 ): KnownRuntimeEnvironment {
   const offer = parseRemotePairingCode(userDataPath, args.pairingCode)
+  assertRuntimeRelayVerified(offer, args.relayConnection)
   const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), selector)
   assertNoIndependentSshAccess(current)
   return replaceEnvironmentPairing(userDataPath, selector, offer, {
     now: args.now ?? Date.now(),
     runtimeId: args.runtimeId,
-    connectionDependency: current.connectionDependency
+    connectionDependency: current.connectionDependency,
+    relayConnection: args.relayConnection
   })
 }
 
@@ -167,7 +168,7 @@ function replaceEnvironmentPairing(
   userDataPath: string,
   selector: string,
   offer: PairingOffer,
-  args: { now: number; runtimeId?: string; connectionDependency?: 'ssh-tunnel' }
+  args: ReplaceEnvironmentPairingOptions
 ): KnownRuntimeEnvironment {
   const store = readPersistedEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, selector)
@@ -177,6 +178,7 @@ function replaceEnvironmentPairing(
     name: existing.name,
     now: existing.createdAt,
     offer,
+    relayConnection: args.relayConnection,
     runtimeId: args.runtimeId ?? existing.runtimeId,
     ...(existing.source ? { source: existing.source } : {}),
     ...getPairingConnectionDependency(args.connectionDependency, offer)
@@ -188,6 +190,13 @@ function replaceEnvironmentPairing(
     pairingRevision: Math.max(args.now, previousPairingRevision + 1),
     lastUsedAt: existing.lastUsedAt
   }
+  stageRuntimeEnvironmentRelay(
+    userDataPath,
+    store.environments,
+    existing,
+    args.relayConnection,
+    next
+  )
   writeEnvironmentStore(userDataPath, {
     version: 1,
     environments: store.environments
@@ -195,23 +204,6 @@ function replaceEnvironmentPairing(
       .sort((a, b) => a.name.localeCompare(b.name))
   })
   return next
-}
-
-function getPairingConnectionDependency(
-  dependency: 'ssh-tunnel' | undefined,
-  offer: PairingOffer
-): { connectionDependency?: 'ssh-tunnel' } {
-  if (!dependency) {
-    return {}
-  }
-  try {
-    const endpoint = new URL(offer.endpoint)
-    return classifyRemotePairingHostname(endpoint.hostname) === 'loopback'
-      ? { connectionDependency: dependency }
-      : {}
-  } catch {
-    return {}
-  }
 }
 
 export function resolveEnvironment(

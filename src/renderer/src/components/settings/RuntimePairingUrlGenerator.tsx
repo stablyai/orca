@@ -12,6 +12,7 @@ import {
   clearGeneratedRuntimePairingLink,
   runtimePairingLinkCache,
   runtimePairingReachForIntent,
+  isCurrentRuntimePairingChoice,
   selectRuntimePairingIntent,
   type RuntimePairingIntent,
   type RuntimePairingUrlGeneratorProps
@@ -188,6 +189,7 @@ export function RuntimePairingUrlGenerator({
       const result = await window.api.mobile.getRuntimePairingUrl({
         address,
         rotate: true,
+        ...(intent === 'relay' ? { connectionMode: 'relay' as const } : {}),
         // Send declared reach with the address; loopback alone cannot distinguish local-only intent from a tunnel frontend.
         reach: runtimePairingReachForIntent(intent)
       })
@@ -203,6 +205,9 @@ export function RuntimePairingUrlGenerator({
               )
           )
         }
+        return
+      }
+      if (!isCurrentRuntimePairingChoice(intent, address)) {
         return
       }
       cacheGeneratedRuntimePairingLink({
@@ -358,14 +363,9 @@ export function RuntimePairingUrlGenerator({
   }
 
   const updateIntent = (nextIntent: RuntimePairingIntent): void => {
+    clearGeneratedUrls()
     setIntent(nextIntent)
-    setSelectedAddress(
-      selectRuntimePairingIntent(
-        nextIntent,
-        networkInterfaces,
-        runtimePairingLinkCache.customAddress
-      )
-    )
+    setSelectedAddress(selectRuntimePairingIntent(nextIntent, networkInterfaces))
   }
 
   return (

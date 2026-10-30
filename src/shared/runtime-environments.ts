@@ -1,3 +1,7 @@
+import {
+  RuntimeRelayConnectionSchema,
+  type RuntimeRelayConnection
+} from './runtime-relay-connection'
 import { z } from 'zod'
 import { PAIRING_OFFER_VERSION, type PairingOffer } from './pairing'
 import {
@@ -101,6 +105,7 @@ export type PersistedRuntimeEnvironment = z.infer<typeof PersistedRuntimeEnviron
 
 /** Overlay sidecar-only state; never persist these fields in orca-environments.json, which shipped builds strip on rewrite. */
 export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.extend({
+  relayConnection: RuntimeRelayConnectionSchema.optional(),
   sshAccess: RuntimeSshAccessLinkSchema.optional(),
   pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
   orcadDeployment: OrcadDeploymentLinkSchema.optional(),
@@ -157,7 +162,10 @@ export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.e
 
 export type KnownRuntimeEnvironment = z.infer<typeof KnownRuntimeEnvironmentSchema>
 
-export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpoints'> & {
+export type PublicKnownRuntimeEnvironment = Omit<
+  KnownRuntimeEnvironment,
+  'endpoints' | 'relayConnection'
+> & {
   endpoints: PublicRuntimeAccessEndpoint[]
   /** Digest of the host's persisted E2EE public key, which its pairing handshake proves. */
   hostKeyFingerprint?: string
@@ -172,8 +180,9 @@ export type RuntimeEnvironmentRemoval = {
 export function redactRuntimeEnvironment(
   environment: KnownRuntimeEnvironment
 ): PublicKnownRuntimeEnvironment {
+  const { relayConnection: _relayCredential, ...publicEnvironment } = environment
   return {
-    ...environment,
+    ...publicEnvironment,
     endpoints: environment.endpoints.map(
       ({ deviceToken: _deviceToken, publicKeyB64: _key, ...rest }) => rest
     )
@@ -193,6 +202,7 @@ export function createEnvironmentFromPairingOffer(args: {
   name: string
   now: number
   offer: PairingOffer
+  relayConnection?: RuntimeRelayConnection
   runtimeId?: string | null
   source?: RuntimeEnvironmentSource
   connectionDependency?: 'ssh-tunnel'
@@ -200,6 +210,7 @@ export function createEnvironmentFromPairingOffer(args: {
   const endpointId = `ws-${args.id}`
   return KnownRuntimeEnvironmentSchema.parse({
     id: args.id,
+    ...(args.relayConnection ? { relayConnection: args.relayConnection } : {}),
     name: args.name,
     createdAt: args.now,
     updatedAt: args.now,
@@ -273,7 +284,7 @@ export function isListedRemoteServer(
 
 type PreferredEndpointSource = Pick<
   KnownRuntimeEnvironment,
-  'name' | 'endpoints' | 'preferredEndpointId' | 'pairedDeviceId'
+  'name' | 'endpoints' | 'preferredEndpointId' | 'pairedDeviceId' | 'relayConnection'
 >
 
 function preferredEndpoint(environment: PreferredEndpointSource) {
@@ -290,12 +301,13 @@ export function getPreferredPairedRuntimeConnection(
   environment: PreferredEndpointSource
 ): PairedRuntimeConnection {
   const endpoint = preferredEndpoint(environment)
-  return pairedRuntimeConnectionFromOffer({
-    endpoint: endpoint.endpoint,
-    deviceToken: endpoint.deviceToken,
-    publicKeyB64: endpoint.publicKeyB64,
-    pairedDeviceId: environment.pairedDeviceId
-  })
+  return pairedRuntimeConnectionFromOffer(
+    {
+      ...endpoint,
+      pairedDeviceId: environment.pairedDeviceId
+    },
+    environment.relayConnection
+  )
 }
 
 export function getPreferredPairingOffer(environment: PreferredEndpointSource): PairingOffer {

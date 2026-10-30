@@ -77,6 +77,7 @@ export type PairedE2EEClientHandshakeArgs = {
   serializeJson?: (value: unknown) => string
   clientKeyPair?: PairedE2EEKeyPair
   clientNonce?: Uint8Array
+  runtimeTokenCapabilities?: boolean
 }
 
 export function createPairedE2EEClientHandshake(
@@ -190,9 +191,14 @@ function createV2Handshake(args: PairedE2EEClientHandshakeArgs): PairedE2EEClien
       // Why read first: throws before the ready, so nothing is signed without a transcript.
       const transcriptHashB64 = session.transcriptHashB64
       if (credential.kind === 'token') {
-        // Why no capabilities: v2 token auth is an exact key set on every host.
+        // Mobile keeps its exact wire shape; native Relay clients opt into scoped capability negotiation.
         return session.sealText(
-          serializeJson(pairedE2EEV2TokenAuth(transcriptHashB64, credential.deviceToken))
+          serializeJson({
+            ...pairedE2EEV2TokenAuth(transcriptHashB64, credential.deviceToken),
+            ...(args.runtimeTokenCapabilities
+              ? { runtimeClientCapabilities: options?.clientCapabilities ?? [] }
+              : {})
+          })
         )
       }
       const signature = await credential.sign(

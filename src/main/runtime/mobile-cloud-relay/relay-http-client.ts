@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto'
+import { deriveRelayHostId } from '../../../shared/relay-host-id'
+export { deriveRelayHostId } from '../../../shared/relay-host-id'
 import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
@@ -80,10 +81,6 @@ export function shouldRetryRelayConnectionError(error: unknown): boolean {
     error.statusCode === 425 ||
     error.statusCode === 429
   )
-}
-
-export function deriveRelayHostId(publicKey: Uint8Array): string {
-  return createHash('sha256').update(publicKey).digest('base64url').slice(0, 16)
 }
 
 function isAllowedRelayOrigin(value: string): boolean {

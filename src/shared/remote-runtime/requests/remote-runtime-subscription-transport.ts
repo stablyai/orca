@@ -1,10 +1,14 @@
+import {
+  createRemoteRuntimeSocketProtocol,
+  resolveRemoteRuntimeRelay,
+  relayRuntimeClientError
+} from '../remote-runtime-relay-protocol'
 import { closeRemoteRuntimeSocket } from '../remote-runtime-socket-close'
 import { throwIfSignalAborted, abortSignalReason } from '../../abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
 import {
-  createRemoteRuntimeClientHandshake,
   formatRemoteRuntimeCloseMessage,
   ignoreSettledRemoteRuntimeSocketError
 } from '../remote-runtime-client-handshake'
@@ -41,6 +45,8 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   options?: RemoteRuntimeSubscriptionOptions
 ): Promise<RemoteRuntimeTransportSubscription> {
   throwIfSignalAborted(options?.signal)
+  await resolveRemoteRuntimeRelay(connection)
+  throwIfSignalAborted(options?.signal)
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
@@ -49,7 +55,8 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     params
   })
   return await new Promise((resolve, reject) => {
-    const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)
+    const protocol = createRemoteRuntimeSocketProtocol(connection)
+    const { handshake } = protocol
     let settled = false
     let closing = false
     let terminalFailure = false
@@ -207,7 +214,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       options?.connectTimeoutMs
     )
     try {
-      ws = new WebSocket(connection.endpoint, connectOptions)
+      ws = new WebSocket(protocol.endpoint, connectOptions)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
@@ -215,7 +222,11 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     }
 
     function onOpen(): void {
-      ws?.send(handshake.helloText())
+      try {
+        protocol.open((frame) => ws?.send(frame))
+      } catch (error) {
+        fail(relayRuntimeClientError(error))
+      }
     }
 
     function onError(error: Error): void {
@@ -254,7 +265,14 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
         return
       }
       liveness?.noteActivity()
-      frameRouter.handleFrame(data, isBinary)
+      try {
+        if (!isBinary && protocol.accept(data.toString(), (frame) => ws?.send(frame))) {
+          return
+        }
+        frameRouter.handleFrame(data, isBinary)
+      } catch (error) {
+        fail(relayRuntimeClientError(error))
+      }
     }
 
     function onLivenessSignal(): void {

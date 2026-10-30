@@ -1,7 +1,13 @@
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { isTailnetIPv4Address } from './tailnet-address'
 
-export type RemotePairingEndpointKind = 'loopback' | 'tailscale' | 'lan' | 'public' | 'custom'
+export type RemotePairingEndpointKind =
+  | 'loopback'
+  | 'tailscale'
+  | 'lan'
+  | 'public'
+  | 'custom'
+  | 'relay'
 
 export type ParsedHostAccessLink = {
   pairing: PairingOffer
@@ -61,7 +67,9 @@ function getEmbeddedIPv4Address(hostname: string): string | null {
   return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`
 }
 
-export function classifyRemotePairingHostname(hostname: string): RemotePairingEndpointKind {
+export function classifyRemotePairingHostname(
+  hostname: string
+): Exclude<RemotePairingEndpointKind, 'relay'> {
   const normalized = hostname
     .toLowerCase()
     .replace(/^\[|\]$/g, '')
@@ -140,8 +148,8 @@ export function parseHostAccessLink(input: string): ParseHostAccessLinkResult {
     ok: true,
     value: {
       pairing,
-      displayEndpoint: endpoint.host,
-      endpointKind: classifyRemotePairingHostname(endpoint.hostname)
+      displayEndpoint: pairing.relay ? new URL(pairing.relay.cellUrl).host : endpoint.host,
+      endpointKind: pairing.relay ? 'relay' : classifyRemotePairingHostname(endpoint.hostname)
     }
   }
 }

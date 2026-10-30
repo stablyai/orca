@@ -1,3 +1,7 @@
+import {
+  createRemoteRuntimeSocketProtocol,
+  resolveRemoteRuntimeRelay
+} from '../remote-runtime-relay-protocol'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
@@ -5,7 +9,6 @@ import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
 import type { RuntimeCapability } from '../../protocol-version'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
-  createRemoteRuntimeClientHandshake,
   formatRemoteRuntimeCloseMessage,
   ignoreSettledRemoteRuntimeSocketError
 } from '../remote-runtime-client-handshake'
@@ -51,6 +54,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
     )
   }
+  await resolveRemoteRuntimeRelay(connection)
+  throwIfSignalAborted(signal)
   const requestId = randomUUID()
   const statusRequestId = validateStatus ? randomUUID() : null
   const serializedStatusRequest = statusRequestId
@@ -78,7 +83,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         : prepare(params)
   }
   return await new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
-    const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)
+    const protocol = createRemoteRuntimeSocketProtocol(connection)
+    const { handshake } = protocol
     let settled = false
     let ws: WebSocket | null = null
     let router: RemoteRuntimeRequestResponseRouter<TResult>
@@ -200,7 +206,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       const connectOptions = remoteRuntimeConnectOptions({
         maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
       })
-      ws = new WebSocket(connection.endpoint, connectOptions)
+      ws = new WebSocket(protocol.endpoint, connectOptions)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       finishError(
@@ -210,7 +216,11 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     }
 
     function onOpen(): void {
-      ws?.send(handshake.helloText())
+      try {
+        protocol.open((frame) => ws?.send(frame))
+      } catch (error) {
+        finishError(error instanceof Error ? error : new Error(String(error)))
+      }
     }
 
     function onError(error: Error): void {
@@ -252,7 +262,13 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         )
         return
       }
-      router.handleTextFrame(data.toString())
+      try {
+        if (!protocol.accept(data.toString(), (frame) => ws?.send(frame))) {
+          router.handleTextFrame(data.toString())
+        }
+      } catch (error) {
+        finishError(error instanceof Error ? error : new Error(String(error)))
+      }
     }
 
     ws.once('open', onOpen)

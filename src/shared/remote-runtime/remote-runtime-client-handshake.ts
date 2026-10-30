@@ -1,3 +1,4 @@
+import type { RuntimeRelayConnection } from '../runtime-relay-connection'
 import {
   createPairedE2EEClientHandshake,
   type PairedE2EEClientHandshake
@@ -8,15 +9,23 @@ import { parseRemoteRuntimeJsonText } from './requests/remote-runtime-request-fr
 
 export type RemoteRuntimeHandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
-// Desktop and CLI runtime clients: legacy framing, structure-limited parsing,
+// Desktop and CLI: direct legacy framing or Relay v2, structure-limited parsing,
 // size-limited auth serialization. Throws on an invalid host public key.
 export function createRemoteRuntimeClientHandshake(
-  hostPublicKeyB64: string
+  hostPublicKeyB64: string,
+  relay?: RuntimeRelayConnection
 ): PairedE2EEClientHandshake {
   return createPairedE2EEClientHandshake({
     primitives: NODE_PAIRED_E2EE_PRIMITIVES,
     hostPublicKeyB64,
-    framing: 'legacy',
+    framing: relay ? 'v2' : 'legacy',
+    ...(relay
+      ? {
+          transport: 'relay' as const,
+          relayHostId: relay.relayHostId,
+          runtimeTokenCapabilities: true
+        }
+      : {}),
     parseJson: parseRemoteRuntimeJsonText,
     serializeJson: serializeRemoteRuntimePayload
   })

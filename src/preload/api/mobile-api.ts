@@ -49,13 +49,20 @@ export type MobileApi = {
   >
   openWindowsNetworkSettings: () => Promise<boolean>
   getRuntimePairingUrl: (args?: {
+    connectionMode?: 'direct' | 'relay'
     address?: string
     rotate?: boolean
     reach?: RuntimePairingReach
   }) => Promise<
     | {
         available: false
-        reason?: 'network_exposure_failed'
+        reason?:
+          | 'network_exposure_failed'
+          | 'relay_mint_failed'
+          | 'websocket_unavailable'
+          | 'invalid_advertised_endpoint'
+          | 'device_registry_unavailable'
+          | 'e2ee_key_unavailable'
         guidance?: string
       }
     | {

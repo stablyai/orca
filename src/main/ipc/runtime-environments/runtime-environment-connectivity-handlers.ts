@@ -88,7 +88,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       args: { name: string; pairingCode: string }
     ): { environment: PublicKnownRuntimeEnvironment } => {
       // An unverified code must not replace a working pairing.
-      const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
+      const environment = addEnvironmentFromPairingCode(getUserDataPath(), {
+        name: args.name,
+        pairingCode: args.pairingCode
+      })
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
     }

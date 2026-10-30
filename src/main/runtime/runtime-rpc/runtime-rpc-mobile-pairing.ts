@@ -1,3 +1,4 @@
+import type { DeviceScope } from '../device-registry'
 import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
 import {
   mobileRelayMintFailureFromUnknown,
@@ -21,13 +22,17 @@ const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   async createMobilePairingOffer(args: {
     address?: string | null
+    scope?: DeviceScope
     connectionMode?: MobilePairingConnectionMode
     name?: string
     rotate?: boolean
   }): Promise<MobilePairingOffer> {
+    const scope = args.scope ?? 'mobile'
     // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
     try {
-      await this.ensureNetworkExposure()
+      if (args.scope !== 'runtime') {
+        await this.ensureNetworkExposure()
+      }
     } catch (error) {
       console.error(
         '[runtime] Network exposure failed while creating a mobile pairing offer:',
@@ -36,23 +41,23 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
     }
     if (args.connectionMode === 'local-only') {
-      this.mobilePairingOfferGeneration += 1
-      return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
+      return this.createMobilePairingOfferSerial(args, this.advancePairingGeneration(scope))
     }
     const address = args.address ?? null
     const rotate = args.rotate === true
     const inFlight = this.mobileRelayPairingOfferInFlight
     if (
-      inFlight?.generation === this.mobilePairingOfferGeneration &&
+      inFlight?.generation === this.pairingGeneration(scope) &&
       inFlight.address === address &&
+      inFlight.scope === scope &&
       (inFlight.rotate || !rotate)
     ) {
       return inFlight.request
     }
     // Why: every request that is not coalesced above supersedes the older one, rotating or not.
-    const generation = ++this.mobilePairingOfferGeneration
+    const generation = this.advancePairingGeneration(scope)
     const request = this.mobileRelayPairingOfferQueue.then(() =>
-      generation === this.mobilePairingOfferGeneration
+      generation === this.pairingGeneration(scope)
         ? this.createMobilePairingOfferSerial(args, generation)
         : this.relayPairingRequestSuperseded()
     )
@@ -60,7 +65,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       () => undefined,
       () => undefined
     )
-    this.mobileRelayPairingOfferInFlight = { generation, address, rotate, request }
+    this.mobileRelayPairingOfferInFlight = { generation, address, scope, rotate, request }
     void request.then(
       () => {
         if (this.mobileRelayPairingOfferInFlight?.request === request) {
@@ -76,9 +81,22 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     return request
   }
 
+  private pairingGeneration(scope: DeviceScope): number {
+    return scope === 'runtime'
+      ? this.runtimeRelayPairingOfferGeneration
+      : this.mobilePairingOfferGeneration
+  }
+
+  private advancePairingGeneration(scope: DeviceScope): number {
+    return scope === 'runtime'
+      ? ++this.runtimeRelayPairingOfferGeneration
+      : ++this.mobilePairingOfferGeneration
+  }
+
   protected async createMobilePairingOfferSerial(
     args: {
       address?: string | null
+      scope?: DeviceScope
       connectionMode?: MobilePairingConnectionMode
       name?: string
       rotate?: boolean
@@ -87,9 +105,11 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   ): Promise<MobilePairingOffer> {
     // Renderer input is untrusted; only explicit local-only may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
-    const pending = this.deviceRegistry?.getPendingDevice('mobile')
+    const scope = args.scope ?? 'mobile'
+    const pending = this.deviceRegistry?.getPendingDevice(scope)
     // Rotate when connection policy changes so old QR credentials retain no new-policy authority.
     const switchingPendingMode =
+      scope === 'mobile' &&
       pending != null &&
       this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
     if (args.rotate || switchingPendingMode) {
@@ -106,7 +126,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     const direct = this.createPairingOffer({
       ...args,
       rotate: args.rotate || switchingPendingMode,
-      scope: 'mobile'
+      scope,
+      ...(scope === 'runtime' ? { reach: 'this-computer' as const } : {})
     })
     if (!direct.available) {
       return direct
@@ -115,15 +136,16 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     let connectionModeStored = false
     try {
       connectionModeStored =
-        this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode) ??
-        false
+        scope === 'runtime' ||
+        (this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode) ??
+          false)
     } catch (error) {
       console.error('[runtime] Failed to persist the pairing connection mode:', error)
     }
     // Persist credential mode or refuse; a QR must never pair under an unstored default policy.
     if (!connectionModeStored) {
       if (createdNewPendingDevice) {
-        this.discardPendingMobilePairingDevice(direct.deviceId)
+        this.discardPendingPairingDevice(direct.deviceId)
       }
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
     }
@@ -136,7 +158,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       relayFailure: MobileRelayMintFailure
     ): PairingOfferUnavailable => {
       if (createdNewPendingDevice) {
-        this.discardPendingMobilePairingDevice(direct.deviceId)
+        this.discardPendingPairingDevice(direct.deviceId)
       }
       return {
         available: false,
@@ -187,14 +209,15 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     }
     const currentDevice = this.deviceRegistry?.getDevice(device.deviceId)
     if (
-      generation !== this.mobilePairingOfferGeneration ||
+      generation !== this.pairingGeneration(scope) ||
       relayProvider !== this.mobileRelayPairingProvider ||
       currentDevice?.token !== device.token ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(device.deviceId) !== 'automatic'
+      (scope === 'mobile' &&
+        this.deviceRegistry?.getMobilePairingConnectionMode(device.deviceId) !== 'automatic')
     ) {
       this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
       if (createdNewPendingDevice) {
-        this.discardPendingMobilePairingDevice(direct.deviceId)
+        this.discardPendingPairingDevice(direct.deviceId)
       }
       return this.relayPairingRequestSuperseded()
     }
@@ -225,7 +248,10 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
         deviceToken: device.token,
         publicKeyB64,
         pairedDeviceId: device.deviceId,
-        scope: 'mobile',
+        scope,
+        ...(scope === 'runtime' && this.hostDescriptor
+          ? { hostDescriptor: this.hostDescriptor }
+          : {}),
         relay: relayPairing.relay
       })
     }
@@ -244,10 +270,10 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     }
   }
 
-  /** Drop a never-scanned mobile pending credential after a failed Anywhere mint. */
-  protected discardPendingMobilePairingDevice(deviceId: string): void {
+  /** Drop an unused pending credential after a failed Relay mint. */
+  protected discardPendingPairingDevice(deviceId: string): void {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    if (!device || device.scope !== 'mobile' || device.lastSeenAt !== 0) {
+    if (!device || device.lastSeenAt !== 0) {
       return
     }
     if (device.relayBinding) {

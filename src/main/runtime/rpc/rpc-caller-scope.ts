@@ -40,6 +40,9 @@ export function denyRpcMethodForCaller(
   if (scope.kind === 'owner' || permission === undefined) {
     return null
   }
+  if (methodName === 'pairing.getEndpoints' || methodName === 'pairing.provisionRelay') {
+    return null
+  }
   return !RUNTIME_PAIRED_STANDARD.has(permission) &&
     !scope.grants.some((grant) => grant === permission)
     ? `Method '${methodName}' needs the '${permission}' permission, which this paired client was not granted when it paired.`

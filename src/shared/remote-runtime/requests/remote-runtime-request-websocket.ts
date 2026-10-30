@@ -1,7 +1,7 @@
 import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
-import { createRemoteRuntimeClientHandshake } from '../remote-runtime-client-handshake'
+import { createRemoteRuntimeSocketProtocol } from '../remote-runtime-relay-protocol'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,
@@ -40,16 +40,24 @@ export function openRemoteRuntimeWebSocket(
   if (!opened.ok) {
     return opened
   }
-  const { ws, handshake } = opened
+  const { ws, handshake, protocol } = opened
 
   let cleanedUp = false
   const onOpen = (): void => {
-    ws.send(handshake.helloText())
+    try {
+      protocol.open((frame) => ws.send(frame))
+    } catch (error) {
+      onError(error instanceof Error ? error : new Error(String(error)))
+    }
   }
   const onError = (error: Error): void => {
     callbacks.onError(
       ws,
-      remoteRuntimeUnavailableError(remoteRuntimeConnectFailureMessage(error, connection.endpoint))
+      error instanceof RemoteRuntimeClientError
+        ? error
+        : remoteRuntimeUnavailableError(
+            remoteRuntimeConnectFailureMessage(error, connection.endpoint)
+          )
     )
   }
   const onClose = (code: number, reason: Buffer): void => callbacks.onClose(ws, code, reason)
@@ -67,7 +75,13 @@ export function openRemoteRuntimeWebSocket(
       )
       return
     }
-    callbacks.onTextFrame(ws, data.toString())
+    try {
+      if (!protocol.accept(data.toString(), (frame) => ws.send(frame))) {
+        callbacks.onTextFrame(ws, data.toString())
+      }
+    } catch (error) {
+      onError(error instanceof Error ? error : new Error(String(error)))
+    }
   }
   const onPong = (): void => callbacks.onPong?.(ws)
   const onPing = (): void => callbacks.onPing?.(ws)
@@ -103,11 +117,16 @@ function createSocket(
   connection: PairedRuntimeConnection,
   connectTimeoutMs?: number
 ):
-  | { ok: true; ws: WebSocket; handshake: PairedE2EEClientHandshake }
+  | {
+      ok: true
+      ws: WebSocket
+      handshake: PairedE2EEClientHandshake
+      protocol: ReturnType<typeof createRemoteRuntimeSocketProtocol>
+    }
   | { ok: false; error: RemoteRuntimeClientError } {
-  let handshake: PairedE2EEClientHandshake
+  let protocol: ReturnType<typeof createRemoteRuntimeSocketProtocol>
   try {
-    handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)
+    protocol = createRemoteRuntimeSocketProtocol(connection)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return {
@@ -123,13 +142,14 @@ function createSocket(
       ok: true,
       // Why: no runtime frame exceeds this, so a larger one is a broken peer, not a payload to buffer.
       ws: new WebSocket(
-        connection.endpoint,
+        protocol.endpoint,
         remoteRuntimeConnectOptions(
           { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES },
           connectTimeoutMs
         )
       ),
-      handshake
+      handshake: protocol.handshake,
+      protocol
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

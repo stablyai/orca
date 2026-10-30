@@ -15,9 +15,18 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('./RuntimeAccessGrantList', () => ({ RuntimeAccessGrantList: () => null }))
 vi.mock('./RuntimePairingGeneratorForm', () => ({
-  RuntimePairingGeneratorForm: (props: { selectedAddress: string; onGenerate: () => void }) => (
+  RuntimePairingGeneratorForm: (props: {
+    selectedAddress: string
+    onGenerate: () => void
+    onIntentChange: (intent: 'relay') => void
+    runtimePairingUrl: string | null
+  }) => (
     <div>
       <div data-testid="selected-address">{props.selectedAddress}</div>
+      <div>{props.runtimePairingUrl}</div>
+      <button type="button" onClick={() => props.onIntentChange('relay')}>
+        Relay
+      </button>
       <button type="button" onClick={props.onGenerate}>
         Generate
       </button>
@@ -102,5 +111,32 @@ describe('RuntimePairingUrlGenerator', () => {
     await waitFor(() =>
       expect(mocks.getRuntimePairingUrl).toHaveBeenCalledWith({ address, rotate: true, reach })
     )
+  })
+  it('requests a Relay access code without depending on a LAN interface', async () => {
+    runtimePairingLinkCache.intent = 'relay'
+    runtimePairingLinkCache.selectedAddress = '127.0.0.1'
+    mocks.listNetworkInterfaces.mockResolvedValue({ interfaces: [] })
+    render(<RuntimePairingUrlGenerator />)
+    screen.getByRole('button', { name: 'Generate' }).click()
+    await waitFor(() =>
+      expect(mocks.getRuntimePairingUrl).toHaveBeenCalledWith({
+        address: '127.0.0.1',
+        rotate: true,
+        reach: 'network',
+        connectionMode: 'relay'
+      })
+    )
+  })
+  it('does not reuse a local code when switching to Relay at the same address', async () => {
+    runtimePairingLinkCache.intent = 'local'
+    runtimePairingLinkCache.selectedAddress = '127.0.0.1'
+    runtimePairingLinkCache.generatedAddress = '127.0.0.1'
+    runtimePairingLinkCache.runtimePairingUrl = 'local-only-link'
+    mocks.listNetworkInterfaces.mockResolvedValue({ interfaces: [] })
+    render(<RuntimePairingUrlGenerator />)
+    expect(screen.getByText('local-only-link')).not.toBeNull()
+    screen.getByRole('button', { name: 'Relay' }).click()
+    await waitFor(() => expect(screen.queryByText('local-only-link')).toBeNull())
+    expect(runtimePairingLinkCache.runtimePairingUrl).toBeNull()
   })
 })

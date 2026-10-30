@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../terminal/adoption/unshown-live-terminal-placement'
@@ -245,6 +246,36 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
+        if (
+          socket.device.scope === 'runtime' &&
+          socket.transport.transport === 'relay' &&
+          socket.transport.credentialKind === 'resume'
+        ) {
+          const provider = this.mobileRelayPairingProvider
+          if (!provider) {
+            socket.ws.close(1011, 'Relay resume confirmation unavailable')
+            return
+          }
+          void provider
+            .getEndpoints(
+              {
+                deviceId: socket.device.deviceId,
+                connectionId: socket.connectionId,
+                transport: socket.transport
+              },
+              { resumeConfirmReqId: randomUUID() }
+            )
+            .then(
+              (result) => {
+                if (!result.resumeConfirmation) {
+                  socket.ws.close(1011, 'Relay resume confirmation unavailable')
+                }
+              },
+              () => {
+                socket.ws.close(1011, 'Relay resume confirmation failed')
+              }
+            )
+        }
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()

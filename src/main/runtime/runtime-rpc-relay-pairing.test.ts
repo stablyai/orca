@@ -24,64 +24,66 @@ vi.mock('../git/worktree', () => {
 })
 
 describe('OrcaRuntimeRpcServer', () => {
-  it('adds only the exact optional relay object to GUI mobile pairing offers', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const server = new OrcaRuntimeRpcServer({
-      methods: [],
-      runtime: new OrcaRuntimeService(),
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-    const relay = {
-      v: 1 as const,
-      directorUrl: 'https://relay.example.com',
-      cellUrl: 'https://cell.example.com',
-      assignmentEpoch: 7,
-      relayHostId: 'AbCdEf0123_-xyZ9',
-      inviteToken: 'A'.repeat(43),
-      inviteExpiresAt: Date.now() + 60_000,
-      e2eeFraming: 2 as const
-    }
-    server.setMobileRelayPairingProvider({
-      createPairingRelay: async (relayDeviceId) => ({
-        relay,
-        binding: {
-          relayHostId: relay.relayHostId,
-          relayDeviceId,
-          ownerIdentityKey: 'user\0profile\0org'
-        }
-      }),
-      onDeviceRevokeQueued: vi.fn(),
-      getEndpoints: vi.fn(),
-      provisionRelay: vi.fn()
-    })
-
-    await server.start()
-    try {
-      const offer = await server.createMobilePairingOffer({
-        address: '100.64.1.20',
-        name: 'Mobile test'
+  it.each(['mobile', 'runtime'] as const)(
+    'adds Relay routing to %s pairing offers without changing the grant scope',
+    async (scope) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const server = new OrcaRuntimeRpcServer({
+        methods: [],
+        runtime: new OrcaRuntimeService(),
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0
       })
-      expect(offer.available).toBe(true)
-      if (!offer.available) {
-        throw new Error('WebSocket pairing unavailable')
+      const relay = {
+        v: 1 as const,
+        directorUrl: 'https://relay.example.com',
+        cellUrl: 'https://cell.example.com',
+        assignmentEpoch: 7,
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        inviteToken: 'A'.repeat(43),
+        inviteExpiresAt: Date.now() + 60_000,
+        e2eeFraming: 2 as const
       }
-      const parsed = parsePairingCode(offer.pairingUrl)
-      expect(parsed).toEqual(
-        expect.objectContaining({ endpoint: offer.endpoint, scope: 'mobile', relay })
-      )
-      expect(parsed).not.toHaveProperty('endpoints')
-      expect(offer.connectionMode).toBe('automatic')
-      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.relayBinding).toEqual({
-        relayHostId: relay.relayHostId,
-        relayDeviceId: offer.deviceId,
-        ownerIdentityKey: 'user\0profile\0org'
+      server.setMobileRelayPairingProvider({
+        createPairingRelay: async (relayDeviceId) => ({
+          relay,
+          binding: {
+            relayHostId: relay.relayHostId,
+            relayDeviceId,
+            ownerIdentityKey: 'user\0profile\0org'
+          }
+        }),
+        onDeviceRevokeQueued: vi.fn(),
+        getEndpoints: vi.fn(),
+        provisionRelay: vi.fn()
       })
-    } finally {
-      await server.stop()
+
+      await server.start()
+      try {
+        const offer = await server.createMobilePairingOffer({
+          address: '100.64.1.20',
+          name: 'Mobile test',
+          scope
+        })
+        expect(offer.available).toBe(true)
+        if (!offer.available) {
+          throw new Error('WebSocket pairing unavailable')
+        }
+        const parsed = parsePairingCode(offer.pairingUrl)
+        expect(parsed).toEqual(expect.objectContaining({ endpoint: offer.endpoint, scope, relay }))
+        expect(parsed).not.toHaveProperty('endpoints')
+        expect(offer.connectionMode).toBe('automatic')
+        expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.relayBinding).toEqual({
+          relayHostId: relay.relayHostId,
+          relayDeviceId: offer.deviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        })
+      } finally {
+        await server.stop()
+      }
     }
-  })
+  )
 
   it('queues the old Relay binding when a stable provider changes accounts', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

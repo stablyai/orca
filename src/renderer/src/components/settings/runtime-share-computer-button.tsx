@@ -54,7 +54,7 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
         {translate('auto.components.settings.serverList.shareTitle', 'Share this computer')}
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-xl" scrollable>
+        <DialogContent surface="security" className="sm:max-w-xl" scrollable>
           <DialogHeader>
             <DialogTitle>
               {translate('auto.components.settings.serverList.shareTitle', 'Share this computer')}

@@ -37,7 +37,7 @@ export function RuntimeAddServerDialog({
         }
       }}
     >
-      <DialogContent scrollable>
+      <DialogContent surface="security" scrollable>
         <DialogHeader>
           <DialogTitle>
             {translate('auto.components.settings.serverList.addTitle', 'Add server')}

@@ -55,7 +55,7 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('Add SSH host')
     expect(html).toContain('Use an existing machine over SSH.')
     expect(html).toContain('Add remote server')
-    expect(html).toContain('Pair with Orca running on another computer.')
+    expect(html).toContain('Paste an access link or Relay code from another computer.')
   })
 
   it('shows disconnected SSH hosts with a connect action in Add Project', () => {

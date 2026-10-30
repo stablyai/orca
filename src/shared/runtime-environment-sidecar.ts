@@ -1,3 +1,4 @@
+import { RuntimeRelayConnectionSchema } from './runtime-relay-connection'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -32,6 +33,8 @@ const SidecarSshAccessSchema = RuntimeSshAccessLinkSchema.extend({
 })
 
 const SidecarEntrySchema = z.object({
+  relayConnection: RuntimeRelayConnectionSchema.optional(),
+  pendingRelayConnection: RuntimeRelayConnectionSchema.optional(),
   binding: SidecarBindingSchema,
   // The store state a two-file rebind is moving to; the entry stays current through a crash between them.
   pendingBinding: SidecarBindingSchema.optional(),
@@ -143,10 +146,14 @@ function currentEntry(
     return undefined
   }
   // A rebind stopped after its store write: the stored endpoint already names the new tunnel port.
+  const pendingEntry = {
+    ...entry,
+    ...(entry.pendingRelayConnection ? { relayConnection: entry.pendingRelayConnection } : {})
+  }
   const localPort = getPreferredLoopbackRuntimePort(environment)
   return entry.orcadDeployment && localPort !== null
-    ? { ...entry, orcadDeployment: { ...entry.orcadDeployment, localPort } }
-    : entry
+    ? { ...pendingEntry, orcadDeployment: { ...entry.orcadDeployment, localPort } }
+    : pendingEntry
 }
 
 /** Ignore stale sidecars whose pairing binding or overlay validation no longer matches. */
@@ -185,7 +192,8 @@ export function overlayRuntimeEnvironmentSidecar(
       : {}),
     ...(current.orcadDeployment ? { orcadDeployment: current.orcadDeployment } : {}),
     ...(current.orcadMigratedAt ? { orcadMigratedAt: current.orcadMigratedAt } : {}),
-    ...(current.reconciliation ? { reconciliation: current.reconciliation } : {})
+    ...(current.reconciliation ? { reconciliation: current.reconciliation } : {}),
+    ...(current.relayConnection ? { relayConnection: current.relayConnection } : {})
   })
   return overlaid.success ? overlaid.data : base
 }
@@ -227,6 +235,8 @@ export function writeRuntimeEnvironmentSidecarEntry(
   const hasState =
     entry !== null &&
     ((entry.runtimeId !== undefined && environment.runtimeId === null) ||
+      entry.relayConnection !== undefined ||
+      entry.pendingRelayConnection !== undefined ||
       entry.sshAccess !== undefined ||
       entry.pendingSshAccessOperation !== undefined ||
       entry.orcadDeployment !== undefined ||

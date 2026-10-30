@@ -41,12 +41,23 @@ export const mobileApi = {
   openWindowsNetworkSettings: () => ipcRenderer.invoke('mobile:openWindowsNetworkSettings'),
 
   getRuntimePairingUrl: (args?: {
+    connectionMode?: 'direct' | 'relay'
     address?: string
     rotate?: boolean
     // Gate host-wide exposure on the chosen reach: a loopback address may front an SSH tunnel.
     reach?: RuntimePairingReach
   }): Promise<
-    | { available: false; reason?: 'network_exposure_failed'; guidance?: string }
+    | {
+        available: false
+        reason?:
+          | 'network_exposure_failed'
+          | 'relay_mint_failed'
+          | 'websocket_unavailable'
+          | 'invalid_advertised_endpoint'
+          | 'device_registry_unavailable'
+          | 'e2ee_key_unavailable'
+        guidance?: string
+      }
     | {
         available: true
         pairingUrl: string

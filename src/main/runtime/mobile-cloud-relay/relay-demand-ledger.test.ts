@@ -70,18 +70,21 @@ describe('RelayDemandLedger', () => {
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
   })
 
-  it('keeps provisioned devices and revoke outbox work authoritative', () => {
-    const { deviceRegistry, revokeOutbox, ledger } = fixture(5_000)
-    const paired = deviceRegistry.addDevice('Paired phone')
-    deviceRegistry.setRelayBinding(paired.deviceId, binding(paired.deviceId))
-    deviceRegistry.updateLastSeen(paired.deviceId)
-    expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
+  it.each(['mobile', 'runtime'] as const)(
+    'keeps provisioned %s devices and revoke outbox work authoritative',
+    (scope) => {
+      const { deviceRegistry, revokeOutbox, ledger } = fixture(5_000)
+      const paired = deviceRegistry.addDevice('Paired device', scope)
+      deviceRegistry.setRelayBinding(paired.deviceId, binding(paired.deviceId))
+      deviceRegistry.updateLastSeen(paired.deviceId)
+      expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
 
-    deviceRegistry.removeDevice(paired.deviceId)
-    expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
-    revokeOutbox.enqueue(binding(paired.deviceId))
-    expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
-  })
+      deviceRegistry.removeDevice(paired.deviceId)
+      expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
+      revokeOutbox.enqueue(binding(paired.deviceId))
+      expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
+    }
+  )
 
   it('does not activate another signed-in identity or relay host', () => {
     const { deviceRegistry, ledger } = fixture(1_000)

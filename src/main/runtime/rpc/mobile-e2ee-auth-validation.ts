@@ -4,7 +4,7 @@ import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/reque
 import { isDeviceProofB64, verifyDeviceProof } from '../../../shared/device-key-proof'
 
 export type ClassifiedE2EEAuth =
-  | { kind: 'token'; deviceToken: string; clientCapabilities?: unknown }
+  | { kind: 'token'; deviceToken: string; clientCapabilities?: unknown; runtimeToken?: true }
   | { kind: 'device-key'; deviceId: string; deviceProofB64: string; clientCapabilities?: unknown }
   | { kind: 'invalid' }
 
@@ -56,6 +56,20 @@ export function classifyE2EEAuth(
   ) {
     return { kind: 'token', deviceToken: auth.deviceToken }
   }
+  if (
+    keys.join(',') === 'deviceToken,runtimeClientCapabilities,transcriptHashB64,type,v' &&
+    typeof auth.deviceToken === 'string' &&
+    auth.deviceToken &&
+    Array.isArray(auth.runtimeClientCapabilities) &&
+    auth.runtimeClientCapabilities.every((value) => typeof value === 'string')
+  ) {
+    return {
+      kind: 'token',
+      deviceToken: auth.deviceToken,
+      runtimeToken: true,
+      clientCapabilities: auth.runtimeClientCapabilities
+    }
+  }
   const rest = keys.filter((key) => key !== 'type' && key !== 'v' && key !== 'transcriptHashB64')
   if (
     rest.every((key) => V2_DEVICE_KEY_KEYS.has(key)) &&
@@ -89,7 +103,9 @@ export type DeviceKeyResolution<TDevice> =
   | { kind: 'refused' }
   | { kind: 'unavailable' }
 
-export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>(args: {
+export function authenticateMobileE2EE<
+  TDevice extends { deviceToken?: string; scope?: string }
+>(args: {
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
   resolveDevice: (token: string) => TDevice | null
@@ -102,7 +118,8 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
     // Why: a keyed row has no token, so presenting one can never match it.
-    return device?.deviceToken === auth.deviceToken
+    return device?.deviceToken === auth.deviceToken &&
+      (!auth.runtimeToken || device.scope === 'runtime')
       ? { ok: true, device, clientCapabilities: auth.clientCapabilities }
       : { ok: false, code: 'unauthorized' }
   }

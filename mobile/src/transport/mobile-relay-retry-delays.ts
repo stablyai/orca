@@ -12,7 +12,7 @@ const RELAY_ATTACH_TIMEOUT_REDIAL_MAX_MS = 2_000
 const RELAY_GATE_REPROBE_BASE_MS = 60_000
 const RELAY_GATE_REPROBE_CEILING_MS = 15 * 60_000
 // Cap director pacing so one header cannot park recovery indefinitely.
-export const MOBILE_RELAY_RETRY_AFTER_MAX_MS = 120_000
+export { RELAY_DIRECTOR_RETRY_AFTER_MAX_MS as MOBILE_RELAY_RETRY_AFTER_MAX_MS } from '../../../src/shared/relay-resume-director'
 
 export class RelayRetryDelays {
   constructor(private readonly randomBytes: (length: number) => Uint8Array) {}

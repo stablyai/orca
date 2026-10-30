@@ -54,6 +54,14 @@ export function RuntimePairingGeneratorForm({
   }))
   const intentOptions: { value: RuntimePairingIntent; label: string; description: string }[] = [
     {
+      value: 'relay',
+      label: translate('runtimePairing.relay', 'Relay'),
+      description: translate(
+        'runtimePairing.relayHelp',
+        'Connect another Orca desktop over the internet without configuring SSH or opening a port.'
+      )
+    },
+    {
       value: 'another',
       label: translate(
         'auto.components.settings.RuntimePairingUrlGenerator.anotherDevice',
@@ -92,20 +100,20 @@ export function RuntimePairingGeneratorForm({
   const customAddressResult =
     intent === 'custom' ? parseServerShareAddress(selectedAddress) : { ok: true as const }
   const customAddressInvalid = selectedAddress !== '' && !customAddressResult.ok
-  const canGenerate = selectedAddress !== '' && (intent !== 'custom' || customAddressResult.ok)
+  const canGenerate =
+    (intent === 'relay' || selectedAddress !== '') &&
+    (intent !== 'custom' || customAddressResult.ok)
 
   return (
     <>
       <div className="space-y-3">
         <div className="space-y-2">
           <div id="runtime-pairing-intent-label" className="text-sm font-medium">
-            {translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.whoOpens',
-              'Who will open the link'
-            )}
+            {translate('runtimePairing.connectionMethod', 'Connection method')}
           </div>
           <ToggleGroup
             type="single"
+            disabled={isGeneratingPairing}
             variant="segmented"
             size="sm"
             spacing={1}
@@ -130,7 +138,14 @@ export function RuntimePairingGeneratorForm({
           </p>
         </div>
 
-        {intent === 'local' ? (
+        {intent === 'relay' ? (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'runtimePairing.relayCodeHelp',
+              'Generate an access code, then paste it into Add remote server on your other computer. Both computers must be online.'
+            )}
+          </p>
+        ) : intent === 'local' ? (
           <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs">
             <div className="font-medium">
               {translate(

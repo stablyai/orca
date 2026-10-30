@@ -46,6 +46,9 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     if (device?.scope !== 'runtime') {
       return false
     }
+    if (device.relayBinding && !this.queueRelayDeviceRevoke(device.relayBinding)) {
+      return false
+    }
     for (const child of this.deviceRegistry?.listDelegatedMobileDevices(deviceId) ?? []) {
       // Keep parent until child cleanup is durable so retry can rediscover them.
       if (!this.revokeMobileDeviceNow(child.deviceId)) {
@@ -55,6 +58,7 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     if (!this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
+    this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
     return true

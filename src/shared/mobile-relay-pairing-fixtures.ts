@@ -54,9 +54,9 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
       expected: directOffer
     },
     {
-      name: 'runtime relay is invalid',
+      name: 'relay offer with runtime scope',
       payload: { ...directOffer, scope: 'runtime', relay },
-      expected: null
+      expected: { ...directOffer, scope: 'runtime', relay }
     },
     {
       name: 'relay offer public key must be canonical 32-byte base64',

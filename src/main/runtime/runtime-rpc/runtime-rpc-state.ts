@@ -1,3 +1,4 @@
+import type { DeviceScope } from '../device-registry'
 import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -83,11 +84,13 @@ export class RuntimeRpcState {
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   protected mobileRelayPairingOfferInFlight: {
     generation: number
+    scope: DeviceScope
     address: string | null
     rotate: boolean
     request: Promise<MobilePairingOffer>
   } | null = null
   protected mobilePairingOfferGeneration = 0
+  protected runtimeRelayPairingOfferGeneration = 0
   protected onUnpairedDeviceAuthFailure: (() => void) | null = null
   protected unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
   protected readonly binaryMessageRouter = new RuntimeBinaryMessageRouter()

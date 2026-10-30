@@ -323,6 +323,7 @@ export function AddRemoteHostDialog({
       }}
     >
       <DialogContent
+        surface={renderMode === 'server' ? 'security' : undefined}
         className={
           showSshConfigPicker
             ? 'flex max-h-[min(90vh,560px)] flex-col gap-0 overflow-hidden sm:max-w-xl'

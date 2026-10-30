@@ -197,7 +197,7 @@ export function RemoteServerFields({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="add-server-pairing-code">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.accessLink', 'Access link')}
+          {translate('runtimePairing.accessLinkOrCode', 'Access link or code')}
         </Label>
         <Input
           id="add-server-pairing-code"

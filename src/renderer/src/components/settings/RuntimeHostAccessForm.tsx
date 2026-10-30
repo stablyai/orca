@@ -75,7 +75,7 @@ export function RuntimeHostAccessForm({
     >
       <div className="space-y-2">
         <Label htmlFor="runtime-server-access-link">
-          {translate('auto.components.settings.RuntimeHostAccessForm.accessLink', 'Access link')}
+          {translate('runtimePairing.accessLinkOrCode', 'Access link or code')}
         </Label>
         <Input
           id="runtime-server-access-link"

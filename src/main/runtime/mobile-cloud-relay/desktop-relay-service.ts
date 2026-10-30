@@ -144,7 +144,7 @@ export class DesktopRelayService {
     context: MobilePairingConnectionContext,
     params: PairingGetEndpointsParams
   ): Promise<PairingGetEndpointsResult> {
-    this.requireMobileDevice(context.deviceId)
+    this.requirePairedDevice(context.deviceId)
     if (
       this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
       'local-only'
@@ -186,7 +186,7 @@ export class DesktopRelayService {
     context: MobilePairingConnectionContext,
     params: PairingProvisionRelayParams
   ): Promise<DeviceCredentialInstalled> {
-    this.requireMobileDevice(context.deviceId)
+    this.requirePairedDevice(context.deviceId)
     if (
       this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
       'local-only'
@@ -241,8 +241,8 @@ export class DesktopRelayService {
     }
   }
 
-  private requireMobileDevice(deviceId: string): void {
-    if (this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)?.scope !== 'mobile') {
+  private requirePairedDevice(deviceId: string): void {
+    if (!this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)) {
       throw new Error('mobile_device_not_found')
     }
   }

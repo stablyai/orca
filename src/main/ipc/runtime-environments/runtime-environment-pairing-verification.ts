@@ -1,3 +1,5 @@
+import { verifyRuntimeRelayPairing } from './runtime-environment-relay-pairing'
+import type { RuntimeRelayConnection } from '../../../shared/runtime-relay-connection'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import {
   addOrUpdateEnvironmentFromPairingCode,
@@ -38,10 +40,13 @@ type VerifiedPairingCode = {
   ok: true
   link: ParsedHostAccessLink
   runtimeStatus: RuntimeStatus
+  relayConnection?: RuntimeRelayConnection
+  finishPairing?: () => void
 }
 
 /** Proves a pairing link reaches a compatible host that accepts it, without saving anything. */
 async function verifyPairingCode(
+  userDataPath: string,
   pairingCode: string,
   allowLoopback: boolean | undefined
 ): Promise<VerifiedPairingCode | RemotePairingFailure> {
@@ -49,7 +54,7 @@ async function verifyPairingCode(
   if (!parsed.ok) {
     return { ok: false, kind: 'access-link-invalid', message: parsed.message }
   }
-  if (parsed.value.endpointKind === 'loopback' && !allowLoopback) {
+  if (!parsed.value.pairing.relay && parsed.value.endpointKind === 'loopback' && !allowLoopback) {
     return {
       ok: false,
       kind: 'host-unreachable',
@@ -57,6 +62,11 @@ async function verifyPairingCode(
     }
   }
   try {
+    const connection = pairedRuntimeConnectionFromOffer(parsed.value.pairing)
+    if (connection.relayConnection) {
+      const verified = await verifyRuntimeRelayPairing(userDataPath, parsed.value.pairing)
+      return verified.ok ? { ...verified, link: parsed.value } : verified
+    }
     const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
       pairedRuntimeConnectionFromOffer(parsed.value.pairing),
       'status.get',
@@ -91,7 +101,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   userDataPath: string,
   args: VerifyAndAddRuntimeEnvironmentArgs
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
-  const verified = await verifyPairingCode(args.pairingCode, args.allowLoopback)
+  const verified = await verifyPairingCode(userDataPath, args.pairingCode, args.allowLoopback)
   if (!verified.ok) {
     return verified
   }
@@ -101,12 +111,18 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   try {
     outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
       ...args,
+      relayConnection: verified.relayConnection,
       // Only a verified key match permits updating an existing server identity.
       runtimeId: runtimeStatus.runtimeId,
       ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
     })
   } catch (error) {
     return pairingSaveFailure(error, 'hostSaveFailed')
+  }
+  try {
+    verified.finishPairing?.()
+  } catch {
+    /* A saved pairing no longer depends on the recovery file. */
   }
   return {
     ok: true,
@@ -127,6 +143,7 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   }
   // SSH tunnel pairings legitimately use loopback links.
   const verified = await verifyPairingCode(
+    userDataPath,
     args.pairingCode,
     existing.connectionDependency === 'ssh-tunnel'
   )
@@ -145,11 +162,17 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   try {
     environment = updateEnvironmentFromPairingCode(userDataPath, existing.id, {
       pairingCode: args.pairingCode,
+      relayConnection: verified.relayConnection,
       // The verified same host may have restarted with a new runtimeId.
       runtimeId: verified.runtimeStatus.runtimeId
     })
   } catch (error) {
     return pairingSaveFailure(error, 'repairSaveFailed')
+  }
+  try {
+    verified.finishPairing?.()
+  } catch {
+    /* A saved pairing no longer depends on the recovery file. */
   }
   return {
     ok: true,

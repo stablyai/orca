@@ -56,6 +56,10 @@ function listRelayableEnvironments(
   const wslReaches = wslHostsGateOpen() ? getWslHostPhoneGate()?.reachAll() : undefined
   const relayable: { environment: KnownRuntimeEnvironment; reach: WslHostPhoneReach | null }[] = []
   for (const environment of listEnvironments(userDataPath)) {
+    // A delegated phone cannot reuse the paired desktop's outer Relay device identity.
+    if (environment.relayConnection) {
+      continue
+    }
     const reach =
       classifyRuntimeEnvironmentHost(environment).kind === 'wsl'
         ? (wslReaches?.get(environment.id) ?? 'hidden')

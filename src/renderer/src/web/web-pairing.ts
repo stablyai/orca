@@ -114,6 +114,9 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
   ) {
     return null
   }
+  if (parsed.scope === 'runtime' && 'relay' in parsed) {
+    return null
+  }
   const scope = parseWebPairingScope(parsed.scope)
   const pairedDeviceId =
     typeof parsed.pairedDeviceId === 'string' && parsed.pairedDeviceId.length > 0

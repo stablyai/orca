@@ -91,7 +91,17 @@ describe('paired runtime clients', () => {
     }
   )
 
-  it.each(['pairing.provisionRelay', 'pairing.getEndpoints', 'notifications.registerPush'])(
+  it.each(['pairing.provisionRelay', 'pairing.getEndpoints'])(
+    'permits this authenticated device to manage its own relay: %s',
+    async (method) => {
+      const response = await dispatchAs(PAIRED, method, {})
+      expect(errorCode(response)).not.toBe('forbidden')
+      const delegated = await dispatchAs({ kind: 'mobile', delegated: true }, method, {})
+      expect(errorCode(delegated)).toBe('forbidden')
+    }
+  )
+
+  it.each(['notifications.registerPush'])(
     'are refused pairing and push administration: %s',
     async (method) => {
       const response = await dispatchAs(PAIRED, method, {})

@@ -48,7 +48,13 @@ export class RemoteRuntimeSharedControlConnection {
     private readonly connection: PairedRuntimeConnection,
     private readonly options: SharedControlTypes.RemoteRuntimeSharedControlConnectionOptions = {}
   ) {
-    this.diagnostics = new SharedControlDiagnosticsTracker(options, () => this.diagnosticsCounts())
+    this.diagnostics = new SharedControlDiagnosticsTracker(options, () => ({
+      state: this.state,
+      reconnecting: this.reconnect.isScheduled,
+      pendingRequestCount: this.pendingRequests.size,
+      subscriptionCount: this.subscriptions.size,
+      reconnectAttempt: this.reconnect.attemptCount
+    }))
     this.readyStableReset = new SharedControlReadyStableResetTimer(
       options.reconnectStableResetMs ?? 30_000
     )
@@ -115,35 +121,22 @@ export class RemoteRuntimeSharedControlConnection {
       this.closeSubscription(subscription.requestId)
     }
     this.closeSocket(error)
-    this.publishDiagnostics()
+    this.diagnostics.publish()
   }
   readonly retryNow = (): boolean => this.reconnect.retryNow()
   pauseStandingRetry(): void {
     if (this.subscriptions.size === 0) {
       this.reconnect.clear()
-      this.publishDiagnostics()
+      this.diagnostics.publish()
     }
   }
 
-  private publishDiagnostics(): void {
-    this.diagnostics.publish()
-  }
   isReady(): boolean {
     const { state, ws, handshake } = this
     return sharedControlReady.isSharedControlReady({ state, ws, handshake })
   }
-  getDiagnostics(): SharedControlTypes.RemoteRuntimeSharedConnectionDiagnostics {
-    return this.diagnostics.get()
-  }
-  private diagnosticsCounts() {
-    return {
-      state: this.state,
-      reconnecting: this.reconnect.isScheduled,
-      pendingRequestCount: this.pendingRequests.size,
-      subscriptionCount: this.subscriptions.size,
-      reconnectAttempt: this.reconnect.attemptCount
-    }
-  }
+  readonly getDiagnostics = (): SharedControlTypes.RemoteRuntimeSharedConnectionDiagnostics =>
+    this.diagnostics.get()
   reconnectNow(): void {
     refreshRemoteRuntimeSharedControl({
       intentionallyClosed: this.intentionallyClosed,
@@ -173,7 +166,15 @@ export class RemoteRuntimeSharedControlConnection {
       return
     }
     this.reconnect.clear()
-    const socketGeneration = this.socketGeneration.begin()
+    this.state = 'awaiting_ready'
+    this.socketGeneration.openAfterRelayResolution(
+      this.connection,
+      (generation) => this.openSocket(generation),
+      (error, generation) => this.handleSocketClosed(error, generation, 'socket_error')
+    )
+  }
+
+  private openSocket(socketGeneration: number): void {
     const opened = openSharedControlSocket(this.connection, {
       getCurrentSocket: () => this.ws,
       onSocketClosed: (error, cause, close) => {
@@ -198,7 +199,7 @@ export class RemoteRuntimeSharedControlConnection {
     this.handshake = opened.socket.handshake
     this.socketCleanup = opened.socket.cleanup
     this.state = 'awaiting_ready'
-    this.publishDiagnostics()
+    this.diagnostics.publish()
   }
 
   private handleTextFrame(frame: string, socketGeneration: number): void {
@@ -225,7 +226,7 @@ export class RemoteRuntimeSharedControlConnection {
         this.diagnostics.markReady()
         this.options.onReady?.()
         // Clear predecessor-attempt diagnostics on recovery so Connected cannot retain stale failure details.
-        this.publishDiagnostics()
+        this.diagnostics.publish()
         this.readyStableReset.schedule({
           getState: () => this.state,
           getSocket: () => this.ws,
@@ -233,7 +234,7 @@ export class RemoteRuntimeSharedControlConnection {
         })
       },
       replaySubscriptions: () => this.replaySubscriptions(),
-      publishDiagnostics: () => this.publishDiagnostics()
+      publishDiagnostics: () => this.diagnostics.publish()
     })
   }
 
@@ -285,7 +286,7 @@ export class RemoteRuntimeSharedControlConnection {
           subscriptionCount: this.subscriptions.size,
           open: () => this.open()
         }),
-      publishDiagnostics: () => this.publishDiagnostics()
+      publishDiagnostics: () => this.diagnostics.publish()
     })
   }
 
@@ -297,7 +298,7 @@ export class RemoteRuntimeSharedControlConnection {
       pendingRequests: this.pendingRequests,
       subscriptions: this.subscriptions,
       readyWaiters: this.readyWaiters,
-      lastClose: this.getDiagnostics().lastClose,
+      lastClose: this.diagnostics.get().lastClose,
       socketCleanup: this.socketCleanup,
       ws: this.ws,
       error,
@@ -307,6 +308,6 @@ export class RemoteRuntimeSharedControlConnection {
     this.ws = this.handshake = null
     this.socketCleanup = null
     this.state = 'closed'
-    this.publishDiagnostics()
+    this.diagnostics.publish()
   }
 }

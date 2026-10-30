@@ -185,8 +185,8 @@ export function AddRepoHostSelector({
                         </span>
                         <span className="mt-0.5 text-[11px] text-muted-foreground">
                           {translate(
-                            'auto.components.sidebar.AddRepoHostSelector.addRemoteServerDetail',
-                            'Pair with Orca running on another computer.'
+                            'remoteServer.accessCodeHelp',
+                            'Paste an access link or Relay code from another computer.'
                           )}
                         </span>
                       </button>

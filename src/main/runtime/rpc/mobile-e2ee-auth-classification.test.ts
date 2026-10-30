@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyE2EEAuth } from './mobile-e2ee-auth-validation'
+import { authenticateMobileE2EE, classifyE2EEAuth } from './mobile-e2ee-auth-validation'
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
 
 const transcriptHashB64 = Buffer.alloc(32, 3).toString('base64')
@@ -19,6 +19,41 @@ describe('classifyE2EEAuth', () => {
       kind: 'token',
       deviceToken: 't'
     })
+  })
+
+  it('accepts native capability auth only for a proven runtime grant', () => {
+    const plaintext = auth({
+      v: 2,
+      transcriptHashB64,
+      deviceToken: 't',
+      runtimeClientCapabilities: ['agent.launch.v2']
+    })
+    expect(
+      authenticateMobileE2EE({
+        plaintext,
+        v2Session: v2,
+        resolveDevice: () => ({ deviceToken: 't', scope: 'runtime' })
+      })
+    ).toMatchObject({ ok: true, clientCapabilities: ['agent.launch.v2'] })
+    expect(
+      authenticateMobileE2EE({
+        plaintext,
+        v2Session: v2,
+        resolveDevice: () => ({ deviceToken: 't', scope: 'mobile' })
+      })
+    ).toMatchObject({ ok: false })
+    expect(
+      classifyE2EEAuth(
+        auth({
+          v: 2,
+          transcriptHashB64,
+          deviceToken: 't',
+          runtimeClientCapabilities: [],
+          deviceId: 'other'
+        }),
+        v2
+      ).kind
+    ).toBe('invalid')
   })
 
   it('accepts key auth only inside the matching v2 transcript', () => {

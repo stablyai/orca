@@ -56,7 +56,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
     const current = this.deviceRegistry?.getDevice(deviceId)
     if (
-      current?.scope !== 'mobile' ||
+      !current ||
       this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
     ) {
       return false
@@ -180,6 +180,13 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     const scope = args.scope ?? 'runtime'
     let device: TokenDeviceEntry
     try {
+      const pending = args.rotate ? this.deviceRegistry.getPendingDevice(scope) : null
+      if (pending?.relayBinding && !this.queueRelayDeviceRevoke(pending.relayBinding)) {
+        return pairingUnavailable(
+          'device_registry_unavailable',
+          'Could not persist Relay cleanup before rotating the access code.'
+        )
+      }
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
       device = args.rotate
