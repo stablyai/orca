@@ -32,8 +32,8 @@ vi.mock('@/components/terminal-pane/terminal-tab-into-pane-deps', () => ({
   moveTerminalTabIntoPaneInApp: moveMock
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenuItem: ({
+vi.mock('@/components/ui/context-menu', () => ({
+  ContextMenuItem: ({
     children,
     disabled,
     onSelect
@@ -46,20 +46,14 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
       {children}
     </button>
   ),
-  DropdownMenuSub: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubTrigger: ({
-    children,
-    disabled
-  }: {
-    children?: ReactNode
-    disabled?: boolean
-  }) => (
+  ContextMenuSub: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ContextMenuSubContent: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ContextMenuSubTrigger: ({ children, disabled }: { children?: ReactNode; disabled?: boolean }) => (
     <button type="button" disabled={disabled}>
       {children}
     </button>
   ),
-  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <span>{children}</span>
+  ContextMenuShortcut: ({ children }: { children?: ReactNode }) => <span>{children}</span>
 }))
 
 vi.mock('lucide-react', () => ({
