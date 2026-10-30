@@ -12,15 +12,21 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: getStateMock }
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
-  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock,
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock,
+  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+}))
+vi.mock('../../../../shared/terminal-surface-id', () => ({
   toHostSessionTabId: vi.fn((tabId: string) => tabId)
 }))
 
-vi.mock('@/runtime/web-session-tabs-sync', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: vi.fn(() => null)
 }))
 
@@ -37,6 +43,7 @@ function baseState(overrides: Record<string, unknown> = {}): Record<string, unkn
     activeTabId: 'terminal-1',
     openFiles: [],
     browserTabsByWorktree: {},
+    reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
     closeTab: vi.fn(),
     closeUnifiedTab: vi.fn(),
     setActiveFile: vi.fn(),
@@ -98,7 +105,7 @@ describe('closeTerminalTab kill-all routing', () => {
 
     expect(state.closeTab).toHaveBeenCalledWith('terminal-1')
     expect(state.setActiveFile).toHaveBeenCalledWith('editor-1')
-    expect(state.setActiveTabType).toHaveBeenCalledWith('editor')
+    expect(state.setActiveTabType).toHaveBeenCalledWith('editor', 'wt')
     expect(state.closeFile).not.toHaveBeenCalled()
     expect(state.closeBrowserTab).not.toHaveBeenCalled()
     expect(state.setActiveWorktree).not.toHaveBeenCalled()
@@ -114,7 +121,7 @@ describe('closeTerminalTab kill-all routing', () => {
     closeTerminalTab('terminal-1', { force: true })
 
     expect(state.setActiveBrowserTab).toHaveBeenCalledWith('browser-1')
-    expect(state.setActiveTabType).toHaveBeenCalledWith('browser')
+    expect(state.setActiveTabType).toHaveBeenCalledWith('browser', 'wt')
     expect(state.closeBrowserTab).not.toHaveBeenCalled()
     expect(state.setActiveWorktree).not.toHaveBeenCalled()
     expect(state.createTab).not.toHaveBeenCalled()

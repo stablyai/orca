@@ -1,5 +1,6 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -8,19 +9,23 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
-// ---------------------------------------------------------------------------
-// Public interfaces
-// ---------------------------------------------------------------------------
+export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
 
-/** Hints forwarded from splitPane() into onPaneCreated for a single split.
- *  Carries one-shot PTY spawn/adoption data for the new pane.
- *  Kept as a separate parameter (rather than extending ManagedPane) so the
- *  hint is scoped to pane creation and does not live on the pane afterwards. */
+/** One-shot spawn/adoption hints belong to creation, separate from persistent ManagedPane state. */
 export type PaneSpawnHints = {
   cwd?: string
+  cwdPromise?: Promise<string>
   ptyId?: string
+  /** Where the pane's leaf sits; main reads it only for a leaf it does not know yet. */
+  placement?: TerminalPanePlacement
+}
+
+export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
+  ratio?: number
+  leafId?: string
 }
 
 export type ClosedPaneInfo = {
@@ -46,20 +51,30 @@ export type PaneExternalDropHandler = (
   target: PaneExternalDropTarget
 ) => boolean
 
+export type PaneDropTaker = (
+  drop: { sourcePaneId: number; targetPaneId: number; zone: DropZone },
+  move: () => void
+) => boolean
+
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
   onActivePaneChange?: (pane: ManagedPane) => void
   onLayoutChanged?: () => void
-  /** Why: Electron webviews can steal pointer streams from renderer-owned
-   *  pane drags unless callers temporarily put them in pointer passthrough. */
+  // Temporarily bypass Electron webview pointers during pane drags or webviews steal the stream.
   onPaneDragActiveChange?: (active: boolean) => void
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  /** A user's divider drag or reset ended; runs after `onLayoutChanged`. */
+  onDividerRatiosCommitted?: () => void
+  /** Takes an in-tab pane drop instead of moving it now: true means `move` runs later or never. */
+  takePaneDrop?: PaneDropTaker
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
+  terminalLigaturesEnabled?: () => boolean
+  terminalInlineImagesEnabled?: () => boolean
   terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
-  /** Resolved per hover so link-routing setting changes apply without recreating panes. */
+  // Resolve hints per hover so settings stay current; require wiring at compile time, scoped to the hovered pane’s host routes.
   // Why: required so dropping the wiring is a compile error — an optional hint with a
   // default would silently serve stale copy that no test can distinguish.
   // Why: paneId-scoped because the hovered pane's host decides where its links can go.
@@ -70,10 +85,9 @@ export type PaneManagerOptions = {
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
   initialRenderingSuspended?: boolean
+  retainHiddenWebgl?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
-  // Why: diagnostic label for log correlation. safeFit and other internal
-  // helpers log warnings that are hard to correlate without knowing which
-  // tab/worktree the PaneManager belongs to.
+  // Correlate internal fit warnings with their tab/worktree.
   debugLabel?: string
 }
 
@@ -84,10 +98,7 @@ export type PaneStyleOptions = {
   activePaneOpacity?: number
   opacityTransitionMs?: number
   dividerThicknessPx?: number
-  // Why this behavior flag lives on "style" options: this type is already
-  // the single runtime-settings bag the PaneManager exposes. Splitting into
-  // separate style vs behavior types is a refactor worth its own change
-  // when a second behavior flag lands. See docs/focus-follows-mouse-design.md.
+  // Use the existing runtime-settings bag for this behavior flag; split behavior/style types when another flag warrants it (focus-follows-mouse-design.md).
   focusFollowsMouse?: boolean
   paddingX?: number
   paddingY?: number
@@ -101,7 +112,7 @@ export type ManagedPane = {
   /** Compatibility alias while callers migrate from the older stablePaneId name. */
   stablePaneId: TerminalLeafId
   terminal: Terminal
-  container: HTMLElement // the .pane element
+  container: HTMLElement
   linkTooltip: HTMLElement
   fitAddon: FitAddon
   searchAddon: SearchAddon
@@ -120,10 +131,6 @@ export type PaneRenderingDiagnostics = {
   terminalWebglAutoDecision: TerminalWebglAutoDecision
   hasWebgl: boolean
 }
-
-// ---------------------------------------------------------------------------
-// Internal types
-// ---------------------------------------------------------------------------
 
 export type ScrollState = {
   bufferType: 'normal' | 'alternate'
@@ -147,60 +154,49 @@ export type ManagedPaneInternal = {
   webglContextLossTimestamps?: number[]
   // Hidden retained renderers rebuild at the resume boundary, never behind the hidden surface.
   webglRebuildDeferred?: boolean
-  // Why per-pane: one pane's failed WebGL attach must not strand every other
-  // pane on the DOM renderer until the next recovery boundary. Optional so
-  // absent means "never failed"; only the attach failure path sets it.
+  // Latch attach failure per pane so one failure cannot strand all panes on DOM; absent means never failed.
   webglAttachFailedSinceRecovery?: boolean
-  // Why: expose complex-output diagnostics without changing renderer choice;
-  // auto renderer fallback is reserved for platform or WebGL failures.
+  // Complex-output diagnostics must not select renderers; automatic fallback is for platform/WebGL failures.
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null
-  // Why nullable: ligatures are opt-in per font and toggleable at runtime,
-  // so the addon instance only exists while the feature is active. A null
-  // value means "currently disabled".
+  // Ligatures are optional and toggleable; null means disabled.
   ligaturesAddon: LigaturesAddon | null
+  // Images are optional and lazy-loaded; null means disabled or not yet resolved.
+  imageAddon: ImageAddon | null
+  // Enabled but waiting for the lazy addon; onLoaded drains these panes.
+  imageAttachmentDeferred?: boolean
   fitResizeObserver: ResizeObserver | null
-  // Why: fit-element pixel size at the last successful fit; the reveal fit compares
-  // against it to tell a real hidden-time resize from a transient cell-metric wobble.
+  // Last successful fit’s host pixels distinguish real hidden-time resizes from cell-metric wobble.
   lastFitClientSize?: { width: number; height: number }
   // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
   pendingInitialFitRafId?: number | null
-  // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.
   pendingWebglRefreshRafId?: number | null
   pendingObservedFitRafId: number | null
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon
   webLinksAddon: WebLinksAddon
-  // Stored so disposePane() can remove pane-local DOM listeners explicitly.
   panePointerDownHandler?: ((event: PointerEvent) => void) | null
   paneMouseEnterHandler?: ((event: MouseEvent) => void) | null
   paneDragCleanup?: (() => void) | null
-  // Stored so disposePane() can remove it and avoid a memory leak.
   compositionHandler: (() => void) | null
-  // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
-  // Stored so disposePane() can remove user-scroll intent listeners.
+  domBlockFillCleanup?: (() => void) | null
   terminalScrollIntentDisposable?: IDisposable | null
-  // Stored so disposePane() can detach the streamed-output hover-cache reset
-  // that keeps freshly printed links linkifiable without a scroll.
+  mouseEncodingTrackerDisposable?: IDisposable | null
+  // Dispose the output-driven hover-cache reset with the pane.
   linkifierHoverResetDisposable?: IDisposable | null
   // Stored because mouseleave does not bubble from xterm's screen.
   linkifierMouseLeaveResetDisposable?: IDisposable | null
-  // Stored because a window blur may strand xterm's active link without a
-  // follow-up mouse event.
+  // Window blur can strand an active link without another mouse event.
   linkifierWindowBlurResetDisposable?: IDisposable | null
-  // Stored so disposePane() can deregister the joiner; terminal.dispose()
-  // does not remove registered character joiners.
+  // Deregister explicitly: terminal.dispose() leaves character joiners registered.
   arabicShapingJoinerCleanup?: (() => void) | null
-  // Why: splitPane reparents DOM; its delayed restore owns scroll until the
-  // browser settles, so intermediate fits must not compete with it.
+  // Split reparent’s delayed scroll restore owns the settle window; intermediate fits must not compete.
   pendingSplitScrollState: ScrollState | null
-  // Stored so repeated split restores and disposePane() can cancel deferred
-  // restore handles instead of leaving stale pane closures alive.
+  // Cancel obsolete split restores on repetition/disposal rather than retaining stale pane closures.
   pendingSplitScrollRafIds?: number[]
   pendingSplitScrollTimerId?: ReturnType<typeof setTimeout> | null
-  // Stored so repeated split restores and disposePane() can remove the
-  // deferred alt-screen buffer listener instead of stacking callbacks.
+  // Replace/remove the deferred alt-screen listener instead of stacking split-restore callbacks.
   pendingSplitScrollBufferDisposable?: IDisposable | null
   debugLabel: string | null
 } & ManagedPane

@@ -4,8 +4,7 @@ import type { SnapshotCheckpointResult } from './daemon-pty-runtime-state'
 import type { GetSnapshotResult, TakePendingOutputResult } from './types'
 
 export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpointScheduler {
-  // Why 'deferred' exists: a full snapshot inside the cooldown is postponed and the session stays dirty for retry;
-  // skipping append meanwhile keeps the on-disk log a consistent (stale) prefix instead of punching a hole.
+  // Defer without appending so cooldown preserves a consistent log prefix; keep the session dirty for retry.
   protected async writeSessionCheckpoint(
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
@@ -22,8 +21,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       if (!opts.final && this.isFullCheckpointCoolingDown(sessionId)) {
         return 'deferred'
       }
-      // Why take-with-snapshot not plain getSnapshot: it clears pending records in the same turn as the serialize,
-      // so a warm reattach won't re-append records the checkpoint already contains (double-replay on cold restore).
+      // Drain and snapshot atomically so warm reattach cannot append records already in the checkpoint.
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
         teardown: opts.teardown,
         forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
@@ -45,7 +43,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       return 'done'
     }
     if (take.overflowed) {
-      // Why: overflow dropped records (log has a hole); only a full snapshot can re-anchor it.
+      // Dropped records leave a log gap; re-anchor with a full snapshot.
       if (this.isFullCheckpointCoolingDown(sessionId)) {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
@@ -72,7 +70,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       take.records
     )
     if (appendResult === 'needs-checkpoint') {
-      // Why dropping take.records is lossless: applied to the emulator before the take, so the snapshot below contains them.
+      // The emulator already contains these records; a full snapshot can replace the failed append.
       if (this.isFullCheckpointCoolingDown(sessionId)) {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
@@ -103,30 +101,24 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       teardownSnapshot: opts.teardown
     })
     if (take?.snapshot && this.historyManager) {
-      // Why require drainedRecords: an older daemon still empties the pending
-      // queue on includeSnapshot but omits the field. Treating absence as []
-      // would compact stale disk history and reset the log.
-      const snapshot =
+      // Missing drainedRecords on older daemons cannot mean empty: snapshotting still drained their queue.
+      // Teardown records repeat held bytes already emitted; use drainedRecords to avoid replaying them twice.
+      const durable =
         take.drainedRecords === undefined || opts.forceLiveSnapshot === true || take.overflowed
           ? take.snapshot
-          : await this.buildDurableHistorySnapshot(
-              sessionId,
-              take.snapshot,
-              [...take.drainedRecords, ...take.records],
-              {
-                pendingRecordsAreComplete: take.seq === 1,
-                ...(opts.requireContinuityProof === true
-                  ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
-                  : {})
-              }
-            )
+          : await this.buildDurableHistorySnapshot(sessionId, take.snapshot, take.drainedRecords, {
+              isFirstTake: take.seq === 1,
+              ...(opts.requireContinuityProof === true
+                ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
+                : {})
+            })
+      // Set only inside an exclusive final pass (Sleep or quit), so no other checkpoint sees it.
+      const probedCwd = this.probedShellCwds.get(sessionId)
+      const snapshot = probedCwd ? { ...durable, cwd: probedCwd } : durable
       const checkpoint = await this.historyManager.checkpoint(sessionId, snapshot, {
         pendingOutputSeq: take.seq
       })
       if (checkpoint === 'retryable') {
-        // Why take.records is dropped, not appended: the pending output this take drained went into the snapshot that
-        // failed to land, so appending the held tail at the next contiguous seq would splice it over that hole and
-        // defeat the log's seq-gap detection. A stale prefix beats an undetectable hole.
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         this.sessionsNeedingLiveCheckpoint.add(sessionId)
         this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
@@ -140,10 +132,6 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         return { checkpoint, snapshot: take.snapshot }
       }
       this.lastFullCheckpointAt.set(sessionId, Date.now())
-      if (take.records.length > 0 && snapshot === take.snapshot) {
-        // Why: live-window fallback still lacks held parser-state bytes; keep them as a post-checkpoint log tail.
-        await this.historyManager.appendIncrements(sessionId, take.seq, take.records)
-      }
       this.sessionsNeedingLiveCheckpoint.delete(sessionId)
       this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
       return { checkpoint: 'committed', snapshot }
@@ -159,7 +147,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     liveSnapshot: NonNullable<TakePendingOutputResult['snapshot']>,
     pendingRecords: TakePendingOutputResult['records'],
     opts: {
-      pendingRecordsAreComplete: boolean
+      isFirstTake: boolean
       requiredPreviousPendingOutputSeq?: number
     }
   ): Promise<NonNullable<TakePendingOutputResult['snapshot']>> {
@@ -172,7 +160,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         wslDistro: this.wslDistrosBySessionId.get(sessionId)
       })
       if (
-        (!restoreInfo && !opts.pendingRecordsAreComplete) ||
+        (!restoreInfo && !opts.isFirstTake) ||
         (opts.requiredPreviousPendingOutputSeq !== undefined &&
           restoreInfo?.pendingOutputSeq !== opts.requiredPreviousPendingOutputSeq)
       ) {
@@ -182,7 +170,9 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       return await buildDurableCheckpointSnapshot({
         liveSnapshot,
         restoreInfo,
-        pendingRecords
+        pendingRecords,
+        isFirstTake: opts.isFirstTake,
+        resizeModel: this.historyManager?.hostingResizeModel()
       })
     } catch (error) {
       console.warn('[history] durable history rebuild failed:', sessionId, error)

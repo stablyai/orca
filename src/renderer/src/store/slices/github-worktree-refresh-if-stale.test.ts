@@ -133,15 +133,12 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
     await Promise.resolve()
 
-    // Why 13: a merged PR confirmed to contain this worktree head is still the
-    // branch's PR; losing the fallback number would blank the panel whenever
-    // GitHub stops reporting the deleted head by branch name.
+    // Contained-head merged PR 13 remains a valid fallback after GitHub stops branch lookup for deleted heads.
     expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith(
       expect.objectContaining({
         candidate: expect.objectContaining({
           fallbackPRNumber: 13,
-          // Why: main can only head-gate fallback preservation when the
-          // candidate carries the worktree head it was built for.
+          // Carry candidate worktree head so main can gate merged fallback validity.
           currentHeadOid: 'behind-head'
         })
       })
@@ -179,7 +176,10 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     await Promise.resolve()
 
     expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledTimes(1)
-    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(1)
+    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      candidate: expect.any(Object),
+      reason: 'active'
+    })
   })
 
   it('bounds rejected active PR refresh IPCs during worktree activation', async () => {
@@ -530,7 +530,13 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: 12, currentHeadOid: null },
+      params: {
+        repo: 'repo-1',
+        branch,
+        linkedPRNumber: 12,
+        currentHeadOid: null,
+        reason: 'active'
+      },
       timeoutMs: 30_000
     })
     expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
@@ -619,6 +625,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      reason: 'manual',
       candidate: expect.objectContaining({
         cacheKey: `ssh:ssh-1::repo-ssh::${branch}`,
         connectionId: 'ssh-1',

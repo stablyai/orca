@@ -1,8 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+import {
+  REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
+  REMOTE_RUNTIME_RECOVERY_DELAYS_MS
+} from './remote-runtime-pty-recovery-state'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -49,8 +65,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       terminal: 'terminal-1',
       viewport: { cols: 100, rows: 30 }
     })
-    // Why: opening the pane is the user's wake gesture for a slept pane, so it
-    // must not be labelled like the reconnect probe (STA-3465).
+    // Opening is an explicit wake gesture; distinguish it from reconnect probes that preserve deliberate sleep (STA-3465).
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'session.tabs.activate',
@@ -140,10 +155,11 @@ describe('createRemoteRuntimePtyTransport', () => {
         existingPtyId: 'remote:env-1@@stale-client-handle',
         callbacks: {}
       })
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
 
       const attemptsAtCutoff = runtimeSubscribe.mock.calls.length
-      expect(attemptsAtCutoff).toBe(8)
+      // Why: every backoff step must be reachable inside the window it arms (#11305).
+      expect(attemptsAtCutoff).toBeGreaterThanOrEqual(REMOTE_RUNTIME_RECOVERY_DELAYS_MS.length)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       await vi.advanceTimersByTimeAsync(5 * 60_000)
@@ -235,7 +251,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(250)
       expect(activateAttempts).toBe(2)
 
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       rejectInFlight(
@@ -292,7 +308,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(250)
       expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
 
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       rejectSubscription(
@@ -349,7 +365,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         expect.objectContaining({ method: 'terminal.resolvePane' })
       )
 
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       resolveMetadata({

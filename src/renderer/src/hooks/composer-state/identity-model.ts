@@ -1,7 +1,8 @@
 import type * as React from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 
 export type ComposerIdentityModel = {
   linkedIssue: string
@@ -14,9 +15,13 @@ export type ComposerIdentityModel = {
   setLinkedGitLabMR: React.Dispatch<React.SetStateAction<number | null>>
   baseBranch: string | undefined
   setBaseBranch: React.Dispatch<React.SetStateAction<string | undefined>>
+  baseBranchNamesWorkspace: boolean
+  setBaseBranchNamesWorkspace: React.Dispatch<React.SetStateAction<boolean>>
   compareBaseRef: string | undefined
   setCompareBaseRef: React.Dispatch<React.SetStateAction<string | undefined>>
   branchNameOverride: string | undefined
+  branchIntent?: CreateWorktreeArgs['branchIntent']
+  setBranchIntent: React.Dispatch<React.SetStateAction<CreateWorktreeArgs['branchIntent']>>
   setBranchNameOverride: React.Dispatch<React.SetStateAction<string | undefined>>
   parentWorktreeId: string | null
   setParentWorktreeId: React.Dispatch<React.SetStateAction<string | null>>

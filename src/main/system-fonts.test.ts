@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../shared/child-process/run-process'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const { runProcessMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
 }))
 
-// Why mock the chokepoint rather than child_process: the timeout, the output
-// cap and the hidden console are runProcess's contract now, so this suite
-// asserts what font discovery asks for, not how a process gets started.
-vi.mock('../shared/child-process/run-process', () => ({
+// Verify discovery's process options; spawning and console hiding belong to runProcess.
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
 
@@ -62,19 +61,27 @@ describe('listSystemFontFamilies', () => {
 
       const args = runProcessMock.mock.calls[0]?.[0].args ?? []
       const script = args[args.indexOf('-Command') + 1] ?? ''
-      // Why: match the whole statement, not a substring — anything emitted above it
-      // still leaves in the OEM code page, and a swapped encoding must not slip by.
+      // Output before this statement would still use the OEM encoding.
       expect(script.trim().split(/\r?\n/)[0]).toBe(
         '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
       )
     })
   })
 
+  it('spawns the Windows font script without an -ExecutionPolicy switch', async () => {
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
+      expect(args).toContain('-Command')
+      expect(args).not.toContain('-ExecutionPolicy')
+      expect(args).not.toContain('Bypass')
+    })
+  })
+
   it('runs PowerShell by absolute path on Windows', async () => {
-    // Why: a bare `powershell.exe` resolves against the child's PATH, which is
-    // not the user's under Electron. Where policy has pruned the System32 entry
-    // the spawn fails and the picker silently reports five hardcoded families
-    // instead of an error (#11771).
     await withPlatform('win32', async () => {
       runProcessMock.mockResolvedValue(ok('Consolas\n'))
       const { listSystemFontFamilies } = await import('./system-fonts')

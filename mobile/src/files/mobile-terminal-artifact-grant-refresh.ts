@@ -1,9 +1,10 @@
 import type { RuntimeNativeChatFileContext } from '../../../src/shared/runtime-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
+import {
+  terminalArtifactPathResolve,
+  type MobileFilePreviewRpcSender
+} from './mobile-file-preview-operations'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
-
-type MobileFilePreviewClient = Pick<RpcClient, 'sendRequest'>
 
 export type MobileTerminalArtifactPreviewSource = {
   source: 'terminalArtifact'
@@ -20,28 +21,34 @@ export type MobileTerminalArtifactPreviewSource = {
 export type TerminalArtifactRetryOptions = {
   onTerminalArtifactSourceRefreshed?: (source: MobileTerminalArtifactPreviewSource) => void
   refreshGrant?: boolean
+  isCurrent?: () => boolean
 }
 
+/** Takes the refusal rather than the envelope: every caller already routed on its own acceptance. */
 export async function refreshTerminalArtifactSourceAfterGrantFailure(
-  client: MobileFilePreviewClient,
+  client: MobileFilePreviewRpcSender,
   source: MobileTerminalArtifactPreviewSource,
-  response: RpcResponse,
+  refusal: RpcFailure['error'],
   options: TerminalArtifactRetryOptions = {}
 ): Promise<MobileTerminalArtifactPreviewSource | null> {
-  if (response.ok || !isTerminalArtifactGrantFailure(response, options)) {
+  if (options.isCurrent?.() === false || !isTerminalArtifactGrantFailure(refusal, options)) {
     return null
   }
-  const refreshed = await client.sendRequest('files.resolveTerminalPath', {
+  const reply = await terminalArtifactPathResolve.request(client, {
     worktree: `id:${source.worktreeId}`,
     pathText: source.pathText ?? source.absolutePath,
     ...(source.cwd ? { cwd: source.cwd } : {}),
     ...(source.terminalHandle ? { terminal: source.terminalHandle } : {}),
     ...(source.nativeChatContext ? { nativeChatContext: source.nativeChatContext } : {})
   })
-  if (!refreshed.ok) {
+  if (options.isCurrent?.() === false) {
     return null
   }
-  const result = (refreshed as RpcSuccess).result
+  const resolved = terminalArtifactPathResolve.interpret(reply)
+  if (!resolved.accepted) {
+    return null
+  }
+  const result = resolved.value
   if (!isTerminalArtifactResolution(result)) {
     return null
   }
@@ -62,13 +69,13 @@ export async function refreshTerminalArtifactSourceAfterGrantFailure(
 }
 
 function isTerminalArtifactGrantFailure(
-  response: RpcFailure,
+  refusal: RpcFailure['error'],
   options: TerminalArtifactRetryOptions
 ): boolean {
   if (options.refreshGrant === false) {
     return false
   }
-  return isTerminalArtifactGrantError(`${response.error.code} ${response.error.message}`)
+  return isTerminalArtifactGrantError(`${refusal.code} ${refusal.message}`)
 }
 
 function isTerminalArtifactResolution(result: unknown): result is {

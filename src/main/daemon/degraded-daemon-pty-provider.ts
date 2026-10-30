@@ -1,3 +1,6 @@
+import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
+import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
@@ -6,11 +9,11 @@ import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
   PtyDataEvent,
-  PtyProviderBufferSnapshot,
   PtyProcessInfo,
+  PtyProviderBufferSnapshot,
   PtySpawnOptions,
   PtySpawnResult
-} from '../providers/types'
+} from '../providers/pty-provider-contract'
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
@@ -19,19 +22,21 @@ import {
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
 
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
-  private fallback: IPtyProvider
+  /** Runs terminals in this process, so they die with it. */
+  readonly fallback: IPtyProvider
   private sessionProviders = new Map<string, IPtyProvider>()
   private freshSpawns: DegradedDaemonFreshSpawnRouter
   private ownerRecovery: DegradedDaemonOwnerRecovery
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: PtyDataEvent) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private exitListeners: Parameters<IPtyProvider['onExit']>[0][] = []
 
   constructor(opts: {
     current: DaemonPtyAdapter
@@ -85,7 +90,6 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
 
-  // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
 
@@ -93,6 +97,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     const mapped = this.sessionProviders.get(id)
     return mapped ? (mapped.hasPty?.(id) ?? true) : this.findProviderForExistingSession(id) !== null
   }
+
+  getPtyAvailability = (id: string): boolean | null =>
+    this.providerFor(id).getPtyAvailability?.(id) ?? null
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
     const mapped = this.sessionProviders.get(id)
@@ -102,21 +109,24 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return await this.ownerRecovery.probe(id)
   }
 
-  // Why: an unknown id cannot borrow listing authority from the fresh-spawn provider.
+  // Unknown IDs cannot borrow listing authority from the fresh-spawn provider.
   providesAgentSessionOwnerListings = (ptyId: string): boolean =>
-    (
-      this.sessionProviders.get(ptyId) ?? this.findProviderForExistingSession(ptyId)
-    )?.providesAgentSessionOwnerListings?.(ptyId) === true
+    this.ownerRecovery.getVerifiedRoute(ptyId)?.providesAgentSessionOwnerListings?.(ptyId) === true
+
+  supportsFencedTermination = (id: string): boolean =>
+    this.ownerRecovery.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
+
+  killFenced = (request: PtyFencedTerminationRequest) =>
+    terminateResolvedDaemonSession(request, () =>
+      this.ownerRecovery.resolveFencedOwner(request.id, request.expectedIncarnationId)
+    )
 
   write(id: string, data: string): boolean | void {
     return this.providerFor(id).write(id, data)
   }
 
-  async writeWithSettlement(id: string, data: string): Promise<boolean> {
-    const provider = this.providerFor(id)
-    return provider.writeWithSettlement
-      ? await provider.writeWithSettlement(id, data)
-      : provider.write(id, data) !== false
+  async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
+    return await this.providerFor(id).writeWithSettlement(id, data)
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -135,15 +145,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).setPtyBackgrounded?.(id, background)
   }
 
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
-    await this.providerFor(id).shutdown(id, opts)
-    if (!opts.keepHistory) {
-      this.sessionProviders.delete(id)
-    }
-  }
+  shutdown = (id: string, opts: Parameters<IPtyProvider['shutdown']>[1]) =>
+    shutdownRoutedDegradedSession(id, opts, this.providerFor(id), this.sessionProviders)
 
   async sendSignal(id: string, signal: string): Promise<void> {
     await this.providerFor(id).sendSignal(id, signal)
@@ -165,15 +168,18 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     id: string,
     opts?: { scrollbackRows?: number }
   ): Promise<PtyProviderBufferSnapshot | null> {
-    // Why: recovery must reach the legacy adapter that owns the thinned session model.
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
   }
 
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)
+  resetInputModes = (id: string): Promise<void> => this.providerFor(id).resetInputModes(id)
 
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
+
+  setColorQueryReplyColors: IPtyProvider['setColorQueryReplyColors'] = (colors) =>
+    this.allProviders().forEach((provider) => provider.setColorQueryReplyColors?.(colors))
 
   acknowledgeDataEvent(id: string, charCount: number): void {
     this.providerFor(id).acknowledgeDataEvent(id, charCount)
@@ -206,11 +212,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.fallback.revive(state)
   }
 
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    const results = await Promise.all(
-      this.allProviders().map((provider) => provider.listProcesses(opts))
-    )
-    return results.flat()
+  async listProcesses(
+    opts?: Parameters<IPtyProvider['listProcesses']>[0]
+  ): Promise<PtyProcessInfo[]> {
+    return this.ownerRecovery.listProcesses(opts)
   }
 
   async getDefaultShell(): Promise<string> {
@@ -237,9 +242,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     )
   }
 
-  // Why: main subscribes on the routed provider, so without this the dead-endpoint
-  // fan-out reaches no listener and only the written pane recovers (STA-2373). Daemon
-  // adapters only — the local fallback has no dead-socket problem.
+  // Forward daemon endpoint failures so every affected pane can recover (STA-2373).
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     return combineUnsubscribes(
       this.allDaemonAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
@@ -264,7 +267,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return trackedUnsubscribe
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(callback: Parameters<IPtyProvider['onExit']>[0]): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -308,17 +311,18 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return shutdownDegradedFallbackSessions(this.sessionProviders, this.fallback)
   }
 
-  getCurrentDaemonSessionIds(): string[] {
-    return listProviderSessionIds(this.sessionProviders, this.current)
+  getSessionIdsRoutedTo(route: 'current-daemon' | 'fallback'): string[] {
+    const target = route === 'fallback' ? this.fallback : this.current
+    return listProviderSessionIds(this.sessionProviders, target)
   }
 
-  fanoutCurrentDaemonSyntheticExits(code: number): void {
-    for (const id of this.getCurrentDaemonSessionIds()) {
-      this.sessionProviders.delete(id)
-      // Why: restart kills listed sessions even when the adapter did not track them active.
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-      for (const listener of [...this.exitListeners]) {
-        listener({ id, code })
+  fanoutCurrentDaemonSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
+    for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
+      this.ownerRecovery.forgetRoute(id)
+      // Restart also kills listed sessions the adapter never tracked as active.
+      // Why: listeners may unsubscribe during iteration.
+      for (const listener of Array.from(this.exitListeners)) {
+        listener({ id, code, ...exit })
       }
     }
   }
@@ -356,7 +360,5 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return [this.fallback, ...this.allDaemonAdapters()]
   }
 
-  private allDaemonAdapters(): DaemonPtyAdapter[] {
-    return [this.current, ...this.legacy]
-  }
+  private allDaemonAdapters = (): DaemonPtyAdapter[] => [this.current, ...this.legacy]
 }

@@ -1,0 +1,43 @@
+{
+  "id": "evt_0cc7238ae002BOODuEn2h3Ro0N",
+  "created": 1790136432814,
+  "type": "form.created",
+  "location": {
+    "directory": "/private/tmp/oc2-evidence"
+  },
+  "data": {
+    "form": {
+      "id": "frm_0cc7238ae001iZeN97tf8v3xTs",
+      "sessionID": "ses_f33905de7ffeBFKvVC2HupLfJq",
+      "title": "Questions",
+      "metadata": {
+        "kind": "question",
+        "tool": {
+          "messageID": "msg_0cc723557001aL7j9XWmdbIFh1",
+          "id": "tool_1611fbde530a4443b5f11c67a4cd3d91"
+        }
+      },
+      "fields": [
+        {
+          "key": "q0",
+          "title": "Color Preference",
+          "description": "Which color do you prefer, red or blue?",
+          "type": "string",
+          "options": [
+            {
+              "value": "Red",
+              "label": "Red",
+              "description": "The color red"
+            },
+            {
+              "value": "Blue",
+              "label": "Blue",
+              "description": "The color blue"
+            }
+          ],
+          "custom": true
+        }
+      ]
+    }
+  }
+}

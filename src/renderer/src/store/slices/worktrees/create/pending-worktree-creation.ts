@@ -2,6 +2,7 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { AppState } from '../../../types'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
+import { endWindowCreation } from '@/lib/sidebar-ended-creations'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
@@ -23,14 +24,14 @@ export function createUpdatePendingWorktreeCreation(
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
       if (!entry) {
-        return {}
+        return s
       }
       // Why: the main process re-emits the same phase; skip no-op writes so the strip and panel don't re-render.
       const hasChange = (Object.keys(patch) as (keyof typeof patch)[]).some(
         (key) => patch[key] !== entry[key]
       )
       if (!hasChange) {
-        return {}
+        return s
       }
       return {
         pendingWorktreeCreations: {
@@ -51,7 +52,7 @@ export function createRemovePendingWorktreeCreation(
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
       if (!entry) {
-        return {}
+        return s
       }
       removedEntry = entry
       const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
@@ -61,6 +62,9 @@ export function createRemovePendingWorktreeCreation(
         ...(s.activePendingCreationId === creationId ? { activePendingCreationId: null } : {})
       }
     })
+    if (removedEntry) {
+      endWindowCreation(creationId)
+    }
     if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
       return
     }
@@ -73,7 +77,8 @@ export function createRemovePendingWorktreeCreation(
       return
     }
     void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
-      deleteProjectHostSetup: (setupId) => get().deleteProjectHostSetup({ setupId }),
+      deleteProjectHostSetup: (setupId, hostId) =>
+        get().deleteProjectHostSetup({ setupId, hostId }),
       cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
       reportSetupError: (error) =>
         console.error('Failed to remove cancelled provisioned-root project setup:', error),
@@ -90,7 +95,7 @@ export function createSetActivePendingWorktreeCreation(
   return (creationId) => {
     set((s) => {
       if (creationId !== null && !s.pendingWorktreeCreations[creationId]) {
-        return {}
+        return s
       }
       return { activePendingCreationId: creationId }
     })

@@ -24,11 +24,7 @@ export type AgentForegroundResolutionOptions = {
   forceProcessScan?: boolean
   /** Lazily proves which global descendants still belong to this ConPTY. */
   readWindowsConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
-  /**
-   * A caller's cached liveness anchor. When a scan row holds this pid but no
-   * longer recognizes as the cached agent, the pid was recycled by a different
-   * process (command lines are immutable): the resolution reports it foreign.
-   */
+  /** A contradictory full-table command line proves cached anchor PID reuse. */
   anchorProcessId?: number
   /** The cached agent name the anchor pid is supposed to prove. */
   anchorProcessName?: string
@@ -37,12 +33,7 @@ export type AgentForegroundResolutionOptions = {
 export type WindowsAgentForegroundResolution = {
   available: boolean
   processName: string | null
-  /**
-   * Pid of the process the name belongs to — the liveness anchor a caller may
-   * check against the pane's job. The OUTER wrapper's pid when the name
-   * collapsed onto one (its embedded leaf may exit first). Absent when the
-   * name came from a fallback or when sibling leaves left no single anchor.
-   */
+  /** Unambiguous recognized-name anchor; use the outer wrapper PID so embedded-child restarts do not imply exit. */
   processId?: number
   /** True when the scan proves `anchorProcessId` now belongs to a non-agent. */
   anchorPidForeign?: boolean
@@ -62,16 +53,6 @@ export function shouldInspectWindowsAgentForeground(fallbackProcess: string): bo
   )
 }
 
-export async function resolveWindowsAgentForegroundProcess(
-  shellPid: number,
-  fallbackProcess: string,
-  options: AgentForegroundResolutionOptions
-): Promise<string | null> {
-  return (
-    await resolveWindowsAgentForegroundProcessWithAvailability(shellPid, fallbackProcess, options)
-  ).processName
-}
-
 export async function resolveWindowsAgentForegroundProcessWithAvailability(
   shellPid: number,
   fallbackProcess: string,
@@ -85,9 +66,7 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
     return { available: false, processName: null }
   }
   const candidates = inventory.candidates
-  // Resolve membership before applying the global ambiguity rule. A detached
-  // agent can otherwise make an attached Droid look ambiguous and suppress
-  // the only identity that is actually able to receive this PTY's input.
+  // Filter console membership before ambiguity checks so detached agents cannot suppress the attached input owner.
   const hasRecognizedCandidate = windowsCandidatesContainRecognizedAgent(
     candidates,
     fallbackProcess,
@@ -95,19 +74,14 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
   )
   let filteredCandidates = candidates
   if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
-    // Why console attachment and not the job: this filter exists to DROP a
-    // descendant that detached from the console, and the job still contains
-    // those by design. Answering it from the job would re-admit precisely what
-    // the filter is for -- granting byte authority to a detached `Start-Process
-    // droid`, or making an attached agent look ambiguous.
+    // Job membership retains detached descendants; only console attachment can exclude their byte authority.
     const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds()
     if (!consoleProcessIds) {
       return { available: false, processName: null }
     }
     filteredCandidates = candidates.filter((candidate) => consoleProcessIds.has(candidate.pid))
   }
-  // From the FULL table, not the ppid projection: an orphaned job member (its
-  // creator exited) leaves the descendant walk yet can hold a recycled pid.
+  // Orphaned job members can hold recycled PIDs outside the descendant walk; inspect the full-table anchor.
   const anchorRow = inventory.anchorRow
   const anchorRecognized = anchorRow === null ? null : recognizeWindowsProcessCandidate(anchorRow)
   const anchorPidForeign =
@@ -116,8 +90,7 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
       ? // A recognized row is foreign when it names a DIFFERENT agent.
         options.anchorProcessName !== undefined &&
         anchorRecognized.processName !== options.anchorProcessName
-      : // A query-denied row falls back to command === name; that is
-        // inconclusive (the agent may just be unreadable), never foreign.
+      : // Query-denied command === name is inconclusive, never foreign proof.
         anchorRow.command !== anchorRow.name)
   return {
     available: true,
@@ -143,7 +116,7 @@ function windowsCandidatesContainRecognizedAgent(
     )
 }
 
-function resolveWindowsForegroundIdentity(
+export function resolveWindowsForegroundIdentity(
   candidates: readonly WindowsProcessCandidate[],
   fallbackProcess: string,
   contextPaths: readonly string[] | undefined
@@ -245,14 +218,11 @@ function resolveRecognizedWindowsProcessCandidates(
     resolveOuterWrapperForegroundIdentity(candidate.recognized, candidate, allCandidates)
   )
   const leafProcessNames = new Set(leafIdentities.map((identity) => identity.processName))
-  // Why: Windows lacks a cheap PTY foreground marker like POSIX '+'. A single
-  // recognized lineage leaf is strong enough; sibling agent leaves are not.
+  // Windows lacks POSIX foreground markers; disagreeing recognized lineage leaves cannot prove one agent.
   if (leafProcessNames.size !== 1) {
     return { processName: null }
   }
-  // The anchor is the process the NAME belongs to — the outer wrapper when the
-  // leaf collapsed onto one, else the leaf itself. An embedded leaf can exit
-  // and restart under a live wrapper; its pid must not stand for the wrapper's.
+  // Anchor the named outer wrapper; its embedded child may exit/restart while the wrapper stays live.
   const anchorProcessIds = new Set(leafIdentities.map((identity) => identity.processId))
   return {
     processName: [...leafProcessNames][0],

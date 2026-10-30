@@ -20,6 +20,7 @@ export type Body = {
   worktreeId?: string
   env?: string
   version?: string
+  agentProcess?: string
   payload: Record<string, unknown>
 }
 
@@ -41,7 +42,7 @@ export function buildBody(payload: Record<string, unknown>, overrides: Partial<B
   }
 }
 
-// Why: use a recent-but-not-now timestamp so fixtures survive hydrate's 7d drop (HYDRATE_MAX_AGE_MS) without racing the wall clock.
+// Stay within the seven-day hydration limit without racing now.
 export function recentTs(offsetMs = 0): number {
   return Date.now() - 60 * 60 * 1000 + offsetMs
 }
@@ -56,6 +57,8 @@ export async function postHookEvent(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      // Fake-time advances must not expire a pooled socket before the next hook.
+      Connection: 'close',
       'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
     },
     body: JSON.stringify(body)

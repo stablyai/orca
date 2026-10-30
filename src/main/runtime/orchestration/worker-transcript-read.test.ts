@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -66,6 +66,8 @@ describe('worker transcript reads', () => {
       sessionId: 'session-exact',
       transcriptPath,
       offset: initial.nextOffset,
+      expectedSourceFingerprint: initial.sourceFingerprint,
+      expectedBoundaryCheckpoint: initial.boundaryCheckpoint,
       limit: 2
     })
 
@@ -77,47 +79,83 @@ describe('worker transcript reads', () => {
     })
   })
 
-  it('pins archived reads to the transcript offset observed before release', async () => {
-    await writeFile(
-      transcriptPath,
-      `${codexMessage('one', 'before release')}\n${codexMessage('two', 'release boundary')}\n`
-    )
-    const snapshot = await readWorkerTranscript({
+  it('pages forward through every record when a page fills before the end of the file', async () => {
+    await writeFile(transcriptPath, `${codexMessage('zero', 'start')}\n`)
+    const initial = await readWorkerTranscript({
       agent: 'codex',
       sessionId: 'session-exact',
       transcriptPath,
       limit: 1
     })
-    if (!snapshot.ok) {
-      throw new Error('Expected the release transcript probe')
+    if (!initial.ok) {
+      throw new Error('Expected the initial transcript page')
     }
-    await appendFile(transcriptPath, `${codexMessage('three', 'after release')}\n`)
+    const ids = Array.from({ length: 7 }, (_, index) => `forward-${index}`)
+    await appendFile(transcriptPath, ids.map((id) => `${codexMessage(id, id)}\n`).join(''))
 
-    await expect(
-      readWorkerTranscript({
+    const seen: string[] = []
+    let cursor = initial
+    for (let page = 0; page < ids.length; page++) {
+      const next = await readWorkerTranscript({
         agent: 'codex',
         sessionId: 'session-exact',
         transcriptPath,
-        endOffset: snapshot.nextOffset,
-        limit: 10
+        offset: cursor.nextOffset,
+        expectedSourceFingerprint: cursor.sourceFingerprint,
+        expectedBoundaryCheckpoint: cursor.boundaryCheckpoint,
+        limit: 2
       })
-    ).resolves.toMatchObject({
-      ok: true,
-      messages: [
-        { id: 'one', blocks: [{ type: 'text', text: 'before release' }] },
-        { id: 'two', blocks: [{ type: 'text', text: 'release boundary' }] }
-      ]
+      if (!next.ok) {
+        throw new Error(`Expected forward page ${page}, got ${next.reason}`)
+      }
+      seen.push(...next.messages.map((message) => message.id))
+      cursor = next
+      if (!next.limited) {
+        break
+      }
+    }
+
+    expect(seen).toEqual(ids)
+  })
+
+  it.each([
+    ['equal-size', 0],
+    ['larger', 64]
+  ])('rejects a same-inode truncate/regrow at %s', async (_label, extraBytes) => {
+    await writeFile(
+      transcriptPath,
+      `${codexMessage('one', 'original transcript with enough padding for equal-size rewrite')}\n`
+    )
+    const initial = await readWorkerTranscript({
+      agent: 'codex',
+      sessionId: 'session-exact',
+      transcriptPath,
+      limit: 10
     })
+    if (!initial.ok) {
+      throw new Error('Expected the original transcript page')
+    }
+    const before = await stat(transcriptPath, { bigint: true })
+    const replacementLine = `${codexMessage('other', 'unrelated rewrite')}\n`
+    const replacement = replacementLine.padEnd(initial.nextOffset + extraBytes, ' ')
+
+    await writeFile(transcriptPath, replacement)
+
+    const after = await stat(transcriptPath, { bigint: true })
+    expect(after.ino).toBe(before.ino)
+    expect(after.dev).toBe(before.dev)
+    expect(Number(after.size)).toBeGreaterThanOrEqual(initial.nextOffset)
     await expect(
       readWorkerTranscript({
         agent: 'codex',
         sessionId: 'session-exact',
         transcriptPath,
-        offset: snapshot.nextOffset,
-        endOffset: snapshot.nextOffset,
+        offset: initial.nextOffset,
+        expectedSourceFingerprint: initial.sourceFingerprint,
+        expectedBoundaryCheckpoint: initial.boundaryCheckpoint,
         limit: 10
       })
-    ).resolves.toMatchObject({ ok: true, messages: [], nextOffset: snapshot.nextOffset })
+    ).resolves.toEqual({ ok: false, reason: 'source_changed', warnings: [] })
   })
 
   it('reports source changes and unsupported providers without guessing', async () => {
@@ -219,6 +257,8 @@ describe('worker transcript reads', () => {
       sessionId: 'session-exact',
       transcriptPath,
       offset: oversized.nextOffset,
+      expectedSourceFingerprint: oversized.sourceFingerprint,
+      expectedBoundaryCheckpoint: oversized.boundaryCheckpoint,
       limit: 2
     })
 

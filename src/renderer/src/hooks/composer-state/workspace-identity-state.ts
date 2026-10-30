@@ -11,21 +11,30 @@ type WorkspaceIdentityStateInput = Pick<
   | 'newWorkspaceDraft'
   | 'persistDraft'
   | 'selectedRepoConnectionId'
-  | 'selectedRepoSettings'
+  | 'selectedRepoRuntimeEnvironmentId'
   | 'settings'
 >
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, type SetStateAction } from 'react'
+import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import { getLinkedWorkItemProvider, isGitLabIssueUrl } from '@/lib/new-workspace'
 import {
   type SmartNameMode,
   isBlockingJiraUrlIntent
-} from '@/components/new-workspace/smart-workspace-source-results'
+} from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
+
+/** Older drafts lack naming intent; restore baseBranch as the branch pick it represented when saved. */
+export function resolveDraftBaseBranchNamesWorkspace(args: {
+  persistDraft: boolean
+  draftValue: boolean | undefined
+}): boolean {
+  return args.persistDraft ? (args.draftValue ?? true) : true
+}
 
 export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const {
@@ -38,7 +47,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     newWorkspaceDraft,
     persistDraft,
     selectedRepoConnectionId,
-    selectedRepoSettings,
+    selectedRepoRuntimeEnvironmentId,
     settings
   } = input
 
@@ -71,7 +80,6 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
 
-  // Why: GitLab parallels of linkedIssue/linkedPR, kept as separate state so existing GitHub auto-name/badge/persistence paths stay untouched.
   const [linkedGitLabIssue, setLinkedGitLabIssue] = useState<number | null>(() => {
     if (persistDraft && newWorkspaceDraft?.linkedGitLabIssue !== undefined) {
       return newWorkspaceDraft.linkedGitLabIssue
@@ -91,14 +99,26 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
+  // Branch-as-name selections get source pills; checkout-base picks must not hide the typed name.
+  const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(() =>
+    resolveDraftBaseBranchNamesWorkspace({
+      persistDraft,
+      draftValue: newWorkspaceDraft?.baseBranchNamesWorkspace
+    })
+  )
 
   const [compareBaseRef, setCompareBaseRef] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.compareBaseRef : undefined
   )
 
-  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(
+  const [branchNameOverride, updateBranchNameOverride] = useState<string | undefined>(
     initialLinearBranchName
   )
+  const [branchIntent, setBranchIntent] = useState<CreateWorktreeArgs['branchIntent']>()
+  const setBranchNameOverride = useCallback((value: SetStateAction<string | undefined>) => {
+    setBranchIntent(undefined)
+    updateBranchNameOverride(value)
+  }, [])
 
   const [parentWorktreeId, setParentWorktreeId] = useState<string | null>(null)
 
@@ -111,17 +131,16 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   // Why: a pasted Jira URL is not a workspace name yet — block create until it resolves to an issue.
   const sourceIntentBlocksCreate = !linkedWorkItem && isBlockingJiraUrlIntent(smartNameMode, name)
 
-  // Why (#5181): reuseEligibleBranch = local branch name eligible for checkout-reuse (null if none); reuseSelectedBranch = the checkbox that enacts it.
   const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
 
   const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
 
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
 
-  // Why: when a repo switch wipes a prior Start-from selection, surface the reset inline (e.g. "was PR #8778") so it doesn't slip past the user.
+  // Show invalidated checkout-source labels inline so repo-switch resets remain visible.
   const [startFromResetHint, setStartFromResetHint] = useState<string | null>(null)
 
-  // Why: a fork PR with "Allow edits from maintainers" off can't be pushed to; warn (don't block) so a rejected push isn't a surprise.
+  // Warn when fork PRs disable maintainer edits, before a rejected push surprises the user.
   const [forkPushWarning, setForkPushWarning] = useState<string | null>(null)
 
   const disabledTuiAgentKey = (settings?.disabledTuiAgents ?? []).join('\u0000')
@@ -133,7 +152,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     [disabledTuiAgentKey]
   )
 
-  // Why: the long-form composer requires a real TuiAgent, so a global 'blank' pref collapses to Claude (blank only exists in quick-create).
+  // Long-form requires a real agent; blank is quick-create-only and falls back to Claude here.
   const enabledCatalogAgents = useMemo(
     () =>
       filterEnabledTuiAgents(
@@ -154,12 +173,14 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
   )
 
-  // Why: for a repo on an SSH host or runtime env, read the per-host agent list so the dialog shows the host's installed agents, not local.
+  // Host-owned repos must show their host’s installed agents rather than the client’s inventory.
+  const runtimeEnvironmentId = selectedRepoRuntimeEnvironmentId?.trim() || null
+
+  // Kept as-is: uploads fence on the worktree's real host, which for a server repo is its target.
   const connectionId = selectedRepoConnectionId
 
-  const isRemote = typeof connectionId === 'string'
-
-  const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
+  // Server-owned connection IDs name the server’s SSH target; ask that server to probe agents.
+  const isRemote = typeof connectionId === 'string' && !runtimeEnvironmentId
 
   const detectedAgentList = useAppStore((s) => {
     if (isRemote) {
@@ -193,9 +214,13 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     setLinkedGitLabMR,
     baseBranch,
     setBaseBranch,
+    baseBranchNamesWorkspace,
+    setBaseBranchNamesWorkspace,
     compareBaseRef,
     setCompareBaseRef,
     branchNameOverride,
+    branchIntent,
+    setBranchIntent,
     setBranchNameOverride,
     parentWorktreeId,
     setParentWorktreeId,

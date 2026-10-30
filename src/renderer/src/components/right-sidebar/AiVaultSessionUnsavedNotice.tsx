@@ -7,15 +7,13 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 
-// Distinct state for a zero-turn transcript: the conversation was not persisted,
-// but queued prompts and/or subagent transcripts may still be recoverable.
+// Zero-turn transcripts may still have recoverable queued prompts or subagent history.
 export function SessionUnsavedConversationNotice({
   session,
   logAvailable
 }: {
   session: AiVaultSession
-  // Whether an open-log affordance exists nearby; remote (SSH) sessions have
-  // none, so the "open the log" hint would point at nothing.
+  // Show open-log guidance only when a nearby action exists; SSH sessions have none.
   logAvailable: boolean
 }): React.JSX.Element {
   const recoverable = isAiVaultSessionRecoverableEmpty(session)
@@ -34,9 +32,13 @@ export function SessionUnsavedConversationNotice({
       <div className="rounded-md border border-dashed border-border/70 bg-foreground/[0.04] px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
         {recoverable
           ? translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetail',
-              'This session has no saved conversation, but {{value0}} recoverable item(s) survive.',
-              { value0: aiVaultSessionRecoverableSignalCount(session) }
+              'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetailCount',
+              'This session has no saved conversation, but {{count}} recoverable items survive.',
+              {
+                count: aiVaultSessionRecoverableSignalCount(session),
+                defaultValue_one:
+                  'This session has no saved conversation, but {{count}} recoverable item survives.'
+              }
             )
           : translate(
               'auto.components.right.sidebar.AiVaultSessionDetails.emptyConversationDetail',
@@ -71,18 +73,18 @@ function SessionRecoverableSignalLines({
       {queuedMessageCount > 0 ? (
         <li>
           {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.queuedMessages',
-            '{{value0}} queued message(s)',
-            { value0: queuedMessageCount }
+            'auto.components.right.sidebar.AiVaultSessionDetails.queuedMessageCount',
+            '{{count}} queued messages',
+            { count: queuedMessageCount, defaultValue_one: '{{count}} queued message' }
           )}
         </li>
       ) : null}
       {subagentTranscriptCount > 0 ? (
         <li>
           {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.subagentTranscripts',
-            '{{value0}} subagent transcript(s)',
-            { value0: subagentTranscriptCount }
+            'auto.components.right.sidebar.AiVaultSessionDetails.subagentTranscriptCount',
+            '{{count}} subagent transcripts',
+            { count: subagentTranscriptCount, defaultValue_one: '{{count}} subagent transcript' }
           )}
         </li>
       ) : null}

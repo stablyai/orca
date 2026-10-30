@@ -1,14 +1,22 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
 import { buildWorkspaceSessionPayload } from './workspace-session'
+import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 
 const initialAppStoreState = useAppStore.getState()
 
+beforeEach(() => {
+  // Track the original global before the shared fixture installs the renderer API.
+  vi.stubGlobal('window', undefined)
+  createStoreSessionMockApi()
+})
+
 afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
+  vi.unstubAllGlobals()
 })
 
 function makeRecord(
@@ -34,6 +42,48 @@ function makeTerminalTab(id: string): Record<string, unknown> {
 }
 
 describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
+  it('publishes the resume command and ownership claim with the first visible tab state', () => {
+    const record = makeRecord()
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+    let firstVisible:
+      | {
+          command: string | undefined
+          claim: unknown
+          layout: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId'][string]
+        }
+      | undefined
+    const unsubscribe = useAppStore.subscribe((state) => {
+      const tab = state.tabsByWorktree['wt-1']?.[0]
+      if (tab && !firstVisible) {
+        firstVisible = {
+          command: state.pendingStartupByTabId[tab.id]?.command,
+          claim: state.automaticAgentResumeClaimsByTabId[tab.id],
+          layout: state.terminalLayoutsByTabId[tab.id]
+        }
+      }
+    })
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    unsubscribe()
+
+    expect(firstVisible?.command).toContain('resume')
+    expect(firstVisible?.command).toContain(record.providerSession.id)
+    expect(firstVisible?.claim).toEqual({
+      worktreeId: record.worktreeId,
+      launchAgent: record.agent,
+      providerSession: record.providerSession
+    })
+    expect(firstVisible?.layout).toMatchObject({
+      root: { type: 'leaf', leafId: expect.any(String) },
+      activeLeafId: expect.any(String)
+    })
+    const root = firstVisible?.layout?.root
+    expect(firstVisible?.layout?.activeLeafId).toBe(root?.type === 'leaf' ? root.leafId : undefined)
+  })
+
   it('stores provider-session metadata in the queued startup and runtime claim', () => {
     const record = makeRecord()
     useAppStore.setState({

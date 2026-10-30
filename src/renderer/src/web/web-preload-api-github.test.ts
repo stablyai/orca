@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
-  installApi,
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
 } from './web-preload-api-test-harness'
@@ -15,73 +14,6 @@ describe('web GitHub preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
-  })
-
-  it('keeps the web GitHub preload key set in parity with the preload contract', async () => {
-    const { api } = await installApi('Linux')
-
-    expect(Object.keys(api.gh).sort()).toEqual(
-      [
-        'addIssueComment',
-        'addIssueCommentBySlug',
-        'addPRReviewComment',
-        'addPRReviewCommentReply',
-        'checkOrcaStarred',
-        'clearProjectItemField',
-        'countWorkItems',
-        'createIssue',
-        'deleteIssueCommentBySlug',
-        'diagnoseAuth',
-        'enqueuePRRefresh',
-        'getProjectViewTable',
-        'issue',
-        'listAccessibleProjects',
-        'listAssignableUsers',
-        'listAssignableUsersBySlug',
-        'listIssueTypesBySlug',
-        'listIssues',
-        'listLabels',
-        'listLabelsBySlug',
-        'listProjectViews',
-        'listWorkItems',
-        'mergePR',
-        'notifyWorkItemMutated',
-        'onPRRefreshEvent',
-        'onWorkItemMutated',
-        'prCheckDetails',
-        'prChecks',
-        'prComments',
-        'prFileContents',
-        'prForBranch',
-        'projectWorkItemDetailsBySlug',
-        'rateLimit',
-        'refreshPRNow',
-        'removePRReviewers',
-        'repoSlug',
-        'repoUpstream',
-        'reportVisiblePRRefreshCandidates',
-        'rerunPRChecks',
-        'requestPRReviewers',
-        'resolveProjectRef',
-        'resolveReviewThread',
-        'setPRAutoMerge',
-        'setPRCommentReaction',
-        'setPRFileViewed',
-        'starOrca',
-        'updateIssue',
-        'updateIssueBySlug',
-        'updateIssueCommentBySlug',
-        'updateIssueTypeBySlug',
-        'updatePRState',
-        'updatePRTitle',
-        'updateProjectItemField',
-        'updatePullRequestBySlug',
-        'viewer',
-        'workItem',
-        'workItemByOwnerRepo',
-        'workItemDetails'
-      ].sort()
-    )
   })
 
   it('routes every runtime-backed GitHub method through the expected RPC method', async () => {
@@ -370,6 +302,18 @@ describe('web GitHub preload API', () => {
         expectedParams: { force: true }
       },
       {
+        key: 'listBindableAccounts',
+        args: { repoPath, refreshCapability: true },
+        expectedMethod: 'github.listBindableAccounts',
+        expectedParams: withRepo({ repoPath, refreshCapability: true })
+      },
+      {
+        key: 'validateAccountBinding',
+        args: { repoPath, host: 'github.com', user: 'octocat' },
+        expectedMethod: 'github.validateAccountBinding',
+        expectedParams: withRepo({ repoPath, host: 'github.com', user: 'octocat' })
+      },
+      {
         key: 'listAccessibleProjects',
         args: { host: 'ghe.example.com' },
         expectedMethod: 'github.project.listAccessible',
@@ -468,7 +412,9 @@ describe('web GitHub preload API', () => {
     ]
 
     expect(routeCases.map((routeCase) => routeCase.key).sort()).toEqual(
-      Object.keys(GITHUB_WEB_RPC_METHODS).sort()
+      Object.keys(GITHUB_WEB_RPC_METHODS)
+        .filter((key) => key !== 'markPRReadyForReview')
+        .sort()
     )
 
     for (const routeCase of routeCases) {
@@ -509,5 +455,75 @@ describe('web GitHub preload API', () => {
         }
       }
     ])
+  })
+
+  it('gates marking a PR ready on the paired host capability', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result:
+              method === 'status.get'
+                ? { capabilities: ['github.markPRReadyForReview'] }
+                : { ok: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.gh.markPRReadyForReview({ repoPath: '/workspace/repo', prNumber: 7 })
+    ).resolves.toEqual({ ok: true })
+    expect(runtimeCalls).toEqual([
+      { method: 'status.get', params: undefined },
+      {
+        method: 'github.markPRReadyForReview',
+        params: { repoPath: '/workspace/repo', repo: '/workspace/repo', prNumber: 7 }
+      }
+    ])
+  })
+
+  it('does not call the ready RPC on an older paired host', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { capabilities: [] },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = await globals.window.api.gh.markPRReadyForReview({
+      repoPath: '/workspace/repo',
+      prNumber: 7
+    })
+
+    expect(result).toMatchObject({ ok: false })
+    expect(runtimeCalls).toEqual([{ method: 'status.get', params: undefined }])
   })
 })

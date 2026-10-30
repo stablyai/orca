@@ -1,5 +1,6 @@
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
+import { forwardGuestMousePress } from './browser-guest-mouse-press'
 
 const CONTROL_MODIFIERS = new Set(['control', 'ctrl'])
 const MAC_COMMAND_MODIFIERS = new Set(['meta', 'command', 'cmd'])
@@ -68,17 +69,55 @@ export function setupGuestMouseWheelZoomForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
+  isViewportPresetActive?: () => boolean
+  canViewportScroll?: (mouse: Electron.MouseWheelInputEvent) => boolean
+  onViewportWheelConsumed?: (deltaX: number, deltaY: number) => void
 }): () => void {
-  const { browserTabId, guest, resolveRenderer } = args
+  const {
+    browserTabId,
+    guest,
+    resolveRenderer,
+    isViewportPresetActive,
+    canViewportScroll,
+    onViewportWheelConsumed
+  } = args
   const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
-    const direction = resolveGuestMouseWheelZoomDirection(mouse)
-    if (!direction) {
+    // Why here: presses ride this per-guest listener and its cleanup rather than a second one.
+    if (forwardGuestMousePress(guest, browserTabId, resolveRenderer, mouse)) {
       return
     }
-    // Why: wheel input over a focused webview never reaches renderer DOM handlers, so consume and forward here.
+    const direction = resolveGuestMouseWheelZoomDirection(mouse)
+    if (direction) {
+      // Focused guest wheel events do not reach renderer DOM handlers.
+      event.preventDefault()
+      markGuestWheelZoom(guest, direction)
+      resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', {
+        browserPageId: browserTabId,
+        direction
+      })
+      return
+    }
+    if (
+      !isViewportPresetActive?.() ||
+      mouse.type !== 'mouseWheel' ||
+      !canViewportScroll?.(mouse as Electron.MouseWheelInputEvent)
+    ) {
+      return
+    }
+    const { deltaX, deltaY } = mouse as Electron.MouseWheelInputEvent
+    const safeDeltaX = typeof deltaX === 'number' && Number.isFinite(deltaX) ? deltaX : 0
+    const safeDeltaY = typeof deltaY === 'number' && Number.isFinite(deltaY) ? deltaY : 0
+    if (safeDeltaX === 0 && safeDeltaY === 0) {
+      return
+    }
+    // The host pans emulated viewports larger than the pane.
     event.preventDefault()
-    markGuestWheelZoom(guest, direction)
-    resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
+    onViewportWheelConsumed?.(safeDeltaX, safeDeltaY)
+    resolveRenderer(browserTabId)?.send('ui:scrollBrowserPage', {
+      browserPageId: browserTabId,
+      deltaX: safeDeltaX,
+      deltaY: safeDeltaY
+    })
   }
 
   guest.on('before-mouse-event', handler)
@@ -86,7 +125,7 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     try {
       guest.off('before-mouse-event', handler)
     } catch {
-      // Why: best-effort — guest may already be destroyed during teardown.
+      // The guest may already be destroyed.
     }
   }
 }

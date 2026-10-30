@@ -10,16 +10,14 @@ vi.mock('child_process', () => ({
 
 const getAllProcessesMock = vi.fn()
 
-import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
+import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import {
   confirmShellForegroundProcess,
   resolveAgentForegroundProcess,
   resolveAgentForegroundProcessWithAvailability
 } from './agent-foreground-process'
-// A real snapshot always contains the process doing the querying; the reader
-// rejects a table without it, because that is what a blocked
-// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+// Toolhelp denial may return an empty table; require the querying process to distinguish a readable snapshot.
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
@@ -77,10 +75,9 @@ describe('resolveAgentForegroundProcess', () => {
     execFileMock.mockReset()
     getAllProcessesMock.mockReset()
     resetProcessTableSnapshotForTests()
-    // Why: the Windows rows reader caches across calls (500ms TTL), so each
-    // case's rows must not be answered by the previous case's snapshot.
+    // Reset the 500ms Windows snapshot cache so each case reads its own rows.
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: getAllProcessesMock
     }))
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -95,8 +92,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('does not report a suspended agent when a non-agent holds the foreground', async () => {
-    // shell pid 100. vim (pid 102) holds the terminal foreground ('+'); a
-    // suspended codex (pid 101, stat 'T', no '+') is a backgrounded descendant.
+    // vim owns foreground (+); Ctrl-Z left Codex as a stopped background descendant.
     mockPs(
       [
         '101 100 T    node /Users/dev/.nvm/versions/node/bin/codex',
@@ -121,8 +117,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('reports omp even when the wrapped pi child holds the foreground alone', async () => {
-    // Why: across command boundaries only the deeper `pi` carries `+`; the
-    // wrapper identity must stay omp regardless of which frame we sampled.
+    // OMP identity must survive samples where only the wrapped Pi child owns foreground.
     mockPs(['101 100 S    omp', '102 101 S+   pi'].join('\n'))
 
     await expect(resolveAgentForegroundProcess(100, 'omp')).resolves.toBe('omp')
@@ -221,13 +216,13 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('confirms a quoted login shell only when its fresh PTY tree contains shells', async () => {
-    mockPs(['100 99 Ss+  "/bin/zsh" -l', '101 100 S+   /bin/bash'].join('\n'))
+    mockPs(['100 99 100 100 Ss+ "/bin/zsh" -l', '101 100 101 100 S+ /bin/bash'].join('\n'))
 
     await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(true)
   })
 
   it('uses spawned-shell identity instead of a lagging foreground child label', async () => {
-    mockPs(['100 99 Ss+  /bin/zsh -l'].join('\n'))
+    mockPs(['100 99 100 100 Ss+ /bin/zsh -l'].join('\n'))
 
     await expect(confirmShellForegroundProcess(100, '/bin/zsh')).resolves.toBe(true)
   })
@@ -235,11 +230,11 @@ describe('resolveAgentForegroundProcess', () => {
   it('confirms the spawned shell behind a login wrapper while prompt hooks run', async () => {
     mockPs(
       [
-        '100 99 Ss   /usr/bin/login -pfl developer /bin/zsh',
-        '101 100 S+   -zsh',
-        '102 101 S+   (zsh)',
-        '103 102 S+   (sed)',
-        '104 102 R+   (git)'
+        '100 99 100 101 Ss /usr/bin/login -pfl developer /bin/zsh',
+        '101 100 101 101 S+ -zsh',
+        '102 101 101 101 S+ (zsh)',
+        '103 102 101 101 S+ (sed)',
+        '104 102 101 101 R+ (git)'
       ].join('\n')
     )
 
@@ -249,10 +244,10 @@ describe('resolveAgentForegroundProcess', () => {
   it('rejects a foreground nested shell while the spawned shell remains suspended', async () => {
     mockPs(
       [
-        '100 99 Ss   /usr/bin/login -pfl developer /bin/zsh',
-        '101 100 S    -zsh',
-        '102 101 S+   agent-tui',
-        '103 102 S+   /bin/zsh -i'
+        '100 99 100 102 Ss /usr/bin/login -pfl developer /bin/zsh',
+        '101 100 101 102 S -zsh',
+        '102 101 102 102 S+ agent-tui',
+        '103 102 102 102 S+ /bin/zsh -i'
       ].join('\n')
     )
 
@@ -262,9 +257,9 @@ describe('resolveAgentForegroundProcess', () => {
   it('rejects shell ownership while a TUI and its nested shell remain in the PTY tree', async () => {
     mockPs(
       [
-        '100 99 Ss   /bin/zsh -l',
-        '101 100 S+   /usr/local/bin/agent-tui',
-        '102 101 S+   /bin/bash -i'
+        '100 99 100 101 Ss /bin/zsh -l',
+        '101 100 101 101 S+ /usr/local/bin/agent-tui',
+        '102 101 101 101 S+ /bin/bash -i'
       ].join('\n')
     )
 
@@ -272,14 +267,13 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('rejects shell ownership while a stopped TUI remains resumable', async () => {
-    mockPs(['100 99 Ss+  /bin/zsh -l', '101 100 T    /usr/local/bin/agent-tui'].join('\n'))
+    mockPs(['100 99 100 100 Ss+ /bin/zsh -l', '101 100 101 100 T agent-tui'].join('\n'))
 
     await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(false)
   })
 
   it('refuses WSL shells: wsl.exe is not a provable shell identity', async () => {
-    // Why pinned: the WSL job object holds only wsl.exe, so a looser
-    // isShellProcess would confirm ownership regardless of distro-side state.
+    // The WSL job holds only wsl.exe and cannot prove guest-side shell state.
     await expect(confirmShellForegroundProcess(100, 'wsl.exe')).resolves.toBe(false)
     expect(execFileMock).not.toHaveBeenCalled()
   })
@@ -342,8 +336,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('falls back to recognized descendants when no process in the PTY tree holds foreground', async () => {
-    // No '+' marker at all (e.g. a detached/daemon descendant tree) — the
-    // recognized agent may still be the best available signal.
+    // Detached descendants may have no foreground marker; retain agent recognition as a fallback.
     mockPs(
       ['100 99 Ss   bash -i', '101 100 S    node /Users/dev/.nvm/versions/node/bin/codex'].join(
         '\n'
@@ -435,8 +428,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('keeps a multiline Windows command line inside its own row', async () => {
-    // The prompt text impersonates another row; recognition must read the row
-    // it belongs to rather than the process it names.
+    // Prompt text impersonates another row; keep it within its actual process command line.
     Object.defineProperty(process, 'platform', { value: 'win32' })
     mockWindowsRows([
       {
@@ -509,8 +501,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('reports a foreign anchor when its pid now runs an unrecognized command', async () => {
-    // Pid reuse inside the pane's job: the row proves a different process
-    // (command lines are immutable), so job membership must stop confirming it.
+    // Job membership cannot preserve an agent identity contradicted by immutable command-line evidence.
     Object.defineProperty(process, 'platform', { value: 'win32' })
     mockWindowsRows([
       { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
@@ -529,8 +520,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('detects a foreign anchor even when the squatter is orphaned out of the descendant walk', async () => {
-    // The recycled pid's creator exited, so the row is not a ppid-descendant of
-    // the shell — but it can still be the job member holding the anchor pid.
+    // PID reuse can leave the squatter outside the shell ancestry while retaining job membership.
     Object.defineProperty(process, 'platform', { value: 'win32' })
     mockWindowsRows([
       { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
@@ -549,7 +539,6 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('flags an anchor recycled by a DIFFERENT agent as foreign', async () => {
-    // The squatter recognizes as an agent — just not the cached one.
     Object.defineProperty(process, 'platform', { value: 'win32' })
     mockWindowsRows([
       { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
@@ -709,10 +698,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('fails closed when console attachment cannot be read', async () => {
-    // The filter exists to DROP descendants that left the console. If it cannot
-    // tell which ones those are, publishing the unfiltered list would grant a
-    // detached process the pane's identity. #16419 briefly made this fall open
-    // and nothing caught it, because no test drove the null.
+    // Unreadable console attachment cannot authorize a detached descendant as the pane agent (#16419).
     Object.defineProperty(process, 'platform', { value: 'win32' })
     mockWindowsRows([
       { pid: 200, ppid: 199, name: 'powershell.exe', commandLine: 'powershell.exe' },
@@ -728,8 +714,7 @@ describe('resolveAgentForegroundProcess', () => {
     })
 
     expect(reader).toHaveBeenCalledTimes(1)
-    // available:false is the fail-closed signal; the wrapper then substitutes
-    // the shell fallback rather than publishing an unverified agent identity.
+    // Unavailable evidence must yield the shell fallback, never an unverified agent identity.
     expect(resolution.available).toBe(false)
     expect(resolution.processName).toBe('powershell.exe')
   })

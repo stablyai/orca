@@ -44,9 +44,13 @@ export function useBrowserPageReloadActions({
       if (!webview) {
         return
       }
-      if (reloadBrowserPageWebview(webview, { ignoreCache }) === 'guest-missing') {
+      const result = reloadBrowserPageWebview(webview, { ignoreCache })
+      if (result === 'not-ready') {
+        return
+      }
+      onUpdatePageStateRef.current(browserTab.id, { loading: true })
+      if (result === 'guest-missing') {
         // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
-        onUpdatePageStateRef.current(browserTab.id, { loading: true })
         retryGuestRecoveryRef.current()
       }
     },
@@ -87,7 +91,6 @@ export function useBrowserPageReloadActions({
     ]
   )
 
-  // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
   const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
   const reloadButtonLabel =
     reloadButtonLabelKind === 'stop'

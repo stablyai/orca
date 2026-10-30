@@ -33,11 +33,7 @@ export function faviconUrlFromWebsite(rawUrl: string): string | null {
 
 type GitHubAvatarSlug = { owner: string; repo: string; host?: string }
 
-/**
- * Pick the owner whose avatar represents a repo, given its `origin` and fork parent.
- * Why: a same-name fork is a personal copy, so it reads as the parent project; a
- * renamed fork is its own project and keeps its own owner.
- */
+/** Same-name forks use the parent avatar; renamed forks keep their own identity. */
 export function githubAvatarSlug(
   origin: GitHubAvatarSlug | null | undefined,
   upstream: GitHubAvatarSlug | null | undefined
@@ -47,9 +43,7 @@ export function githubAvatarSlug(
   return renamedFork ? origin : (upstream ?? origin ?? null)
 }
 
-// Why: shared default icon URL/label for main auto-detect and the renderer picker.
 export function githubAvatarIcon(slug: GitHubAvatarSlug): RepoIcon {
-  // Why: GHES uses the same /<login>.png avatar path as github.com.
   const host = normalizeGitHubAvatarHost(slug.host)
   return {
     type: 'image',
@@ -63,9 +57,7 @@ function normalizeGitHubAvatarHost(rawHost?: string): string {
   const candidate = rawHost?.trim().toLowerCase() || 'github.com'
   try {
     const url = new URL(`https://${candidate}`)
-    // Why: only bare hostnames — reject credentials, paths, query, or hash.
-    // Explicit default port 443 is stripped by URL serialization, so accept the
-    // canonical `hostname:443` form too or valid GHES avatars on 443 fall back.
+    // Accept bare hosts including canonical :443; reject credentials, paths, query and hash.
     return !url.username &&
       !url.password &&
       (url.host === candidate || `${url.host}:443` === candidate) &&
@@ -79,7 +71,7 @@ function normalizeGitHubAvatarHost(rawHost?: string): string {
   }
 }
 
-function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean {
+function computeIsSupportedImageSrc(src: string, source: RepoIconImageSource): boolean {
   if (source === 'upload') {
     return (
       /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src) &&
@@ -110,6 +102,26 @@ function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean 
   }
 
   return url.hostname === 'www.google.com' && url.pathname === '/s2/favicons'
+}
+
+type ImageSrcVerdict = { src: unknown; source: unknown; supported: boolean }
+
+/** Hydration reuses persisted icon objects; cache costly data-URI validation without retaining replaced icons.
+ * Recheck src/source on hits to reject stale verdicts after in-place mutation. */
+const imageSrcVerdicts = new WeakMap<object, ImageSrcVerdict>()
+
+function isSupportedImageSrc(
+  candidate: Record<string, unknown>,
+  src: string,
+  source: RepoIconImageSource
+): boolean {
+  const cached = imageSrcVerdicts.get(candidate)
+  if (cached && cached.src === candidate.src && cached.source === candidate.source) {
+    return cached.supported
+  }
+  const supported = computeIsSupportedImageSrc(src, source)
+  imageSrcVerdicts.set(candidate, { src: candidate.src, source: candidate.source, supported })
+  return supported
 }
 
 export function sanitizeRepoIcon(value: unknown): RepoIcon | null | undefined {
@@ -146,7 +158,7 @@ export function sanitizeRepoIcon(value: unknown): RepoIcon | null | undefined {
     if (!isRepoIconImageSource(source) || src.length > MAX_REPO_ICON_DATA_URL_LENGTH) {
       return undefined
     }
-    if (!isSupportedImageSrc(src, source)) {
+    if (!isSupportedImageSrc(candidate, src, source)) {
       return undefined
     }
     const label = typeof candidate.label === 'string' ? candidate.label.trim().slice(0, 80) : ''

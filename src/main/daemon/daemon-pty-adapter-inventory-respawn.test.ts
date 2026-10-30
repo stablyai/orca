@@ -1,4 +1,4 @@
-/* Inventory after the terminal host dies: worktree removal must not hard-fail. */
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
@@ -18,7 +18,6 @@ describe('inventory after the terminal host dies (#10087)', () => {
     respawnServer = undefined
   })
 
-  /** An adapter that can bring the host back, as production does. */
   const healingAdapter = (): { adapter: DaemonPtyAdapter; respawn: ReturnType<typeof vi.fn> } => {
     const respawn = vi.fn(async () => {
       respawnServer = new DaemonServer({
@@ -39,11 +38,7 @@ describe('inventory after the terminal host dies (#10087)', () => {
   }
 
   it('lists processes after the host dies instead of failing the removal', async () => {
-    // The reported failure: worktree remove inventories PTYs through
-    // listProcesses, and a dead named pipe surfaced as
-    // `connect ENOENT \\?\pipe\orca-terminal-host-...`, blocking removal until
-    // the whole app was restarted. spawn already recovers from this; inventory
-    // did not, so the destructive path was the one that could not heal.
+    // Dead host pipes previously blocked worktree removal until the app restarted (#10087).
     const { adapter, respawn } = healingAdapter()
     try {
       await adapter.spawn({ cols: 80, rows: 24 })
@@ -59,8 +54,6 @@ describe('inventory after the terminal host dies (#10087)', () => {
   })
 
   it('still recovers on spawn, the path that already worked', async () => {
-    // Control: proves the harness really kills the host, so the test above is
-    // not passing because nothing broke.
     const { adapter, respawn } = healingAdapter()
     try {
       await adapter.spawn({ cols: 80, rows: 24 })

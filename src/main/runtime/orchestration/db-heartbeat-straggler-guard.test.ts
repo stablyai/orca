@@ -9,17 +9,17 @@ afterEach(() => {
   db = undefined
 })
 
-// Why: seeding before the row settles keeps the expectation off the row's initial null — a settle that cleared the column would satisfy `toBeNull()` too.
+// Seed a heartbeat so a later null assertion can detect settlement clearing it.
 function seedHeartbeatedDispatch(): { d: OrchestrationDb; dispatchId: string } {
   const d = new OrchestrationDb(':memory:')
   db = d
-  const task = d.createTask({ spec: 'work' })
+  const task = d.createTask({ runId: 'run_legacy_local', spec: 'work' })
   const dispatch = createRootDispatch(d, task.id, 'term_worker')
   d.recordHeartbeat(dispatch.id, '2026-05-03T00:00:00.000Z')
   return { d, dispatchId: dispatch.id }
 }
 
-// Why: recordHeartbeat matches status='dispatched' exactly, so every settled status needs its own case — a widened `status != 'completed'` guard shows up only on the failed one.
+// Cover every settled status; failed rows catch a widened status != completed guard.
 describe('recordHeartbeat straggler guard', () => {
   it('ignores a straggler heartbeat after the dispatch completed', () => {
     const { d, dispatchId } = seedHeartbeatedDispatch()

@@ -1,7 +1,8 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser-client-host-protocol'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import type { BrowserExecutionHostKeyResolution } from '../../runtime-browser-client-page-adoption'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -32,10 +33,7 @@ function orphanedPage(
   }
 }
 
-/**
- * Attaches through the real RPC method, answering every command the runtime publishes the way the
- * client host would. Everything adoption does at attach has to survive this path or it ships broken.
- */
+/** Drive the real attach RPC and answer its published client-host commands to verify adoption crosses the wire correctly. */
 function attachHost(
   pageInventory: readonly BrowserClientHostedPageInventory[],
   options: {
@@ -183,6 +181,51 @@ describe('browser.clientHost.attach adoption', () => {
     await rig.dispatch
   })
 
+  it('does not recover a page created after the attach inventory was captured', async () => {
+    let releaseAdoption!: (value: BrowserExecutionHostKeyResolution) => void
+    const route = new Promise<BrowserExecutionHostKeyResolution>((resolve) => {
+      releaseAdoption = resolve
+    })
+    const resolveExecutionHostKey = vi.fn(() => route)
+    const rig = attachHost([orphanedPage()], { resolveExecutionHostKey })
+    const settleAttach = async (): Promise<void> => {
+      rig.cleanups.get(`browser-client-host:${HOST_CLIENT_ID}`)?.()
+      await rig.dispatch
+    }
+    try {
+      await vi.waitFor(() => expect(resolveExecutionHostKey).toHaveBeenCalled())
+      const authority = getBrowserHostLeaseRegistry(rig.hostRuntime)
+      const pages = getRuntimeBrowserPageRegistry(rig.hostRuntime)
+      const placement = authority.placeClientPage('page-created-after-attach', HOST_CLIENT_ID)
+      if (placement.kind !== 'client') {
+        throw new Error('expected client placement')
+      }
+      pages.publishClientPage({
+        browserPageId: 'page-created-after-attach',
+        workspaceId: WORKSPACE_ID,
+        browserProfileId: 'default',
+        executionHostKey: EXECUTION_HOST_KEY,
+        placement,
+        pairedDeviceId: 'device-a',
+        url: 'https://remote.internal/new',
+        loading: false,
+        active: true
+      })
+      releaseAdoption({ status: 'resolved', executionHostKey: EXECUTION_HOST_KEY })
+      await vi.waitFor(() => expect(rig.markClientHostedPagesReconciled).toHaveBeenCalled())
+      // Attach awaits recovery; draining microtasks alone could miss a command not issued yet.
+      await settleAttach()
+
+      expect(authority.getPlacement('page-created-after-attach')).toEqual(placement)
+      expect(pages.getPage('page-created-after-attach')).toMatchObject({ placement, active: true })
+      expect(
+        rig.commands().filter((event) => event.browserPageId === 'page-created-after-attach')
+      ).toEqual([])
+    } finally {
+      await settleAttach()
+    }
+  })
+
   it('does not re-enter recovery for a page it just adopted', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const rig = attachHost([orphanedPage({ browserPageId: 'page-d' })], {
@@ -197,8 +240,7 @@ describe('browser.clientHost.attach adoption', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // The adopted page's inventory entry still names the predecessor by construction, so recovery
-    // would call it stale and warn once per adopted page on every restart.
+    // Adopted inventory still names the predecessor; recovery must not warn on every page after restart.
     expect(
       warn.mock.calls.filter(([message]) => String(message).includes('client page recovery failed'))
     ).toEqual([])

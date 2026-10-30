@@ -1,7 +1,10 @@
 import type { SearchFileResult, SearchMatch } from './code-search-types'
 import type { SearchAccumulator } from './text-search'
+import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
+import { ownRetainedString } from './own-retained-string'
 
-const MAX_LINE_CONTENT_LENGTH = 500
+// Bound repeated context so dense search results fit within the SSH message limit.
+export const MAX_LINE_CONTENT_LENGTH = 500
 const TRUNCATION_MARKER = '…'
 
 type ClampedLineContext = {
@@ -24,11 +27,20 @@ function clampLineContext(
   const remaining = MAX_LINE_CONTENT_LENGTH - clampedMatchLength
   const leftBudget = Math.floor(remaining / 2)
   let windowStart = Math.max(0, matchStart - leftBudget)
-  const windowEnd = Math.min(text.length, windowStart + MAX_LINE_CONTENT_LENGTH)
+  let windowEnd = Math.min(text.length, windowStart + MAX_LINE_CONTENT_LENGTH)
   windowStart = Math.max(0, windowEnd - MAX_LINE_CONTENT_LENGTH)
+  if (windowStart > 0 && (text.codePointAt(windowStart - 1) ?? 0) > 0xffff) {
+    windowStart++
+  }
 
-  let snippet = text.slice(windowStart, windowEnd)
-  let column = matchStart - windowStart + 1
+  let snippet = sliceAtCodeUnitLimit(text.slice(windowStart), windowEnd - windowStart)
+  windowEnd = windowStart + snippet.length
+  const displayStart = Math.max(windowStart, Math.min(matchStart, windowEnd))
+  const displayMatchLength = Math.max(
+    0,
+    Math.min(matchStart + matchLength, windowEnd) - displayStart
+  )
+  let column = displayStart - windowStart + 1
   if (windowStart > 0) {
     snippet = TRUNCATION_MARKER + snippet
     column += TRUNCATION_MARKER.length
@@ -37,11 +49,12 @@ function clampLineContext(
     snippet += TRUNCATION_MARKER
   }
   return {
-    lineContent: snippet,
+    // A tiny slice can otherwise retain the entire source line until results are released.
+    lineContent: ownRetainedString(snippet),
     column: matchStart + 1,
     matchLength,
     displayColumn: column,
-    displayMatchLength: clampedMatchLength
+    displayMatchLength
   }
 }
 

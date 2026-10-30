@@ -16,31 +16,14 @@ type DaemonRpcRequestOptions = {
   payload: unknown
   timeoutMs: number
   signal?: AbortSignal
-  /**
-   * How long to keep waiting after the daemon says it could not match a cancel.
-   * A create that already published a result still has a response in flight, but
-   * an attach-only request has nothing coming, so the wait must be bounded.
-   */
+  /** Bound late-response waits after unmatched cancellation, including attach-only requests with no reply coming. */
   unmatchedCancelGraceMs: number
-  /**
-   * Escalation of last resort: called only when the cancel RPC could not be put on
-   * the wire at all. Never called for a cancel the daemon answered with an error,
-   * or one that timed out — those say nothing about the sibling sessions sharing
-   * this connection. A cancel that timed out is instead reported through
-   * `wedgedDaemonError` on this request alone.
-   */
+  /** Tear down only for undeliverable cancels; refusals and timeouts do not imply sibling transport failure. */
   onCreateCancellationFailure: () => void
   settleCreateCancellation: (sessionId: string, requestId: string) => Promise<{ canceled: boolean }>
 }
 
-/**
- * Why: the request timed out and so did the cancel sent to clean it up, so the daemon
- * is wedged with its socket still open — no close event, no disconnect, and nothing
- * else in the client notices (#8689 is the same shape). Re-message it to the one
- * string `isDaemonGoneError` matches, so the caller's retry can respawn the daemon
- * instead of retrying against a daemon that will never answer. Aborts are excluded:
- * the caller asked to stop, not to retry.
- */
+// Matching request/cancel timeouts signal a wedged daemon to retry logic; caller aborts do not.
 function wedgedDaemonError(requestError: Error, cancelError: unknown): Error | null {
   if (
     !(requestError instanceof DaemonRequestTimeoutError) ||
@@ -54,30 +37,37 @@ function wedgedDaemonError(requestError: Error, cancelError: unknown): Error | n
 }
 
 export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
+  // A stalled event loop can deliver a daemon cancellation before its overdue timer runs.
   const { payload, type } = opts
+  const createTimeoutError = (): DaemonRequestTimeoutError =>
+    new DaemonRequestTimeoutError(`Request ${type} timed out after ${opts.timeoutMs}ms`)
   const createSessionId =
-    type === 'createOrAttach' && payload !== null && typeof payload === 'object'
-      ? Reflect.get(payload, 'sessionId')
+    type === 'createOrAttach' &&
+    payload !== null &&
+    typeof payload === 'object' &&
+    'sessionId' in payload
+      ? payload.sessionId
       : null
   const requestPayload =
     type === 'createOrAttach' && payload !== null && typeof payload === 'object'
-      ? { ...payload, cancelAfterMs: Math.max(1, opts.timeoutMs - 100) }
+      ? {
+          ...payload,
+          cancelAfterMs: Math.max(1, opts.timeoutMs + opts.unmatchedCancelGraceMs)
+        }
       : payload
   const encoded = encodeNdjson({
     id: opts.id,
     type,
     ...(requestPayload !== undefined ? { payload: requestPayload } : {})
   })
+  const clientDeadlineMs = performance.now() + opts.timeoutMs
 
   return new Promise<T>((resolve, reject) => {
     let sent = false
     let cancellationStarted = false
     let settled = false
     let unmatchedCancelTimer: NodeJS.Timeout | null = null
-    // Why: our cancel makes the daemon reject the request too (a queued create
-    // abandoning an aborted wait). Callers key recovery off `client_disconnected`,
-    // so letting that race pick the message rolls back terminals it should keep.
-    // Scoped to the daemon's cancellation reply: a real disconnect still wins.
+    // Preserve the caller's cancellation error over a racing daemon reply; real disconnects still win.
     let cancellationError: Error | null = null
     const removeAbortListener = (): void => opts.signal?.removeEventListener('abort', onAbort)
     const clearTimers = (): void => {
@@ -97,9 +87,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       clearTimers()
       reject(error)
     }
-    // Unmatched or unconfirmed cancel: a create that already published a result will
-    // still answer, so keep waiting — but only for a bounded window, or an
-    // attach-only request queued behind a hung create never settles at all.
+    // Allow a published create reply to arrive, but bound attach-only waits that may never get a response.
     const awaitLateResponseThenReject = (error: Error): void => {
       if (settled || unmatchedCancelTimer) {
         return
@@ -131,13 +119,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
           if (settled) {
             return
           }
-          // Why: a cancel the daemon refused (v1-v10 answer 'Unknown request type')
-          // or that blew its own 5s timeout (busy event loop, e.g. an unreachable UNC
-          // share) proves nothing about the other sessions on this connection, so it
-          // must not tear it down. Only an undeliverable cancel does. Unrecognized
-          // errors deliberately fall through to the bounded wait: the fail-safe
-          // direction is leaving siblings alone. A wedged daemon is still reported —
-          // on this request only — via wedgedDaemonError.
+          // Refused, timed-out or unknown cancel failures must leave sibling sessions on the connection intact.
           if (cancelError instanceof DaemonConnectionLostError) {
             opts.onCreateCancellationFailure()
             return
@@ -146,9 +128,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
         })
     }
     const timer = setTimeout(() => {
-      const error = new DaemonRequestTimeoutError(
-        `Request ${type} timed out after ${opts.timeoutMs}ms`
-      )
+      const error = createTimeoutError()
       if (typeof createSessionId === 'string') {
         cancelCreate(error)
       } else {
@@ -172,8 +152,11 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
         removeAbortListener()
         clearTimers()
         reject(
-          cancellationError !== null && isTerminalAttachCanceledMessage(error.message)
-            ? cancellationError
+          isTerminalAttachCanceledMessage(error.message)
+            ? (cancellationError ??
+                (type === 'createOrAttach' && performance.now() >= clientDeadlineMs
+                  ? createTimeoutError()
+                  : error))
             : error
         )
       },
@@ -189,8 +172,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       opts.socket.write(encoded)
       sent = true
     } catch (err) {
-      // Why: an unwrapped throw here leaks the pending entry and its timer, and the
-      // raw error would be indistinguishable from a daemon refusal.
+      // Wrap transport throws and drop the pending timer so they cannot masquerade as daemon refusals.
       rejectAndDrop(new DaemonConnectionLostError(err instanceof Error ? err.message : String(err)))
     }
   })

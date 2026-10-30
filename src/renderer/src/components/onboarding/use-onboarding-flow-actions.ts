@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
-import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -71,7 +71,7 @@ export function useOnboardingFlowActions({
   updateSettings,
   skipOptions
 }: OnboardingFlowActionsArgs) {
-  // Why: sync latch; busyLabel state commits too late to stop a ~30ms Cmd+Enter auto-repeat from re-entering next() and skipping a step.
+  // Latch synchronously: busyLabel commits too late to stop shortcut autorepeat from skipping a step.
   const nextInFlightRef = useRef(false)
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
@@ -117,7 +117,12 @@ export function useOnboardingFlowActions({
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
           if (currentStep.id === 'notifications') {
-            setBusyLabel('Opening Add Project...')
+            setBusyLabel(
+              translate(
+                'components.onboarding.flow.actions.openingAddProject',
+                'Opening Add Project...'
+              )
+            )
             const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
             if (closed) {
               openModal('add-repo')
@@ -190,13 +195,14 @@ export function useOnboardingFlowActions({
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
-    setBusyLabel('Opening Add Project...')
+    setBusyLabel(
+      translate('components.onboarding.flow.actions.openingAddProject', 'Opening Add Project...')
+    )
     try {
       const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
       if (!closed) {
         return
       }
-      // Why: repo picker now lives in the Add Project dialog, so skipping optional setup closes onboarding and hands off to it.
       track('onboarding_step_skipped', {
         step: stepNumber,
         value_kind: valueKind,

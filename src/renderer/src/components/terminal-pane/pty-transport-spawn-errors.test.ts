@@ -151,8 +151,8 @@ describe('createIpcPtyTransport', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
-  it('recovers a stale cross-connection SSH reattach as expired instead of a red error toast', async () => {
-    // Why: a cross-connection SSH reattach is unreachable ("belongs to SSH connection"), so drop it as sessionExpired instead of erroring.
+  it('refuses to call a cross-connection SSH reattach expired, and still raises no error toast', async () => {
+    // Client-side connection mismatch proves no host exit, even after same-machine re-adoption; keep it unverifiable to avoid duplicate resume while preserving toast suppression (#7661).
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi
       .fn()
@@ -186,10 +186,40 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      id: 'ssh:ssh-1779863656395-57g1q1@@pty-3',
-      sessionExpired: true
+    // Unaddressable IDs remain unverifiable and cannot authorize respawn.
+    expect(result).toBeUndefined()
+  })
+
+  it('still calls a relay-attested gone session expired so a truly dead PTY respawns', async () => {
+    // Relay-proven expiry still authorizes respawn; only client mismatch lost that authority.
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi.fn().mockRejectedValue(new Error('SSH_SESSION_EXPIRED: ssh:ssh-1@@pty-3'))
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const onError = vi.fn()
+    const result = await createIpcPtyTransport({ connectionId: 'ssh-1' }).connect({
+      url: '',
+      sessionId: 'ssh:ssh-1@@pty-3',
+      callbacks: { onError }
     })
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(result).toEqual({ id: 'ssh:ssh-1@@pty-3', sessionExpired: true })
   })
 
   it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
@@ -223,5 +253,24 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).toHaveBeenCalledWith(createTerminalSessionStateSaveFailureMessage())
+  })
+
+  it('keeps every line of a multi-line spawn failure for the pane toast (#20386)', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const diagnosis =
+      'Remote terminals are unavailable: make and a C++ compiler are not installed. Install them on the remote host, then reconnect:\n' +
+      '  sudo apt-get install -y build-essential python3\n' +
+      'Host: linux/x64, glibc 2.36, Node v22.12.0 (ABI 127), prebuild slot linux-x64-glibc.'
+    vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(
+      new Error(`Error invoking remote method 'pty:spawn': Error: ${diagnosis}`)
+    )
+
+    const onError = vi.fn()
+    await createIpcPtyTransport({ connectionId: 'ssh-1' }).connect({
+      url: '',
+      callbacks: { onError }
+    })
+
+    expect(onError).toHaveBeenCalledWith(diagnosis)
   })
 })

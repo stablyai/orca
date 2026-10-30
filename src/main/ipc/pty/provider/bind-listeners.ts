@@ -1,6 +1,5 @@
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
 import {
   localBackgroundStreamUnsub,
   localDataUnsub,
@@ -13,8 +12,10 @@ import {
 } from './listener-lifecycle'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
-import { providerSnapshotRequiredPtys } from '../delivery/visibility-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { providerSnapshotRequiredPtys, visibleRendererPtys } from '../delivery/visibility-state'
 import type { PtyIpcSession } from '../session'
+import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
 
 export function bindProviderListeners(session: PtyIpcSession): void {
   localDataUnsub?.()
@@ -22,12 +23,13 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   localBackgroundStreamUnsub?.()
   localWriteUnavailableUnsub?.()
 
-  // Why: a daemon death takes down every session at once. The provider signals
-  // each affected pane here so background panes remount + re-attach too, not
-  // just the pane whose write happened to detect the dead endpoint (STA-2373).
+  // Daemon death invalidates every session; notify background panes too so they can remount (STA-2373).
   setLocalWriteUnavailableUnsub(
     localProvider.onWriteUnavailable?.((payload) => {
+      // Before the window check: a headless host has no window, only remote streams.
+      publishPtyEndpointLoss(payload.id)
       if (
+        !session.mainWindow ||
         session.mainWindow.isDestroyed() ||
         (typeof session.mainWindow.webContents.isDestroyed === 'function' &&
           session.mainWindow.webContents.isDestroyed())
@@ -38,7 +40,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     }) ?? null
   )
 
-  // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
+  // Apply thinning facts in stream order; gaps require snapshot restore and change transient-scan authority.
   setLocalBackgroundStreamUnsub(
     localProvider.onBackgroundStreamEvent?.((payload) => {
       if (payload.kind === 'backgroundMarker') {
@@ -64,13 +66,11 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     }) ?? null
   )
 
-  // Why: daemon providers lack configure().onData, so feed the runtime here or their tail buffer (terminal.read, agent-detection, mobile stream) stays empty.
-  const isLocalProvider = localProvider instanceof LocalPtyProvider
-
+  // Feed the runtime unless the emitting provider already did via configure().
   setLocalDataUnsub(
     localProvider.onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
-      const outputSeq = isLocalProvider
+      const outputSeq = payload.runtimeFed
         ? session.runtime?.getPtyOutputSequence(payload.id)
         : session.runtime?.onPtyData(
             payload.id,
@@ -87,25 +87,45 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (!isCurrentPtyExit(payload)) {
         return
       }
-      if (session.consumeSyntheticKillExit(payload.id)) {
-        return
-      }
-      if (!isLocalProvider) {
-        clearProviderPtyState(payload.id)
-        ptyOwnership.delete(payload.id)
-        markClaudePtyExited(payload.id)
-        session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
-          providerExitObserved: true,
-          ...(payload.cause ? { cause: payload.cause } : {})
+      // Its distro's hook relay may idle out once no bridge terminal remains.
+      wslBridgePtyPresence.noteExited(payload.id)
+      const syntheticExit = session.consumeSyntheticKillExit(payload.id, payload.incarnationId)
+      // Daemon restart replaces processes while their panes survive.
+      const settleRestartStop = payload.replacedByRestart
+        ? session.runtime?.intentionalPtyStops?.mark(
+            payload.id,
+            'replaced',
+            payload.incarnationId ?? null
+          )
+        : undefined
+      try {
+        if (!payload.runtimeFed) {
+          const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
+          clearProviderPtyState(payload.id)
+          ptyOwnership.delete(payload.id)
+          if (syntheticExit) {
+            session.runtime?.markPtyStopRequested(payload.id)
+          }
+          session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
+            providerExitObserved: true,
+            ...(viewShown ? { viewShown } : {}),
+            ...(payload.cause ? { cause: payload.cause } : {}),
+            ...(payload.hostLost ? { hostLost: true } : {})
+          })
+        }
+        // Control replies may overtake stream data; physical exit must still retire late output.
+        if (syntheticExit) {
+          return
+        }
+        // Exit cause belongs to runtime records; preserve the renderer event contract.
+        session.sendPtyExitToRenderer({
+          id: payload.id,
+          code: payload.code,
+          ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {})
         })
+      } finally {
+        settleRestartStop?.(true)
       }
-      // Why not the whole payload: the exit cause is a main-process fact for the
-      // runtime's records; the renderer's pty:exit contract stays as it was.
-      session.sendPtyExitToRenderer({
-        id: payload.id,
-        code: payload.code,
-        ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {})
-      })
     })
   )
 }

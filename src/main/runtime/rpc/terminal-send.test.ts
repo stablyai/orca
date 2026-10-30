@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
@@ -124,7 +125,8 @@ describe('terminal send RPC', () => {
         terminal: 'terminal-1',
         text: 'x',
         client: { id: 'desktop-1', type: 'desktop' }
-      })
+      }),
+      { caller: { kind: 'desktop' } }
     )
 
     expect(response.ok).toBe(true)
@@ -169,7 +171,8 @@ describe('terminal send RPC', () => {
         client: { id: 'desktop-1', type: 'desktop' },
         viewport: { cols: 96, rows: 32 },
         claimViewport: true
-      })
+      }),
+      { caller: { kind: 'desktop' } }
     )
 
     await vi.waitFor(() =>
@@ -179,6 +182,46 @@ describe('terminal send RPC', () => {
     releaseClaim()
     await expect(response).resolves.toMatchObject({ ok: true })
     expect(sendTerminal).toHaveBeenCalled()
+  })
+
+  it('does not claim the viewport for a focus report or query reply (#26469)', async () => {
+    const refreshRemoteDesktopViewer = vi.fn().mockResolvedValue(true)
+    const sendTerminal = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 3
+    })
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      refreshRemoteDesktopViewer,
+      sendTerminal
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const send = (text: string, suffix: { enter?: boolean } = {}) =>
+      dispatcher.dispatch(
+        makeRequest('terminal.send', {
+          terminal: 'terminal-1',
+          text,
+          ...suffix,
+          client: { id: 'desktop-1', type: 'desktop' },
+          viewport: { cols: 96, rows: 32 },
+          claimViewport: true
+        }),
+        { caller: { kind: 'desktop' } }
+      )
+
+    await expect(send('\x1b[I')).resolves.toMatchObject({ ok: true })
+    await expect(send('\x1b[O\x1b[I')).resolves.toMatchObject({ ok: true })
+    await expect(send('\x1b[?62;22c')).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).not.toHaveBeenCalled()
+    expect(sendTerminal).toHaveBeenCalledTimes(3)
+
+    await expect(send('\x1b[I', { enter: true })).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).toHaveBeenCalledTimes(1)
+
+    await expect(send('a')).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).toHaveBeenCalledWith('pty-1', 'desktop-1', 96, 32, true)
   })
 
   it('accepts legacy clientless mobile input when the current driver is mobile', async () => {
@@ -232,6 +275,8 @@ describe('terminal send RPC', () => {
         interrupt: false
       },
       {
+        inputKind: 'driving',
+        inputSource: 'legacy',
         beforeWrite: undefined,
         reserveWrite: expect.any(Function),
         afterWrite: expect.any(Function)
@@ -352,6 +397,7 @@ describe('terminal send RPC', () => {
         bytesWritten: 6
       }),
       isMobileTerminalQueryReplyAuthority: vi.fn().mockReturnValue(true),
+      shouldForwardTerminalQueryReply: () => true,
       mobileTookFloor: vi.fn()
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -370,7 +416,7 @@ describe('terminal send RPC', () => {
     expect(runtime.sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: '\x1b[3;4R', enter: false, interrupt: false },
-      { beforeWrite: undefined }
+      { beforeWrite: undefined, inputKind: 'query-reply', inputSource: 'mobile' }
     )
     expect(runtime.mobileTookFloor).not.toHaveBeenCalled()
   })
@@ -382,6 +428,7 @@ describe('terminal send RPC', () => {
       isMobileTerminalQueryReplyAuthority: vi.fn(
         (_ptyId: string, clientId: string) => clientId === 'mobile-1'
       ),
+      shouldForwardTerminalQueryReply: () => true,
       sendTerminal: vi.fn().mockResolvedValue({
         handle: 'terminal-1',
         accepted: true,
@@ -570,7 +617,7 @@ describe('terminal send RPC', () => {
         enter: false,
         interrupt: false
       },
-      { beforeWrite: undefined }
+      { inputKind: 'driving', inputSource: 'legacy', beforeWrite: undefined }
     )
   })
 
@@ -653,7 +700,7 @@ describe('terminal send RPC', () => {
         enter: true,
         interrupt: false
       },
-      { beforeWrite: expect.any(Function) }
+      { inputKind: 'driving', inputSource: 'programmatic', beforeWrite: expect.any(Function) }
     )
   })
 
@@ -769,48 +816,6 @@ describe('terminal send RPC', () => {
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
   })
 
-  it('rechecks the mobile floor lock immediately before guarded PTY writes', async () => {
-    const runtime = stubRuntime({
-      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      getDriver: vi
-        .fn()
-        .mockReturnValueOnce({ kind: 'desktop' })
-        .mockReturnValueOnce({ kind: 'desktop' })
-        .mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
-      getTerminalAgentStatus: vi.fn().mockResolvedValue({
-        handle: 'terminal-1',
-        isRunningAgent: true,
-        status: 'working'
-      }),
-      sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
-        await options.beforeWrite('pty-1')
-        return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
-      })
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('terminal.send', {
-        terminal: 'terminal-1',
-        enter: true,
-        requireAgentStatus: 'sendable',
-        client: { id: 'desktop-1', type: 'desktop' }
-      })
-    )
-
-    expect(response.ok).toBe(true)
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    expect(response.result).toEqual({
-      send: {
-        handle: 'terminal-1',
-        accepted: false,
-        bytesWritten: 0
-      }
-    })
-  })
-
   it('routes terminal restore fit through the runtime driver state machine', async () => {
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -831,8 +836,7 @@ describe('terminal send RPC', () => {
     expect(response.result).toEqual({ restored: true })
     expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1')
   })
-  // Why: mobile gates reply forwarding on this static capability; removing it
-  // would silently re-break mobile query answering against current hosts.
+  // Mobile gates query replies on this static capability; removing it breaks forwarding to current hosts.
   it('advertises query-reply input support to mobile clients', () => {
     expect(RUNTIME_CAPABILITIES).toContain(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY)
   })

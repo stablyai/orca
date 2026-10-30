@@ -1,27 +1,19 @@
+import { createAdapter } from './daemon-pty-router-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from './daemon-pty-router'
+import { stubWriteSettlement } from '../providers/settled-pty-write-stub'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtyProcessInfo, PtySpawnResult } from '../providers/pty-provider-contract'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
 } from './types'
 import {
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
-  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
   STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
-
-type AdapterMock = DaemonPtyAdapter & {
-  emitData: (id: string, data: string, sequenceChars?: number) => void
-  emitBackground: (event: PtyBackgroundStreamEvent) => void
-  emitExit: (id: string, code: number, incarnationId?: string) => void
-  emitIdentityChange: () => void
-  triggerWriteUnavailable: (id: string) => void
-}
 
 const LARGE_RECONCILE_SESSION_COUNT = 150_000
 
@@ -33,157 +25,8 @@ function buildSessionIds(prefix: string, count: number): string[] {
   return ids
 }
 
-function createAdapter(
-  label: string,
-  sessions: string[] = [],
-  reconcileResult?: { alive: string[]; killed: string[] },
-  protocolVersion = GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
-): AdapterMock {
-  const writes: { id: string; data: string }[] = []
-  const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
-    []
-  const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
-  const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
-  const exitListeners: ((payload: { id: string; code: number; incarnationId?: string }) => void)[] =
-    []
-  const identityChangeListeners: (() => void)[] = []
-  return {
-    protocolVersion,
-    supportsGitCredentialGuardHost: () =>
-      protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
-    supportsAgentSessionClaims: () =>
-      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-    supportsAgentSessionCreateOperations: () =>
-      protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-    providesAgentSessionOwnerListings: () =>
-      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-    canProvideAuthoritativeBufferSnapshot: () =>
-      protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
-    spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
-      const id = opts.sessionId ?? `${label}-new`
-      sessions.push(id)
-      return { id }
-    }),
-    listProcesses: vi.fn(async () =>
-      sessions.map((id) => ({
-        id,
-        cwd: '',
-        title: label
-      }))
-    ),
-    hasPty: vi.fn((id: string) => sessions.includes(id)),
-    probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
-    write: vi.fn((id: string, data: string) => {
-      writes.push({ id, data })
-    }),
-    writeWithSettlement: vi.fn(async () => true),
-    resize: vi.fn(),
-    setPtyBackgrounded: vi.fn(),
-    getBufferSnapshot: vi.fn(async () => null),
-    shutdown: vi.fn(async (id: string) => {
-      const idx = sessions.indexOf(id)
-      if (idx !== -1) {
-        sessions.splice(idx, 1)
-      }
-    }),
-    attach: vi.fn(async () => {}),
-    sendSignal: vi.fn(async () => {}),
-    getCwd: vi.fn(async () => ''),
-    getInitialCwd: vi.fn(async () => ''),
-    clearBuffer: vi.fn(async () => {}),
-    acknowledgeDataEvent: vi.fn(),
-    hasChildProcesses: vi.fn(async () => false),
-    getForegroundProcess: vi.fn(async () => null),
-    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
-    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
-    serialize: vi.fn(async () => '{}'),
-    revive: vi.fn(async () => {}),
-    getDefaultShell: vi.fn(async () => '/bin/zsh'),
-    getProfiles: vi.fn(async () => []),
-    onData: vi.fn(
-      (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
-        dataListeners.push(callback)
-        return () => {
-          const idx = dataListeners.indexOf(callback)
-          if (idx !== -1) {
-            dataListeners.splice(idx, 1)
-          }
-        }
-      }
-    ),
-    onBackgroundStreamEvent: vi.fn((callback: (payload: PtyBackgroundStreamEvent) => void) => {
-      backgroundListeners.push(callback)
-      return () => {
-        const idx = backgroundListeners.indexOf(callback)
-        if (idx !== -1) {
-          backgroundListeners.splice(idx, 1)
-        }
-      }
-    }),
-    onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
-      writeUnavailableListeners.push(callback)
-      return () => {
-        const idx = writeUnavailableListeners.indexOf(callback)
-        if (idx !== -1) {
-          writeUnavailableListeners.splice(idx, 1)
-        }
-      }
-    }),
-    onExit: vi.fn(
-      (callback: (payload: { id: string; code: number; incarnationId?: string }) => void) => {
-        exitListeners.push(callback)
-        return () => {
-          const idx = exitListeners.indexOf(callback)
-          if (idx !== -1) {
-            exitListeners.splice(idx, 1)
-          }
-        }
-      }
-    ),
-    onDaemonIdentityChanged: vi.fn((callback: () => void) => {
-      identityChangeListeners.push(callback)
-      return () => {
-        const idx = identityChangeListeners.indexOf(callback)
-        if (idx !== -1) {
-          identityChangeListeners.splice(idx, 1)
-        }
-      }
-    }),
-    ackColdRestore: vi.fn(),
-    clearTombstone: vi.fn(),
-    reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
-    dispose: vi.fn(),
-    disconnectOnly: vi.fn(async () => {}),
-    emitData: (id: string, data: string, sequenceChars?: number) => {
-      for (const listener of dataListeners) {
-        listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
-      }
-    },
-    emitBackground: (event: PtyBackgroundStreamEvent) => {
-      for (const listener of backgroundListeners) {
-        listener(event)
-      }
-    },
-    emitExit: (id: string, code: number, incarnationId?: string) => {
-      for (const listener of exitListeners) {
-        listener({ id, code, ...(incarnationId ? { incarnationId } : {}) })
-      }
-    },
-    emitIdentityChange: () => identityChangeListeners.forEach((listener) => listener()),
-    triggerWriteUnavailable: (id: string) => {
-      for (const listener of writeUnavailableListeners) {
-        listener({ id })
-      }
-    },
-    _writes: writes
-  } as unknown as AdapterMock
-}
-
 it('forwards dead-endpoint write-unavailable signals from every routed adapter', () => {
-  // Why revert-sensitive: main subscribes on the ROUTED provider, so if the router
-  // does not forward this the STA-2373 fan-out never reaches the renderer and only
-  // the written pane recovers — siblings stay frozen. The router is the live
-  // localProvider whenever a legacy daemon socket exists (protocol bump mid-session).
+  // Main subscribes to the router; missing fanout would strand passive sibling panes (STA-2373).
   const current = createAdapter('current')
   const legacy = createAdapter('legacy')
   const router = new DaemonPtyRouter({ current, legacy: [legacy] })
@@ -210,12 +53,13 @@ it('rejects completion inspection when no daemon owns the session', async () => 
   await expect(router.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
 })
 
-it('preserves unavailable inspection from the owning legacy daemon', async () => {
+it('preserves client-only unverifiable inspection from the owning legacy daemon', async () => {
   const legacy = createAdapter('legacy', ['legacy-session'])
   vi.mocked(legacy.inspectProcess).mockResolvedValue({
     foregroundProcess: null,
-    hasChildProcesses: true,
-    unavailable: true
+    hasChildProcesses: false,
+    verdict: 'unverifiable',
+    reason: 'old_host'
   })
   const router = new DaemonPtyRouter({
     current: createAdapter('current'),
@@ -225,8 +69,9 @@ it('preserves unavailable inspection from the owning legacy daemon', async () =>
 
   await expect(router.inspectProcess('legacy-session')).resolves.toEqual({
     foregroundProcess: null,
-    hasChildProcesses: true,
-    unavailable: true
+    hasChildProcesses: false,
+    verdict: 'unverifiable',
+    reason: 'old_host'
   })
 })
 
@@ -244,6 +89,83 @@ it('forwards the owning legacy daemon sequence from attach', async () => {
 })
 
 describe('DaemonPtyRouter', () => {
+  describe('idle retirement', () => {
+    it('retires every empty daemon generation and fences subsequent spawns', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, PROTOCOL_VERSION)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({ state: 'retiring' })
+      expect(current.requestIdleRetirement).toHaveBeenCalledOnce()
+      expect(legacy.requestIdleRetirement).toHaveBeenCalledOnce()
+      await expect(router.spawn({ sessionId: 'late', cols: 80, rows: 24 })).rejects.toThrow(
+        'Terminal daemon is decommissioning'
+      )
+    })
+
+    it('reports live inventory before retiring any generation and reopens admission', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', ['legacy-live'], undefined, PROTOCOL_VERSION)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({
+        state: 'busy',
+        liveSessions: 1,
+        admissionReopened: true
+      })
+      expect(current.requestIdleRetirement).not.toHaveBeenCalled()
+      expect(legacy.requestIdleRetirement).not.toHaveBeenCalled()
+      await expect(
+        router.spawn({ sessionId: 'after-refusal', cols: 80, rows: 24 })
+      ).resolves.toEqual({
+        id: 'after-refusal'
+      })
+    })
+
+    it('does not partially retire when a generation predates clean idle shutdown', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, 23)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({ state: 'unsupported' })
+      expect(current.requestIdleRetirement).not.toHaveBeenCalled()
+      expect(legacy.requestIdleRetirement).not.toHaveBeenCalled()
+    })
+
+    it('keeps admission fenced after a partial multi-generation retirement', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, PROTOCOL_VERSION)
+      vi.mocked(legacy.requestIdleRetirement).mockResolvedValueOnce({
+        state: 'busy',
+        liveSessions: 0
+      })
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({ state: 'unverifiable' })
+      await expect(router.spawn({ sessionId: 'unsafe', cols: 80, rows: 24 })).rejects.toThrow(
+        'Terminal daemon is decommissioning'
+      )
+    })
+
+    it('does not certify reopened admission when another generation retired beside live sessions', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, PROTOCOL_VERSION)
+      vi.mocked(legacy.requestIdleRetirement).mockResolvedValueOnce({
+        state: 'busy',
+        liveSessions: 1,
+        admissionReopened: true
+      })
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+      await expect(router.requestIdleRetirement()).resolves.toEqual({
+        state: 'busy',
+        liveSessions: 1
+      })
+      await expect(
+        router.spawn({ sessionId: 'unsafe-partial', cols: 80, rows: 24 })
+      ).rejects.toThrow('Terminal daemon is decommissioning')
+    })
+  })
+
   it('reports separate conservative resume and fresh-create boundaries', () => {
     const current = createAdapter(
       'current',
@@ -288,6 +210,80 @@ describe('DaemonPtyRouter', () => {
     expect(router.providesAgentSessionOwnerListings('unknown-session')).toBe(false)
   })
 
+  it.each([false, true])(
+    'keeps newer spawn authority when an older listing completes (duplicate ids: %s)',
+    async (duplicateIds) => {
+      const current = createAdapter('current')
+      const legacy = createAdapter('legacy')
+      current.supportsFencedTermination = () => true
+      current.killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+      legacy.supportsFencedTermination = () => false
+      legacy.killFenced = vi.fn(async () => ({
+        outcome: 'refused' as const,
+        reason: 'unsupported' as const
+      }))
+      vi.mocked(current.spawn).mockResolvedValue({ id: 'raced', incarnationId: 'new' })
+      vi.mocked(current.listProcesses).mockResolvedValue(
+        duplicateIds ? [{ id: 'raced', incarnationId: 'old-current', cwd: '', title: '' }] : []
+      )
+      const { promise: oldInventory, resolve: release } = Promise.withResolvers<PtyProcessInfo[]>()
+      vi.mocked(legacy.listProcesses).mockReturnValue(oldInventory)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+      const oldListing = router.listProcesses()
+      expect(legacy.listProcesses).toHaveBeenCalledOnce()
+      await router.spawn({ sessionId: 'raced', isNewSession: true, cols: 80, rows: 24 })
+      release([{ id: 'raced', incarnationId: 'old-legacy', cwd: '', title: '' }])
+      await expect(oldListing).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+      const request = {
+        id: 'raced',
+        expectedIncarnationId: 'new',
+        requireNoAgentOwner: true,
+        requireUnattached: true
+      }
+
+      expect(router.supportsFencedTermination('raced')).toBe(true)
+      await expect(router.killFenced(request)).resolves.toEqual({ outcome: 'ended' })
+      expect(current.killFenced).toHaveBeenCalledExactlyOnceWith(request)
+      expect(legacy.killFenced).not.toHaveBeenCalled()
+      expect(current.listProcesses).toHaveBeenCalledOnce()
+      expect(legacy.listProcesses).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('does not let an older refresh overwrite a newer discovery route', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    current.supportsFencedTermination = () => true
+    current.killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+    legacy.supportsFencedTermination = () => false
+    const { promise: staleCurrent, resolve: releaseCurrent } =
+      Promise.withResolvers<PtyProcessInfo[]>()
+    const { promise: staleLegacy, resolve: releaseLegacy } =
+      Promise.withResolvers<PtyProcessInfo[]>()
+    vi.mocked(current.listProcesses)
+      .mockReturnValueOnce(staleCurrent)
+      .mockResolvedValueOnce([{ id: 'discovered', incarnationId: 'new', cwd: '', title: '' }])
+    vi.mocked(legacy.listProcesses).mockReturnValueOnce(staleLegacy).mockResolvedValueOnce([])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    const staleRefresh = router.listProcesses()
+    await router.discoverLegacySessions()
+    releaseCurrent([])
+    releaseLegacy([{ id: 'discovered', incarnationId: 'old', cwd: '', title: '' }])
+    await expect(staleRefresh).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+    const request = {
+      id: 'discovered',
+      expectedIncarnationId: 'new',
+      requireNoAgentOwner: true,
+      requireUnattached: true
+    }
+
+    expect(router.supportsFencedTermination('discovered')).toBe(true)
+    await expect(router.killFenced(request)).resolves.toEqual({ outcome: 'ended' })
+    expect(current.killFenced).toHaveBeenCalledExactlyOnceWith(request)
+    expect(current.listProcesses).toHaveBeenCalledTimes(2)
+    expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
+  })
+
   it('does not publish a route when the adapter proves exit before reply', async () => {
     const current = createAdapter('current')
     let finishSpawn: ((result: PtySpawnResult) => void) | undefined
@@ -300,6 +296,7 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [] })
 
     const spawning = router.spawn({ cols: 80, rows: 24, sessionId: 'raced-session' })
+    await vi.waitFor(() => expect(finishSpawn).toBeDefined())
     finishSpawn?.({
       id: 'raced-session',
       incarnationId: 'raced-incarnation',
@@ -325,6 +322,7 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [] })
 
     const spawning = router.spawn({ cols: 80, rows: 24, sessionId: 'reused-session' })
+    await vi.waitFor(() => expect(finishSpawn).toBeDefined())
     current.emitExit('reused-session', 0, 'incarnation-old')
     finishSpawn?.({ id: 'reused-session', incarnationId: 'incarnation-current' })
     await spawning
@@ -352,6 +350,7 @@ describe('DaemonPtyRouter', () => {
       sessionId: 'requested-session',
       agentSessionEnsure: {} as never
     })
+    await vi.waitFor(() => expect(finishSpawn).toBeDefined())
     finishSpawn?.({
       id: 'canonical-session',
       incarnationId: 'canonical-incarnation',
@@ -463,11 +462,13 @@ describe('DaemonPtyRouter', () => {
   it('routes settlement-aware writes to the owning daemon generation', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
-    vi.mocked(legacy.writeWithSettlement).mockResolvedValue(false)
+    vi.mocked(legacy.writeWithSettlement).mockResolvedValue(stubWriteSettlement(false))
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
-    await expect(router.writeWithSettlement('legacy-session', 'pointer')).resolves.toBe(false)
+    await expect(router.writeWithSettlement('legacy-session', 'pointer')).resolves.toEqual(
+      stubWriteSettlement(false)
+    )
     expect(legacy.writeWithSettlement).toHaveBeenCalledWith('legacy-session', 'pointer')
     expect(current.writeWithSettlement).not.toHaveBeenCalled()
   })
@@ -530,11 +531,13 @@ describe('DaemonPtyRouter', () => {
 
   it('drops a legacy mapping after the routed session exits', async () => {
     const current = createAdapter('current')
-    const legacy = createAdapter('legacy', ['legacy-session'])
+    const legacySessions = ['legacy-session']
+    const legacy = createAdapter('legacy', legacySessions)
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await router.discoverLegacySessions()
 
+    legacySessions.length = 0
     legacy.emitExit('legacy-session', 0)
     await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
@@ -630,7 +633,6 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
-    // Without an inventory nothing proves the legacy daemon doesn't own this id.
     await expect(router.probePtyLiveness('unknown-session')).resolves.toBeNull()
     expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
     expect(legacy.probePtyLiveness).not.toHaveBeenCalled()
@@ -818,11 +820,7 @@ describe('DaemonPtyRouter', () => {
     expect(legacy.dispose).toHaveBeenCalled()
   })
 
-  // Why: docs/daemon-staleness-ux.md §Phase 1 step 5 requires the restart flow
-  // to preserve the legacy adapter instances across the current-adapter swap,
-  // and it reads them back via these accessors. Locking the return shape
-  // prevents a future refactor from quietly switching to a defensive copy
-  // (breaks instance identity) or a different list (breaks restart).
+  // Restart swaps the current adapter while retaining legacy adapter identities.
   describe('restart accessors', () => {
     it('returns the exact current adapter instance', () => {
       const current = createAdapter('current')
@@ -857,13 +855,7 @@ describe('DaemonPtyRouter', () => {
     })
   })
 
-  // Why: the restart flow (daemon-init.runRestartDaemon step 5→6) relies on
-  // disposeRouterOnly draining the outgoing router's subscriptions WITHOUT
-  // tearing down the legacy adapters themselves. plain dispose() would
-  // cascade into the adapters and strand any legacy-backed sessions — see
-  // daemon-pty-router.ts §disposeRouterOnly comment. These tests lock the
-  // contract: no adapter teardown, subscriptions actually detached for both
-  // onData and onExit on both current and legacy, idempotent.
+  // Restart reuses legacy adapters, so detach the old router without tearing them down.
   describe('disposeRouterOnly', () => {
     it('does not call dispose or disconnectOnly on any adapter', () => {
       const current = createAdapter('current')
@@ -883,10 +875,7 @@ describe('DaemonPtyRouter', () => {
       const legacy = createAdapter('legacy')
       const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
-      // Realistic restart scenario: the local IPC layer subscribes at app
-      // start, THEN the restart flow later calls disposeRouterOnly. A spy
-      // registered *after* dispose proves the router→subscriber path is
-      // empty, but doesn't prove the router unsubscribed from the adapters.
+      // Subscribe before disposal to exercise removal of existing adapter subscriptions.
       const dataSpy = vi.fn()
       const exitSpy = vi.fn()
       router.onData(dataSpy)
@@ -894,9 +883,6 @@ describe('DaemonPtyRouter', () => {
 
       router.disposeRouterOnly()
 
-      // Both current- and legacy-adapter emissions must be silenced. A
-      // regression that only unsubscribed from one would pass a single-
-      // adapter test but fail this one.
       current.emitData('current-id', 'hello')
       current.emitExit('current-id', 0)
       legacy.emitData('legacy-id', 'world')
@@ -913,7 +899,6 @@ describe('DaemonPtyRouter', () => {
 
       router.disposeRouterOnly()
       expect(() => router.disposeRouterOnly()).not.toThrow()
-      // And still no adapter teardown on the second call.
       expect(current.dispose).not.toHaveBeenCalled()
       expect(legacy.dispose).not.toHaveBeenCalled()
     })

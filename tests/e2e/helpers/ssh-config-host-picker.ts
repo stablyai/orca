@@ -1,7 +1,4 @@
-/**
- * Shared helpers for SSH config host picker / import E2E specs.
- * Prefer role/label locators and user-visible copy over ids / data-*.
- */
+import { openSidebarProjectDialog } from './sidebar-project-dialog'
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -72,39 +69,47 @@ export async function closeSettingsPage(page: Page): Promise<void> {
 
 export async function closeOpenDialogs(page: Page): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
+    // Nested dialogs can finish their exit animations in different frames.
+    await expect(page.locator('[role="dialog"][data-state="closed"]')).toHaveCount(0, {
+      timeout: 3_000
+    })
     const dialogCount = await page.getByRole('dialog').count()
     if (dialogCount === 0) {
       return
     }
-    const dialog = page.getByRole('dialog').last()
-    const cancelOrBack = dialog.getByRole('button', { name: /^(Cancel|Back)$/ })
-    await ((await cancelOrBack
-      .first()
-      .isVisible()
-      .catch(() => false))
-      ? cancelOrBack.first().click()
-      : page.keyboard.press('Escape'))
-    await expect
-      .poll(async () => page.getByRole('dialog').count(), { timeout: 3_000 })
-      .toBeLessThan(dialogCount)
-      .catch(() => undefined)
+    const dialogId = await page.getByRole('dialog').last().getAttribute('id')
+    if (!dialogId) {
+      throw new Error('Open dialog is missing its Radix identity')
+    }
+    const dialog = page.locator(`[role="dialog"][id=${JSON.stringify(dialogId)}]`)
+    const back = dialog.getByRole('button', { name: 'Back', exact: true })
+    if (await back.isVisible()) {
+      await back.click()
+      // The picker and host form reuse the same Radix dialog.
+      await expect(back).toBeHidden({ timeout: 3_000 })
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible({
+        timeout: 3_000
+      })
+      continue
+    }
+    const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true })
+    await ((await cancel.isVisible()) ? cancel.click() : page.keyboard.press('Escape'))
+    // Hidden Electron windows can park CSS exits before their first compositor frame.
+    await page.screenshot({ animations: 'disabled' })
+    await expect(dialog).toBeHidden({ timeout: 3_000 })
   }
+  await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
 }
 
-/** Leave settings / overlays so the main shell (Add Project) is reachable. */
 export async function returnToAppShell(page: Page): Promise<void> {
   await closeOpenDialogs(page)
   await closeSettingsPage(page)
   await closeOpenDialogs(page)
 }
 
-/** Add Project → Host → Add remote host → Add SSH host → form dialog. */
 export async function openAddSshHostDialog(page: Page): Promise<Locator> {
   await returnToAppShell(page)
-  await page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(page)
   const addProjectDialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(addProjectDialog).toBeVisible({ timeout: 10_000 })
 
@@ -143,7 +148,6 @@ export async function openSshConfigHostPicker(page: Page): Promise<Locator> {
   return pickerDialog
 }
 
-/** Settings → SSH pane: section the user sees under the “SSH Hosts” heading. */
 export async function openSshHostSettings(page: Page): Promise<Locator> {
   await closeOpenDialogs(page)
   await page.evaluate(() => {
@@ -161,12 +165,11 @@ export async function openSshHostSettings(page: Page): Promise<Locator> {
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: 'SSH Hosts' }) })
   await expect(sshSection).toBeVisible({ timeout: 10_000 })
-  await expect(sshSection.getByRole('button', { name: 'Import' })).toBeVisible()
-  await expect(sshSection.getByRole('button', { name: 'Add Target' })).toBeVisible()
+  await expect(sshSection.getByRole('button', { name: 'Sync ~/.ssh/config' })).toBeVisible()
+  await expect(sshSection.getByRole('button', { name: 'Add host' })).toBeVisible()
   return sshSection
 }
 
-/** Form fields on Add SSH host — labels the user reads. */
 export function addSshHostFormFields(dialog: Locator): {
   label: Locator
   host: Locator
@@ -183,10 +186,7 @@ export function addSshHostFormFields(dialog: Locator): {
   }
 }
 
-/**
- * Picker row for one config Host: the list button whose accessible name includes
- * the alias and the user@host:port line the user sees.
- */
+// Match both the config alias and user@host:port in the picker row’s accessible name.
 export function configHostRow(
   pickerDialog: Locator,
   host: Pick<SeededSshConfigHost, 'alias' | 'user' | 'hostname' | 'port'>
@@ -198,10 +198,7 @@ export function configHostRow(
     .getByRole('button', { name: new RegExp(`${alias}[\\s\\S]*${endpoint}`) })
 }
 
-/**
- * Assert a saved host appears in Settings. Card subtitle is
- * `user@host:port • terminal timeout: …`, so match the endpoint as a prefix.
- */
+// Match the endpoint prefix because Settings appends terminal-timeout text.
 export async function expectSshHostListedInSettings(
   sshSection: Locator,
   host: SeededSshConfigHost

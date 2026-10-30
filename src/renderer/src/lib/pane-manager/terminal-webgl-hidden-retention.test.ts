@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ManagedPaneInternal } from './pane-manager-types'
+import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
+import { PaneManager } from './pane-manager'
 import {
   releaseHiddenWebglRetention,
   resetHiddenWebglRetentionForTest,
   retainedHiddenWebglOwnerCountForTest,
-  tryRetainHiddenPanesWebgl
+  tryRetainHiddenPanesWebgl,
+  type HiddenWebglRetentionOwner
 } from './terminal-webgl-hidden-retention'
 
 function createPane(withAddon = true): ManagedPaneInternal {
   return {
-    terminal: { blur: vi.fn() },
+    // options mirrors the real Terminal: suspend parks cursorBlink here.
+    terminal: { blur: vi.fn(), options: { cursorBlink: true } },
     webglAddon: withAddon
       ? ({ dispose: vi.fn() } as unknown as ManagedPaneInternal['webglAddon'])
       : null,
@@ -22,8 +25,15 @@ function createPane(withAddon = true): ManagedPaneInternal {
   } as unknown as ManagedPaneInternal
 }
 
-function retentionFor(owner: object, panes: ManagedPaneInternal[]) {
+function retentionFor(owner: HiddenWebglRetentionOwner, panes: ManagedPaneInternal[]) {
   return { owner, livePanes: () => panes }
+}
+
+// panes is private, and the retention branch is only reachable through a mounted pane.
+function managerWithPane(pane: ManagedPaneInternal, options: Partial<PaneManagerOptions>) {
+  const manager = new PaneManager({} as HTMLElement, options as PaneManagerOptions)
+  Object.assign(manager, { panes: new Map([[1, pane]]) })
+  return manager
 }
 
 describe('terminal-webgl-hidden-retention', () => {
@@ -49,7 +59,24 @@ describe('terminal-webgl-hidden-retention', () => {
     expect(panes[0].webglAddon).toBeNull()
   })
 
-  // Why: the retained branch's blur is already pinned above; only the dispose branch changed.
+  it('disposes a floating manager context on hide so reopen cannot reuse a corrupt atlas', () => {
+    const pane = createPane()
+    const addon = pane.webglAddon
+    managerWithPane(pane, { retainHiddenWebgl: false }).suspendRendering()
+    expect(addon?.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.webglAttachmentDeferred).toBe(true)
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
+  })
+
+  // Pin the option polarity; an inverted default would dispose every ordinary worktree’s renderers.
+  it('retains an ordinary manager context on hide', () => {
+    const pane = createPane()
+    managerWithPane(pane, {}).suspendRendering()
+    expect(pane.webglAddon).not.toBeNull()
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(1)
+  })
+
   it('blurs a suspended pane on the dispose branch', () => {
     const panes = [createPane()]
     suspendPaneRendering(panes)
@@ -88,7 +115,6 @@ describe('terminal-webgl-hidden-retention', () => {
     const panesB = [createPane(), createPane(), createPane()]
     suspendPaneRendering(panesB, retentionFor(ownerB, panesB))
 
-    // Touch A again: B becomes the eviction candidate.
     suspendPaneRendering(panesA, retentionFor(ownerA, panesA))
     const ownerC = {}
     const panesC = [createPane()]
@@ -124,7 +150,6 @@ describe('terminal-webgl-hidden-retention', () => {
     expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
     expect(panes[0].webglAddon).not.toBeNull()
     expect(panes[0].webglAttachmentDeferred).toBe(false)
-    // Released owner no longer counts toward the cap: three more 3-pane owners fit.
     const others = [{}, {}]
     for (const other of others) {
       const otherPanes = [createPane(), createPane(), createPane()]
@@ -146,7 +171,6 @@ describe('terminal-webgl-hidden-retention', () => {
     const ownerA = {}
     const panesA = [createPane(), createPane(), createPane(), createPane()]
     suspendPaneRendering(panesA, retentionFor(ownerA, panesA))
-    // GPU-off path disposes retained addons directly.
     for (const pane of panesA) {
       pane.webglAddon = null
     }

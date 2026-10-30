@@ -12,18 +12,13 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-/**
- * Normalize an `updateviewarea` payload's `location`. pdf.js does not type
- * EventBus payloads, so this is the validation boundary — a pdf.js upgrade that
- * reshapes the payload degrades to "no restore" rather than throwing.
- */
+/** Validate untyped pdf.js location payloads so incompatible upgrades disable restoration instead of throwing. */
 export function readPdfViewPosition(location: unknown): PdfViewPosition | null {
   if (typeof location !== 'object' || location === null) {
     return null
   }
   const { pageNumber, top, left } = location as Record<string, unknown>
-  // Why: scrollPageIntoView itself guards on Number.isInteger and silently
-  // logs-and-returns, so a fractional page would fail the restore invisibly.
+  // pdf.js silently refuses fractional pages; reject them at the validation boundary.
   if (!isFiniteNumber(pageNumber) || !Number.isInteger(pageNumber) || pageNumber < 1) {
     return null
   }
@@ -33,28 +28,19 @@ export function readPdfViewPosition(location: unknown): PdfViewPosition | null {
   return { pageNumber, top, left }
 }
 
-/**
- * Build the XYZ destination pdf.js uses for its own scale-change position
- * restore (`pdf_viewer.mjs:8843-8853`).
- */
+/** Use the XYZ destination pdf.js uses for scale-change restoration. */
 export function buildPdfScrollDestination(position: PdfViewPosition): PdfScrollDestination {
   return {
     pageNumber: position.pageNumber,
-    // Why: slot 0 (page ref) is never read on this path; the trailing null zoom
-    // pairs with ignoreDestinationZoom so the destination cannot overwrite scale.
+    // The page-ref slot is unused; null zoom plus ignoreDestinationZoom preserves the current scale.
     destArray: [null, { name: 'XYZ' }, position.left, position.top, null],
     ignoreDestinationZoom: true,
-    // Why: a position in the inter-page gap transforms to a negative offset;
-    // clamping it would land at the page top instead, off by the gap height.
+    // Preserve negative offsets for inter-page gaps or restoration jumps to the page top.
     allowNegativeOffset: true
   }
 }
 
-/**
- * Clamp a cached page against a document that shrank on disk. Not a safety
- * guard — pdf.js already ignores an out-of-range page — this just lands the
- * reader on the last page instead of nowhere.
- */
+/** If disk changes shrink the document, restore to its last page rather than nowhere. */
 export function clampPdfViewPosition(
   position: PdfViewPosition,
   pagesCount: number
@@ -76,15 +62,7 @@ export type PdfViewPositionRecorder = {
   dispose: () => void
 }
 
-/**
- * Owns the record half of PDF scroll preservation: the arm gate and the
- * trailing debounce. Extracted from `PdfViewer` because the effect itself is
- * untestable (node vitest env, and ImageViewer.test mocks useEffect), so every
- * race guard below would otherwise ship uncovered.
- *
- * `dispose` is terminal: afterwards `record` is inert, so a late timer can
- * never resurrect an entry `useClosedEditorTabCleanup` just swept.
- */
+/** Record armed positions with bounded LRU refresh; terminal disposal makes late writes inert after the owner detaches. */
 export function createPdfViewPositionRecorder({
   key,
   write
@@ -97,9 +75,7 @@ export function createPdfViewPositionRecorder({
   let pending: PdfViewPosition | null = null
   let timer: TimerHandle | null = null
 
-  // Why: a strict no-op when nothing was recorded — writing here would clobber a
-  // good cached position on a StrictMode double-mount, whose cleanup runs before
-  // the reader has scrolled at all.
+  // With no recorded scroll, StrictMode cleanup must not overwrite a valid cached position.
   const flush = (): void => {
     if (pending) {
       write(key, pending)
@@ -123,8 +99,7 @@ export function createPdfViewPositionRecorder({
       if (timer !== null) {
         return
       }
-      // Why: the debounced write only refreshes LRU recency — teardown is what
-      // actually persists the position — so a pending timer need not restart.
+      // The timer refreshes LRU recency; teardown persists the final position, so later events need not restart it.
       timer = setTimeout(() => {
         timer = null
         flush()

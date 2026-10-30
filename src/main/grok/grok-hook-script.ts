@@ -1,11 +1,10 @@
-import {
-  getSharedManagedScriptPath,
-  wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand
-} from '../agent-hooks/installer-utils'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+import { getSharedManagedScriptPath, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import {
   buildPosixHookPayloadCapture,
-  buildPosixHookSpoolLines
+  buildPosixHookSpoolLines,
+  POSIX_HOOK_JSON_STDIN
 } from '../agent-hooks/hook-stdin-contract'
 import {
   buildWindowsGrokHookScript,
@@ -21,10 +20,9 @@ export function getGrokManagedScriptPath(): string {
 }
 
 export function getGrokManagedCommand(scriptPath: string): string {
-  // A cmd-safe bare path avoids two extra Windows interpreters; POSIX can gate before spawning the
-  // managed script because Orca injects ORCA_PANE_KEY only into panes it owns.
+  // POSIX can gate before spawning because Orca injects ORCA_PANE_KEY only into panes it owns.
   return process.platform === 'win32'
-    ? wrapWindowsCmdHookCommand(scriptPath)
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath, {}, { requiredEnvVar: 'ORCA_PANE_KEY' })
 }
 
@@ -35,7 +33,7 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
 
   return [
     '#!/bin/sh',
-    ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_JSON_STDIN),
     ...buildPosixHookSpoolLines('grok'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
@@ -48,7 +46,7 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
     `if [ -n "\${GROK_HOME:-}" ] && [ "\${#GROK_HOME}" -le ${GROK_HOME_ENVELOPE_MAX_LENGTH} ]; then`,
     '  grok_home=$GROK_HOME',
     'fi',
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/grok" \\',
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/grok" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

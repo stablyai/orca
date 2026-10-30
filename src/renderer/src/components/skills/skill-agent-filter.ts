@@ -14,11 +14,7 @@ export function skillAgentLabel(agentId: string): string {
   return (AI_VAULT_AGENT_LABELS as Record<string, string>)[agentId] ?? agentId
 }
 
-/**
- * Discovery tags every non-Codex, non-Claude root as `agent-skills` and keeps
- * the real agent on the source, so the owning agent has to come from the root
- * a skill was found in rather than from its provider list.
- */
+/** Resolve agent ownership from discovery roots; provider tags collapse most agents into agent-skills. */
 export function skillAgentByRootPath(
   result: SkillDiscoveryResult | null
 ): ReadonlyMap<string, string> {
@@ -35,12 +31,21 @@ function skillAgents(
   return [...new Set(roots.map((root) => agentByRootPath.get(root)).filter(Boolean))] as string[]
 }
 
+/** Stop at the first owning root for membership; counting still needs the deduplicated owner list. */
 export function skillMatchesAgent(
   skill: DiscoveredSkill,
   agentId: string,
   agentByRootPath: ReadonlyMap<string, string>
 ): boolean {
-  return agentId === 'all' || skillAgents(skill, agentByRootPath).includes(agentId)
+  if (agentId === 'all') {
+    return true
+  }
+  if (!agentId) {
+    return false // An empty owner is never a filter; parity with the dropped `.filter(Boolean)`.
+  }
+  return skill.rootPaths?.length
+    ? skill.rootPaths.some((root) => agentByRootPath.get(root) === agentId)
+    : agentByRootPath.get(skill.rootPath) === agentId
 }
 
 /** Only agents that actually hold a skill; an empty root is not a filter. */

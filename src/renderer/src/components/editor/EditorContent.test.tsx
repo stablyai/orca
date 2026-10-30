@@ -2,9 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 
-// Why: EditorContent's mode renderers (Monaco, DiffViewer, ...) are lazy();
-// renderToStaticMarkup cannot resolve them. Stubbing them keeps the banner
-// branch structure renderable so its placement is pinned by tests.
+// Stub lazy renderers because renderToStaticMarkup cannot resolve them; retain the banner branch structure.
 vi.mock('@/lib/lazy-with-retry', () => ({
   lazyWithRetry: () => () => null
 }))
@@ -67,6 +65,7 @@ describe('EditorContent', () => {
         isCsv={false}
         isNotebook
         mdViewMode="rich"
+        inlineMarkdownRenderState={null}
         isChangesMode={false}
         sideBySide={false}
         pendingEditorReveal={null}
@@ -108,6 +107,7 @@ describe('EditorContent', () => {
         isCsv={false}
         isNotebook={false}
         mdViewMode="rich"
+        inlineMarkdownRenderState={null}
         isChangesMode={false}
         sideBySide={false}
         pendingEditorReveal={null}
@@ -153,6 +153,7 @@ describe('EditorContent', () => {
         isCsv={false}
         isNotebook={false}
         mdViewMode="rich"
+        inlineMarkdownRenderState={null}
         isChangesMode={false}
         sideBySide={false}
         pendingEditorReveal={null}
@@ -167,8 +168,7 @@ describe('EditorContent', () => {
 
     expect(html).toContain('role="alert"')
     expect(html).toContain('changed on disk')
-    // Why: the diff-mode wrapper must give the viewer its height back — a
-    // flex-1-only wrapper collapsed the DiffViewer to 0px (found live).
+    // A flex-1-only wrapper collapsed the diff to zero height.
     expect(html).toContain('flex h-full min-h-0 flex-col')
   })
 
@@ -200,6 +200,7 @@ describe('EditorContent', () => {
         isCsv={false}
         isNotebook={false}
         mdViewMode="preview"
+        inlineMarkdownRenderState={null}
         isChangesMode={false}
         sideBySide={false}
         pendingEditorReveal={null}

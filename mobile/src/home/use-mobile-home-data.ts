@@ -9,8 +9,8 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../onboarding/mobile-onboarding-plan'
-import { totalHomeStats, type HomeStatsSummary } from '../stats/home-stats-total'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
+import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
+import type { TaskProvider } from '../../../src/shared/task-providers'
 import {
   selectConnectableHostProfiles,
   sortHostsByLastConnected
@@ -29,12 +29,13 @@ import {
   fetchMobileHomeStats,
   fetchMobileHomeTaskProviders
 } from './mobile-home-host-requests'
+import { projectHomeHostConnections } from './home-host-connection-projection'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
 export function useMobileHomeData() {
   const router = useRouter()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
-  const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsSummary>>({})
+  const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
   const [taskProvidersByHost, setTaskProvidersByHost] = useState<Record<string, TaskProvider[]>>({})
@@ -163,18 +164,9 @@ export function useMobileHomeData() {
     () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
     [sortedHosts, connections.hostStates]
   )
-  const primaryHost = connectedHosts[0] ?? null
-  const primaryTaskProviders = primaryHost
-    ? (taskProvidersByHost[primaryHost.id] ?? ['github'])
-    : []
-  const hostPaths = Object.fromEntries(
-    connections.allClients.map(({ hostId, path }) => [hostId, path])
-  )
-  const hostPendingPaths = Object.fromEntries(
-    connections.allClients.map(({ hostId, pendingPath }) => [hostId, pendingPath])
-  )
-  const hostPairingRejected = Object.fromEntries(
-    connections.allClients.map(({ hostId, pairingRejected }) => [hostId, pairingRejected])
+  const hostConnections = useMemo(
+    () => projectHomeHostConnections(connections.allClients),
+    [connections.allClients]
   )
 
   return {
@@ -182,16 +174,13 @@ export function useMobileHomeData() {
     accountsHosts,
     connectedHosts,
     hostCatalog,
-    hostPairingRejected,
-    hostPaths,
-    hostPendingPaths,
-    primaryHost,
-    primaryTaskProviders,
+    hostConnections,
     resumeCard,
     router,
     setHostCatalog,
     sortedHostCatalog,
     stats,
+    taskProvidersByHost,
     worktreeInfo
   }
 }

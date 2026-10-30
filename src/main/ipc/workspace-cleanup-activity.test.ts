@@ -2,17 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { resolveWorkspaceCleanupActivityWorktree } from './workspace-cleanup-activity'
+import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
-const REPO: Repo = {
-  id: 'repo-1',
-  path: '/repo',
-  displayName: 'Repo',
-  badgeColor: '#000',
-  addedAt: 1
-}
+const LOCAL_ROUTE: WorkspaceCleanupGitRoute = { kind: 'local', hostId: 'local' }
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -51,7 +45,11 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       mtimeMs: targetPath.endsWith('.git') ? 20_000 : 10_000
     }))
 
-    const worktree = await resolveWorkspaceCleanupActivityWorktree(REPO, makeWorktree(), statPath)
+    const worktree = await resolveWorkspaceCleanupActivityWorktree(
+      LOCAL_ROUTE,
+      makeWorktree(),
+      statPath
+    )
 
     expect(statPath).toHaveBeenCalledWith('/repo-feature')
     expect(statPath).toHaveBeenCalledWith(path.join('/repo-feature', '.git'))
@@ -76,7 +74,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => `gitdir: ${gitDirPath}\n`)
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -104,7 +102,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => `gitdir: ${gitDirPath}\n`)
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -131,13 +129,12 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     )
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
     )
 
-    // Why: only the tail of the reflog is read — the newest entry is enough.
     expect(readTextFile).toHaveBeenCalledWith(reflogPath, { tailBytes: 8192 })
     expect(worktree.lastActivityAt).toBe(1_700_000_900_000)
   })
@@ -150,8 +147,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       const worktreePath = path.join(dir, 'wt')
       await mkdir(worktreePath, { recursive: true })
       await writeFile(path.join(worktreePath, '.git'), `gitdir: ${gitDir}\n`)
-      // Why: a single record longer than the 8192-byte tail window keeps its
-      // timestamp before the window; the reader must fall back to a full read.
+      // A reflog entry longer than the tail window needs a full read to find its timestamp.
       await writeFile(
         path.join(gitDir, 'logs', 'HEAD'),
         '0000 1111 Dev <dev@example.com> 1700000000 -0700\tbranch: Created from HEAD\n' +
@@ -160,7 +156,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
 
       const worktree = await resolveWorkspaceCleanupActivityWorktree(
-        REPO,
+        LOCAL_ROUTE,
         makeWorktree({ path: worktreePath }),
         statPath
       )
@@ -179,7 +175,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     )
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -197,7 +193,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => 'gitdir: .repo/gitdir\n')
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -224,7 +220,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => 'gitdir: /home/me/repo/.git/worktrees/repo-feature\n')
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree({ path: worktreePath }),
       statPath,
       readTextFile
@@ -239,11 +235,50 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     expect(worktree.lastActivityAt).toBe(70_000)
   })
 
+  it('maps a drvfs gitdir pointer to its drive spelling on a Windows host', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const statPath = vi.fn(async (targetPath: string) => ({
+        mtimeMs: targetPath.endsWith('COMMIT_EDITMSG') ? 70_000 : 10_000
+      }))
+      // A WSL git writes the pointer in the guest namespace even for a drive-path worktree.
+      const readTextFile = vi.fn(
+        async (_targetPath: string) => 'gitdir: /mnt/c/Users/me/repo/.git/worktrees/repo-feature\n'
+      )
+
+      const worktree = await resolveWorkspaceCleanupActivityWorktree(
+        LOCAL_ROUTE,
+        makeWorktree({ path: String.raw`C:\Users\me\repo-feature` }),
+        statPath,
+        readTextFile
+      )
+
+      // Normalize probe separators while checking the Windows drive spelling of every resolved target.
+      const normalize = (target: string): string => target.replaceAll('/', '\\')
+      expect(statPath.mock.calls.map(([target]) => normalize(target)).sort()).toEqual(
+        [
+          String.raw`C:\Users\me\repo-feature`,
+          String.raw`C:\Users\me\repo-feature\.git`,
+          String.raw`C:\Users\me\repo\.git\worktrees\repo-feature\HEAD`,
+          String.raw`C:\Users\me\repo\.git\worktrees\repo-feature\COMMIT_EDITMSG`,
+          String.raw`C:\Users\me\repo\.git\worktrees\repo-feature\ORIG_HEAD`
+        ].sort()
+      )
+      expect(readTextFile.mock.calls.map(([target]) => normalize(target))).toContain(
+        String.raw`C:\Users\me\repo\.git\worktrees\repo-feature\logs\HEAD`
+      )
+      expect(worktree.lastActivityAt).toBe(70_000)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
   it('keeps persisted activity when it is newer than local metadata', async () => {
     const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree({ lastActivityAt: 30_000 }),
       statPath
     )
@@ -255,7 +290,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const statPath = vi.fn(async () => ({ mtimeMs: 20_000 }))
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      { ...REPO, connectionId: 'ssh-1' },
+      { kind: 'ssh', hostId: 'ssh:ssh-1', connectionId: 'ssh-1' },
       makeWorktree({ createdAt: 10_000 }),
       statPath
     )

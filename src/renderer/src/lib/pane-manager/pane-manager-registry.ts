@@ -5,14 +5,13 @@ import type { PaneRenderingDiagnostics } from './pane-manager-types'
 type RegisteredPaneManager = {
   resetWebglTextureAtlases(): void
   clearWebglTextureAtlases?: () => void
-  presentForcedViewports?: () => void
+  presentViewports?: () => void
   fitAllPanes?: () => void
   refreshAllPanes?: () => void
   getRenderingDiagnostics?: () => PaneRenderingDiagnostics[]
   getPanes?: (limit?: number) => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
-  scheduleRevealPresent?: () => void
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -30,29 +29,8 @@ export function unregisterLivePaneManager(manager: RegisteredPaneManager): void 
   liveManagers.delete(manager)
 }
 
-/**
- * Resets the WebGL glyph atlases of every live pane manager, not just one.
- *
- * Why: @xterm/addon-webgl keeps a module-global atlas cache, so terminals with
- * identical font configs share one glyph texture atlas. Clearing it through a
- * single manager invalidates the cached glyph coordinates of every other
- * sharing terminal without rebuilding their render models, which paints them
- * as garbled glyphs. Recovery resets must therefore rebuild all terminals.
- */
-export function resetAllTerminalWebglAtlases(): void {
-  for (const manager of liveManagers) {
-    try {
-      manager.resetWebglTextureAtlases()
-    } catch {
-      // Why: stale WebGL recovery is best-effort during pane teardown; one
-      // disposed manager should not prevent sibling terminals from repainting.
-    }
-  }
-}
-
 export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
-  // Why: the atlas wipe is the heavy recovery path; recording it lets a freeze
-  // report show whether a post-wake repaint actually ran. Silent breadcrumb.
+  // Record heavy atlas recovery so freeze reports distinguish a missing repaint from a completed post-wake attempt.
   const recoveryManagers = Array.from(liveManagers).filter(
     (manager) => manager.isVisibleForAtlasRecovery?.() !== false
   )
@@ -62,10 +40,7 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
     ...(reason ? { reason } : {})
   })
   const resetManagers: RegisteredPaneManager[] = []
-  // Why: clearTextureAtlas() is module-global. Clearing then presenting per
-  // pane interleaves a present against generation N with the next pane's wipe
-  // to N+1, so the first synchronized-output column keeps pre-hide footer pixels.
-  // Wipe every recovered atlas first; present only once the generation is final.
+  // clearTextureAtlas is global: wipe all before presenting or later wipes invalidate earlier panes’ generation and preserve stale footer pixels.
   for (const manager of recoveryManagers) {
     try {
       if (manager.clearWebglTextureAtlases) {
@@ -75,43 +50,23 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
       }
       resetManagers.push(manager)
     } catch {
-      // Why: recovery is best-effort during pane teardown; a disposed manager
-      // should not block sibling terminals from rebuilding and repainting.
+      // One disposed manager must not block sibling atlas recovery.
     }
   }
   for (const manager of resetManagers) {
     try {
-      if (manager.presentForcedViewports) {
-        manager.presentForcedViewports()
+      if (manager.presentViewports) {
+        manager.presentViewports()
       } else {
         manager.refreshAllPanes?.()
       }
     } catch {
-      // Why: a pane can unmount between atlas reset and repaint; later
-      // managers still need to repaint from their xterm buffers.
+      // Panes may unmount between reset and repaint; continue with remaining managers.
     }
   }
 }
 
-export function presentAllTerminalPanesWithoutAtlasClear(): void {
-  for (const manager of liveManagers) {
-    if (manager.isVisibleForAtlasRecovery?.() === false) {
-      continue
-    }
-    try {
-      manager.scheduleRevealPresent?.()
-    } catch {
-      // A disposing manager must not block sibling panes from presenting.
-    }
-  }
-}
-
-/**
- * Per-pane WebGL renderer state across all live managers, for the one-paste
- * freeze report. Lets a post-wake garble report show, per pane, whether it
- * held a live WebGL addon or had fallen back after a context loss — the state
- * that distinguishes "missed repaint" from "atlas corrupted".
- */
+/** Report each pane’s WebGL/DOM state so freeze reports distinguish missed repaint from atlas corruption/context loss. */
 export function getAllPaneRenderingDiagnostics(): PaneRenderingDiagnostics[] {
   const all: PaneRenderingDiagnostics[] = []
   for (const manager of liveManagers) {
@@ -121,27 +76,20 @@ export function getAllPaneRenderingDiagnostics(): PaneRenderingDiagnostics[] {
         all.push(...diagnostics)
       }
     } catch {
-      // Why: best-effort during teardown; one manager must not sink the report.
+      // One manager’s teardown must not sink the report.
     }
   }
   return all
 }
 
-/**
- * Live pane census: managers (≈ terminal tabs) and the panes they hold.
- *
- * Why: this is the population number crash reports have been inferring from
- * breadcrumb multiplicity, which never worked — `pane.id` restarts at 1 per
- * manager, so N panes and one looping pane are indistinguishable in the ring.
- * Measure it instead.
- */
+/** Measure managers and panes directly; pane IDs restart per manager, so coalesced breadcrumb multiplicity cannot distinguish a population from one looping pane. */
 export function getLivePaneCensus(): { managers: number; panes: number } {
   let panes = 0
   for (const manager of liveManagers) {
     try {
       panes += manager.getPaneCount?.() ?? manager.getPanes?.().length ?? 0
     } catch {
-      // Why: a manager mid-teardown must not sink the count for the rest.
+      // One manager’s teardown must not sink the census.
     }
   }
   return { managers: liveManagers.size, panes }
@@ -169,7 +117,7 @@ export function forEachLivePaneForDesyncSentinel(
       try {
         visit(`m${managerId}:p${pane.id}`, pane)
       } catch {
-        // Why: one pane's failure must not stop sentinel coverage of the rest.
+        // One pane’s failure must not stop sentinel coverage of others.
       }
     }
   }
@@ -178,18 +126,16 @@ export function forEachLivePaneForDesyncSentinel(
 export function refitAndRefreshAllTerminalPanes(): void {
   for (const manager of liveManagers) {
     try {
-      // Why: after bulk desktop restore, background panes may have correct
-      // cols/rows but a stale xterm renderer until focus forces a repaint.
+      // Background panes can have correct grids but stale renderers after bulk desktop restore.
       manager.fitAllPanes?.()
       manager.refreshAllPanes?.()
     } catch {
-      // Why: restore-all is best-effort across live managers during teardown.
+      // Continue restore-all across managers being torn down.
     }
   }
 }
 
-// Rough xterm BufferLine cost (3 uint32 per cell + object overhead); ranking
-// matters, not accuracy.
+// Approximate BufferLine cost (three uint32/cell plus overhead); ranking matters more than precision.
 const BYTES_PER_TERMINAL_CELL = 16
 const BYTES_PER_KILOBYTE = 1024
 const MANAGER_SAMPLE_LIMIT = 64
@@ -200,12 +146,7 @@ type BufferedTerminal = {
   buffer?: { active?: { length?: number } }
 }
 
-/**
- * Memory-profile census over live pane managers. Mounted panes are the
- * dominant highwater cost the store census can't see (97b9e86d: heap ~1.3GB
- * while all store slices summed to ~15MB) — eviction-exempt panes accumulate
- * mounted forever, each retaining rows x cols of scrollback.
- */
+/** Include mounted scrollback in memory census: eviction-exempt panes can dominate heap while persisted store slices stay small. */
 export function getLivePaneMemoryProfileCounts(): Record<string, number> {
   let sampledManagers = 0
   let paneCount = 0
@@ -264,6 +205,5 @@ export function getLivePaneMemoryProfileCounts(): Record<string, number> {
   }
 }
 
-// Why here: contributors push in (crash-diagnostics stays a leaf); same-name
-// re-registration on dev HMR overwrites, so no disposal hook is needed.
+// Push into leaf crash-diagnostics to avoid cycles; HMR overwrites same-name contributors without disposal.
 registerRendererMemoryProfileContributor('terminals', getLivePaneMemoryProfileCounts)

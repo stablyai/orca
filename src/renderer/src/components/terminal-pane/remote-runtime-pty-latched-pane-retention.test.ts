@@ -1,13 +1,26 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
 } from '../../../../shared/terminal-stream-protocol'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
-// Why: the recovery cutoff no longer tears down the retry registry entry or the accepted-snapshot
-// listener, so those two module-global collections are the only places a latched pane can accumulate.
+// Latched panes intentionally retain only retry-registry and accepted-snapshot entries; destroy must release both.
 describe('remote runtime pty latched-pane retention', () => {
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()
@@ -45,8 +58,7 @@ describe('remote runtime pty latched-pane retention', () => {
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe).length
   }
 
-  // Why: every pane needs its own host surface, otherwise a later pane reuses the earlier pane's
-  // multiplexed stream and never enters recovery at all.
+  // Give each pane a distinct host surface so it cannot reuse another’s live stream instead of entering recovery.
   const paneIdentity = (pane: number) => ({
     hostTabId: `tab-${pane}`,
     tabId: `web-terminal-tab-${pane}`,
@@ -56,8 +68,7 @@ describe('remote runtime pty latched-pane retention', () => {
 
   const PANE_COUNT = 24
 
-  // Why: one payload carries every pane's surface, matching the real per-worktree session.tabs
-  // response that any polling pane receives.
+  // Publish all pane surfaces in one response like real per-workspace inventory.
   function hostSnapshot(
     snapshotVersion: number,
     publicationEpoch: string
@@ -104,8 +115,7 @@ describe('remote runtime pty latched-pane retention', () => {
     })
     await vi.waitFor(() => expect(subscribeFrameCount()).toBeGreaterThan(subscribesBefore))
 
-    // The host keeps publishing the same live handle, so bounded replacement polling finds no
-    // replacement and stops quietly: the exact shape that leaves the pane latched but revivable.
+    // Keep the ended handle published so bounded replacement polling expires into the revivable latch.
     subscriptionCallbacks?.onResponse({
       ok: true,
       result: {
@@ -129,7 +139,7 @@ describe('remote runtime pty latched-pane retention', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.doUnmock('../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session', () => ({
+    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
     vi.clearAllMocks()
@@ -170,9 +180,7 @@ describe('remote runtime pty latched-pane retention', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   it('returns listener and retry-registry counts to baseline across destroy cycles', async () => {
@@ -184,7 +192,7 @@ describe('remote runtime pty latched-pane retention', () => {
 
       for (let cycle = 0; cycle < 20; cycle += 1) {
         const transport = await attachStalePane(cycle)
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
         expect(transport.getRecoveryState?.().phase).toBe('disconnected')
         latched.push(await registries())
         transport.destroy?.()
@@ -208,7 +216,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const settled: { subscribers: number; scheduled: number }[] = []
       for (let cycle = 0; cycle < 20; cycle += 1) {
         const transport = await attachStalePane(cycle)
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
         expect(transport.getRecoveryState?.().phase).toBe('disconnected')
         transport.detach?.()
         await vi.advanceTimersByTimeAsync(1_000)
@@ -227,7 +235,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const transports: Awaited<ReturnType<typeof attachStalePane>>[] = []
       for (let pane = 0; pane < 8; pane += 1) {
         transports.push(await attachStalePane(pane))
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       }
       // Retention is per live pane, not per timeout: eight latched panes hold eight of each.
       expect(await registries()).toEqual({ subscribers: 8, scheduled: 8 })
@@ -247,14 +255,13 @@ describe('remote runtime pty latched-pane retention', () => {
     vi.useFakeTimers()
     try {
       const transport = await attachStalePane(0)
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       const baseline = await registries()
       const callsAtLatch = runtimeCall.mock.calls.length
       const timersAtLatch = vi.getTimerCount()
-      // Nothing is armed once the window is spent: the pane costs one listener and one registry
-      // entry, and nothing else, no matter how long it stays latched.
+      // Spent windows retain only one listener/registry entry, with no autonomous retry work.
       expect(timersAtLatch).toBe(0)
 
       await vi.advanceTimersByTimeAsync(10 * 60_000)
@@ -277,7 +284,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
       const transport = await attachStalePane(0)
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       const baseline = await registries()
@@ -292,10 +299,9 @@ describe('remote runtime pty latched-pane retention', () => {
 
       for (let cycle = 0; cycle < 25; cycle += 1) {
         const revived = retryAllRemoteRuntimePtyRecoveriesNow()
-        // A second trigger in the same window must find nothing to advance, so an online/resume
-        // storm cannot stack fresh recovery epochs on one pane.
+        // External-trigger storms cannot stack fresh epochs inside one active recovery window.
         expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
         expect(transport.getRecoveryState?.().phase).toBe('disconnected')
         observed.push({ ...(await registries()), timers: vi.getTimerCount(), revived })
       }
@@ -325,7 +331,7 @@ describe('remote runtime pty latched-pane retention', () => {
     try {
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
       const transport = await attachStalePane(0)
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       const baseline = await registries()
 
@@ -342,8 +348,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const after = await registries()
       expect(after.subscribers).toBeLessThanOrEqual(baseline.subscribers)
       expect(after.scheduled).toBeLessThanOrEqual(baseline.scheduled)
-      // At most one same-handle resubscribe per spent window: 50 snapshots inside one window
-      // must not become 50 subscribes.
+      // Permit at most one same-handle subscribe per spent window, regardless of snapshot publication count.
       expect(subscribeFrameCount() - subscribesAtLatch).toBeLessThanOrEqual(1)
 
       transport.destroy?.()

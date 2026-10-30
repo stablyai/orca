@@ -1,15 +1,50 @@
 import { stripCredentialsFromMessage } from './git-remote-error'
 
+// Noninteractive clones cannot prompt and use keys on the destination host; users may otherwise compare failures to successful client-local clones.
+const CLONE_HOST_NOTE =
+  'The clone runs non-interactively (BatchMode=yes) on the machine that will hold the repository, using the SSH keys and agent on that machine rather than the ones on this computer.'
+const CLONE_KEY_HINT = `${CLONE_HOST_NOTE} A passphrase-protected key cannot prompt there, so load it into an agent on that machine (ssh-add) and retry.`
+const CLONE_HOST_KEY_HINT = `${CLONE_HOST_NOTE} It has not trusted this host key yet — connect once from a shell on that machine to record it in its known_hosts.`
+
+/** An ssh(1) diagnostic, i.e. a line only the SSH transport can have produced. */
+const SSH_TRANSPORT_DIAGNOSTIC =
+  /\bssh|permission denied \(|connection (?:closed|reset|refused|timed out) by/i
+
 export function getGitCloneFailureMessage(
+  stderr: string,
+  options: { clonePath?: string | null } = {}
+): string {
+  return appendCloneTransportGuidance(
+    getGitCloneFailureLine(stderr, options),
+    stripCredentialsFromMessage(stderr)
+  )
+}
+
+/** Guidance the raw git error omits: where the clone ran, and why nothing could prompt there. */
+function appendCloneTransportGuidance(message: string, scrubbedStderr: string): string {
+  if (message.includes(CLONE_HOST_NOTE)) {
+    return message
+  }
+  if (/host key verification failed/i.test(scrubbedStderr)) {
+    return `${message} ${CLONE_HOST_KEY_HINT}`
+  }
+  if (/permission denied \(([^)]*publickey[^)]*)\)/i.test(scrubbedStderr)) {
+    return `${message} ${CLONE_KEY_HINT}`
+  }
+  // Git’s HTTP helper shares this diagnostic; append key/agent guidance only with independent SSH evidence.
+  return /could not read from remote repository/i.test(scrubbedStderr) &&
+    SSH_TRANSPORT_DIAGNOSTIC.test(scrubbedStderr)
+    ? `${message} ${CLONE_HOST_NOTE}`
+    : message
+}
+
+function getGitCloneFailureLine(
   stderr: string,
   options: { clonePath?: string | null } = {}
 ): string {
   let fallbackLine: string | null = null
 
-  // Why: clone errors echo the URL the user typed, which is the most likely
-  // git error to embed a live token (`https://user:ghp_…@host/repo.git`).
-  // Scrub up-front so every return branch operates on already-redacted text,
-  // matching normalizeGitErrorMessage.
+  // Clone errors commonly echo credential-bearing URLs; redact before every return path, matching normalizeGitErrorMessage.
   const scrubbedStderr = stripCredentialsFromMessage(stderr)
 
   for (const rawLine of iterateLinesFromEnd(scrubbedStderr)) {

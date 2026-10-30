@@ -2,20 +2,44 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { existsSync, readFileSync } from 'node:fs'
-import { release } from 'node:os'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
+import {
+  ensureWindowsProcessTreeCommandLinePatch,
+  inspectWindowsProcessTreeAddon,
+  nodeGypRebuildInvocation,
+  nodeGypRebuildTimeoutMs,
+  stageWindowsProcessTreeNodeAddonApiHeaders,
+  windowsProcessTreeAddonPath
+} from './windows-process-tree-gyp-rebuild.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
+import {
+  isSharedNativePackage,
+  isSourceBuildDir,
+  nodePtyBuildArtifactPaths,
+  nodePtyNativeModuleName,
+  resolveNativePackageDir
+} from './native-build-entry.cjs'
+import {
+  checkNativeBuildDirLoads,
+  ensureSharedNativeBuild,
+  nativeBuildEnvironment
+} from './shared-native-build.mjs'
 
 const require = createRequire(import.meta.url)
-const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
+const { assertNodePtyJobOwnership, nodePtyAddonPath } = require('./node-pty-job-ownership.cjs')
+const { assertWindowsProcessTreeCreationTime } = require('./windows-process-tree-creation-time.cjs')
 const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
+// Why: `pnpm rebuild:node` must rebuild even a loadable node-pty; a shared slot still reuses its usable entry.
+const forceRebuild = process.argv.includes('--force')
 
 const NATIVE_MODULES = [
   'node-pty',
   ...(process.platform === 'win32'
-    ? ['windows-native-registry', '@vscode/windows-process-tree']
+    ? ['@orca/windows-registry', '@orca/windows-security', '@vscode/windows-process-tree']
     : [])
 ]
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
@@ -58,12 +82,14 @@ function readRuntimeArg() {
 function ensureNodeRuntime() {
   const initial = runNodeCheck()
   const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
-  if (initial.ok && !patchedNodePtyRebuildReason) {
+  if (initial.ok && !patchedNodePtyRebuildReason && !forceRebuild) {
     return
   }
 
-  if (patchedNodePtyRebuildReason) {
-    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+  if (patchedNodePtyRebuildReason || forceRebuild) {
+    console.warn(
+      `[native-runtime] ${patchedNodePtyRebuildReason ?? 'Forced rebuild of node-pty for Node.'}`
+    )
     if (!initial.ok) {
       printCheckError(initial)
     }
@@ -128,8 +154,7 @@ function ensureElectronRuntime() {
 }
 
 function runNodeCheck() {
-  // Why: a failed native addon load can poison the current process, so the
-  // post-rebuild verification must happen in a fresh Node process.
+  // Failed addon loads can poison process state; verify rebuilt addons in a fresh Node process.
   const result = spawnSync(process.execPath, [scriptPath, CHILD_CHECK_FLAG], {
     cwd: projectDir,
     encoding: 'utf8',
@@ -253,17 +278,28 @@ function collectNativeModuleFailures() {
 
 function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
-    // A bare require already loads the .node addon on win32, so it catches an
-    // ABI mismatch on its own. What it cannot catch is a snapshot that comes
-    // back empty -- the shape a blocked CreateToolhelp32Snapshot produces --
-    // so check the addon actually enumerates before calling the runtime healthy.
-    require(moduleName)
+    // Loadable node-addon-api prebuild can still read foreign command lines/ignore CreationTime; verify patched binary on both counts.
+    assertWindowsProcessTreeCreationTime({ module: require(moduleName) })
+    if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath()) === 'unpatched') {
+      throw new Error(
+        'the loaded addon still calls ReadProcessMemory, so it was not built from the patched ' +
+          'source. Rebuild it (pnpm run rebuild:electron) rather than using the published prebuild.'
+      )
+    }
     return
   }
-  if (moduleName === 'windows-native-registry') {
+  if (moduleName === '@orca/windows-registry') {
     const registry = require(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.
     registry.getRegistryKey(registry.HK.CU, 'Environment')
+    return
+  }
+  if (moduleName === '@orca/windows-security') {
+    const security = require(moduleName)
+    // currentUserSid loads the addon; a stale build that still loads lacks the newest export.
+    if (!security.currentUserSid() || !security.hasNativeExport('isolatedSpawnBreaksAwayFromJob')) {
+      throw new Error('stale build without the newest export; rebuild it')
+    }
     return
   }
   if (moduleName === 'node-pty') {
@@ -278,24 +314,24 @@ function loadNodePtyNativeModule() {
   require('node-pty')
 
   const { loadNativeModule } = require('node-pty/lib/utils')
-  const nativeName = getNodePtyNativeModuleName()
-  // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
-  // terminal is created, so require('node-pty') alone can miss ABI mismatches.
+  const nativeName = nodePtyNativeModuleName()
+  // Windows node-pty defers native loading until terminal creation; bare require misses ABI failures.
   const native = loadNativeModule(nativeName)
-  assertNodePtyWindowsConptyRuntime(native?.dir)
-  assertNodePtyJobOwnership({ nativeName, native })
-  if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
+  const addonPath = nodePtyAddonPath(require.resolve('node-pty/lib/utils'), native, nativeName)
+  assertNodePtyWindowsConptyRuntime(native?.dir, dirname(addonPath))
+  assertNodePtyJobOwnership({ nativeName, native, addonPath })
+  if (requiresPatchedNodePtySourceBuild() && !isSourceBuildDir(native?.dir)) {
     throw new Error(
       `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
     )
   }
 }
 
-function assertNodePtyWindowsConptyRuntime(nativeDir) {
-  if (process.platform !== 'win32' || !isNodePtyReleaseBuildDir(nativeDir)) {
+function assertNodePtyWindowsConptyRuntime(nativeDir, loadedDir) {
+  if (process.platform !== 'win32' || !isSourceBuildDir(nativeDir)) {
     return
   }
-  const runtimeDir = resolve(projectDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty')
+  const runtimeDir = resolve(loadedDir, 'conpty')
   const missingFile = NODE_PTY_CONPTY_RUNTIME_FILES.find(
     (filename) => !existsSync(resolve(runtimeDir, filename))
   )
@@ -304,23 +340,14 @@ function assertNodePtyWindowsConptyRuntime(nativeDir) {
   }
 }
 
-function getNodePtyNativeModuleName() {
-  if (process.platform !== 'win32') {
-    return 'pty'
-  }
-
-  return getWindowsBuildNumber() >= 18309 ? 'conpty' : 'pty'
-}
-
 function getPatchedNodePtyRebuildReason() {
   if (!requiresPatchedNodePtySourceBuild()) {
     return null
   }
 
-  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix and
-  // Windows patches only land in the source-built build/Release artifacts.
+  // Loadable upstream prebuilds lack Orca patches; require source-built build/Release artifacts on both platforms.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths = patchedNodePtyArtifactPaths(nodePtyDir)
+  const artifactPaths = nodePtyBuildArtifactPaths(nodePtyDir)
   const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
@@ -328,23 +355,6 @@ function getPatchedNodePtyRebuildReason() {
   }
 
   return 'Patched node-pty build artifacts are missing; rebuilding native deps.'
-}
-
-function patchedNodePtyArtifactPaths(nodePtyDir) {
-  if (process.platform === 'win32') {
-    const releaseDir = resolve(nodePtyDir, 'build', 'Release')
-    return [
-      resolve(releaseDir, 'conpty.node'),
-      ...NODE_PTY_CONPTY_RUNTIME_FILES.map((filename) => resolve(releaseDir, 'conpty', filename))
-    ]
-  }
-
-  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
-  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
-  if (process.platform === 'darwin') {
-    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
-  }
-  return artifactPaths
 }
 
 function requiresPatchedNodePtySourceBuild() {
@@ -356,45 +366,66 @@ function requiresPatchedNodePtySourceBuild() {
   return existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
 }
 
-function isNodePtyReleaseBuildDir(nativeDir) {
-  return typeof nativeDir === 'string' && nativeDir.replace(/\\/g, '/').includes('build/Release/')
-}
-
-function getWindowsBuildNumber() {
-  const match = /(\d+)\.(\d+)\.(\d+)/g.exec(release())
-  return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
-}
-
 function rebuildNodeRuntimeModules(moduleNames) {
   for (const moduleName of moduleNames) {
-    const moduleDir = dirname(require.resolve(`${moduleName}/package.json`))
+    let moduleDir = dirname(require.resolve(`${moduleName}/package.json`))
+    if (isSharedNativePackage(moduleName, projectDir)) {
+      // Why: other worktrees load this very dir, so build beside it instead of over it.
+      buildSharedNodeRuntimeModule(moduleName, resolveNativePackageDir(moduleName, projectDir))
+      continue
+    }
+    if (moduleName === '@vscode/windows-process-tree') {
+      // Reapply process-tree patch before rebuild or pnpm’s unpatched source reproduces the defect; physical-dir node-gyp and node-addon-api setup live in windows-process-tree-gyp-rebuild.mjs.
+      ensureWindowsProcessTreeCommandLinePatch(moduleDir)
+      stageWindowsProcessTreeNodeAddonApiHeaders(moduleDir)
+      moduleDir = realpathSync(moduleDir)
+    }
     console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
-    runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+    // pnpm exec inside an installed addon cannot discover the root build tool.
+    runNodeGyp(
+      moduleName,
+      nodeGypRebuildInvocation(
+        process.arch,
+        moduleDir,
+        process.env.npm_config_node_gyp || undefined
+      )
+    )
     if (moduleName === 'node-pty' && process.platform === 'win32') {
       runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
     }
   }
 }
 
-function runPnpm(args, { cwd = projectDir } = {}) {
-  const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-  const env =
-    process.platform === 'linux' && args.includes('node-gyp')
-      ? { ...process.env, CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim() }
-      : process.env
-  const result = spawnSync(command, args, {
-    cwd,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    env
-  })
+function buildSharedNodeRuntimeModule(moduleName, packageDir) {
+  try {
+    ensureSharedNativeBuild({
+      moduleName,
+      packageDir,
+      checkBuildDir: (dir) => checkNativeBuildDirLoads(moduleName, dir),
+      nodeGypEntry: process.env.npm_config_node_gyp || undefined,
+      log: (message) => console.warn(`[native-runtime] ${message}`)
+    })
+  } catch (error) {
+    console.error(`[native-runtime] ${moduleName}: ${formatError(error)}`)
+    process.exit(1)
+  }
+}
 
-  if (result.error || result.status !== 0) {
-    console.error(`[native-runtime] ${command} ${args.join(' ')} failed in ${cwd}.`)
-    if (result.error) {
-      console.error(formatError(result.error))
-    }
-    process.exit(result.status ?? 1)
+function runNodeGyp(moduleName, { args, cwd }) {
+  const env = nativeBuildEnvironment()
+  const result = runProcessSync({
+    program: process.execPath,
+    args,
+    cwd,
+    env,
+    stdio: 'inherit',
+    timeoutMs: nodeGypRebuildTimeoutMs(moduleName)
+  })
+  if (result.code !== 0) {
+    console.error(
+      `[native-runtime] node-gyp rebuild failed in ${cwd}: ${describeProcessFailure(result)}`
+    )
+    process.exit(result.code ?? 1)
   }
 }
 

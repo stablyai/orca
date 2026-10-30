@@ -20,6 +20,7 @@ describe('terminal keyboard pane ownership', () => {
       active = paneId === focused.id ? focused : first
     })
     const sendFocused = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the complete Enter path; unused runtime dependencies intentionally remain absent.
     const handlers = createTerminalKeyboardEventHandlers({
       isMac: false,
       isWindows: false,
@@ -41,7 +42,7 @@ describe('terminal keyboard pane ownership', () => {
         absorbRedispatchedEnter: () => false,
         defer: vi.fn()
       },
-      deferredChordSender: { defer: vi.fn() },
+      deferredChordSender: { defer: vi.fn(), absorbReplay: () => false },
       getModifiedEnterChord: () => null,
       reconcileHeldImeEnterModifiers: vi.fn(),
       optionKittyReleases: { arm: vi.fn(), armNativeDeadKey: vi.fn() },
@@ -67,6 +68,7 @@ describe('terminal keyboard pane ownership', () => {
       persistLayoutSnapshot: vi.fn(),
       toggleExpandPane: vi.fn(),
       setSearchOpen: vi.fn(),
+      focusSearchInput: vi.fn(),
       onSearchSelectedText: vi.fn(),
       onRequestClosePane: vi.fn(),
       onClearPaneScrollback: vi.fn(),

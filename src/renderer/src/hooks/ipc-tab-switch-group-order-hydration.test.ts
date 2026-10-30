@@ -1,13 +1,13 @@
-// STA-3475: the tab-cycle chord runs through the real group order helper here (no mock), because
-// the bug was the seam between them — a group tab the strip renders but group.tabOrder had not
-// learned about yet left the cycle with <=1 tab, so Terminal.tsx consumed the chord and nothing
-// moved until a mouse click rewrote the group state.
+/** Use real group order: stale group.tabOrder once omitted visible tabs, consuming cycle chords until a click repaired it (STA-3475). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
 
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: getStateMock } }))
+
+import { createTabsFocusActions } from '../store/slices/tabs/tabs-focus-actions'
+import type { TabsSliceGet, TabsSliceSet } from '../store/slices/tabs/tabs-slice-contract'
 
 import {
   handleSwitchTab,
@@ -39,7 +39,7 @@ function stateWithGroupOrder(tabOrder: string[]) {
     terminalTab('tab-2', 'term-2', 1),
     terminalTab('tab-3', 'term-3', 2)
   ]
-  return {
+  const store = {
     activeWorktreeId: WT,
     activeTabType: 'terminal' as const,
     activeTabId: 'term-1',
@@ -58,8 +58,15 @@ function stateWithGroupOrder(tabOrder: string[]) {
     setActiveFile: vi.fn(),
     setActiveBrowserTab: vi.fn(),
     setActiveTabType: vi.fn(),
-    activateTab: vi.fn()
+    activateTab: vi.fn(),
+    getActiveTab: (_worktreeId: string): unknown => null
   }
+  // The real resolver must decide group scope; a stub would precompute the answer under test.
+  store.getActiveTab = createTabsFocusActions(
+    (() => {}) as unknown as TabsSliceSet,
+    (() => store) as unknown as TabsSliceGet
+  ).getActiveTab
+  return store
 }
 
 describe('tab-cycle chord against a group whose tabOrder is still hydrating', () => {
@@ -103,6 +110,16 @@ describe('tab-cycle chord against a group whose tabOrder is still hydrating', ()
   it('cycles Ctrl+PageUp/PageDown through a unified terminal before its runtime row hydrates', () => {
     const store = stateWithGroupOrder(['tab-1'])
     store.tabsByWorktree = { [WT]: [{ id: 'term-1' }] }
+    getStateMock.mockReturnValue(store)
+
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+  })
+
+  it('uses the worktree order when keyboard activation sees an empty group projection', () => {
+    const store = stateWithGroupOrder([])
+    store.unifiedTabsByWorktree = { [WT]: [] }
+    store.tabsByWorktree = { [WT]: [{ id: 'term-1' }, { id: 'term-2' }] }
     getStateMock.mockReturnValue(store)
 
     expect(handleSwitchTerminalTab(1)).toBe(true)

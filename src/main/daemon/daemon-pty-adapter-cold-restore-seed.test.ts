@@ -1,4 +1,4 @@
-/* Cold-restore seed transfer and the payload shapes handed back to the renderer. */
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -314,7 +314,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('cold-restores an alt-screen agent snapshot as scrollback on wake (hibernation)', async () => {
-      // Why: hibernation force-kills the agent in alt-screen (empty scrollbackAnsi); fall back to the snapshot so the pane repaints instead of blanking.
+      // Hibernation can leave only the alt-screen snapshot available for repaint.
       const sessionId = 'cold-restore-alt-screen'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
@@ -356,12 +356,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Claude Code')
-      // The payload must NOT re-enter alt-screen — it would fight the relaunched agent's repaint and the renderer's POST_REPLAY_MODE_RESET.
+      // Re-entering alt-screen would fight the relaunched agent and renderer replay reset.
       expect(result.coldRestore!.scrollback).not.toContain('\x1b[?1049h')
     })
 
     it('skips cold restore for an alt-screen session with an empty snapshot', async () => {
-      // Why: alt-screen entered before any content → nothing to show; keep the no-op rather than fabricate a payload.
       const sessionId = 'cold-restore-alt-screen-empty'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })

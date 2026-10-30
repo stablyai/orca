@@ -1,10 +1,11 @@
-import { Loader2, MessageSquarePlus, RefreshCw } from 'lucide-react'
+import { MessageSquarePlus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { BrowserNavigationControlRow } from '../assemble-chrome/browser-navigation-control-row'
 import BrowserAddressBar from '../assemble-chrome/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/use-browser-address-bar-edit-session'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-indicator'
 import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
@@ -15,10 +16,12 @@ export function RemoteBrowserPageToolbar({
   onAddressBarChange,
   onSubmitAddressBar,
   onNavigateToUrl,
+  onOpenWorkspaceDoc,
   addressBarInputRef,
   addressBarEditSession,
   busy,
   loading,
+  loadFailed,
   markup,
   frameUrl,
   isActive,
@@ -31,10 +34,13 @@ export function RemoteBrowserPageToolbar({
   onAddressBarChange: (value: string) => void
   onSubmitAddressBar: () => void
   onNavigateToUrl: (url: string) => void
+  /** A previewed-document suggestion opens on a fresh grant instead of navigating the remote guest. */
+  onOpenWorkspaceDoc: (docLocation: BrowserPageDocLocation) => void
   addressBarInputRef: React.RefObject<HTMLInputElement | null>
   addressBarEditSession: BrowserAddressBarEditSessionBinding
   busy: boolean
   loading: boolean
+  loadFailed: boolean
   markup: MarkupModeController
   frameUrl: string | null
   isActive: boolean
@@ -45,11 +51,9 @@ export function RemoteBrowserPageToolbar({
   return (
     <BrowserNavigationControlRow
       controls={{
-        // Why: remote pages report no history depth, so the arrows stay live and a
-        // dead-end back/forward RPC is simply a no-op on the host.
+        // Hosts report no history depth; keep arrows enabled and let dead-end RPCs no-op.
         canGoBack: true,
         canGoForward: true,
-        loading: busy || loading,
         goBack: onBack,
         goForward: onForward,
         reload: onReload,
@@ -57,10 +61,12 @@ export function RemoteBrowserPageToolbar({
       }}
       addressSlot={
         <BrowserAddressBar
+          pageId={addressBarEditSession.pageId}
           value={addressBarValue}
           onChange={onAddressBarChange}
           onSubmit={onSubmitAddressBar}
           onNavigate={onNavigateToUrl}
+          onOpenWorkspaceDoc={onOpenWorkspaceDoc}
           inputRef={addressBarInputRef}
           editSession={addressBarEditSession}
           leadingIcon={
@@ -69,11 +75,12 @@ export function RemoteBrowserPageToolbar({
               presentation="streamed"
             />
           }
+          loading={busy || loading}
+          loadFailed={loadFailed}
         />
       }
       reloadControl={
-        // Why: no ignore-cache RPC exists for remote pages, and this pane binds no reload chord, so there is
-        // nothing truthful to put in a menu or a shortcut hint here — tooltip only.
+        // Remote reload chords share browser.reload; no ignore-cache RPC exists to offer a distinct hard-reload menu action.
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -86,11 +93,7 @@ export function RemoteBrowserPageToolbar({
               )}
               onClick={onReload}
             >
-              {busy || loading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
+              <RefreshCw className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>

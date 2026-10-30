@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult
@@ -26,18 +28,22 @@ import { findOpenPRByHeadBase, readPullRequestTemplate } from './pull-request-te
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'github') {
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
+      error: 'Creating reviews for this provider is not supported yet.',
+      reason: 'provider_not_supported'
     }
   }
 
-  // Why: creation targets the origin owning the unqualified head branch; the shared resolver preserves its host (#7331, #8312).
+  // `gh` runs on this client whatever the host; only the git reads under it are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
+
+  // The unqualified head branch belongs to origin; retain its resolved host.
   const ownerRepo = await getOriginGitHubApiRepository(
     repoPath,
     connectionId,
@@ -47,10 +53,11 @@ export async function createGitHubPullRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating pull requests requires a GitHub remote.'
+      error: 'Creating pull requests requires a GitHub remote.',
+      reason: 'unsupported_provider'
     }
   }
-  // The runner host-qualifies --repo from options.host for GHES (#8312).
+  // The runner qualifies --repo using options.host.
   const repoArg = `${ownerRepo.owner}/${ownerRepo.repo}`
 
   const base = normalizeHostedReviewBaseRef(input.base)
@@ -67,7 +74,8 @@ export async function createGitHubPullRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
+      error: 'Create PR failed: choose a different base branch before creating a pull request.',
+      reason: 'same_base_branch'
     }
   }
 
@@ -99,10 +107,11 @@ export async function createGitHubPullRequest(
       createArgs.push('--draft')
     }
     try {
-      const context = githubRepoContext(repoPath, connectionId)
+      const localGitOptions = getHostedReviewLocalGitOptions(options)
+      const context = githubRepoContext(repoPath, connectionId, localGitOptions)
       const { stdout } = await ghExecFileAsync(createArgs, {
         ...ghRepoExecOptions(context),
-        ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
+        ...(connectionId ? {} : localGitOptions),
         ...githubHostExecOptions(ownerRepo),
         timeout: 60_000,
         idempotent: false
@@ -127,7 +136,8 @@ export async function createGitHubPullRequest(
       return {
         ok: false,
         code: 'unknown_completion',
-        error: 'PR creation may have completed. Refreshing branch review state...'
+        error: 'PR creation may have completed. Refreshing branch review state...',
+        reason: 'creation_unconfirmed'
       }
     } catch (error) {
       const classified = classifyCreatePRError(error)
@@ -149,6 +159,7 @@ export async function createGitHubPullRequest(
             ok: false,
             code: 'already_exists',
             error: 'A pull request already exists for this branch.',
+            reason: 'existing_review',
             existingReview: existing
           }
         }

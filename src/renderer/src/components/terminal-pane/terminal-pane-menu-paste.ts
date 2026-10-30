@@ -1,20 +1,17 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
+import { requestNativeChatCoverPaste } from './native-chat-cover-paste'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { pasteTerminalText } from './terminal-bracketed-paste'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
-import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield,
-  type TerminalPasteSource,
-  type TerminalPasteTextOptions
-} from './terminal-paste-coordinator'
+import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-model'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
-import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
+import {
+  resolveTerminalPasteRuntime,
+  resolveTerminalPasteRuntimeEnvironmentId
+} from './terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
+import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { useAppStore } from '@/store'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
@@ -28,13 +25,6 @@ export type TerminalPaneMenuPasteContext = {
   worktreeId: string
   forceBracketedMultilineTextPaste: boolean
   onPasteError: (message: string) => void
-}
-
-export const getTerminalPaneMenuShortcutPlatform = (): NodeJS.Platform => {
-  if (navigator.userAgent.includes('Mac')) {
-    return 'darwin'
-  }
-  return navigator.userAgent.includes('Windows') ? 'win32' : 'linux'
 }
 
 const isPanePasteTargetMounted = (
@@ -60,38 +50,25 @@ export const executeTerminalPaneMenuPasteText = async (
   text: string,
   options?: TerminalPasteTextOptions
 ): Promise<boolean> => {
-  const connectionId = getConnectionId(context.worktreeId) ?? null
   const transport = context.paneTransportsRef.current.get(pane.id)
   const ptyId = transport?.getPtyId() ?? null
-  const shortcutPlatform = getTerminalPaneMenuShortcutPlatform()
-  const plan = await planTerminalPasteWithYield({
+  const isTargetMounted = (): boolean => isPanePasteTargetMounted(context, pane, transport, ptyId)
+  const execution = await pasteTextIntoTerminalPane({
+    pane,
     text,
     source,
-    target: {
-      kind: 'terminal',
-      paneId: pane.id,
-      leafId: pane.leafId,
+    ptyId,
+    runtime: resolveTerminalPasteRuntime({
+      platform: getShortcutPlatform(),
       ptyId,
-      runtime: resolveTerminalPasteRuntime({
-        platform: shortcutPlatform,
-        ptyId,
-        connectionId,
-        remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
-        transport,
-        isWindowsConpty: context.forceBracketedMultilineTextPaste
-      })
-    },
-    forceBracketedPaste: options?.forceBracketedPaste,
-    forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
-    windowsInputRecordNewline: options?.windowsInputRecordNewline,
-    terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
-  })
-  const execution = await executeTerminalPastePlan(plan, {
-    pasteText: (pasteText, pasteOptions) =>
-      pasteTerminalText(pane.terminal, pasteText, pasteOptions),
-    writePty: (data) => writeTerminalPastePtyInput(transport, data),
-    isTargetCurrent: () => isPanePasteTargetMounted(context, pane, transport, ptyId),
-    canContinue: () => isPanePasteTargetMounted(context, pane, transport, ptyId)
+      transport,
+      isWindowsConpty: context.forceBracketedMultilineTextPaste
+    }),
+    transport,
+    inputKind: 'driving',
+    isTargetCurrent: isTargetMounted,
+    canContinue: isTargetMounted,
+    planOptions: options
   })
   if (execution.status !== 'pasted') {
     context.onPasteError(formatTerminalPasteExecutionError(execution.reason))
@@ -114,11 +91,18 @@ export const pasteTerminalPaneMenuClipboard = async (
   if (!pane) {
     return
   }
+  if (requestNativeChatCoverPaste(pane)) {
+    return
+  }
   const { tabId, worktreeId, forceBracketedMultilineTextPaste, onPasteError } = context
   const connectionId = getConnectionId(worktreeId) ?? null
   const state = useAppStore.getState()
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
+  const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
+    state,
+    worktreeId,
+    transport
+  )
   const result = await pasteTerminalClipboard({
     readClipboardText: window.api.ui.readClipboardText,
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -127,7 +111,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     protectedMultilineTextPasteOptions: resolveProtectedMultilinePasteOptionsForPane({
       isWindowsClient: forceBracketedMultilineTextPaste,
       hostPlatform: resolveTerminalInputHostPlatform({
-        clientPlatform: getTerminalPaneMenuShortcutPlatform(),
+        clientPlatform: getShortcutPlatform(),
         state,
         worktreeId,
         transport
@@ -149,8 +133,6 @@ export const pasteTerminalPaneMenuClipboard = async (
   if (result.status !== 'pasted') {
     return
   }
-  // Why: Radix returns focus to the menu trigger (the pane container) on
-  // close. Refocus only after a completed paste so rejected async targets
-  // do not steal focus from the user's new control.
+  // Refocus after completed paste only; a rejected async target must not steal focus from a newer control.
   pane.terminal.focus()
 }

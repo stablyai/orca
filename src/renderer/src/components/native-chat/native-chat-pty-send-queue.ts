@@ -1,13 +1,8 @@
-// Per-PTY serialization for native-chat clear+body+Enter sequences.
-// Why: Enter is delayed (busy-agent safety). Without a queue, a second send's
-// clear/body can interleave with the first Enter window and still glue or race
-// the agent composer. Each sequence owns the line until its Enter fires.
-//
-// Option commands (model switch) cancel/await this queue first so a delayed chat
-// Enter cannot land on Claude's model confirmation dialog.
+// Serialize clear/body/delayed Enter per PTY; option commands cancel and await sends before opening dialogs.
 
 export type NativeChatPtySendQueueHandle = {
-  cancel: () => void
+  /** `keepInput` skips the unsubmitted-input clear, e.g. while a dialog owns the agent's input. */
+  cancel: (keepInput?: boolean) => void
   settleAfterMs: number
   settled: Promise<void>
   bodyStarted: () => boolean
@@ -15,10 +10,7 @@ export type NativeChatPtySendQueueHandle = {
 }
 
 export type EnqueueNativeChatPtySendOptions = {
-  /**
-   * Called when cancel aborts after `start` began but before Enter was marked
-   * submitted. Used to clear leftover body text from the agent TUI.
-   */
+  /** Clear leftover TUI input only if cancellation follows start but precedes submission. */
   onCancelUnsubmitted?: () => void
 }
 
@@ -49,7 +41,6 @@ export function resetNativeChatPtySendQueuesForTests(): void {
   ptyQueues.clear()
 }
 
-/** Abort every in-flight/queued chat send on this PTY (clears delayed Enter). */
 export function cancelNativeChatPtySends(ptyId: string): void {
   const state = ptyQueues.get(ptyId)
   if (!state) {
@@ -60,7 +51,6 @@ export function cancelNativeChatPtySends(ptyId: string): void {
   }
 }
 
-/** Wait until every chat sequence on this PTY has finished or been cancelled. */
 export async function waitForNativeChatPtyIdle(ptyId: string): Promise<void> {
   const state = ptyQueues.get(ptyId)
   if (!state) {
@@ -69,10 +59,7 @@ export async function waitForNativeChatPtyIdle(ptyId: string): Promise<void> {
   await state.tail
 }
 
-/**
- * Run `start` only after prior sequences for `ptyId` finish. When the queue is
- * idle, `start` runs synchronously so the body write is not deferred a tick.
- */
+/** Wait for earlier sends; start synchronously when idle to avoid deferring the body write. */
 export function enqueueNativeChatPtySend(
   ptyId: string,
   durationMs: number,
@@ -149,8 +136,7 @@ export function enqueueNativeChatPtySend(
     state.depth = Math.max(0, state.depth - 1)
     finished = true
     dropHandle()
-    // Why: drop the per-pty record once nothing is in flight so the map does not
-    // accumulate one permanent entry per pty over a long, multi-pane session.
+    // Release idle PTY keys so closed panes cannot accumulate permanent queue entries.
     if (state.depth === 0 && state.handles.size === 0 && ptyQueues.get(ptyId) === state) {
       ptyQueues.delete(ptyId)
     }
@@ -160,7 +146,7 @@ export function enqueueNativeChatPtySend(
   state.tail = settled
 
   const handle: NativeChatPtySendQueueHandle = {
-    cancel: () => {
+    cancel: (keepInput = false) => {
       if (cancelled) {
         return
       }
@@ -169,14 +155,11 @@ export function enqueueNativeChatPtySend(
         clearTimeout(timer)
       }
       const shouldClear = bodyStarted && !submitted
-      // Why: refund only THIS sequence's charged window rather than collapsing
-      // freeAt to now — later queued sends still hold the line, so a blanket
-      // reset would understate the next enqueue's settle time and let a send
-      // card drop while a queued Enter is still pending.
+      // Refund only this sequence’s window; later queued Enters still hold the line and their cards.
       state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
       finishEntry()
       dropHandle()
-      if (shouldClear) {
+      if (shouldClear && !keepInput) {
         options?.onCancelUnsubmitted?.()
       }
     },

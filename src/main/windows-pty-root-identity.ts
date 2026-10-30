@@ -1,49 +1,30 @@
-import { queryWindowsProcessRowsFresh } from './providers/windows-foreground-process-rows'
+import { queryWindowsProcessLinksFresh } from './providers/windows-foreground-process-rows'
+import { readOrcaChromiumProcessPids } from './orca-chromium-process-pids'
 
-/**
- * Whether a PID still sits inside this process's own subtree. Note this is
- * subtree membership, not root identity: a recycled PID that lands on any other
- * Orca descendant also reads `own`. It bounds the blast radius of a bad
- * `taskkill /T /F` to our own tree; it does not prove we spawned this PTY.
- * - `own`: ancestry reaches us, so the tree is eligible for guarded teardown.
- * - `absent`: the PID is gone; `taskkill` would no-op anyway.
- * - `foreign`: the PID resolves to a process we did not start (PID recycle).
- * - `unknown`: no usable evidence; callers must not force-kill the tree.
- */
+/** `own` proves ancestry, not PTY identity: a recycled PID under another Orca child still qualifies. */
 export type WindowsTreeKillTarget = 'own' | 'absent' | 'foreign' | 'unknown'
 
 export const WINDOWS_ROOT_IDENTITY_TIMEOUT_MS = 3_000
 
-// Why: ConPTY spawns the shell directly from this process (1 hop). node-pty falls
-// back to winpty below Windows build 18309, which adds a winpty-agent.exe hop.
+// Allow the extra winpty-agent hop used below Windows build 18309.
 const MAX_ANCESTOR_HOPS = 4
 
 type ProcessLink = { pid: number; ppid: number }
 
 export type WindowsProcessLinkReader = () => Promise<readonly ProcessLink[] | null>
 
-/**
- * Classify `rootPid` by walking its ancestry back to `ownerPid`. A recycled PID
- * usually belongs to an unrelated process whose chain never passes through Orca,
- * so it resolves `foreign` and must never reach `taskkill /T /F`. Ambiguous
- * tables resolve `unknown` because ambiguity is not evidence of ownership.
- *
- * Known limit (#10680): a recycle that lands on one of our OWN descendants —
- * another pane's shell, an agent CLI, a `git.exe` we spawned — still reads
- * `own`. That is not remote during teardown, when Orca is itself the process
- * allocating pids. Closing it needs real identity (a `Win32_Process.CreationDate`
- * baseline, the analogue of the POSIX `lstart` check, or an inherited handle /
- * Job Object).
- */
 export function classifyWindowsTreeKillTarget(
   rootPid: number,
   rows: readonly ProcessLink[],
-  ownerPid: number
+  ownerPid: number,
+  ownChromiumPids: ReadonlySet<number> = readOrcaChromiumProcessPids()
 ): WindowsTreeKillTarget {
-  // Why: our own pid is never a PTY root, so reading it here means the pid is
-  // corrupt. `foreign` is the refusing verdict, which is what that must get —
-  // `taskkill /T /F` on ourselves would take Orca and every pane down with it.
+  // Never let a corrupt root PID authorize killing Orca itself.
   if (!Number.isInteger(rootPid) || rootPid <= 0 || rootPid === ownerPid) {
+    return 'foreign'
+  }
+  // Chromium children also reach ownerPid, but must never qualify for PTY teardown.
+  if (ownChromiumPids.has(rootPid)) {
     return 'foreign'
   }
   const parentByPid = new Map<number, number | null>()
@@ -62,8 +43,7 @@ export function classifyWindowsTreeKillTarget(
     if (parent === null) {
       return 'unknown'
     }
-    // Why: a chain that dead-ends elsewhere is positive evidence the PID is not
-    // ours. Only our own live PID can terminate a chain that started at our child.
+    // A chain ending elsewhere does not belong to this live owner.
     if (parent === undefined) {
       return 'foreign'
     }
@@ -71,7 +51,7 @@ export function classifyWindowsTreeKillTarget(
       return 'own'
     }
     if (visited.has(parent)) {
-      // An inconsistent table (mid-scan PID reuse) proves nothing either way.
+      // Cycles in a changing process table cannot prove ownership.
       return 'unknown'
     }
     visited.add(parent)
@@ -107,32 +87,31 @@ function readLinksBeforeDeadline(
   })
 }
 
-/**
- * Verify that `rootPid` still identifies the PTY root this process started,
- * before a `taskkill /T /F` that would otherwise force-kill a recycled PID and
- * its whole descendant tree. Never rejects: an unavailable or slow process query
- * resolves `unknown`, which is not permission to force-kill the tree.
- */
+/** Unavailable or timed-out process queries return `unknown`, which must not authorize a tree kill. */
 export async function verifyWindowsTreeKillTarget(
   rootPid: number,
   deps: {
     readRows?: WindowsProcessLinkReader
     ownerPid?: number
+    ownChromiumPids?: ReadonlySet<number>
     platform?: NodeJS.Platform
     timeoutMs?: number
   } = {}
 ): Promise<WindowsTreeKillTarget> {
-  // Why: the CIM/wmic probes exist only on Windows, so there is nothing to verify
-  // off-platform — including suites that drive the win32 branch from POSIX.
   if ((deps.platform ?? process.platform) !== 'win32') {
     return 'unknown'
   }
   const rows = await readLinksBeforeDeadline(
-    deps.readRows ?? queryWindowsProcessRowsFresh,
+    deps.readRows ?? queryWindowsProcessLinksFresh,
     deps.timeoutMs ?? WINDOWS_ROOT_IDENTITY_TIMEOUT_MS
   )
   if (!rows) {
     return 'unknown'
   }
-  return classifyWindowsTreeKillTarget(rootPid, rows, deps.ownerPid ?? process.pid)
+  return classifyWindowsTreeKillTarget(
+    rootPid,
+    rows,
+    deps.ownerPid ?? process.pid,
+    deps.ownChromiumPids ?? readOrcaChromiumProcessPids()
+  )
 }

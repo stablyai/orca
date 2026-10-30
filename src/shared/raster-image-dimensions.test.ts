@@ -28,7 +28,7 @@ function jpegWithMetadata(
   extraSegments = 0
 ): Buffer {
   const parts = [Buffer.from([0xff, 0xd8])]
-  for (let written = 0; written < metadataBytes; ) {
+  for (let written = 0; written < metadataBytes;) {
     // A JPEG segment length field is 16 bits, so real files chain many segments to carry a profile.
     const size = Math.min(65_533, metadataBytes - written)
     const header = Buffer.alloc(4)
@@ -94,8 +94,7 @@ describe('readRasterImageDimensions', () => {
   })
 
   it('reads a JPEG whose frame header sits behind large chained metadata', () => {
-    // Cameras and editors emit ICC/MPF profiles split across many 64 KiB segments, pushing SOF0 far
-    // into the file. Both shapes below decode everywhere, so neither may read as an unknown size.
+    // Real ICC/MPF profiles span chained 64KiB segments before SOF; these valid images must still yield dimensions.
     expect(readRasterImageDimensions(jpegWithMetadata(1_400 * 1024, 4_000, 3_000))).toEqual({
       width: 4_000,
       height: 3_000
@@ -105,4 +104,18 @@ describe('readRasterImageDimensions', () => {
       height: 480
     })
   })
+
+  it.each(['c00011081770177003011100021100031100', 'c0001108000c001003011100021100031100'])(
+    'reads the real JPEG frame after stray bytes: %s',
+    (strayHex) => {
+      const jpeg = jpegWithMetadata(0, 640, 480)
+      const prefixed = Buffer.concat([
+        jpeg.subarray(0, 2),
+        Buffer.from(strayHex, 'hex'),
+        jpeg.subarray(2)
+      ])
+
+      expect(readRasterImageDimensions(prefixed)).toEqual({ width: 640, height: 480 })
+    }
+  )
 })

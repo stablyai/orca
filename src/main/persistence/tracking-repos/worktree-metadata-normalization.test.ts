@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../shared/worktree/meta-persisted-defaults'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   gcStaleWorktreeMeta,
@@ -7,9 +8,9 @@ import {
   WORKTREE_META_GC_GRACE_MS
 } from './worktree-metadata-normalization'
 
-// Only the presence of an entry matters here; the normalizer never reads its linked-item fields.
+// Surviving rows must restore the defaults omitted by serialization.
 function makeMeta(): WorktreeMeta {
-  return { createdAt: 1 } as WorktreeMeta
+  return { createdAt: 1, ...WORKTREE_META_PERSISTED_DEFAULTS } as WorktreeMeta
 }
 
 function makeState(overrides: Partial<PersistedState>): PersistedState {
@@ -28,7 +29,7 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
       worktreeLineageById: null as unknown as PersistedState['worktreeLineageById']
     })
 
-    // Without this the map stays null on disk and is repaired again on every reload.
+    // Persist null-map repair so each reload does not repeat it.
     expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(true)
     expect(state.worktreeLineageById).toEqual({})
   })
@@ -52,7 +53,6 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
 
     expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(true)
     expect(state.worktreeMetaByIdentity).toEqual({})
-    // A key with no backing row is what turns the next write into an ambiguous alias, so it goes.
     expect(state.worktreeIdentityAliases).toEqual({})
   })
 
@@ -169,8 +169,7 @@ describe('gcStaleWorktreeMeta', () => {
     })
 
     expect(gcStaleWorktreeMeta(state)).toBe(1)
-    // A surviving alias would re-attach this dead metadata to a worktree later
-    // created at the same repoId::path, and nothing else ever reclaims it.
+    // Dead aliases could attach stale metadata to future worktrees reusing this path.
     expect(state.worktreeMetaByIdentity).toEqual({ [remoteIdentityKey]: expect.anything() })
     expect(state.worktreeIdentityAliases).toEqual({
       [`ssh:conn-1|${worktreeId}`]: [remoteIdentityKey]

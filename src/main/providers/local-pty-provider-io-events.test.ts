@@ -13,7 +13,7 @@ const {
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock,
+  wslUncDirectoryExistsAsyncMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -27,7 +27,7 @@ const {
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn(),
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
@@ -62,10 +62,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,9 +102,8 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
+  wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
 vi.mock('../shell-prompt-readiness-probe', () => ({
@@ -141,7 +137,7 @@ describe('LocalPtyProvider', () => {
       readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
-      wslUncDirectoryExistsMock,
+      wslUncDirectoryExistsAsyncMock,
       createShellPromptReadinessProbeMock
     })
 
@@ -217,7 +213,6 @@ describe('LocalPtyProvider', () => {
       provider.onData(dataHandler)
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
-      // Simulate node-pty data event
       const onDataCb = mockProc.onData.mock.calls[0][0]
       onDataCb('hello world')
 
@@ -253,19 +248,27 @@ describe('LocalPtyProvider', () => {
         ['prompt', expect.any(Number)]
       ])
       expect(dataHandler.mock.calls.map(([payload]) => payload)).toEqual([
-        { id, data: '', sequenceChars: query.length, seq: query.length, transformed: true },
+        {
+          id,
+          data: '',
+          sequenceChars: query.length,
+          seq: query.length,
+          transformed: true,
+          runtimeFed: true
+        },
         {
           id,
           data: '',
           sequenceChars: echo.length,
           seq: query.length + echo.length,
-          transformed: true
+          transformed: true,
+          runtimeFed: true
         },
-        { id, data: 'prompt' }
+        { id, data: 'prompt', runtimeFed: true }
       ])
     })
 
-    it('consumes a native Windows OSC color query before renderer delivery', async () => {
+    it('answers a native Windows OSC color query from pushed colours before renderer delivery', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const dataHandler = vi.fn()
       provider.onData(dataHandler)
@@ -278,6 +281,8 @@ describe('LocalPtyProvider', () => {
       const query = '\x1b]10;?\x07'
 
       onDataCb(query)
+      provider.setColorQueryReplyColors({ foreground: '#123456', background: '#000000' })
+      onDataCb(query)
 
       expect(dataHandler).toHaveBeenCalledWith({
         id,
@@ -286,7 +291,10 @@ describe('LocalPtyProvider', () => {
         seq: query.length,
         transformed: true
       })
-      expect(mockProc.write).not.toHaveBeenCalled()
+      expect(mockProc.write.mock.calls).toEqual([
+        ['\x1b]10;rgb:ffff/ffff/ffff\x1b\\'],
+        ['\x1b]10;rgb:1212/3434/5656\x1b\\']
+      ])
     })
 
     it('keeps forwarded OSC color replies for a Windows-owned WSL PTY', async () => {
@@ -311,7 +319,6 @@ describe('LocalPtyProvider', () => {
       provider.onExit(exitHandler)
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
 
-      // Simulate node-pty exit event
       exitCb?.({ exitCode: 0 })
 
       expect(exitHandler).toHaveBeenCalledWith({
@@ -327,8 +334,7 @@ describe('LocalPtyProvider', () => {
       provider.onExit(exitHandler)
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
 
-      // node-pty reports an OOM/SIGKILL as {exitCode: 0, signal: 9}; dropping
-      // the signal is what made a crash read as a clean finish (STA-4536).
+      // node-pty can report SIGKILL as exitCode 0 with signal 9; dropping signal misclassifies crashes (STA-4536).
       exitCb?.({ exitCode: 0, signal: 9 })
 
       expect(exitHandler).toHaveBeenCalledWith({

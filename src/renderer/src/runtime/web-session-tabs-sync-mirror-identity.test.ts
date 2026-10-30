@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createStore } from 'zustand/vanilla'
+import { shallow } from 'zustand/shallow'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type {
@@ -10,10 +11,10 @@ import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-pl
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
-  applyFreshWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyFreshWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
 const ENVIRONMENT_ID = 'web-env-1'
 const NOW = 1_700_000_000_000
@@ -69,6 +70,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
@@ -247,13 +249,18 @@ describe('remote mirror resource identity', () => {
     })
   })
 
-  it('removes the PTY key when a ready terminal becomes pending', () => {
+  it('retains the PTY key when a ready terminal becomes pending', () => {
     const state = applySnapshot(makeState(), makeTerminalSnapshot())
     const next = applySnapshot(state, makeTerminalSnapshot({ terminal: null }), NOW + 1)
 
-    expect(next.ptyIdsByTabId).not.toBe(state.ptyIdsByTabId)
-    expect(next.ptyIdsByTabId).not.toHaveProperty(MIRRORED_TAB_ID)
-    expect(next.terminalLayoutsByTabId[MIRRORED_TAB_ID]?.ptyIdsByLeafId).toEqual({})
+    expect(next.ptyIdsByTabId).toBe(state.ptyIdsByTabId)
+    expect(next.ptyIdsByTabId[MIRRORED_TAB_ID]).toEqual(['remote:web-env-1@@terminal-1'])
+    expect(next.terminalLayoutsByTabId[MIRRORED_TAB_ID]).toBe(
+      state.terminalLayoutsByTabId[MIRRORED_TAB_ID]
+    )
+    expect(next.terminalLayoutsByTabId[MIRRORED_TAB_ID]?.ptyIdsByLeafId).toEqual({
+      [LEAF_ID]: 'remote:web-env-1@@terminal-1'
+    })
   })
 
   it('cleans up terminal resources and unread state when the host omits the tab', () => {
@@ -299,6 +306,37 @@ describe('remote mirror resource identity', () => {
     expect(next.browserCertificateFailuresByPageId).toBe(state.browserCertificateFailuresByPageId)
   })
 
+  it('keeps an unchanged browser tab record when a sibling browser tab changes', () => {
+    const browserTab = (index: number, title: string) => ({
+      type: 'browser' as const,
+      id: `host-browser-tab-${index}`,
+      browserWorkspaceId: `host-browser-workspace-${index}`,
+      browserPageId: `host-browser-page-${index}`,
+      title,
+      url: `https://example.com/${index}`,
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      certificateFailure: null,
+      isActive: index === 1
+    })
+    const state = applySnapshot(
+      makeState(),
+      makeSnapshot(WORKTREE_A, [browserTab(1, 'One'), browserTab(2, 'Two')], 'browser')
+    )
+    const next = applySnapshot(
+      state,
+      makeSnapshot(WORKTREE_A, [browserTab(1, 'One'), browserTab(2, 'Renamed')], 'browser'),
+      NOW + 1
+    )
+
+    const [unchanged, renamed] = next.browserTabsByWorktree[WORKTREE_A]!
+    const [previous] = state.browserTabsByWorktree[WORKTREE_A]!
+    expect(renamed!.title).toBe('Renamed')
+    // Why: the tab strip compares each record field by field, so a rebuilt page list re-renders the tab.
+    expect(shallow(unchanged, previous)).toBe(true)
+  })
+
   it('clears a same-page certificate failure without replacing its page or handle', () => {
     const state = applySnapshot(makeState(), makeBrowserSnapshot())
     const next = applySnapshot(state, makeBrowserSnapshot({ certificateFailure: null }), NOW + 1)
@@ -311,8 +349,7 @@ describe('remote mirror resource identity', () => {
     expect(next.browserCertificateFailuresByPageId).not.toHaveProperty('host-browser-page-1')
   })
 
-  // Why: a client-hosted page's certificate failure is recorded by the local guest webview and is
-  // structurally absent from what the host publishes, so a host snapshot must not own that record.
+  // Guest owns client-hosted certificate failures; host snapshots omit them and must not clear them.
   it('keeps a locally recorded certificate failure for a client-hosted page', () => {
     const state = applySnapshot(
       makeState({
@@ -336,8 +373,7 @@ describe('remote mirror resource identity', () => {
     )
   })
 
-  // Why: same structural gap as the certificate record — the host publishes no loadError for a
-  // client-hosted page, so the pane's failure overlay would vanish on the next metadata snapshot.
+  // Host omits client-hosted loadError too; metadata echoes must not erase the guest failure overlay.
   it('keeps a locally recorded load failure for a client-hosted page', () => {
     const state = withLocalLoadFailure(
       applySnapshot(
@@ -362,8 +398,7 @@ describe('remote mirror resource identity', () => {
     expect(next.browserTabsByWorktree[WORKTREE_A]?.[0]?.loadError).toEqual(LOAD_ERROR)
   })
 
-  // Why: a host that omits placement and one that publishes 'server' must land on the same side
-  // of the carve-out, or the tests cannot tell the client check apart from an absence check.
+  // Both omitted and explicit server placements must fall outside the client-host carve-out.
   it.each([
     ['an unplaced page', undefined],
     ['an explicitly server-placed page', SERVER_PLACEMENT]

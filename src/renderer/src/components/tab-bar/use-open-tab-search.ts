@@ -1,5 +1,3 @@
-// Feeds the open-tab search module from the store for a single worktree.
-
 import { useDeferredValue, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -9,7 +7,13 @@ import {
   selectOpenTabSearchEntryState,
   type OpenTabSearchEntries
 } from './open-tab-search-entries'
-import { searchOpenTabs, type OpenTabSearchResult } from './open-tab-search'
+import {
+  capOpenTabSearchCandidates,
+  searchOpenTabCandidates,
+  type OpenTabSearchResult
+} from './open-tab-search'
+import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -17,6 +21,8 @@ export type UseOpenTabSearchOptions = {
   enabled: boolean
   query: string
   worktreeId: string
+  /** Keyboard-selected result's `id`; keep it inside the display cap while it still matches. */
+  retainedResultId?: string | null
 }
 
 export type OpenTabSearchSnapshot = {
@@ -30,14 +36,15 @@ export type OpenTabSearchSnapshot = {
 export function useOpenTabSearch({
   enabled,
   query,
-  worktreeId
+  worktreeId,
+  retainedResultId
 }: UseOpenTabSearchOptions): OpenTabSearchSnapshot {
+  const languageRevision = useUiLanguageRevision()
   // Why null while disabled: a closed menu stays stable across store churn.
   const state = useAppStore(
     useShallow((store) => (enabled ? selectOpenTabSearchEntryState(store, worktreeId) : null))
   )
-  // Why snapshot: agent status is a high-frequency stream; tab search metadata
-  // stays stable while the menu is open and refreshes when its tab set changes.
+  // Snapshot noisy agent metadata on open and tab-set changes instead of rerendering search for every status event.
   const agentState = useMemo(
     () => (enabled ? selectOpenTabSearchAgentState(useAppStore.getState()) : null),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refresh on open or tab-set changes, never agent-status churn.
@@ -48,13 +55,30 @@ export function useOpenTabSearch({
     [agentState, state]
   )
   const deferredQuery = useDeferredValue(query)
+  const evaluationSnapshot = useMemo(
+    () => ({ deferredQuery, enabled, entries }),
+    [deferredQuery, enabled, entries]
+  )
+  const context = usePaletteSearchEvaluationContext(evaluationSnapshot)
+  const candidates = useMemo(
+    () =>
+      entries
+        ? searchOpenTabCandidates({
+            ...entries,
+            query: deferredQuery,
+            context
+          })
+        : EMPTY_RESULTS,
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- simulator titles translate the default label.
+    [context, deferredQuery, entries, languageRevision]
+  )
 
   return useMemo(
     () => ({
       query: deferredQuery,
       entries,
-      results: entries ? searchOpenTabs({ ...entries, query: deferredQuery }) : EMPTY_RESULTS
+      results: capOpenTabSearchCandidates(candidates, retainedResultId)
     }),
-    [deferredQuery, entries]
+    [candidates, deferredQuery, entries, retainedResultId]
   )
 }

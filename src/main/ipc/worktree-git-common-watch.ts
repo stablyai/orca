@@ -8,10 +8,7 @@ import { startGitCommonNarrowWatch } from './worktree-git-common-narrow-watch'
 import { startGitCommonPrimaryWatch } from './worktree-git-common-primary-watch'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 
-// Local macOS, Linux, and Windows use the crash-isolated native stream for the
-// narrow `worktrees/` tree and primary metadata leaves. Selected upstream refs
-// stay on the scheduler's bounded stat path. Unsupported platforms retain the
-// full polling fallback.
+// Supported desktops use isolated native metadata watches; upstream refs use bounded stats and other platforms poll.
 
 const NARROW_WATCH_PLATFORMS: Partial<Record<NodeJS.Platform, true>> = {
   darwin: true,
@@ -31,7 +28,8 @@ export async function startGitCommonWatch(
   visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void,
   getStatusRefPaths: () => readonly string[] = () => [],
-  onWatchError?: (error: Error) => void
+  onWatchError?: (error: Error) => void,
+  onOverflow?: () => void
 ): Promise<WorktreeBaseSubscription> {
   if (supportsNarrowWatch(platform)) {
     const [narrowWatch, primaryWatch] = await Promise.all([
@@ -42,7 +40,8 @@ export async function startGitCommonWatch(
         platform,
         visibility,
         onFullScan,
-        onWatchError
+        onWatchError,
+        onOverflow
       ),
       startGitCommonPrimaryWatch(
         target.path,

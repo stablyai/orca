@@ -2,14 +2,15 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const buildScript = fileURLToPath(new URL('./run-electron-vite-build.mjs', import.meta.url))
-const targetConfig = fileURLToPath(new URL('../electron-vite-target.config.ts', import.meta.url))
+// Use CommonJS .cts wrapper so concurrent electron-vite targets do not share timestamped ESM temp file.
+const targetConfig = fileURLToPath(new URL('../electron-vite-target.config.cts', import.meta.url))
 const targets = ['main', 'preload', 'renderer']
 
 function buildTarget(target) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [buildScript, '--config', targetConfig, '--ignoreConfigWarning'],
+      [buildScript, '--config', targetConfig, '--ignoreConfigWarning', ...process.argv.slice(2)],
       {
         stdio: 'inherit',
         env: {

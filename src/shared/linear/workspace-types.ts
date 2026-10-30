@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../secret-at-rest-protection'
 export type LinearViewer = {
   displayName: string
   email: string | null
@@ -36,9 +37,40 @@ export type LinearConnectionStatus = {
   workspaces?: LinearWorkspace[]
   activeWorkspaceId?: string | null
   selectedWorkspaceId?: LinearWorkspaceSelection | null
-  // Set when a stored token file exists but could not be decrypted, so the
-  // UI can explain reads failing while the connection still looks saved.
+  // Explain token decrypt failures while retaining saved connection metadata.
   credentialError?: string
+  // Plaintext means some tokens are unsealed; absent from older hosts means unknown, never sealed.
+  credentialProtection?: SecretAtRestProtection | null
+}
+
+/** Key only fields changing Linear read results; full linearStatusScopeSignature also hashes viewer/workspace metadata and churns on irrelevant edits. */
+export function linearWorkspaceScopeSignature(
+  status: Pick<
+    LinearConnectionStatus,
+    | 'connected'
+    | 'credentialError'
+    | 'activeWorkspaceId'
+    | 'selectedWorkspaceId'
+    | 'workspaces'
+    | 'viewer'
+  >
+): string {
+  return JSON.stringify({
+    connected: status.connected === true,
+    credentialError: status.credentialError ?? null,
+    workspaceId: status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null,
+    // Why: under 'all', URL lookup still falls back to the active workspace, so it must key reads too.
+    activeWorkspaceId: status.activeWorkspaceId ?? null,
+    // Why: URL resolution routes by organizationUrlKey, and credentialRevision changes what a read returns.
+    viewerOrganizationUrlKey: status.viewer?.organizationUrlKey ?? null,
+    workspaces: (status.workspaces ?? [])
+      .map((workspace) =>
+        [workspace.id, workspace.organizationUrlKey ?? '', workspace.credentialRevision ?? 0].join(
+          '\u001f'
+        )
+      )
+      .sort()
+  })
 }
 
 export type LinearWorkflowState = {

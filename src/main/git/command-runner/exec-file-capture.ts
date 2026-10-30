@@ -1,16 +1,27 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../shared/subprocess-stdin-write'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { resolveSelectedLocalCommand } from '../../ipc/command-path-resolver'
 import type { WslProcessGroupTermination } from '../wsl-process-group-termination'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from './git-exec-options'
+import type { GitAdmissionTier } from './git-exec-options'
+import { workerExecFile } from './worker-exec-file'
+import type { WorkerThreadChildProcess } from '../../worker-thread-child-process/worker-thread-child-process'
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
   terminationBarrier?: boolean
+  onChildTerminated?: () => void
+  admissionTier?: GitAdmissionTier
+  createTimeoutError?: () => Error
+  /** Called once when the deadline — not an abort — is what ended the process. */
+  onDeadlineKill?: () => void
+  onStderr?: (chunk: string) => void
+  spawnOnWorkerThread?: boolean
 }
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -18,33 +29,67 @@ const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
 export async function execFileCaptureToTermination(
   command: string,
   args: string[],
-  options: ExecFileCaptureOptions,
+  // Why: runProcess owns this child's streams; git-exec-file refuses onStderr with a barrier.
+  options: Omit<ExecFileCaptureOptions, 'onStderr'>,
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
-  const result = await runProcess({
-    program: command,
+  // runProcess already reports spawn cost through spawnProcess.
+  let program: string
+  try {
+    program = resolveSelectedLocalCommand(command, {
+      env: options.env,
+      cwd: typeof options.cwd === 'string' ? options.cwd : undefined
+    })
+  } catch (error) {
+    options.onChildTerminated?.()
+    throw error
+  }
+  const captureBytes = options.encoding === 'buffer'
+  const pending = runProcess({
+    program,
     args,
     cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
     env: options.env,
     timeoutMs: options.timeout ?? GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS,
     maxOutputBytes: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
+    captureStdoutAsBytes: captureBytes,
+    captureStderrAsBytes: captureBytes,
     signal: options.signal,
     terminationBarrier: termination ?? true,
+    onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
-  const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
-  const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
-  const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
-  if (result.code === 0 && !result.timedOut && !options.signal?.aborted) {
+  const result = await pending
+  const stdout = captureBytes ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
+  const stderrBytes = result.stderrBytes ?? Buffer.alloc(0)
+  const stderr = captureBytes
+    ? termination
+      ? // Why: Latin-1 strips ASCII control markers without changing arbitrary bytes.
+        Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
+      : stderrBytes
+    : (termination?.stripControlOutput(result.stderr) ?? result.stderr)
+  if (
+    result.code === 0 &&
+    !result.timedOut &&
+    !result.outputTruncated &&
+    !options.signal?.aborted
+  ) {
     return { stdout, stderr }
   }
-  const error = new Error(
-    result.timedOut
-      ? `${command} timed out.`
-      : options.signal?.aborted
-        ? 'The operation was aborted.'
-        : cleanStderr.trim() || `${command} exited with ${result.code}.`
-  )
+  if (result.timedOut && !options.signal?.aborted) {
+    options.onDeadlineKill?.()
+  }
+  const cleanStderr = typeof stderr === 'string' ? stderr : stderr.toString('utf8')
+  const error = result.timedOut
+    ? (options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
+    : new Error(
+        options.signal?.aborted
+          ? 'The operation was aborted.'
+          : result.outputTruncated
+            ? // Reject clipped output: JSON/JSONL consumers could otherwise accept an incomplete result.
+              `${command} produced more than ${options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER} bytes of output.`
+            : cleanStderr.trim() || `${command} exited with ${result.code}.`
+      )
   if (options.signal?.aborted) {
     error.name = 'AbortError'
   }
@@ -52,6 +97,7 @@ export async function execFileCaptureToTermination(
     code: result.code,
     killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,
     signal: result.signal,
+    outputTruncated: result.outputTruncated,
     stdout,
     stderr
   })
@@ -73,6 +119,23 @@ function isExecFileResultObject(
   )
 }
 
+/** A second, passive stderr listener: execFile still captures every byte. */
+function observeStderr(
+  child: ChildProcess | WorkerThreadChildProcess,
+  observer: (chunk: string) => void
+): void {
+  const onData = (chunk: string | Buffer): void => {
+    try {
+      observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+    } catch (error) {
+      // Detach throwing observers so stream callbacks cannot crash main.
+      child.stderr?.off('data', onData)
+      console.warn('git stderr observer failed; detaching it', error)
+    }
+  }
+  child.stderr?.on('data', onData)
+}
+
 export function execFileCapture(
   command: string,
   args: string[],
@@ -80,14 +143,24 @@ export function execFileCapture(
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) {
+      options.onChildTerminated?.()
       reject(createAbortError())
       return
     }
 
     let settled = false
     let terminating = false
-    let child: ChildProcess | null = null
+    let child: ChildProcess | WorkerThreadChildProcess | null = null
+    const useWorker = options.spawnOnWorkerThread === true && process.platform === 'darwin'
     let timer: NodeJS.Timeout | null = null
+    let terminationReported = false
+    const reportChildTerminated = (): void => {
+      if (terminationReported) {
+        return
+      }
+      terminationReported = true
+      options.onChildTerminated?.()
+    }
     const cleanup = (): void => {
       if (timer) {
         clearTimeout(timer)
@@ -134,14 +207,13 @@ export function execFileCapture(
     try {
       const spawnStartedAt = performance.now()
       // Why: our abort listener owns tree cleanup; Node's signal handler could kill wsl.exe before taskkill sees its children.
-      child = execFile(
+      const capture = useWorker ? workerExecFile : execFile
+      child = capture(
         command,
         args,
         {
           cwd: options.cwd,
-          // Why: git.exe is console-subsystem and Orca's main process owns no
-          // console, so every spawn without this flashes a conhost that takes
-          // foreground. Git runs on nearly every interaction (#14543).
+          // Hide console-subsystem children so frequent Git calls cannot flash or take focus.
           windowsHide: true,
           encoding: options.encoding,
           maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
@@ -160,18 +232,33 @@ export function execFileCapture(
       )
       recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
     } catch (error) {
+      reportChildTerminated()
       finish(error instanceof Error ? error : new Error(String(error)))
       return
     }
 
     child.once('error', (error) => {
+      // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
+      if (!useWorker && !child?.pid) {
+        reportChildTerminated()
+      }
       if (!terminating) {
         finish(error)
       }
     })
+    child.once('close', reportChildTerminated)
+    if (options.onStderr) {
+      observeStderr(child, options.onStderr)
+    }
 
-    if (options.stdin !== undefined) {
-      endSubprocessStdin(child.stdin, options.stdin)
+    // Non-interactive signers must see EOF instead of waiting on an open pipe.
+    if ('id' in child) {
+      if (options.stdin !== undefined) {
+        child.stdin.write(options.stdin)
+      }
+      child.stdin.end()
+    } else {
+      endSubprocessStdin(child.stdin, options.stdin ?? '')
     }
 
     // Why: Node's timeout waits forever on signal-ignoring CLIs; enforce our own deadline with bounded tree cleanup.
@@ -181,7 +268,7 @@ export function execFileCapture(
           return
         }
         terminating = true
-        const timeoutError = new Error(`${command} timed out.`)
+        const timeoutError = options.createTimeoutError?.() ?? new Error(`${command} timed out.`)
         if (!child) {
           terminating = false
           finish(timeoutError)

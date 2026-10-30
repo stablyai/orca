@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
+import {
+  foldToolMessages,
+  splitNativeChatBlocks
+} from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 
 function msg(
   overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>
@@ -45,6 +48,42 @@ describe('foldToolMessages', () => {
     ])
     expect(folded).toHaveLength(1)
     expect(folded[0]?.blocks).toHaveLength(3)
+  })
+
+  // Invisible provider events must not split visible runs; rendered plan updates do.
+  it('keeps one run across a wordless provider event, but not across a plan update', () => {
+    const frameRow = (id: string, kind: string): NativeChatMessage =>
+      msg({
+        id,
+        role: 'system',
+        blocks: [
+          {
+            type: 'text',
+            text: `codex · ${kind}`,
+            providerFrame: {
+              provider: 'codex',
+              kind,
+              payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+            }
+          }
+        ]
+      })
+    const run = (between: NativeChatMessage): string[] =>
+      foldToolMessages([
+        msg({
+          id: 'a1',
+          blocks: [
+            { type: 'text', text: 'go' },
+            { type: 'tool-call', name: 'Bash', input: {} }
+          ]
+        }),
+        msg({ id: 'r1', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] }),
+        between,
+        msg({ id: 'a2', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }] }),
+        msg({ id: 'r2', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] })
+      ]).map((message) => message.id)
+    expect(run(frameRow('frame', 'notification:future/event'))).toEqual(['a1', 'frame'])
+    expect(run(frameRow('plan', 'notification:turn/plan/updated'))).toEqual(['a1', 'plan', 'a2'])
   })
 
   it('drops a tool result no loaded call can own instead of leaving it standalone', () => {
@@ -201,5 +240,54 @@ describe('splitNativeChatBlocks', () => {
     ])
     expect(prose.map((b) => b.type)).toEqual(['text', 'image-ref'])
     expect(tools.map((b) => b.type)).toEqual(['tool-call', 'tool-result'])
+  })
+})
+
+describe('spawn-group roster rows', () => {
+  const roster = msg({
+    id: 'roster',
+    role: 'system',
+    blocks: [
+      { type: 'text', text: 'Kicked off 1 subagent — 1 working' },
+      {
+        type: 'subagent-group',
+        groupId: 'thread:turn-1',
+        agents: [{ id: 'child-1', label: 'read', state: 'working' }]
+      }
+    ]
+  })
+
+  it('does not end the assistant run the following tool messages fold into', () => {
+    const folded = foldToolMessages([
+      msg({
+        id: 'a',
+        role: 'assistant',
+        blocks: [
+          { type: 'text', text: 'working' },
+          { type: 'tool-call', name: 'Bash', input: {} }
+        ]
+      }),
+      roster,
+      msg({ id: 't', role: 'tool', blocks: [{ type: 'tool-result', output: 'done' }] })
+    ])
+
+    expect(folded.map((message) => message.id)).toEqual(['a', 'roster'])
+    expect(folded[0]?.blocks.map((block) => block.type)).toEqual([
+      'text',
+      'tool-call',
+      'tool-result'
+    ])
+  })
+
+  it('survives the noise strip so the roster still reaches the transcript', () => {
+    expect(stripNoiseMessages([roster]).map((message) => message.id)).toEqual(['roster'])
+  })
+
+  it('keeps the roster out of the tool array so mobile draws no empty tool run', () => {
+    const { prose, tools } = splitNativeChatBlocks(roster.blocks)
+
+    expect(tools).toEqual([])
+    // The plain-text twin stays in prose: a client without the block type reads it.
+    expect(prose.map((block) => block.type)).toEqual(['text', 'subagent-group'])
   })
 })

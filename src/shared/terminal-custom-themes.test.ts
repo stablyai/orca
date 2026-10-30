@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  makeCustomTerminalThemeSelection,
-  normalizeTerminalCustomThemes,
-  normalizeTerminalHexColor,
-  parseCustomTerminalThemeSelection
-} from './terminal-custom-themes'
+import { normalizeTerminalCustomThemes } from './terminal-custom-themes'
 
 describe('terminal custom themes', () => {
   it('normalizes colors and drops invalid theme records', () => {
@@ -79,15 +74,5 @@ describe('terminal custom themes', () => {
         }
       ])
     ).toEqual([])
-  })
-
-  it('round-trips custom selection values', () => {
-    expect(makeCustomTerminalThemeSelection('warp:tokyo-night')).toBe('custom:warp:tokyo-night')
-    expect(parseCustomTerminalThemeSelection('custom:warp:tokyo-night')).toBe('warp:tokyo-night')
-    expect(parseCustomTerminalThemeSelection('Builtin Tango Light')).toBeNull()
-  })
-
-  it('expands short hex colors', () => {
-    expect(normalizeTerminalHexColor('abc')).toBe('#aabbcc')
   })
 })

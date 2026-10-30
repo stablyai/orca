@@ -7,21 +7,76 @@ import {
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 
-const { runtimeCall, refreshSessionTabsSnapshot, resetRemoteRuntimeTransport } =
-  createRemoteRuntimeTransportMocks({
-    getCallbacks: () => subscriptionCallbacks,
-    setCallbacks: (callbacks) => {
-      subscriptionCallbacks = callbacks
-    },
-    getResolvedPaneHandle: () => resolvedPaneHandle,
-    setResolvedPaneHandle: (handle) => {
-      resolvedPaneHandle = handle
-    }
-  })
+const {
+  runtimeCall,
+  refreshSessionTabsSnapshot,
+  resetRemoteRuntimeTransport,
+  latestSubscribePayload,
+  emitSnapshot,
+  inputFrameTexts
+} = createRemoteRuntimeTransportMocks({
+  getCallbacks: () => subscriptionCallbacks,
+  setCallbacks: (callbacks) => {
+    subscriptionCallbacks = callbacks
+  },
+  getResolvedPaneHandle: () => resolvedPaneHandle,
+  setResolvedPaneHandle: (handle) => {
+    resolvedPaneHandle = handle
+  }
+})
 
 describe('createRemoteRuntimePtyTransport', () => {
-  beforeEach(() => {
+  it.each([
+    { supported: true, resume: false },
+    { supported: true, resume: true },
+    { supported: false, resume: false },
+    { supported: false, resume: true }
+  ])(
+    'gates keyboard fields for host support $supported, resume $resume',
+    async ({ supported, resume }) => {
+      runtimeCall.mockImplementation(async (args: { method?: string }) =>
+        args.method === 'status.get'
+          ? {
+              ok: true,
+              result: {
+                runtimeProtocolVersion: 3,
+                minCompatibleRuntimeClientVersion: 2,
+                capabilities: [
+                  'agent-session.host-authority.v1',
+                  ...(supported ? ['agent-session.keyboard.v1'] : [])
+                ]
+              }
+            }
+          : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        launchAgent: 'codex',
+        terminalKittyKeyboardProtocol: true,
+        ...(resume
+          ? { resumeProviderSession: { key: 'session_id' as const, id: 'session-1' } }
+          : {})
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      const method = resume ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
+      const call = runtimeCall.mock.calls.find(([args]) => args.method === method)?.[0]
+      expect(call).toBeDefined()
+      if (supported) {
+        expect(call?.params).toHaveProperty('terminalKittyKeyboardProtocol', true)
+      } else {
+        expect(call?.params).not.toHaveProperty('terminalKittyKeyboardProtocol')
+      }
+      transport.destroy?.()
+    }
+  )
+
+  beforeEach(async () => {
     resetRemoteRuntimeTransport()
+    // Charge the cold module transform to setup, not the launch deadline.
+    await import('./remote-runtime-pty-transport')
   })
 
   it('closes a remote terminal created after the pane was destroyed', async () => {
@@ -250,6 +305,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       command: "codex 'linked issue context'",
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: 'shell-ready',
+      terminalKittyKeyboardProtocol: true,
       terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
     })
 
@@ -263,6 +319,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           command: "codex 'linked issue context'",
           envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
           startupCommandDelivery: 'shell-ready',
+          terminalKittyKeyboardProtocol: true,
           terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
         })
       })
@@ -447,4 +504,55 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect.objectContaining({ method: 'terminal.createAgentSession' })
     )
   })
+  it.each(['existing', 'fresh', 'legacy'] as const)(
+    'uses subscription image for an existing intermediate-host owner and keeps fresh cold data (%s)',
+    async (kind) => {
+      const coldRestore = { scrollback: 'old checkpoint A', cwd: '/workspace' }
+      runtimeCall.mockImplementation(async (args: { method: string }) => ({
+        ok: true,
+        result:
+          args.method === 'terminal.create'
+            ? {
+                terminal: {
+                  handle: 'terminal-1',
+                  ...(kind === 'existing' ? { isReattach: true, incarnationId: 'i1' } : {}),
+                  ...(kind !== 'legacy' ? { coldRestore } : {})
+                }
+              }
+            : {}
+      }))
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+      const onReplayData = vi.fn()
+      const onConnect = vi.fn()
+      const result = await transport.connect({ url: '', callbacks: { onReplayData, onConnect } })
+      try {
+        if (!result || typeof result === 'string') {
+          throw new Error('Expected a terminal connection result')
+        }
+        expect(runtimeCall).toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.create' })
+        )
+        expect(result?.coldRestore).toEqual(kind === 'fresh' ? coldRestore : undefined)
+        expect(result?.isReattach).toBe(kind === 'existing' ? true : undefined)
+        expect(result?.replay).toBe('')
+        const { streamId } = latestSubscribePayload()
+        emitSnapshot(streamId, 'actual owner image B')
+        expect(onReplayData.mock.calls).toEqual([
+          ['actual owner image B', { carriesNormalBuffer: true }]
+        ])
+        expect(onConnect).toHaveBeenCalled()
+        expect(inputFrameTexts()).toEqual([])
+        expect(runtimeCall).not.toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.resolvePane' })
+        )
+      } finally {
+        transport.destroy?.()
+      }
+    }
+  )
 })

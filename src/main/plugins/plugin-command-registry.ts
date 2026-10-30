@@ -1,13 +1,13 @@
 import {
   pluginCommandKeybindingActionId,
   type PluginCommandAliasActionId
-} from '../../shared/plugins/plugin-command-actions'
+} from '../../shared/plugins/contributions/plugin-command-actions'
 import { getKeybindingConflictIdentity, type KeybindingOverrides } from '../../shared/keybindings'
 import type {
   PluginCommandContribution,
   PluginManifest
-} from '../../shared/plugins/plugin-manifest'
-import type { PluginKeybindingContribution } from '../../shared/plugins/plugin-content-pack-contributions'
+} from '../../shared/plugins/manifest/plugin-manifest'
+import type { PluginKeybindingContribution } from '../../shared/plugins/contributions/plugin-content-pack-contributions'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
@@ -16,21 +16,20 @@ import {
 
 export type PluginCommandKeybinding = {
   key: string
-  when: 'global' | 'worktree'
+  when: 'global' | 'workspace'
 }
 
 export type PluginCommandRegistration = {
   pluginKey: string
   id: string
   title: string
-  context: 'global' | 'worktree'
+  context: 'global' | 'workspace'
   handler: { type: 'built-in'; action: PluginCommandAliasActionId } | { type: 'worker' }
   keybindings: PluginCommandKeybinding[]
 }
 
 type CommandOwner = {
   pluginKey: string
-  context: PluginCommandKeybinding['when']
   key: string
 }
 
@@ -82,7 +81,6 @@ export class PluginCommandRegistry {
           const owners = chordOwners.get(identity) ?? []
           owners.push({
             pluginKey: plugin.pluginKey,
-            context: keybinding.when,
             key: keybinding.key
           })
           chordOwners.set(identity, owners)
@@ -92,24 +90,16 @@ export class PluginCommandRegistry {
 
     const conflicted = new Set<string>()
     for (const owners of chordOwners.values()) {
-      for (let index = 0; index < owners.length; index += 1) {
-        for (let compared = index + 1; compared < owners.length; compared += 1) {
-          const first = owners[index]!
-          const second = owners[compared]!
-          if (!contextsOverlap(first.context, second.context)) {
-            continue
-          }
-          conflicted.add(first.pluginKey)
-          conflicted.add(second.pluginKey)
-          this.errors.set(
-            first.pluginKey,
-            `plugin keybinding ${first.key} conflicts with another plugin`
-          )
-          this.errors.set(
-            second.pluginKey,
-            `plugin keybinding ${second.key} conflicts with another plugin`
-          )
-        }
+      // Global/worktree are the only contexts, so all owners of the same chord overlap.
+      if (owners.length < 2) {
+        continue
+      }
+      for (const owner of owners) {
+        conflicted.add(owner.pluginKey)
+        this.errors.set(
+          owner.pluginKey,
+          `plugin keybinding ${owner.key} conflicts with another plugin`
+        )
       }
     }
 
@@ -134,16 +124,26 @@ function registrationsForManifest(
   pluginKey: string,
   manifest: PluginManifest
 ): PluginCommandRegistration[] {
+  const bindingsByCommand = new Map<string, PluginKeybindingContribution[]>()
+  for (const binding of manifest.contributes.keybindings) {
+    const commandId = binding.command
+    const bindings = bindingsByCommand.get(commandId)
+    if (bindings) {
+      bindings.push(binding)
+    } else {
+      bindingsByCommand.set(commandId, [binding])
+    }
+  }
   return manifest.contributes.commands.map((command) => ({
     pluginKey,
     id: command.id,
     title: command.title,
-    context: command.context ?? 'global',
+    context: command.when ?? 'global',
     handler:
       command.action === undefined
         ? { type: 'worker' as const }
         : { type: 'built-in' as const, action: command.action as PluginCommandAliasActionId },
-    keybindings: keybindingsForCommand(command, manifest.contributes.keybindings)
+    keybindings: keybindingsForCommand(command, bindingsByCommand.get(command.id) ?? [])
   }))
 }
 
@@ -151,17 +151,8 @@ function keybindingsForCommand(
   command: PluginCommandContribution,
   keybindings: readonly PluginKeybindingContribution[]
 ): PluginCommandKeybinding[] {
-  return keybindings
-    .filter((keybinding) => keybinding.command === command.id)
-    .map((keybinding) => ({
-      key: keybinding.key,
-      when: keybinding.when ?? command.context ?? 'global'
-    }))
-}
-
-function contextsOverlap(
-  first: PluginCommandKeybinding['when'],
-  second: PluginCommandKeybinding['when']
-): boolean {
-  return first === 'global' || second === 'global' || first === second
+  return keybindings.map((keybinding) => ({
+    key: keybinding.key,
+    when: keybinding.when ?? command.when ?? 'global'
+  }))
 }

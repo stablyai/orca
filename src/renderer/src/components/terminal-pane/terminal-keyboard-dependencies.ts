@@ -1,6 +1,6 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from '../../../../shared/keybindings'
 import type { PaneCwdMap } from './resolve-split-cwd'
@@ -24,6 +24,7 @@ export type KeyboardHandlersDeps = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  focusSearchInput: () => void
   onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void

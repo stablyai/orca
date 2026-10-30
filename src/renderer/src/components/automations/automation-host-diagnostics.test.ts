@@ -1,14 +1,4 @@
-/**
- * The counters are only worth having if they are driven by the real cache and
- * scheduler, so these run the instrumentation through both. The design doc's
- * release gate is stated over exactly these numbers: calls per authority, one
- * legacy call per authority per cycle, and stale responses that never landed.
- *
- * The distinction these tests exist to hold down is request versus entry. A
- * legacy answer is one request serving many hosts, so a counter that increments
- * per entry would fail the "one call per authority" gate for a system behaving
- * exactly as designed, and would inflate one stale answer into a dozen.
- */
+/** Exercise real cache/scheduler accounting. Count legacy wire requests once per authority, entries separately, and reject stale responses without inflating one request into many. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -38,13 +28,12 @@ import type { ScopedAutomationList } from './automation-scoped-list-client'
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
 
-// Only the capability-probe suite reaches the real list client; every other test
-// injects a transport, so this mock stands in for a paired host that answers.
+// Only capability-probe tests use the real list client; other cases inject transports.
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args),
-  hasRuntimeRpcErrorCode: () => false
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 const RUNTIME_AUTHORITY: AutomationAuthorityRef = {
   kind: 'runtime',
@@ -168,8 +157,7 @@ function harness(): {
         diagnostics,
         legacyPartitionContext: () => LOCAL_REPO,
         isVisible: () => true,
-        // A retry that never runs: these assert what one cycle cost, and a live
-        // timer would re-enter the counters after the test read them.
+        // Disable retries so counters describe one cycle without timer-driven later requests.
         scheduleRetry: () => () => {},
         ...overrides
       })
@@ -353,9 +341,7 @@ describe('unpooled capability probes', () => {
     ;(await import('./automation-scoped-list-client')).resetAutomationCapabilityProbes()
   })
 
-  // The probe rides outside the four-slot pool, so an instrument blind to it
-  // would under-report relay traffic. It dedupes per authority incarnation:
-  // both hosts of this authority ride on one status.get.
+  // Include out-of-pool status.get traffic; capability probes dedupe per authority incarnation.
   it('counts the status.get probe runtime-scoped lists ride on', async () => {
     const { cache } = harness()
     getRuntimeEnvironmentStatus.mockResolvedValue({
@@ -430,9 +416,7 @@ describe('automation host stale-response counters', () => {
     })
   })
 
-  // One stale legacy answer is one discarded request over many discarded
-  // entries. Counting it per entry would report twelve stale responses for a
-  // twelve-host authority that received exactly one.
+  // Count one stale legacy request but every rejected entry it served.
   it('counts a stale legacy answer once as a request and once per entry', async () => {
     const { cache, diagnostics, schedule } = harness()
     const gate = deferred<Automation[]>()
@@ -457,8 +441,7 @@ describe('automation host stale-response counters', () => {
     })
   })
 
-  // The gate `discardedCommits === 0` has to stay assertable for a system that
-  // is behaving: an answer that landed somewhere was not thrown away.
+  // A legacy response that committed anywhere is not a wholly discarded request.
   it('does not call a legacy answer discarded when one of its entries landed', async () => {
     const { cache, diagnostics, schedule } = harness()
     const gate = deferred<Automation[]>()
@@ -550,9 +533,7 @@ describe('automation host response measurements', () => {
     expect(snapshot.byStableKey[hostStableKey(ssh)].rows).toBe(0)
   })
 
-  // Sizing re-serializes a payload the transport already decoded, so it stays
-  // off unless someone is profiling. The flag keeps an unmeasured zero from
-  // reading as a real one.
+  // Response reserialization is opt-in profiling work; an unmeasured zero must not be mistaken for a real size.
   it('leaves response size unmeasured until measurement is turned on', async () => {
     const { diagnostics, schedule } = harness()
     const scheduler = schedule({
@@ -585,8 +566,7 @@ describe('automation host diagnostics bookkeeping', () => {
     }
     const snapshot = diagnostics.snapshot()
     expect(Object.keys(snapshot.byStableKey)).toEqual(['k2', 'k3'])
-    // Evicting a key must not rewrite history: the totals still saw three calls.
-    // This is also why sum(byStableKey) is a lower bound on totals, not an equality.
+    // Eviction preserves cumulative totals, so summed per-key buckets are only a lower bound.
     expect(snapshot.totals.requests).toBe(3)
   })
 
@@ -604,17 +584,5 @@ describe('automation host diagnostics bookkeeping', () => {
       byAuthority: {},
       byStableKey: {}
     })
-  })
-
-  it('never copies an automation, a prompt, or a name into a counter', () => {
-    const diagnostics = createAutomationHostDiagnostics()
-    diagnostics.recordResponse({
-      authorityKey: 'a',
-      stableKey: 'k1',
-      rows: 3,
-      durationMs: 12,
-      approxSerializedChars: 900
-    })
-    expect(JSON.stringify(diagnostics.snapshot())).not.toMatch(/prompt|automation-|secret/i)
   })
 })

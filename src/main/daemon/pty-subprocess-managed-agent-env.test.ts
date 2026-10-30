@@ -1,4 +1,3 @@
-// Daemon-managed agent env: shell wrapper survival and overlay deletion.
 import { describe, expect, it, vi } from 'vitest'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
@@ -30,9 +29,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -65,10 +62,6 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
@@ -158,8 +151,8 @@ describe('createPtySubprocess', () => {
         rows: 24,
         env: {
           SHELL: '/bin/zsh',
-          MIMOCODE_HOME: '/tmp/orca-mimocode-overlay',
-          ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
+          MIMOCODE_CONFIG_DIR: '/tmp/orca-mimocode-overlay',
+          ORCA_MIMOCODE_CONFIG_DIR: '/tmp/orca-mimocode-overlay'
         }
       })
     } finally {
@@ -261,7 +254,7 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
-  it('keeps plain Codex startup commands on the no-marker wrapper', async () => {
+  it('enables readiness and shell identity for plain Codex startup', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -285,7 +278,8 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).toContain('ready')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).toContain('identity')
   })
 
   it('uses shell-ready wrapper for delivery-hinted Codex startup commands', async () => {
@@ -408,8 +402,7 @@ describe('createPtySubprocess', () => {
     spawnMock.mockReturnValue(proc)
     const previousCodexHome = process.env.CODEX_HOME
     const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
-    // A per-account home is injected as CODEX_HOME === ORCA_CODEX_HOME, so the
-    // nested-Orca strip must clear it exactly as it does the shared mirror.
+    // Per-account homes use the same overlay-ownership deletion rule as the shared mirror.
     const perAccountHome = '/daemon/managed/codex-accounts/019f0000-aaaa/home'
     process.env.CODEX_HOME = perAccountHome
     process.env.ORCA_CODEX_HOME = perAccountHome

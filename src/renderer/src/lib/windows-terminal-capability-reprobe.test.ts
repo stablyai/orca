@@ -40,6 +40,18 @@ afterEach(() => {
 })
 
 describe('windows terminal capability re-probe', () => {
+  it('settles usable WSL on a Windows host without waiting for process identity', async () => {
+    vi.useFakeTimers()
+    const { probe, readCached } = createWatcher([USABLE_WSL])
+    startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(probe).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
+    expect(probe).toHaveBeenCalledTimes(1)
+  })
+
   it('backs off to a five-minute ceiling on a stable answer', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()
@@ -140,8 +152,7 @@ describe('windows terminal capability re-probe', () => {
     expect(probe).toHaveBeenCalledTimes(4)
   })
 
-  // Why: each re-arm reschedules the first probe to now+30s, so an un-guarded focus handler
-  // lets a user alt-tabbing right after mount defer the re-check indefinitely.
+  // Guard focus rearming: repeated now+30s resets after mount can defer checks indefinitely under alt-tab.
   it('does not let focus churn right after mount defer the first probe', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()

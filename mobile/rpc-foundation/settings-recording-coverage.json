@@ -1,0 +1,124 @@
+{
+  "manifestCommit": "1d950ab0e0",
+  "recordingBaseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "excludedKinds": ["device-preference"],
+  "operations": [
+    {
+      "manifestOperation": "main:mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx:loadMobileResumeMetadata:settings.get:387",
+      "manifestScenarioIds": [
+        "main:mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx:loadMobileResumeMetadata:settings.get:387:fulfilled",
+        "main:mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx:loadMobileResumeMetadata:settings.get:387:refused",
+        "main:mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx:loadMobileResumeMetadata:settings.get:387:transport-error"
+      ],
+      "scenarios": [
+        "settings-resume-metadata-fulfilled",
+        "settings-resume-metadata-refused",
+        "settings-resume-metadata-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/components/use-new-workspace-create-submit.ts:create:settings.get:91",
+      "manifestScenarioIds": [
+        "main:mobile/src/components/use-new-workspace-create-submit.ts:create:settings.get:91:fulfilled",
+        "main:mobile/src/components/use-new-workspace-create-submit.ts:create:settings.get:91:refused",
+        "main:mobile/src/components/use-new-workspace-create-submit.ts:create:settings.get:91:transport-error"
+      ],
+      "scenarios": [
+        "settings-workspace-submit-fulfilled",
+        "settings-workspace-submit-refused",
+        "settings-workspace-submit-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/components/use-new-workspace-runtime-context.ts:useNewWorkspaceRuntimeContext:settings.get:42",
+      "manifestScenarioIds": [
+        "main:mobile/src/components/use-new-workspace-runtime-context.ts:useNewWorkspaceRuntimeContext:settings.get:42:fulfilled",
+        "main:mobile/src/components/use-new-workspace-runtime-context.ts:useNewWorkspaceRuntimeContext:settings.get:42:refused",
+        "main:mobile/src/components/use-new-workspace-runtime-context.ts:useNewWorkspaceRuntimeContext:settings.get:42:transport-error"
+      ],
+      "scenarios": [
+        "settings-workspace-context-fulfilled",
+        "settings-workspace-context-refused",
+        "settings-workspace-context-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76",
+      "manifestScenarioIds": [
+        "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76:fulfilled",
+        "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76:refused",
+        "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76:transport-error"
+      ],
+      "scenarios": [
+        "settings-home-providers-fulfilled",
+        "settings-home-providers-refused",
+        "settings-home-providers-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/host-screen/use-host-repo-metadata.ts:fetchRepoMetadata:settings.get:124",
+      "manifestScenarioIds": [
+        "main:mobile/src/host-screen/use-host-repo-metadata.ts:fetchRepoMetadata:settings.get:124:fulfilled",
+        "main:mobile/src/host-screen/use-host-repo-metadata.ts:fetchRepoMetadata:settings.get:124:refused",
+        "main:mobile/src/host-screen/use-host-repo-metadata.ts:fetchRepoMetadata:settings.get:124:transport-error"
+      ],
+      "scenarios": [
+        "settings-repo-metadata-fulfilled",
+        "settings-repo-metadata-refused",
+        "settings-repo-metadata-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/session/mobile-new-tab-agent-loader.ts:loadMobileNewTabAgentOptions:settings.get:26",
+      "manifestScenarioIds": [
+        "main:mobile/src/session/mobile-new-tab-agent-loader.ts:loadMobileNewTabAgentOptions:settings.get:26:fulfilled",
+        "main:mobile/src/session/mobile-new-tab-agent-loader.ts:loadMobileNewTabAgentOptions:settings.get:26:refused",
+        "main:mobile/src/session/mobile-new-tab-agent-loader.ts:loadMobileNewTabAgentOptions:settings.get:26:transport-error"
+      ],
+      "scenarios": [
+        "settings-new-tab-ssh",
+        "settings-new-tab-refused",
+        "settings-new-tab-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/session/use-pr-bot-author-overrides.ts:usePRBotAuthorOverrides:settings.get:35",
+      "manifestScenarioIds": [
+        "main:mobile/src/session/use-pr-bot-author-overrides.ts:usePRBotAuthorOverrides:settings.get:35:fulfilled",
+        "main:mobile/src/session/use-pr-bot-author-overrides.ts:usePRBotAuthorOverrides:settings.get:35:refused",
+        "main:mobile/src/session/use-pr-bot-author-overrides.ts:usePRBotAuthorOverrides:settings.get:35:transport-error"
+      ],
+      "scenarios": [
+        "settings-bot-overrides-fulfilled",
+        "settings-bot-overrides-refused",
+        "settings-bot-overrides-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx:hydrateTaskState:settings.get:253",
+      "manifestScenarioIds": [
+        "main:mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx:hydrateTaskState:settings.get:253:fulfilled",
+        "main:mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx:hydrateTaskState:settings.get:253:refused",
+        "main:mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx:hydrateTaskState:settings.get:253:transport-error"
+      ],
+      "scenarios": [
+        "settings-task-hydration-fulfilled",
+        "settings-task-hydration-refused",
+        "settings-task-hydration-transport-error"
+      ]
+    },
+    {
+      "manifestOperation": "main:mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx:createWorkspace:settings.get:75",
+      "manifestScenarioIds": [
+        "main:mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx:createWorkspace:settings.get:75:fulfilled",
+        "main:mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx:createWorkspace:settings.get:75:refused",
+        "main:mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx:createWorkspace:settings.get:75:transport-error"
+      ],
+      "scenarios": [
+        "settings-task-workspace-fulfilled",
+        "settings-task-workspace-refused",
+        "settings-task-workspace-transport-error"
+      ]
+    }
+  ]
+}

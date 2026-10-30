@@ -1,5 +1,7 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
+import { ownsGlobalSelection } from '../../../global-selection-owner'
+import { EMPTY_EDITOR_BUFFER_VIEW_INDEX } from '../buffers/editor-buffer-views'
 
 export function createOpenFileState(
   set: EditorSet,
@@ -7,6 +9,12 @@ export function createOpenFileState(
 ): Pick<
   EditorSlice,
   | 'openFiles'
+  | 'editorBuffers'
+  | 'editorBufferIdOf'
+  | 'editorBufferViews'
+  | 'editorBufferDetached'
+  | 'editorBufferKept'
+  | 'editorBufferIdentityRevision'
   | 'activeFileId'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
@@ -16,20 +24,23 @@ export function createOpenFileState(
 > {
   return {
     openFiles: [],
+    editorBuffers: {},
+    ...EMPTY_EDITOR_BUFFER_VIEW_INDEX,
+    editorBufferDetached: {},
+    editorBufferKept: {},
+    editorBufferIdentityRevision: 0,
     activeFileId: null,
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     activeTabType: 'terminal',
     recentlyClosedEditorTabsByWorktree: {},
-    setActiveTabType: (type) =>
-      set((s) => {
-        const worktreeId = s.activeWorktreeId
-        return {
-          activeTabType: type,
-          activeTabTypeByWorktree: worktreeId
-            ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
-            : s.activeTabTypeByWorktree
-        }
-      })
+    // Require explicit worktree so background/floating actions cannot retype main-window selection.
+    setActiveTabType: (type, worktreeId) =>
+      set((s) => ({
+        ...(ownsGlobalSelection(s, worktreeId) ? { activeTabType: type } : {}),
+        activeTabTypeByWorktree: worktreeId
+          ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
+          : s.activeTabTypeByWorktree
+      }))
   }
 }

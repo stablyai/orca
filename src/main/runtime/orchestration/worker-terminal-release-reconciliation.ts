@@ -1,5 +1,7 @@
-import type { OrcaRuntimeService } from '../orca-runtime'
-import { completeWorkerTerminalRelease } from '../rpc/methods/orchestration-worker-release-completion'
+import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
+import { inspectRemoteAttachment } from '../rpc/methods/orchestration/federation/federation-attachment-observation'
+import { releaseRemoteAttachment } from '../rpc/methods/orchestration/federation/federated-worker-release-host'
+import { completeWorkerTerminalRelease } from '../rpc/methods/orchestration/worker/worker-release-completion'
 
 export type WorkerTerminalReleaseReconciliationResult = {
   attempted: number
@@ -14,13 +16,14 @@ type ActiveReconciliation = {
   promise?: Promise<WorkerTerminalReleaseReconciliationResult>
 }
 
-const activeReconciliationByRuntime = new WeakMap<OrcaRuntimeService, ActiveReconciliation>()
+const activeReconciliationByRuntime = new WeakMap<
+  WorkerTerminalReleaseRuntime,
+  ActiveReconciliation
+>()
 
-// Finishes ONLY previously requested releases after startup/reconnect terminal discovery.
-// It never invents release intent: resources outside requested/releasing are untouched, and
-// unresolved identity defers (release_pending) rather than settling or broadening the close.
+// Reconcile only requested/releasing resources; discovery must neither invent release intent nor widen an unresolved close.
 export function reconcileRequestedWorkerTerminalReleases(
-  runtime: OrcaRuntimeService
+  runtime: WorkerTerminalReleaseRuntime
 ): Promise<WorkerTerminalReleaseReconciliationResult> {
   const active = activeReconciliationByRuntime.get(runtime)
   if (active?.promise) {
@@ -39,7 +42,7 @@ export function reconcileRequestedWorkerTerminalReleases(
 }
 
 async function runReconciliationPasses(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   state: ActiveReconciliation
 ): Promise<WorkerTerminalReleaseReconciliationResult> {
   const combined = emptyResult()
@@ -60,20 +63,28 @@ async function runReconciliationPasses(
 }
 
 async function reconcileRequestedWorkerTerminalReleasesOnce(
-  runtime: OrcaRuntimeService
+  runtime: WorkerTerminalReleaseRuntime
 ): Promise<WorkerTerminalReleaseReconciliationResult> {
   const db = runtime.getOrchestrationDb()
   const backlog = db.listWorkerTerminalReleaseBacklog()
   const result = { ...emptyResult(), attempted: backlog.length }
   for (const resource of backlog) {
     try {
-      const receipt = await completeWorkerTerminalRelease({
-        runtime,
-        db,
-        dispatchId: resource.owner_dispatch_id,
-        resource,
-        mode: 'recovery'
-      })
+      const attachment = db.getRemoteDispatchAttachment(resource.owner_dispatch_id)
+      const receipt = attachment
+        ? await releaseRemoteAttachment({
+            runtime,
+            attachment,
+            observation: await inspectRemoteAttachment(runtime, resource.owner_dispatch_id),
+            mode: 'recovery'
+          })
+        : await completeWorkerTerminalRelease({
+            runtime,
+            db,
+            dispatchId: resource.owner_dispatch_id,
+            resource,
+            mode: 'recovery'
+          })
       if (receipt.state === 'released' || receipt.state === 'already_released') {
         result.released += 1
       } else if (receipt.state === 'release_pending') {

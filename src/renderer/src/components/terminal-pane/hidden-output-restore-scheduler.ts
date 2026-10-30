@@ -1,16 +1,21 @@
+import type { Terminal } from '@xterm/xterm'
+
+/** Opaque queue identity; no terminal members are read. */
+type HiddenOutputRestoreTarget = Partial<Terminal>
+
 type HiddenOutputRestorePriority = 'active' | 'inactive'
 
-type HiddenOutputRestoreRequest = () => void
+/** Returns whether the pane actually started a replay; a guard-only return is free. */
+type HiddenOutputRestoreRequest = () => boolean
 
 type HiddenOutputRestoreEntry = {
   requestRestore: HiddenOutputRestoreRequest
 }
 
-// Why: one inactive xterm scrollback replay per frame keeps tab return focused
-// on the active pane while still catching watched split panes up quickly.
+// Replay one inactive pane per frame so tab return prioritizes the active pane.
 const INACTIVE_RESTORE_INTERVAL_MS = 16
 
-const inactiveRestoreQueue = new Map<object, HiddenOutputRestoreEntry>()
+const inactiveRestoreQueue = new Map<HiddenOutputRestoreTarget, HiddenOutputRestoreEntry>()
 let inactiveRestoreTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearInactiveRestoreTimer(): void {
@@ -30,18 +35,25 @@ function scheduleInactiveRestoreDrain(): void {
 
 function drainInactiveRestoreQueue(): void {
   inactiveRestoreTimer = null
-  const next = inactiveRestoreQueue.entries().next()
-  if (next.done) {
-    return
+  // Skip disposed/hidden/superseded guards for free; charge the frame only when a replay actually starts.
+  let remaining = inactiveRestoreQueue.size
+  while (remaining > 0) {
+    remaining -= 1
+    const next = inactiveRestoreQueue.entries().next()
+    if (next.done) {
+      break
+    }
+    const [target, entry] = next.value
+    inactiveRestoreQueue.delete(target)
+    if (entry.requestRestore()) {
+      break
+    }
   }
-  const [target, entry] = next.value
-  inactiveRestoreQueue.delete(target)
-  entry.requestRestore()
   scheduleInactiveRestoreDrain()
 }
 
 export function scheduleHiddenOutputRestore(
-  target: object,
+  target: HiddenOutputRestoreTarget,
   requestRestore: HiddenOutputRestoreRequest,
   priority: HiddenOutputRestorePriority
 ): void {
@@ -54,7 +66,7 @@ export function scheduleHiddenOutputRestore(
   scheduleInactiveRestoreDrain()
 }
 
-export function cancelScheduledHiddenOutputRestore(target: object): void {
+export function cancelScheduledHiddenOutputRestore(target: HiddenOutputRestoreTarget): void {
   inactiveRestoreQueue.delete(target)
   if (inactiveRestoreQueue.size === 0) {
     clearInactiveRestoreTimer()

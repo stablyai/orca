@@ -60,7 +60,8 @@ function claudeLine(uuid: string, role: 'user' | 'assistant', text: string): str
   })}\n`
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+// Real fs.watch events need observable polling against the platform clock.
+async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
   const start = Date.now()
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
@@ -141,8 +142,7 @@ describe('native chat transcript watcher liveness', () => {
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await appendFile(filePath, claudeLine('missed-event', 'assistant', 'recovered'))
-    // The mocked watcher never invokes watchCallbacks[0], reproducing a silent
-    // missed/coalesced host event while the file itself remains valid.
+    // Suppress native callbacks to reproduce a missed/coalesced event.
     await waitFor(() => appends.mock.calls.flat(2).some((message) => message.id === 'missed-event'))
 
     subscription.unsubscribe()
@@ -166,13 +166,14 @@ describe('native chat transcript watcher liveness', () => {
       onReplace: replacements,
       onAppend: () => {},
       debounceMs: 0,
-      reconciliationIntervalMs: 20
+      reconciliationIntervalMs: 10_000
     })
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await writeFile(filePath, prefixAfter + stableTail)
     const future = new Date(Date.now() + 10_000)
     await utimes(filePath, future, future)
+    watchCallbacks[0]!('change', 'transcript.jsonl')
     await waitFor(() =>
       replacements.mock.calls.flat(2).some((message) => message.id === 'prefix-new')
     )

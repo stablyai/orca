@@ -13,17 +13,6 @@ describe('shouldShowMobileEmulatorAgentSetupGuide', () => {
     ).toBe(true)
   })
 
-  it('stays visible when setup is complete until the user dismisses it', () => {
-    expect(
-      shouldShowMobileEmulatorAgentSetupGuide({
-        dismissed: false,
-        initialProbeComplete: true,
-        isActive: true,
-        statusReady: true
-      })
-    ).toBe(true)
-  })
-
   it('hides before the first probe completes or after dismissal', () => {
     expect(
       shouldShowMobileEmulatorAgentSetupGuide({

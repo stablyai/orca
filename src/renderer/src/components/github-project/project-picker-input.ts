@@ -1,3 +1,7 @@
+import {
+  GITHUB_OWNER_NUMBER_SHORTHAND_RE,
+  GITHUB_OWNER_SLUG_RE
+} from '../../../../shared/github/owner-slug'
 import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/project-ref-input'
 
 export function parseProjectInput(
@@ -7,7 +11,7 @@ export function parseProjectInput(
   if (!trimmed || isGitHubProjectRefInputTooLarge(trimmed)) {
     return null
   }
-  const short = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/.exec(trimmed)
+  const short = GITHUB_OWNER_NUMBER_SHORTHAND_RE.exec(trimmed)
   if (short) {
     const number = Number(short[2])
     return Number.isSafeInteger(number) && number > 0 ? { owner: short[1], number } : null
@@ -26,7 +30,7 @@ export function parseProjectInput(
     const hasView = parts.length === 6 && parts[4] === 'views'
     if (
       (parts[0] === 'orgs' || parts[0] === 'users') &&
-      /^[A-Za-z0-9][A-Za-z0-9-]*$/.test(parts[1] ?? '') &&
+      GITHUB_OWNER_SLUG_RE.test(parts[1] ?? '') &&
       parts[2] === 'projects' &&
       (parts.length === 4 || hasView)
     ) {

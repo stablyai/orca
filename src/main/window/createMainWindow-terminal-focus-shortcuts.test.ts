@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -17,7 +14,7 @@ vi.mock('../browser/browser-manager', async () =>
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
-import { browserWindowMock, isMock, resetMainWindowMocks } from './createMainWindow-test-harness'
+import { browserWindowMock, appMock, resetMainWindowMocks } from './createMainWindow-test-harness'
 
 describe('createMainWindow', () => {
   beforeEach(() => {
@@ -34,6 +31,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -51,8 +49,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -88,7 +86,14 @@ describe('createMainWindow', () => {
     expect(disabledPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
+    // #18691: with no model the renderer still needs the chord to show its setup toast.
     voice.enabled = true
+    const noModelPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: noModelPreventDefault }, dictationInput)
+    expect(noModelPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    webContents.send.mockClear()
     voice.sttModel = 'test-model'
     voice.dictationMode = 'hold'
     const holdPreventDefault = vi.fn()
@@ -126,6 +131,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -143,8 +149,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -220,6 +226,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -237,8 +244,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -285,6 +292,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -302,8 +310,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -349,6 +357,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -366,8 +375,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -407,6 +416,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -424,8 +434,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -469,6 +479,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -486,8 +497,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -548,6 +559,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -565,8 +577,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -613,6 +625,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -630,8 +643,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -690,6 +703,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -707,8 +721,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -751,7 +765,7 @@ describe('createMainWindow', () => {
   })
 
   it('toggles devtools on F12 in development', () => {
-    isMock.dev = true
+    appMock.isPackaged = false
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -760,6 +774,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -777,8 +792,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance

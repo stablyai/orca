@@ -1,6 +1,7 @@
-import * as pty from 'node-pty'
+import type * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
+import { getCmdExePath } from '../../../shared/windows-batch-spawn'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates,
@@ -10,8 +11,13 @@ import {
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
+import { checkDaemonAsyncIo } from '../daemon-async-io-probe'
 
-const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+export const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+
+async function loadNodePty(): Promise<typeof pty> {
+  return import('node-pty')
+}
 
 function daemonEnvironmentDiagSuffix(): string {
   const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
@@ -54,9 +60,7 @@ function repairDaemonCwd(): string | null {
       try {
         process.chdir(candidate)
         return candidate
-      } catch {
-        // Try the next stable cwd candidate.
-      }
+      } catch {}
     }
   }
   return null
@@ -93,9 +97,7 @@ function preflightMacNodePtySpawnEnvironment(): void {
       if (statSync(candidate).isFile()) {
         return
       }
-    } catch {
-      // Try the next node-pty native location.
-    }
+    } catch {}
   }
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
 }
@@ -104,7 +106,7 @@ function preflightUnixPtySpawnEnvironment(): void {
   if (process.platform === 'win32') {
     return
   }
-  // Why: detached daemons can outlive their launch cwd; repair before every spawn.
+  // Detached daemons can outlive their launch cwd; repair before spawning.
   preflightDaemonCwd()
   preflightMacNodePtySpawnEnvironment()
 }
@@ -143,6 +145,13 @@ export async function preflightPtySpawn(args: {
   }
 }
 
+export class PtySpawnHealthTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`PTY spawn health check timed out after ${timeoutMs}ms`)
+    this.name = 'PtySpawnHealthTimeoutError'
+  }
+}
+
 export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
   const message = err instanceof Error ? err.message : String(err)
   const formatted = new DaemonProtocolError(
@@ -154,21 +163,40 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
   return formatted
 }
 
-export function runPtySpawnHealthProbe(): Promise<void> {
+export async function runPtySpawnHealthProbe(
+  timeoutMs = PTY_SPAWN_HEALTH_TIMEOUT_MS
+): Promise<void> {
+  if ((await checkDaemonAsyncIo()).state === 'stalled') {
+    throw new DaemonProtocolError(
+      'Terminal daemon asynchronous I/O is stalled; restart the terminal daemon.'
+    )
+  }
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()
+  const command =
+    process.platform === 'win32'
+      ? { file: getCmdExePath(), args: ['/d', '/c', 'exit', '0'] }
+      : { file: '/bin/sh', args: ['-c', 'exit 0'] }
   let proc: pty.IPty
   try {
-    proc = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
+    const env: Record<string, string> = { TERM: 'xterm-256color' }
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) {
+        env[key] = value
+      }
+    }
+    proc = (await loadNodePty()).spawn(command.file, command.args, {
       name: 'xterm-256color',
       cols: 2,
       rows: 1,
       cwd,
-      env: { ...process.env, TERM: 'xterm-256color' }
+      env,
+      // Probe the same bundled ConPTY used for terminal spawns.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
   } catch (err) {
-    throw formatPtySpawnError(err, '/bin/sh', cwd)
+    throw formatPtySpawnError(err, command.file, cwd)
   }
 
   return new Promise<void>((resolve, reject) => {
@@ -181,12 +209,11 @@ export function runPtySpawnHealthProbe(): Promise<void> {
       settled = true
       clearTimeout(timer)
       exitDisposable?.dispose()
-      if (opts?.kill) {
+      // Windows needs kill() after shell exit to close the pseudoconsole and its conout worker.
+      if (opts?.kill || process.platform === 'win32') {
         try {
           proc.kill()
-        } catch {
-          // Best-effort cleanup for a short-lived health probe.
-        }
+        } catch {}
       }
       if (error) {
         reject(error)
@@ -195,10 +222,8 @@ export function runPtySpawnHealthProbe(): Promise<void> {
       }
     }
     const timer = setTimeout(() => {
-      finish(new Error(`PTY spawn health check timed out after ${PTY_SPAWN_HEALTH_TIMEOUT_MS}ms`), {
-        kill: true
-      })
-    }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
+      finish(new PtySpawnHealthTimeoutError(timeoutMs), { kill: true })
+    }, timeoutMs)
     exitDisposable = proc.onExit(({ exitCode }) => {
       if (exitCode === 0) {
         finish()
@@ -213,9 +238,7 @@ export function preflightPtySpawnHealth(): boolean {
   if (process.platform === 'win32') {
     return false
   }
-  if (process.platform === 'darwin') {
-    ensureNodePtySpawnHelperExecutable()
-  }
+  ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
   return true
 }

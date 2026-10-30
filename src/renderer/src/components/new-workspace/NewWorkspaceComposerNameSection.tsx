@@ -1,14 +1,18 @@
 import React from 'react'
-import { AlertTriangle, Check } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { shouldShowComposerBaseRefPicker } from './base-ref-picker-visibility'
+import { ComposerBaseRefPicker } from './ComposerBaseRefPicker'
+import { ComposerBranchChoice } from './ComposerBranchChoice'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
 type NewWorkspaceComposerNameSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'nameInputRef'
   | 'eligibleRepos'
+  | 'selectedRepo'
   | 'repoId'
   | 'onRepoChange'
   | 'name'
@@ -31,10 +35,18 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'allowSmartNameAddProject'
   | 'smartNameRepoSwitchTarget'
   | 'onSmartNameModeChange'
+  | 'smartNameMode'
   | 'forkPushWarning'
   | 'canReuseSelectedBranch'
   | 'reuseSelectedBranch'
+  | 'reuseEligibleBranch'
+  | 'branchNameOverride'
+  | 'onBranchNameOverrideChange'
   | 'onReuseSelectedBranchChange'
+  | 'onOpenSelectedBranchWorkspace'
+  | 'baseBranch'
+  | 'onBaseBranchChange'
+  | 'startFromResetHint'
 > & {
   onNamePlainEnter: () => void
 }
@@ -42,6 +54,7 @@ type NewWorkspaceComposerNameSectionProps = Pick<
 export function NewWorkspaceComposerNameSection({
   nameInputRef,
   eligibleRepos,
+  selectedRepo,
   repoId,
   onRepoChange,
   name,
@@ -64,28 +77,56 @@ export function NewWorkspaceComposerNameSection({
   allowSmartNameAddProject = true,
   smartNameRepoSwitchTarget = 'project',
   onSmartNameModeChange,
+  smartNameMode,
   onNamePlainEnter,
   forkPushWarning,
   canReuseSelectedBranch,
   reuseSelectedBranch,
-  onReuseSelectedBranchChange
+  reuseEligibleBranch,
+  branchNameOverride,
+  onBranchNameOverrideChange,
+  onReuseSelectedBranchChange,
+  onOpenSelectedBranchWorkspace,
+  baseBranch,
+  onBaseBranchChange,
+  startFromResetHint
 }: NewWorkspaceComposerNameSectionProps): React.JSX.Element {
+  const showBaseRefPicker =
+    Boolean(onBaseBranchChange) &&
+    shouldShowComposerBaseRefPicker({
+      selectedRepoIsGit,
+      branchesEnabled,
+      smartNameMode: smartNameMode ?? 'smart',
+      smartNameSelectionKind: smartNameSelection?.kind ?? null
+    })
   return (
     <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-name">
-      <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
-        {selectedRepoIsGit
-          ? translate(
-              'auto.components.NewWorkspaceComposerCard.ac3748dcda',
-              "Name or 'Create From'"
-            )
-          : translate('auto.components.NewWorkspaceComposerCard.0ee17638fe', 'Workspace name')}{' '}
-        <span className="text-muted-foreground/70">
-          {translate('auto.components.NewWorkspaceComposerCard.0c5d6a479c', '[Optional]')}
-        </span>
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+          {selectedRepoIsGit
+            ? translate('auto.components.NewWorkspaceComposerCard.ac3748dcda', 'Create From')
+            : translate(
+                'auto.components.NewWorkspaceComposerCard.0ee17638fe',
+                'Workspace name'
+              )}{' '}
+          <span className="text-muted-foreground/70">
+            {translate('auto.components.NewWorkspaceComposerCard.0c5d6a479c', '[Optional]')}
+          </span>
+        </label>
+        {showBaseRefPicker && onBaseBranchChange ? (
+          <ComposerBaseRefPicker
+            repoId={repoId}
+            baseBranch={baseBranch}
+            onBaseBranchChange={onBaseBranchChange}
+            resetHint={startFromResetHint}
+            readOnly={selectedRepoRequiresConnection}
+          />
+        ) : null}
+      </div>
       <SmartWorkspaceNameField
         inputRef={nameInputRef}
         repos={eligibleRepos}
+        selectedRepo={selectedRepo}
         repoId={repoId}
         onRepoChange={onRepoChange}
         value={name}
@@ -122,49 +163,23 @@ export function NewWorkspaceComposerNameSection({
       ) : null}
       <div
         className={cn(
-          'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+          'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
           canReuseSelectedBranch ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         )}
         aria-hidden={!canReuseSelectedBranch}
+        inert={!canReuseSelectedBranch}
       >
         <div className="min-h-0">
-          <div className="space-y-1 pt-1">
-            <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
-              <span
-                className={cn(
-                  'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
-                  reuseSelectedBranch
-                    ? 'border-emerald-500/60 bg-emerald-500 text-white'
-                    : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
-                )}
-              >
-                <Check
-                  className={cn(
-                    'size-3 transition-opacity',
-                    reuseSelectedBranch ? 'opacity-100' : 'opacity-0'
-                  )}
-                />
-              </span>
-              <input
-                type="checkbox"
-                checked={reuseSelectedBranch}
-                onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
-                disabled={!canReuseSelectedBranch}
-                className="sr-only"
-              />
-              <span>
-                {translate(
-                  'auto.components.NewWorkspaceComposerCard.reuseExistingBranch',
-                  'Reuse branch'
-                )}
-              </span>
-            </label>
-            <p className="pl-6 text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
-                'Check out the existing branch instead of creating a new one from it.'
-              )}
-            </p>
+          <div className="pt-3">
+            <ComposerBranchChoice
+              existingBranchName={reuseEligibleBranch ?? smartNameSelection?.label}
+              reuseSelectedBranch={reuseSelectedBranch}
+              onReuseSelectedBranchChange={onReuseSelectedBranchChange}
+              branchNameOverride={branchNameOverride}
+              onBranchNameOverrideChange={onBranchNameOverrideChange}
+              onOpenSelectedBranchWorkspace={onOpenSelectedBranchWorkspace}
+              disabled={!canReuseSelectedBranch}
+            />
           </div>
         </div>
       </div>

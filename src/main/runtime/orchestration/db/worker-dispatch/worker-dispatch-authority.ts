@@ -1,29 +1,27 @@
-import { randomBytes } from 'node:crypto'
 import { OrchestrationError } from '../../orchestration-error'
-import { hashDispatchCapability } from '../dispatch-capability-hash'
 import type { OrchestrationDb } from '../orchestration-db'
+import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
   params: {
     dispatchId: string
     handle: string
-    paneKey: string
-    processIncarnation: string
+    /** Both null for a chat, which its Orca session ID identifies instead. */
+    paneKey: string | null
+    processIncarnation: string | null
     launchTokenHash?: string
     worktreeId: string
     effects: unknown[]
     setupState: string
     hostScope?: string | null
-    // 'created': this worker-start operation created the agent terminal (including agent-first
-    // worktree creation, whose effects receipt says 'reused_agent_terminal'). 'external': an
-    // explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
+    // Created terminals acquire custody; external reuse transfers only an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
   }
-): string {
+): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    // Why: read inside the transaction so the guarded UPDATEs below cannot lose a race with a concurrent state change.
+    // Read under the transaction so guarded updates cannot race another state change.
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
@@ -42,26 +40,32 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} already has a different launch-token commitment.`
       )
     }
-    const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey)
+    const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey ?? undefined)
     if (existing && existing.id !== params.dispatchId) {
       throw new Error(
         `Terminal ${params.handle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
       )
     }
-    const capability = `dcap_${randomBytes(32).toString('base64url')}`
+    const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
     const contextUpdate = this.db
       .prepare(
         `UPDATE dispatch_contexts
-         SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ?,
-             capability_hash = ?, launch_token_hash = COALESCE(launch_token_hash, ?),
-             capability_revoked_at = NULL
+         SET assignee_handle = ?, assignee_pane_key = ?, assignee_orca_session_id = ?,
+             process_incarnation = ?, host_scope = ?,
+             launch_token_hash = COALESCE(launch_token_hash, ?),
+             capability_revoked_at = NULL,
+             consumer_generation = consumer_generation + 1
          WHERE id = ? AND status = 'pending'`
       )
       .run(
         params.handle,
         params.paneKey,
+        dispatchAssigneeOrcaSessionId({
+          handle: params.handle,
+          processIncarnation: params.processIncarnation
+        }),
         params.processIncarnation,
-        hashDispatchCapability(capability),
+        params.hostScope ?? null,
         params.launchTokenHash ?? null,
         params.dispatchId
       )
@@ -71,6 +75,7 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+    this.fenceUnacknowledgedMailboxDeliveries(`dispatch:${params.dispatchId}`)
     const workerUpdate = this.db
       .prepare(
         `UPDATE worker_dispatches
@@ -109,23 +114,32 @@ export function prepareStartingWorkerAuthority(
           terminalHandle: params.handle,
           paneKey: params.paneKey,
           processIncarnation: params.processIncarnation,
+          endpointId,
+          endpointIncarnation: params.processIncarnation,
           hostScope: params.hostScope,
           ownership: 'owned'
         })
       } else {
-        const transferable = this.findTransferableWorkerTerminalResource({
-          terminalHandle: params.handle,
-          paneKey: params.paneKey,
-          processIncarnation: params.processIncarnation,
-          hostScope: params.hostScope ?? null
-        })
-        if (transferable) {
+        // A chat has no process to transfer and remains the user's external resource.
+        const exact =
+          params.paneKey && params.processIncarnation
+            ? { paneKey: params.paneKey, processIncarnation: params.processIncarnation }
+            : null
+        const transferable = exact
+          ? this.findTransferableWorkerTerminalResource({
+              terminalHandle: params.handle,
+              ...exact,
+              hostScope: params.hostScope ?? null
+            })
+          : undefined
+        if (exact && transferable) {
           this.transferWorkerTerminalResourceStatement({
             resourceId: transferable.id,
             toDispatchId: params.dispatchId,
             terminalHandle: params.handle,
-            paneKey: params.paneKey,
-            processIncarnation: params.processIncarnation,
+            ...exact,
+            endpointId,
+            endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope ?? null
           })
         } else {
@@ -135,6 +149,8 @@ export function prepareStartingWorkerAuthority(
             terminalHandle: params.handle,
             paneKey: params.paneKey,
             processIncarnation: params.processIncarnation,
+            endpointId,
+            endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope,
             ownership: 'external'
           })
@@ -142,7 +158,49 @@ export function prepareStartingWorkerAuthority(
       }
     }
     this.db.exec('COMMIT')
-    return capability
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+/** Record pane custody at creation so boot-time user input can relinquish it; lifecycle authority still waits for successful boot. */
+export function recordCreatedWorkerTerminalCustody(
+  this: OrchestrationDb,
+  params: {
+    dispatchId: string
+    handle: string
+    paneKey: string
+    processIncarnation: string
+    worktreeId: string
+    hostScope?: string | null
+  }
+): void {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    // Recheck under the writer transaction: a Dispatch stopped during creation cannot acquire ownership.
+    const dispatch = this.getDispatchContextById(params.dispatchId)
+    const worker = this.getWorkerDispatch(params.dispatchId)
+    if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Dispatch ${params.dispatchId} is not starting.`
+      )
+    }
+    if (!this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
+      this.createWorkerTerminalResourceStatement({
+        dispatchId: params.dispatchId,
+        worktreeId: params.worktreeId,
+        terminalHandle: params.handle,
+        paneKey: params.paneKey,
+        processIncarnation: params.processIncarnation,
+        endpointId: worker.runtime_epoch,
+        endpointIncarnation: params.processIncarnation,
+        hostScope: params.hostScope,
+        ownership: 'owned'
+      })
+    }
+    this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
@@ -151,10 +209,12 @@ export function prepareStartingWorkerAuthority(
 
 export type WorkerDispatchAuthorityMethods = {
   prepareStartingWorkerAuthority: typeof prepareStartingWorkerAuthority
+  recordCreatedWorkerTerminalCustody: typeof recordCreatedWorkerTerminalCustody
 }
 
 export function attachWorkerDispatchAuthority(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
-    prepareStartingWorkerAuthority
+    prepareStartingWorkerAuthority,
+    recordCreatedWorkerTerminalCustody
   })
 }

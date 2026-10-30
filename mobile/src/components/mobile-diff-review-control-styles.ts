@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileDiffReviewControlStyles = StyleSheet.create({
+export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   footer: {
     position: 'absolute',
     left: 0,
@@ -89,9 +90,6 @@ export const mobileDiffReviewControlStyles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.76
   },
-  buttonDisabled: {
-    opacity: 0.45
-  },
   composerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -109,21 +107,9 @@ export const mobileDiffReviewControlStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     marginTop: 2
   },
-  composerInput: {
-    minHeight: 112,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    padding: spacing.md,
-    textAlignVertical: 'top'
-  },
   drawerButtonRow: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.md
   }
-})
+}))

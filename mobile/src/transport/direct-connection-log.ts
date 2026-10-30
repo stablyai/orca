@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { LivenessTimeoutEvidence } from './rpc-session-liveness-watchdog'
 import type {
   ConnectionLogEntry,
@@ -42,5 +42,9 @@ export class DirectConnectionLog {
       `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`,
       { code: 'liveness-timeout' }
     )
+  }
+
+  connected = (): void => {
+    this.emit('success', 'Authenticated', 'Channel ready for RPC', { code: 'direct-connected' })
   }
 }

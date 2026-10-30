@@ -1,48 +1,31 @@
-import type {
-  TerminalMultiplexCleanupStage,
-  TerminalMultiplexConnection,
-  TerminalMultiplexFlowControlStage
-} from './terminal-multiplex-connection'
+import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
+import { answerUndeliveredYieldedQueries } from './terminal-multiplex-yielded-queries'
 
-export function installMultiplexCleanup(
-  build: TerminalMultiplexFlowControlStage
-): asserts build is TerminalMultiplexCleanupStage {
-  const state = build as TerminalMultiplexConnection
+export function installMultiplexCleanup(state: TerminalMultiplexConnection): void {
   const { runtime, streams, pendingPtyWaitControllers, emit, signal } = state
-  state.detachStream = (
-    streamId: number,
-    emitEnd: boolean,
-    releaseRemoteDesktopDriver = true
-  ): void => {
+  state.detachStream = (streamId: number, endVerdict, releaseRemoteDesktopDriver = true): void => {
     const stream = streams.get(streamId)
     if (!stream) {
       return
     }
-    const replacement = stream.sourceRangeReplacement
-    stream.sourceRangeReplacement = null
-    if (replacement) {
-      runtime.rollbackRemoteTerminalSourceRangeReplacement(
-        replacement,
-        'stream-detached-replacement-aborted'
-      )
-    }
     stream.outputBatcher.flush()
     stream.outputBatcher.dispose()
-    state.detachSourceRangeConsumer(stream, 'stream-detached')
     state.ackTotalInFlightBytes = Math.max(0, state.ackTotalInFlightBytes - stream.ackInFlightBytes)
     stream.ackInFlightBytes = 0
     stream.ackPendingOutput = []
     stream.ackPendingOutputBytes = 0
     stream.ackPendingOutputOverflowed = false
     stream.ackRecoverySnapshotInFlight = false
+    stream.ackRecoveryHistoryOwed = false
     stream.unsubscribeData()
+    answerUndeliveredYieldedQueries(runtime, stream)
     stream.unsubscribeResize()
     stream.unsubscribeFit()
     stream.unsubscribeDriver()
     stream.unregisterBinaryHandler()
     streams.delete(streamId)
     state.flushAllAckPendingOutput()
-    // Why: release the runtime exit-waiter for this slot (see the field's note); delete before abort so its .catch no-ops instead of re-detaching.
+    // Delete before abort so the released exit-waiter's catch cannot re-detach.
     stream.exitWaiterAbort.abort()
     if (stream.isMobile && stream.client?.id) {
       runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
@@ -51,11 +34,11 @@ export function installMultiplexCleanup(
       stream.registeredRemoteDesktopDriver &&
       stream.client?.id
     ) {
-      // Why: release the width floor only if THIS stream took it, so a passive stream can't release a peer's floor.
+      // Release width floors only this stream took; passive streams cannot release peers' floors.
       runtime.unregisterRemoteDesktopViewer(stream.ptyId, stream.remoteDesktopSubscriptionKey)
     }
-    if (emitEnd) {
-      emit({ type: 'end', streamId })
+    if (endVerdict) {
+      emit({ type: 'end', streamId, verdict: endVerdict })
     }
   }
   state.cancelPendingPtyWaits = (streamId: number): void => {
@@ -88,9 +71,9 @@ export function installMultiplexCleanup(
         keys.push(stream.remoteDesktopSubscriptionKey)
         remoteDesktopKeysByPty.set(stream.ptyId, keys)
       }
-      state.detachStream(streamId, false, false)
+      state.detachStream(streamId, null, false)
     }
-    // Why: one connection can own many panes on the same PTY; remove floors together so close scans each registry once.
+    // Batch same-PTY connection floors so cleanup scans each registry once.
     for (const [ptyId, subscriptionKeys] of remoteDesktopKeysByPty) {
       void runtime.unregisterRemoteDesktopViewers(ptyId, subscriptionKeys)
     }

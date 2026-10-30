@@ -1,14 +1,22 @@
-import { spawnProcess, type ChildProcessHandle } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
   buildWindowsHostInteractiveLoginSpawn,
   type WindowsHostInteractiveLoginSpawn
 } from '../../shared/windows-interactive-login-spawn'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import {
+  isSpawnEnoent,
+  isWindowsOnlyAgentCommand,
+  windowsOnlyCliMessage
+} from '../codex-cli/windows-only-agent-cli'
+import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
+import { terminateClaudeProcess } from './claude-login-process-termination'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
-const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 const CLAUDE_AUTH_DENIED_PATTERN =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
@@ -19,13 +27,13 @@ export type ClaudeCommandConfig = {
 }
 
 export type ClaudeCommandOptions = {
-  allowFailure?: boolean
   signal?: AbortSignal
   keepStdinOpen?: boolean
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
+  /** BROWSER for Claude, as Claude's own host sees the path. */
+  browser?: string
+  onStdout?: (text: string) => void
+  /** Requires `keepStdinOpen`. */
+  onStdin?: (send: (text: string) => void) => void
 }
 
 export function runClaudeCommandProcess(
@@ -41,12 +49,20 @@ export function runClaudeCommandProcess(
       configDir.wslDistro === null &&
       args[0] === 'auth' &&
       args[1] === 'login'
-    // Why lazy: the WSL branch runs `claude` inside the distro, so resolving a
-    // host binary there would be wasted filesystem probing for a path never used.
+    // WSL launches never need the host binary, so resolve it lazily.
     let cachedHostClaudeCommand: string | null = null
-    const hostClaudeCommand = (): string => (cachedHostClaudeCommand ??= resolveClaudeCommand())
-    // The native login needs its own visible console, so it runs behind a
-    // start /wait wrapper that relays the real login PID back for termination.
+    const hostClaudeCommand = (): string => {
+      if (cachedHostClaudeCommand) {
+        return cachedHostClaudeCommand
+      }
+      const resolved = resolveClaudeCommand()
+      // A Windows-only result is never kept, so a later WSL install is found by the next resolve.
+      if (!isWindowsOnlyAgentCommand(resolved)) {
+        cachedHostClaudeCommand = resolved
+      }
+      return resolved
+    }
+    // The visible-console wrapper relays the login PID so termination reaches it.
     const interactiveLogin = isWindowsHostInteractiveLogin
       ? buildWindowsHostInteractiveLoginSpawn(hostClaudeCommand(), args)
       : null
@@ -54,15 +70,14 @@ export function runClaudeCommandProcess(
       args,
       configDir,
       interactiveLogin,
-      hostClaudeCommand
+      hostClaudeCommand,
+      options?.browser
     )
     const child = spawnProcess({
       program: spawnConfig.command,
       args: spawnConfig.args,
       env: spawnConfig.env,
-      // Why: Claude's browser auth can bind its callback lifetime to stdin.
-      // Keeping stdin open prevents hidden managed-login runs from tearing down
-      // the local callback server before the browser returns.
+      // Keep stdin open so Claude's auth callback survives until the browser returns.
       stdio: interactiveLogin
         ? interactiveLogin.stdio
         : [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
@@ -97,6 +112,7 @@ export function runClaudeCommandProcess(
         timeout = null
       }
       stdout?.off('data', appendOutput)
+      stdout?.off('data', forwardStdout)
       stderr?.off('data', appendOutput)
       child.off('error', onError)
       child.off(completionEvent, onDone)
@@ -125,6 +141,7 @@ export function runClaudeCommandProcess(
       terminationPending = true
       terminateClaudeProcess(child, interactiveLogin, afterKill)
     }
+    const forwardStdout = (chunk: Buffer): void => options?.onStdout?.(chunk.toString())
     const appendOutput = (chunk: Buffer): void => {
       output = `${output}${chunk.toString()}`
       if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
@@ -141,7 +158,10 @@ export function runClaudeCommandProcess(
     }
     const onError = (error: Error): void => {
       if (!terminationPending) {
-        settle(() => rejectPromise(error))
+        const windowsOnly = isSpawnEnoent(error)
+          ? windowsOnlyCliMessage(spawnConfig.command, 'Claude')
+          : null
+        settle(() => rejectPromise(windowsOnly ? new Error(windowsOnly) : error))
       }
     }
     const onDone = (code: number | null): void => {
@@ -149,7 +169,7 @@ export function runClaudeCommandProcess(
         return
       }
       settle(() => {
-        if (code === 0 || options?.allowFailure) {
+        if (code === 0) {
           resolvePromise(output)
           return
         }
@@ -171,8 +191,23 @@ export function runClaudeCommandProcess(
     }, timeoutMs)
     stdout?.on('data', appendOutput)
     stderr?.on('data', appendOutput)
+    if (options?.onStdout) {
+      stdout?.on('data', forwardStdout)
+    }
     child.on('error', onError)
     child.on(completionEvent, onDone)
+    const stdin = options?.keepStdinOpen && !interactiveLogin ? child.stdin : null
+    if (stdin && options?.onStdin) {
+      // Unhandled EPIPE during exit would crash the host.
+      stdin.on('error', (error) =>
+        console.warn('[claude-accounts] Claude login stdin:', error.message)
+      )
+      options.onStdin((text) => {
+        if (!settled && !stdin.destroyed) {
+          stdin.write(text)
+        }
+      })
+    }
     if (options?.signal?.aborted) {
       onAbort()
     } else {
@@ -188,11 +223,30 @@ type ClaudeSpawnConfig = {
   windowsVerbatimArguments: boolean
 }
 
+// Match account terminals by using CLAUDE_CONFIG_DIR for login identity.
+function claudeConfigDirEnv(configDir: string, browser: string | undefined): NodeJS.ProcessEnv {
+  return browser
+    ? { CLAUDE_CONFIG_DIR: configDir, BROWSER: browser }
+    : { CLAUDE_CONFIG_DIR: configDir }
+}
+
+function wslClaudeCommand(linuxPath: string, args: string[], browser: string | undefined): string {
+  const claude = `claude ${args.map(quotePosixShell).join(' ')}`
+  const configDir = `CLAUDE_CONFIG_DIR=${quotePosixShell(linuxPath)}`
+  if (!browser) {
+    return `exec env ${configDir} ${claude}`
+  }
+  // WSL share writes lack execute permission; attempt chmod without blocking login on failure.
+  const helper = quotePosixShell(browser)
+  return `chmod 700 ${helper}; exec env ${configDir} BROWSER=${helper} ${claude}`
+}
+
 function resolveClaudeInvocation(
   args: string[],
   configDir: ClaudeCommandConfig,
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
-  hostClaudeCommand: () => string
+  hostClaudeCommand: () => string,
+  browser: string | undefined
 ): ClaudeSpawnConfig {
   const spawnConfig = interactiveLogin
     ? {
@@ -200,21 +254,19 @@ function resolveClaudeInvocation(
         args: interactiveLogin.args,
         env: withCliRuntimeOnPath(hostClaudeCommand(), {
           ...process.env,
-          CLAUDE_CONFIG_DIR: configDir.windowsPath
+          ...claudeConfigDirEnv(configDir.windowsPath, browser)
         }),
         windowsVerbatimArguments: false
       }
     : configDir.linuxPath && configDir.wslDistro
       ? {
-          command: 'wsl.exe',
-          args: [
-            '-d',
-            configDir.wslDistro,
-            '--exec',
-            'bash',
-            '-lc',
-            `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
-          ],
+          // The distro's login shell finds Claude installed through nvm or mise.
+          command: resolveWslExecutablePath(),
+          args: buildWslExecArgs(configDir.wslDistro, [
+            '/bin/sh',
+            '-c',
+            buildWslLoginShellCommand(wslClaudeCommand(configDir.linuxPath, args, browser))
+          ]),
           env: process.env,
           windowsVerbatimArguments: false
         }
@@ -223,7 +275,7 @@ function resolveClaudeInvocation(
             ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...process.env,
-              CLAUDE_CONFIG_DIR: configDir.windowsPath
+              ...claudeConfigDirEnv(configDir.windowsPath, browser)
             })
           }
         : {
@@ -231,72 +283,9 @@ function resolveClaudeInvocation(
             args,
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...process.env,
-              CLAUDE_CONFIG_DIR: configDir.windowsPath
+              ...claudeConfigDirEnv(configDir.windowsPath, browser)
             }),
             windowsVerbatimArguments: false
           }
   return spawnConfig
-}
-
-function terminateClaudeProcess(
-  child: ChildProcessHandle,
-  interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
-  afterKill: () => void
-): void {
-  const killWindowsTree = (windowsTerminationPid: number): void => {
-    const taskkill = spawnProcess({
-      program: 'taskkill.exe',
-      args: ['/pid', String(windowsTerminationPid), '/t', '/f'],
-      stdio: 'ignore'
-    })
-    let finished = false
-    const finish = (succeeded: boolean): void => {
-      if (finished) {
-        return
-      }
-      finished = true
-      clearTimeout(taskkillTimeout)
-      if (!succeeded) {
-        child.kill()
-      }
-      afterKill()
-    }
-    const taskkillTimeout = setTimeout(() => {
-      taskkill.kill()
-      finish(false)
-    }, WINDOWS_TASKKILL_TIMEOUT_MS)
-    taskkill.once('error', () => finish(false))
-    taskkill.once('close', (code) => finish(code === 0))
-  }
-  if (process.platform === 'win32') {
-    // The wrapper's own PID never owns the login tree, so prefer the relayed PID.
-    const resolveTerminationPid = interactiveLogin?.waitForTerminationPid
-      ? interactiveLogin.waitForTerminationPid()
-      : Promise.resolve(interactiveLogin?.getTerminationPid?.() ?? child.pid ?? null)
-    void resolveTerminationPid
-      .then((windowsTerminationPid) => {
-        if (windowsTerminationPid) {
-          killWindowsTree(windowsTerminationPid)
-          return
-        }
-        child.kill()
-        afterKill()
-      })
-      .catch(() => {
-        child.kill()
-        afterKill()
-      })
-    return
-  }
-  if (child.pid) {
-    try {
-      process.kill(-child.pid)
-      afterKill()
-      return
-    } catch {
-      // The direct child remains the only safe fallback when group lookup fails.
-    }
-  }
-  child.kill()
-  afterKill()
 }

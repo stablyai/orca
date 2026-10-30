@@ -7,9 +7,11 @@ import { getPublishTargetStatus } from '../../shared/git-publish-target-status'
 import { gitExecFileAsync } from './runner'
 import { validateGitPushTarget } from './push-target-validation'
 import { nativeAndWslGitUpstreamStatusReadOwner } from './git-upstream-status-read-owner'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
 type GitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 export function invalidateGitUpstreamStatusReads(): void {
@@ -19,8 +21,12 @@ export function invalidateGitUpstreamStatusReads(): void {
 function gitExecOptions(
   cwd: string,
   options: GitExecOptions = {}
-): { cwd: string; wslDistro?: string } {
-  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+): { cwd: string; wslDistro?: string; admissionTier?: GitAdmissionTier } {
+  return {
+    cwd,
+    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+  }
 }
 
 async function getBehindCommitsArePatchEquivalent(
@@ -30,13 +36,21 @@ async function getBehindCommitsArePatchEquivalent(
 ): Promise<boolean> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['log', '--oneline', '--cherry-mark', '--right-only', `HEAD...${upstreamName}`, '--'],
+      [
+        'log',
+        '--no-show-signature',
+        '--no-color',
+        '--format=%m',
+        '--cherry-mark',
+        '--right-only',
+        `HEAD...${upstreamName}`,
+        '--'
+      ],
       gitExecOptions(worktreePath, options)
     )
     return upstreamOnlyCommitsArePatchEquivalent(stdout)
   } catch {
-    // Why: patch-equivalence is an optimization for the rebase case. If the
-    // probe fails, keep the conservative pull-first behavior.
+    // Failed patch-equivalence probes retain the conservative pull-first behavior.
     return false
   }
 }
@@ -60,11 +74,7 @@ async function readUpstreamStatus(
       (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
     )
   } catch (error) {
-    // Why: we only swallow clearly-no-upstream signals — that's an expected
-    // state, not a failure. Other errors (auth, corruption, "not a git
-    // repository", sparse-checkout) should surface to the user so they can
-    // act on them. The shared isNoUpstreamError helper intentionally omits
-    // broad phrases like "no such branch" to avoid masking real errors.
+    // Suppress only proven no-upstream errors; auth, corruption and unavailable repos must surface.
     if (isNoUpstreamError(error)) {
       return {
         hasUpstream: false,
@@ -72,8 +82,7 @@ async function readUpstreamStatus(
         behind: 0
       }
     }
-    // Why: parity with gitPush/gitPull/gitFetch — normalize before crossing
-    // the IPC boundary so renderers don't see execFile stderr preambles or local paths.
+    // Normalize before IPC so renderer errors omit subprocess preambles and local paths.
     throw new Error(normalizeGitErrorMessage(error, 'upstream'))
   }
 }

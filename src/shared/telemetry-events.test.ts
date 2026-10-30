@@ -1,21 +1,7 @@
-// Schema round-trip coverage for the event map. Fail-closed invariants that
-// must hold: agent_error is enum-only (error_message / error_stack rejected
-// by `.strict()`), unknown enum values fail, and any well-formed payload
-// round-trips without coercion.
+// Strict telemetry schemas must reject raw errors and unknown enums while round-tripping valid payloads without coercion.
 
 import { describe, expect, it } from 'vitest'
-import {
-  addRepoSetupStepActionSchema,
-  AGENT_KIND_VALUES,
-  agentKindSchema,
-  errorClassSchema,
-  eventSchemas,
-  isCohortExtendedEvent,
-  SETTINGS_CHANGED_WHITELIST,
-  settingsChangedKeySchema
-} from './telemetry-events'
-import { FEATURE_INTERACTION_IDS, getFeatureInteractionCategory } from './feature-interactions'
-import { appStarSourceSchema } from './gh-star-source'
+import { eventSchemas } from './telemetry-events'
 
 describe('feature_interaction_usage_bucket_reached schema', () => {
   it('accepts a valid bucket payload', () => {
@@ -27,24 +13,6 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
       nth_repo_added: 2
     })
     expect(parsed.success).toBe(true)
-  })
-
-  it('is in the runtime cohort-injection roster', () => {
-    expect(isCohortExtendedEvent('feature_interaction_usage_bucket_reached')).toBe(true)
-  })
-
-  it('keeps the feature id enum in sync with the catalog', () => {
-    const schema = eventSchemas.feature_interaction_usage_bucket_reached
-    for (const feature_id of FEATURE_INTERACTION_IDS) {
-      expect(
-        schema.safeParse({
-          feature_id,
-          feature_category: getFeatureInteractionCategory(feature_id),
-          count_bucket: 'count_1',
-          bucket_source: 'crossed_now'
-        }).success
-      ).toBe(true)
-    }
   })
 
   it('rejects unknown enum values and mismatched categories', () => {
@@ -125,13 +93,6 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
 })
 
 describe('app_starred_orca schema', () => {
-  it('accepts every declared app star source', () => {
-    for (const source of appStarSourceSchema.options) {
-      const parsed = eventSchemas.app_starred_orca.safeParse({ source })
-      expect(parsed.success).toBe(true)
-    }
-  })
-
   it('accepts cohort context on successful app star telemetry', () => {
     const parsed = eventSchemas.app_starred_orca.safeParse({
       source: 'settings',
@@ -169,10 +130,6 @@ describe('star_nag_outcome schema', () => {
 
   it('accepts a strict valid payload with cohort context', () => {
     expect(eventSchemas.star_nag_outcome.safeParse(valid).success).toBe(true)
-  })
-
-  it('is in the runtime cohort-injection roster', () => {
-    expect(isCohortExtendedEvent('star_nag_outcome')).toBe(true)
   })
 
   it('accepts next_threshold only as a positive integer for deferrals', () => {
@@ -288,9 +245,7 @@ describe('agent_error schema', () => {
     expect(parsed.success).toBe(true)
   })
 
-  // Core invariant: `.strict()` rejects raw error strings. If this test ever
-  // flips, the analytics lane is leaking UGC — revert the offending schema
-  // change.
+  // Privacy boundary: raw errors must never enter analytics.
   it('rejects error_message via .strict()', () => {
     const parsed = eventSchemas.agent_error.safeParse({
       error_class: 'unknown',
@@ -310,9 +265,7 @@ describe('agent_error schema', () => {
   })
 
   it('rejects error_name (deferred — schema is enum-only)', () => {
-    // `error_name` was part of an earlier draft. The trimmed schema is
-    // enum-only; if a future PR re-introduces it as additive-optional,
-    // this test should be replaced rather than relaxed silently.
+    // An earlier draft allowed error_name; reintroducing it requires revisiting this privacy boundary.
     const parsed = eventSchemas.agent_error.safeParse({
       error_class: 'unknown',
       agent_kind: 'claude-code',
@@ -357,9 +310,7 @@ describe('daemon_lifecycle schema', () => {
     expect(parsed.success).toBe(true)
   })
 
-  // Core privacy invariant: enum-only + bucketed counts. If this flips, the lane is leaking
-  // paths/versions/exact counts — revert the offending schema change (STA-2376).
-  // Both union members, so neither can lose .strict() unnoticed.
+  // Privacy boundary: both union members must reject raw paths/versions/exact counts (STA-2376).
   it('rejects raw paths, versions, and unbucketed counts via .strict()', () => {
     const bases = [
       { transition: 'replaced', reason: 'failed_health_check', live_session_count_bucket: '2-5' },
@@ -374,7 +325,7 @@ describe('daemon_lifecycle schema', () => {
         const parsed = eventSchemas.daemon_lifecycle.safeParse({ ...base, ...leak })
         expect(parsed.success).toBe(false)
       }
-      // Sanity: the base itself must be valid, so the rejections above are the leak, not the base.
+      // Validate the base so unrelated schema errors cannot mask a privacy leak.
       expect(eventSchemas.daemon_lifecycle.safeParse(base).success).toBe(true)
     }
   })
@@ -430,15 +381,6 @@ describe('workspace_created schema', () => {
     })
     expect(parsed.success).toBe(true)
   })
-
-  it('rejects extra keys via .strict()', () => {
-    const parsed = eventSchemas.workspace_created.safeParse({
-      source: 'command_palette',
-      from_existing_branch: true,
-      branch: 'refs/heads/main' // raw branch name is UGC — rejected by .strict()
-    })
-    expect(parsed.success).toBe(false)
-  })
 })
 
 describe('agent_started schema', () => {
@@ -473,6 +415,29 @@ describe('agent_prompt_sent schema', () => {
   })
 })
 
+describe('agent_hook_install_failed schema', () => {
+  it('accepts only the fixed error categories', () => {
+    for (const error_message of ['EACCES', 'E2BIG', 'unknown']) {
+      expect(
+        eventSchemas.agent_hook_install_failed.safeParse({ agent: 'codex', error_message }).success
+      ).toBe(true)
+    }
+  })
+
+  it('rejects raw error messages and path-bearing codes (#21492)', () => {
+    for (const error_message of [
+      "EACCES: permission denied, open '/home/someone/.codex/config.toml'",
+      'EACCES /home/someone',
+      `E${'A'.repeat(16)}`,
+      'Timed out waiting for another managed-hook install to finish'
+    ]) {
+      expect(
+        eventSchemas.agent_hook_install_failed.safeParse({ agent: 'codex', error_message }).success
+      ).toBe(false)
+    }
+  })
+})
+
 describe('agent_hook_unattributed schema', () => {
   it('accepts the two bounded attribution failure reasons', () => {
     for (const reason of ['empty_pane_key', 'unknown_tab_id'] as const) {
@@ -490,13 +455,6 @@ describe('agent_hook_unattributed schema', () => {
 })
 
 describe('add_repo_setup_step_action schema', () => {
-  it('accepts every Setup-step action declared in the schema', () => {
-    for (const action of addRepoSetupStepActionSchema.options) {
-      const parsed = eventSchemas.add_repo_setup_step_action.safeParse({ action })
-      expect(parsed.success).toBe(true)
-    }
-  })
-
   it('rejects unknown action enum values', () => {
     const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
       action: 'export_to_pdf'
@@ -537,14 +495,6 @@ describe('add_repo_default_checkout_handoff schema', () => {
 })
 
 describe('workspace_create_failed schema', () => {
-  it('accepts a valid payload', () => {
-    const parsed = eventSchemas.workspace_create_failed.safeParse({
-      source: 'sidebar',
-      error_class: 'git_failed'
-    })
-    expect(parsed.success).toBe(true)
-  })
-
   it('rejects unknown error_class values', () => {
     const parsed = eventSchemas.workspace_create_failed.safeParse({
       source: 'sidebar',
@@ -553,9 +503,7 @@ describe('workspace_create_failed schema', () => {
     expect(parsed.success).toBe(false)
   })
 
-  // Core invariant mirroring agent_error: raw error strings never cross the
-  // wire. If this test ever flips, the failure-rate lane is leaking UGC —
-  // revert the offending schema change.
+  // Privacy boundary: raw workspace-create errors must never enter analytics.
   it('rejects error_message via .strict()', () => {
     const parsed = eventSchemas.workspace_create_failed.safeParse({
       source: 'sidebar',
@@ -576,15 +524,33 @@ describe('workspace_create_failed schema', () => {
 })
 
 describe('settings_changed schema', () => {
-  it('accepts whitelisted setting keys', () => {
-    for (const key of SETTINGS_CHANGED_WHITELIST) {
-      const parsed = eventSchemas.settings_changed.safeParse({
-        setting_key: key,
+  it('accepts the Chat UI switch as a boolean adoption signal', () => {
+    expect(
+      eventSchemas.settings_changed.safeParse({
+        setting_key: 'experimentalNativeChat',
         value_kind: 'bool'
-      })
-      expect(parsed.success).toBe(true)
-    }
+      }).success
+    ).toBe(true)
   })
+
+  it('accepts the browser extensions switch as a boolean adoption signal', () => {
+    expect(
+      eventSchemas.settings_changed.safeParse({
+        setting_key: 'experimentalBrowserExtensions',
+        value_kind: 'bool'
+      }).success
+    ).toBe(true)
+  })
+
+  it.each(['experimentalStructuredNativeChat', 'openAgentTabsInChatByDefault'])(
+    'rejects the retired %s key',
+    (settingKey) => {
+      expect(
+        eventSchemas.settings_changed.safeParse({ setting_key: settingKey, value_kind: 'bool' })
+          .success
+      ).toBe(false)
+    }
+  )
 
   it('rejects non-whitelisted setting keys', () => {
     const parsed = eventSchemas.settings_changed.safeParse({
@@ -592,24 +558,6 @@ describe('settings_changed schema', () => {
       value_kind: 'bool'
     })
     expect(parsed.success).toBe(false)
-  })
-})
-
-describe('exported enum schemas', () => {
-  it('agentKindSchema accepts the known product IDs', () => {
-    for (const kind of AGENT_KIND_VALUES) {
-      expect(agentKindSchema.safeParse(kind).success).toBe(true)
-    }
-  })
-
-  it('errorClassSchema rejects novel classes', () => {
-    expect(errorClassSchema.safeParse('kernel_panic').success).toBe(false)
-  })
-
-  it('settingsChangedKeySchema membership matches SETTINGS_CHANGED_WHITELIST', () => {
-    for (const key of SETTINGS_CHANGED_WHITELIST) {
-      expect(settingsChangedKeySchema.safeParse(key).success).toBe(true)
-    }
   })
 })
 

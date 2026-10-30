@@ -9,9 +9,12 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
 import type { FolderWorkspaceUpdateTicket } from '../slices/folder-workspace-update-coordinator'
-import { callRuntimeRpc, type RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   FolderWorkspaceUpdateCoordinatorInstance,
   FolderWorkspaceUpdateField
@@ -20,7 +23,8 @@ import {
   folderWorkspaceUpdateInvalidatesPathStatus,
   mergeFolderWorkspaceUpdateResponse
 } from './folder-workspace-routing'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
+import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
 
 export type FetchedFolderWorkspaceCatalog = {
@@ -28,32 +32,56 @@ export type FetchedFolderWorkspaceCatalog = {
   hostId: ExecutionHostId
 }
 
-export function getFolderWorkspaceHostId(
-  workspace: FolderWorkspace,
+type FolderWorkspaceHostIndex = ReadonlyMap<string, ExecutionHostId | null>
+
+function createFolderWorkspaceHostIndex(
   projectGroups: readonly ProjectGroup[]
+): FolderWorkspaceHostIndex {
+  const hostByGroupId = new Map<string, ExecutionHostId | null>()
+  for (const group of projectGroups) {
+    const hostId = getProjectGroupHostId(group)
+    if (!hostByGroupId.has(group.id)) {
+      hostByGroupId.set(group.id, hostId)
+      continue
+    }
+    const existingHostId = hostByGroupId.get(group.id)
+    if (existingHostId !== null && existingHostId !== hostId) {
+      // Multiple copies of a group on different hosts are intentionally local/ambiguous.
+      hostByGroupId.set(group.id, null)
+    }
+  }
+  return hostByGroupId
+}
+
+function getFolderWorkspaceHostIdFromIndex(
+  workspace: FolderWorkspace,
+  hostByGroupId: FolderWorkspaceHostIndex
 ): ExecutionHostId {
-  const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
-  if (explicitHostId) {
-    return explicitHostId
+  return hostByGroupId.get(workspace.projectGroupId) ?? LOCAL_EXECUTION_HOST_ID
+}
+
+function createFolderWorkspaceHostResolver(
+  projectGroups: readonly ProjectGroup[]
+): (workspace: FolderWorkspace) => ExecutionHostId {
+  let hostByGroupId: FolderWorkspaceHostIndex | undefined
+  return (workspace) => {
+    const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
+    if (explicitHostId) {
+      return explicitHostId
+    }
+    if (workspace.connectionId) {
+      return toSshExecutionHostId(workspace.connectionId)
+    }
+    hostByGroupId ??= createFolderWorkspaceHostIndex(projectGroups)
+    return getFolderWorkspaceHostIdFromIndex(workspace, hostByGroupId)
   }
-  if (workspace.connectionId) {
-    return toSshExecutionHostId(workspace.connectionId)
-  }
-  const matchingHosts = new Set(
-    projectGroups
-      .filter((group) => group.id === workspace.projectGroupId)
-      .map(getProjectGroupHostId)
-  )
-  return matchingHosts.size === 1
-    ? ([...matchingHosts][0] as ExecutionHostId)
-    : LOCAL_EXECUTION_HOST_ID
 }
 
 function getFolderWorkspaceHostIdentity(
   workspace: FolderWorkspace,
-  projectGroups: readonly ProjectGroup[]
+  resolveHostId: (workspace: FolderWorkspace) => ExecutionHostId
 ): string {
-  return JSON.stringify([getFolderWorkspaceHostId(workspace, projectGroups), workspace.id])
+  return JSON.stringify([resolveHostId(workspace), workspace.id])
 }
 
 export function getFolderWorkspaceUpdateIdentity(
@@ -74,21 +102,22 @@ function mergeFetchedFolderWorkspacesForHost({
   projectGroups: readonly ProjectGroup[]
   hostId: string
 }): readonly FolderWorkspace[] {
+  const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
   const fetchedIdentities = new Set(
-    fetched.map((workspace) => getFolderWorkspaceHostIdentity(workspace, projectGroups))
+    fetched.map((workspace) => getFolderWorkspaceHostIdentity(workspace, resolveHostId))
   )
   const preserved = previous.filter((workspace) => {
-    const existingHostId = getFolderWorkspaceHostId(workspace, projectGroups)
+    const existingHostId = resolveHostId(workspace)
     return (
       !catalogOwnsHost(hostId, existingHostId) ||
-      fetchedIdentities.has(getFolderWorkspaceHostIdentity(workspace, projectGroups))
+      fetchedIdentities.has(getFolderWorkspaceHostIdentity(workspace, resolveHostId))
     )
   })
   return unchangedMergeSource(
     previous,
     preserved,
     mergeByIdentity(preserved, fetched, (workspace) =>
-      getFolderWorkspaceHostIdentity(workspace, projectGroups)
+      getFolderWorkspaceHostIdentity(workspace, resolveHostId)
     )
   )
 }
@@ -98,16 +127,14 @@ export function getFolderWorkspaceCatalogReplacementIdentities(
   currentFolderWorkspaces: readonly FolderWorkspace[],
   projectGroups: readonly ProjectGroup[]
 ): Set<string> {
+  const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
   const replacedIdentities = new Set(
     catalog.folderWorkspaces.map((workspace) =>
-      getFolderWorkspaceUpdateIdentity(
-        getFolderWorkspaceHostId(workspace, projectGroups),
-        workspace.id
-      )
+      getFolderWorkspaceUpdateIdentity(resolveHostId(workspace), workspace.id)
     )
   )
   for (const workspace of currentFolderWorkspaces) {
-    const hostId = getFolderWorkspaceHostId(workspace, projectGroups)
+    const hostId = resolveHostId(workspace)
     if (catalogOwnsHost(catalog.hostId, hostId)) {
       replacedIdentities.add(getFolderWorkspaceUpdateIdentity(hostId, workspace.id))
     }
@@ -115,38 +142,47 @@ export function getFolderWorkspaceCatalogReplacementIdentities(
   return replacedIdentities
 }
 
+/**
+ * Drops a restored owner once its own host settles it. Folder ids can repeat across hosts, so a
+ * copy on another host proves nothing; only the owner's copy or the owner's hydrated catalog does.
+ */
 export function clearRestoredFolderWorkspaceSessionOwners(
   owners: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] | undefined,
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>,
+  settled: {
+    hydratedHostIds: ReadonlySet<ExecutionHostId>
+    /** Runtime hosts the environment list named; null when it didn't answer. */
+    listedRuntimeHostIds: ReadonlySet<ExecutionHostId> | null
+  }
 ): AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] {
   const next: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] = {}
+  const resolveHostId = createFolderWorkspaceHostResolver(state.projectGroups)
   for (const [key, hostId] of Object.entries(owners ?? {})) {
     const scope = parseWorkspaceKey(key)
     if (scope?.type !== 'folder') {
       next[key] = hostId
       continue
     }
-    const workspace = state.folderWorkspaces.find((entry) => entry.id === scope.folderWorkspaceId)
-    if (workspace && !state.projectGroups.some((group) => group.id === workspace.projectGroupId)) {
-      // Why: ownership resolves via the project group; if that catalog is still missing, keep the restored host owner so a session write doesn't move runtime tabs local.
+    const ownCopy = state.folderWorkspaces.find(
+      (entry) => entry.id === scope.folderWorkspaceId && resolveHostId(entry) === hostId
+    )
+    if (ownCopy) {
+      if (!state.projectGroups.some((group) => group.id === ownCopy.projectGroupId)) {
+        // Why: ownership resolves via the project group; if that catalog is still missing, keep the restored host owner so a session write doesn't move runtime tabs local.
+        next[key] = hostId
+      }
+      continue
+    }
+    const ownerSettled =
+      [...settled.hydratedHostIds].some((hydrated) => catalogOwnsHost(hydrated, hostId)) ||
+      (settled.listedRuntimeHostIds !== null &&
+        parseExecutionHostId(hostId)?.kind === 'runtime' &&
+        !settled.listedRuntimeHostIds.has(hostId))
+    if (!ownerSettled) {
       next[key] = hostId
     }
   }
   return next
-}
-
-export function folderWorkspaceWithFetchedOwner(
-  workspace: FolderWorkspace,
-  target: RuntimeClientTarget,
-  projectGroups: readonly ProjectGroup[]
-): FolderWorkspace {
-  return {
-    ...workspace,
-    executionHostId:
-      target.kind === 'environment'
-        ? getRuntimeTargetHostId(target)
-        : getFolderWorkspaceHostId(workspace, projectGroups)
-  }
 }
 
 export async function fetchFolderWorkspaceCatalogForTarget(
@@ -164,10 +200,12 @@ export async function fetchFolderWorkspaceCatalogForTarget(
             { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
           )
         ).folderWorkspaces
+  const resolveOwnHostId = createFolderWorkspaceHostResolver(projectGroups)
+  const ownedFolderWorkspaces = fetchedFolderWorkspaces.map((row) =>
+    adoptFromEndpoint(target, { kind: 'folderWorkspace', row, resolveOwnHostId })
+  )
   return {
-    folderWorkspaces: fetchedFolderWorkspaces.map((workspace) =>
-      folderWorkspaceWithFetchedOwner(workspace, target, projectGroups)
-    ),
+    folderWorkspaces: ownedFolderWorkspaces,
     hostId: getRuntimeTargetHostId(target)
   }
 }
@@ -228,7 +266,12 @@ export async function reconcileFailedFolderWorkspaceUpdate(args: {
         : {})
     }))
     if (!refreshed) {
-      args.get().purgeWorktreeTerminalState([folderWorkspaceKey(args.folderWorkspaceId)])
+      args.get().purgeWorktreeTerminalState([
+        hostWorktreeTarget({
+          id: folderWorkspaceKey(args.folderWorkspaceId),
+          hostId: args.ownerHostId
+        })
+      ])
     }
   } catch (err) {
     console.warn('Failed to reconcile folder workspace after update failure:', err)

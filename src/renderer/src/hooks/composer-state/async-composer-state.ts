@@ -19,7 +19,6 @@ type ComposerAsyncStateInput = Pick<
   | 'selectedRepoConnectionId'
   | 'selectedRepoHookContextKey'
   | 'selectedRepoIsGit'
-  | 'selectedRepoSettings'
   | 'setName'
 >
 
@@ -31,7 +30,11 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 import { getRepoSetupAgentStartupPolicy } from './setup-policy-decisions'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+import type {
+  SmartGitHubPrStartPointSelection,
+  SmartSourceSelection
+} from './source-selection-decisions'
 
 export function useComposerAsyncState(input: ComposerAsyncStateInput) {
   const {
@@ -52,7 +55,6 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     selectedRepoConnectionId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
-    selectedRepoSettings,
     setName
   } = input
   const { getInitialAutoManagedWorkspaceName, getInitialGitHubPrStartPointSelection } = decisions
@@ -101,7 +103,6 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const [createError, setCreateError] = useState<WorkspaceCreateErrorDisplay | null>(null)
 
-  // Why: when checked, a successful create keeps the modal open and resets identity fields so the user can queue another worktree.
   const [createMultiple, setCreateMultiple] = useState(false)
 
   const [advancedOpen, setAdvancedOpen] = useState(
@@ -128,23 +129,23 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const [linkDirectLoading, setLinkDirectLoading] = useState(false)
 
-  const lastAutoNameRef = useRef<string>(
-    getInitialAutoManagedWorkspaceName({
-      draftName: persistDraft ? newWorkspaceDraft?.name : null,
-      draftLinkedWorkItem: persistDraft ? draftLinkedWorkItemSeed : null,
-      initialName,
-      initialLinkedWorkItem: initialLinkedWorkItemSeed
-    })
-  )
+  const lastAutoNameRef = useRef<string>(undefined!)
+  lastAutoNameRef.current ??= getInitialAutoManagedWorkspaceName({
+    draftName: persistDraft ? newWorkspaceDraft?.name : null,
+    draftLinkedWorkItem: persistDraft ? draftLinkedWorkItemSeed : null,
+    initialName,
+    initialLinkedWorkItem: initialLinkedWorkItemSeed,
+    ...getJiraIssueKeyCasingSeedOptions()
+  })
 
   const nameRef = useRef<string>(name)
 
   const branchAutoNameRef = useRef<string>('')
 
-  // Why: the note we auto-prefilled from a Start-from PR pick, so a later PR change can replace it without clobbering user-typed text.
+  // Track auto-prefilled PR notes separately so source changes never overwrite user text.
   const lastAutoNoteRef = useRef<string>('')
 
-  // Why: let handleBaseBranchPrSelect read the latest note without adding it to deps (would rebuild the callback on every keystroke).
+  // Read the latest note without rebuilding PR-selection callbacks on every keystroke.
   const noteRef = useRef<string>(note)
 
   useEffect(() => {
@@ -152,13 +153,17 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     noteRef.current = note
   }, [name, note])
 
-  // Why: PR checkout refs resolve async, so submit can still see the linked PR as a checkout source if Create fires before the resolver settles.
-  const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
-    getInitialGitHubPrStartPointSelection({
-      item: initialGitHubWorkItem,
-      linkedWorkItem: initialLinkedWorkItemSeed,
-      repoId: selectedRepo?.id ?? initialRepoId
-    })
+  // Retain PR checkout intent while async refs resolve; lazy state accepts null without repeatedly seeding during render.
+  const [initialSmartGitHubPrStartPointSelection] =
+    useState<SmartGitHubPrStartPointSelection | null>(() =>
+      getInitialGitHubPrStartPointSelection({
+        item: initialGitHubWorkItem,
+        linkedWorkItem: initialLinkedWorkItemSeed,
+        repoId: selectedRepo?.id ?? initialRepoId
+      })
+    )
+  const smartSourceSelectionRef = useRef<SmartSourceSelection | null>(
+    initialSmartGitHubPrStartPointSelection
   )
 
   useEffect(() => {
@@ -187,7 +192,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const nameInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Why: mirror agentPrompt into a ref so the once-mounted file-drop listener reads it fresh without re-subscribing, which would reorder composerDropStack.
+  // Keep the once-mounted drop listener fresh without resubscribing and reordering composerDropStack.
   const agentPromptRef = useRef(agentPrompt)
 
   const connectionIdRef = useRef(connectionId)
@@ -201,15 +206,12 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const selectedRepoPathRef = useRef<string | undefined>(selectedRepoPath)
 
-  const selectedRepoSettingsRef = useRef(selectedRepoSettings)
-
   useEffect(() => {
     agentPromptRef.current = agentPrompt
     connectionIdRef.current = connectionId
     selectedRepoConnectionIdRef.current = selectedRepoConnectionId
     selectedRepoPathRef.current = selectedRepoPath
-    selectedRepoSettingsRef.current = selectedRepoSettings
-  }, [agentPrompt, connectionId, selectedRepoConnectionId, selectedRepoPath, selectedRepoSettings])
+  }, [agentPrompt, connectionId, selectedRepoConnectionId, selectedRepoPath])
 
   return {
     yamlHooks,
@@ -218,7 +220,6 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     setCheckedHooksContextKey,
     loadedIssueCommand,
     setLoadedIssueCommand,
-    currentIssueCommand,
     issueCommandTemplate,
     hasLoadedIssueCommand,
     setupDecision,
@@ -261,7 +262,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     branchAutoNameRef,
     lastAutoNoteRef,
     noteRef,
-    smartGitHubPrStartPointSelectionRef,
+    smartSourceSelectionRef,
     composerRef,
     promptTextareaRef,
     promptCaretFrameRef,
@@ -272,7 +273,6 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     selectedRepoSlug,
     setSelectedRepoSlug,
     selectedRepoPath,
-    selectedRepoPathRef,
-    selectedRepoSettingsRef
+    selectedRepoPathRef
   }
 }

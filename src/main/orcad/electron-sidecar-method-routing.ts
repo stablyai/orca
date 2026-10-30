@@ -1,4 +1,5 @@
 export const TARGETLESS_BROWSER_METHODS: Record<string, true> = {
+  browserProfileClearGoogleCookies: true,
   browserProfileClearDefaultCookies: true,
   browserProfileCreate: true,
   browserProfileDelete: true,
@@ -10,6 +11,9 @@ export const TARGETLESS_BROWSER_METHODS: Record<string, true> = {
 }
 
 export function electronSidecarRuntimeMethodName(browserMethod: string): string {
+  if (browserMethod === 'browserOpenUrlOnClient') {
+    return 'browser.openUrl'
+  }
   const suffix = browserMethod.slice('browser'.length)
   if (suffix === 'ProceedCertificate') {
     return 'browser.certificate.proceed'

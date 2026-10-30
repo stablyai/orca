@@ -17,127 +17,18 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import {
+  CHECKOUT_DIFF_FLAGS,
+  PNPM_DIFF_FLAGS,
+  assertSourceDerivationsAgree,
+  escapeRegExp,
+  formatCheckFailure,
+  normalizePnpmDiff,
+  pnpmDiffEnvironment
+} from './xterm-patch-text.mjs'
 
 const DEFAULT_REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const MANIFEST_RELATIVE_PATH = path.join('config', 'patches', 'xterm-upstream.json')
-
-/**
- * Flags pnpm@10 passes to `git diff` in its own `diffFolders()`. A patch built
- * with anything else is a patch pnpm may re-diff differently on the next
- * `pnpm patch-commit`, so the byte-comparison gate would never settle.
- */
-export const PNPM_DIFF_FLAGS = [
-  '-c',
-  'core.safecrlf=false',
-  'diff',
-  '--src-prefix=a/',
-  '--dst-prefix=b/',
-  '--ignore-cr-at-eol',
-  '--irreversible-delete',
-  '--full-index',
-  '--no-index',
-  '--text',
-  '--no-ext-diff',
-  '--no-color'
-]
-
-/**
- * The same formatting as PNPM_DIFF_FLAGS minus `--no-index`, so a diff taken
- * inside the upstream checkout is byte-comparable with the emitted patch.
- */
-export const CHECKOUT_DIFF_FLAGS = PNPM_DIFF_FLAGS.filter((flag) => flag !== '--no-index')
-
-/** Blanks the vars pnpm blanks so user and system git config cannot reach the diff. */
-export function pnpmDiffEnvironment(baseEnvironment = process.env) {
-  return {
-    ...baseEnvironment,
-    GIT_CONFIG_NOSYSTEM: '1',
-    HOME: '',
-    XDG_CONFIG_HOME: '',
-    USERPROFILE: ''
-  }
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function trimSurroundingSlashes(value) {
-  return value[0] === '/' || value.endsWith('/') ? value.replace(/^\/|\/$/g, '') : value
-}
-
-/**
- * Reproduces pnpm's post-processing of the raw `git diff` output: strip the two
- * scratch folder prefixes, drop a trailing no-newline marker, and remove
- * .DS_Store entries a macOS run would otherwise smuggle in.
- */
-export function normalizePnpmDiff(stdout, folderA, folderB) {
-  const a = folderA.replace(/\\/g, '/')
-  const b = folderB.replace(/\\/g, '/')
-  return stdout
-    .replace(new RegExp(`(a|b)(${escapeRegExp(`/${trimSurroundingSlashes(a)}/`)})`, 'g'), '$1/')
-    .replace(new RegExp(`(a|b)${escapeRegExp(`/${trimSurroundingSlashes(b)}/`)}`, 'g'), '$1/')
-    .replace(new RegExp(escapeRegExp(`${a}/`), 'g'), '')
-    .replace(new RegExp(escapeRegExp(`${b}/`), 'g'), '')
-    .replace(/\n\\ No newline at end of file\n$/, '\n')
-    .replace(/^diff --git a\/.*\.DS_Store b\/.*\.DS_Store[\s\S]+?(?=^diff --git)/gm, '')
-    .replace(/^diff --git a\/.*\.DS_Store b\/.*\.DS_Store[\s\S]*$/gm, '')
-}
-
-/** Splits a patch into one entry per `diff --git` stanza, keeping the raw text. */
-export function splitPatchEntries(patchText) {
-  return patchText
-    .split(/^(?=diff --git )/m)
-    .filter((entry) => entry.startsWith('diff --git '))
-    .map((text) => {
-      const header = text.slice(0, text.indexOf('\n'))
-      const match = /^diff --git a\/(.+) b\/\1$/.exec(header)
-      if (!match) {
-        throw new Error(`Unsupported diff header (renames are not supported): ${header}`)
-      }
-      return { path: match[1], text }
-    })
-}
-
-export function selectPatchEntries(patchText, matches) {
-  return splitPatchEntries(patchText)
-    .filter((entry) => matches(entry.path))
-    .map((entry) => entry.text)
-    .join('')
-}
-
-/** The hand-editable half of a patch: everything under `src/`. */
-export function sourceHunks(patchText) {
-  return selectPatchEntries(patchText, (file) => file.startsWith('src/'))
-}
-
-/**
- * The source patch and the emitted patch are the same edits diffed two ways, so
- * they must produce the same bytes. A source hunk the emitted patch cannot carry
- * would be deleted by the next `--write`, so this fails instead of shipping one.
- */
-export function assertSourceDerivationsAgree(checkoutSource, patchText) {
-  const checkout = sourceHunks(checkoutSource)
-  const emitted = sourceHunks(patchText)
-  if (checkout === emitted) {
-    return
-  }
-  throw new Error(
-    [
-      'The checkout diff and the emitted patch disagree on a source file.',
-      `  from checkout: [${splitPatchEntries(checkout)
-        .map((e) => e.path)
-        .join(', ')}]`,
-      `  from patch:    [${splitPatchEntries(emitted)
-        .map((e) => e.path)
-        .join(', ')}]`,
-      `  first difference at character ${firstDifferenceIndex(checkout, emitted)}`,
-      '',
-      'A hunk the emitted patch cannot name is never installed, so it cannot ship',
-      'here; upstream .npmignore strips `src/**/*.test.ts`.'
-    ].join('\n')
-  )
-}
 
 export function stampVersionSource(source, version) {
   const stamped = source.replace(
@@ -150,11 +41,7 @@ export function stampVersionSource(source, version) {
   return stamped
 }
 
-/**
- * The published tarball names the commit it was built from, so a version bump
- * that forgets the manifest fails here instead of producing a patch against the
- * wrong tree.
- */
+// Verify published tarball’s source commit or a version bump can generate patches against the wrong tree.
 export function assertPublishedCommit(publishedPackageJson, packageEntry, upstreamCommit) {
   if (publishedPackageJson.version !== packageEntry.version) {
     throw new Error(
@@ -189,8 +76,7 @@ export function assertBuildStepsAllowed(manifest) {
   }
 }
 
-// `delete` was dropped with the code that implemented it: accepting a policy
-// nothing honours would silently ship maps that do not match the bundle.
+// Reject retired delete policy: its implementation is gone, and accepting it ships maps mismatched to bundle.
 export const SOURCEMAP_POLICIES = new Set(['include'])
 
 /** An unrecognised policy is a manifest bug, not a default to fall through to. */
@@ -204,19 +90,14 @@ export function assertSourcemapPolicy(manifest) {
   return policy
 }
 
-/**
- * pnpm keys the patched package directory and the lockfile entry by the
- * sha256 of the patch file itself, so a regenerated patch that leaves
- * pnpm-lock.yaml alone fails `--frozen-lockfile` on every machine but the
- * author's.
- */
+// Update lockfile with regenerated patch hash or frozen installs fail outside author’s warm store.
 export function patchHash(patchText) {
   return createHash('sha256').update(patchText, 'utf8').digest('hex')
 }
 
 function lockfilePatchHashPattern(packageKey) {
   // Unscoped keys such as `node-pty@1.1.0` are emitted unquoted.
-  return new RegExp(`(^  '?${escapeRegExp(packageKey)}'?:\\n    hash: )([0-9a-f]{64})$`, 'm')
+  return new RegExp(`(^  '?${escapeRegExp(packageKey)}'?: )([0-9a-f]{64})$`, 'm')
 }
 
 export function readLockfilePatchHash(lockfileText, packageKey) {
@@ -231,21 +112,21 @@ function lockfileResolutionHashPattern(packageKey) {
   const separator = packageKey.lastIndexOf('@')
   const name = escapeRegExp(packageKey.slice(0, separator))
   const version = escapeRegExp(packageKey.slice(separator + 1))
-  // Two spellings: `name@version(patch_hash=…)` in dependency keys, and a bare
-  // `: version(patch_hash=…)` under `version:` and in resolved dependency maps.
+  // Replace both name@version(patch_hash=…) keys and bare version(patch_hash=…) resolution values.
   return new RegExp(`(?:${name}@|: )${version}\\(patch_hash=([0-9a-f]{64})\\)`, 'g')
 }
 
-/**
- * pnpm repeats the hash inside every resolution key that depends on the patched
- * package, not just in `patchedDependencies`. Updating one and not the other leaves
- * a lockfile that installs on a warm store and drifts on a cold one, which is CI.
- */
+// Update hash in every dependent resolution key, not just patchedDependencies, or cold CI stores diverge from warm installs.
 export function readLockfileResolutionHashes(lockfileText, packageKey) {
   return Array.from(
     lockfileText.matchAll(lockfileResolutionHashPattern(packageKey)),
     (match) => match[1]
   )
+}
+
+/** False for a key the lockfile has never seen, which is the normal state mid version bump. */
+export function lockfileHasPatchEntry(lockfileText, packageKey) {
+  return lockfilePatchHashPattern(packageKey).test(lockfileText)
 }
 
 export function lockfilePatchHashIsStale(lockfileText, packageKey, hash) {
@@ -264,37 +145,7 @@ export function updateLockfilePatchHash(lockfileText, packageKey, hash) {
     )
 }
 
-export function firstDifferenceIndex(left, right) {
-  const limit = Math.min(left.length, right.length)
-  for (let index = 0; index < limit; index += 1) {
-    if (left[index] !== right[index]) {
-      return index
-    }
-  }
-  return left.length === right.length ? -1 : limit
-}
-
-export function formatCheckFailure({ name, patchPath, committed, regenerated }) {
-  const index = firstDifferenceIndex(committed, regenerated)
-  const committedFiles = splitPatchEntries(committed).map((entry) => entry.path)
-  const regeneratedFiles = splitPatchEntries(regenerated).map((entry) => entry.path)
-  return [
-    `${name}: ${patchPath} is not what the pinned upstream build produces.`,
-    `  committed:   ${Buffer.byteLength(committed)} bytes, files [${committedFiles.join(', ')}]`,
-    `  regenerated: ${Buffer.byteLength(regenerated)} bytes, files [${regeneratedFiles.join(', ')}]`,
-    `  first difference at character ${index}`,
-    '',
-    'The bundle hunks are generated. Do not edit them. Change the source patch',
-    'instead and regenerate both files:',
-    '',
-    '  node config/scripts/regenerate-xterm-patches.mjs --write',
-    '',
-    'See docs/reference/xterm-patch-regeneration.md.'
-  ].join('\n')
-}
-
-// npm ships as `npm.cmd` on Windows, and execFile applies no PATHEXT and refuses
-// a `.cmd` target without a shell (CVE-2024-27980). git and tar are real .exe.
+// Windows npm.cmd needs interpreter routing (CVE-2024-27980); execFile neither applies PATHEXT nor spawns .cmd without shell. Git/tar are executables.
 const WINDOWS_SHIM_COMMANDS = new Set(['npm', 'npx', 'pnpm', 'yarn'])
 
 function run(command, args, options = {}) {
@@ -327,7 +178,7 @@ function sameBytes(left, right) {
   )
 }
 
-function fetchPristinePackage(packageEntry, workDir) {
+export function fetchPristinePackage(packageEntry, workDir) {
   const target = path.join(workDir, 'pristine', packageEntry.name.replace(/[@/]/g, '_'))
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
@@ -369,6 +220,7 @@ function ensureDependencies(upstreamRoot, manifest) {
   const stamp = path.join(upstreamRoot, 'node_modules', '.orca-xterm-install-stamp')
   const want = `${manifest.upstream.commit}\n${statSync(lockfile).size}\n`
   if (existsSync(stamp) && readFileSync(stamp, 'utf8') === want) {
+    assertToolchain(upstreamRoot, manifest)
     return
   }
   run('npm', ['ci'], {
@@ -400,11 +252,7 @@ function assertToolchain(upstreamRoot, manifest) {
   }
 }
 
-/**
- * The published src/ must equal the pinned commit's src/ apart from the version
- * stamp publish.js rewrites. If it does not, the manifest points at the wrong
- * commit and every hunk below would be nonsense.
- */
+// Match published src to pinned commit except publish-time version stamp; mismatch invalidates generated hunks.
 function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
   const stampFile = packageEntry.versionStampFile
   const sourceRoot = path.join(pristineDir, 'src')
@@ -430,11 +278,13 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
   for (const directory of ['lib', 'out', 'out-esbuild']) {
     rmSync(path.join(packageRoot, directory), { recursive: true, force: true })
   }
-  const stampPath = path.join(packageRoot, packageEntry.versionStampFile)
-  writeFileSync(
-    stampPath,
-    stampVersionSource(readFileSync(stampPath, 'utf8'), packageEntry.version)
-  )
+  if (packageEntry.versionStampFile) {
+    const stampPath = path.join(packageRoot, packageEntry.versionStampFile)
+    writeFileSync(
+      stampPath,
+      stampVersionSource(readFileSync(stampPath, 'utf8'), packageEntry.version)
+    )
+  }
   assertBuildStepsAllowed(manifest)
   for (const step of packageEntry.build) {
     run(step.command, step.args, { cwd: path.join(packageRoot, step.cwd), stdio: 'inherit' })
@@ -473,8 +323,7 @@ function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination
   cpSync(pristineDir, destination, { recursive: true })
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
   for (const relative of listFilesRelative(pristineDir)) {
-    // package.json carries the registry's version/commit stamp, which the build
-    // tree has no way to reproduce and which we never want to patch.
+    // Exclude registry version/commit stamp: build tree cannot reproduce it and patch must not change it.
     if (relative === 'package.json') {
       continue
     }
@@ -507,7 +356,7 @@ function diffFolders(folderA, folderB) {
 
 /** The source of truth for the hand-written half: what the checkout itself holds. */
 function diffCheckoutSource(packageRoot) {
-  return run('git', [...CHECKOUT_DIFF_FLAGS, '--', 'src/'], {
+  return run('git', [...CHECKOUT_DIFF_FLAGS, 'src/'], {
     cwd: packageRoot,
     env: pnpmDiffEnvironment(),
     maxBuffer: 64 * 1024 * 1024
@@ -528,22 +377,37 @@ function regeneratePackage(packageEntry, manifest, context) {
   assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry)
 
   run('git', ['reset', '--quiet', '--hard', manifest.upstream.commit], { cwd: upstreamRoot })
-  run('git', ['apply', '--whitespace=nowarn', path.join(repoRoot, packageEntry.sourcePatch)], {
-    cwd: path.join(upstreamRoot, packageEntry.packageDir)
-  })
+  const packageDir = toPosix(packageEntry.packageDir)
+  run(
+    'git',
+    [
+      'apply',
+      '--whitespace=nowarn',
+      ...(packageDir === '.' ? [] : [`--directory=${packageDir}`]),
+      path.join(repoRoot, packageEntry.sourcePatch)
+    ],
+    { cwd: upstreamRoot }
+  )
   buildPackage(upstreamRoot, packageEntry, manifest)
 
   const patchedDir = path.join(workDir, 'patched', packageEntry.name.replace(/[@/]/g, '_'))
   overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, patchedDir)
 
-  // Leave the checkout diffable: the pinned commit plus the source patch, with
-  // no publish-time version stamp mixed in, so `git diff` there is the source
-  // patch and nothing else.
-  run('git', ['checkout', '--', packageEntry.versionStampFile], {
-    cwd: path.join(upstreamRoot, packageEntry.packageDir)
-  })
+  // Leave checkout at pinned commit plus source patch, without publish-time stamp, so git diff remains the source patch alone.
+  if (packageEntry.versionStampFile) {
+    run('git', ['checkout', '--', packageEntry.versionStampFile], {
+      cwd: path.join(upstreamRoot, packageEntry.packageDir)
+    })
+  }
 
   const source = diffCheckoutSource(path.join(upstreamRoot, packageEntry.packageDir))
+  if (source.trim().length === 0) {
+    throw new Error(
+      `${packageEntry.name}: applying ${packageEntry.sourcePatch} left the checkout unchanged. ` +
+        'git apply reports success when it skips every hunk, so this is a path-rooting bug, ' +
+        'not an empty patch.'
+    )
+  }
   const patch = diffFolders(pristineDir, patchedDir)
   assertSourceDerivationsAgree(source, patch)
   return { patch, source }
@@ -565,6 +429,7 @@ export function regenerateXtermPatches({
   let lockfileChanged = false
 
   const failures = []
+  const pendingInstall = []
   for (const packageEntry of manifest.packages) {
     const shortCommit = manifest.upstream.commit.slice(0, 12)
     log(`${packageEntry.name}@${packageEntry.version}: regenerating from ${shortCommit}`)
@@ -583,7 +448,10 @@ export function regenerateXtermPatches({
       writeFileSync(sourcePatchPath, canonicalSource)
       log(`  wrote ${packageEntry.patch} (${Buffer.byteLength(regenerated)} bytes)`)
       log(`  wrote ${packageEntry.sourcePatch} (${Buffer.byteLength(canonicalSource)} bytes)`)
-      if (lockfilePatchHashIsStale(lockfile, packageKey, hash)) {
+      if (!lockfileHasPatchEntry(lockfile, packageKey)) {
+        pendingInstall.push(packageKey)
+        log(`  pnpm-lock.yaml has no entry for ${packageKey} yet; run pnpm install`)
+      } else if (lockfilePatchHashIsStale(lockfile, packageKey, hash)) {
         lockfile = updateLockfilePatchHash(lockfile, packageKey, hash)
         lockfileChanged = true
         log(`  updated pnpm-lock.yaml patch hash to ${hash}`)
@@ -591,7 +459,11 @@ export function regenerateXtermPatches({
       continue
     }
 
-    if (lockfilePatchHashIsStale(lockfile, packageKey, hash)) {
+    if (!lockfileHasPatchEntry(lockfile, packageKey)) {
+      failures.push(
+        `${packageKey}: pnpm-lock.yaml has no patchedDependencies entry. Run pnpm install.`
+      )
+    } else if (lockfilePatchHashIsStale(lockfile, packageKey, hash)) {
       const stale = Array.from(
         new Set(readLockfileResolutionHashes(lockfile, packageKey).filter((v) => v !== hash))
       )
@@ -638,6 +510,12 @@ export function regenerateXtermPatches({
   if (lockfileChanged) {
     writeFileSync(lockfilePath, lockfile)
   }
+  if (pendingInstall.length > 0) {
+    log(
+      `\nRun pnpm install to key the lockfile to the new patches: ${pendingInstall.join(', ')}\n` +
+        'Then rerun with --check, which is the authority on the lockfile.'
+    )
+  }
   if (failures.length > 0) {
     throw new Error(failures.join('\n\n'))
   }
@@ -655,8 +533,7 @@ function main(argv) {
     console.info(USAGE)
     return
   }
-  // --check is the default, so an unrecognised flag would otherwise silently run a full
-  // upstream build instead of whatever the caller meant.
+  // Reject unknown flags or default --check would silently launch full upstream build.
   const known = (v) =>
     !v.startsWith('-') || ['--write', '--check'].includes(v) || v.startsWith('--work-dir=')
   const unknown = argv.filter((value) => !known(value))

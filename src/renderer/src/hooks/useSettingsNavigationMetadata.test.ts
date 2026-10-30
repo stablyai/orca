@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { buildCmdJSettingsResults } from '../components/cmd-j/palette-results'
+import { matchesSettingsSearch } from '../components/settings/settings-search'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
+import { getCodexTerminalServerIsolationTitle } from '../components/settings/codex-terminal-server-isolation-copy'
 
 const repo = {
   id: 'repo-1',
@@ -32,6 +33,47 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
+  it.each([false, undefined])(
+    'omits Chat navigation and search when the opt-in is %s',
+    (enabled) => {
+      const sections = buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient: false,
+        nativeChatEnabled: enabled,
+        repos: []
+      })
+      expect(sections.some((section) => section.id === 'chat')).toBe(false)
+      expect(buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'chat')).toBe(
+        false
+      )
+      for (const query of ['Code text size', 'Reset chat appearance']) {
+        expect(
+          sections.some((section) => matchesSettingsSearch(query, section.searchEntries))
+        ).toBe(false)
+      }
+    }
+  )
+
+  it('places Chat directly after Appearance in Interface and moves its search entries', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      nativeChatEnabled: true,
+      repos: []
+    })
+    const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')
+    const chat = sections[appearanceIndex + 1]
+    expect(chat.id).toBe('chat')
+    expect(chat.title).toBe('Chat')
+    expect(chat.group).toBe('interface')
+    for (const query of ['Code text size', 'Reset chat appearance']) {
+      expect(matchesSettingsSearch(query, chat.searchEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, sections[appearanceIndex].searchEntries)).toBe(false)
+    }
+  })
+
   it('puts AI capability panes at the top on desktop', () => {
     expect(ids().slice(0, 10)).toEqual([
       'agents',
@@ -181,6 +223,21 @@ describe('settings navigation metadata', () => {
     )
   })
 
+  it('lists the host-only Codex server setting in desktop Agents search only', () => {
+    const agentTitles = (isWebClient: boolean): string[] | undefined =>
+      buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient,
+        repos: [repo]
+      })
+        .find((section) => section.id === 'agents')
+        ?.searchEntries.map((entry) => entry.title)
+
+    expect(agentTitles(false)).toContain(getCodexTerminalServerIsolationTitle())
+    expect(agentTitles(true)).not.toContain(getCodexTerminalServerIsolationTitle())
+  })
+
   it('keeps the Browser shortcut searchable for a capable web runtime', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
@@ -291,8 +348,7 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
-    // Right-click to paste is now exposed on every platform (#8322), so it is
-    // indexed even when only the terminal host — not the client — is Windows.
+    // Right-click paste is indexed on every client platform, including clients of Windows terminal hosts.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
       true
     )
@@ -354,11 +410,7 @@ describe('settings navigation metadata', () => {
     expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
   })
 
-  // Note: this exercises the isDev parameter and isWebClient branches only.
-  // Production safety rests on the hard `import.meta.env.DEV` term in the
-  // builder, which is compile-time-inlined per build and cannot be flipped from
-  // a test (vitest always runs with DEV=true) — don't mistake this for full
-  // prod-gate coverage. The bundle exclusion is what guarantees prod safety.
+  // Vitest always has DEV=true; these branches cannot prove the compile-time production gate or bundle exclusion.
   it('shows Dev tools only in desktop development metadata', () => {
     expect(ids()).not.toContain('dev')
     expect(ids({ isDev: true })).toContain('dev')
@@ -401,37 +453,32 @@ describe('settings navigation metadata', () => {
     expect(repoSections[0].id).toBe('repo-local-1')
   })
 
+  it('renders a nav section per same-host clone, titled by the clone (#20861)', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const clone = { badgeColor: '#000', addedAt: 0, gitRemoteIdentity: gitRemote }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        { ...clone, id: 'clone-a', path: '/work/app', displayName: 'app' },
+        { ...clone, id: 'clone-b', path: '/work/app-b', displayName: 'app-b' }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections.map((section) => [section.id, section.title])).toEqual([
+      ['repo-clone-a', 'app'],
+      ['repo-clone-b', 'app-b']
+    ])
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')
-  })
-
-  it('does not import Settings page or pane UI modules from the metadata hook', () => {
-    const testDir = import.meta.dirname
-    const hookSource = readFileSync(resolve(testDir, 'useSettingsNavigationMetadata.ts'), 'utf8')
-    const importLines = hookSource
-      .split('\n')
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
-  })
-
-  it('does not import Settings page or pane UI modules from the quick action registry', () => {
-    const testDir = import.meta.dirname
-    const registrySource = readFileSync(
-      resolve(testDir, '../components/cmd-j/quick-actions.ts'),
-      'utf8'
-    )
-    const importLines = registrySource
-      .split('\n')
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
   })
 })

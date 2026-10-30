@@ -1,22 +1,11 @@
-// Regression guard: bound the volume of full-process-table scans driven by
-// Windows agent foreground-process inspection — the Windows analogue of issue
-// #6288 (POSIX `ps`).
-//
-// Drives queryWindowsProcessDescendants across several concurrently-inspecting
-// agent panes on the agent-completion cadence (ACTIVE_POLL_INTERVAL_MS = 750ms)
-// and counts how many Toolhelp32 snapshots actually run. Pre-fix the call site
-// scanned once per pane per tick; with the shared snapshot cache the scans
-// collapse to ~one per tick regardless of pane count, while each pane still
-// resolves the same descendant set.
+// At the 750ms completion cadence, Windows panes must share Toolhelp snapshots and retain per-pane descendants (#6288).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getAllProcessesMock = vi.fn()
 
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import { queryWindowsProcessDescendants } from './windows-foreground-process-rows'
-// A real snapshot always contains the process doing the querying; the reader
-// rejects a table without it, because that is what a blocked
-// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+// Empty Toolhelp snapshots can mean denial; include the querying process to prove readability.
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
@@ -30,9 +19,7 @@ const TICKS = Math.floor((WINDOW_SECONDS * 1000) / ACTIVE_POLL_INTERVAL_MS)
 
 const shellPid = (pane: number): number => 100 + pane * 1000
 
-// A snapshot returns the whole system, so one shared scan must contain every
-// pane's shell + foreground node/codex child. Each pane resolves its own
-// descendant from the single scan.
+// One system snapshot must include every pane and its descendants.
 const NATIVE_ROWS = Array.from({ length: PANE_COUNT }, (_, pane) => {
   const shell = shellPid(pane)
   return [
@@ -62,7 +49,7 @@ describe('windows agent foreground inspection process-table scan volume', () => 
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: getAllProcessesMock
     }))
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -88,8 +75,6 @@ describe('windows agent foreground inspection process-table scan volume', () => 
           queryWindowsProcessDescendants(shellPid(pane))
         )
       )
-      // Caching must not change the answer: every pane still finds its foreground
-      // node child as the sole descendant of its shell.
       for (let pane = 0; pane < PANE_COUNT; pane++) {
         const candidates = resolved[pane]
         expect(candidates).not.toBeNull()
@@ -99,9 +84,7 @@ describe('windows agent foreground inspection process-table scan volume', () => 
     }
 
     const totalInspections = PANE_COUNT * TICKS
-    // Pre-fix this equals totalInspections (one scan per inspection). With the
-    // shared cache, concurrent panes within a tick share one scan and the 500ms
-    // TTL forces a fresh scan each new 750ms tick -> ~one per tick.
+    // The 500ms TTL expires each 750ms tick; concurrent panes still share a snapshot.
     expect(scanCount()).toBeLessThanOrEqual(TICKS + 1)
     expect(scanCount()).toBeLessThan(totalInspections / 2)
   })

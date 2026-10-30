@@ -1,4 +1,8 @@
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import type { AppState } from '../../store/types'
@@ -21,19 +25,29 @@ export function getRuntimeClientEventEnvironmentIds(
     ids.add(activeEnvironmentId)
   }
   for (const environment of state.runtimeEnvironments ?? []) {
-    if (state.runtimeStatusByEnvironmentId?.get(environment.id)?.status) {
+    if (isRuntimeHostStillInContact(state, environment.id)) {
       ids.add(environment.id)
     }
   }
   return [...ids]
 }
 
+/** Use transport evidence, not nullable probe status: unverifiable probes can coexist with live events and must not drop subscriptions (ssh-execution-boundary.md). */
+function isRuntimeHostStillInContact(
+  state: RuntimeEnvironmentStoreSyncState,
+  environmentId: string
+): boolean {
+  return isConnectedRuntimeHostState(
+    runtimeHostConnectionStateForEntry(state.runtimeStatusByEnvironmentId?.get(environmentId))
+  )
+}
+
 export function getReachableRuntimeEnvironmentIds(
   state: RuntimeEnvironmentStoreSyncState
 ): string[] {
   const ids: string[] = []
-  for (const [environmentId, status] of state.runtimeStatusByEnvironmentId ?? []) {
-    if (status?.status) {
+  for (const environmentId of state.runtimeStatusByEnvironmentId?.keys() ?? []) {
+    if (isRuntimeHostStillInContact(state, environmentId)) {
       ids.push(environmentId)
     }
   }
@@ -62,8 +76,7 @@ export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]):
     .join('\u0000')
 }
 
-/** Ids in `next` not in `previous` — environments that just became connected. */
-export function getNewlyConnectedRuntimeEnvironmentIds(
+function getNewlyConnectedRuntimeEnvironmentIds(
   previous: readonly string[],
   next: readonly string[]
 ): string[] {
@@ -71,15 +84,14 @@ export function getNewlyConnectedRuntimeEnvironmentIds(
   return [...new Set(next)].filter((environmentId) => !known.has(environmentId))
 }
 
-/** Ids in `previous` not in `next` — environments whose transport was just observed down. */
-export function getNewlyDisconnectedRuntimeEnvironmentIds(
+function getNewlyDisconnectedRuntimeEnvironmentIds(
   previous: readonly string[],
   next: readonly string[]
 ): string[] {
   return getNewlyConnectedRuntimeEnvironmentIds(next, previous)
 }
 
-export function getRuntimeProjectRefreshEnvironmentIds(args: {
+function getRuntimeProjectRefreshEnvironmentIds(args: {
   previousDesired: readonly string[]
   nextDesired: readonly string[]
   previousReachable: readonly string[]
@@ -109,12 +121,7 @@ export type RuntimeEnvironmentStoreSyncSubscriber = (
   previousState: RuntimeEnvironmentStoreSyncState
 ) => void
 
-/**
- * Builds the one renderer-wide runtime subscriber. The reference gate runs
- * before either host collection is enumerated; key generation remains the
- * second gate for relevant-reference writes whose effective subscription set
- * did not change.
- */
+/** Gate subscription scans first by relevant slice references, then effective key, to avoid enumerating hosts on unrelated writes. */
 export function createRuntimeEnvironmentStoreSyncSubscriber(
   deps: RuntimeEnvironmentStoreSyncSubscriberDeps
 ): RuntimeEnvironmentStoreSyncSubscriber {
@@ -125,9 +132,7 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
   let handlingStoreWrite = false
 
   return (state, previousState) => {
-    // markEnvironmentSshStateStale can synchronously publish its nested SSH
-    // bucket. The outer pass incorporates that generation before syncing, so a
-    // re-entrant pass would only enumerate and sync the same transition twice.
+    // The outer pass incorporates synchronous SSH-stale publication; suppress re-entry so that transition syncs once.
     if (handlingStoreWrite || canSkipRuntimeEnvironmentStoreSync(state, previousState)) {
       return
     }
@@ -156,9 +161,7 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
         deps.markEnvironmentSshStateStale(environmentId)
       }
 
-      // Build after disconnect invalidation: marking a mirrored SSH bucket stale
-      // advances its generation, and the replacement subscription must capture
-      // that final generation in this same (single) sync.
+      // Capture SSH generation after disconnect invalidation advances it, in the same replacement sync.
       const nextDesiredEnvironmentKey = deps.buildEnvironmentKey(desiredEnvironmentIds)
       const nextReachableEnvironmentKey = deps.buildEnvironmentKey(reachableEnvironmentIds)
       if (
@@ -185,18 +188,11 @@ type RuntimeClientEventReplayInvalidationDeps = {
   sync: () => void
 }
 
-/**
- * Invalidates a replay after the runtime event stream reports a transport gap.
- * A tracked SSH bucket publishes synchronously and lets the store subscriber
- * sync it; an empty/already-stale bucket has no reference publication, so this
- * path must explicitly sync the advanced module-level SSH generation.
- */
+/** Replay gaps advance SSH generation; tracked-bucket publication syncs via subscriber, while empty/already-stale buckets need explicit sync. */
 export function invalidateRuntimeClientEventReplay(
   deps: RuntimeClientEventReplayInvalidationDeps
 ): void {
-  // Why: nothing else re-probes status.get after a reconnect, so a host recorded
-  // unreachable during the gap stayed 'disconnected' in the sidebar forever while
-  // its terminals and RPCs worked again.
+  // Re-probe after reconnect or the host can stay visually disconnected while RPCs/terminals work.
   deps.refreshRuntimeStatus()
   deps.requestProjectRefresh()
   const previousSshStateReference = deps.getSshStateReference()

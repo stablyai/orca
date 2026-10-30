@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../../../../shared/artifacts'
+import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../../shared/artifacts'
 import type { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import {
   getShareableBrowserArtifactFile,
@@ -43,13 +43,20 @@ describe('browser artifact upload', () => {
       contentType: 'text/html',
       fileName: 'report.html'
     })
-    expect(stat).toHaveBeenCalledWith({ filePath: '/tmp/report.html' })
-    expect(readFile).toHaveBeenCalledWith({ filePath: '/tmp/report.html' })
+    // Why user-file: the user opened this page by URL, so it is shared from where it is.
+    expect(stat).toHaveBeenCalledWith({
+      filePath: '/tmp/report.html',
+      access: { kind: 'user-file' }
+    })
+    expect(readFile).toHaveBeenCalledWith({
+      filePath: '/tmp/report.html',
+      access: { kind: 'user-file' }
+    })
   })
 
   it('rejects oversized and unreadable files before upload', async () => {
     stat.mockResolvedValueOnce({
-      size: ARTIFACT_CLI_MAX_RPC_BYTES + 1,
+      size: ARTIFACT_MAX_CONTENT_BYTES + 1,
       isDirectory: false,
       mtime: 1
     })
@@ -62,5 +69,17 @@ describe('browser artifact upload', () => {
     await expect(readBrowserHtmlArtifactRequest('file:///tmp/private.html')).rejects.toMatchObject({
       code: 'unreadable'
     } satisfies Partial<ArtifactPublishPreparationError>)
+  })
+
+  it('accepts a file whose stat is exactly at the 10 MiB boundary', async () => {
+    stat.mockResolvedValueOnce({
+      size: ARTIFACT_MAX_CONTENT_BYTES,
+      isDirectory: false,
+      mtime: 1
+    })
+
+    await expect(readBrowserHtmlArtifactRequest('file:///tmp/exact.html')).resolves.toMatchObject({
+      sourceKey: '/tmp/exact.html'
+    })
   })
 })

@@ -21,44 +21,84 @@ export function assertJsonTextStructureWithinLimits(
   content: string,
   limits: JsonTextStructureLimits
 ): void {
-  assertLimit(limits.structuralTokens)
-  assertLimit(limits.nestingDepth)
-  let structuralTokens = 0
-  let depth = 0
-  let inString = false
-  let escaped = false
+  new JsonTextStructureValidator(limits).consume(content)
+}
 
-  for (let index = 0; index < content.length; index += 1) {
-    const character = content[index]
-    if (inString) {
-      if (escaped) {
-        escaped = false
-      } else if (character === '\\') {
-        escaped = true
-      } else if (character === '"') {
-        inString = false
+/** Carries string/escape and structure state across bounded chunks. */
+export class JsonTextStructureValidator {
+  private structuralTokens = 0
+  private depth = 0
+  private maximumDepth = 0
+  private inString = false
+  private escaped = false
+
+  constructor(private readonly limits: JsonTextStructureLimits) {
+    assertLimit(limits.structuralTokens)
+    assertLimit(limits.nestingDepth)
+  }
+
+  consume(content: string): void {
+    let linearString = false
+    for (let index = 0; index < content.length; index += 1) {
+      const character = content[index]
+      if (this.inString) {
+        if (this.escaped) {
+          this.escaped = false
+          continue
+        }
+        if (!linearString) {
+          const quote = content.indexOf('"', index)
+          const end = quote === -1 ? content.length : quote
+          let backslashes = 0
+          for (let at = end - 1; at >= index && content[at] === '\\'; at -= 1) {
+            backslashes++
+          }
+          if (quote === -1) {
+            this.escaped = backslashes % 2 !== 0
+            return
+          }
+          index = quote
+          if (backslashes % 2 === 0) {
+            this.inString = false
+          } else {
+            // Escape-heavy strings scan linearly instead of repeating native searches.
+            linearString = true
+          }
+          continue
+        }
+        if (character === '\\') {
+          this.escaped = true
+        } else if (character === '"') {
+          this.inString = false
+          linearString = false
+        }
+        continue
       }
-      continue
-    }
-    if (character === '"') {
-      inString = true
-      continue
-    }
-    if (!isStructuralToken(character)) {
-      continue
-    }
-    structuralTokens += 1
-    if (structuralTokens > limits.structuralTokens) {
-      throw new JsonTextStructureCapacityError('structuralTokens', limits.structuralTokens)
-    }
-    if (character === '{' || character === '[') {
-      depth += 1
-      if (depth > limits.nestingDepth) {
-        throw new JsonTextStructureCapacityError('nestingDepth', limits.nestingDepth)
+      if (character === '"') {
+        this.inString = true
+        continue
       }
-    } else if (character === '}' || character === ']') {
-      depth = Math.max(0, depth - 1)
+      if (!isStructuralToken(character)) {
+        continue
+      }
+      this.structuralTokens++
+      if (this.structuralTokens > this.limits.structuralTokens) {
+        throw new JsonTextStructureCapacityError('structuralTokens', this.limits.structuralTokens)
+      }
+      if (character === '{' || character === '[') {
+        this.depth++
+        this.maximumDepth = Math.max(this.maximumDepth, this.depth)
+        if (this.depth > this.limits.nestingDepth) {
+          throw new JsonTextStructureCapacityError('nestingDepth', this.limits.nestingDepth)
+        }
+      } else if (character === '}' || character === ']') {
+        this.depth = Math.max(0, this.depth - 1)
+      }
     }
+  }
+
+  usage(): { structuralTokens: number; nestingDepth: number } {
+    return { structuralTokens: this.structuralTokens, nestingDepth: this.maximumDepth }
   }
 }
 

@@ -1,13 +1,14 @@
 import { useAppStore } from '@/store'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
+import { deleteFolderWorkspaceUnlessUnsaved } from './folder-workspace-delete'
 import type { WorktreeDeleteIdentity } from './worktree-delete-request'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type WorktreeContextMenuDeleteIntent =
   | { kind: 'worktree'; worktree: WorktreeDeleteIdentity }
   | { kind: 'batch'; worktrees: readonly WorktreeDeleteIdentity[] }
-  | { kind: 'folder'; folderWorkspaceId: string }
+  | { kind: 'folder'; folderWorkspaceId: string; executionHostId?: ExecutionHostId }
 
 export function createWorktreeContextMenuDeleteIntent(args: {
   worktree: Pick<Worktree, 'id' | 'instanceId' | 'hostId'>
@@ -26,7 +27,11 @@ export function createWorktreeContextMenuDeleteIntent(args: {
     }
   }
   if (args.folderWorkspaceId) {
-    return { kind: 'folder', folderWorkspaceId: args.folderWorkspaceId }
+    return {
+      kind: 'folder',
+      folderWorkspaceId: args.folderWorkspaceId,
+      ...(args.worktree.hostId ? { executionHostId: args.worktree.hostId } : {})
+    }
   }
   const { id, instanceId, hostId } = args.worktree
   return { kind: 'worktree', worktree: { id, instanceId, hostId } }
@@ -44,13 +49,11 @@ export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDe
     })
     return
   }
-  const state = useAppStore.getState()
-  void state.deleteFolderWorkspace(intent.folderWorkspaceId).then((deleted) => {
-    const current = useAppStore.getState()
-    if (deleted && current.activeWorktreeId === folderWorkspaceKey(intent.folderWorkspaceId)) {
-      current.setActiveWorktree(null)
-    }
-  })
+  void deleteFolderWorkspaceUnlessUnsaved(
+    useAppStore.getState,
+    intent.folderWorkspaceId,
+    intent.executionHostId
+  )
 }
 
 export function deferWorktreeContextMenuDeleteIntent(

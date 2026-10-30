@@ -30,6 +30,30 @@ export function layoutSpanningGroups(
     )
 }
 
+/** Restore declared-owner rows omitted from a persisted tab order. */
+export function appendOwnedTabIdsToGroups(
+  groups: readonly TabGroup[],
+  tabOwners: ReadonlyMap<string, string>
+): TabGroup[] {
+  const tabIdsByGroup = new Map<string, string[]>()
+  for (const [tabId, groupId] of tabOwners) {
+    const tabIds = tabIdsByGroup.get(groupId) ?? []
+    tabIds.push(tabId)
+    tabIdsByGroup.set(groupId, tabIds)
+  }
+  return groups.map((group) => {
+    const ownedTabIds = tabIdsByGroup.get(group.id)
+    if (!ownedTabIds) {
+      return group
+    }
+    const orderedTabIds = new Set(group.tabOrder)
+    const missingTabIds = ownedTabIds.filter((tabId) => !orderedTabIds.has(tabId))
+    return missingTabIds.length > 0
+      ? { ...group, tabOrder: [...group.tabOrder, ...missingTabIds] }
+      : group
+  })
+}
+
 /** Re-home tabs stranded by a dropped group so hydration cannot render a blank workspace. */
 export function adoptGrouplessTabs(
   tabsByWorktree: Record<string, Tab[]>,

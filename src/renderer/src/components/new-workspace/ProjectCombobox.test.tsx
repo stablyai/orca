@@ -5,10 +5,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import ProjectCombobox from './ProjectCombobox'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
-// Render the popover inline so assertions can reach the list without a portal.
-// `onOpenChange` is exposed on a button so a test can close the popover the way
-// Radix does on Escape — independently of the component's own key handler.
+// Render inline and expose Radix-style close independently of the component key handler.
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({
     children,
@@ -30,6 +29,10 @@ vi.mock('./use-recent-project-ids', () => ({ useRecentProjectIds: () => [] }))
 
 let container: HTMLDivElement
 let root: Root
+
+function renderField(element: React.ReactNode): void {
+  root.render(<TooltipProvider>{element}</TooltipProvider>)
+}
 
 const projects: NewWorkspaceProjectOption[] = [
   {
@@ -72,7 +75,7 @@ function field(): HTMLInputElement {
 
 function openList(): void {
   act(() => {
-    field().dispatchEvent(new FocusEvent('focus', { bubbles: true }))
+    field().focus()
   })
 }
 
@@ -111,7 +114,7 @@ afterEach(() => {
 describe('ProjectCombobox', () => {
   it('renders a logical project label without host-specific SSH chrome', () => {
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox options={projects} value="github:stablyai/orca" onValueChange={vi.fn()} />
       )
     })
@@ -123,7 +126,7 @@ describe('ProjectCombobox', () => {
 
   it('keeps a focusable combobox that composer focus helpers can target', () => {
     act(() => {
-      root.render(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
+      renderField(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
     })
 
     const trigger = container.querySelector<HTMLElement>(
@@ -140,7 +143,7 @@ describe('ProjectCombobox', () => {
     const onValueChange = vi.fn()
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={projects}
           value="github:stablyai/orca"
@@ -160,7 +163,7 @@ describe('ProjectCombobox', () => {
     const onValueChange = vi.fn()
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={projects}
           value="project-group:folder-group"
@@ -181,11 +184,11 @@ describe('ProjectCombobox', () => {
     expect(onValueChange).toHaveBeenCalledWith('project-group:folder-group')
   })
 
-  it('always offers an "Add a new project" action, including when the list is empty', () => {
+  it('always offers an "Add project" action, including when the list is empty', () => {
     const onAddProject = vi.fn()
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={[]}
           value={null}
@@ -197,7 +200,7 @@ describe('ProjectCombobox', () => {
     openList()
 
     const addRow = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (node) => node.textContent?.includes('Add a new project')
+      (node) => node.textContent?.includes('Add project')
     )
     expect(addRow).toBeTruthy()
 
@@ -208,11 +211,11 @@ describe('ProjectCombobox', () => {
     expect(onAddProject).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps "Add a new project" reachable when the search matches nothing', () => {
+  it('keeps "Add project" reachable when the search matches nothing', () => {
     const onAddProject = vi.fn()
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={projects}
           value={null}
@@ -226,7 +229,7 @@ describe('ProjectCombobox', () => {
 
     expect(container.textContent).toContain('No projects match your search.')
     const addRow = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (node) => node.textContent?.includes('Add a new project')
+      (node) => node.textContent?.includes('Add project')
     )
     expect(addRow).toBeTruthy()
 
@@ -236,13 +239,13 @@ describe('ProjectCombobox', () => {
     expect(onAddProject).toHaveBeenCalledTimes(1)
   })
 
-  it('omits the "Add a new project" action when no handler is provided', () => {
+  it('omits the "Add project" action when no handler is provided', () => {
     act(() => {
-      root.render(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
+      renderField(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
     })
     openList()
 
-    expect(container.textContent).not.toContain('Add a new project')
+    expect(container.textContent).not.toContain('Add project')
   })
 
   it('renders directory details for duplicate project names', () => {
@@ -266,7 +269,7 @@ describe('ProjectCombobox', () => {
     ]
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox options={duplicateProjects} value={null} onValueChange={vi.fn()} />
       )
     })
@@ -278,10 +281,9 @@ describe('ProjectCombobox', () => {
 
   it('filters as the user types, without a second search box', () => {
     act(() => {
-      root.render(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
+      renderField(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
     })
     openList()
-    // The field itself is the only text input in the control.
     expect(container.querySelectorAll('input')).toHaveLength(1)
 
     type('noq')
@@ -294,7 +296,7 @@ describe('ProjectCombobox', () => {
     const onValueSelected = vi.fn()
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={projects}
           value={null}
@@ -313,12 +315,12 @@ describe('ProjectCombobox', () => {
     expect(onValueSelected).toHaveBeenCalledWith('github:stablyai/noqa')
   })
 
-  it('arms "Add a new project" when a query matches nothing, so Enter is never a wrong guess', () => {
+  it('arms "Add project" when a query matches nothing, so Enter is never a wrong guess', () => {
     const onAddProject = vi.fn()
     const onValueChange = vi.fn()
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={projects}
           value={null}
@@ -339,16 +341,14 @@ describe('ProjectCombobox', () => {
 
   it('restores the committed project on Escape instead of stranding a stale query', () => {
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox options={projects} value="github:stablyai/orca" onValueChange={vi.fn()} />
       )
     })
     openList()
     type('zzzznomatch')
     expect(field().value).toBe('zzzznomatch')
-    // Radix closes the popover itself on Escape/outside-click, leaving a closed
-    // list with a live query — the state that used to strand the field showing
-    // text matching nothing while hiding the committed project.
+    // Radix can close without clearing the query; Escape must still restore the committed project.
     act(() => {
       container
         .querySelector<HTMLButtonElement>('[data-test-close-popover]')
@@ -366,7 +366,7 @@ describe('ProjectCombobox', () => {
 
   it('drops an uncommitted query when the list closes, so junk text never persists', () => {
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox options={projects} value="github:stablyai/orca" onValueChange={vi.fn()} />
       )
     })
@@ -374,7 +374,6 @@ describe('ProjectCombobox', () => {
     type('asasdasd')
     expect(field().value).toBe('asasdasd')
 
-    // Blur / outside-click closes via Radix, not the key handler.
     act(() => {
       container
         .querySelector<HTMLButtonElement>('[data-test-close-popover]')
@@ -388,7 +387,7 @@ describe('ProjectCombobox', () => {
 
   it('marks the field invalid so a failed create press can turn it red', () => {
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={projects}
           value={null}
@@ -403,9 +402,7 @@ describe('ProjectCombobox', () => {
     expect(field().getAttribute('aria-describedby')).toBe('project-error')
   })
 
-  // Empty query + >=6 matches + a folder group triggers sectioning, which sinks
-  // folders below Projects. Arming raw rank order armed the BOTTOM row, so Enter
-  // on open created the workspace in the folder group.
+  // Sectioning sinks folders below projects; raw rank would arm the bottom row and Enter would choose the wrong project.
   const sectionedOptions: NewWorkspaceProjectOption[] = [
     ...Array.from({ length: 5 }, (_, index) => ({
       kind: 'project' as const,
@@ -429,7 +426,7 @@ describe('ProjectCombobox', () => {
 
   it('arms the first rendered row when sections reorder the list', () => {
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox options={sectionedOptions} value={null} onValueChange={vi.fn()} />
       )
     })
@@ -445,7 +442,7 @@ describe('ProjectCombobox', () => {
     const onValueChange = vi.fn()
 
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox options={sectionedOptions} value={null} onValueChange={onValueChange} />
       )
     })
@@ -464,7 +461,7 @@ describe('ProjectCombobox', () => {
 
   it('steps ArrowDown to the next rendered row instead of jumping across sections', () => {
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox options={sectionedOptions} value={null} onValueChange={vi.fn()} />
       )
     })
@@ -479,7 +476,7 @@ describe('ProjectCombobox', () => {
 
   it('owns every option from the listbox, with no unroled wrapper in between', () => {
     act(() => {
-      root.render(
+      renderField(
         <ProjectCombobox
           options={projects}
           value={null}

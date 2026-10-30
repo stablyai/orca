@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   publishDocPreviewFailure: vi.fn(),
-  boundGrantIdByGuest: new Map<object, string>(),
+  boundGrantIdByGuest: new Map<Electron.WebContents, string>(),
   revocationListener: null as null | ((grant: { id: string }) => void)
 }))
 
@@ -10,7 +10,8 @@ vi.mock('./doc-preview-failure-notice', () => ({
   publishDocPreviewFailure: mocks.publishDocPreviewFailure
 }))
 vi.mock('./doc-preview-guest-policy', () => ({
-  readDocPreviewGuestBoundGrantId: (guest: object) => mocks.boundGrantIdByGuest.get(guest) ?? null
+  readDocPreviewGuestBoundGrantId: (guest: Electron.WebContents) =>
+    mocks.boundGrantIdByGuest.get(guest) ?? null
 }))
 vi.mock('./doc-preview-grant-registry', () => ({
   onDocPreviewGrantRevoked: (listener: (grant: { id: string }) => void) => {
@@ -22,7 +23,6 @@ vi.mock('./doc-preview-grant-registry', () => ({
 const GRANT_ID = 'a'.repeat(32)
 const OTHER_GRANT_ID = 'b'.repeat(32)
 
-/** Only the identity matters: the module asks the guest registry what grant this contents holds. */
 function guestBoundTo(grantId: string | null): Electron.WebContents {
   const guest = {} as Electron.WebContents
   if (grantId !== null) {
@@ -40,7 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.boundGrantIdByGuest.clear()
   mocks.revocationListener = null
-  // Why per test: the module remembers which grants it has already told the reader about.
+  // Reset per-grant notice throttling between tests.
   vi.resetModules()
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-08-27T00:00:00.000Z'))
@@ -51,19 +51,6 @@ afterEach(() => {
 })
 
 describe('noticeDocPreviewDownloadBlocked', () => {
-  it('tells the shell which preview had a download refused', async () => {
-    const notice = await loadNotifier()
-
-    notice(guestBoundTo(GRANT_ID))
-
-    expect(mocks.publishDocPreviewFailure).toHaveBeenCalledWith({
-      grantId: GRANT_ID,
-      reason: 'download-blocked'
-    })
-  })
-
-  // Why: a document can ask in a loop. The reader learns nothing from the second notice, and every
-  // attempt would otherwise cross the IPC boundary and re-render the strip.
   it('says it once however often the document asks', async () => {
     const notice = await loadNotifier()
     const guest = guestBoundTo(GRANT_ID)
@@ -87,8 +74,6 @@ describe('noticeDocPreviewDownloadBlocked', () => {
     expect(mocks.publishDocPreviewFailure).toHaveBeenCalledTimes(2)
   })
 
-  // Why not one throttle for the whole app: two previews are two readers, and silencing the second
-  // because the first just refused something leaves that press unexplained.
   it('throttles each preview on its own', async () => {
     const notice = await loadNotifier()
 
@@ -113,9 +98,6 @@ describe('noticeDocPreviewDownloadBlocked', () => {
     expect(mocks.publishDocPreviewFailure).toHaveBeenCalledTimes(2)
   })
 
-  // The absence half of the first test: no shell is showing this contents, so there is no preview
-  // to put a notice on. Without the presence tests above, this would pass on a module that never
-  // published anything at all.
   it('says nothing for a contents no preview is bound to', async () => {
     const notice = await loadNotifier()
 

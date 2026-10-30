@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
-// Imported through the registry the way the drag lifecycle imports it, so these drive the entry
-// point the shipping gesture actually calls.
+// Use the registry entry point called by the shipping drag lifecycle.
 import {
   acquireWebviewsDragPassthrough,
   registerPersistentWebview,
@@ -49,20 +48,6 @@ describe('client-hosted retained guest drag passthrough', () => {
     const rig = createRetainedHostFixture()
     await rig.mount()
     const endDrag = startDrag()
-
-    rig.attach()
-
-    expect(rig.host().style.pointerEvents).toBe('none')
-
-    endDrag()
-
-    expect(rig.host().style.pointerEvents).toBe('auto')
-  })
-
-  it('brings a retained page created mid-drag up click-through', async () => {
-    const rig = createRetainedHostFixture()
-    const endDrag = startDrag()
-    await rig.mount()
 
     rig.attach()
 

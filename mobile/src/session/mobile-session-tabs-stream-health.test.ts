@@ -72,12 +72,10 @@ function makeHarness(options?: {
   } as unknown as RpcClient
   const apply =
     options?.apply ??
-    vi.fn(
-      (value: TestResult): SessionTabsApplyOutcome<string> => ({
-        accepted: true,
-        effectiveTabs: value.tabs
-      })
-    )
+    vi.fn((value: TestResult): SessionTabsApplyOutcome<string> => ({
+      accepted: true,
+      effectiveTabs: value.tabs
+    }))
   const consumeAccepted = vi.fn()
   let recoveryNeeded = false
   const controller = new MobileSessionTabsStreamHealth<TestResult, string>({
@@ -306,9 +304,8 @@ describe('MobileSessionTabsStreamHealth', () => {
   })
 
   it('does not consume a rejected stream snapshot or update', () => {
-    const apply = vi.fn(
-      (value: TestResult): SessionTabsApplyOutcome<string> =>
-        value.type ? { accepted: false } : { accepted: true, effectiveTabs: value.tabs }
+    const apply = vi.fn((value: TestResult): SessionTabsApplyOutcome<string> =>
+      value.type ? { accepted: false } : { accepted: true, effectiveTabs: value.tabs }
     )
     const harness = makeHarness({ apply })
     const subscription = harness.controller.beginSubscription()

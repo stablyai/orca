@@ -2,15 +2,10 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from '../../../../shared/terminal-tab-types'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 
-/**
- * Whether a tab's split layout is owned by a host (web/mobile clients, or a
- * desktop client viewing a remote "Orca server" worktree) rather than built
- * locally. Such layouts arrive via the host snapshot, so the live-layout
- * reconciler must materialize their panes. A desktop client only needs this for
- * remote-runtime tabs — local tabs split their panes directly.
- */
+/** Materialize host-published layouts for web/mobile and desktop remote-runtime tabs; local desktop splits create panes directly. */
 export function isHostAuthoritativeLayout(args: {
   isWebClient: boolean
   ptyIdsByLeafId: Record<string, string> | undefined
@@ -85,6 +80,22 @@ function mountedLeafIdsIn(
   ]
 }
 
+/** Find mounted leaves omitted by a nonempty host tree; no tree proves nothing about retirement. */
+export function planTerminalLiveLayoutRemovals(
+  root: TerminalPaneLayoutNode | null | undefined,
+  currentLeafIds: Iterable<string>,
+  retiredLeafIds: ReadonlySet<string>
+): string[] {
+  if (!root) {
+    return []
+  }
+  const layoutLeafIds = new Set(collectLeafIds(root))
+  // Require prior host publication before treating absence as retirement; snapshots can race client startup.
+  return [...currentLeafIds].filter(
+    (leafId) => !layoutLeafIds.has(leafId) && retiredLeafIds.has(leafId)
+  )
+}
+
 export function planTerminalLiveLayoutInsertions(
   root: TerminalPaneLayoutNode | null | undefined,
   currentLeafIds: Iterable<string>
@@ -107,9 +118,7 @@ export function planTerminalLiveLayoutInsertions(
       return false
     }
 
-    // Why: bridge the current split before filling nested descendants; once a
-    // child subtree is split internally, PaneManager can no longer wrap it as
-    // this split's sibling using a leaf-only splitPane call.
+    // Bridge parent splits first; nested children cannot later be wrapped as siblings through leaf-only splitPane.
     if (firstHasMounted && !secondHasMounted) {
       const sourceLeafId = rightmostMountedLeafId(node.first, mountedLeafIds)
       const newLeafId = leftmostLeafId(node.second)
@@ -155,4 +164,44 @@ export function planTerminalLiveLayoutInsertions(
 
   ensureSubtree(root)
   return insertions
+}
+
+/** Close only retired leaves with cleared PTYs; missing transports may still mount, and live bindings may outdate snapshots. Never remove the last pane. */
+export function selectRetiredPaneIds(
+  retiredLeafIds: readonly string[],
+  view: {
+    paneCount: number
+    paneIdForLeaf: (leafId: string) => number | null
+    ptyIdForPane: (paneId: number) => string | null | undefined
+  }
+): number[] {
+  const paneIds: number[] = []
+  for (const leafId of retiredLeafIds) {
+    if (view.paneCount - paneIds.length <= 1) {
+      break
+    }
+    const paneId = view.paneIdForLeaf(leafId)
+    if (paneId === null || view.ptyIdForPane(paneId) !== null) {
+      continue
+    }
+    paneIds.push(paneId)
+  }
+  return paneIds
+}
+
+/** Retain omitted previously published leaves until removal or host republication, retrying after live PTY bindings clear. */
+export function trackRetiredLeafIds(args: {
+  retiredLeafIds: ReadonlySet<string>
+  previousLayoutLeafIds: ReadonlySet<string>
+  layoutLeafIds: ReadonlySet<string>
+  mountedLeafIds: Iterable<string>
+}): ReadonlySet<string> {
+  const mounted = new Set(args.mountedLeafIds)
+  const next = new Set<string>()
+  for (const leafId of [...args.retiredLeafIds, ...args.previousLayoutLeafIds]) {
+    if (mounted.has(leafId) && !args.layoutLeafIds.has(leafId)) {
+      next.add(leafId)
+    }
+  }
+  return next
 }

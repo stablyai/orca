@@ -41,7 +41,7 @@ export function normalizeAmpEvent(
     (eventName === 'tool.call' || eventName === 'tool.result') &&
     state.ampCompletedCacheKeys.has(ampCacheKey)
   ) {
-    // Why: Amp status posts are fire-and-forget, so drop stale tool events that arrive after the thread ended.
+    // Drop fire-and-forget tool posts arriving after thread completion.
     return null
   }
 
@@ -69,7 +69,7 @@ export function normalizeAmpEvent(
 
   const normalized = normalizeAgentStatusPayload({
     state: stateName,
-    // Why: Amp tool/result events may use `message` for tool output; only lifecycle events may treat it as the turn prompt.
+    // Tool/result message is output; only lifecycle messages can supply turn prompts.
     prompt: resolvePrompt(state, ampCacheKey, ampPromptText, {
       resetOnNewTurn: isNewTurnEvent('amp', eventName)
     }),
@@ -78,6 +78,7 @@ export function normalizeAmpEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted
   })
   if (normalized && eventName === 'agent.end') {
@@ -95,7 +96,7 @@ export function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unkn
     ['threadId', 'threadID', 'thread_id'],
     AMP_THREAD_ID_MAX_LENGTH
   )
-  // Why: Amp emits events for multiple threads per pane; cache by thread internally while keeping the visible paneKey stable.
+  // Keep one visible pane while isolating each Amp thread's caches.
   return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
 }
 
@@ -131,7 +132,7 @@ export function pruneAmpThreadCacheKeys(
     return
   }
 
-  // Why: Amp multiplexes many thread IDs through one pane; keep the current thread plus the most recent entries instead of retaining every completed thread until teardown.
+  // Bound completed-thread caches while retaining the current and most recent threads.
   for (const key of scopedKeys) {
     if (overflow <= 0) {
       break

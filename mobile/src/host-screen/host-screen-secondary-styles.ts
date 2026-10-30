@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenSecondaryStyles = StyleSheet.create({
+export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   errorText: {
     color: colors.statusRed,
     fontSize: typography.bodySize
@@ -34,6 +35,9 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     color: colors.textMuted,
     marginLeft: spacing.xs
   },
+  sectionPendingSpinner: {
+    marginLeft: spacing.sm
+  },
   separator: {
     height: 1,
     backgroundColor: colors.borderSubtle,
@@ -47,10 +51,24 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     marginBottom: spacing.md
   },
+  filterModalHeading: {
+    flexShrink: 1
+  },
   filterModalTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary
+  },
+  filterModalSubtitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2
+  },
+  optionPending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs
   },
   clearFiltersText: {
     fontSize: 13,
@@ -87,6 +105,50 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
+  },
+  optionRowLabel: {
+    flex: 1
+  },
+  optionRowDetail: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2
+  },
+  optionRowIndented: {
+    paddingLeft: spacing.md + 2 + spacing.lg
+  },
+  optionRowDisabled: {
+    opacity: 0.5
+  },
+  optionSearch: {
+    padding: spacing.sm
+  },
+  optionRowValue: {
+    flexShrink: 1,
+    maxWidth: '45%',
+    fontSize: 13,
+    color: colors.textMuted
+  },
+  // On the drawer's base color, so the track takes the panel color the option cards use.
+  optionSegmented: {
+    backgroundColor: colors.bgPanel,
+    marginBottom: spacing.md
+  },
+  optionBack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs
+  },
+  optionBackText: {
+    fontSize: 14,
+    color: colors.textSecondary
+  },
+  optionPageTitle: {
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md
   },
   filterRepoDot: {
     width: 8,
@@ -136,4 +198,4 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff'
   }
-})
+}))

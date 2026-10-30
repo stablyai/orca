@@ -11,15 +11,20 @@ import {
   unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   clearCopiedResourceMarker,
   markCopiedResource,
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
+import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
+
+// The Codex app installs these under ~/.codex; Codex rejects them from any other home.
+export const CODEX_BUNDLED_MARKETPLACES_ENTRY = join('.tmp', 'bundled-marketplaces')
+export const CODEX_BUNDLED_MARKETPLACE_NAMES = ['openai-bundled', 'openai-bundled-alpha'] as const
 
 const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'skills',
@@ -29,6 +34,7 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'profile-v2',
   'themes',
   'prompts',
+  CODEX_BUNDLED_MARKETPLACES_ENTRY,
   CODEX_GLOBAL_INSTRUCTIONS_ENTRY
 ] as const
 
@@ -47,6 +53,20 @@ export function getOrcaManagedCodexHomePath(): string {
   return managedHomePath
 }
 
+/** Config files an Orca-launched local Codex reads trust from, in the hook installer's lock order. */
+export function getLocalCodexTrustConfigFiles(
+  agentHome: string,
+  launchCodexHome?: string | null
+): string[] {
+  const files = [
+    join(getOrcaManagedCodexHomePath(), 'config.toml'),
+    // Managed accounts launch on their own CODEX_HOME, the only config that launch reads (#27235).
+    ...(launchCodexHome ? [join(launchCodexHome, 'config.toml')] : []),
+    join(agentHome, '.codex', 'config.toml')
+  ]
+  return [...new Set(files)]
+}
+
 export function getCodexSessionBackfillStateDirPath(): string {
   return join(getOrcaUserDataPath(), 'codex-session-backfill')
 }
@@ -55,8 +75,7 @@ export function getOrcaUserDataPath(): string {
   if (process.env.ORCA_USER_DATA_PATH) {
     return process.env.ORCA_USER_DATA_PATH
   }
-  // Why: CLI hook commands import this module outside Electron. Mirror the CLI
-  // runtime metadata path so offline hook status/on/off uses the same userData.
+  // Offline CLI hooks run outside Electron and must resolve the same userData path.
   if (process.platform === 'darwin') {
     return join(homedir(), 'Library', 'Application Support', 'orca')
   }
@@ -66,16 +85,13 @@ export function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
-// Why: each managed home (the shared runtime mirror, or a per-account
-// self-contained CODEX_HOME that the caller has already created) links the same
-// system resources with its own ownership markers, so a per-account launch home
-// is complete without ever symlinking into or mutating the user's real ~/.codex.
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
+  syncSystemCodexRulesIntoManagedHome(systemHomePath, targetHome)
 }
 
 export function syncCodexGlobalInstructionsIntoManagedHome({
@@ -86,10 +102,7 @@ export function syncCodexGlobalInstructionsIntoManagedHome({
   managedHomePath: string
 }): void {
   mkdirSync(managedHomePath, { recursive: true })
-  // Why: this only runs for WSL runtime homes, whose system + managed homes are
-  // both \\wsl.localhost UNC paths. A host-side symlink there stores a Windows
-  // UNC target the distro cannot resolve, so copy the file like the config
-  // mirror does across the same boundary.
+  // WSL cannot resolve host-side UNC symlink targets; copy instructions into its runtime home.
   linkSystemCodexResource(systemHomePath, managedHomePath, CODEX_GLOBAL_INSTRUCTIONS_ENTRY, {
     preferCopy: true
   })
@@ -103,11 +116,7 @@ function linkSystemCodexResource(
 ): void {
   const sourcePath = join(systemHomePath, entryName)
   const targetPath = join(managedHomePath, entryName)
-  // Why: both branches below DELETE Orca's mirrored copy because the system
-  // resource "is not there". `existsSync` and the old `catch { return false }`
-  // both reported that for a source we merely could not read, so one denied
-  // read on ~/.codex/AGENTS.md removed the managed copy on the next launch.
-  // One resolved stat now answers reachability and regular-file-ness together.
+  // Distinguish unreadable sources from absent ones before deleting a managed copy.
   const sourceObservation = observeResolvedPathEntry(sourcePath)
   if (sourceObservation.kind === 'indeterminate') {
     return
@@ -128,8 +137,7 @@ function linkSystemCodexResource(
       return
     }
   }
-  // Why: an unreadable target is not a missing target; do not let the fallback
-  // copier remove it merely because existsSync/lstatSync collapsed the error.
+  // Unreadable targets must not enter the copier's removal path.
   const targetObservation = observe(() => lstatSync(targetPath))
   if (targetObservation.kind === 'indeterminate') {
     return
@@ -141,19 +149,18 @@ function linkSystemCodexResource(
     return
   }
   if (shouldRefreshFallbackCopy) {
-    // Why: WSL launch preparation runs before every Codex start. Avoid
-    // rewriting an unchanged file across the UNC boundary on every launch.
+    // Avoid rewriting unchanged instructions across UNC on every WSL launch.
     if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY) {
       const contentsMatch = copiedFileContentsMatch(sourcePath, targetPath)
       if (contentsMatch === 'match' || contentsMatch === 'indeterminate') {
-        // Why: a failed comparison is not permission to remove the only
-        // readable copy; leave it in place for the next launch.
+        // Failed comparisons must preserve the potentially only readable copy.
         return
       }
     }
     rmSync(targetPath, { recursive: true, force: true })
   }
 
+  mkdirSync(dirname(targetPath), { recursive: true })
   if (preferCopy) {
     copySystemCodexResourceAsOwnedFallback(sourcePath, targetPath, managedHomePath, entryName)
     return
@@ -168,9 +175,7 @@ function linkSystemCodexResource(
     )
     clearCopiedResourceMarker(managedHomePath, entryName)
   } catch (error) {
-    // Why: Windows can reject file symlinks outside developer mode. Copy is
-    // a fallback for launch-time resources; mark ownership so later syncs can
-    // refresh the copy without touching user-created runtime resources.
+    // Windows may reject file symlinks; mark fallback copies so sync never replaces user-owned resources.
     copySystemCodexResourceAsOwnedFallback(
       sourcePath,
       targetPath,
@@ -194,14 +199,12 @@ function copySystemCodexResourceAsOwnedFallback(
       recursive: true,
       force: false,
       errorOnExist: true,
-      // Why: dotfile managers commonly symlink AGENTS.md. WSL needs the file
-      // contents because a copied host-side link is not usable in the distro.
+      // Materialize symlinked instructions: WSL cannot use a copied host-side link.
       dereference: entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY
     })
     markCopiedResource(managedHomePath, entryName, sourcePath)
   } catch (copyError) {
-    // Why: an unmarked copy cannot be refreshed or safely removed later.
-    // Roll it back instead of stranding stale instructions in the runtime home.
+    // Roll back unmarked copies; later sync cannot safely refresh or remove them.
     try {
       rmSync(targetPath, { recursive: true, force: true })
     } catch (cleanupError) {
@@ -224,8 +227,7 @@ function copiedFileContentsMatch(
   targetPath: string
 ): 'match' | 'different' | 'indeterminate' {
   try {
-    // Why: reading a FIFO or device synchronously can block Codex launch.
-    // Follow source symlinks, but only compare two regular files.
+    // Compare regular files only; synchronous FIFO/device reads can block launch.
     if (!statSync(sourcePath).isFile() || !lstatSync(targetPath).isFile()) {
       return 'different'
     }
@@ -290,8 +292,6 @@ function removeSymlinkedResourceIfOwned(targetPath: string, sourcePath: string):
 
 function removeSymlinkEntry(targetPath: string): boolean {
   try {
-    // Why: recursive rm can leave a broken directory symlink behind; unlink the
-    // link entry itself so deleted system resources do not linger in runtime home.
     unlinkSync(targetPath)
     return true
   } catch {

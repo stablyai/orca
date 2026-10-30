@@ -14,36 +14,43 @@ const updateWorktreeMeta = vi.fn()
 let worktreeCardProperties: WorktreeCardProperty[] = []
 const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {},
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      projectGroups: [],
-      remoteBranchConflictByWorktreeId: {},
-      settings: null,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      updateWorktreeMeta,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    projectGroups: [],
+    remoteBranchConflictByWorktreeId: {},
+    settings: null,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    updateWorktreeMeta,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
-}))
+vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -57,7 +64,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))

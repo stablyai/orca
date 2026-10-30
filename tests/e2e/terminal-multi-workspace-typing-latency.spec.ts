@@ -1,30 +1,18 @@
-/**
- * Deterministic reproduction + benchmark for "typing lags while multiple
- * workspaces run agents" (the multi-workspace typing-latency complaint).
- *
- * Unlike the artificial-opencode suite (bounded bursts + held ACK gates),
- * this harness runs SUSTAINED paced agent-TUI streams through real PTYs in
- * background-workspace panes (and optionally visible splits) with no
- * artificial wedges, types at a fixed cadence WITHOUT waiting for each echo
- * (real users keep typing), and decomposes every key's latency into:
- *   input-half  = CDP keydown -> byte arrives at the pty (probe sidecar)
- *   echo-half   = pty echo    -> marker visible in the xterm buffer
- * All three clocks are epoch ms on one machine, so the halves add up.
- *
- * Scenarios are gated behind ORCA_TYPING_BENCH=1 (they are benchmarks that
- * may legitimately "fail" while the bug reproduces, not CI regression gates).
- * Entry point: pnpm bench:multi-workspace-typing  (see
- * config/scripts/run-multi-workspace-typing-bench.mjs for knobs). Results are
- * written as JSON to tests/tools/benchmarks/results/ for A/B comparison.
- */
-import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { type ChildProcess, spawn } from 'node:child_process'
+// Benchmark sustained paced real-PTY agent load while typing at fixed cadence without waiting for echoes.
+// Split latency into CDP keydown→PTY receipt and receipt→xterm-buffer detection on one machine’s epoch clock; neither proves pixel paint.
+// ORCA_TYPING_BENCH=1 gates benchmarks, not CI regressions; ORCA_TYPING_BENCH_INSTRUMENTATION=0 supplies a probe-off observer control.
+// Run pnpm bench:multi-workspace-typing (runner documents knobs); JSON results go to tests/tools/benchmarks/results/.
+import type { Page } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
+import { tmpdir } from 'node:os'
 import { test, expect } from './helpers/orca-app'
+import { createTypingLoadWorkspaces, removeTypingLoadWorkspaces } from './typing-load-workspaces'
+import { readTypingScaleCensus } from './typing-scale-census'
 import {
   ensureTerminalVisible,
+  getActiveTabId,
   getActiveWorktreeId,
   getAllWorktreeIds,
   switchToWorktree,
@@ -38,348 +26,82 @@ import {
 } from './helpers/terminal'
 import {
   ensureActiveWorktreePaneLoad,
-  focusActiveTerminalInput,
   focusPane,
-  waitForTerminalOutputForPtyId,
   type TerminalLoadPane
 } from './artificial-opencode-pane-interactions'
 import {
   sustainedLoadReadyFilePath,
-  typingKeyMarkerPrefix,
-  typingProbeReadyMarker,
+  writeCodexEchoProbeScript,
   writeSustainedAgentLoadScript,
   writeTypingEchoProbeScript
 } from './sustained-agent-typing-load-scripts'
-
-const BENCH_ENABLED = process.env.ORCA_TYPING_BENCH === '1'
-
-function readPositiveInt(name: string, fallback: number): number {
-  const value = Number(process.env[name])
-  return Number.isInteger(value) && value > 0 ? value : fallback
-}
-
-const LOAD_PANES = readPositiveInt('ORCA_TYPING_BENCH_LOAD_PANES', 4)
-const LOAD_RATE_KBPS = readPositiveInt('ORCA_TYPING_BENCH_RATE_KBPS', 256)
-const KEY_COUNT = readPositiveInt('ORCA_TYPING_BENCH_KEYS', 32)
-const KEY_CADENCE_MS = readPositiveInt('ORCA_TYPING_BENCH_KEY_CADENCE_MS', 250)
-const CPU_WORKERS = readPositiveInt('ORCA_TYPING_BENCH_CPU_WORKERS', 0)
-const BENCH_LABEL = process.env.ORCA_TYPING_BENCH_LABEL ?? 'dev'
-
-const KEY_CHARS = 'abcdefghijklmnopqrstuvwxyz'
-const TIMER_SAMPLE_MS = 16
-const MARKER_SCAN_TRAILING_ROWS = 160
-const ECHO_STRAGGLER_TIMEOUT_MS = 30_000
-// Load must outlive setup (pane splits, worktree switches) plus the typing
-// window; generously padded because setup time varies with pane count.
-const LOAD_DURATION_S = Math.ceil((KEY_COUNT * KEY_CADENCE_MS) / 1000) + 90
-
-const RESULTS_DIR = path.resolve(__dirname, '..', '..', 'tools', 'benchmarks', 'results')
-
-type LatencyStats = {
-  count: number
-  p50: number
-  p90: number
-  p99: number
-  max: number
-}
-
-type KeySample = {
-  seq: number
-  sentAt: number
-  ptyArrivedAt: number | null
-  echoSeenAt: number | null
-}
-
-type PacedTypingMeasurement = {
-  keyCount: number
-  missingPtyArrivalCount: number
-  missingEchoCount: number
-  totalMs: LatencyStats | null
-  inputHalfMs: LatencyStats | null
-  echoHalfMs: LatencyStats | null
-  maxTimerDriftMs: number
-  samples: KeySample[]
-}
-
-type SchedulerDebugSnapshot = {
-  queuedChars: number
-  peakQueuedChars: number
-  droppedBacklogCount: number
-}
-
-type MainDeliveryDebugSnapshot = {
-  pendingChars: number
-  peakPendingChars: number
-  peakRendererInFlightChars: number
-  hiddenDeliveryGatedPtyCount: number
-  hiddenDeliveryDroppedChars: number
-  pendingDroppedChars: number
-}
-
-type TypingBenchWindow = Window & {
-  __terminalOutputSchedulerDebug?: {
-    reset: () => void
-    snapshot: () => SchedulerDebugSnapshot
-  }
-}
-
-function latencyStats(samples: number[]): LatencyStats | null {
-  if (samples.length === 0) {
-    return null
-  }
-  const sorted = [...samples].sort((a, b) => a - b)
-  const at = (q: number): number =>
-    sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]
-  return {
-    count: sorted.length,
-    p50: at(0.5),
-    p90: at(0.9),
-    p99: at(0.99),
-    max: sorted.at(-1) ?? 0
-  }
-}
-
-async function scanRecentKeyMarkerSeqs(
-  page: Page,
-  markerPrefix: string
-): Promise<{ seqs: number[]; atMs: number }> {
-  return page.evaluate(
-    ({ markerPrefix, trailingRows }) => {
-      const state = window.__store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      const tabId =
-        state?.activeTabType === 'terminal'
-          ? state.activeTabId
-          : worktreeId
-            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-            : null
-      const manager = tabId ? window.__paneManagers?.get(tabId) : null
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      const seqs: number[] = []
-      if (!pane) {
-        return { seqs, atMs: Date.now() }
-      }
-      // Why trailing rows, not serialize: full-buffer serialization on every
-      // poll runs on the renderer main thread and would perturb the very
-      // latency being measured (same rationale as the history-size spec).
-      const re = new RegExp(`${markerPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`, 'g')
-      const buffer = pane.terminal.buffer.active
-      const start = Math.max(0, buffer.length - trailingRows)
-      for (let row = start; row < buffer.length; row += 1) {
-        const line = buffer.getLine(row)?.translateToString(true) ?? ''
-        let match: RegExpExecArray | null
-        while ((match = re.exec(line)) !== null) {
-          seqs.push(Number(match[1]))
-        }
-      }
-      return { seqs, atMs: Date.now() }
-    },
-    { markerPrefix, trailingRows: MARKER_SCAN_TRAILING_ROWS }
-  )
-}
-
-function readKeyArrivalSidecar(sidecarPath: string): Map<number, number> {
-  const arrivals = new Map<number, number>()
-  let raw = ''
-  try {
-    raw = readFileSync(sidecarPath, 'utf8')
-  } catch {
-    return arrivals
-  }
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) {
-      continue
-    }
-    try {
-      const entry = JSON.parse(line) as { seq: number; atMs: number }
-      arrivals.set(entry.seq, entry.atMs)
-    } catch {
-      /* torn tail write; final retry pass re-reads */
-    }
-  }
-  return arrivals
-}
-
-async function measurePacedTyping(
-  page: Page,
-  runId: string,
-  sidecarPath: string
-): Promise<PacedTypingMeasurement> {
-  const markerPrefix = typingKeyMarkerPrefix(runId)
-  await focusActiveTerminalInput(page)
-
-  const timerDrift = await page.evaluateHandle((sampleMs) => {
-    let maxTimerDriftMs = 0
-    let lastTick = performance.now()
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
-      lastTick = now
-    }, sampleMs)
-    return {
-      stop: () => {
-        window.clearInterval(timer)
-        return maxTimerDriftMs
-      }
-    }
-  }, TIMER_SAMPLE_MS)
-
-  // Concurrent echo watcher: records the first time each key's marker is
-  // visible in the buffer, while typing continues at its own cadence.
-  const echoSeenAt = new Map<number, number>()
-  let watching = true
-  const echoWatcher = (async () => {
-    while (watching) {
-      const { seqs, atMs } = await scanRecentKeyMarkerSeqs(page, markerPrefix)
-      for (const seq of seqs) {
-        if (!echoSeenAt.has(seq)) {
-          echoSeenAt.set(seq, atMs)
-        }
-      }
-      await page.waitForTimeout(10)
-    }
-  })()
-
-  const sentAtBySeq = new Map<number, number>()
-  try {
-    for (let index = 0; index < KEY_COUNT; index++) {
-      const seq = index + 1
-      const tickStart = Date.now()
-      sentAtBySeq.set(seq, tickStart)
-      await page.keyboard.type(KEY_CHARS[index % KEY_CHARS.length])
-      const elapsed = Date.now() - tickStart
-      if (elapsed < KEY_CADENCE_MS) {
-        await page.waitForTimeout(KEY_CADENCE_MS - elapsed)
-      }
-    }
-    // Wait out stragglers so a slow echo is measured, not dropped.
-    const stragglerDeadline = Date.now() + ECHO_STRAGGLER_TIMEOUT_MS
-    while (echoSeenAt.size < KEY_COUNT && Date.now() < stragglerDeadline) {
-      await page.waitForTimeout(25)
-    }
-  } finally {
-    watching = false
-    await echoWatcher
-  }
-  const maxTimerDriftMs = await timerDrift.evaluate((watcher) => watcher.stop())
-  await timerDrift.dispose()
-
-  // The probe appends arrivals asynchronously; re-read until complete or 5s.
-  let arrivals = readKeyArrivalSidecar(sidecarPath)
-  const sidecarDeadline = Date.now() + 5_000
-  while (arrivals.size < KEY_COUNT && Date.now() < sidecarDeadline) {
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    arrivals = readKeyArrivalSidecar(sidecarPath)
-  }
-
-  const samples: KeySample[] = []
-  const totalMs: number[] = []
-  const inputHalfMs: number[] = []
-  const echoHalfMs: number[] = []
-  for (let seq = 1; seq <= KEY_COUNT; seq++) {
-    const sentAt = sentAtBySeq.get(seq) ?? 0
-    const ptyArrivedAt = arrivals.get(seq) ?? null
-    const seenAt = echoSeenAt.get(seq) ?? null
-    samples.push({ seq, sentAt, ptyArrivedAt, echoSeenAt: seenAt })
-    if (ptyArrivedAt !== null) {
-      inputHalfMs.push(ptyArrivedAt - sentAt)
-    }
-    if (seenAt !== null) {
-      totalMs.push(seenAt - sentAt)
-      if (ptyArrivedAt !== null) {
-        echoHalfMs.push(seenAt - ptyArrivedAt)
-      }
-    }
-  }
-
-  return {
-    keyCount: KEY_COUNT,
-    missingPtyArrivalCount: KEY_COUNT - arrivals.size,
-    missingEchoCount: KEY_COUNT - echoSeenAt.size,
-    totalMs: latencyStats(totalMs),
-    inputHalfMs: latencyStats(inputHalfMs),
-    echoHalfMs: latencyStats(echoHalfMs),
-    maxTimerDriftMs,
-    samples
-  }
-}
-
-async function readSchedulerDebug(page: Page): Promise<SchedulerDebugSnapshot | null> {
-  return page.evaluate(
-    () => (window as TypingBenchWindow).__terminalOutputSchedulerDebug?.snapshot() ?? null
-  )
-}
-
-async function readMainDeliveryDebug(page: Page): Promise<MainDeliveryDebugSnapshot | null> {
-  return page.evaluate(async () => window.api.pty.getRendererDeliveryDebugSnapshot())
-}
-
-async function resetDeliveryDebug(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    ;(window as TypingBenchWindow).__terminalOutputSchedulerDebug?.reset()
-    await window.api.pty.resetRendererDeliveryDebug()
-  })
-}
-
-function spawnCpuPressureWorkers(): ChildProcess[] {
-  const workerPath = path.resolve(
-    __dirname,
-    '..',
-    '..',
-    'tools',
-    'benchmarks',
-    'cpu-pressure-worker.mjs'
-  )
-  return Array.from({ length: CPU_WORKERS }, () =>
-    spawn(process.execPath, [workerPath, String((LOAD_DURATION_S + 120) * 1000)], {
-      stdio: 'ignore'
-    })
-  )
-}
-
-function writeBenchReport(
-  testInfo: TestInfo,
-  scenario: string,
-  measurement: PacedTypingMeasurement,
-  scheduler: SchedulerDebugSnapshot | null,
-  mainDelivery: MainDeliveryDebugSnapshot | null
-): void {
-  const report = {
-    benchmark: 'multi-workspace-typing-latency',
-    label: BENCH_LABEL,
-    scenario,
-    timestamp: new Date().toISOString(),
-    config: {
-      loadPanes: LOAD_PANES,
-      loadRateKbps: LOAD_RATE_KBPS,
-      keyCount: KEY_COUNT,
-      keyCadenceMs: KEY_CADENCE_MS,
-      cpuWorkers: CPU_WORKERS
-    },
-    measurement,
-    scheduler,
-    mainDelivery
-  }
-  mkdirSync(RESULTS_DIR, { recursive: true })
-  const stamp = report.timestamp.replace(/[:.]/g, '-')
-  const outPath = path.join(
-    RESULTS_DIR,
-    `multi-workspace-typing-${BENCH_LABEL}-${scenario}-${stamp}.json`
-  )
-  writeFileSync(outPath, JSON.stringify(report, null, 2))
-  const fmt = (stats: LatencyStats | null): string =>
-    stats
-      ? `p50 ${stats.p50.toFixed(1)}ms p90 ${stats.p90.toFixed(1)}ms max ${stats.max.toFixed(1)}ms`
-      : 'n/a'
-  testInfo.annotations.push({
-    type: `multi-workspace-typing-${scenario}`,
-    description:
-      `total ${fmt(measurement.totalMs)} | input-half ${fmt(measurement.inputHalfMs)} | ` +
-      `echo-half ${fmt(measurement.echoHalfMs)} | drift ${measurement.maxTimerDriftMs.toFixed(1)}ms | ` +
-      `missingEcho ${measurement.missingEchoCount} | report ${outPath}`
-  })
-  console.log(`[multi-workspace-typing] ${scenario}: ${testInfo.annotations.at(-1)?.description}`)
-}
+import {
+  startSynchronizedOutputBlackoutProbe,
+  stopSynchronizedOutputBlackoutProbe,
+  type SynchronizedOutputBlackoutSnapshot
+} from './synchronized-output-blackout-probe'
+import {
+  createGitChurnRepos,
+  registerGitChurnRepos,
+  startGitChurnLoad,
+  stopGitChurnLoad,
+  type GitChurnStats
+} from './git-churn-load'
+import {
+  cleanupAccumulatedWorkspaceFixture,
+  seedAccumulatedWorkspaceFixture,
+  startAccumulatedBenchmarkInstrumentation,
+  stopAccumulatedBenchmarkInstrumentation
+} from './accumulated-workspace-fixture'
+import {
+  startAccumulatedStatusTraffic,
+  stopAccumulatedStatusTraffic,
+  validateAccumulatedStatusIpcIngress,
+  type AccumulatedStatusIngressValidation
+} from './accumulated-workspace-status-fixture'
+import {
+  startAccumulatedTitleTraffic,
+  stopAccumulatedTitleTraffic
+} from './accumulated-workspace-title-fixture'
+import {
+  startAccumulatedOrderTraffic,
+  stopAccumulatedOrderTraffic
+} from './accumulated-workspace-order-fixture'
+import {
+  injectRendererLongTaskSelfTest,
+  startRuntimeGraphPublicationProbe,
+  stopRuntimeGraphPublicationProbe,
+  type RendererLongTaskSelfTestWindow
+} from './runtime-graph-publication-probe'
+import {
+  BENCH_ENABLED,
+  readPositiveInt,
+  LOAD_WORKSPACES,
+  LOAD_PANES,
+  LOAD_RATE_KBPS,
+  KEY_COUNT,
+  CPU_WORKERS,
+  GIT_CHURN_REPOS,
+  GIT_CHURN_FILES,
+  GIT_CHURN_CONCURRENCY,
+  CODEX_FRAME_ROWS,
+  CODEX_SPLIT_DELAY_MS,
+  PTY_METADATA,
+  BENCH_LABEL,
+  BENCH_INSTRUMENTATION_REQUESTED,
+  GRAPH_PROBE_REQUESTED,
+  GRAPH_PROBE_SELF_TEST_MS,
+  ORDER_CHURN_MS,
+  LOAD_DURATION_S,
+  readSchedulerDebug,
+  readMainDeliveryDebug,
+  resetDeliveryDebug,
+  spawnCpuPressureWorkers,
+  measureTypingWindow,
+  writeBenchReport,
+  startTypingProbe,
+  stopPtysQuietly
+} from './multi-workspace-typing-bench'
 
 async function startSustainedLoadInPanes(
   page: Page,
@@ -392,12 +114,10 @@ async function startSustainedLoadInPanes(
     await sendToTerminal(
       page,
       pane.ptyId,
-      `node ${JSON.stringify(scriptPath)} ${index} ${LOAD_RATE_KBPS} ${LOAD_DURATION_S}\r`
+      `node ${JSON.stringify(scriptPath)} ${index} ${LOAD_RATE_KBPS} ${LOAD_DURATION_S} ${PTY_METADATA ? 1 : 0} ${readPositiveInt('ORCA_TYPING_BENCH_TITLE_CHANGE_MS', 0)} ${readPositiveInt('ORCA_TYPING_BENCH_LIFECYCLE_MS', 0)}\r`
     )
   }
-  // Readiness is signalled via files, not terminal markers: a streaming pane
-  // scrolls its READY line out of the buffer before sequential checks get to
-  // it once several panes start together.
+  // Signal readiness through files: concurrent streaming panes can scroll READY out before sequential buffer checks.
   const missingReadyPanes = (): number[] =>
     panes
       .map((_, index) => index)
@@ -410,37 +130,23 @@ async function startSustainedLoadInPanes(
     .toBe(0)
 }
 
-async function startTypingProbe(
-  page: Page,
-  typingPtyId: string,
-  scriptPath: string,
-  runId: string
-): Promise<void> {
-  await sendToTerminal(page, typingPtyId, `node ${JSON.stringify(scriptPath)}\r`)
-  await waitForTerminalOutputForPtyId(page, typingPtyId, typingProbeReadyMarker(runId), 15_000)
-}
-
 function removeLoadReadyFiles(directory: string, runId: string, paneCount: number): void {
   for (let index = 0; index < paneCount; index++) {
     rmSync(sustainedLoadReadyFilePath(directory, runId, index), { force: true })
+    rmSync(path.join(directory, `.orca-mwt-load-stats-${runId}-${index}`), { force: true })
   }
-}
-
-async function stopPtysQuietly(page: Page, ptyIds: string[]): Promise<void> {
-  await Promise.all(
-    ptyIds.map((ptyId) => sendToTerminal(page, ptyId, '\x03').catch(() => undefined))
-  )
 }
 
 test.describe('Multi-workspace sustained typing latency bench', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(10 * 60 * 1000)
+  // Group scope, not the test bodies: a body-level skip still builds the Electron fixtures.
+  test.skip(!BENCH_ENABLED, 'Bench-only: run via pnpm bench:multi-workspace-typing')
 
   test('baseline: paced typing with no agent load', async ({
     orcaPage,
     testRepoPath
   }, testInfo) => {
-    test.skip(!BENCH_ENABLED, 'Bench-only: run via pnpm bench:multi-workspace-typing')
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -454,15 +160,18 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
     try {
       await resetDeliveryDebug(orcaPage)
       await startTypingProbe(orcaPage, typingPtyId, probePath, runId)
-      const measurement = await measurePacedTyping(orcaPage, runId, sidecarPath)
+      const measured = await measureTypingWindow(orcaPage, runId, sidecarPath)
+      const { measurement } = measured
       writeBenchReport(
         testInfo,
         'baseline',
-        measurement,
+        measured,
+        { cpuWorkers: 0, ptyMetadata: false, statusTrafficModel: null },
         await readSchedulerDebug(orcaPage),
         await readMainDeliveryDebug(orcaPage)
       )
-      expect(measurement.missingEchoCount).toBe(0)
+      expect(measurement.inputHalfMs?.count).toBe(KEY_COUNT)
+      expect(measurement.totalMs?.count).toBe(KEY_COUNT)
       expect(measurement.totalMs?.p50 ?? Number.POSITIVE_INFINITY).toBeLessThan(250)
     } finally {
       await stopPtysQuietly(orcaPage, [typingPtyId])
@@ -472,10 +181,9 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
   })
 
   test('typing under sustained hidden multi-workspace agent load', async ({
-    orcaPage,
-    testRepoPath
+    electronApp,
+    orcaPage
   }, testInfo) => {
-    test.skip(!BENCH_ENABLED, 'Bench-only: run via pnpm bench:multi-workspace-typing')
     await waitForSessionReady(orcaPage)
     const typingWorktreeId = await waitForActiveWorktree(orcaPage)
     const loadWorktreeId = (await getAllWorktreeIds(orcaPage)).find((id) => id !== typingWorktreeId)
@@ -484,19 +192,35 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
       return
     }
 
+    const scratch = mkdtempSync(path.join(tmpdir(), 'orca-typing-load-'))
     const runId = randomUUID()
-    const loadPath = path.join(testRepoPath, `.orca-mwt-load-${runId}.mjs`)
-    const probePath = path.join(testRepoPath, `.orca-mwt-probe-${runId}.mjs`)
-    const sidecarPath = path.join(testRepoPath, `.orca-mwt-arrivals-${runId}.jsonl`)
-    writeSustainedAgentLoadScript(loadPath, runId, testRepoPath)
+    const loadPath = path.join(scratch, `.orca-mwt-load-${runId}.mjs`)
+    const probePath = path.join(scratch, `.orca-mwt-probe-${runId}.mjs`)
+    const sidecarPath = path.join(scratch, `.orca-mwt-arrivals-${runId}.jsonl`)
+    writeSustainedAgentLoadScript(loadPath, runId, scratch)
     writeTypingEchoProbeScript(probePath, runId, sidecarPath)
 
     const cpuWorkers = spawnCpuPressureWorkers()
     let loadPanes: TerminalLoadPane[] = []
+    const createdWorktreeIds: string[] = []
+    let titleWorkload: { registeredTabs: number; registeredPanes: number } | null = null
+    let statusTrafficStarted = false
+    let orderTrafficStarted = false
+    let instrumentationAvailable = false
+    let graphProbeStart: { main: string; renderer: string } | null = null
+    let graphProbeSelfTest: RendererLongTaskSelfTestWindow | null = null
+    let statusIngressValidation: AccumulatedStatusIngressValidation | null = null
     try {
       await switchToWorktree(orcaPage, loadWorktreeId)
-      loadPanes = await ensureActiveWorktreePaneLoad(orcaPage, LOAD_PANES)
-      await startSustainedLoadInPanes(orcaPage, loadPanes, loadPath, runId, testRepoPath)
+      loadPanes = await createTypingLoadWorkspaces(
+        orcaPage,
+        loadWorktreeId,
+        LOAD_PANES,
+        LOAD_WORKSPACES,
+        readPositiveInt('ORCA_TYPING_BENCH_VISITED_WORKSPACES', LOAD_WORKSPACES),
+        createdWorktreeIds
+      )
+      await startSustainedLoadInPanes(orcaPage, loadPanes, loadPath, runId, scratch)
 
       await switchToWorktree(orcaPage, typingWorktreeId)
       await expect
@@ -506,9 +230,64 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
       await waitForActiveTerminalManager(orcaPage, 30_000)
       const typingPtyId = await waitForActivePanePtyId(orcaPage)
 
+      const fixtureSummary = await seedAccumulatedWorkspaceFixture(orcaPage, {
+        worktrees: readPositiveInt('ORCA_TYPING_BENCH_METADATA_WORKTREES', 870),
+        repositories: readPositiveInt('ORCA_TYPING_BENCH_METADATA_REPOSITORIES', 27),
+        terminalTabs: readPositiveInt('ORCA_TYPING_BENCH_METADATA_TERMINAL_TABS', 1410),
+        unifiedTabs: readPositiveInt('ORCA_TYPING_BENCH_METADATA_UNIFIED_TABS', 2000),
+        panesPerTab: readPositiveInt('ORCA_TYPING_BENCH_METADATA_PANES', 1),
+        sleepingRecords: readPositiveInt('ORCA_TYPING_BENCH_METADATA_SLEEPERS', 857),
+        liveStatuses: readPositiveInt('ORCA_TYPING_BENCH_METADATA_LIVE_STATUSES', 177),
+        statusHistoryEntries: readPositiveInt('ORCA_TYPING_BENCH_METADATA_STATUS_HISTORY', 3)
+      })
+      console.log(`[multi-workspace-typing] accumulated fixture: ${JSON.stringify(fixtureSummary)}`)
+      const statusTrafficEnabled =
+        !PTY_METADATA && process.env.ORCA_TYPING_BENCH_METADATA_STATUS !== '0'
+      if (statusTrafficEnabled) {
+        statusIngressValidation = await validateAccumulatedStatusIpcIngress(electronApp, orcaPage)
+        const validationPaneCount = Math.min(3, fixtureSummary.liveStatuses)
+        expect(statusIngressValidation).toEqual({
+          burstEvents: validationPaneCount,
+          staggeredEvents: validationPaneCount
+        })
+      }
+      if (BENCH_INSTRUMENTATION_REQUESTED) {
+        instrumentationAvailable = await startAccumulatedBenchmarkInstrumentation(orcaPage)
+      }
+      if (GRAPH_PROBE_REQUESTED) {
+        graphProbeStart = await startRuntimeGraphPublicationProbe(electronApp, orcaPage)
+        if (GRAPH_PROBE_SELF_TEST_MS > 0) {
+          graphProbeSelfTest = await injectRendererLongTaskSelfTest(
+            orcaPage,
+            GRAPH_PROBE_SELF_TEST_MS
+          )
+        }
+        console.log(`[multi-workspace-typing] graph probe: ${JSON.stringify(graphProbeStart)}`)
+      }
+      if (statusTrafficEnabled) {
+        const statusTraffic = await startAccumulatedStatusTraffic(
+          electronApp,
+          orcaPage,
+          readPositiveInt('ORCA_TYPING_BENCH_METADATA_STATUS_INTERVAL_MS', 100)
+        )
+        expect(statusTraffic.trackedStatuses).toBe(fixtureSummary.liveStatuses)
+        statusTrafficStarted = true
+      }
+      if (!PTY_METADATA && process.env.ORCA_TYPING_BENCH_METADATA_TITLES === '1') {
+        titleWorkload = await startAccumulatedTitleTraffic(orcaPage, 100)
+        console.log(
+          `[multi-workspace-typing] registered title workload: ${JSON.stringify(titleWorkload)}`
+        )
+      }
+
+      if (ORDER_CHURN_MS > 0) {
+        const orderedRepos = await startAccumulatedOrderTraffic(orcaPage, ORDER_CHURN_MS)
+        expect(orderedRepos).toBe(fixtureSummary.repositories)
+        orderTrafficStarted = true
+      }
+
       await resetDeliveryDebug(orcaPage)
-      // Load is flowing when the hidden-delivery gate starts dropping the
-      // background worktree's bytes — the topology the complaint describes.
+      // Hidden-byte drops prove load flows through the background-worktree delivery gate.
       await expect
         .poll(
           async () => (await readMainDeliveryDebug(orcaPage))?.hiddenDeliveryDroppedChars ?? 0,
@@ -516,21 +295,131 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
         )
         .toBeGreaterThan(0)
 
+      if (PTY_METADATA) {
+        await expect
+          .poll(
+            () =>
+              orcaPage.evaluate(
+                () =>
+                  Object.values(window.__store?.getState().agentStatusByPaneKey ?? {}).filter(
+                    (row) => row.prompt === 'Synthetic production-path typing workload'
+                  ).length
+              ),
+            { timeout: 30_000 }
+          )
+          .toBe(LOAD_PANES)
+      }
       await startTypingProbe(orcaPage, typingPtyId, probePath, runId)
-      const measurement = await measurePacedTyping(orcaPage, runId, sidecarPath)
+      const measured = await measureTypingWindow(orcaPage, runId, sidecarPath)
+      const { measurement } = measured
+      const orderWorkload = orderTrafficStarted ? await stopAccumulatedOrderTraffic(orcaPage) : null
+      orderTrafficStarted = false
+      if (orderWorkload) {
+        expect(orderWorkload.publications).toBeGreaterThan(0)
+      }
+      const statusWorkload = statusTrafficStarted
+        ? await stopAccumulatedStatusTraffic(electronApp, orcaPage)
+        : null
+      statusTrafficStarted = false
+      if (statusWorkload) {
+        // Require controller presence before equalities that an all-zero result would satisfy.
+        expect(statusWorkload.generatedUpdates).toBeGreaterThan(0)
+        expect(statusWorkload.trackedStatuses).toBeGreaterThan(0)
+        expect(statusWorkload.acceptedUpdates).toBe(statusWorkload.generatedUpdates)
+        expect(statusWorkload.latestReceipts).toBe(statusWorkload.trackedStatuses)
+      }
+      const instrumentation = BENCH_INSTRUMENTATION_REQUESTED
+        ? await stopAccumulatedBenchmarkInstrumentation(orcaPage)
+        : { available: false as const, reason: 'disabled' as const, snapshot: null }
+      instrumentationAvailable = false
+      const graphProbe = graphProbeStart
+        ? await stopRuntimeGraphPublicationProbe(
+            electronApp,
+            orcaPage,
+            graphProbeStart,
+            graphProbeSelfTest
+          )
+        : null
+      graphProbeStart = null
       writeBenchReport(
         testInfo,
-        `hidden-load-${LOAD_PANES}x${LOAD_RATE_KBPS}kbps-cpu${CPU_WORKERS}`,
-        measurement,
+        `hidden-load-${LOAD_PANES}x${LOAD_RATE_KBPS}kbps-cpu${CPU_WORKERS}${ORDER_CHURN_MS > 0 ? `-order${ORDER_CHURN_MS}ms` : ''}`,
+        measured,
+        {
+          cpuWorkers: cpuWorkers.length,
+          ptyMetadata: PTY_METADATA,
+          statusTrafficModel: PTY_METADATA
+            ? 'pty-osc-through-runtime-and-ipc-bridge'
+            : statusWorkload
+              ? 'electron-ipc-burst-through-production-bridge'
+              : null
+        },
         await readSchedulerDebug(orcaPage),
-        await readMainDeliveryDebug(orcaPage)
+        await readMainDeliveryDebug(orcaPage),
+        instrumentation,
+        titleWorkload,
+        statusWorkload,
+        statusIngressValidation,
+        await readTypingScaleCensus(orcaPage),
+        fixtureSummary,
+        {
+          producers: loadPanes.map((_, index) =>
+            JSON.parse(
+              readFileSync(path.join(scratch, `.orca-mwt-load-stats-${runId}-${index}`), 'utf8')
+            )
+          ),
+          receipts: await orcaPage.evaluate(() => {
+            const state = window.__store?.getState()
+            return {
+              statuses: Object.values(state?.agentStatusByPaneKey ?? {})
+                .filter((row) => row.prompt === 'Synthetic production-path typing workload')
+                .map((row) => ({
+                  sequence: row.acceptedStatusSeq,
+                  providerSession: row.providerSession,
+                  state: row.state,
+                  message: row.lastAssistantMessage
+                })),
+              titles: Object.values(state?.runtimePaneTitlesByTabId ?? {}).flatMap(Object.values),
+              agentRowsMode: state?.agentActivityDisplayMode,
+              renderedAgentRows: document.querySelectorAll(
+                '.worktree-agent-row-hover, .compact-agent-row'
+              ).length
+            }
+          })
+        },
+        graphProbe,
+        null,
+        null,
+        orderWorkload
       )
-      // Hang detector only — the JSON report is the benchmark output. A
-      // reproduced regression shows up as large percentiles, not a hard fail.
-      expect(measurement.missingEchoCount).toBe(0)
+      const screenDirectory = path.resolve('.tmp', 'typing-reproduction')
+      mkdirSync(screenDirectory, { recursive: true })
+      await orcaPage.screenshot({ path: path.join(screenDirectory, `${BENCH_LABEL}-screen.png`) })
+      // Timeout catches hangs only; report regressions through JSON percentiles.
+      expect(measurement.inputHalfMs?.count).toBe(KEY_COUNT)
+      expect(measurement.totalMs?.count).toBe(KEY_COUNT)
 
       await stopPtysQuietly(orcaPage, [typingPtyId])
     } finally {
+      if (orderTrafficStarted) {
+        await stopAccumulatedOrderTraffic(orcaPage).catch(() => null)
+      }
+      if (instrumentationAvailable) {
+        await stopAccumulatedBenchmarkInstrumentation(orcaPage).catch(() => undefined)
+      }
+      if (graphProbeStart) {
+        await stopRuntimeGraphPublicationProbe(
+          electronApp,
+          orcaPage,
+          graphProbeStart,
+          graphProbeSelfTest
+        ).catch(() => undefined)
+      }
+      if (statusTrafficStarted) {
+        await stopAccumulatedStatusTraffic(electronApp, orcaPage)
+      }
+      await stopAccumulatedTitleTraffic(orcaPage)
+      await cleanupAccumulatedWorkspaceFixture(orcaPage)
       for (const worker of cpuWorkers) {
         worker.kill('SIGKILL')
       }
@@ -543,7 +432,9 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
       rmSync(loadPath, { force: true })
       rmSync(probePath, { force: true })
       rmSync(sidecarPath, { force: true })
-      removeLoadReadyFiles(testRepoPath, runId, LOAD_PANES)
+      removeLoadReadyFiles(scratch, runId, LOAD_PANES)
+      await removeTypingLoadWorkspaces(orcaPage, createdWorktreeIds)
+      rmSync(scratch, { recursive: true, force: true })
     }
   })
 
@@ -551,7 +442,6 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
     orcaPage,
     testRepoPath
   }, testInfo) => {
-    test.skip(!BENCH_ENABLED, 'Bench-only: run via pnpm bench:multi-workspace-typing')
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -567,8 +457,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
     const cpuWorkers = spawnCpuPressureWorkers()
     let panes: TerminalLoadPane[] = []
     try {
-      // Pane 0 types; the rest replay the agent stream side by side — the
-      // "Claude Code running in a visible split" shape.
+      // Type in pane 0 while adjacent panes stream, matching a visible agent split.
       panes = await ensureActiveWorktreePaneLoad(orcaPage, 2)
       const [typingPane, ...loadPanes] = panes
       await startSustainedLoadInPanes(orcaPage, loadPanes, loadPath, runId, testRepoPath)
@@ -576,16 +465,202 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
 
       await resetDeliveryDebug(orcaPage)
       await startTypingProbe(orcaPage, typingPane.ptyId, probePath, runId)
-      const measurement = await measurePacedTyping(orcaPage, runId, sidecarPath)
+      const measured = await measureTypingWindow(orcaPage, runId, sidecarPath)
+      const { measurement } = measured
       writeBenchReport(
         testInfo,
         `visible-split-${LOAD_RATE_KBPS}kbps-cpu${CPU_WORKERS}`,
-        measurement,
+        measured,
+        {
+          cpuWorkers: cpuWorkers.length,
+          ptyMetadata: PTY_METADATA,
+          statusTrafficModel: PTY_METADATA ? 'pty-osc-through-runtime-and-ipc-bridge' : null
+        },
         await readSchedulerDebug(orcaPage),
         await readMainDeliveryDebug(orcaPage)
       )
-      expect(measurement.missingEchoCount).toBe(0)
+      expect(measurement.inputHalfMs?.count).toBe(KEY_COUNT)
+      expect(measurement.totalMs?.count).toBe(KEY_COUNT)
     } finally {
+      for (const worker of cpuWorkers) {
+        worker.kill('SIGKILL')
+      }
+      await stopPtysQuietly(
+        orcaPage,
+        panes.map((pane) => pane.ptyId)
+      )
+      rmSync(loadPath, { force: true })
+      rmSync(probePath, { force: true })
+      rmSync(sidecarPath, { force: true })
+      removeLoadReadyFiles(testRepoPath, runId, panes.length)
+    }
+  })
+
+  // Require --git-churn-repos: main’s git subprocess polling competes with PTY relay on the same event loop.
+  // Without it this would duplicate the visible-split scenario.
+  test('typing under sustained git-subprocess churn', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    test.skip(
+      GIT_CHURN_REPOS === 0,
+      'Set --git-churn-repos to run: this scenario measures git-spawn churn, not PTY bytes'
+    )
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const runId = randomUUID()
+    const loadPath = path.join(testRepoPath, `.orca-mwt-load-${runId}.mjs`)
+    const probePath = path.join(testRepoPath, `.orca-mwt-probe-${runId}.mjs`)
+    const sidecarPath = path.join(testRepoPath, `.orca-mwt-arrivals-${runId}.jsonl`)
+    const churnRoot = mkdtempSync(path.join(tmpdir(), 'orca-git-churn-'))
+    writeSustainedAgentLoadScript(loadPath, runId, testRepoPath)
+    writeTypingEchoProbeScript(probePath, runId, sidecarPath)
+
+    const cpuWorkers = spawnCpuPressureWorkers()
+    let panes: TerminalLoadPane[] = []
+    let gitChurn: GitChurnStats | null = null
+    try {
+      const repos = createGitChurnRepos(churnRoot, GIT_CHURN_REPOS, GIT_CHURN_FILES)
+      const registration = await registerGitChurnRepos(
+        orcaPage,
+        repos.map((repo) => repo.path)
+      )
+      expect(
+        registration,
+        `churn repos were not registered with Orca: ${registration.failures.join('; ')}`
+      ).toMatchObject({ registered: repos.length })
+      panes = await ensureActiveWorktreePaneLoad(orcaPage, 2)
+      const [typingPane, ...loadPanes] = panes
+      await startSustainedLoadInPanes(orcaPage, loadPanes, loadPath, runId, testRepoPath)
+      await focusPane(orcaPage, typingPane.paneKey)
+
+      await resetDeliveryDebug(orcaPage)
+      await startTypingProbe(orcaPage, typingPane.ptyId, probePath, runId)
+      await startGitChurnLoad(
+        orcaPage,
+        repos.map((repo) => repo.path),
+        { concurrency: GIT_CHURN_CONCURRENCY, admissionTier: 'status' }
+      )
+      const measured = await measureTypingWindow(orcaPage, runId, sidecarPath)
+      gitChurn = await stopGitChurnLoad(orcaPage)
+      const { measurement } = measured
+      writeBenchReport(
+        testInfo,
+        `git-churn-${GIT_CHURN_REPOS}repos-x${GIT_CHURN_CONCURRENCY}`,
+        measured,
+        {
+          cpuWorkers: cpuWorkers.length,
+          ptyMetadata: PTY_METADATA,
+          statusTrafficModel: PTY_METADATA ? 'pty-osc-through-runtime-and-ipc-bridge' : null
+        },
+        await readSchedulerDebug(orcaPage),
+        await readMainDeliveryDebug(orcaPage),
+        undefined,
+        null,
+        null,
+        null,
+        undefined,
+        undefined,
+        undefined,
+        null,
+        gitChurn
+      )
+      // Require spawned git children; rejection-only loops cannot measure subprocess churn.
+      expect(gitChurn?.settled ?? 0).toBeGreaterThan(0)
+      expect(
+        gitChurn,
+        `git churn never reached git: ${gitChurn?.firstError ?? 'unknown error'}`
+      ).toMatchObject({ failed: 0 })
+      expect(measurement.inputHalfMs?.count).toBe(KEY_COUNT)
+      expect(measurement.totalMs?.count).toBe(KEY_COUNT)
+    } finally {
+      await stopGitChurnLoad(orcaPage).catch(() => null)
+      for (const worker of cpuWorkers) {
+        worker.kill('SIGKILL')
+      }
+      await stopPtysQuietly(
+        orcaPage,
+        panes.map((pane) => pane.ptyId)
+      )
+      rmSync(loadPath, { force: true })
+      rmSync(probePath, { force: true })
+      rmSync(sidecarPath, { force: true })
+      rmSync(churnRoot, { recursive: true, force: true })
+      removeLoadReadyFiles(testRepoPath, runId, panes.length)
+    }
+  })
+
+  // Measure render gaps for synchronized-output foreground repaint under background load.
+  // A delayed closing ?2026l can suppress rows until xterm’s 1000ms force-flush while buffer-only observations report fast echo.
+  test('typing a DEC 2026 foreground TUI under agent load, measured at the render', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const runId = randomUUID()
+    const loadPath = path.join(testRepoPath, `.orca-mwt-load-${runId}.mjs`)
+    const probePath = path.join(testRepoPath, `.orca-mwt-probe-${runId}.mjs`)
+    const sidecarPath = path.join(testRepoPath, `.orca-mwt-arrivals-${runId}.jsonl`)
+    writeSustainedAgentLoadScript(loadPath, runId, testRepoPath)
+    writeCodexEchoProbeScript(probePath, runId, sidecarPath, {
+      frameRows: CODEX_FRAME_ROWS,
+      splitDelayMs: CODEX_SPLIT_DELAY_MS
+    })
+
+    const cpuWorkers = spawnCpuPressureWorkers()
+    let panes: TerminalLoadPane[] = []
+    let blackout: SynchronizedOutputBlackoutSnapshot | null = null
+    try {
+      panes = await ensureActiveWorktreePaneLoad(orcaPage, Math.max(2, LOAD_PANES + 1))
+      const [typingPane, ...loadPanes] = panes
+      await startSustainedLoadInPanes(orcaPage, loadPanes, loadPath, runId, testRepoPath)
+      await focusPane(orcaPage, typingPane.paneKey)
+
+      await resetDeliveryDebug(orcaPage)
+      await startTypingProbe(orcaPage, typingPane.ptyId, probePath, runId)
+      const activeTabId = await getActiveTabId(orcaPage)
+      const probeInstall = await startSynchronizedOutputBlackoutProbe(orcaPage, activeTabId ?? '')
+      // Require probe installation so missing instrumentation cannot report a false zero-blackout success.
+      expect(probeInstall, `blackout probe not installed: ${probeInstall.reason}`).toMatchObject({
+        installed: true
+      })
+
+      const measured = await measureTypingWindow(orcaPage, runId, sidecarPath)
+      blackout = await stopSynchronizedOutputBlackoutProbe(orcaPage)
+      const { measurement } = measured
+      writeBenchReport(
+        testInfo,
+        `dec2026-render-${LOAD_PANES}panes-${LOAD_RATE_KBPS}kbps-rows${CODEX_FRAME_ROWS}`,
+        measured,
+        {
+          cpuWorkers: cpuWorkers.length,
+          ptyMetadata: PTY_METADATA,
+          statusTrafficModel: PTY_METADATA ? 'pty-osc-through-runtime-and-ipc-bridge' : null
+        },
+        await readSchedulerDebug(orcaPage),
+        await readMainDeliveryDebug(orcaPage),
+        undefined,
+        null,
+        null,
+        null,
+        await readTypingScaleCensus(orcaPage).catch(() => null),
+        undefined,
+        undefined,
+        null,
+        null,
+        blackout
+      )
+      expect(measurement.totalMs?.count).toBe(KEY_COUNT)
+      expect(blackout?.renderCount ?? 0).toBeGreaterThan(0)
+    } finally {
+      await stopSynchronizedOutputBlackoutProbe(orcaPage).catch(() => null)
       for (const worker of cpuWorkers) {
         worker.kill('SIGKILL')
       }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveActiveSessionTab } from './active-session-tab'
 
-type Tab = { id: string; type: 'terminal' | 'browser'; isActive: boolean }
+type Tab = { id: string; type: 'terminal' | 'browser' | 'agent-session'; isActive: boolean }
 
 function terminalTab(id: string, isActive: boolean): Tab {
   return { id, type: 'terminal', isActive }
@@ -24,18 +24,6 @@ describe('resolveActiveSessionTab', () => {
     expect(result.activeTab?.id).toBe('browser')
     expect(result.selectionSource).toBe('selected-tab')
     expect(result.retainSelectedSessionTabId).toBe(false)
-  })
-
-  it('keeps the device on a terminal tab when an agent turn flags another terminal active', () => {
-    const result = resolveActiveSessionTab(
-      [terminalTab('agent', true), terminalTab('shell', false)],
-      {
-        pendingActiveSessionTabId: null,
-        selectedSessionTabId: 'shell'
-      }
-    )
-
-    expect(result.activeTab?.id).toBe('shell')
   })
 
   it('follows the host when it explicitly navigates this device', () => {
@@ -77,7 +65,6 @@ describe('resolveActiveSessionTab', () => {
     expect(gap.activeTab?.id).toBe('agent')
     expect(gap.retainSelectedSessionTabId).toBe(true)
 
-    // The guest re-registers and the tab comes back: focus must return to it.
     const restored = resolveActiveSessionTab(
       [terminalTab('agent', true), browserTab('browser', false)],
       { pendingActiveSessionTabId: null, selectedSessionTabId: 'browser' }
@@ -132,6 +119,20 @@ describe('resolveActiveSessionTab', () => {
     )
 
     expect(result.activeTab?.id).toBe('browser')
+    expect(result.selectionSource).toBe('snapshot')
+  })
+
+  it('opens the chat a create-worktree launch landed on, over the workspace shell', () => {
+    // A just-created route has no local pick; the host’s launch activation must open its chat.
+    const result = resolveActiveSessionTab(
+      [
+        { id: 'shell', type: 'terminal', isActive: false },
+        { id: 'agent-session:s-1', type: 'agent-session', isActive: true }
+      ],
+      { pendingActiveSessionTabId: null, selectedSessionTabId: null }
+    )
+
+    expect(result.activeTab?.id).toBe('agent-session:s-1')
     expect(result.selectionSource).toBe('snapshot')
   })
 

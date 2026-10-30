@@ -1,14 +1,10 @@
 import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
-import { execFileAsync, acquire, release } from '../../gh-utils'
-/**
- * Get the authenticated GitHub viewer when gh is available and logged in.
- * Returns null when gh is unavailable, unauthenticated, or the lookup fails.
- */
+import { ghExecFileAsync, acquire, release } from '../../gh-utils'
+/** Use the bounded runner so failed viewer probes return null without stranding a GitHub admission slot. */
 export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
   await acquire()
   try {
-    const { stdout } = await execFileAsync(
-      'gh',
+    const { stdout } = await ghExecFileAsync(
       ['api', 'user', '--jq', '{login: .login, email: .email}'],
       { encoding: 'utf-8' }
     )

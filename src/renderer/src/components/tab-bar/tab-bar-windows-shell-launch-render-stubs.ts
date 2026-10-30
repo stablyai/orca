@@ -1,11 +1,19 @@
+import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 
 // Headless React: hooks are stubbed so TabBar can be invoked as a plain function.
 export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
+  const contextDefaults = new WeakMap<object, unknown>()
   return {
     ...actual,
     memo: <T>(component: T) => component,
+    createContext: <T>(defaultValue: T) => {
+      const context = actual.createContext(defaultValue)
+      contextDefaults.set(context, defaultValue)
+      return context
+    },
+    useContext: (context: ReactModule.Context<unknown>) => contextDefaults.get(context),
     useEffect: () => {},
     useLayoutEffect: () => {},
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
@@ -15,14 +23,12 @@ export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
       const value = typeof initial === 'function' ? (initial as () => T)() : initial
       return [value, vi.fn()] as const
     },
-    // Why: module-level external stores (client-hosted browser rows) read through this; without a
-    // stub the real hook looks for a dispatcher these headless renders never install.
+    // Stub external-store reads because shallow component calls have no React dispatcher.
     useSyncExternalStore: <T>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot()
   }
 }
 
-// The headless React stub above removes the dispatcher, so zustand's useShallow
-// (which calls useRef) has to be a pass-through like the store mock.
+// Pass selectors through because the headless hook runtime cannot run Zustand’s useRef.
 export function stubShallowSelector(): Record<string, unknown> {
   return { useShallow: (selector: unknown) => selector }
 }
@@ -43,6 +49,20 @@ export function stubTabStripDragScroll(): Record<string, unknown> {
       onDragScrollEndEnter: vi.fn(),
       onDragScrollLeave: vi.fn()
     })
+  }
+}
+
+// Return inert tooltip descriptors so shallow walking never invokes hook-based primitives.
+export function stubTooltip(): Record<string, unknown> {
+  const passthrough = (type: string) =>
+    function TooltipPrimitiveStub(props: { children?: unknown }) {
+      return { type, props }
+    }
+  return {
+    TooltipProvider: passthrough('TooltipProvider'),
+    Tooltip: passthrough('Tooltip'),
+    TooltipTrigger: passthrough('TooltipTrigger'),
+    TooltipContent: passthrough('TooltipContent')
   }
 }
 
@@ -87,7 +107,11 @@ export function stubQuickLaunchButton(): Record<string, unknown> {
   return {
     QuickLaunchAgentMenuItems: function QuickLaunchAgentMenuItems() {
       return null
-    }
+    },
+    ProjectedAgentMenuItems: function ProjectedAgentMenuItems() {
+      return null
+    },
+    useTabAgentMenuLaunch: () => () => undefined
   }
 }
 
@@ -103,7 +127,6 @@ export function stubFocusTerminalTabSurface(): Record<string, unknown> {
   return { focusTerminalTabSurface: vi.fn() }
 }
 
-// Dropdown primitives render to inert descriptors so menu rows can be walked.
 export function stubDropdownMenu(): Record<string, unknown> {
   return {
     DropdownMenu: function DropdownMenu(props: { children?: unknown }) {

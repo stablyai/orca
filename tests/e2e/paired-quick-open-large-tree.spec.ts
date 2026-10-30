@@ -7,8 +7,11 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 import { createPairedQuickOpenLargeTreeFixture } from './helpers/paired-quick-open-large-tree-fixture'
+import type { RuntimeFileListResult } from '../../src/shared/runtime-file-contracts'
+import type { RuntimeWorktreeListResult } from '../../src/shared/runtime-worktree-contracts'
 import type { PairedQuickOpenLargeTreeFixture } from './helpers/paired-quick-open-large-tree-fixture'
 import { waitForSessionReady } from './helpers/store'
+import { callPairedRuntime } from './helpers/paired-client-host-session'
 
 const QUICK_OPEN_SEARCH_DEBOUNCE_MS = 120
 
@@ -73,10 +76,12 @@ async function expectQuickOpenAndRuntimeHealthy(
         if (!response.ok) {
           throw new Error(`files.searchPaths oracle failed: ${JSON.stringify(response)}`)
         }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runtimeEnvironments.call is untyped at the IPC boundary; files.searchPaths answers RuntimeFileListResult.
+        const result = response.result as RuntimeFileListResult
         const oracle = {
-          files: response.result.files.map((file) => file.relativePath),
-          totalCount: response.result.totalCount,
-          truncated: response.result.truncated
+          files: result.files.map((file) => file.relativePath),
+          totalCount: result.totalCount,
+          truncated: result.truncated
         }
         const encodedOracle = new TextEncoder().encode(JSON.stringify(oracle))
         const digest = await crypto.subtle.digest('SHA-256', encodedOracle)
@@ -93,19 +98,11 @@ async function expectQuickOpenAndRuntimeHealthy(
     )
   for (const targetPath of [fixture.gitIgnoredTargetPath, fixture.orcaIgnoredTargetPath]) {
     const filename = targetPath.split('/').at(-1)!
-    const stat = await client.page.evaluate(
-      async ({ environmentId, worktreeId, targetPath }) => {
-        const response = await window.api.runtimeEnvironments.call({
-          selector: environmentId,
-          method: 'files.stat',
-          params: { worktree: `id:${worktreeId}`, relativePath: targetPath }
-        })
-        if (!response.ok) {
-          throw new Error(`files.stat oracle failed: ${JSON.stringify(response)}`)
-        }
-        return response.result
-      },
-      { environmentId: client.environmentId, worktreeId, targetPath }
+    const stat = await callPairedRuntime<{ size: number; isDirectory: boolean }>(
+      client.page,
+      client.environmentId,
+      'files.stat',
+      { worktree: `id:${worktreeId}`, relativePath: targetPath }
     )
     expect(stat.isDirectory).toBe(false)
     expect(stat.size).toBeGreaterThanOrEqual(0)
@@ -149,19 +146,13 @@ async function expectQuickOpenAndRuntimeHealthy(
     await expect(dialog).not.toContainText('Remote Orca runtime closed the connection')
   }
 
-  const response = await client.page.evaluate(
-    async ({ environmentId }) =>
-      window.api.runtimeEnvironments.call({
-        selector: environmentId,
-        method: 'worktree.list',
-        params: { limit: 10_000 }
-      }),
-    { environmentId: client.environmentId }
+  const { worktrees } = await callPairedRuntime<RuntimeWorktreeListResult>(
+    client.page,
+    client.environmentId,
+    'worktree.list',
+    { limit: 10_000 }
   )
-  expect(response.ok).toBe(true)
-  if (response.ok) {
-    expect(response.result.worktrees.some((worktree) => worktree.id === worktreeId)).toBe(true)
-  }
+  expect(worktrees.some((worktree) => worktree.id === worktreeId)).toBe(true)
 }
 
 test('finds paths beyond the old prefix on a headed paired runtime @headful', async ({

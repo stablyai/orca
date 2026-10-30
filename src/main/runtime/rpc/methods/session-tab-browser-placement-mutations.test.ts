@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -64,6 +65,47 @@ describe('session tab browser placement mutations', () => {
     })
   })
 
+  it('translates an old-client pane-move drop index into the raw order', async () => {
+    const moveMobileSessionLeafToNewTab = vi
+      .fn()
+      .mockResolvedValue({ status: 'moved', ptyId: null })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method only reaches these two runtime calls.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue(mixedPlacementSnapshot()),
+      moveMobileSessionLeafToNewTab
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    // Shown [tab-1, tab-2]: before tab-2 is after the hidden page in the raw order.
+    const response = await dispatch(dispatcher, 'session.tabs.movePaneToNewTab', {
+      worktree: 'id:wt-1',
+      sourceTabId: 'tab-1',
+      targetTabId: 'tab-3',
+      leafId: 'leaf-1',
+      targetGroupId: 'group-1',
+      index: 1
+    })
+
+    expect(response.ok).toBe(true)
+    expect(moveMobileSessionLeafToNewTab.mock.calls[0]?.[3]).toEqual({
+      targetGroupId: 'group-1',
+      index: 2
+    })
+
+    // A group the host does not hold still moves the pane, appended.
+    await dispatch(dispatcher, 'session.tabs.movePaneToNewTab', {
+      worktree: 'id:wt-1',
+      sourceTabId: 'tab-1',
+      targetTabId: 'tab-4',
+      leafId: 'leaf-1',
+      targetGroupId: 'gone-group',
+      index: 0
+    })
+    expect(moveMobileSessionLeafToNewTab).toHaveBeenCalledTimes(2)
+    expect(moveMobileSessionLeafToNewTab.mock.calls[1]?.[3]).toBeUndefined()
+  })
+
   it('refuses an old-client close for a projected-out browser page', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -85,7 +127,7 @@ describe('session tab browser placement mutations', () => {
   it('keeps capable mutation callers on the unprojected path', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listMobileSessionTabs: vi.fn(),
+      listMobileSessionTabs: vi.fn().mockResolvedValue(mixedPlacementSnapshot()),
       closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -102,7 +144,7 @@ describe('session tab browser placement mutations', () => {
     )
 
     expect(response.ok).toBe(true)
-    expect(runtime.listMobileSessionTabs).not.toHaveBeenCalled()
+    expect(runtime.listMobileSessionTabs).toHaveBeenCalledOnce()
     expect(runtime.closeMobileSessionTab).toHaveBeenCalledOnce()
   })
 })

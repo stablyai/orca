@@ -12,11 +12,11 @@ export const GROK_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  { eventName: 'StopCancelled', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
-    // Why: Orca needs the pre-event to show in-flight tools and detect ask_user_question waits;
-    // PostToolUse arrives only after both states have ended.
+    // PreToolUse exposes in-flight tools and question waits that PostToolUse cannot observe.
     eventName: 'PreToolUse',
     definition: { matcher: GROK_TOOL_EVENT_MATCHER, hooks: [{ type: 'command', command: '' }] }
   },

@@ -1,3 +1,4 @@
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,
@@ -14,9 +15,11 @@ import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mo
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
+  normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
+import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
 import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
@@ -38,6 +41,7 @@ import {
 } from './ui-selection-normalization'
 import {
   mergeContextualTourSeenIds,
+  mergeFeatureTipSeenIds,
   mergeFeatureInteractions,
   stripMainOwnedTelemetryMarkerFromUI
 } from './ui-interaction-merge'
@@ -57,7 +61,9 @@ export function updatePersistedUI(
   operations: UIUpdateOperations,
   updates: Partial<PersistedState['ui']>
 ): void {
-  if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
+  const clearsProtectedSecret =
+    'browserKagiSessionLink' in updates && !updates.browserKagiSessionLink
+  if (clearsProtectedSecret) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)
   }
   const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
@@ -75,8 +81,7 @@ export function updatePersistedUI(
   }
   const previousUI = {
     ...operations.getUI(),
-    // Why: the legacy field stays unchanged as a migration/downgrade
-    // fallback; the profile sidecar is authoritative in current builds.
+    // Keep the legacy activeView for downgrade compatibility; the profile sidecar is authoritative.
     activeView: currentUI.activeView
   }
   const nextRightSidebarTab =
@@ -95,6 +100,11 @@ export function updatePersistedUI(
             operations.state.ui?.rightSidebarExplorerView,
             nextRightSidebarTab
           )
+  const nextVisibleWorkspaceHostIds = normalizeVisibleExecutionHostIds(
+    sanitizedUpdates.visibleWorkspaceHostIds !== undefined
+      ? sanitizedUpdates.visibleWorkspaceHostIds
+      : operations.state.ui?.visibleWorkspaceHostIds
+  )
   const nextUI = {
     ...currentUI,
     ...durableUpdates,
@@ -148,10 +158,21 @@ export function updatePersistedUI(
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
     ),
-    visibleWorkspaceHostIds:
-      sanitizedUpdates.visibleWorkspaceHostIds !== undefined
-        ? normalizeVisibleExecutionHostIds(sanitizedUpdates.visibleWorkspaceHostIds)
-        : normalizeVisibleExecutionHostIds(operations.state.ui?.visibleWorkspaceHostIds),
+    visibleWorkspaceHostIds: nextVisibleWorkspaceHostIds,
+    // Paired clients may write only visible hosts; derive scope so all-hosts cannot override them.
+    ...(sanitizedUpdates.visibleWorkspaceHostIds !== undefined &&
+    sanitizedUpdates.workspaceHostScope === undefined
+      ? {
+          workspaceHostScope: workspaceHostScopeForVisibleHosts(
+            nextVisibleWorkspaceHostIds,
+            normalizeExecutionHostScope(currentUI.workspaceHostScope)
+          )
+        }
+      : {}),
+    agentsVisibleHostIds:
+      sanitizedUpdates.agentsVisibleHostIds !== undefined
+        ? normalizeVisibleExecutionHostIds(sanitizedUpdates.agentsVisibleHostIds)
+        : normalizeVisibleExecutionHostIds(operations.state.ui?.agentsVisibleHostIds),
     workspaceHostOrder:
       sanitizedUpdates.workspaceHostOrder !== undefined
         ? normalizeExecutionHostOrder(sanitizedUpdates.workspaceHostOrder)
@@ -163,15 +184,25 @@ export function updatePersistedUI(
     browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
       sanitizedUpdates.browserDefaultZoomLevel ?? operations.state.ui?.browserDefaultZoomLevel
     ),
+    explorerDisplayRootByWorktree:
+      sanitizedUpdates.explorerDisplayRootByWorktree !== undefined
+        ? normalizeExplorerDisplayRootByWorktree(sanitizedUpdates.explorerDisplayRootByWorktree)
+        : normalizeExplorerDisplayRootByWorktree(
+            operations.state.ui?.explorerDisplayRootByWorktree
+          ),
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
+    // Union dismissals so stale clients cannot revive one-time tips.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
-        ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
+        ? mergeFeatureTipSeenIds(
+            operations.state.ui?.featureTipsSeenIds,
+            sanitizedUpdates.featureTipsSeenIds
+          )
         : normalizeFeatureTipIds(operations.state.ui?.featureTipsSeenIds),
-    // Why: renderer and paired clients can mark different tours seen from stale snapshots; union so completed tours stay suppressed.
+    // Union seen tours across stale renderer and paired-client snapshots.
     contextualToursSeenIds:
       sanitizedUpdates.contextualToursSeenIds !== undefined
         ? mergeContextualTourSeenIds(
@@ -179,7 +210,7 @@ export function updatePersistedUI(
             sanitizedUpdates.contextualToursSeenIds
           )
         : normalizeContextualTourIds(operations.state.ui?.contextualToursSeenIds),
-    // Why: runtime RPCs and the renderer both record education state; merge so a stale renderer snapshot can't erase runtime-only interactions.
+    // Merge runtime interactions so stale renderer saves cannot erase them.
     featureInteractions:
       sanitizedUpdates.featureInteractions !== undefined
         ? mergeFeatureInteractions(
@@ -188,7 +219,8 @@ export function updatePersistedUI(
           )
         : normalizeFeatureInteractions(operations.state.ui?.featureInteractions)
   }
-  if (persistedUIValuesEqual(previousUI, nextUI)) {
+  // A sealed secret looks empty in memory; an explicit clear must still reach disk.
+  if (!clearsProtectedSecret && persistedUIValuesEqual(previousUI, nextUI)) {
     if (activeViewChanged) {
       operations.notifyUIChanged()
     }

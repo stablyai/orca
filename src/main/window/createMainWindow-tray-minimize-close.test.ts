@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { recordAgentSessionRuntimeEndMock } = vi.hoisted(() => ({
+  recordAgentSessionRuntimeEndMock: vi.fn()
+}))
+
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
-)
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
@@ -13,6 +14,9 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+vi.mock('../runtime/agent-session-runtime-end-record', () => ({
+  recordAgentSessionRuntimeEnd: recordAgentSessionRuntimeEndMock
+}))
 
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
@@ -61,6 +65,7 @@ describe('createMainWindow', () => {
         }),
         setZoomLevel: vi.fn(),
         setBackgroundThrottling: vi.fn(),
+        setWebRTCIPHandlingPolicy: vi.fn(),
         invalidate: vi.fn(),
         setWindowOpenHandler: vi.fn(),
         send: vi.fn(),
@@ -81,8 +86,8 @@ describe('createMainWindow', () => {
         maximize: vi.fn(),
         show: vi.fn(),
         hide: vi.fn(),
-        loadFile: vi.fn(),
-        loadURL: vi.fn()
+        loadFile: vi.fn(() => Promise.resolve()),
+        loadURL: vi.fn(() => Promise.resolve())
       }
       browserWindowMock.mockImplementation(function () {
         return instance
@@ -140,6 +145,17 @@ describe('createMainWindow', () => {
       ])
     })
 
+    it("records the Orca runtime's end, since Windows emits no will-quit for it", () => {
+      setPlatform('win32')
+      recordAgentSessionRuntimeEndMock.mockClear()
+      const { windowHandlers } = setupCloseWindow()
+
+      createMainWindow(null)
+      windowHandlers['session-end']?.({ reasons: ['logoff'] })
+
+      expect(recordAgentSessionRuntimeEndMock).toHaveBeenCalledExactlyOnceWith('quit')
+    })
+
     it.each(['darwin', 'linux'] as const)(
       'does not mark session teardown state on %s',
       (platform) => {
@@ -189,7 +205,6 @@ describe('createMainWindow', () => {
       expect(preventDefault).toHaveBeenCalled()
       expect(instance.hide).toHaveBeenCalledTimes(1)
       expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
-      // Notice already shown, so it must not fire again.
       expect(notificationMock).not.toHaveBeenCalled()
     })
 
@@ -270,9 +285,7 @@ describe('createMainWindow', () => {
       })
     })
 
-    // Why: on Windows the renderer-drawn X routes through window:request-close,
-    // not the native close event — regression guard for the bug where the app
-    // quit instead of hiding because the guard only covered the native event.
+    // Windows custom X uses window:request-close; the native close guard alone would quit instead of hide.
     function captureIpcHandlers(): Record<string, (...args: any[]) => void> {
       const ipcHandlers: Record<string, (...args: any[]) => void> = {}
       vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {

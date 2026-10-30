@@ -3,11 +3,13 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
+  dictationModelRowAction,
   deleteDictationModel,
   downloadDictationModel,
   fetchDictationSetup,
-  isDictationReady,
+  dictationNeedsSetup,
   isDictationSetupRequiredError,
+  dictationFailureMessage,
   isModelInFlight,
   setDictationConfig,
   type MobileSpeechModel,
@@ -21,6 +23,7 @@ function fail(message: string): RpcFailure {
   return { id: 'r', ok: false, error: { code: 'x', message }, _meta: { runtimeId: 'rt' } }
 }
 function malformedFailure(error: { code?: string; message?: string }): RpcResponse {
+  // SAFETY: Intentionally omit RPC error fields to exercise older or malformed server replies.
   return { id: 'r', ok: false, error, _meta: { runtimeId: 'rt' } } as unknown as RpcResponse
 }
 
@@ -62,14 +65,24 @@ describe('isDictationSetupRequiredError', () => {
 
 describe('rpc wrappers', () => {
   it('fetches setup', async () => {
-    const setup: MobileSpeechSetup = { enabled: false, selectedModelId: '', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: false,
+      selectedModelId: '',
+      dictationMode: 'toggle',
+      models: []
+    }
     const client = clientWith([ok(setup)])
     await expect(fetchDictationSetup(client)).resolves.toEqual(setup)
     expect(client.calls[0]).toEqual({ method: 'speech.models.list', params: null })
   })
 
   it('retries the idempotent setup read once after logical-client cutover', async () => {
-    const setup: MobileSpeechSetup = { enabled: false, selectedModelId: '', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: false,
+      selectedModelId: '',
+      dictationMode: 'toggle',
+      models: []
+    }
     const sendRequest = vi
       .fn()
       .mockRejectedValueOnce(new LogicalClientCutoverError())
@@ -95,14 +108,24 @@ describe('rpc wrappers', () => {
   })
 
   it('deletes a model and returns refreshed setup', async () => {
-    const setup: MobileSpeechSetup = { enabled: true, selectedModelId: '', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: true,
+      selectedModelId: '',
+      dictationMode: 'toggle',
+      models: []
+    }
     const client = clientWith([ok(setup)])
     await expect(deleteDictationModel(client, 'm1')).resolves.toEqual(setup)
     expect(client.calls[0]).toEqual({ method: 'speech.models.delete', params: { modelId: 'm1' } })
   })
 
   it('sets config', async () => {
-    const setup: MobileSpeechSetup = { enabled: true, selectedModelId: 'm1', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: true,
+      selectedModelId: 'm1',
+      dictationMode: 'hold',
+      models: []
+    }
     const client = clientWith([ok(setup)])
     await expect(setDictationConfig(client, { enabled: true, modelId: 'm1' })).resolves.toEqual(
       setup
@@ -149,6 +172,26 @@ describe('rpc wrappers', () => {
     )
   })
 
+  it('maps a headless server with no speech to update guidance (#31174)', async () => {
+    const client = clientWith([
+      malformedFailure({
+        code: 'runtime_error',
+        message: 'speech_unavailable: this host has no speech services'
+      })
+    ])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow(
+      'Update Orca on this server to use voice dictation.'
+    )
+  })
+
+  it('recognizes an old server refusing a dictation start', () => {
+    expect(dictationFailureMessage('speech_unavailable: this host has no speech services')).toBe(
+      'Update Orca on this server to use voice dictation.'
+    )
+    expect(dictationFailureMessage('voice_dictation_disabled')).toBe('voice_dictation_disabled')
+  })
+
   it('keeps unrelated speech model failures specific', async () => {
     const client = clientWith([
       malformedFailure({
@@ -169,6 +212,15 @@ describe('rpc wrappers', () => {
   })
 })
 
+describe('dictationModelRowAction', () => {
+  it('keeps on-device rows downloadable until they are ready', () => {
+    expect(dictationModelRowAction(model({ status: 'not-downloaded' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'error' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'downloading' }), '')).toBe('downloading')
+    expect(dictationModelRowAction(model({ status: 'ready' }), 'm1')).toBe('in-use')
+  })
+})
+
 describe('state helpers', () => {
   it('isModelInFlight covers downloading + extracting', () => {
     expect(isModelInFlight(model({ status: 'downloading' }))).toBe(true)
@@ -176,28 +228,20 @@ describe('state helpers', () => {
     expect(isModelInFlight(model({ status: 'ready' }))).toBe(false)
   })
 
-  it('isDictationReady requires enabled + selected + ready', () => {
-    expect(
-      isDictationReady({
-        enabled: true,
-        selectedModelId: 'm1',
-        models: [model({ status: 'ready' })]
-      })
-    ).toBe(true)
-    expect(
-      isDictationReady({
-        enabled: false,
-        selectedModelId: 'm1',
-        models: [model({ status: 'ready' })]
-      })
-    ).toBe(false)
-    expect(
-      isDictationReady({
-        enabled: true,
-        selectedModelId: 'm1',
-        models: [model({ status: 'not-downloaded' })]
-      })
-    ).toBe(false)
-    expect(isDictationReady({ enabled: true, selectedModelId: '', models: [] })).toBe(false)
+  it('dictationNeedsSetup mirrors the host start refusals', () => {
+    const setup = (enabled: boolean, selectedModelId: string, models: MobileSpeechModel[]) => ({
+      enabled,
+      selectedModelId,
+      dictationMode: 'toggle' as const,
+      models
+    })
+    expect(dictationNeedsSetup(setup(true, 'm1', [model({ status: 'ready' })]))).toBe(false)
+    expect(dictationNeedsSetup(setup(false, 'm1', [model({ status: 'ready' })]))).toBe(true)
+    expect(dictationNeedsSetup(setup(true, 'm1', [model({ status: 'not-downloaded' })]))).toBe(true)
+    expect(dictationNeedsSetup(setup(true, '', []))).toBe(true)
+    // A user model is absent from the host catalog; only the host can judge it.
+    expect(dictationNeedsSetup(setup(true, 'custom', [model({ status: 'ready' })]))).toBe(false)
+    // Older hosts may omit enabled and the selection.
+    expect(dictationNeedsSetup({ dictationMode: 'toggle', models: [] })).toBe(false)
   })
 })

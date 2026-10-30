@@ -1,9 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -31,8 +44,9 @@ describe('createRemoteRuntimePtyTransport', () => {
     resetRemoteRuntimeTransport()
   })
 
-  it('caps unavailable host inventory at two recovery windows', async () => {
+  it('keeps polling an unavailable host inventory on the backoff ladder until the deadline', async () => {
     vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       resolvedPaneHandle = 'terminal-stable'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -64,76 +78,25 @@ describe('createRemoteRuntimePtyTransport', () => {
         result: { type: 'end', streamId: oldStreamId, code: 0 }
       })
       await vi.advanceTimersByTimeAsync(32_000)
-
       const callsAfterTwoWindows = hostListCalls
-      expect(callsAfterTwoWindows).toBeGreaterThan(25)
-      expect(callsAfterTwoWindows).toBeLessThan(40)
+      // Why: a parked third window made no attempt for the rest of the deadline (#27178).
       await vi.advanceTimersByTimeAsync(20_000)
-      expect(hostListCalls).toBe(callsAfterTwoWindows)
-      expect(transport.getRecoveryState?.().phase).toBe('recovering')
+      expect(hostListCalls).toBeGreaterThan(callsAfterTwoWindows)
 
-      await vi.advanceTimersByTimeAsync(9_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      const callsAtDeadline = hostListCalls
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(hostListCalls).toBe(callsAtDeadline)
       expect(subscribedTerminalHandles()).toEqual(['terminal-stable'])
       transport.destroy?.()
     } finally {
+      warn.mockRestore()
       vi.useRealTimers()
     }
   })
 
-  it('reattaches from prior ready evidence when the trailing inventory poll fails', async () => {
-    vi.useFakeTimers()
-    try {
-      resolvedPaneHandle = 'terminal-stable'
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const onPtyExit = vi.fn()
-      const transport = createRemoteRuntimePtyTransport('hub-env', {
-        worktreeId: 'wt-1',
-        tabId: 'web-terminal-host-tab-1',
-        leafId: 'pane:1',
-        onPtyExit
-      })
-
-      transport.attach({
-        existingPtyId: 'remote:hub-env@@terminal-stable',
-        callbacks: {}
-      })
-      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
-      const oldStreamId = latestSubscribePayload().streamId
-      emitSnapshot(oldStreamId, 'before trailing inventory failure')
-
-      let hostListCalls = 0
-      runtimeCall.mockImplementation(async (args: { method: string }) => {
-        if (args.method !== 'session.tabs.list') {
-          return { ok: true, result: {} }
-        }
-        hostListCalls += 1
-        if (hostListCalls === 1) {
-          return readyHostSessionInventoryResponse('terminal-stable')
-        }
-        throw new Error('final inventory poll failed')
-      })
-
-      subscriptionCallbacks?.onResponse({
-        ok: true,
-        result: { type: 'end', streamId: oldStreamId, code: 0 }
-      })
-      await vi.advanceTimersByTimeAsync(16_000)
-
-      expect(hostListCalls).toBeGreaterThan(1)
-      expect(hostListCalls).toBeLessThan(25)
-      expect(subscribedTerminalHandles()).toEqual(['terminal-stable', 'terminal-stable'])
-      expect(onPtyExit).not.toHaveBeenCalled()
-      expect(transport.isConnected()).toBe(false)
-      emitSnapshot(latestSubscribePayload().streamId, 'reattached from ready evidence')
-      expect(transport.isConnected()).toBe(true)
-      transport.destroy?.()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('strengthens repeated same-handle end recovery until it disconnects', async () => {
+  it('paces repeated same-handle stream ends instead of disconnecting', async () => {
     vi.useFakeTimers()
     try {
       resolvedPaneHandle = 'terminal-flapping'
@@ -157,31 +120,34 @@ describe('createRemoteRuntimePtyTransport', () => {
       emitSnapshot(latestSubscribePayload().streamId, 'initial stream')
 
       for (let cycle = 0; cycle < 2; cycle += 1) {
-        const endingStreamId = latestSubscribePayload().streamId
         subscriptionCallbacks?.onResponse({
           ok: true,
-          result: { type: 'end', streamId: endingStreamId, code: 0 }
+          result: { type: 'end', streamId: latestSubscribePayload().streamId, code: 0 }
         })
-        await vi.advanceTimersByTimeAsync(16_000)
+        await vi.advanceTimersByTimeAsync(1_000)
         expect(subscribedTerminalHandles()).toHaveLength(cycle + 2)
         emitSnapshot(latestSubscribePayload().streamId, `same handle cycle ${cycle}`)
         expect(transport.isConnected()).toBe(true)
       }
 
+      // Why: the third end inside the flap window waits out a backoff before reusing the handle.
       subscriptionCallbacks?.onResponse({
         ok: true,
         result: { type: 'end', streamId: latestSubscribePayload().streamId, code: 0 }
       })
-      await vi.advanceTimersByTimeAsync(16_000)
-
+      await vi.advanceTimersByTimeAsync(500)
+      expect(subscribedTerminalHandles()).toHaveLength(3)
+      expect(transport.getRecoveryState?.().phase).toBe('backoff')
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(subscribedTerminalHandles()).toEqual([
+        'terminal-flapping',
         'terminal-flapping',
         'terminal-flapping',
         'terminal-flapping'
       ])
-      expect(transport.isConnected()).toBe(false)
-      await vi.advanceTimersByTimeAsync(45_000)
-      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      emitSnapshot(latestSubscribePayload().streamId, 'paced reattach')
+      expect(transport.isConnected()).toBe(true)
+      expect(transport.getRecoveryState?.().phase).toBe('connected')
       transport.destroy?.()
     } finally {
       vi.useRealTimers()
@@ -225,7 +191,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
-    const pendingSend = sendInputAccepted('sent-before-rebind')
+    const pendingSend = sendInputAccepted('sent-before-rebind', 'driving')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
     )
@@ -292,7 +258,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
-    const pendingSend = sendInputAccepted('sent-before-close')
+    const pendingSend = sendInputAccepted('sent-before-close', 'driving')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
     )
@@ -322,7 +288,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledOnce())
     expect(subscribedTerminalHandles()).toEqual(['terminal-old'])
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-old')
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-old', -1)
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
   })
@@ -389,7 +355,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (!sendInputAccepted) {
         throw new Error('Expected acknowledged remote terminal input')
       }
-      const pendingSend = sendInputAccepted('sent-before-stream-end')
+      const pendingSend = sendInputAccepted('sent-before-stream-end', 'driving')
       await vi.waitFor(() =>
         expect(runtimeCall).toHaveBeenCalledWith(
           expect.objectContaining({ method: 'terminal.send' })

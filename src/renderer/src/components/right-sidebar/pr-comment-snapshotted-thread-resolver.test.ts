@@ -58,14 +58,19 @@ describe('buildSnapshottedThreadResolver', () => {
     })
   })
 
-  it('resolves a GitLab discussion against the snapshotted MR iid', async () => {
+  it('resolves a GitLab discussion against the snapshotted MR iid and host', async () => {
     const resolveGitLabDiscussion = vi.fn().mockResolvedValue({ ok: true })
     const resolveReviewThread = vi.fn()
     const resolve = buildSnapshottedThreadResolver(
       deps({
         provider: 'gitlab',
         githubResolveTarget: undefined,
-        gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 },
+        gitlabTarget: {
+          repoPath: '/repos/widgets',
+          repoId: 'repo-1',
+          iid: 7,
+          ownerHostId: 'runtime:env-b'
+        },
         resolveGitLabDiscussion,
         resolveReviewThread
       })
@@ -77,7 +82,8 @@ describe('buildSnapshottedThreadResolver', () => {
       repoId: 'repo-1',
       iid: 7,
       discussionId: 'D1',
-      resolved: true
+      resolved: true,
+      repoOwnerExecutionHostId: 'runtime:env-b'
     })
     expect(resolveReviewThread).not.toHaveBeenCalled()
   })
@@ -119,7 +125,12 @@ describe('buildSnapshottedThreadResolver', () => {
       deps({
         provider: 'gitlab',
         githubResolveTarget: undefined,
-        gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 },
+        gitlabTarget: {
+          repoPath: '/repos/widgets',
+          repoId: 'repo-1',
+          iid: 7,
+          ownerHostId: 'runtime:env-b'
+        },
         resolveGitLabDiscussion: vi.fn().mockResolvedValue({ ok: false, error: 'timed out' }),
         onResolveFailed,
         onResolvedOptimistically
@@ -131,7 +142,6 @@ describe('buildSnapshottedThreadResolver', () => {
     expect(onResolvedOptimistically).not.toHaveBeenCalled()
   })
 
-  // Why: one rejected host call must not abort the bulk ack pool.
   it('reports a rejected host call as a failure', async () => {
     const onResolveFailed = vi.fn()
     const resolve = buildSnapshottedThreadResolver(
@@ -158,8 +168,7 @@ describe('buildSnapshottedThreadResolver', () => {
     expect(onResolvedOptimistically).not.toHaveBeenCalled()
   })
 
-  // Why: the host call still belongs to the launch review, but the optimistic row would land
-  // in whatever review the panel navigated to.
+  // Host resolution retains its launch target; optimistic writes must not enter the newly selected review.
   it('still resolves on the host but skips the optimistic update after the panel moved', async () => {
     const resolveReviewThread = vi.fn().mockResolvedValue(true)
     const onResolvedOptimistically = vi.fn()

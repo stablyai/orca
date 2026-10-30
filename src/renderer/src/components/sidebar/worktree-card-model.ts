@@ -1,8 +1,10 @@
+import type { DraggedWorktreeCopies } from './worktree-list/drag/dragged-worktree-copies'
 import type React from 'react'
 
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { translate } from '@/i18n/i18n'
 
 export type WorktreeRenameRequest = {
   worktreeId: string
@@ -24,6 +26,8 @@ export type WorktreeCardProps = {
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
   hostContextLabel?: string
+  /** Reuse the normal project badge for a nested child owned by another repo. */
+  showProjectName?: boolean
   inPinnedSection?: boolean
   activationRowKey?: string
   renameRowKey?: string
@@ -36,6 +40,7 @@ export type WorktreeCardProps = {
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   isLineageDropTarget?: boolean
   onActivate?: () => void
+  onWorktreeCardClick?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onContextMenuSelect?: (
@@ -46,7 +51,7 @@ export type WorktreeCardProps = {
   onCardDragStart?: (
     event: React.DragEvent<HTMLDivElement>,
     worktreeId: string,
-    draggedIds: readonly string[]
+    draggedCopies: DraggedWorktreeCopies
   ) => void
   onCardDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void
   nativeDragEnabled?: boolean
@@ -88,7 +93,6 @@ export type ResolvedWorktreeCardProps = Omit<WorktreeCardProps, DefaultedWorktre
 }
 
 export const EMPTY_WORKSPACE_PORTS = []
-export const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
 
 export function shouldBeginWorktreeRename(
   request: WorktreeRenameRequest | null,
@@ -103,7 +107,13 @@ export function shouldBeginWorktreeRename(
 
 export function formatSparseDirectoryPreview(directories: string[]): string {
   const preview = directories.slice(0, 4).join(', ')
-  return directories.length <= 4 ? preview : `${preview}, +${directories.length - 4} more`
+  return directories.length <= 4
+    ? preview
+    : translate(
+        'auto.components.sidebar.worktreeCardModel.sparsePreviewMore',
+        '{{preview}}, +{{count}} more',
+        { preview, count: directories.length - 4, defaultValue_one: '{{preview}}, +{{count}} more' }
+      )
 }
 
 export function isWebClient(): boolean {

@@ -1,0 +1,259 @@
+import { defineMethod } from '../../../core'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import { resolveDispatchCreator } from './dispatch-creator'
+import {
+  injectRejectedError,
+  taskNotFoundError,
+  taskNotStartableError
+} from '../../../../orchestration/task-dispatch-refusal'
+import { resolveRunScope } from './run-scope'
+import { DispatchParams, DispatchShowParams } from '../schemas'
+import {
+  orcaSessionIdOrHandle,
+  resolveDispatchAssigneeParty
+} from '../../../../orchestration/orchestration-party'
+import {
+  admitChatAssignee,
+  chatAssigneeOf,
+  refuseChatSelfAssignment
+} from '../chat-assignee-admission'
+import { sendChatTask } from '../chat-task-delivery'
+import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
+
+export const ORCHESTRATION_DISPATCH_METHODS = [
+  defineMethod({
+    name: 'orchestration.dispatch',
+    permission: 'workspace',
+    params: DispatchParams,
+    handler: async (
+      params,
+      {
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime,
+        legacyCoordinatorRunId,
+        revalidateLegacyCoordinator,
+        orchestrationMutation
+      }
+    ) => {
+      const db = runtime.getOrchestrationDb()
+      const task = db.getTask(params.task)
+      if (!task) {
+        throw taskNotFoundError(`Task not found: ${params.task}`, { taskId: params.task })
+      }
+      const run = resolveRunScope(runtime, {
+        runId: params.run,
+        callerTerminalHandle: params.from,
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId,
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
+      })
+      if (task.run_id !== run.id) {
+        throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
+          taskId: task.id,
+          runId: run.id
+        })
+      }
+      const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
+      const assignee = assigneeParty?.address
+      // A chat has no pane, process or agent to probe: it is reached as mail to it is.
+      const chatAssignee = assigneeParty ? chatAssigneeOf(assigneeParty) : null
+      if (chatAssignee) {
+        await admitChatAssignee(runtime, chatAssignee, db)
+      }
+
+      // Dry-run previews without state changes; skip readiness and use a placeholder Dispatch id.
+      if (params.dryRun) {
+        const maxDepth = runtime.getNestedWorkerMaxDepth()
+        const previewDepth = db.resolveChildDispatchDepth(
+          resolveDispatchCreator(runtime, params.from, orchestrationCaller),
+          maxDepth
+        )
+        const preamble = buildDispatchPreamble({
+          taskId: task.id,
+          dispatchId: 'ctx_dryrun',
+          canDispatchSubWorkers: previewDepth < maxDepth,
+          heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
+          taskSpec: task.spec,
+          coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+          workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
+          devMode: params.devMode,
+          ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
+        })
+        return { dispatch: null, injected: false, dryRun: true, preamble }
+      }
+
+      if (!assignee) {
+        throw new Error('Missing --to')
+      }
+      const to = assignee
+
+      if (task.status !== 'ready') {
+        throw taskNotStartableError(
+          db,
+          `Task ${params.task} is ${task.status}; only ready tasks can be dispatched`,
+          task
+        )
+      }
+
+      const dispatchAuthority = chatAssignee ? null : runtime.getOrchestrationDispatchAuthority(to)
+      const assigneePaneKey = chatAssignee
+        ? undefined
+        : (dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined)
+      const processIncarnation =
+        dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+          ? dispatchAuthority.processIncarnation
+          : undefined
+      // Resolve dispatch authority on both sides; pane lookup alone misses window-graph-only handles.
+      const callerPane = params.from
+        ? (runtime.getOrchestrationDispatchAuthority(params.from)?.paneKey ??
+          runtime.getTerminalPaneKey(params.from) ??
+          null)
+        : null
+      if (params.inject && chatAssignee) {
+        // The session wins over `--from`, so a chat calling with none is still refused here.
+        refuseChatSelfAssignment({
+          sessionId: chatAssignee,
+          coordinatorSessionId: orchestrationCaller?.orcaSessionId,
+          remedy: 'Dispatch to a different agent, or use worker-start to create one.'
+        })
+      }
+      if (
+        params.inject &&
+        params.from &&
+        (to === params.from || (assigneePaneKey != null && assigneePaneKey === callerPane))
+      ) {
+        // Refuse self-injected preambles to avoid endless self-answering; context-only topology dispatch remains legal.
+        throw new OrchestrationError(
+          'terminal_is_coordinator',
+          `Terminal ${to} is this coordinator's own terminal. Dispatch to a different agent pane, or use worker-start to create one.`
+        )
+      }
+
+      // Require a detected agent before injection so a bare shell cannot execute the preamble.
+      if (params.inject && !chatAssignee) {
+        const hasAgent = await runtime.isTerminalRunningAgent(to)
+        if (!hasAgent) {
+          throw injectRejectedError(to, 'no_agent_detected')
+        }
+      }
+
+      if (params.inject && !chatAssignee && (!assigneePaneKey || !processIncarnation)) {
+        throw new OrchestrationError(
+          'stable_pane_required',
+          `Terminal ${to} has no stable pane/process incarnation for lifecycle authority.`
+        )
+      }
+
+      revalidateLegacyCoordinator?.()
+      const ctx = db.createDispatchContext({
+        taskId: params.task,
+        assigneeHandle: to,
+        assigneePaneKey,
+        launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
+        processIncarnation,
+        creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
+        maxDepth: runtime.getNestedWorkerMaxDepth()
+      })
+
+      // Build after ctx to put its real id in heartbeats and attribute liveness to this Dispatch.
+      const preamble = buildDispatchPreamble({
+        taskId: task.id,
+        dispatchId: ctx.id,
+        canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
+        heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
+        taskSpec: task.spec,
+        coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+        workerHandle: orcaSessionIdOrHandle(to, db),
+        devMode: params.devMode,
+        cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
+      })
+
+      let injected = false
+      let prompt
+      if (params.inject) {
+        try {
+          if (chatAssignee) {
+            const from = dispatchTaskSource({
+              db,
+              dispatch: ctx,
+              from: params.from,
+              senderName: (party, reported) =>
+                runtime.orchestrationSenderNames.nameOf(party, reported)
+            })
+            await sendChatTask({ db, dispatch: ctx, from, preamble })
+          } else {
+            prompt = await sendAgentTurn({
+              kind: 'terminal',
+              runtime,
+              handle: to,
+              turn: {
+                purpose: 'dispatch-preamble',
+                body: preamble,
+                operationId: orchestrationMutation?.requestId ?? ctx.id
+              }
+            })
+          }
+          injected = true
+        } catch (err) {
+          // Unknown delivery may still be running; keep Dispatch open for its report or explicit abandon.
+          if (!(err instanceof OrchestrationError && err.code === 'operation_unknown')) {
+            db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          }
+          throw err
+        }
+      }
+
+      // Opt into returning the preamble to avoid hundreds of unnecessary response bytes.
+      if (params.returnPreamble) {
+        return {
+          dispatch: ctx,
+          injected,
+          preamble,
+          ...(prompt?.prompt ? { prompt: prompt.prompt } : {})
+        }
+      }
+      return { dispatch: ctx, injected, ...(prompt?.prompt ? { prompt: prompt.prompt } : {}) }
+    }
+  }),
+
+  defineMethod({
+    name: 'orchestration.dispatchShow',
+    permission: 'workspace',
+    params: DispatchShowParams,
+    handler: (params, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      if (!params.task) {
+        throw new Error('Missing --task')
+      }
+      const ctx = db.getDispatchContext(params.task)
+
+      // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
+      if (params.preamble) {
+        const task = db.getTask(params.task)
+        if (!task) {
+          throw new Error(`Task not found: ${params.task}`)
+        }
+        const workerHandle = ctx?.assignee_handle ?? 'worker'
+        const preamble = buildDispatchPreamble({
+          taskId: task.id,
+          // Use the real Dispatch id for matching previews; use a placeholder before dispatch.
+          dispatchId: ctx?.id ?? 'ctx_preview',
+          canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+          heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
+          taskSpec: task.spec,
+          coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+          workerHandle: orcaSessionIdOrHandle(workerHandle, db),
+          devMode: params.devMode,
+          ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
+        })
+        return { dispatch: ctx ?? null, preamble }
+      }
+
+      return { dispatch: ctx ?? null }
+    }
+  })
+]

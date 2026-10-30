@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { execFile } from 'node:child_process'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
   repairWindowsMobileFirewall,
   type WindowsMobileFirewallEnvironment
 } from './windows-mobile-firewall'
+
+// Why: every other case injects `runPowerShell`, so only the argv case below reaches execFile.
+vi.mock('node:child_process', () => ({ execFile: vi.fn() }))
 
 function environment(
   runPowerShell: WindowsMobileFirewallEnvironment['runPowerShell'],
@@ -61,6 +65,18 @@ describe('windows mobile firewall', () => {
     expect(script).toContain("[string]$rule.Action -eq 'Block'")
     expect(script).toContain('remoteAddresses = @($addressFilter.RemoteAddress')
     expect(script).toContain('$localPrefixLength = [int]$ip.PrefixLength')
+  })
+
+  it('doubles typographic single quotes in the executable literal', async () => {
+    const runPowerShell = vi.fn().mockResolvedValue('not json')
+    await inspectWindowsMobileFirewall(
+      6768,
+      '192.168.0.108',
+      environment(runPowerShell, { executablePath: 'C:\\Users\\O\u2019Brien\\Orca\\Orca.exe' })
+    )
+    expect(runPowerShell.mock.calls[0]![0]).toContain(
+      "-Program 'C:\\Users\\O\u2019\u2019Brien\\Orca\\Orca.exe'"
+    )
   })
 
   it('treats an overlapping inbound Block rule as overriding a matching Allow rule', async () => {
@@ -177,6 +193,50 @@ describe('windows mobile firewall', () => {
     expect(repairScript).toContain('-LocalPort 6769')
     expect(repairScript).toContain("-Program 'C:\\Users\\O''Brien\\Orca\\Orca.exe'")
     expect(repairScript).toContain('-EdgeTraversalPolicy Block')
+  })
+
+  it('keeps the elevated child encoded because Start-Process re-splits its ArgumentList', async () => {
+    // Elevated Start-Process joins/re-splits argv and collapses spaces in executable paths; only this hop needs base64.
+    const runPowerShell = vi.fn().mockResolvedValue('{"launched":true,"exitCode":0}')
+    await repairWindowsMobileFirewall(
+      6769,
+      environment(runPowerShell, { executablePath: 'C:\\My  App\\Orca.exe' })
+    )
+
+    const outerScript = runPowerShell.mock.calls[0]![0] as string
+    expect(outerScript).toContain("'-EncodedCommand'")
+    expect(outerScript).not.toContain("'-Command'")
+    expect(outerScript).toContain('-Verb RunAs')
+
+    const encoded = outerScript.match(/'-EncodedCommand', '([^']+)'/)?.[1]
+    const repairScript = Buffer.from(encoded!, 'base64').toString('utf16le')
+    expect(repairScript).toContain("-Program 'C:\\My  App\\Orca.exe'")
+  })
+
+  it('runs the local PowerShell over argv with a plain -Command script', async () => {
+    // Direct CreateProcess argv preserves spaces without encoding; -EncodedCommand here only adds EDR signal.
+    const execFileMock = vi.mocked(execFile)
+    execFileMock.mockImplementation(((_file, _args, _options, callback) => {
+      callback(null, '{"privateFirewallEnabled":true,"networkCategory":"Private"}', '')
+      return {}
+    }) as unknown as typeof execFile)
+
+    await inspectWindowsMobileFirewall(6768, undefined, {
+      platform: 'win32',
+      isPackaged: true,
+      executablePath: 'C:\\My  App\\Orca.exe',
+      systemRoot: 'C:\\Windows'
+    })
+
+    const [file, args] = execFileMock.mock.calls[0]!
+    expect(file).toMatch(/WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
+    expect(args!.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-Command'])
+    expect(args).not.toContain('-EncodedCommand')
+    expect(args).not.toContain('-ExecutionPolicy')
+    // The script travels as ONE argv element, so its spaces and newlines survive verbatim.
+    expect(args).toHaveLength(4)
+    expect(args![3]).toContain("-Program 'C:\\My  App\\Orca.exe'")
+    expect(args![3]).toContain('\n')
   })
 
   it('distinguishes a cancelled UAC prompt from repair failure', async () => {

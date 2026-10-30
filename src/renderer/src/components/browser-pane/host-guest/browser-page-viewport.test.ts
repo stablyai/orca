@@ -2,12 +2,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   applyBrowserPageViewportLayout,
+  BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME,
   ensureBrowserPageViewport,
+  getBrowserPageViewportScrollState,
   getBrowserOverlaySlotViewport,
   getBrowserPageViewportContainer,
   parkBrowserPageViewport,
   registerBrowserOverlaySlotViewport,
   removeBrowserPageViewport,
+  scrollBrowserPageViewport,
+  setBrowserPageViewportPresetSize,
   subscribeBrowserOverlaySlotViewport,
   syncBrowserPageChromeInset
 } from './browser-page-viewport'
@@ -23,6 +27,7 @@ function mountSlotViewport(workspaceTabId: string): HTMLDivElement {
 afterEach(() => {
   for (const id of ['page-1', 'page-2']) {
     removeBrowserPageViewport(id)
+    setBrowserPageViewportPresetSize(id, null)
   }
   for (const id of ['workspace-1']) {
     getBrowserOverlaySlotViewport(id)?.remove()
@@ -31,6 +36,111 @@ afterEach(() => {
 })
 
 describe('ensureBrowserPageViewport', () => {
+  it('provides a scroll surface for an oversized preset content host', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    const scroller = viewport.container.querySelector('[data-browser-page-scroller]')
+    const content = viewport.container.querySelector('[data-browser-page-content]')
+
+    expect(scroller).not.toBeNull()
+    expect(content).not.toBeNull()
+  })
+
+  it('sizes and clears the host surface without changing responsive defaults', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(viewport.content.style.width).toBe('100%')
+    expect(viewport.content.style.height).toBe('100%')
+    expect(viewport.scroller.style.overflow).toBe('')
+
+    setBrowserPageViewportPresetSize('page-1', { width: 1440, height: 900 })
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-width')).toBe('1440px')
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-height')).toBe('900px')
+    expect(viewport.content.classList.contains(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)).toBe(true)
+    expect(viewport.scroller.style.overflow).toBe('auto')
+
+    setBrowserPageViewportPresetSize('page-1', null)
+    expect(viewport.content.style.width).toBe('100%')
+    expect(viewport.content.style.height).toBe('100%')
+    expect(viewport.scroller.style.overflow).toBe('')
+  })
+
+  it('restores a preset after the viewport shell is rebuilt', () => {
+    mountSlotViewport('workspace-1')
+    setBrowserPageViewportPresetSize('page-1', { width: 1024, height: 768 })
+    removeBrowserPageViewport('page-1')
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    expect(rebuilt.content.style.getPropertyValue('--browser-page-viewport-width')).toBe('1024px')
+    expect(rebuilt.content.style.getPropertyValue('--browser-page-viewport-height')).toBe('768px')
+    expect(rebuilt.scroller.style.overflow).toBe('auto')
+  })
+
+  // Keep preset dimensions in window DIP; CSS divides them by live UI zoom.
+  it('stores preset host dimensions as window-DIP CSS variables', () => {
+    mountSlotViewport('workspace-1')
+
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    setBrowserPageViewportPresetSize('page-1', { width: 390, height: 844 })
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-width')).toBe('390px')
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-height')).toBe('844px')
+  })
+
+  it('leaves the host box sized by the zoom-compensating rule, not an inline size', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    setBrowserPageViewportPresetSize('page-1', { width: 390, height: 844 })
+
+    expect(viewport.content.classList.contains(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)).toBe(true)
+    // An inline width/height would outrank the rule and reinstate the unscaled DIP box.
+    expect(viewport.content.style.width).toBe('')
+    expect(viewport.content.style.height).toBe('')
+  })
+
+  it('clears preset dimensions when no preset is active', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    setBrowserPageViewportPresetSize('page-1', { width: 390, height: 844 })
+    setBrowserPageViewportPresetSize('page-1', null)
+
+    expect(viewport.content.classList.contains(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)).toBe(false)
+    expect(viewport.content.style.width).toBe('100%')
+  })
+
+  it('routes host wheel deltas to the preset scroller', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    setBrowserPageViewportPresetSize('page-1', { width: 1920, height: 1080 })
+
+    scrollBrowserPageViewport('page-1', 32, 48)
+
+    expect(viewport.scroller.scrollLeft).toBe(32)
+    expect(viewport.scroller.scrollTop).toBe(48)
+  })
+
+  it('reports host scroll position and available range for wheel routing', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    Object.defineProperties(viewport.scroller, {
+      scrollLeft: { configurable: true, value: 12 },
+      scrollTop: { configurable: true, value: 18 },
+      scrollWidth: { configurable: true, value: 900 },
+      scrollHeight: { configurable: true, value: 700 },
+      clientWidth: { configurable: true, value: 500 },
+      clientHeight: { configurable: true, value: 400 }
+    })
+
+    expect(getBrowserPageViewportScrollState('page-1')).toEqual({
+      scrollLeft: 12,
+      scrollTop: 18,
+      maxScrollLeft: 400,
+      maxScrollTop: 300
+    })
+  })
+
   it('creates a flex viewport with chrome inset and container under the slot root', () => {
     const root = mountSlotViewport('workspace-1')
     const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')
@@ -86,8 +196,7 @@ describe('ensureBrowserPageViewport', () => {
   it('builds a fresh viewport when a revisit follows guest-budget eviction', () => {
     const root = mountSlotViewport('workspace-1')
     const evicted = ensureBrowserPageViewport('page-1', 'workspace-1')!
-    // Eviction destroys the guest (destroyPersistentWebview removes the viewport);
-    // the slot stays mounted and registered, so the revisit rebuilds into the same root.
+    // Eviction removes the viewport but retains the slot; revisiting must rebuild into that root.
     removeBrowserPageViewport('page-1')
 
     const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')

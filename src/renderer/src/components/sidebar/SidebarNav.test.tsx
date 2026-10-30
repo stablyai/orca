@@ -88,13 +88,9 @@ vi.mock('@/components/ui/context-menu', () => ({
 }))
 
 import SidebarNav, {
-  getSetupGuideSidebarEntryReady,
-  shouldShowAgentDashboardButton,
-  shouldShowAgentsButton,
   shouldShowAutomationsButton,
   shouldShowArtifactsButton,
-  shouldShowMobileButton,
-  shouldShowSetupGuideEntry
+  shouldShowMobileButton
 } from './SidebarNav'
 
 function gitRepo(): Repo {
@@ -220,42 +216,14 @@ describe('SidebarNav', () => {
     setSidebarState()
   })
 
-  it('hides the Agents entry while settings are loading', () => {
-    expect(shouldShowAgentsButton(null)).toBe(false)
-  })
-
-  it('hides the Agents entry while the experimental Agents view is off', () => {
-    expect(
-      shouldShowAgentsButton({
-        ...getDefaultSettings('/tmp'),
-        experimentalActivity: false
-      })
-    ).toBe(false)
-  })
-
-  it('shows the Agents entry when the experimental Agents view is on', () => {
-    expect(
-      shouldShowAgentsButton({
-        ...getDefaultSettings('/tmp'),
-        experimentalActivity: true
-      })
-    ).toBe(true)
-  })
-
-  it('shows the Agent Dashboard entry only when its experiment is enabled', () => {
-    expect(shouldShowAgentDashboardButton(null)).toBe(false)
-    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: false })).toBe(false)
-    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: true })).toBe(true)
-  })
-
-  it('keeps the Agent Dashboard row unmounted by default', async () => {
+  it('keeps the Agent Dashboard row unmounted while its experiment is off', async () => {
     const container = await renderSidebarNav()
 
     expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
     expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
   })
 
-  it('mounts the Agent Dashboard row after opt-in', async () => {
+  it('mounts the Agent Dashboard row only when its experiment is enabled', async () => {
     setSidebarState({
       settings: {
         ...getDefaultSettings('/tmp'),
@@ -386,10 +354,6 @@ describe('SidebarNav', () => {
     expect(shouldShowAutomationsButton({})).toBe(true)
   })
 
-  it('hides the Automations entry when the sidebar setting is off', () => {
-    expect(shouldShowAutomationsButton({ showAutomationsButton: false })).toBe(false)
-  })
-
   it('omits the Automations row when the sidebar setting is off', async () => {
     setSidebarState({
       settings: {
@@ -513,26 +477,5 @@ describe('SidebarNav', () => {
     await clickButton(getHideButton(tasksMenu as HTMLElement))
 
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showTasksButton: false })
-  })
-
-  it('shows the setup guide entry only after readiness, before completion, and before explicit hide', () => {
-    expect(
-      shouldShowSetupGuideEntry({ ready: false, setupComplete: false, dismissed: false })
-    ).toBe(false)
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: false, dismissed: false })).toBe(
-      true
-    )
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: true, dismissed: false })).toBe(
-      false
-    )
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: false, dismissed: true })).toBe(
-      false
-    )
-  })
-
-  it('requires both persisted UI and setup progress readiness before showing setup guide entry', () => {
-    expect(getSetupGuideSidebarEntryReady(false, true)).toBe(false)
-    expect(getSetupGuideSidebarEntryReady(true, false)).toBe(false)
-    expect(getSetupGuideSidebarEntryReady(true, true)).toBe(true)
   })
 })

@@ -6,13 +6,13 @@ import {
   getTabEntryOptions,
   isTabEntryAbsolutePathLike
 } from './tab-create-entry-action'
-import { findMatchingTabAgentLaunchOptions } from './tab-agent-launch-options'
-import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import {
-  getActiveOptionId,
-  isActiveEntryOption,
-  type ActiveOption
-} from './tab-create-entry-active-option'
+  configuredAgentPickerLaunchOption,
+  findMatchingTabAgentLaunchOptions,
+  matchingAgentPickerLaunchOptions
+} from './tab-agent-launch-options'
+import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
+import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import {
   EntryActionRow,
   EntryStatusRow,
@@ -20,6 +20,9 @@ import {
   resultOptionDomId
 } from './TabBarCreateEntryRow'
 import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
+import { placeHistoryRowsInEntryOptions } from './tab-create-entry-history-placement'
+import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
+import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
@@ -34,6 +37,7 @@ import {
   getTabEntryOmniboxPlaceholder
 } from './tab-create-entry-copy'
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
+import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
@@ -42,11 +46,13 @@ export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.
 
 function TabBarCreateEntrySession({
   agentOptions = EMPTY_AGENT_OPTIONS,
+  agentPickerEntries,
   groupId,
   menuOpen,
   menuOptions = EMPTY_MENU_OPTIONS,
   onDidOpenEntry,
   onLaunchAgent,
+  onLaunchAgentOption,
   onOpenDefaultTerminal,
   onOpenEntry,
   onQueryChange,
@@ -76,7 +82,8 @@ function TabBarCreateEntrySession({
   const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
     query,
-    worktreeId
+    worktreeId,
+    retainedResultId: pinnedOptionId
   })
   const shouldResolveAbsolutePaths =
     menuOpen && !terminalQueryMode && isTabEntryAbsolutePathLike(query.trim())
@@ -88,8 +95,7 @@ function TabBarCreateEntrySession({
     [shouldResolveAbsolutePaths, worktreeId]
   )
   const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
-  // Why the worktree path: editor↔file dedupe folds case by the worktree's
-  // filesystem, which a Windows client's own platform does not describe.
+  // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
   const worktreePath = useAppStore((state) =>
     menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
   )
@@ -98,34 +104,7 @@ function TabBarCreateEntrySession({
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
   )
 
-  // Why: once ArrowDown moves focus into the static menu list, ArrowUp on the
-  // first item should return to the search box so the keyboard trip isn't
-  // one-way. Capture phase beats Radix's roving-focus handler.
-  useEffect(() => {
-    if (!menuOpen) {
-      return
-    }
-    const input = inputRef.current
-    const menu = input?.closest<HTMLElement>('[role="menu"]')
-    if (!input || !menu) {
-      return
-    }
-    const handleMenuKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'ArrowUp') {
-        return
-      }
-      const firstItem = menu.querySelector(
-        '[role="menuitem"]:not([data-disabled]):not([aria-disabled="true"])'
-      )
-      if (firstItem && document.activeElement === firstItem) {
-        event.preventDefault()
-        event.stopPropagation()
-        input.focus()
-      }
-    }
-    menu.addEventListener('keydown', handleMenuKeyDown, true)
-    return () => menu.removeEventListener('keydown', handleMenuKeyDown, true)
-  }, [menuOpen])
+  useTabEntryMenuReturnFocus(inputRef, menuOpen)
 
   useEffect(() => {
     if (!menuOpen) {
@@ -165,12 +144,20 @@ function TabBarCreateEntrySession({
     tabResults,
     worktreePath
   ])
+  const historyRows = useOmniboxBrowserHistory({
+    enabled: menuOpen && !terminalQueryMode,
+    query,
+    tabResults
+  })
   const matchingAgentOptions = useMemo(
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : findMatchingTabAgentLaunchOptions(query, agentOptions),
-    [agentOptions, query, terminalQueryMode]
+        : [
+            ...matchingAgentPickerLaunchOptions(agentPickerEntries ?? [], query),
+            ...findMatchingTabAgentLaunchOptions(query, agentOptions)
+          ],
+    [agentOptions, agentPickerEntries, query, terminalQueryMode]
   )
 
   const disabled = !onOpenEntry
@@ -188,10 +175,7 @@ function TabBarCreateEntrySession({
       kind: 'agent' as const,
       option
     })),
-    ...options.filter(isActiveEntryOption).map((option) => ({
-      kind: 'entry' as const,
-      option
-    }))
+    ...placeHistoryRowsInEntryOptions(options, historyRows)
   ]
   const { activeSelectedIndex, selectedActiveOption } = useNetworkSafeTabEntrySelection({
     activeOptions,
@@ -226,8 +210,7 @@ function TabBarCreateEntrySession({
         setSelectionGuidance(getTabEntryChooseActionMessage())
         return
       }
-      // Why: an 'empty' status is the placeholder prompt, not a failure — showing
-      // it as an error turns a bare "?" into a red row that reads like a bug.
+      // Empty status is guidance rather than failure; do not turn a bare query marker into an error.
       if (statusOption?.classification.kind !== 'empty') {
         setError(statusMessage)
       }
@@ -235,6 +218,9 @@ function TabBarCreateEntrySession({
     }
     if (selectedOption.kind === 'tab') {
       const outcome = activateOpenTabSearchResult(selectedOption.option)
+      if (outcome.status === 'blocked') {
+        return
+      }
       if (outcome.status === 'failed') {
         setSwitchError(outcome.message)
         return
@@ -251,20 +237,26 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      onLaunchAgent?.(selectedOption.option.agent)
+      if (selectedOption.option.disabled) {
+        return
+      }
+      if (onLaunchAgentOption) {
+        onLaunchAgentOption(selectedOption.option)
+      } else {
+        onLaunchAgent?.(selectedOption.option.agent)
+      }
       onDidOpenEntry?.()
       return
     }
+    // Route history through typed-URL navigation to preserve workspace targeting and SSH resolution.
+    const classification: TabEntryActionClassification =
+      selectedOption.kind === 'history'
+        ? { kind: 'explicit-url', url: selectedOption.option.entry.url }
+        : selectedOption.option.classification
     setPending(true)
     setError(null)
     const submissionId = ++submissionIdRef.current
-    void onOpenEntry({
-      query,
-      worktreeId,
-      groupId,
-      fileList,
-      classification: selectedOption.option.classification
-    })
+    void onOpenEntry({ query, worktreeId, groupId, fileList, classification })
       .then(() => {
         if (submissionIdRef.current === submissionId) {
           onDidOpenEntry?.()
@@ -305,9 +297,7 @@ function TabBarCreateEntrySession({
             setSelectionGuidance(null)
             return
           }
-          // Why: with no result rows the static create/agent items render below;
-          // move focus into that Radix menu list so it stays keyboard-navigable
-          // from the search box instead of trapping focus in the input.
+          // With no search results, transfer arrow navigation to static Radix items so the input cannot trap focus.
           if (
             focusTabEntryMenuItemAtEdge(
               event.currentTarget,
@@ -331,8 +321,7 @@ function TabBarCreateEntrySession({
           value={query}
           onChange={(event) => {
             const nextQuery = event.target.value
-            // Why: the parent query only changes in response to typing, so publish
-            // it in this event rather than a later effect after the render commits.
+            // Publish query changes in the typing event instead of waiting for a post-commit effect.
             setQuery(nextQuery)
             onQueryChange?.(nextQuery)
             setPinnedOptionId(null)
@@ -340,8 +329,7 @@ function TabBarCreateEntrySession({
             setSwitchError(null)
             setSelectionGuidance(null)
           }}
-          // Why: disabling the focused input would hand focus to the body and
-          // break arrow/Escape navigation until the submission settles.
+          // Keep pending input focus with readOnly; disabling it breaks arrow/Escape navigation.
           disabled={disabled}
           readOnly={pending}
           aria-busy={pending || undefined}
@@ -361,9 +349,7 @@ function TabBarCreateEntrySession({
           className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
       </div>
-      {/* Above the list, not instead of it: a stale switch target must not wipe
-          the rows the user can still act on. The live region stays mounted so a
-          screen reader announces the failure instead of missing the insertion. */}
+      {/* Keep a mounted live region above usable rows so stale-target failures announce without removing other choices. */}
       <div role="status">
         {error ? (
           <div className="mt-1 px-1" id="tab-create-entry-error">
@@ -399,7 +385,20 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                disabled={disabled || pending}
+                onUseAgent={
+                  option.kind === 'agent' && option.option.pickerEntry
+                    ? (draft) =>
+                        submitOption({
+                          kind: 'agent',
+                          option: configuredAgentPickerLaunchOption(option.option, draft)
+                        })
+                    : undefined
+                }
+                disabled={
+                  disabled ||
+                  pending ||
+                  (option.kind === 'agent' && option.option.disabled === true)
+                }
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)

@@ -24,11 +24,23 @@ function splitPath(pathValue: string): string[] {
   return pathValue.split(pathWin32.delimiter).filter(Boolean)
 }
 
+export function createWindowsPathKey(): (segment: string) => string {
+  const keys = new Map<string, string>()
+  return (segment) => {
+    let key = keys.get(segment)
+    if (key === undefined) {
+      key = windowsPathSegmentKey(segment)
+      keys.set(segment, key)
+    }
+    return key
+  }
+}
+
 function externalAdditions(application: AppliedWindowsPath, currentValue: string): string[] {
   if (currentValue === application.appliedValue) {
     return []
   }
-  // Why: forced Windows preflight appends newly installed registry paths after hydration.
+  // Forced Windows preflight may append newly installed registry paths after hydration.
   const appliedKeys = new Set(splitPath(application.appliedValue).map(windowsPathSegmentKey))
   return splitPath(currentValue).filter(
     (segment) => !appliedKeys.has(windowsPathSegmentKey(segment))

@@ -1,13 +1,12 @@
 import { type Mock, vi } from 'vitest'
+import type { describeCreatedWorktree } from '../git/worktree'
+import type { computeWorktreePath } from './worktree-logic'
 import type { HandlerMap } from './worktrees-test-ipc-surface'
 
-/** Loose signature: one mock stands in for many unrelated module exports. */
+/** One loose mock type covers unrelated module exports. */
 export type ModuleMock = Mock<(...args: unknown[]) => unknown>
-/** Mocks tests re-implement with a leading path/name/script argument. */
 export type StringArgMock = Mock<(value: string, ...rest: unknown[]) => unknown>
-/** Lookups tests re-implement per branch, e.g. conflict kind and PR resolution. */
 export type RepoBranchMock = Mock<(repoPath: string, branch: string, ...rest: unknown[]) => unknown>
-/** Git invocations tests re-implement by inspecting the argv array. */
 export type GitArgvMock = Mock<(args: string[], ...rest: unknown[]) => unknown>
 
 export type ParsedWorktreeRow = {
@@ -32,6 +31,7 @@ export const findExistingWorktreeSymlinkPathsMock: ModuleMock = vi.fn()
 export const handleMock: Mock<(channel: string, handler: HandlerMap[string]) => void> = vi.fn()
 export const removeHandlerMock: ModuleMock = vi.fn()
 export const listWorktreesMock: StringArgMock = vi.fn()
+export const describeCreatedWorktreeMock = vi.fn<typeof describeCreatedWorktree>()
 export const parseWorktreeListMock: Mock<(output: string) => ParsedWorktreeRow[]> = vi.fn(
   (output: string) =>
     output
@@ -62,7 +62,6 @@ export const getWorkItemMock: ModuleMock = vi.fn()
 export const getPullRequestPushTargetMock: ModuleMock = vi.fn()
 export const getEffectiveHooksMock: Mock<(repo?: unknown, worktreePath?: string) => unknown> =
   vi.fn()
-export const createIssueCommandRunnerScriptMock: ModuleMock = vi.fn()
 export const createSetupRunnerScriptMock: ModuleMock = vi.fn()
 export const getEffectiveHooksFromConfigMock: ModuleMock = vi.fn()
 export const getDefaultTabsLaunchMock: ModuleMock = vi.fn()
@@ -77,18 +76,9 @@ export const resolveSetupRunnerShellMock: ModuleMock = vi.fn()
 export const runHookMock: ModuleMock = vi.fn()
 export const hasHooksFileMock: ModuleMock = vi.fn()
 export const loadHooksMock: ModuleMock = vi.fn()
-export const computeWorktreePathMock: Mock<
-  (
-    sanitizedName: string,
-    repoPath: string,
-    settings: { nestWorkspaces: boolean; workspaceDir: string }
-  ) => string
-> = vi.fn()
+export const computeWorktreePathMock: Mock<typeof computeWorktreePath> = vi.fn()
 export const ensurePathWithinWorkspaceMock: StringArgMock = vi.fn()
 export const gitExecFileAsyncMock: GitArgvMock = vi.fn()
-export const getSshGitProviderMock: StringArgMock = vi.fn()
-export const getSshFilesystemProviderMock: ModuleMock = vi.fn()
-export const getActiveMultiplexerMock: ModuleMock = vi.fn()
 export const deleteWorktreeHistoryDirMock: ModuleMock = vi.fn()
 export const advertisedUrlWatcherForgetWorktreeMock: ModuleMock = vi.fn()
 export const pruneCleanupScanSnapshotMock: ModuleMock = vi.fn().mockResolvedValue(undefined)
@@ -99,10 +89,8 @@ export const recordRemovalSnapshotPruneMock: ModuleMock = vi.fn()
 export const killAllProcessesForWorktreeMock: ModuleMock = vi.fn()
 export const clearProviderPtyStateMock: ModuleMock = vi.fn()
 export const getLocalPtyProviderMock: ModuleMock = vi.fn()
-export const getSshPtyProviderMock: ModuleMock = vi.fn()
 
-// Why: vi.mock factories are hoisted per test file, so each file calls these builders instead of
-// closing over module-scope bindings.
+// Hoisted vi.mock factories must call builders instead of closing over module-scope bindings.
 export const electronModuleMock = () => ({
   ipcMain: {
     handle: handleMock,
@@ -113,6 +101,9 @@ export const electronModuleMock = () => ({
 export const gitWorktreeModuleMock = () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
+  listWorktreesSharedStrict: listWorktreesMock,
+  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
+  describeCreatedWorktree: describeCreatedWorktreeMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
@@ -134,7 +125,19 @@ export const gitRepoModuleMock = () => ({
   resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
-  getBranchConflictKind: getBranchConflictKindMock
+  getBranchConflictKind: async (
+    repoPath: string,
+    branch: string,
+    base?: string,
+    options?: { wslDistro?: string },
+    allowLocalBranch?: () => Promise<boolean>
+  ) => {
+    // Ref presence is stubbed here; policy tests cover missing refs.
+    if (allowLocalBranch && (await allowLocalBranch())) {
+      return null
+    }
+    return getBranchConflictKindMock(repoPath, branch, base, options)
+  }
 })
 
 export const githubClientModuleMock = () => ({
@@ -145,26 +148,6 @@ export const githubClientModuleMock = () => ({
 
 export const hostedReviewModuleMock = () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
-})
-
-export const sshGitDispatchModuleMock = () => ({
-  getSshGitProviderGeneration: () => 0,
-  getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
-  requireSshGitProvider: (connectionId: string) => {
-    const provider = getSshGitProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider
-  }
-})
-
-export const sshFilesystemDispatchModuleMock = () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
 })
 
 export const worktreeSymlinksModuleMock = (): {
@@ -179,17 +162,6 @@ export const worktreeSymlinksModuleMock = (): {
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
 })
 
-export const sshModuleMock = () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
-})
-
-// Why a second builder: getActiveMultiplexer moved to ../ssh/ssh-target-registry so the
-// runtime could reach it without ipcMain. Production imports it from there now, so a
-// vi.mock('./ssh') factory alone is inert.
-export const sshTargetRegistryModuleMock = () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
-})
-
 export const hooksModuleMock = () => ({
   getEffectiveHooks: getEffectiveHooksMock,
   loadHooks: loadHooksMock,
@@ -198,8 +170,7 @@ export const hooksModuleMock = () => ({
   hasHooksFile: hasHooksFileMock
 })
 
-// Why: the runner-script/hook-config surface moved out of hooks.ts, so each home
-// module needs its own mock or the worktree handlers run the real implementations.
+// Mock each owning module so handler tests cannot invoke real runner-script or hook-config code.
 export const setupRunnerScriptTextModuleMock = (actual: Record<string, unknown>) => ({
   ...actual,
   buildPosixRunnerScript: buildPosixRunnerScriptMock,
@@ -208,7 +179,6 @@ export const setupRunnerScriptTextModuleMock = (actual: Record<string, unknown>)
 
 export const worktreeRunnerScriptModuleMock = (actual: Record<string, unknown>) => ({
   ...actual,
-  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   resolveSetupRunnerShell: resolveSetupRunnerShellMock
 })
@@ -259,8 +229,8 @@ export const worktreeTeardownModuleMock = () => ({
   killAllProcessesForWorktree: killAllProcessesForWorktreeMock
 })
 
-export const ptyModuleMock = () => ({
-  clearProviderPtyState: clearProviderPtyStateMock,
-  getLocalPtyProvider: getLocalPtyProviderMock,
-  getSshPtyProvider: getSshPtyProviderMock
+export const ptyRegistryModuleMock = () => ({ getLocalPtyProvider: getLocalPtyProviderMock })
+
+export const ptyStateCleanupModuleMock = () => ({
+  clearProviderPtyState: clearProviderPtyStateMock
 })

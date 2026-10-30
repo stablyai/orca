@@ -18,6 +18,7 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-w
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type ActiveDashboardWorkspace = {
   projectId: string
@@ -30,7 +31,8 @@ export type ActiveDashboardWorkspace = {
   hostLabel?: string
 }
 
-type DashboardWorkspaceState = Pick<AppState, 'repos' | 'worktreesByRepo'> &
+/** Metadata-free reads use only repos/worktreesByRepo/folderWorkspaces/projectGroups; widen the bucket-count memo key whenever this ungated set grows. */
+export type DashboardWorkspaceState = Pick<AppState, 'repos' | 'worktreesByRepo'> &
   Partial<
     Pick<
       AppState,
@@ -86,7 +88,7 @@ export function collectActiveDashboardWorkspaces(
   }
 
   for (const repo of state.repos ?? []) {
-    for (const worktree of state.worktreesByRepo?.[repo.id] ?? []) {
+    for (const worktree of selectWorktreesByRepo(state)?.[repo.id] ?? []) {
       if (worktree.isArchived) {
         continue
       }

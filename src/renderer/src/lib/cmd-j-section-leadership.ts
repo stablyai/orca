@@ -1,13 +1,14 @@
 import {
   paletteResultQualityClassRank,
   type PaletteResultQualityClass
-} from './palette-match/match-quality'
-import { comparePaletteDocumentRank } from './palette-match/palette-document'
-import type { PaletteDocumentRank } from './palette-match/palette-document'
+} from '../../../shared/palette-match/match-quality'
+import type { PaletteDocumentRank } from '../../../shared/palette-match/palette-document'
+import {
+  comparePaletteEntityRanks,
+  type PaletteActivityRank
+} from '../../../shared/palette-match/palette-ranking'
 
-// Why a shared class and not raw scores: each section's score encodes its own list
-// position, so only a small common vocabulary can say which section holds the
-// better hit. Lower ranks lead.
+// Section scores encode incompatible list positions; compare shared match ranks first, lower leading.
 export const NO_PALETTE_QUALITY_RANK = Number.MAX_SAFE_INTEGER
 
 export function paletteQualityRank(
@@ -30,32 +31,33 @@ export type PaletteRankedItem = {
   rank: PaletteDocumentRank | null
   /** Existing smart-recency / list position, used only after match rank ties. */
   order: number
-  id: string
-  /** Timestamp of most recent activity (focus or agent interaction). */
-  lastActiveAt?: number
+  identity: string
+  activity?: PaletteActivityRank
 }
 
-/** Match rank first, then recent activity, then positional order, then stable id. */
 export function comparePaletteRankedItems(a: PaletteRankedItem, b: PaletteRankedItem): number {
   if (a.rank && b.rank) {
-    const byRank = comparePaletteDocumentRank(a.rank, b.rank)
-    if (byRank !== 0) {
-      return byRank
-    }
+    return comparePaletteEntityRanks(
+      {
+        rank: a.rank,
+        activity: a.activity ?? { ageBucket: null, timestamp: 0 },
+        position: a.order,
+        identity: a.identity
+      },
+      {
+        rank: b.rank,
+        activity: b.activity ?? { ageBucket: null, timestamp: 0 },
+        position: b.order,
+        identity: b.identity
+      }
+    )
   } else if (a.rank !== b.rank) {
     return a.rank ? -1 : 1
-  }
-  if (a.lastActiveAt !== b.lastActiveAt) {
-    const aTime = a.lastActiveAt ?? 0
-    const bTime = b.lastActiveAt ?? 0
-    if (aTime !== bTime) {
-      return bTime - aTime
-    }
   }
   if (a.order !== b.order) {
     return a.order - b.order
   }
-  return a.id.localeCompare(b.id)
+  return a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0
 }
 
 /** Ties prefer Open Tabs, matching the documented section-leadership rule. */
@@ -66,11 +68,7 @@ export function shouldOpenTabsLeadPaletteSections(args: {
   return args.bestOpenTabQualityRank <= args.bestWorktreeQualityRank
 }
 
-/**
- * A decisive settings/action/project intent may lead *weaker* entity hits only.
- * An entity that matched its own visible name exactly is not weaker, so typing a
- * workspace's exact name never sinks it under a same-named settings pane.
- */
+/** Decisive settings/action/project intent may outrank weaker entities, never an exact visible entity name. */
 export function shouldIntentSectionLeadPaletteSections(args: {
   bestEntityQualityRank: number
   bestIntentQualityRank: number

@@ -1,6 +1,7 @@
 import type * as ReactModule from 'react'
 import type * as StoreModule from '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { schedulePaneRevealRepaint } from '@/lib/pane-manager/pane-reveal-repaint'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import {
   cleanupGlobalEffectsTestWindow,
@@ -96,11 +97,7 @@ vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
-// Why: this suite invokes the hook outside a real React render (the react mock
-// above runs effects synchronously and manages refs by hand), so a reactive
-// useAppStore(selector) call would throw an "Invalid hook call". Read the
-// current snapshot synchronously instead; getState/setState stay real so tests
-// can seed terminalLayoutsByTabId.
+// This harness runs hooks without React rendering; use real synchronous store snapshots instead of reactive selectors that would throw invalid-hook-call.
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
@@ -127,17 +124,23 @@ describe('useTerminalPaneGlobalEffects', () => {
   })
 
   it('flushes visible terminal panes before resuming rendering and fitting', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('requestAnimationFrame', undefined)
     const order: string[] = []
     const terminalA = { name: 'terminal-a' }
     const terminalB = { name: 'terminal-b' }
+    const getPanes = vi.fn(() => [
+      { id: 1, terminal: terminalA },
+      { id: 2, terminal: terminalB }
+    ])
     const manager = {
-      getPanes: vi.fn(() => [
-        { id: 1, terminal: terminalA },
-        { id: 2, terminal: terminalB }
-      ]),
+      getPanes,
       resumeRendering: vi.fn(() => order.push('resume')),
       resetWebglTextureAtlases: vi.fn(() => order.push('reset-atlas')),
-      scheduleRevealRepaint: vi.fn(() => order.push('reveal-repaint')),
+      scheduleRevealRepaint: vi.fn(() => {
+        order.push('reveal-repaint')
+        schedulePaneRevealRepaint(getPanes as never)
+      }),
       scheduleRevealPresent: vi.fn(() => order.push('reveal-present')),
       refreshAllPanes: vi.fn(() => order.push('refresh')),
       suspendRendering: vi.fn(),
@@ -164,16 +167,13 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
 
-    // Why: the resume path resets atlases through the live-manager registry
-    // (shared glyph atlas), so the fake manager must be registered to observe
-    // its reset in the ordering assertion.
+    // Why: the settled reveal resets atlases through the live-manager registry.
     registerManagerForReset(manager)
     const isActiveRef = { current: false }
     const isVisibleRef = { current: false }
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       isActive: true,
       isVisible: true,
       isSyncFitEnabled: true,
@@ -197,10 +197,12 @@ describe('useTerminalPaneGlobalEffects', () => {
       'fit-reveal',
       'intent:terminal-a',
       'intent:terminal-b',
-      'reset-atlas',
-      'refresh',
-      'reveal-repaint'
+      'reveal-present'
     ])
+    vi.advanceTimersByTime(0)
+    // A healthy shared atlas is not cleared on an ordinary worktree reveal.
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
     expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -239,7 +241,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     registerManagerForReset(manager)
     const baseArgs = {
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },
@@ -299,6 +300,62 @@ describe('useTerminalPaneGlobalEffects', () => {
     vi.advanceTimersByTime(500)
   })
 
+  it.each([
+    ['skips focus while the chat leaf is active', true],
+    ['keeps focusing an active split terminal leaf', false]
+  ])('chat view mode %s', (_label, covered) => {
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const pane = {
+      id: 1,
+      terminal: { name: 'terminal-a' },
+      container: { querySelector: vi.fn(() => (covered ? {} : null)) }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
+      scheduleRevealPresent: vi.fn(),
+      refreshAllPanes: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
+      getActivePane: vi.fn(() => pane),
+      setActivePane: vi.fn()
+    }
+    registerManagerForReset(manager)
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      paneCount: 1,
+      isSyncFitEnabled: true,
+      isWorktreeActive: true,
+      toggleExpandPane: vi.fn(),
+      isActive: true,
+      isVisible: true,
+      isChatViewMode: true
+    })
+
+    expect(pane.container.querySelector).toHaveBeenCalledWith('.native-chat-pane-shell')
+    if (covered) {
+      expect(mocks.focusActivePane).not.toHaveBeenCalled()
+    } else {
+      expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
+    }
+  })
+
   it('keeps visible active-state updates on the light resume path', () => {
     vi.useFakeTimers()
     vi.stubGlobal(
@@ -325,7 +382,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     registerManagerForReset(manager)
     const baseArgs = {
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },
@@ -393,7 +449,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     registerManagerForReset(manager)
     const baseArgs = {
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },
@@ -449,7 +504,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     registerManagerForReset(manager)
     const baseArgs = {
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },
@@ -491,6 +545,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
+    manager.scheduleRevealRepaint.mockClear()
     manager.refreshAllPanes.mockClear()
     manager.fitAllRevealedPanes.mockClear()
     mocks.fitAndFocusPanes.mockClear()
@@ -514,8 +569,10 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
     expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(manager.refreshAllPanes).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealPresent).toHaveBeenCalled()
   })
 
   it('enforces scroll intent after hidden layout changes the viewport', () => {
@@ -540,7 +597,6 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     const baseArgs = {
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },

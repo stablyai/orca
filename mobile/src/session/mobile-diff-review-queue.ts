@@ -1,3 +1,5 @@
+import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { translate } from '../i18n/mobile-i18n'
 import type {
   DiffComment,
   DiffReviewScope,
@@ -7,6 +9,7 @@ import type { MobileGitBranchChangeEntry } from '../source-control/mobile-branch
 import {
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
+  isMobileGitUnstageableEntry,
   type MobileGitFileStatus,
   type MobileGitStagingArea,
   type MobileGitStatusEntry
@@ -81,7 +84,7 @@ export function createMobileDiffReviewFileKey(
 function statusEntryIdentity(entry: MobileGitStatusEntry, scope: DiffReviewScope): string {
   return buildMobileDiffIdentity([
     scope,
-    entry.area,
+    entry.area ?? '',
     entry.status,
     entry.oldPath ?? '',
     entry.path,
@@ -162,8 +165,14 @@ function queueNoteCounts(
   return { noteCount, unsentNoteCount, staleNoteCount }
 }
 
+type PlaceableStatusEntry = MobileGitStatusEntry & { area: MobileGitStagingArea }
+
+function isPlaceableStatusEntry(entry: MobileGitStatusEntry): entry is PlaceableStatusEntry {
+  return entry.area !== undefined
+}
+
 function statusEntryToQueueItem(
-  entry: MobileGitStatusEntry,
+  entry: PlaceableStatusEntry,
   comments: readonly DiffComment[],
   reviewState: MobileDiffReviewState
 ): MobileDiffReviewQueueItem {
@@ -183,12 +192,16 @@ function statusEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: scope === 'staged' ? 'Staged' : 'Unstaged',
+    get subtitle() {
+      return scope === 'staged'
+        ? translate('session.diffReviewQueue.staged', 'Staged')
+        : translate('session.diffReviewQueue.unstaged', 'Unstaged')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: isMobileGitStageableEntry(entry),
-    canUnstage: entry.area === 'staged',
-    canDiscard: isMobileGitDiscardableEntry(entry) && entry.area !== 'staged',
+    canUnstage: isMobileGitUnstageableEntry(entry),
+    canDiscard: isMobileGitDiscardableEntry(entry),
     isGeneratedOrLockFile: isGeneratedOrLockFile(entry.path),
     diffIdentity,
     ...counts,
@@ -200,7 +213,8 @@ function statusEntryToQueueItem(
 
 function branchEntryToQueueItem(
   entry: MobileGitBranchChangeEntry,
-  input: BuildMobileDiffReviewQueueInput
+  input: BuildMobileDiffReviewQueueInput,
+  comments: readonly DiffComment[]
 ): MobileDiffReviewQueueItem {
   const scope: DiffReviewScope = 'branch'
   const key = createMobileDiffReviewFileKey(scope, 'branch', entry.path, entry.oldPath)
@@ -208,7 +222,7 @@ function branchEntryToQueueItem(
   const reviewFileState = input.reviewState.files[key]
   const counts = queueNoteCounts(
     { filePath: entry.path, oldPath: entry.oldPath, scope, diffIdentity },
-    input.comments
+    comments
   )
   return {
     key,
@@ -218,7 +232,9 @@ function branchEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: 'Committed on branch',
+    get subtitle() {
+      return translate('session.diffReviewQueue.committedOnBranch', 'Committed on branch')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: false,
@@ -233,26 +249,32 @@ function branchEntryToQueueItem(
   }
 }
 
-function compareQueueItems(
-  first: MobileDiffReviewQueueItem,
-  second: MobileDiffReviewQueueItem
-): number {
-  return (
-    SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
-    Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
-    first.filePath.localeCompare(second.filePath, undefined, { numeric: true })
-  )
-}
-
 export function buildMobileDiffReviewQueue(
   input: BuildMobileDiffReviewQueueInput
 ): MobileDiffReviewQueueItem[] {
-  return [
-    ...input.statusEntries.map((entry) =>
-      statusEntryToQueueItem(entry, input.comments, input.reviewState)
-    ),
-    ...input.branchEntries.map((entry) => branchEntryToQueueItem(entry, input))
-  ].sort(compareQueueItems)
+  const commentsByPath = new Map<string, DiffComment[]>()
+  for (const comment of input.comments) {
+    const comments = commentsByPath.get(comment.filePath) ?? []
+    comments.push(comment)
+    commentsByPath.set(comment.filePath, comments)
+  }
+  const queue = [
+    ...input.statusEntries
+      .filter(isPlaceableStatusEntry)
+      .map((entry) =>
+        statusEntryToQueueItem(entry, commentsByPath.get(entry.path) ?? [], input.reviewState)
+      ),
+    ...input.branchEntries.map((entry) =>
+      branchEntryToQueueItem(entry, input, commentsByPath.get(entry.path) ?? [])
+    )
+  ]
+  queue.sort(
+    (first, second) =>
+      SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
+      Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
+      compareFileNames(first.filePath, second.filePath)
+  )
+  return queue
 }
 
 export function filterMobileDiffReviewQueue(
@@ -271,4 +293,26 @@ export function filterMobileDiffReviewQueue(
     case 'all':
       return [...queue]
   }
+}
+
+export type MobileDiffReviewQueueSummary = {
+  reviewedCount: number
+  reviewedUnstagedCount: number
+}
+
+export function summarizeMobileDiffReviewQueue(
+  queue: readonly MobileDiffReviewQueueItem[]
+): MobileDiffReviewQueueSummary {
+  let reviewedCount = 0
+  let reviewedUnstagedCount = 0
+  for (const item of queue) {
+    if (!item.isReviewed) {
+      continue
+    }
+    reviewedCount += 1
+    if (item.scope === 'unstaged' && item.canStage) {
+      reviewedUnstagedCount += 1
+    }
+  }
+  return { reviewedCount, reviewedUnstagedCount }
 }

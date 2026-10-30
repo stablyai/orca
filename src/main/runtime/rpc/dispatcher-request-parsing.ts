@@ -1,6 +1,7 @@
+import { getCompiledSchema } from '../../zod-schema-compilation'
 import {
   formatZodError,
-  type RpcAnyMethod,
+  type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
   type RpcRequest,
   type RpcResponse
@@ -9,13 +10,13 @@ import { invalidArgumentResponse } from './dispatcher-error-response'
 
 export function parseRpcRequestParams(
   request: RpcRequest,
-  method: RpcAnyMethod,
+  method: RpcAnyMethodDeclaration,
   meta: RpcEnvelopeMeta
 ): { value: unknown; error?: undefined } | { value?: undefined; error: RpcResponse } {
   if (method.params === null) {
     return { value: undefined }
   }
-  const result = method.params.safeParse(request.params ?? {})
+  const result = getCompiledSchema(method.params).safeParse(request.params ?? {})
   if (!result.success) {
     return {
       error: invalidArgumentResponse(request, meta, formatZodError(result.error))

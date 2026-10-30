@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/source-control-generation-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   createStagedCommitMessageChange,
@@ -100,8 +100,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
         testWindow.__createPRIntentPushFinished = false
         store.setState((current) => ({
           getHostedReviewCreationEligibility: async () => {
-            // Why: eligibility stays blocked until the delayed push completes,
-            // so this test exercises navigation during an in-flight intent run.
+            // Delay push so eligibility remains blocked while navigation exercises the in-flight intent.
             if (!testWindow.__createPRIntentPushFinished) {
               return {
                 provider: 'github' as const,
@@ -109,6 +108,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
                 canCreate: false,
                 blockedReason: 'needs_push' as const,
                 nextAction: 'push' as const,
+                reviewLookupOutcome: 'not_found' as const,
                 defaultBaseRef: primaryBranch,
                 head: branch
               }
@@ -119,6 +119,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
               canCreate: true,
               blockedReason: null,
               nextAction: null,
+              reviewLookupOutcome: 'not_found' as const,
               defaultBaseRef: primaryBranch,
               title: 'Create PR intent after switching worktrees',
               body: 'The intent flow should continue after navigation.',

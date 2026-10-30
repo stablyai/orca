@@ -13,8 +13,7 @@ import {
 
 type Pending = { resolve: (response: unknown) => void; reject: (err: Error) => void }
 
-/** Renders the hook against a deferred RPC client so a test decides exactly when each
- *  `worktree.listRetiredNames` lands, and for which repo. */
+// Defer RPC replies to control both their repo and arrival order.
 function mountNames() {
   const pending: Pending[] = []
   const requests: { method: string; params: unknown }[] = []
@@ -55,7 +54,11 @@ function mountNames() {
       retiredNameTiersByRepo: Record<string, unknown> = {}
     ) {
       await act(async () => {
-        pending[index]!.resolve({ result: { retiredNamesByRepo, retiredNameTiersByRepo } })
+        // Include the real host’s ok field so acceptance exercises success rather than refusal.
+        pending[index]!.resolve({
+          ok: true,
+          result: { retiredNamesByRepo, retiredNameTiersByRepo }
+        })
         await Promise.resolve()
       })
     },
@@ -117,8 +120,7 @@ describe('useRetiredWorktreeNames', () => {
     expect(probe.registry.exhaustedTiers).toBe(3)
   })
 
-  // Regression: this hook used to reset to [] on any error, un-retiring every name for the rest of
-  // the sheet session. Desktop always held the previous answer; both now share that rule.
+  // Match desktop: refresh failure must not un-retire every name for the rest of the sheet session.
   it('keeps previously loaded names when a refresh fails', async () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
@@ -130,15 +132,12 @@ describe('useRetiredWorktreeNames', () => {
     expect(probe.names).toEqual(['nautilus'])
   })
 
-  // Regression: the effect used to depend on [client, repoId] only, so a workspace created while
-  // the sheet was open never made it into the pool.
   it('refetches when the workspace list changes', async () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
 
     probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
     expect(probe.requests).toHaveLength(2)
-    // The previous answer stays visible while the refetch is in flight.
     expect(probe.names).toEqual(['nautilus'])
 
     await probe.settle(1, { 'repo-1': ['nautilus', 'seahorse'] })
@@ -149,8 +148,12 @@ describe('useRetiredWorktreeNames', () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
 
+    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
     probe.rerender({ repoId: 'repo-2', refreshKey: 'a' })
     expect(probe.names).toEqual([])
+    await probe.settle(2, { 'repo-2': ['seahorse'] })
+    await probe.settle(1, { 'repo-1': ['nautilus', 'marlin'] })
+    expect(probe.names).toEqual(['seahorse'])
   })
 
   it('reports nothing without a selected repo, and asks the host nothing', () => {

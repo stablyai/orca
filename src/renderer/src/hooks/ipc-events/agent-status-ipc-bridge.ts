@@ -13,6 +13,9 @@ import type {
   AgentStatusBatchEvent,
   PendingAgentStatusEvent
 } from './agent-status-bridge-types'
+import { shouldRetryPendingAgentStatusesAfterStoreUpdate } from './agent-status-pending-retry-gate'
+
+import { registerAgentStatusStartupSnapshot } from './agent-status-startup-snapshot'
 
 const PENDING_AGENT_STATUS_RETRY_MS = 100
 const PENDING_AGENT_STATUS_TTL_MS = 15_000
@@ -78,8 +81,7 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
           candidates.map((event) => ({ data: event.data, replay: event.replay, retry: true }))
         )
       } catch (err) {
-        // Why: the queue was already spliced, so a throwing fold would drop the whole
-        // burst and strand every pane in it. Requeue ahead of newer arrivals and retry.
+        // A throwing fold must requeue the spliced burst ahead of newer arrivals or every pane in it loses status.
         pendingAgentStatusEvents.unshift(...candidates)
         throw err
       }
@@ -94,8 +96,8 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
       }
     } finally {
       isFlushingAgentStatuses = false
+      schedulePendingAgentStatusFlush()
     }
-    schedulePendingAgentStatusFlush()
   }
 
   const applyAgentStatus = createAgentStatusEventApplicator({
@@ -103,11 +105,15 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     transientClearWatermarkByConnectionId,
     enqueuePendingAgentStatus
   })
+  const startupSnapshot = registerAgentStatusStartupSnapshot()
   let snapshotRequestedForReadyWindow = false
   let snapshotRequestId = 0
   const requestAgentStatusSnapshotIfReady = (): void => {
     const store = useAppStore.getState()
     if (!store.workspaceSessionReady) {
+      if (snapshotRequestedForReadyWindow) {
+        startupSnapshot.reset()
+      }
       snapshotRequestedForReadyWindow = false
       return
     }
@@ -116,6 +122,7 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     }
     const getSnapshot = window.api.agentStatus.getSnapshot
     if (typeof getSnapshot !== 'function') {
+      startupSnapshot.settle()
       return
     }
     snapshotRequestedForReadyWindow = true
@@ -130,6 +137,7 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
           return
         }
         applyAgentStatusBatch(entries.map((data) => ({ data, replay: true })))
+        startupSnapshot.settle()
         const getMigrationUnsupportedSnapshot =
           window.api.agentStatus.getMigrationUnsupportedSnapshot
         if (typeof getMigrationUnsupportedSnapshot !== 'function') {
@@ -155,7 +163,10 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
         })
       })
       .catch((err) => {
-        // Why: stay latched on failure; the store subscriber fires on every update, so resetting here would turn a persistent IPC failure into a retry storm (flag clears on workspaceSessionReady toggle).
+        // Latch failure until readiness changes; retrying on every store update would storm a persistently failing IPC.
+        if (!disposed && requestId === snapshotRequestId) {
+          startupSnapshot.settle()
+        }
         console.warn('[agent-status] failed to load startup snapshot:', err)
       })
   }
@@ -231,9 +242,7 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
       now - lastLiveAgentStatusApplyAt >= LIVE_AGENT_STATUS_BURST_WINDOW_MS
     ) {
       lastLiveAgentStatusApplyAt = now
-      // Why: only an applied event commits state and costs a render pass —
-      // a dropped/pending leading edge must not make its successor pay
-      // burst latency (startup replay and unmounted panes stay immediate).
+      // Only applied events incur burst latency; dropped/pending leading edges must leave successors immediate.
       if (applyAgentStatus(data) !== 'applied') {
         lastLiveAgentStatusApplyAt = 0
       }
@@ -257,17 +266,24 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     liveAgentStatusBurstQueue
   })
 
-  // Why: main hook server is the durable source of truth; pull the snapshot only after tabs are ready so early startup pushes can be ignored, not buffered.
+  // Pull main’s durable snapshot after tabs are ready so early pushes can be ignored without buffering.
   requestAgentStatusSnapshotIfReady()
   const unsubscribeAgentStatusStore = useAppStore.subscribe((state, previousState) => {
     requestAgentStatusSnapshotIfReady()
-    flushPendingAgentStatuses()
+    // Why: the timer covers module-owned rekeys; unrelated store writes cannot change attribution and must not rebuild its routing index.
+    if (
+      pendingAgentStatusEvents.length > 0 &&
+      shouldRetryPendingAgentStatusesAfterStoreUpdate(state, previousState)
+    ) {
+      flushPendingAgentStatuses()
+    }
     syncAgentHookCompletionNotificationsForStoreUpdate(state, previousState)
   })
 
   return {
     disposeAsyncState: () => {
       disposed = true
+      startupSnapshot.dispose()
       snapshotRequestId += 1
       if (pendingAgentStatusRetryTimer !== null) {
         globalThis.clearTimeout(pendingAgentStatusRetryTimer)

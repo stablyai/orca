@@ -1,41 +1,21 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 
-/**
- * The single place Orca runs a program inside WSL.
- *
- * Five things have to be decided per call -- separator, shell, stdout fencing,
- * WSLENV, payload transport -- and each has shipped wrong: #12964, #14288 /
- * #9768 / #9725, #11327, #12557, #14292 respectively. See
- * docs/reference/wsl-command-execution.md.
- */
+/** Shared WSL argv/environment/payload rules; see docs/reference/wsl-command-execution.md. */
 
-/**
- * How much the call needs the user's login PATH.
- *
- * Why one axis and not `lane` + `allowDegradedEnvironment`: 19 of 23 sites
- * passed the opt-out, and two of them said in comments that they did not want
- * the login PATH at all -- the flag had become the `'none'` this union was
- * missing. A required discriminator whose default nobody wants is not a
- * discriminator.
- */
+/** Choose login PATH needs explicitly; separating this from failure handling avoids contradictory lane/opt-out flags. */
 export type WslLoginPath =
   /** The command reads $HOME or absolute paths only. No probe. */
   | 'none'
   /** Use the cached login PATH when there is one; run anyway when there is not. */
   | 'preferred'
 
-/**
- * What to run: a single binary, or a script.
- *
- * Why a union rather than an optional `script`: a script needs a shell to run
- * it, and picking one per call site is how the wrappers this replaces drifted
- * apart. `script` makes the runner supply the shell, and `shell` says which.
- */
+/** A script requires runner-selected shell handling; binary programs pass directly as argv. */
 export type WslCommand =
   | {
       program: string
@@ -47,23 +27,16 @@ export type WslCommand =
       script: string
       args?: readonly string[]
       program?: never
-      /**
-       * Interpreter for `script`. Defaults to `sh`, which on Debian and Ubuntu
-       * is dash.
-       *
-       * Why this is not just always `sh`: a payload using process substitution
-       * (`done < <(find ...)`), `local`, or `[[ ]]` is bash-only, and dash
-       * rejects it with `Syntax error: word unexpected` -- the exact signature
-       * in #14292. A caller that writes bash must say so; silently downgrading
-       * its interpreter is how that error reaches users.
-       */
+      /** Defaults to sh (often dash); callers using [[ ]] or process substitution must explicitly request bash (#14292). */
       shell?: 'sh' | 'bash'
     }
 
 export type WslSpec = WslCommand & {
   /** Undefined selects the distro's default. */
   distro?: string
-  /** Required, with no default: the wrong answer here is the defect this file exists to prevent. */
+  /** Guest user; undefined runs as the distro's default user. */
+  user?: 'root'
+  /** Callers must explicitly choose PATH policy to avoid hidden lookup assumptions. */
   loginPath: WslLoginPath
   /** Guest (POSIX) path. */
   cwd?: string
@@ -74,29 +47,20 @@ export type WslSpec = WslCommand & {
 }
 
 export type WslResult = {
-  /**
-   * False when `loginPath: 'preferred'` could not establish the login PATH, so
-   * the call ran on the distro's default PATH. A caller deciding "is this tool
-   * installed?" must then report unverifiable rather than absent -- an
-   * nvm-installed binary is invisible without it, which is #9725 exactly.
-   *
-   * Always true under `loginPath: 'none'`, because such a command asked for no
-   * PATH and cannot be let down by one. A PATH lookup marked 'none' therefore
-   * gets no protection from this field; the value has to be right.
-   */
+  /** False means preferred PATH was unavailable: tool lookup is unverifiable, never absent (#9725). none always reports true and must only serve callers independent of login PATH. */
   environmentResolved: boolean
   code: number | null
   stdout: string
   stderr: string
   timedOut: boolean
+  /** True when stdout or stderr hit `maxOutputBytes` and was clipped. */
+  outputTruncated?: boolean
 }
 
 export const DEFAULT_WSL_TIMEOUT_MS = 30_000
 
 function assertGuestPath(cwd: string): void {
-  // Why reject rather than convert: a caller passing a Windows path here has
-  // usually made a different mistake further up, and silently translating it
-  // hides that.
+  // Reject mistaken Windows cwd rather than silently mask the upstream error.
   if (!cwd.startsWith('/')) {
     throw new Error(`WSL cwd must be a guest path, received ${cwd}`)
   }
@@ -104,33 +68,20 @@ function assertGuestPath(cwd: string): void {
 
 /** Use `script` to run a script; a command line here is the thing being prevented. */
 function assertNotShellString(program: string): void {
-  // Metacharacters, not whitespace: --exec passes argv elements, so a spaced
-  // path is fine.
+  // --exec preserves spaced paths; reject shell metacharacters, not whitespace alone.
   if (/[;&|<>$`\n\r]/.test(program) || /^\S+\s+-/.test(program)) {
     throw new Error(`WSL program must be a single binary, received ${program}`)
   }
-  // After `env PATH=… HOME=…`, a name=value program is a third assignment: env
-  // prints the environment and exits 0.
+  // name=value after env is another assignment; no program means environment disclosure and exit 0.
   if (program.includes('=')) {
     throw new Error(`WSL program must not look like an assignment, received ${program}`)
   }
 }
 
-/**
- * Host env plus WSL_UTF8 and the WSLENV entries that let values cross.
- *
- * Why WSL_UTF8 unconditionally: without it `wsl.exe` writes its OWN messages
- * ("There is no distribution with the supplied name") as UTF-16LE, so every
- * caller that surfaces stderr shows NUL-riddled text. Setting it per-call site
- * is how it got lost -- the relay set it, the migration dropped it, and nothing
- * noticed because the happy path is pure ASCII. Credit: #9010.
- */
+/** Always request UTF-8 for wsl.exe's own error messages; default UTF-16 would corrupt stderr even when guest output is ASCII (#9010). */
 function buildHostEnv(env: WslSpec['env']): NodeJS.ProcessEnv {
   const merged: NodeJS.ProcessEnv = { ...process.env, ...env, WSL_UTF8: '1' }
-  // Never name a path-shaped variable in WSLENV. wsl.exe translates those
-  // between Windows and Linux form, so forwarding PATH replaces the guest's
-  // own PATH with a translated Windows one -- silently, and this runner exists
-  // to make that class of mistake impossible rather than to document it.
+  // Exclude path-shaped variables from WSLENV translation or Windows values replace the guest's own paths.
   const crossable = Object.keys(env ?? {}).filter(
     (key) => !['PATH', 'HOME', 'TMP', 'TEMP'].includes(key)
   )
@@ -140,20 +91,13 @@ function buildHostEnv(env: WslSpec['env']): NodeJS.ProcessEnv {
   return merged
 }
 
-/**
- * `cd` into the guest cwd before the program.
- *
- * Why not `runProcess`'s `cwd`: that is a *Windows* directory for `wsl.exe`,
- * not a guest one. Passing a guest path there fails, and passing the UNC form
- * makes wsl.exe start in a network location.
- */
+/** cd inside the guest; runProcess cwd is Windows-side and must never receive guest/UNC paths. */
 function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[] {
   if (!cwd) {
     return [...argv]
   }
   assertGuestPath(cwd)
-  // Why: `exec` with no operands is a no-op, so the wrapper would cd and exit 0
-  // having run nothing -- the one shape that turns it into a silent success.
+  // exec without operands succeeds doing nothing; reject empty commands.
   if (argv.length === 0) {
     throw new Error('WSL invocation has no command to run')
   }
@@ -185,14 +129,7 @@ function buildGuestArgv(
   return withGuestCwd(spec.cwd, argv)
 }
 
-/**
- * Run a program inside WSL.
- *
- * A missing login PATH is never fatal: the call runs on the distro's default
- * PATH and reports `environmentResolved: false`. Every knob this file used to
- * carry -- cooldown tiers, budget splitting, a re-probe heuristic, an opt-out
- * flag on 19 of 23 sites -- existed only because that case used to throw.
- */
+/** Missing preferred login PATH is nonfatal: use distro defaults and return environmentResolved=false. */
 export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   if (spec.program !== undefined) {
     assertNotShellString(spec.program)
@@ -203,42 +140,34 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const deadline = Date.now() + (spec.timeoutMs ?? DEFAULT_WSL_TIMEOUT_MS)
 
   const wantsEnvironment = spec.loginPath === 'preferred'
-  // Cap the probe at half the budget and at 4s: a 5s caller was giving the
-  // probe 3333ms and its own command 1667ms, tighter than the 5s it had before
-  // the runner existed, which is how a cold distro read as "not installed".
+  // Reserve at least half the remaining budget for the actual command; cap probing at 4s.
   const remainingForProbe = deadline - Date.now()
   const probeBudgetMs = Math.max(1, Math.min(4_000, Math.floor(remainingForProbe / 2)))
   const environment = wantsEnvironment
     ? await getWslGuestEnvironment(spec.distro, probeBudgetMs)
     : null
 
-  // Probe failure must NOT fall back to the login shell. That lane sources
-  // ~/.profile, which is the stall this runner exists to remove (#14288) -- and
-  // the probe most often fails *because* the distro is slow, so the fallback
-  // would hit the hazard exactly when it is worst. Run shell-free with the
-  // distro's default PATH instead: degraded, never blocking.
-  // Build the argv form first and measure it: the env prefix is part of the
-  // budget, so only the finished line can say whether argv fits. Resolved once
-  // here because the argv shape and the stdin payload must agree.
+  // Never fall back to a blocking login shell after probe failure (#14288); use default PATH. Measure the complete argv including env before choosing transport.
   const argvForm = buildGuestArgv(environment, spec, 'argv')
-  // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
-  // prepended after this point and are part of the same budget.
-  const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
-  // Argv is the default, but it has a hard ceiling that stdin does not. A user's
-  // `orca.yaml` hook is the one unbounded script Orca runs, so past the cap the
-  // choice is between failing to spawn at all and accepting the stdin caveat.
+  // Windows counts executable, distro and --exec prefix in the same command-line budget.
+  const fullLine = [
+    resolveWslExecutablePath(),
+    ...buildWslExecArgs(spec.distro, argvForm, { user: spec.user })
+  ]
+  // Prefer argv to preserve stdin; oversized unbounded hooks must use stdin or fail to spawn.
   const delivery: 'argv' | 'stdin' =
     spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
       ? 'stdin'
       : 'argv'
   const argv = delivery === 'argv' ? argvForm : buildGuestArgv(environment, spec, 'stdin')
 
-  // One budget for the whole call: the probe used to run on its own 10s timer
-  // ahead of the timed leg, so a 5s caller could wait 15s.
+  // Probe and command share one deadline; never add an independent probe timeout.
   const remainingMs = Math.max(1, deadline - Date.now())
   const result = await runProcess({
     program: resolveWslExecutablePath(),
-    args: buildWslExecArgs(spec.distro, argv),
+    args: buildWslExecArgs(spec.distro, argv, { user: spec.user }),
+    // Use stable Windows cwd: inherited worktrees can disappear and break all later spawns (#16463). Guest cd stays inside.
+    cwd: resolveWslInteropSpawnCwd(),
     env: buildHostEnv(spec.env),
     input: delivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
@@ -250,6 +179,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     code: result.code,
     stdout: result.stdout,
     stderr: result.stderr,
-    timedOut: result.timedOut
+    timedOut: result.timedOut,
+    outputTruncated: result.outputTruncated ?? false
   }
 }

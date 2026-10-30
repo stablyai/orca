@@ -1,4 +1,5 @@
 import type { GitStatusEntry } from '../../../shared/git-status-types'
+import { collectGitStatusLineStatInputs } from '../../../shared/git-status-line-stat-inputs'
 import {
   applyLineStats,
   collectUntrackedAdditions,
@@ -8,6 +9,7 @@ import {
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 
 async function runNumstat(
   worktreePath: string,
@@ -19,6 +21,8 @@ async function runNumstat(
       [
         '-c',
         'core.quotePath=false',
+        '-c',
+        'diff.autoRefreshIndex=false',
         'diff',
         '-z',
         ...(cached ? ['--cached'] : []),
@@ -32,11 +36,11 @@ async function runNumstat(
     )
     return parseNumstat(stdout)
   } catch (error) {
-    // Why: an aborted pass must reject; only a genuine numstat failure degrades to uncounted rows.
+    // Propagate cancellation; ordinary numstat failures may degrade to uncounted rows.
     if (options.signal?.aborted) {
       throw error
     }
-    // Why: a numstat failure leaves rows uncounted; null (not empty map) flags the pass incomplete and uncacheable.
+    // null marks the pass incomplete and uncacheable; an empty map would imply success.
     return null
   }
 }
@@ -50,23 +54,25 @@ export async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
-  const hasStaged = entries.some((entry) => entry.area === 'staged')
-  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
-  const untrackedPaths = entries
-    .filter((entry) => entry.area === 'untracked')
-    .map((entry) => entry.path)
+  const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
     hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
-    collectUntrackedAdditions(worktreePath, untrackedPaths, options.signal)
+    // Node reads need host paths even when Git runs in WSL.
+    collectUntrackedAdditions(
+      resolveWorktreeFilesystemPath(worktreePath, options),
+      untrackedPaths,
+      options.signal
+    )
   ])
   for (const entry of entries) {
+    const area = entry.area
     applyLineStats(
       entry,
-      entry.area === 'staged'
+      area === 'staged'
         ? (stagedStats ?? emptyStats).get(entry.path)
-        : entry.area === 'unstaged'
+        : area === 'unstaged'
           ? (unstagedStats ?? emptyStats).get(entry.path)
           : untrackedStats.get(entry.path)
     )

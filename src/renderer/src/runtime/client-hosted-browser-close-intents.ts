@@ -4,6 +4,11 @@ import {
   type ClientHostedBrowserCloseIntent
 } from '../../../shared/client-hosted-browser-close-intent'
 import type { AppState } from '@/store/types'
+import {
+  appendEnvironmentCloseIntents,
+  removeEnvironmentCloseIntents,
+  type EnvironmentCloseIntentList
+} from './environment-close-intent-list'
 
 export type ClientHostedBrowserCloseIntentsByEnvironment = Record<
   string,
@@ -19,6 +24,25 @@ export type PendingClientHostedBrowserClose = {
   environmentId: string
   browserPageId: string
   worktreeId: string
+}
+
+/**
+ * Whether an unheard close of this page would resurrect it — the qualification for a durable
+ * intent. Only client-hosted pages qualify: a server-placed page dies with the runtime that ran
+ * it, so there is nothing left to resurrect; a staged handle names a page the host never minted,
+ * so replaying a close at it would be answered as unknown forever.
+ */
+export function isDurableClientHostedBrowserHandle(handle: {
+  environmentId?: string
+  staged?: boolean
+  placement?: { kind?: string } | null
+  restoredClientHosted?: boolean
+}): boolean {
+  return (
+    (handle.environmentId?.trim().length ?? 0) > 0 &&
+    handle.staged !== true &&
+    (handle.placement?.kind === 'client' || handle.restoredClientHosted === true)
+  )
 }
 
 /**
@@ -44,15 +68,18 @@ export function collectPendingClientHostedBrowserCloses(
       !handle ||
       !environmentId ||
       !environmentIds.has(environmentId) ||
-      // Why staged is excluded: the host was never told the page exists, so it has nothing to
-      // forget, and replaying a close at an id it never minted would be answered as unknown forever.
-      handle.staged === true ||
-      !(handle.placement?.kind === 'client' || handle.restoredClientHosted === true)
+      !isDurableClientHostedBrowserHandle(handle)
     ) {
       return []
     }
     return [{ environmentId, browserPageId: handle.remotePageId, worktreeId: args.worktreeId }]
   })
+}
+
+const BROWSER_CLOSE_INTENT_LIST: EnvironmentCloseIntentList<ClientHostedBrowserCloseIntent> = {
+  keyOf: (intent) => intent.browserPageId,
+  maxPerEnvironment: MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS,
+  maxAgeMs: CLIENT_HOSTED_BROWSER_CLOSE_INTENT_MAX_AGE_MS
 }
 
 /** Adds closes to the durable map, newest last, bounded per environment. Returns null if unchanged. */
@@ -61,23 +88,14 @@ export function recordClientHostedBrowserCloseIntents(
   closes: readonly PendingClientHostedBrowserClose[],
   now: number
 ): ClientHostedBrowserCloseIntentsByEnvironment | null {
-  if (closes.length === 0) {
-    return null
-  }
-  const next = { ...current }
-  let changed = false
-  for (const close of closes) {
-    const existing = next[close.environmentId] ?? []
-    if (existing.some((intent) => intent.browserPageId === close.browserPageId)) {
-      continue
-    }
-    next[close.environmentId] = [
-      ...existing,
-      { browserPageId: close.browserPageId, worktreeId: close.worktreeId, closedAt: now }
-    ].slice(-MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS)
-    changed = true
-  }
-  return changed ? next : null
+  return appendEnvironmentCloseIntents(
+    BROWSER_CLOSE_INTENT_LIST,
+    current,
+    closes.map((close) => ({
+      environmentId: close.environmentId,
+      intent: { browserPageId: close.browserPageId, worktreeId: close.worktreeId, closedAt: now }
+    }))
+  )
 }
 
 /** Drops the named pages plus anything older than the give-up bound. Returns null if unchanged. */
@@ -85,31 +103,15 @@ export function clearClientHostedBrowserCloseIntents(
   current: ClientHostedBrowserCloseIntentsByEnvironment,
   args: { environmentId: string; browserPageIds: readonly string[]; now: number }
 ): ClientHostedBrowserCloseIntentsByEnvironment | null {
-  const existing = current[args.environmentId]
-  if (!existing) {
-    return null
-  }
-  const cleared = new Set(args.browserPageIds)
-  const remaining = existing.filter(
-    (intent) =>
-      !cleared.has(intent.browserPageId) &&
-      args.now - intent.closedAt <= CLIENT_HOSTED_BROWSER_CLOSE_INTENT_MAX_AGE_MS
-  )
-  if (remaining.length === existing.length) {
-    return null
-  }
-  const next = { ...current }
-  if (remaining.length === 0) {
-    delete next[args.environmentId]
-  } else {
-    next[args.environmentId] = remaining
-  }
-  return next
+  return removeEnvironmentCloseIntents(BROWSER_CLOSE_INTENT_LIST, current, {
+    environmentId: args.environmentId,
+    keys: args.browserPageIds,
+    now: args.now
+  })
 }
 
 export function listClientHostedBrowserCloseIntents(
-  // Why undefined-tolerant: replay fires and forgets from a status refresh, so a store that
-  // has not materialized the map yet must read as "no intents", not an unhandled rejection.
+  // Status refresh replays fire-and-forget; unmaterialized maps must mean no intents, not an unhandled rejection.
   current: ClientHostedBrowserCloseIntentsByEnvironment | undefined,
   environmentId: string
 ): readonly ClientHostedBrowserCloseIntent[] {

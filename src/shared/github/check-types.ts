@@ -9,16 +9,13 @@ export type PRCheckDetail = {
     | 'neutral'
     | 'skipped'
     | 'pending'
-    // Why: a check suite needing manual action (e.g. a workflow awaiting "Approve
-    // and run") has no check run and is absent from statusCheckRollup, yet blocks
-    // auto-merge (GitHub returns "unstable status"). Surface it as its own state.
+    // Manual-approval suites may have no check run/rollup row yet block auto-merge as unstable; expose them separately.
     | 'action_required'
     | null
   url: string | null
   checkRunId?: number
   workflowRunId?: number
-  // Why: the GitLab job trace API is addressed by numeric job id only, so the
-  // Checks panel cannot load a job log without carrying it on the row.
+  // GitLab trace retrieval requires numeric job id, so carry it through the Checks row.
   gitlabJobId?: number
 }
 
@@ -49,6 +46,7 @@ export type PRCheckJob = {
   completedAt: string | null
   url: string | null
   logTail: string | null
+  logState?: 'available' | 'empty' | 'error' | 'not_requested'
   steps: PRCheckStep[]
 }
 

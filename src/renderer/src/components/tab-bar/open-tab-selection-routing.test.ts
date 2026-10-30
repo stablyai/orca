@@ -62,7 +62,9 @@ const browserResult: OpenTabSearchResult = {
   worktreeId: 'wt-1',
   contentType: 'browser',
   pageId: 'page-1',
-  workspaceId: 'ws-1'
+  workspaceId: 'ws-1',
+  url: 'https://example.com/docs',
+  faviconUrl: null
 }
 
 const simulatorResult: OpenTabSearchResult = {
@@ -164,6 +166,19 @@ describe('activateOpenTabSearchResult', () => {
       message: 'Mobile emulator tab no longer exists'
     })
   })
+
+  it.each([terminalResult, browserResult, simulatorResult])(
+    'preserves a blocked $source jump without scheduling focus',
+    (result) => {
+      mocks.activateWorkspaceTab.mockReturnValue({ status: 'blocked' })
+      mocks.activateBrowserPage.mockReturnValue({ status: 'blocked' })
+      mocks.activateSimulatorTab.mockReturnValue({ status: 'blocked' })
+
+      expect(activateOpenTabSearchResult(result)).toEqual({ status: 'blocked' })
+      expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+      expect(mocks.requestBrowserFocus).not.toHaveBeenCalled()
+    }
+  )
 
   it('reports a missing worktree distinguishably from a stale tab', () => {
     mocks.activateWorkspaceTab.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })

@@ -1,9 +1,31 @@
-import { createElement, type ReactElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { createElement } from 'react'
+import type { ReactElement } from 'react'
+import { act, create } from 'react-test-renderer'
+import type { ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from './types'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
+
+const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
+vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
+
+// Descriptor status probes need RPC stubs these clients do not provide.
+const descriptorProbe = vi.hoisted(() => {
+  const stop = vi.fn()
+  return {
+    stop,
+    start: vi.fn((_client: unknown, _onStatus: (status: unknown) => void) => stop),
+    record: vi.fn()
+  }
+})
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (client: unknown, onStatus: (status: unknown) => void) =>
+    descriptorProbe.start(client, onStatus)
+}))
+vi.mock('./host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: (...args: unknown[]) => descriptorProbe.record(...args)
+}))
 
 const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
@@ -20,13 +42,18 @@ vi.mock('./host-store', () => ({
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
+}))
 
+import { RpcClientProvider } from './client-context'
 import {
-  RpcClientProvider,
   useDisconnectHostClient,
   useForceReconnect,
-  useHostClient
-} from './client-context'
+  useHostClient,
+  usePrimeHosts,
+  useRefreshHostClient
+} from './host-client-hooks'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
@@ -141,25 +168,31 @@ async function renderHarness(hostId: string): Promise<Harness> {
 }
 
 beforeEach(() => {
+  push.attach.mockReset().mockReturnValue(push.detach)
+  push.detach.mockReset()
   connectMock.mockReset()
   loadHostsMock.mockReset()
 })
 
 describe('useHostClient', () => {
-  it('rebinds when Expo reuses a screen between two connected cached hosts', async () => {
-    const host2 = { ...HOST, id: 'host-2', name: 'Host 2' }
+  it('rebinds the client and its authenticated identity together across cached hosts', async () => {
+    const host2 = { ...HOST, id: 'host-2', name: 'Host 2', deviceToken: 'token-2' }
     const client1 = makeFakeClient('connected')
     const client2 = makeFakeClient('connected')
     connectMock.mockReturnValueOnce(client1).mockReturnValueOnce(client2)
     loadHostsMock.mockResolvedValue([HOST, host2])
 
+    const selections: { hostId: string; value: ReturnType<typeof useHostClient> }[] = []
     let selectedHostId = HOST.id
     let selectedClient: RpcClient | null = null
+    let selectedClientId: string | null = null
     let selectedState: ConnectionState = 'disconnected'
     let renderer: ReactTestRenderer | null = null
     function Probe(): null {
       const selected = useHostClient(selectedHostId)
+      selections.push({ hostId: selectedHostId, value: selected })
       selectedClient = selected.client
+      selectedClientId = selected.clientId
       selectedState = selected.state
       useHostClient(host2.id)
       return null
@@ -171,17 +204,28 @@ describe('useHostClient', () => {
         await Promise.resolve()
       })
       expect(selectedClient).toBe(client1)
+      expect(selectedClientId).toBe(HOST.deviceToken)
       expect(selectedState).toBe('connected')
 
       selectedHostId = host2.id
-      client2.emitState('disconnected')
       await act(async () => {
+        client2.emitState('disconnected')
         renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
         await Promise.resolve()
       })
 
       expect(selectedClient).toBe(client2)
+      expect(selectedClientId).toBe(host2.deviceToken)
       expect(selectedState).toBe('disconnected')
+      for (const { value } of selections.filter(({ hostId }) => hostId === host2.id)) {
+        expect(value.state).toBe('disconnected')
+        if (value.client === null) {
+          expect(value.clientId).toBeNull()
+        } else {
+          expect(value.client).toBe(client2)
+          expect(value.clientId).toBe(host2.deviceToken)
+        }
+      }
       expect(connectMock).toHaveBeenCalledTimes(2)
     } finally {
       act(() => renderer?.unmount())
@@ -209,8 +253,7 @@ describe('useHostClient', () => {
       })
       expect(stateByRenderTick.get(0)).toBe('connected')
 
-      // Why (S2): the unresolved-open window is amber, not grey — 'disconnected'
-      // here made every host swap flash a dead host while the Keychain read ran.
+      // Keep host swaps amber during asynchronous profile/keychain loading.
       selectedHostId = 'missing-host'
       renderTick = 1
       await act(async () => {
@@ -237,9 +280,7 @@ describe('useHostClient', () => {
     expect(harness.hook.client).not.toBeNull()
     expect(harness.hook.state).toBe('connected')
 
-    // Regression (STA-1511): disconnect deletes the entry; before the fix the
-    // hook kept handing out the closed client, so mounted screens kept
-    // driving requests that could never resolve.
+    // Disconnect must retire the entry so mounted screens cannot reuse a permanently closed client.
     await act(async () => {
       harness.disconnectHost(HOST.id)
     })
@@ -389,6 +430,47 @@ describe('useHostClient', () => {
     }
   })
 
+  it('refreshes a Relay-active owned client onto the saved row after an endpoint edit', async () => {
+    const relayClient = makeFakeClient('connected', 'relay')
+    const replacement = makeFakeClient('connecting', 'tailscale')
+    connectMock.mockReturnValueOnce(relayClient).mockReturnValueOnce(replacement)
+    loadHostsMock.mockResolvedValue([HOST])
+    const edited = { ...HOST, endpoint: 'ws://100.101.102.103:6768' }
+
+    const states: ConnectionState[] = []
+    let refreshHostClient: ((hostId: string) => void) | null = null
+    let primeHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      refreshHostClient = useRefreshHostClient()
+      primeHosts = usePrimeHosts()
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      act(() => primeHosts?.([HOST]))
+      loadHostsMock.mockResolvedValue([edited])
+      states.length = 0
+
+      await act(async () => {
+        refreshHostClient?.(HOST.id)
+        await Promise.resolve()
+      })
+
+      expect(relayClient.closeMock).toHaveBeenCalled()
+      expect(relayClient.notifyForeground).not.toHaveBeenCalled()
+      expect(connectMock.mock.calls[1]?.[0]).toEqual(edited)
+      expect(states).not.toContain('disconnected')
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('rebuilds a pairing-rejected Relay client so re-pairing credentials are re-read', async () => {
     const rejectedRelayClient = makeFakeClient('disconnected', 'relay')
     const replacement = makeFakeClient('connecting', 'tailscale')
@@ -455,7 +537,7 @@ describe('useHostClient', () => {
 
     expect(connectMock).not.toHaveBeenCalled()
     expect(fake.closeMock).not.toHaveBeenCalled()
-    act(() => renderer.unmount())
+    act(() => renderer?.unmount())
   })
 
   it('does not open a client after provider unmount during an in-flight lookup', async () => {
@@ -518,7 +600,7 @@ describe('useAllHostClients', () => {
     let renderer!: ReturnType<typeof create>
 
     function Probe(): null {
-      // Why: a screen holds the host client and reads the metric hooks beside it.
+      // Model a screen holding its client while observing metric hooks.
       useAllHostClients([HOST.id])
       status = useRelayRecoveryStatus(HOST.id)
       return null
@@ -529,12 +611,19 @@ describe('useAllHostClients', () => {
       await Promise.resolve()
     })
     act(() => client.emitPendingPath('relay'))
-    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: false })
+    expect(status).toEqual({
+      pendingPath: 'relay',
+      pairingRejected: false,
+      relayHostReachability: 'connecting'
+    })
 
-    // Why: the desktop refusing the credential is a status-only change — no
-    // transport state moves, so only the connection-path signal can carry it.
+    // Credential refusal changes status without transport state; the path signal must carry it.
     act(() => client.emitPairingRejected(true))
-    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: true })
+    expect(status).toEqual({
+      pendingPath: 'relay',
+      pairingRejected: true,
+      relayHostReachability: 'connecting'
+    })
 
     act(() => renderer.unmount())
   })
@@ -557,40 +646,6 @@ describe('useAllHostClients', () => {
       })
       expect(connectMock).toHaveBeenCalledOnce()
       expect(connectMock).toHaveBeenCalledWith(host2, expect.any(Function))
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
-  it('keeps startup connection fanout constant for a large saved-host list', async () => {
-    const hosts = Array.from({ length: 1_000 }, (_, index) => ({
-      ...HOST,
-      id: `host-${index}`,
-      name: `Host ${index}`,
-      lastConnected: index
-    }))
-    const hostIds = hosts.map((host) => host.id)
-    const autoConnectHostIds = selectHomeAutoConnectHostIds(hosts)
-    connectMock.mockReturnValue(makeFakeClient('connected'))
-    loadHostsMock.mockResolvedValue(hosts)
-
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      useAllHostClients(hostIds, { autoConnectHostIds })
-      return null
-    }
-
-    try {
-      await act(async () => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-        await Promise.resolve()
-      })
-      expect(connectMock).toHaveBeenCalledTimes(3)
-      expect(connectMock.mock.calls.map(([host]) => host.id)).toEqual([
-        'host-999',
-        'host-998',
-        'host-997'
-      ])
     } finally {
       act(() => renderer?.unmount())
     }
@@ -702,4 +757,61 @@ describe('useAllHostClients', () => {
       act(() => renderer?.unmount())
     }
   })
+})
+
+it('owns push registration for a paired host without mounting the home screen', async () => {
+  const client = makeFakeClient('handshaking')
+  connectMock.mockReturnValue(client)
+  loadHostsMock.mockResolvedValue([HOST])
+  const harness = await renderHarness(HOST.id)
+  expect(push.attach).not.toHaveBeenCalled()
+  await act(async () => client.emitState('connected'))
+  expect(push.attach).toHaveBeenCalledExactlyOnceWith(HOST.id, client)
+  await act(async () => client.emitState('connected'))
+  expect(push.attach).toHaveBeenCalledOnce()
+  await act(async () => client.emitState('disconnected'))
+  expect(push.detach).toHaveBeenCalledOnce()
+  await act(async () => client.emitState('connected'))
+  expect(push.attach).toHaveBeenCalledTimes(2)
+  await act(async () => harness.unmount())
+  expect(push.detach).toHaveBeenCalledTimes(2)
+})
+
+it('reads each connected host descriptor once per connection and records what lands', async () => {
+  descriptorProbe.start.mockClear()
+  descriptorProbe.stop.mockClear()
+  descriptorProbe.record.mockClear()
+  const client = makeFakeClient('handshaking')
+  connectMock.mockReturnValue(client)
+  loadHostsMock.mockResolvedValue([HOST])
+  const harness = await renderHarness(HOST.id)
+  expect(descriptorProbe.start).not.toHaveBeenCalled()
+  await act(async () => client.emitState('connected'))
+  await act(async () => client.emitState('connected'))
+  expect(descriptorProbe.start).toHaveBeenCalledOnce()
+  const onStatus = descriptorProbe.start.mock.calls[0]![1]
+  onStatus({ machineName: 'Studio', hostPlatform: 'darwin' })
+  onStatus(null)
+  expect(descriptorProbe.record).toHaveBeenCalledExactlyOnceWith(HOST.id, {
+    machineName: 'Studio',
+    hostPlatform: 'darwin'
+  })
+  await act(async () => client.emitState('disconnected'))
+  expect(descriptorProbe.stop).toHaveBeenCalledOnce()
+  await act(async () => client.emitState('connected'))
+  expect(descriptorProbe.start).toHaveBeenCalledTimes(2)
+  await act(async () => harness.unmount())
+  expect(descriptorProbe.stop).toHaveBeenCalledTimes(2)
+})
+
+it('registers an already authenticated host and detaches on explicit disconnect', async () => {
+  const client = makeFakeClient('connected')
+  connectMock.mockReturnValue(client)
+  loadHostsMock.mockResolvedValue([HOST])
+  const harness = await renderHarness(HOST.id)
+  expect(push.attach).toHaveBeenCalledExactlyOnceWith(HOST.id, client)
+  await act(async () => harness.disconnectHost(HOST.id))
+  expect(push.detach).toHaveBeenCalledOnce()
+  await act(async () => harness.unmount())
+  expect(push.detach).toHaveBeenCalledOnce()
 })

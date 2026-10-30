@@ -11,14 +11,17 @@ import type {
 } from '../../../shared/project-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
+import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
 export type ProjectHostMutationOperations = {
   state: PersistedState
   gitUsernameCache: Map<string, string>
+  bumpLocalWorktreeScanGeneration: (repoId: string) => void
   hydrateRepo: (repo: Repo) => Repo
   updateRepoBackedProjectHostSetup: (
     setup: ProjectHostSetup,
@@ -29,7 +32,7 @@ export type ProjectHostMutationOperations = {
     setup: ProjectHostSetup,
     updates: ProjectHostSetupUpdateArgs['updates']
   ) => ProjectHostSetup
-  removeProjectForHost: (id: string, hostId: ProjectHostSetup['hostId']) => void
+  removeProjectForHost: (target: RepoHostTarget) => void
   scheduleSave: () => void
 }
 
@@ -63,15 +66,13 @@ export class ProjectHostPersistenceOperations {
     return this.operations.updateIndependentProjectHostSetup(setup, updates)
   }
 
-  private removeProjectForHost(id: string, hostId: ProjectHostSetup['hostId']): void {
-    this.operations.removeProjectForHost(id, hostId)
+  private removeProjectForHost(target: RepoHostTarget): void {
+    this.operations.removeProjectForHost(target)
   }
 
   private scheduleSave(): void {
     this.operations.scheduleSave()
   }
-
-  // ── Repos ──────────────────────────────────────────────────────────
 
   getRepos(): Repo[] {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
@@ -87,6 +88,9 @@ export class ProjectHostPersistenceOperations {
       return null
     }
     if ('localWindowsRuntimePreference' in updates) {
+      for (const repoId of project.sourceRepoIds) {
+        this.operations.bumpLocalWorktreeScanGeneration(repoId)
+      }
       if (updates.localWindowsRuntimePreference === undefined) {
         delete project.localWindowsRuntimePreference
       } else {
@@ -136,14 +140,14 @@ export class ProjectHostPersistenceOperations {
       createdAt: now,
       updatedAt: now
     }
-    // Why: persist independently so future repo projection sync doesn't erase this non-repo-backed setup.
+    // Independent setup persistence survives future repo projection sync.
     this.state.projectHostSetups.push(setup)
     this.scheduleSave()
     return { project, setup }
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = findProjectHostSetup(this.state.projectHostSetups, args)
     if (!setup) {
       return null
     }
@@ -151,9 +155,11 @@ export class ProjectHostPersistenceOperations {
     if (!project) {
       return null
     }
-    const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
-      : undefined
+    const repo = this.findSetupRepo(setup)
+    if (setup.repoId && !repo) {
+      // A stale repo-backed setup; editing it would write a sibling host's row.
+      return null
+    }
     if (repo) {
       const updated = this.updateRepoBackedProjectHostSetup(setup, repo, args.updates)
       const updatedProject = updated
@@ -167,8 +173,17 @@ export class ProjectHostPersistenceOperations {
     return { project, setup: updatedSetup }
   }
 
+  // Same-ID repos require host proof; sibling-host fallback would edit the wrong row.
+  private findSetupRepo(setup: ProjectHostSetup): Repo | undefined {
+    return setup.repoId
+      ? this.state.repos.find(
+          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+        )
+      : undefined
+  }
+
   deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = findProjectHostSetup(this.state.projectHostSetups, args)
     if (!setup) {
       return null
     }
@@ -176,26 +191,16 @@ export class ProjectHostPersistenceOperations {
     if (!project) {
       return null
     }
-    // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
-    // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
-    // registration. With no exact match the setup is stale, and the path below drops just the setup.
-    const repo = setup.repoId
-      ? this.state.repos.find(
-          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
-        )
-      : undefined
+    const repo = this.findSetupRepo(setup)
     if (repo) {
-      this.removeProjectForHost(repo.id, setup.hostId)
+      this.removeProjectForHost(repo)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
-    this.state.projectHostSetups = this.state.projectHostSetups.filter(
-      (entry) => entry.id !== setup.id
-    )
+    this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)
     this.scheduleSave()
     return { project, setup }
   }
 
-  /** O(1) repo count; unlike `getRepos()` this skips per-repo hydration. */
   getRepoCount(): number {
     return this.state.repos.length
   }
@@ -205,12 +210,7 @@ export class ProjectHostPersistenceOperations {
     return repo ? this.hydrateRepo(repo) : undefined
   }
 
-  /**
-   * Record a background-resolved git username; kept out of updateRepo's whitelist so the renderer can't write it directly.
-   * Takes the probed repo, not just its id: the same id can exist on several execution hosts, and an
-   * id-only lookup would write one host's username onto a sibling host's row and cache key.
-   * @returns true when the hydrated value changed.
-   */
+  /** Store probed usernames by exact repo/host; renderer patches cannot author this cache. Returns whether hydration changed. */
   setResolvedRepoGitUsername(
     target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     username: string
@@ -229,7 +229,7 @@ export class ProjectHostPersistenceOperations {
       return false
     }
     if (username) {
-      // Why: persist so the next launch hydrates repos with the right branch prefix before enrichment re-runs.
+      // Retain branch-prefix identity for startup before background enrichment reruns.
       repo.gitUsername = username
     } else {
       delete repo.gitUsername

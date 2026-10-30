@@ -4,26 +4,17 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { SubagentTranscriptPartition } from './session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState } from './session-scanner-types'
 
-// OMP names every session `<ISO-stamp>_<uuidv7>` and stores that session's
-// artifacts — including its task-subagent transcripts — in a sibling directory
-// of the same name (…/<workspace>/<stamp>_<uuid>.jsonl + …/<stamp>_<uuid>/).
-// The anchored name pattern is the classification signal: task-child
-// transcripts are label-named, so they can't match. Workspace dirs are encoded
-// from a cwd and can't realistically match either, but the local prune doesn't
-// rely on that — it skips depth 0 outright. This deliberately reads structure
-// rather than a transcript's own records: children carry their own session id
-// and no parentSession field at all, so lineage is not available here (#9330).
+// Infer lineage from stamp_UUID artifact directories: task transcripts are label-named and omit parentSession (#9330).
 const OMP_SESSION_DIR_NAME = String.raw`\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
 
-// Exported so discovery prunes exactly the subtrees this module reads on
-// demand — the pruning predicate and the lister can't drift apart.
-export const OMP_SESSION_ARTIFACT_DIR_PATTERN = new RegExp(`^${OMP_SESSION_DIR_NAME}$`, 'i')
+const OMP_SESSION_ARTIFACT_DIR_PATTERN = new RegExp(`^${OMP_SESSION_DIR_NAME}$`, 'i')
 
-// Direct child of a session artifact dir: `…/<stamp>_<uuid>/<label>.jsonl`.
-// A child's own artifact dir is label-named (`<stamp>_<uuid>/<label>/`), so a
-// grandchild is one segment too deep for this pattern and counts toward
-// nobody — matching the local direct-children-only readdir. The greedy prefix
-// only matters for a stamped dir nested under another, which OMP never emits.
+/** Walk workspace buckets but not task artifact dirs; OMP lists only top-level conversations (#9330). */
+export function isOmpConversationDirectory(name: string, depth: number): boolean {
+  return depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+}
+
+// Remote counts include only direct artifact children, matching local readdir; nested grandchildren remain excluded.
 const OMP_SUBAGENT_SUBTREE_PATTERN = new RegExp(String.raw`[\\/]${OMP_SESSION_DIR_NAME}[\\/]`, 'i')
 const OMP_SUBAGENT_DIRECT_CHILD_PATTERN = new RegExp(
   String.raw`^(.*[\\/]${OMP_SESSION_DIR_NAME})[\\/][^\\/]+\.jsonl$`,
@@ -35,19 +26,11 @@ export function ompArtifactDirFor(transcriptFilePath: string): string {
   return join(dirname(transcriptFilePath), stem)
 }
 
-// The count below and the on-demand lister both key off this one predicate so
-// the "N subagents" badge can never disagree with the expanded list.
 export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): boolean {
   return isFile && extname(name).toLowerCase() === '.jsonl'
 }
 
-/**
- * Count the task-subagent transcripts stored in a session's artifact directory.
- * Returns 0 when the directory is absent (the common case for sessions that
- * never delegated). Only direct children count: nested dirs (`local/`, a
- * child's own artifact dir) hold artifacts and grandchild transcripts, which
- * belong to their own parents.
- */
+/** Count direct task transcripts only; nested artifacts and grandchildren belong to their own parents. */
 export async function countOmpSubagentTranscripts(transcriptFilePath: string): Promise<number> {
   let entries
   try {
@@ -59,14 +42,7 @@ export async function countOmpSubagentTranscripts(transcriptFilePath: string): P
     .length
 }
 
-/**
- * Partition a recursively walked OMP transcript listing into session
- * candidates and per-parent subagent transcript counts. Remote (SSH) scans
- * cannot readdir a transcript's sibling directory, but their walk already
- * enumerates subagent paths — counting from the listing costs no extra
- * round-trips (mirrors the Claude partition in
- * session-scanner-subagent-transcripts.ts).
- */
+/** Partition the remote walk to count task transcripts without extra SSH directory reads. */
 export function partitionOmpSubagentTranscriptPaths(
   paths: readonly string[]
 ): SubagentTranscriptPartition {
@@ -89,25 +65,21 @@ export function partitionOmpSubagentTranscriptPaths(
   return { sessionFilePaths, subagentTranscriptCounts }
 }
 
-/**
- * Attach the sibling artifact-dir transcript count to an OMP session parse.
- * The artifact dir lives on the host that owns the transcript, so content
- * fetched from a remote (SSH) host must not readdir this machine's disk — the
- * remote walk's partition supplies those counts instead.
- */
+/** Count OMP rows on the transcript-owning host only; remote walks supply their own counts. */
 export function withOmpSubagentTranscriptCount(
   state: ResumableSessionParseState,
   transcriptFilePath: string
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => state.consumeLine(line),
+    identity: () => state.identity?.() ?? null,
     clone: () => withOmpSubagentTranscriptCount(state.clone(), transcriptFilePath),
     touchFile: (file) => state.touchFile(file),
     finalize: async (platform, options) => {
       const session = await state.finalize(platform, options)
       const ownsTranscriptDisk =
         !options?.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
-      if (!session || !ownsTranscriptDisk) {
+      if (session?.agent !== 'omp' || !ownsTranscriptDisk) {
         return session
       }
       return {

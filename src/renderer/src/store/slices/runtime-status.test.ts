@@ -15,7 +15,8 @@ import {
   getRuntimeEnvironmentConnectionGeneration
 } from './runtime-status'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getPairedDeviceIdsByEnvironment } from '@/components/sidebar/workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../../../shared/workspace-creator-visibility'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
@@ -64,14 +65,7 @@ function stubRuntimeEnvironmentApi({
   getStatus?: ReturnType<typeof vi.fn>
   list?: ReturnType<typeof vi.fn>
 }) {
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        getStatus,
-        list
-      }
-    }
-  })
+  stubRuntimeEnvironmentBridge({ getStatus, list })
   return { getStatus, list }
 }
 
@@ -181,7 +175,9 @@ describe('runtime-status slice', () => {
 
     const map = store.getState().runtimeStatusByEnvironmentId
     expect(map.size).toBe(1)
-    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5, connectionGeneration: 1 })
+    // Both counters 0: a first publication is not a reconnect, and going offline never bumps.
+    const counters = { connectionGeneration: 0, hostContactEpoch: 0 }
+    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5, ...counters })
   })
 
   it('retains a learned paired device id after disconnecting a legacy environment', () => {
@@ -203,8 +199,7 @@ describe('runtime-status slice', () => {
 
   it('still learns a paired device id when the re-probed status is unchanged', () => {
     const store = createSliceStore()
-    // Why: the status arrives before the catalog, so only the second (identical) probe
-    // can carry the id onto the environment — the map guard must not swallow it.
+    // Status may precede catalog; an identical later probe must still publish the device ID onto the environment.
     const status = makeStatus({ pairedDeviceId: 'client-device' })
     store.getState().setRuntimeEnvironmentStatus('env-a', { status, checkedAt: 1 })
     store.getState().setRuntimeEnvironments([makeEnvironment()])
@@ -302,7 +297,8 @@ describe('runtime-status slice', () => {
     })
 
     expect(store.getState().runtimeStatusByEnvironmentId).not.toBe(before)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(2)
+    // The first publication holds 0; only the runtime-id change advances it.
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
   })
 
   it('does not toast when the first probe finds a saved server offline', () => {
@@ -525,14 +521,16 @@ describe('runtime-status slice', () => {
       status: makeStatus({ runtimeId: 'runtime-a' }),
       checkedAt: 2
     })
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
+    // Neither the first publication nor a stable re-poll is a connection change.
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(0)
 
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 3 })
     store.getState().setRuntimeEnvironmentStatus('env-a', {
       status: makeStatus({ runtimeId: 'runtime-a' }),
       checkedAt: 4
     })
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(2)
+    // Offline -> online is a real reconnect, so recovery still advances.
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
   })
 
   it('keeps stored and canonical generations aligned after same-id re-pairing', () => {
@@ -552,7 +550,9 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
       getRuntimeEnvironmentConnectionGeneration('env-a')
     )
-    expect(getRuntimeEnvironmentConnectionGeneration('env-a')).toBe(3)
+    // The re-pair itself advanced the generation and dropped the entry; the first
+    // publication under the new pairing must not advance it a second time.
+    expect(getRuntimeEnvironmentConnectionGeneration('env-a')).toBe(1)
   })
 
   it('invalidates provider state only when the active runtime session changes', () => {
@@ -604,7 +604,7 @@ describe('runtime-status slice', () => {
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
     const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { getStatus, call } } })
+    stubRuntimeEnvironmentBridge({ getStatus, call })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
 
@@ -626,10 +626,7 @@ describe('runtime-status slice', () => {
   })
 
   it('drops a recent compatibility failure on a direct non-null status publish', async () => {
-    // Why: paths like Settings "Connect" publish the host online via
-    // setRuntimeEnvironmentStatus directly (not refreshRuntimeEnvironmentStatus)
-    // and then trigger a reuse-flagged repo.list. The stale failure must drop so
-    // that reuse-flagged catalog fetch re-probes the now-reachable host.
+    // Settings Connect publishes reachable status before reuse-flagged repo.list; clear stale failure so that read re-probes.
     clearRuntimeCompatibilityCacheForTests()
     let offline = true
     const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
@@ -647,7 +644,7 @@ describe('runtime-status slice', () => {
       }
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
 
@@ -665,9 +662,7 @@ describe('runtime-status slice', () => {
   })
 
   it('preserves a recent compatibility failure on a null (offline) status publish', async () => {
-    // Why: recording an unreachable host must not undermine the fanout fix — a
-    // null status is not proof of reachability, so reuse-flagged sweeps keep
-    // reusing the one recent failure instead of re-probing per repo.
+    // Null status proves no recovery; fanout must keep sharing the cached compatibility failure.
     clearRuntimeCompatibilityCacheForTests()
     let offline = true
     const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
@@ -685,7 +680,7 @@ describe('runtime-status slice', () => {
       }
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
 
@@ -704,33 +699,33 @@ describe('runtime-status slice', () => {
     clearRuntimeCompatibilityCacheForTests()
   })
 
-  // Both directions of the failure-publication policy, from one failing probe. A user-initiated
-  // check publishes the outage it just observed; a caller holding live transport evidence must
-  // not, because status.get dials its own socket and its failure is unverifiable, not exited.
-  it.each([
-    { name: 'a user-initiated check', options: undefined, publishes: true },
-    { name: 'publishUnreachable defaulted', options: {}, publishes: true },
-    {
-      name: 'a caller that opted out of publishing',
-      options: { publishUnreachable: false },
-      publishes: false
-    }
-  ])('records null and returns false when a runtime refresh fails: $name', async (scenario) => {
+  it('records null and returns false when a runtime refresh fails', async () => {
     const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
     stubRuntimeEnvironmentApi({ getStatus })
     const store = createSliceStore()
     const cached = makeStatus()
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: cached, checkedAt: 1 })
 
-    const reachable = await store
-      .getState()
-      .refreshRuntimeEnvironmentStatus('env-a', undefined, scenario.options)
+    const reachable = await store.getState().refreshRuntimeEnvironmentStatus('env-a')
 
-    // The dial-answered contract the bridge's bounded retry chain reads is policy-independent.
     expect(reachable).toBe(false)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(
-      scenario.publishes ? null : cached
-    )
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(null)
+  })
+
+  it('preserves successful reachability when reading its snapshot fails', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubRuntimeEnvironmentBridge({
+      getStatus: vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')),
+      getStatusSnapshots: vi.fn().mockRejectedValue(new Error('IPC read failed'))
+    })
+    try {
+      const store = createSliceStore()
+      expect(await store.getState().refreshRuntimeEnvironmentStatus('env-a')).toBe(true)
+      expect(store.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
+      expect(log).toHaveBeenCalled()
+    } finally {
+      log.mockRestore()
+    }
   })
 
   it('hydrates saved environments through the single-environment refresh path', async () => {
@@ -898,10 +893,7 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.has('env-b')).toBe(false)
   })
 
-  // Why: skill discovery waits for the catalog to settle. A rejected read must
-  // release that wait without claiming the catalog is hydrated — host routing
-  // uses `runtimeEnvironmentCatalogHydrated` to fail closed on an unknown
-  // catalog, and an empty stale list must not be mistaken for "no runtimes".
+  // Failed catalog reads release skill discovery waiters without marking routing hydrated; empty stale state cannot prove no runtimes.
   it('settles failed catalog reads and allows a later hydration retry', async () => {
     const list = vi
       .fn()

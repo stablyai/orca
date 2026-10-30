@@ -1,6 +1,6 @@
 import type { TabActivationIntent } from '../../../src/shared/tab-activation-intent'
-import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { sessionTabActivate, sessionTerminalFocus } from './mobile-session-write-operations'
 import type { RpcResponse } from '../transport/types'
 import {
   getMobileTerminalDiagnosticErrorName,
@@ -8,7 +8,7 @@ import {
   shortenMobileTerminalDiagnosticId
 } from './mobile-terminal-diagnostics'
 
-type ActivationClient = Pick<RpcClient, 'sendRequest'>
+type ActivationClient = Parameters<typeof sessionTerminalFocus.request>[0]
 
 type MobileSessionTabActivationParams = {
   worktree: string
@@ -49,8 +49,7 @@ async function retryIdempotentActivationAfterCutover(
       operation,
       target: diagnosticTarget
     })
-    // Why: cutover rejects ambiguous in-flight work after the replacement is
-    // active; these state-setting requests are idempotent and safe to repeat once.
+    // Cutover activates the replacement before rejecting old requests; repeat these idempotent state writes once.
     try {
       const response = await request()
       logMobileTerminalDiagnostic('activation-result', {
@@ -76,7 +75,7 @@ export function focusMobileTerminal(
   terminal: string
 ): Promise<RpcResponse> {
   return retryIdempotentActivationAfterCutover(
-    () => client.sendRequest('terminal.focus', { terminal, navigation: 'host' }),
+    () => sessionTerminalFocus.request(client, { terminal, navigation: 'host' }),
     'terminal.focus',
     terminal
   )
@@ -87,7 +86,7 @@ export function activateMobileSessionTab(
   params: MobileSessionTabActivationParams
 ): Promise<RpcResponse> {
   return retryIdempotentActivationAfterCutover(
-    () => client.sendRequest('session.tabs.activate', params),
+    () => sessionTabActivate.request(client, params),
     'session.tabs.activate',
     params.tabId
   )

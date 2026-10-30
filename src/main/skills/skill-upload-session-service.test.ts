@@ -16,8 +16,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SkillUploadSessionService } from './skill-upload-session-service'
 
 const roots: string[] = []
+const services: SkillUploadSessionService[] = []
+
+function createUploadService(
+  ...args: ConstructorParameters<typeof SkillUploadSessionService>
+): SkillUploadSessionService {
+  const service = new SkillUploadSessionService(...args)
+  services.push(service)
+  return service
+}
 
 afterEach(async () => {
+  await Promise.all(services.splice(0).map((service) => service.dispose()))
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -56,7 +66,7 @@ describe('SkillUploadSessionService', () => {
       .mockImplementationOnce(async () => {
         await mkdir(uploads, { recursive: true })
       })
-    const service = new SkillUploadSessionService(uploads, { initializeRoot })
+    const service = createUploadService(uploads, { initializeRoot })
     const request = { package: identity(Buffer.from('new package')) }
 
     await expect(service.begin(request)).rejects.toThrow('transient-init-failure')
@@ -71,7 +81,7 @@ describe('SkillUploadSessionService', () => {
     const uploads = join(root, 'uploads')
     await mkdir(outside)
     await symlink(outside, uploads, process.platform === 'win32' ? 'junction' : 'dir')
-    const service = new SkillUploadSessionService(uploads)
+    const service = createUploadService(uploads)
 
     await expect(service.begin({ package: identity(Buffer.from('new package')) })).rejects.toThrow(
       'skill-upload-staging-root-invalid'
@@ -86,7 +96,7 @@ describe('SkillUploadSessionService', () => {
     const staleOwner = join(uploads, 'owner-2147483646-00000000-0000-4000-8000-000000000000')
     await mkdir(staleOwner, { recursive: true })
     await writeFile(join(staleOwner, 'abandoned.tar.gz'), 'partial package')
-    const service = new SkillUploadSessionService(uploads, {
+    const service = createUploadService(uploads, {
       ownership: { processIsAlive: (pid) => pid === process.pid }
     })
 
@@ -102,8 +112,8 @@ describe('SkillUploadSessionService', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
     const uploads = join(root, 'uploads')
-    const first = new SkillUploadSessionService(uploads)
-    const second = new SkillUploadSessionService(uploads)
+    const first = createUploadService(uploads)
+    const second = createUploadService(uploads)
     const firstBytes = Buffer.from('first live package')
     const firstUpload = await first.begin({ package: identity(firstBytes) })
     await first.append({
@@ -132,7 +142,7 @@ describe('SkillUploadSessionService', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
     const uploads = join(root, 'uploads')
-    const service = new SkillUploadSessionService(uploads)
+    const service = createUploadService(uploads)
     const results = await Promise.allSettled(
       Array.from({ length: 5 }, (_, index) =>
         service.begin({
@@ -161,7 +171,7 @@ describe('SkillUploadSessionService', () => {
     const initializationStarted = new Promise<void>((resolve) => {
       markInitializationStarted = resolve
     })
-    const service = new SkillUploadSessionService(uploads, {
+    const service = createUploadService(uploads, {
       initializeRoot: async () => {
         await mkdir(uploads, { recursive: true })
         markInitializationStarted()
@@ -183,7 +193,7 @@ describe('SkillUploadSessionService', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
     const uploads = join(root, 'uploads')
-    const service = new SkillUploadSessionService(uploads)
+    const service = createUploadService(uploads)
     await service.begin({ package: identity(Buffer.from('closing package')) })
 
     const first = service.dispose()
@@ -206,7 +216,7 @@ describe('SkillUploadSessionService', () => {
         await writeFile(join(owner, 'abandoned.tar.gz'), 'partial package')
       })
     )
-    const service = new SkillUploadSessionService(uploads, {
+    const service = createUploadService(uploads, {
       ownership: { processIsAlive: () => false }
     })
     const request = { package: identity(Buffer.from('new package')) }
@@ -220,7 +230,7 @@ describe('SkillUploadSessionService', () => {
   it('accepts monotonic chunks, acknowledges identical retries, and transfers ownership', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
-    const service = new SkillUploadSessionService(join(root, 'uploads'))
+    const service = createUploadService(join(root, 'uploads'))
     const bytes = Buffer.from('immutable skill package')
     const packageIdentity = identity(bytes)
     const begun = await service.begin({ package: packageIdentity })
@@ -254,7 +264,7 @@ describe('SkillUploadSessionService', () => {
   it('resumes an idempotent transfer without allocating another session', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
-    const service = new SkillUploadSessionService(join(root, 'uploads'))
+    const service = createUploadService(join(root, 'uploads'))
     const bytes = Buffer.from('resumable package')
     const packageIdentity = identity(bytes)
     const request = { package: packageIdentity, transferId: 'operation-1' }
@@ -281,7 +291,7 @@ describe('SkillUploadSessionService', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
     const uploads = join(root, 'uploads')
-    const service = new SkillUploadSessionService(uploads, { idleMs: 20 })
+    const service = createUploadService(uploads, { idleMs: 20 })
     const begun = await service.begin({ package: identity(Buffer.from('abandoned')) })
     await service.append({ uploadId: begun.uploadId, offset: 0, bytesBase64: 'YQ==' })
 
@@ -296,7 +306,7 @@ describe('SkillUploadSessionService', () => {
     roots.push(root)
     vi.useFakeTimers()
     try {
-      const service = new SkillUploadSessionService(join(root, 'uploads'), { idleMs: 20 })
+      const service = createUploadService(join(root, 'uploads'), { idleMs: 20 })
       const bytes = Buffer.from('owned package')
       const packageIdentity = identity(bytes)
       const begun = await service.begin({ package: packageIdentity })
@@ -338,7 +348,7 @@ describe('SkillUploadSessionService', () => {
     roots.push(root)
     const uploads = join(root, 'uploads')
     const hashFailure = new Error('injected-hash-failure')
-    const service = new SkillUploadSessionService(uploads, {
+    const service = createUploadService(uploads, {
       hashArchive: vi.fn().mockRejectedValue(hashFailure)
     })
     const bytes = Buffer.from('unreadable package')
@@ -364,7 +374,7 @@ describe('SkillUploadSessionService', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
     const uploads = join(root, 'uploads')
-    const service = new SkillUploadSessionService(uploads)
+    const service = createUploadService(uploads)
     const begun = await service.begin({ package: identity(Buffer.from('retained')) })
     const [archivePath] = await stagedArchives(uploads)
     const retainedPath = `${archivePath}.retained`
@@ -391,7 +401,7 @@ describe('SkillUploadSessionService', () => {
   it('rejects gaps, changed retries, and an archive hash mismatch', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
-    const service = new SkillUploadSessionService(join(root, 'uploads'))
+    const service = createUploadService(join(root, 'uploads'))
     const bytes = Buffer.from('package')
     const packageIdentity = identity(bytes)
     const begun = await service.begin({ package: packageIdentity })

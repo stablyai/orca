@@ -20,6 +20,7 @@ export type WebGitHubRouteKey =
   | 'setPRFileViewed'
   | 'updatePRTitle'
   | 'mergePR'
+  | 'markPRReadyForReview'
   | 'setPRAutoMerge'
   | 'updatePRState'
   | 'requestPRReviewers'
@@ -31,6 +32,8 @@ export type WebGitHubRouteKey =
   | 'listLabels'
   | 'listAssignableUsers'
   | 'rateLimit'
+  | 'listBindableAccounts'
+  | 'validateAccountBinding'
   | 'listAccessibleProjects'
   | 'resolveProjectRef'
   | 'listProjectViews'
@@ -70,6 +73,7 @@ export type WebGitHubRuntimeMethod =
   | 'github.setPRFileViewed'
   | 'github.updatePRTitle'
   | 'github.mergePR'
+  | 'github.markPRReadyForReview'
   | 'github.setPRAutoMerge'
   | 'github.updatePRState'
   | 'github.requestPRReviewers'
@@ -81,6 +85,8 @@ export type WebGitHubRuntimeMethod =
   | 'github.listLabels'
   | 'github.listAssignableUsers'
   | 'github.rateLimit'
+  | 'github.listBindableAccounts'
+  | 'github.validateAccountBinding'
   | 'github.project.listAccessible'
   | 'github.project.resolveRef'
   | 'github.project.listViews'
@@ -120,6 +126,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   setPRFileViewed: 'github.setPRFileViewed',
   updatePRTitle: 'github.updatePRTitle',
   mergePR: 'github.mergePR',
+  markPRReadyForReview: 'github.markPRReadyForReview',
   setPRAutoMerge: 'github.setPRAutoMerge',
   updatePRState: 'github.updatePRState',
   requestPRReviewers: 'github.requestPRReviewers',
@@ -131,6 +138,8 @@ export const GITHUB_WEB_RPC_METHODS = {
   listLabels: 'github.listLabels',
   listAssignableUsers: 'github.listAssignableUsers',
   rateLimit: 'github.rateLimit',
+  listBindableAccounts: 'github.listBindableAccounts',
+  validateAccountBinding: 'github.validateAccountBinding',
   listAccessibleProjects: 'github.project.listAccessible',
   resolveProjectRef: 'github.project.resolveRef',
   listProjectViews: 'github.project.listViews',

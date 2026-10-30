@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -6,15 +7,90 @@ import type {
 } from '../../../../shared/managed-account-types'
 import {
   buildClaudeStatusSwitchGroups,
+  resolveClaudeStatusAccountState
+} from './status-bar-claude-accounts'
+import {
   buildCodexStatusSwitchGroups,
-  getStatusBarPreferredWslDistro,
-  resolveClaudeStatusAccountState,
   resolveCodexStatusAccountState
-} from './StatusBar'
+} from './status-bar-codex-accounts'
+import { getStatusBarPreferredWslDistro } from './status-bar-runtime-targets'
 
 const hostLabel = navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 
 describe('status bar runtime switch groups', () => {
+  it.each(['host', 'wsl'] as const)(
+    'keeps same-email accounts independently selectable in the %s runtime',
+    (runtime) => {
+      const state: CodexRateLimitAccountsState = {
+        accounts: ['account-a', 'account-b'].map((id) => ({
+          id,
+          email: 'same@example.com',
+          managedHomeRuntime: runtime,
+          wslDistro: runtime === 'wsl' ? 'Ubuntu' : null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        })),
+        activeAccountId: runtime === 'host' ? 'account-b' : null,
+        activeAccountIdsByRuntime: {
+          host: runtime === 'host' ? 'account-b' : null,
+          wsl: runtime === 'wsl' ? { Ubuntu: 'account-b' } : {}
+        }
+      }
+      const target = { runtime, wslDistro: runtime === 'wsl' ? 'Ubuntu' : null }
+      const group = buildCodexStatusSwitchGroups(state, target).find(
+        (entry) => entry.runtimeTarget.runtime === runtime
+      )!
+      expect(group.targets.slice(1)).toEqual([
+        {
+          id: 'account-a',
+          label: 'same@example.com (account-a)',
+          active: false,
+          runtimeTarget: target
+        },
+        {
+          id: 'account-b',
+          label: 'same@example.com (account-b)',
+          active: true,
+          runtimeTarget: target
+        }
+      ])
+    }
+  )
+
+  it('keeps one email plain when its only same-email peer sits in another runtime group', () => {
+    const state: CodexRateLimitAccountsState = {
+      accounts: [
+        {
+          id: 'account-host',
+          email: 'same@example.com',
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          workspaceLabel: 'Personal (Plus)',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-wsl',
+          email: 'same@example.com',
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          workspaceLabel: 'Personal (Plus)',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+    }
+    const groups = buildCodexStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })
+    expect(groups.flatMap((group) => group.targets.slice(1).map((target) => target.label))).toEqual(
+      ['same@example.com (Personal (Plus))', 'same@example.com (Personal (Plus))']
+    )
+  })
+
   it('collapses WSL default into the single concrete Codex distro', () => {
     const state: CodexRateLimitAccountsState = {
       accounts: [
@@ -86,6 +162,51 @@ describe('status bar runtime switch groups', () => {
     ).toEqual([
       { key: 'host', label: hostLabel },
       { key: 'wsl:Ubuntu', label: 'WSL Ubuntu' }
+    ])
+  })
+
+  it("labels Claude rows with their folder's login and keeps one needing sign-in unselectable", () => {
+    const summary = (
+      id: string,
+      email: string,
+      extra: Partial<ClaudeRateLimitAccountsState['accounts'][number]> = {}
+    ) => ({
+      id,
+      email,
+      managedAuthRuntime: 'host' as const,
+      wslDistro: null,
+      authMethod: 'subscription-oauth' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1,
+      ...extra
+    })
+    const runtimeState: ClaudeRateLimitAccountsState = {
+      accounts: [
+        summary('legacy', 'old@example.test', { needsSignIn: true }),
+        summary('relabelled', 'now@example.test')
+      ],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    // Local settings carry neither; the switcher must learn both from the host.
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      claudeManagedAccounts: [
+        { ...summary('legacy', 'old@example.test'), managedAuthPath: '' },
+        { ...summary('relabelled', 'added-as@example.test'), managedAuthPath: '' }
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    const state = resolveClaudeStatusAccountState(settings, runtimeState, null)
+    const [host] = buildClaudeStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })
+    expect(
+      host.targets.map((target) => [target.label, target.disabled ?? false, target.hint ?? null])
+    ).toEqual([
+      ['System default', false, null],
+      ['old@example.test', true, 'Sign in again to use this account'],
+      ['now@example.test', false, null]
     ])
   })
 
@@ -205,13 +326,11 @@ describe('status bar runtime switch groups', () => {
       ]
     } as GlobalSettings
 
-    expect(resolveCodexStatusAccountState(settings, remoteState)).toBe(remoteState)
-    // Without a remote owner, settings-derived accounts win as before.
+    expect(resolveCodexStatusAccountState(settings, remoteState, 'env-1')).toBe(remoteState)
     expect(
-      resolveCodexStatusAccountState(
-        { ...settings, activeRuntimeEnvironmentId: null },
-        remoteState
-      ).accounts.map((account) => account.id)
+      resolveCodexStatusAccountState(settings, remoteState, null).accounts.map(
+        (account) => account.id
+      )
     ).toEqual(['desktop-codex-1'])
   })
 
@@ -238,12 +357,11 @@ describe('status bar runtime switch groups', () => {
       ]
     } as GlobalSettings
 
-    expect(resolveClaudeStatusAccountState(settings, remoteState)).toBe(remoteState)
+    expect(resolveClaudeStatusAccountState(settings, remoteState, 'env-1')).toBe(remoteState)
     expect(
-      resolveClaudeStatusAccountState(
-        { ...settings, activeRuntimeEnvironmentId: '   ' },
-        remoteState
-      ).accounts.map((account) => account.id)
+      resolveClaudeStatusAccountState(settings, remoteState, null).accounts.map(
+        (account) => account.id
+      )
     ).toEqual(['desktop-claude-1'])
   })
 })

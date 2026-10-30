@@ -1,7 +1,8 @@
-import type { CDPSession, Page, TestInfo } from '@stablyai/playwright-test'
+import { expect, type CDPSession, type Page, type TestInfo } from '@stablyai/playwright-test'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
+  getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
@@ -25,16 +26,21 @@ export async function openTerminalImePaneArena(page: Page): Promise<TerminalImeP
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
   const ptyId = await waitForActivePanePtyId(page)
+  // Wait for the prompt after PTY binding so initial snapshot replay cannot overwrite the test row during composition.
+  await expect
+    .poll(() => getTerminalContent(page), {
+      // Match the manager wait above so loaded default-worker runs do not time out first on setup.
+      timeout: 30_000,
+      message: 'Active terminal did not render its initial PTY frame'
+    })
+    .not.toBe('')
   const session = await page.context().newCDPSession(page)
   await focusActiveTerminalInput(page)
   await installTerminalImeBoundaryProbe(page)
   return { page, session, ptyId }
 }
 
-/**
- * `interrupt` sends Ctrl+C only when the test did not reach its end, so a spec that failed
- * mid-composition cannot leave a byte reader holding the pane for the next test in the worker.
- */
+// On failure, interrupt a mid-composition byte reader so the next shared-worker test gets the pane back.
 export async function closeTerminalImePaneArena(
   arena: TerminalImePaneArena,
   testInfo: TestInfo,

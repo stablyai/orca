@@ -2,15 +2,10 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
+import { readRestartRendererState } from './orca-restart'
 import type { PairedElectronClient } from './paired-electron-client'
 
-/**
- * Shared scaffolding for the client-hosted browser survival specs.
- *
- * Extracted rather than copied a third time: every one of these specs has to distinguish "the tab
- * came back" from "a tab came back", and each private copy of that distinction is one more place it
- * can quietly weaken into a URL match that any fresh tab satisfies.
- */
+// Reuse exact-tab identity checks across survival specs so a fresh guest at the same URL cannot count as a survivor.
 export type ClientHostedMarkerFixture = {
   close(): Promise<void>
   markerUrl: string
@@ -64,13 +59,15 @@ export type MirroredBrowserPage = {
 }
 
 export async function findPairedWorktreeId(page: Page, repoPath: string): Promise<string | null> {
-  return page.evaluate(
-    (path) =>
-      window.__store
-        ?.getState()
-        .allWorktrees()
-        .find((worktree) => worktree.path === path)?.id ?? null,
-    repoPath
+  return readRestartRendererState(() =>
+    page.evaluate(
+      (path) =>
+        window.__store
+          ?.getState()
+          .allWorktrees()
+          .find((worktree) => worktree.path === path)?.id ?? null,
+      repoPath
+    )
   )
 }
 
@@ -96,13 +93,15 @@ export async function selectPairedWorktreeGroup(
   await expect
     .poll(
       () =>
-        page.evaluate(
-          ({ environmentId, worktreeId }) => {
-            const state = window.__store?.getState()
-            state?.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
-            return state?.activeGroupIdByWorktree[worktreeId] ?? null
-          },
-          { environmentId, worktreeId }
+        readRestartRendererState(() =>
+          page.evaluate(
+            ({ environmentId, worktreeId }) => {
+              const state = window.__store?.getState()
+              state?.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
+              return state?.activeGroupIdByWorktree[worktreeId] ?? null
+            },
+            { environmentId, worktreeId }
+          )
         ),
       { timeout: 120_000, message: 'paired client never activated a tab group for the worktree' }
     )
@@ -114,54 +113,59 @@ export async function findMirroredBrowserPage(
   worktreeId: string,
   url: string
 ): Promise<MirroredBrowserPage | null> {
-  return page.evaluate(
-    ({ url, worktreeId }) => {
-      const state = window.__store?.getState()
-      for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
-        for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
-          if (!browserPage.url.startsWith(url)) {
-            continue
-          }
-          const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
-          const visibleTab = (state?.unifiedTabsByWorktree[worktreeId] ?? []).find(
-            (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
-          )
-          return {
-            localPageId: browserPage.id,
-            placementKind: handle?.placement?.kind ?? null,
-            remotePageId: handle?.remotePageId ?? browserPage.id,
-            url: browserPage.url,
-            visibleTabId: visibleTab?.id ?? null,
-            workspaceId: workspace.id
+  return readRestartRendererState(() =>
+    page.evaluate(
+      ({ url, worktreeId }) => {
+        const state = window.__store?.getState()
+        for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
+          for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
+            if (!browserPage.url.startsWith(url)) {
+              continue
+            }
+            const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+            const visibleTab = (state?.unifiedTabsByWorktree[worktreeId] ?? []).find(
+              (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+            )
+            return {
+              localPageId: browserPage.id,
+              placementKind: handle?.placement?.kind ?? null,
+              remotePageId: handle?.remotePageId ?? browserPage.id,
+              url: browserPage.url,
+              visibleTabId: visibleTab?.id ?? null,
+              workspaceId: workspace.id
+            }
           }
         }
-      }
-      return null
-    },
-    { url, worktreeId }
+        return null
+      },
+      { url, worktreeId }
+    )
   )
 }
 
-/** Every browser row the client holds for a worktree, for diagnosing duplicates and culls. */
 export async function readClientBrowserRows(
   page: Page,
   worktreeId: string
 ): Promise<{ pageId: string; placementKind: string | null; url: string }[]> {
-  return page.evaluate((worktreeId) => {
-    const state = window.__store?.getState()
-    const rows: { pageId: string; placementKind: string | null; url: string }[] = []
-    for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
-      for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
-        rows.push({
-          pageId: browserPage.id,
-          placementKind:
-            state?.remoteBrowserPageHandlesByPageId[browserPage.id]?.placement?.kind ?? null,
-          url: browserPage.url
-        })
-      }
-    }
-    return rows
-  }, worktreeId)
+  return (
+    (await readRestartRendererState(() =>
+      page.evaluate((worktreeId) => {
+        const state = window.__store?.getState()
+        const rows: { pageId: string; placementKind: string | null; url: string }[] = []
+        for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
+          for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
+            rows.push({
+              pageId: browserPage.id,
+              placementKind:
+                state?.remoteBrowserPageHandlesByPageId[browserPage.id]?.placement?.kind ?? null,
+              url: browserPage.url
+            })
+          }
+        }
+        return rows
+      }, worktreeId)
+    )) ?? []
+  )
 }
 
 export async function openClientHostedFixturePage(
@@ -198,7 +202,6 @@ export async function openClientHostedFixturePage(
   return mirrored
 }
 
-/** Navigates the guest itself, the way following a link does — no client-side URL entry involved. */
 export async function navigateGuest(page: Page, fromUrl: string, toUrl: string): Promise<void> {
   const navigated = await page.evaluate(
     async ({ fromUrl, toUrl }) => {
@@ -223,36 +226,32 @@ export async function navigateGuest(page: Page, fromUrl: string, toUrl: string):
   }
 }
 
-/**
- * Reads the marker out of the guest belonging to one specific page.
- *
- * Bound to that page's retained host rather than scanning every `<webview>`: a scan by URL alone is
- * satisfied by any guest on the fixture origin, so a run that lost the surviving tab and opened a
- * fresh one would still read the moved marker and pass.
- */
+// Read the target page’s retained host; a global URL scan could find a replacement guest and hide tab loss.
 export async function readClientWebviewMarker(
   page: Page,
   target: { urlPrefix: string; remotePageId: string }
 ): Promise<string | null> {
-  return page.evaluate(async ({ urlPrefix, remotePageId }) => {
-    const host = document.querySelector(
-      `[data-browser-client-page-id="${CSS.escape(remotePageId)}"]`
-    )
-    for (const candidate of host?.querySelectorAll('webview') ?? []) {
-      const webview = candidate as Electron.WebviewTag
-      try {
-        if (!webview.getURL().startsWith(urlPrefix)) {
-          continue
+  return readRestartRendererState(() =>
+    page.evaluate(async ({ urlPrefix, remotePageId }) => {
+      const host = document.querySelector(
+        `[data-browser-client-page-id="${CSS.escape(remotePageId)}"]`
+      )
+      for (const candidate of host?.querySelectorAll('webview') ?? []) {
+        const webview = candidate as Electron.WebviewTag
+        try {
+          if (!webview.getURL().startsWith(urlPrefix)) {
+            continue
+          }
+          return (await webview.executeJavaScript(
+            'document.querySelector("#marker")?.textContent ?? null'
+          )) as string | null
+        } catch {
+          // The guest may still be attaching.
         }
-        return (await webview.executeJavaScript(
-          'document.querySelector("#marker")?.textContent ?? null'
-        )) as string | null
-      } catch {
-        // The guest may still be attaching.
       }
-    }
-    return null
-  }, target)
+      return null
+    }, target)
+  )
 }
 
 export async function waitForRenderedClientWebview(
@@ -270,7 +269,6 @@ export async function waitForRenderedClientWebview(
   return marker
 }
 
-/** Surfaces a row's pane so its guest is mounted where the scoped marker read can see it. */
 export async function focusClientBrowserRow(
   page: Page,
   worktreeId: string,
@@ -284,32 +282,4 @@ export async function focusClientBrowserRow(
     },
     { browserPageId: localPageId, worktreeId }
   )
-}
-
-export async function refreshAuthorityRuntimeId(
-  client: PairedElectronClient
-): Promise<string | null> {
-  return client.page
-    .evaluate(async (environmentId) => {
-      await window.api.runtimeEnvironments.connect({ selector: environmentId })
-      await window.__store?.getState().refreshRuntimeEnvironmentStatus(environmentId)
-      return (
-        window.__store?.getState().runtimeStatusByEnvironmentId.get(environmentId)?.status
-          ?.runtimeId ?? null
-      )
-    }, client.environmentId)
-    .catch(() => null)
-}
-
-/** Waits until the client is talking to a genuinely new runtime process, not the one it paired to. */
-export async function waitForRelaunchedRuntime(
-  client: PairedElectronClient,
-  previousRuntimeId: string
-): Promise<void> {
-  await expect
-    .poll(() => refreshAuthorityRuntimeId(client), {
-      timeout: 180_000,
-      message: 'paired client never reconnected to a relaunched runtime process'
-    })
-    .toEqual(expect.not.stringMatching(`^${previousRuntimeId}$`))
 }

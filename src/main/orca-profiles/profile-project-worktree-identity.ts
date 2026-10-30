@@ -66,6 +66,18 @@ export function rekeyOwnerKey(
   return null
 }
 
+/** Consider both locator parses: worktree::/p can name repo worktree or an empty-repo workspace key.
+ * Match ownerKeyBelongsToRepo, which accepts either interpretation. */
+export function ownerKeyWorktreeIds(ownerKey: string): string[] {
+  const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
+    ? getWorktreeIdFromHostIdentity(ownerKey)
+    : ownerKey
+  const scope = parseWorkspaceKey(ownerKey)
+  return scope?.type === 'worktree' && scope.worktreeId !== rawOwnerKey
+    ? [rawOwnerKey, scope.worktreeId]
+    : [rawOwnerKey]
+}
+
 export function ownerKeyBelongsToRepo(ownerKey: string, repoId: string): boolean {
   const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
     ? getWorktreeIdFromHostIdentity(ownerKey)

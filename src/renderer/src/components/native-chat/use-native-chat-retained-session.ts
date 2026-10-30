@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
-} from '../../../../shared/native-chat-transcript-retention'
+} from '../../../../shared/native-chat/transcript/native-chat-transcript-retention'
 import {
   useNativeChatLiveSession,
   type NativeChatLiveSession,
@@ -22,7 +22,8 @@ export function useNativeChatRetainedSession(
     args.transcriptPath ?? null
   ])
   const activeIdentityRef = useRef(identity)
-  const retentionRef = useRef(createNativeChatTranscriptRetention())
+  const retentionRef = useRef<ReturnType<typeof createNativeChatTranscriptRetention>>(undefined!)
+  retentionRef.current ??= createNativeChatTranscriptRetention()
   const sessionMatchesIdentity = activeIdentityRef.current === identity
   const readPhase = sessionMatchesIdentity ? session.readPhase : 'loading'
 

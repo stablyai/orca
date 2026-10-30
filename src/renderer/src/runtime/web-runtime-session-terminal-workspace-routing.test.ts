@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createWebRuntimeSessionTerminal } from './web-runtime-session'
+import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -10,6 +10,7 @@ import {
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -28,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -40,23 +40,27 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
+  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -75,10 +79,7 @@ type MutableSelection = {
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }
 
-/**
- * The harness stub answers with a frozen object; the latch these tests are about
- * only shows up when `setActiveWorktree` actually moves what the next read sees.
- */
+// Selection rollback requires a mutable harness store; frozen setActiveWorktree stubs mask the latch.
 function stubSelectableWorkspaceStore(selection: MutableSelection): void {
   const base = mocks.getState() as Record<string, unknown>
   mocks.getState.mockImplementation(() => ({ ...base, ...selection }))
@@ -109,7 +110,7 @@ describe('web-runtime-session terminal workspace routing', () => {
     }
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn()
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     // `environmentId: null` is the caller saying "I resolved ownership: nobody remote owns this".
     const outcome = await createWebRuntimeSessionTerminal({
@@ -135,7 +136,7 @@ describe('web-runtime-session terminal workspace routing', () => {
     }
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn()
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     const outcome = await createWebRuntimeSessionTerminal({
       worktreeId: FOLDER_WORKSPACE_ID,
@@ -162,7 +163,7 @@ describe('web-runtime-session terminal workspace routing', () => {
         result: { tab: { id: 'host-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     const outcome = await createWebRuntimeSessionTerminal({
       worktreeId: WORKTREE_ID,
@@ -183,7 +184,7 @@ describe('web-runtime-session terminal workspace routing', () => {
     }
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn().mockRejectedValue(new Error('selector_not_found'))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     const outcome = await createWebRuntimeSessionTerminal({
       worktreeId: WORKTREE_ID,
@@ -217,7 +218,7 @@ describe('web-runtime-session terminal workspace routing', () => {
         result: { tab: { id: 'host-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
       })
       .mockRejectedValueOnce(new Error('list failed'))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     const outcome = await createWebRuntimeSessionTerminal({
       worktreeId: WORKTREE_ID,
@@ -242,7 +243,7 @@ describe('web-runtime-session terminal workspace routing', () => {
       selection.activeWorkspaceExecutionHostId = 'local'
       throw new Error('selector_not_found')
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     const outcome = await createWebRuntimeSessionTerminal({
       worktreeId: WORKTREE_ID,
@@ -257,12 +258,12 @@ describe('web-runtime-session terminal workspace routing', () => {
 
   it('does not touch the host selection when the caller opted out of selecting', async () => {
     const selection: MutableSelection = {
-      activeWorktreeId: WORKTREE_ID,
+      activeWorktreeId: 'repo::/other',
       activeWorkspaceExecutionHostId: 'local'
     }
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn().mockRejectedValue(new Error('selector_not_found'))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await createWebRuntimeSessionTerminal({
       worktreeId: WORKTREE_ID,
@@ -272,6 +273,7 @@ describe('web-runtime-session terminal workspace routing', () => {
     })
 
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(selection.activeWorktreeId).toBe('repo::/other')
     expect(selection.activeWorkspaceExecutionHostId).toBe('local')
   })
 })

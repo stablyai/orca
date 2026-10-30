@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
@@ -6,49 +5,30 @@ import {
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { getIcaclsExePath } from '../win32-utils'
+import { loadWindowsSecurity, type WindowsDacl } from '../../shared/windows-security-addon'
+import {
+  ACCESS_ALLOWED_ACE_TYPE,
+  ACCESS_DENIED_ACE_TYPE,
+  INHERIT_ONLY_ACE
+} from '../../shared/windows-secure-dacl'
+import { RESTRICTED_APP_PACKAGES_SID } from './windows-install-dir-package-acl-grant'
 
-/**
- * Read-only DACL probe for the win32 install directory.
- *
- * Why: six 1.4.184 reports show the GPU and renderer children both dying at init
- * with 0x80000003 and nothing to distinguish them from any other CHECK. An install
- * tree carrying an orphan S-1-15-2-* package ACE with no S-1-15-2-1/-2 to satisfy
- * it reproduces exactly that signature (10/10 launches), and an additive grant of
- * S-1-15-2-2 clears it — see electron/electron#51761. This records whether a
- * machine is in that state so the next crash report answers the question itself.
- *
- * Diagnostic only: it never writes an ACL and never changes behavior.
- */
+/** Read-only evidence for electron/electron#51761: orphan package ACEs without either well-known package grant reproduced child-init 0x80000003. Either grant launched clean on Windows 10.0.26200/Electron 43.4.1; report restricted-grant presence separately. */
 
 export const WINDOWS_INSTALL_DIR_ACL_BREADCRUMB = 'windows_install_dir_acl'
 
-// Why a shortlist rather than a readdir: the reproduced failure is a per-file
-// content read, so the directory's own DACL is not sufficient evidence — but any
-// one shipped module answers it, and existsSync costs nothing.
+// Probe a shipped module too: directory DACL cannot establish per-file read access.
 const MODULE_SHORTLIST = ['ffmpeg.dll', 'libGLESv2.dll', 'libEGL.dll', 'icudtl.dat']
 
-const PROBE_BUDGET_MS = 5_000
-
-/** Raw S-1-15-2-* means icacls could not resolve it — locale-independent. */
-const RAW_PACKAGE_SID = /\bS-1-15-2-[0-9-]+\b/i
-const WELL_KNOWN_PACKAGE_SIDS = new Set(['s-1-15-2-1', 's-1-15-2-2'])
-// icacls localizes these; the raw SID form is never printed for them. Orphan
-// detection stays SID-form and locale-independent, but this check is not — so we
-// report whether the output looked English at all, making a locale-induced
-// false positive recognizable instead of silent.
-const WELL_KNOWN_PACKAGE_NAMES = /ALL (RESTRICTED )?APPLICATION PACKAGES/i
-const ENGLISH_PRINCIPAL = /\b(NT AUTHORITY|BUILTIN|APPLICATION PACKAGE AUTHORITY)\b/i
-// Why: an ACE that denies, or only propagates to children, grants nothing on this
-// object — so it cannot satisfy an orphan the way the reproduced fix did.
-const NON_GRANTING_FLAGS = /\((?:DENY|IO)\)/i
+// Use raw SIDs: localized package display names previously misclassified repaired trees.
+const PACKAGE_SID = /^S-1-15-2-[0-9-]+$/i
+/** ALL APPLICATION PACKAGES and ALL RESTRICTED APPLICATION PACKAGES. */
+const WELL_KNOWN_PACKAGE_SIDS = new Set(['S-1-15-2-1', RESTRICTED_APP_PACKAGES_SID])
 
 export type WindowsInstallDirAclProbeOptions = {
   platform?: NodeJS.Platform
   isServeMode?: boolean
   installDir?: string
-  /** Test seams. */
-  spawnFn?: typeof spawn
   fileExists?: (path: string) => boolean
   recordBreadcrumb?: typeof recordDurableCrashBreadcrumb
   onDone?: (data: CrashReportBreadcrumbData) => void
@@ -57,68 +37,53 @@ export type WindowsInstallDirAclProbeOptions = {
 type AclFacts = {
   orphanPackageSids: string[]
   hasWellKnownPackageGrant: boolean
-  sawEnglishPrincipal: boolean
+  hasRestrictedPackageGrant: boolean
 }
 
-function readDacl(spawnFn: typeof spawn, target: string, deadlineMs: number): Promise<string> {
-  return new Promise((resolve) => {
-    // No flags: icacls with a bare path only reads. Never /T — a recursive walk on
-    // a real profile measured 62s and timed out (see windows-user-data-acl.ts).
-    const child = spawnFn(getIcaclsExePath(), [target], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-      windowsHide: true
-    })
-    let out = ''
-    let settled = false
-    const settle = (value: string): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      resolve(value)
-    }
-    const timer = setTimeout(() => {
-      child.kill()
-      settle('')
-    }, deadlineMs)
-    timer.unref?.()
-    child.stdout?.on('data', (chunk: Buffer) => {
-      out += chunk.toString('utf-8')
-    })
-    child.on('error', () => settle(''))
-    // 'close' not 'exit': exit can fire before stdout drains, and an empty read
-    // would parse as a clean DACL — a false negative in the only case we care about.
-    child.on('close', () => settle(out))
-  })
+function readDacl(target: string): WindowsDacl | null {
+  const security = loadWindowsSecurity()
+  if ('error' in security) {
+    throw new Error(`windows-security addon unavailable: ${security.error}`)
+  }
+  try {
+    return security.addon.getDaclAces(target)
+  } catch {
+    return null
+  }
 }
 
-function collectAclFacts(daclOutput: string): AclFacts {
+function collectAclFacts(dacl: WindowsDacl | null): AclFacts | null {
+  // Unreadable/NULL/unsupported ACEs yield no facts; a skipped ACE might be the satisfying grant.
+  if (
+    !dacl ||
+    dacl.aces.some(
+      (ace) => ace.type !== ACCESS_ALLOWED_ACE_TYPE && ace.type !== ACCESS_DENIED_ACE_TYPE
+    )
+  ) {
+    return null
+  }
   const orphanPackageSids: string[] = []
   let hasWellKnownPackageGrant = false
-  let sawEnglishPrincipal = false
-  for (const line of daclOutput.split(/\r?\n/)) {
-    if (ENGLISH_PRINCIPAL.test(line)) {
-      sawEnglishPrincipal = true
-    }
-    // icacls glues the echoed path onto the first principal with no separator, so
-    // match the principal:(flags) tail rather than trying to split the line.
-    const ace = /([^\s:][^:]*):(\([^\s]*\))\s*$/.exec(line.trim())
-    if (!ace) {
+  let hasRestrictedPackageGrant = false
+  for (const ace of dacl.aces) {
+    const sid = ace.sid ?? ''
+    if (!WELL_KNOWN_PACKAGE_SIDS.has(sid)) {
+      if (PACKAGE_SID.test(sid)) {
+        orphanPackageSids.push(sid)
+      }
       continue
     }
-    const [, principal, flags] = ace
-    const sid = RAW_PACKAGE_SID.exec(principal)?.[0]
-    if (sid && !WELL_KNOWN_PACKAGE_SIDS.has(sid.toLowerCase())) {
-      orphanPackageSids.push(sid)
+    // Deny and inherit-only ACEs grant no access to this object.
+    if (ace.type !== ACCESS_ALLOWED_ACE_TYPE || (ace.flags & INHERIT_ONLY_ACE) !== 0) {
       continue
     }
-    const isWellKnown = sid !== undefined || WELL_KNOWN_PACKAGE_NAMES.test(principal)
-    if (isWellKnown && !NON_GRANTING_FLAGS.test(flags)) {
-      hasWellKnownPackageGrant = true
+    hasWellKnownPackageGrant = true
+    // Restricted-grant presence narrows diagnostics but does not decide poison.
+    if (sid === RESTRICTED_APP_PACKAGES_SID) {
+      hasRestrictedPackageGrant = true
     }
   }
-  return { orphanPackageSids, hasWellKnownPackageGrant, sawEnglishPrincipal }
+  return { orphanPackageSids, hasWellKnownPackageGrant, hasRestrictedPackageGrant }
 }
 
 function resolveTargets(installDir: string, fileExists: (path: string) => boolean): string[] {
@@ -126,44 +91,36 @@ function resolveTargets(installDir: string, fileExists: (path: string) => boolea
   return moduleFile ? [installDir, moduleFile] : [installDir]
 }
 
-async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void> {
+function runProbe(options: WindowsInstallDirAclProbeOptions): void {
   const record = options.recordBreadcrumb ?? recordDurableCrashBreadcrumb
   let data: CrashReportBreadcrumbData
   try {
     const installDir = options.installDir ?? dirname(process.execPath)
     const targets = resolveTargets(installDir, options.fileExists ?? existsSync)
-    const spawnFn = options.spawnFn ?? spawn
-    const startedAt = Date.now()
-    const outputs: string[] = []
-    for (const target of targets) {
-      const remaining = PROBE_BUDGET_MS - (Date.now() - startedAt)
-      // Why one shared budget: two targets must never cost two full timeouts.
-      outputs.push(remaining > 0 ? await readDacl(spawnFn, target, remaining) : '')
-    }
-    const facts = outputs.map(collectAclFacts)
+    const outputs = targets.map(readDacl)
+    const facts = outputs.map(collectAclFacts).filter((fact) => fact !== null)
     const orphans = [...new Set(facts.flatMap((f) => f.orphanPackageSids))]
     const hasWellKnownPackageGrant = facts.some((f) => f.hasWellKnownPackageGrant)
-    // Why per target: a grant on the directory does not grant on the module file,
-    // and the reproduced failure is a per-file content read. Merging would let a
-    // grant on one target mask its absence on the other.
+    const hasRestrictedPackageGrant = facts.some((f) => f.hasRestrictedPackageGrant)
+    // Judge each target separately or a directory grant could hide a poisoned module.
     const poisoned = facts.some(
       (f) => f.orphanPackageSids.length > 0 && !f.hasWellKnownPackageGrant
     )
-    data = outputs.every((out) => out === '')
-      ? { status: 'failed', reason: 'all-targets-unreadable' }
-      : {
-          status: 'ok',
-          probedTargetCount: targets.length,
-          orphanPackageSidCount: orphans.length,
-          // Capped: correlating the same orphan across reports is what would
-          // identify the tool that left it, which is the point of recording it.
-          orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
-          hasWellKnownPackageGrant,
-          // False positives are possible on a non-English Windows, where the
-          // well-known ACE resolves to a localized name this cannot match.
-          wellKnownNameCheckReliable: facts.some((f) => f.sawEnglishPrincipal),
-          matchesPoisonSignature: poisoned
-        }
+    data =
+      facts.length === 0
+        ? { status: 'failed', reason: 'all-targets-unreadable' }
+        : {
+            status: 'ok',
+            probedTargetCount: targets.length,
+            orphanPackageSidCount: orphans.length,
+            // Cap orphan identity evidence while retaining cross-report correlation.
+            orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
+            // Either well-known grant satisfies the orphan for this verdict.
+            hasWellKnownPackageGrant,
+            // Diagnostic only: the -1-only shape launched clean on hardware.
+            hasRestrictedPackageGrant,
+            matchesPoisonSignature: poisoned
+          }
   } catch (error) {
     data = { status: 'failed', reason: sanitizeCrashReportString(`probe: ${String(error)}`, 200) }
   }
@@ -171,34 +128,33 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
   options.onDone?.(data)
 }
 
-// Why once per process: the install DACL cannot usefully change mid-session, and
-// openMainWindow re-runs on re-activation.
+// Probe once per process despite window reopen; ordinary install DACL is stable within a session.
 let probeStarted = false
 
 export function resetWindowsInstallDirAclProbeForTest(): void {
   probeStarted = false
 }
 
-/**
- * Fire-and-forget; returns before any spawn. win32 only — no spawn and no fs I/O
- * anywhere else. Called from openMainWindow, which runs after initObservability,
- * so the durable record also emits a span into the diagnostics bundle.
- */
-export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOptions = {}): void {
+/** Defer Windows-only reads until after window creation; observability is ready. Return whether dispatched so reopen callers cannot await an onDone the process latch prevents. */
+export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOptions = {}): boolean {
   if ((options.platform ?? process.platform) !== 'win32' || options.isServeMode === true) {
-    return
+    return false
   }
   if (probeStarted) {
-    return
+    return false
   }
   probeStarted = true
-  // Why the try: this runs inline in openMainWindow, so anything thrown here
-  // propagates into window creation. A diagnostic must never be able to do that.
+  // Probe scheduling runs inline with window creation; diagnostic failures must not escape.
   try {
     setImmediate(() => {
-      void runProbe(options).catch(() => undefined)
+      try {
+        runProbe(options)
+      } catch {
+        // Fail quietly if the diagnostic recorder/callback itself throws.
+      }
     })
   } catch {
-    // Nothing left to report to that would not throw again.
+    // No remaining recorder can safely report this failure.
   }
+  return true
 }

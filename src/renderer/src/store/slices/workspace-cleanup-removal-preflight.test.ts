@@ -90,6 +90,7 @@ describe('workspace cleanup removal and protection', () => {
       { id: 'repo-c::/other', executionHostId: null },
       false,
       {
+        assertBeforeDispatch: expect.any(Function),
         suppressPreservedBranchToast: true
       }
     )
@@ -136,6 +137,7 @@ describe('workspace cleanup removal and protection', () => {
       { id: candidate.worktreeId, executionHostId: null },
       false,
       {
+        assertBeforeDispatch: expect.any(Function),
         suppressPreservedBranchToast: true
       }
     )
@@ -161,6 +163,7 @@ describe('workspace cleanup removal and protection', () => {
       { id: candidate.worktreeId, executionHostId: null },
       false,
       {
+        assertBeforeDispatch: expect.any(Function),
         suppressPreservedBranchToast: true,
         snapshotPruneBatchId: 'batch-1'
       }
@@ -258,10 +261,7 @@ describe('workspace cleanup removal and protection', () => {
               })
           ),
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: false
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }
@@ -276,6 +276,7 @@ describe('workspace cleanup removal and protection', () => {
       failures: []
     })
     expect(removeWorktree).toHaveBeenCalledWith({ id: WORKTREE_ID, executionHostId: null }, false, {
+      assertBeforeDispatch: expect.any(Function),
       suppressPreservedBranchToast: true
     })
   })
@@ -291,10 +292,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: false
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }
@@ -333,10 +331,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: false
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }
@@ -368,10 +363,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: true
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }
@@ -393,6 +385,7 @@ describe('workspace cleanup removal and protection', () => {
       }
     )
     expect(removeWorktree).toHaveBeenCalledWith({ id: WORKTREE_ID, executionHostId: null }, false, {
+      assertBeforeDispatch: expect.any(Function),
       suppressPreservedBranchToast: true
     })
   })
@@ -472,6 +465,7 @@ describe('workspace cleanup removal and protection', () => {
       { id: WORKTREE_ID, executionHostId: 'local' },
       true,
       {
+        assertBeforeDispatch: expect.any(Function),
         suppressPreservedBranchToast: true
       }
     )

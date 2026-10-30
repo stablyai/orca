@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const viewportMocks = vi.hoisted(() => ({
+  clearBrowserPageViewportPresetSize: vi.fn(),
   removeBrowserPageViewport: vi.fn()
 }))
 
@@ -33,6 +34,7 @@ describe('webview registry drag listeners', () => {
     removedListeners = []
     unregisterGuestMock = vi.fn()
     viewportMocks.removeBrowserPageViewport.mockReset()
+    viewportMocks.clearBrowserPageViewportPresetSize.mockReset()
 
     vi.stubGlobal('window', {
       addEventListener: vi.fn(
@@ -74,7 +76,13 @@ describe('webview registry drag listeners', () => {
 
     registerPersistentWebview('page-1', createWebview())
 
-    expect(addedListeners.map((entry) => entry.type)).toEqual(['dragstart', 'dragend', 'drop'])
+    expect(addedListeners.map((entry) => entry.type)).toEqual([
+      'dragstart',
+      'dragend',
+      'drop',
+      'pointerdown',
+      'pointermove'
+    ])
   })
 
   it('removes drag listeners after the last webview is destroyed', async () => {
@@ -84,7 +92,7 @@ describe('webview registry drag listeners', () => {
     registerPersistentWebview('page-1', createWebview())
     registerPersistentWebview('page-2', createWebview())
 
-    expect(addedListeners).toHaveLength(3)
+    expect(addedListeners).toHaveLength(5)
 
     destroyPersistentWebview('page-1')
 
@@ -92,7 +100,13 @@ describe('webview registry drag listeners', () => {
 
     destroyPersistentWebview('page-2')
 
-    expect(removedListeners.map((entry) => entry.type)).toEqual(['dragstart', 'dragend', 'drop'])
+    expect(removedListeners.map((entry) => entry.type)).toEqual([
+      'dragstart',
+      'dragend',
+      'drop',
+      'pointerdown',
+      'pointermove'
+    ])
     expect(unregisterGuestMock).toHaveBeenCalledWith({ browserPageId: 'page-1' })
     expect(unregisterGuestMock).toHaveBeenCalledWith({ browserPageId: 'page-2' })
   })
@@ -122,13 +136,35 @@ describe('webview registry drag listeners', () => {
     expect(secondWebview.style.pointerEvents).toBe('auto')
   })
 
+  it('releases native drag passthrough when a cancelled dragstart never starts a drag', async () => {
+    const { registerPersistentWebview } = await import('./webview-registry')
+    const webview = createWebview()
+    webview.style.pointerEvents = 'auto'
+    registerPersistentWebview('page-1', webview)
+    const listener = (type: string): ((event: Event) => void) => {
+      const found = addedListeners.find((entry) => entry.type === type)?.listener
+      if (typeof found !== 'function') {
+        throw new Error(`${type} listener missing`)
+      }
+      return found
+    }
+
+    for (const pointerType of ['pointermove', 'pointerdown']) {
+      listener('dragstart')(new Event('dragstart'))
+      expect(webview.style.pointerEvents).toBe('none')
+      // No dragend or drop follows a cancelled dragstart; the next pointer event proves no drag is live.
+      listener(pointerType)(new Event(pointerType))
+      expect(webview.style.pointerEvents).toBe('auto')
+    }
+  })
+
   it('keeps one listener set across repeated registrations', async () => {
     const { registerPersistentWebview } = await import('./webview-registry')
 
     registerPersistentWebview('page-1', createWebview())
     registerPersistentWebview('page-2', createWebview())
 
-    expect(addedListeners).toHaveLength(3)
+    expect(addedListeners).toHaveLength(5)
   })
 
   it('profiles live webviews and registered browser guests for memory breadcrumbs', async () => {
@@ -204,21 +240,17 @@ describe('webview registry drag listeners', () => {
     expect(isBrowserPageRendererRecoveryPending('page-1')).toBe(false)
   })
 
-  it('preserves the viewport and zoom only while replacing a guest', async () => {
+  it('preserves the viewport only while replacing a guest', async () => {
     const { destroyPersistentWebview, registerPersistentWebview, replacePersistentWebview } =
       await import('./webview-registry')
-    const { getExplicitBrowserPageZoomLevel, rememberExplicitBrowserPageZoomLevel } =
-      await import('./browser-page-zoom')
 
     registerPersistentWebview('page-1', createWebview())
-    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
     await replacePersistentWebview('page-1', { preserveViewport: true })
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBe(1.5)
     expect(viewportMocks.removeBrowserPageViewport).not.toHaveBeenCalled()
 
     registerPersistentWebview('page-1', createWebview())
     await destroyPersistentWebview('page-1')
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBeNull()
+    expect(viewportMocks.clearBrowserPageViewportPresetSize).toHaveBeenCalledWith('page-1')
     expect(viewportMocks.removeBrowserPageViewport).toHaveBeenCalledWith('page-1')
   })
 
@@ -264,34 +296,6 @@ describe('webview registry drag listeners', () => {
     releaseDrag()
 
     expect(webview.style.pointerEvents).toBe('auto')
-  })
-
-  it('preserves explicit zoom across a parent-drift replacement', async () => {
-    const { registerPersistentWebview, replacePersistentWebview } =
-      await import('./webview-registry')
-    const { getExplicitBrowserPageZoomLevel, rememberExplicitBrowserPageZoomLevel } =
-      await import('./browser-page-zoom')
-
-    registerPersistentWebview('page-1', createWebview())
-    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
-
-    await replacePersistentWebview('page-1', { preserveViewport: true })
-
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBe(1.5)
-  })
-
-  it('forgets explicit zoom on a real tab close', async () => {
-    const { destroyPersistentWebview, registerPersistentWebview } =
-      await import('./webview-registry')
-    const { getExplicitBrowserPageZoomLevel, rememberExplicitBrowserPageZoomLevel } =
-      await import('./browser-page-zoom')
-
-    registerPersistentWebview('page-1', createWebview())
-    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
-
-    destroyPersistentWebview('page-1')
-
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBeNull()
   })
 
   it('moves focus back to the renderer before detaching the focused webview', async () => {

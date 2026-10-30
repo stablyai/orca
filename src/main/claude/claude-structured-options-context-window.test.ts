@@ -1,0 +1,63 @@
+import { describe, expect, it, vi } from 'vitest'
+import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
+import { assistantFrame, journal, userFrame } from './claude-context-usage-test-support'
+import { sessionFor } from './claude-structured-dispatch-test-support'
+import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { setClaudeStructuredOption } from './claude-structured-options'
+import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
+
+function ringSession(catalog: unknown[] = []) {
+  const session = sessionFor()
+  const setModel = vi.fn<ClaudeSession['connection']['setModel']>(async () => undefined)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every connection member a model write and its catalog read call.
+  session.connection = {
+    ...session.connection,
+    setModel,
+    supportedModels: async () => catalog
+  } as ClaudeSession['connection']
+  const state = journal()
+  const translator = createClaudeJournalTranslator({ sink: state.sink, coalesceMs: 0 })
+  session.translator = translator
+  const write = (key: string, value: string) =>
+    setClaudeStructuredOption(session, { key, value }, undefined)
+  const respond = (turnId: string, at: number) => {
+    translator.handle(userFrame(turnId, at))
+    translator.handle(assistantFrame(`${turnId}-reply`, at + 1, 100_000))
+    return selectStructuredAgentContextUsage(state.items())
+  }
+  return { session, setModel, write, respond }
+}
+
+describe('the context ring after a session option write', () => {
+  it('sizes a new session from the model it was launched with', () => {
+    const s = ringSession()
+    adoptClaudeStructuredSpawnOptions(s.session, {
+      sdkOptions: { model: 'opus[1m]' },
+      options: new Map([['model', 'opus[1m]']]),
+      fastModeAtStart: false
+    })
+    expect(s.respond('turn-a', 1_000)).toMatchObject({ windowTokens: 1_000_000, percentage: 10 })
+  })
+
+  it('sizes estimates from a live model write straight away', async () => {
+    const s = ringSession()
+    await s.write('model', 'sonnet')
+    expect(s.respond('turn-a', 1_000)).toBeNull()
+    await s.write('model', 'sonnet[1m]')
+    expect(s.respond('turn-b', 2_000)).toMatchObject({ windowTokens: 1_000_000, percentage: 10 })
+  })
+
+  it('implies no window for a model the child refused', async () => {
+    const refused = ringSession()
+    refused.setModel.mockRejectedValueOnce(new ClaudeControlRequestError('set_model', 'refused'))
+    await expect(refused.write('model', 'opus[1m]')).rejects.toThrow()
+    expect(refused.respond('turn-a', 1_000)).toBeNull()
+  })
+
+  it('refuses a live permission-mode write', async () => {
+    const s = ringSession()
+    await expect(s.write('permissionMode', 'plan')).rejects.toThrow(/permissionMode/)
+  })
+})

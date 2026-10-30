@@ -1,0 +1,113 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.diff-review-actions",
+  "family": "session.diff-review-actions",
+  "namedDeltas": [],
+  "values": {
+    "2fc890e4b748": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "53b792409cec": {
+      "name": "load-review-data",
+      "ordinal": 3,
+      "value": {}
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f39122ee30fc": {
+      "name": "git.stage#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
+    },
+    "fd1322e39fc5": {
+      "name": "git.stage#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.stage"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "staged": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "review-stage-file",
+    "checkpoints": [
+      {
+        "id": "staged",
+        "observation": {
+          "sender": ["fd1322e39fc5"],
+          "payloads": ["f39122ee30fc"],
+          "settlements": {
+            "stage": "eb79a9b3682a"
+          },
+          "state": "2fc890e4b748",
+          "effects": ["53b792409cec"]
+        }
+      }
+    ]
+  }
+}

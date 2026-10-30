@@ -6,28 +6,34 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
 import {
-  isGitRepo,
-  getGitRepoRoot,
-  getLinkedWorktreeMainRepoRoot,
+  inspectGitRepoForRegistrationAsync,
+  getGitRepoRootAsync,
   getRepoName
 } from '../../git/repo'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { describeWslUncAccessDenied } from '../../wsl/wsl-unc-access-denied'
 
 export async function addLocalRepoFromPath(
   store: Store,
   path: string,
-  kind: 'git' | 'folder' = 'git'
+  kind: 'git' | 'folder' = 'git',
+  displayName?: string
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
   }
-  if (repoKind === 'git' && !isGitRepo(path)) {
-    return { error: `Not a valid git repository: ${path}` }
+  const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
+  if (gitInfo && !gitInfo.isRepo) {
+    return {
+      error: (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+    }
   }
 
-  const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
+  const resolvedPath = gitInfo?.rootPath ?? path
   const pathKey = normalizeRuntimePathForComparison(path)
   const existing = store
     .getRepos()
@@ -48,16 +54,23 @@ export async function addLocalRepoFromPath(
       return { repo: existingAfterRootResolve, alreadyExisted: true }
     }
   }
+  const existingAtRealPath = await findProjectAtSameRealPath(
+    store.getRepos().filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID),
+    resolvedPath
+  )
+  if (existingAtRealPath) {
+    return { repo: existingAtRealPath, alreadyExisted: true }
+  }
 
-  // Why: a linked worktree reports itself as its own toplevel, so the path checks above can't see that
-  // it belongs to an already-tracked repo. Adding it anyway yields a second "ready" host setup on the
-  // same project and host — a duplicate run-target row that resolves to a transient worktree path.
+  // Linked worktrees report their own toplevel; resolve the main checkout to avoid duplicate host setups.
+  let mainRepoKey: string | null = null
   if (repoKind === 'git') {
-    const mainRepoRoot = getLinkedWorktreeMainRepoRoot(resolvedPath)
+    const mainRepoRoot = gitInfo?.mainRepoPath
+      ? await getGitRepoRootAsync(gitInfo.mainRepoPath)
+      : null
     if (mainRepoRoot) {
-      const mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
-      // Why !isFolderRepo: only a git-kind main checkout projects onto the same project as its
-      // worktree, so matching a folder record would suppress the add without deduping anything.
+      mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
+      // Only Git checkouts share project identity with their worktrees; folder records do not deduplicate them.
       const trackedMainRepo = store
         .getRepos()
         .find(
@@ -72,11 +85,30 @@ export async function addLocalRepoFromPath(
     }
   }
 
-  const detected = await detectRepoIconAndUpstream({ repoPath: resolvedPath, kind: repoKind })
+  const detected = await detectRepoIconAndUpstream({
+    repoPath: resolvedPath,
+    kind: repoKind,
+    executionHostId: LOCAL_EXECUTION_HOST_ID
+  })
+  // Another registration can finish while icon discovery is pending.
+  const raceWinner = store.getRepos().find((repo) => {
+    if (repo.connectionId) {
+      return false
+    }
+    const repoPathKey = normalizeRuntimePathForComparison(repo.path)
+    return (
+      repoPathKey === pathKey ||
+      repoPathKey === resolvedPathKey ||
+      (mainRepoKey !== null && !isFolderRepo(repo) && repoPathKey === mainRepoKey)
+    )
+  })
+  if (raceWinner) {
+    return { repo: raceWinner, alreadyExisted: true }
+  }
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,
-    displayName: getRepoName(resolvedPath),
+    displayName: displayName?.trim() || getRepoName(resolvedPath),
     badgeColor: DEFAULT_REPO_BADGE_COLOR,
     ...detected,
     addedAt: Date.now(),
@@ -84,7 +116,7 @@ export async function addLocalRepoFromPath(
     ...(repoKind === 'git'
       ? {
           externalWorktreeVisibilityLegacy: false,
-          // Why: new Add Project imports are explicit ready host setups; 'legacy-repo' is reserved for older records/projection.
+          // Explicit imports are ready host setups; legacy-repo is reserved for migrated records.
           projectHostSetupMethod: 'imported-existing-folder' as const
         }
       : {})

@@ -4,7 +4,13 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  getWorktreeExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,
@@ -12,6 +18,11 @@ import {
   MCP_STARTER_CONFIG
 } from '../../../../shared/mcp-config'
 import { useAppStore } from '../../store'
+import { selectRuntimeAwareSshStatus } from '../../store/slices/runtime-environment-ssh-selectors'
+import {
+  worktreeHostMatchOptions,
+  worktreeMatchesHost
+} from '../../store/slices/worktrees/listing/worktree-host-ownership'
 import { joinPath } from '../../lib/path'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { Button } from '../ui/button'
@@ -19,8 +30,17 @@ import { isWindowsUserAgent } from '../terminal-pane/pane-helpers'
 import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFileRow'
 import { McpMissingConfigList } from './McpMissingConfigList'
 import { loadMcpConfigInspections } from './mcp-config-inspection'
+import { formatMcpConfigSummary } from './mcp-config-summary'
 import { translate } from '@/i18n/i18n'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import {
+  assertFileWriteApplied,
+  missingOrIdenticalPrecondition
+} from '../../../../shared/file-write-disk-precondition'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -28,19 +48,29 @@ type McpConfigSectionProps = {
 
 const EMPTY_WORKTREES: Worktree[] = []
 
-function countServers(configs: LoadedMcpConfigInspection[]): number {
-  return configs.reduce((sum, config) => sum + config.servers.length, 0)
-}
-
 export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Element {
   const openFile = useAppStore((state) => state.openFile)
   const setActiveView = useAppStore((state) => state.setActiveView)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const ensureWorktreeRootGroup = useAppStore((state) => state.ensureWorktreeRootGroup)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
-  const worktreesForRepo = useAppStore((state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES)
+  const repos = useAppStore((state) => state.repos)
+  const allWorktreesForRepo = useAppStore(
+    (state) => selectWorktreesByRepo(state)[repo.id] ?? EMPTY_WORKTREES
+  )
+  // Paths belong to the repo row’s host, independent of focused host.
+  const repoHostId = getRepoExecutionHostId(repo)
+  const repoHost = parseExecutionHostId(repoHostId)
+  const runtimeEnvironmentId = repoHost?.kind === 'runtime' ? repoHost.environmentId : null
+  const connectionId = getRepoSshConnectionId(repo) ?? undefined
+  const worktreesForRepo = useMemo(() => {
+    const options = worktreeHostMatchOptions({ repos }, repo.id, repoHostId)
+    return allWorktreesForRepo.filter((worktree) =>
+      worktreeMatchesHost(worktree, repoHostId, options)
+    )
+  }, [allWorktreesForRepo, repo.id, repoHostId, repos])
   const sshConnectionStatus = useAppStore((state) =>
-    repo.connectionId ? state.sshConnectionStates.get(repo.connectionId)?.status : null
+    connectionId ? selectRuntimeAwareSshStatus(state, runtimeEnvironmentId, connectionId) : null
   )
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,25 +81,36 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     null
   )
 
-  const connectionId = repo.connectionId ?? undefined
   const isWindows = isWindowsUserAgent()
-  const targetWorktree = useMemo(() => {
+  const targetWorktree = useMemo((): Pick<Worktree, 'id' | 'path' | 'hostId'> => {
     if (activeWorktreeId && getRepoIdFromWorktreeId(activeWorktreeId) === repo.id) {
-      return (
-        worktreesForRepo.find((worktree) => worktree.id === activeWorktreeId) ?? {
-          id: activeWorktreeId,
-          path: repo.path
-        }
-      )
+      const active = worktreesForRepo.find((worktree) => worktree.id === activeWorktreeId)
+      if (active) {
+        return active
+      }
+      // Another host’s active row cannot lend this repo its worktree ID.
+      if (!allWorktreesForRepo.some((worktree) => worktree.id === activeWorktreeId)) {
+        return { id: activeWorktreeId, path: repo.path }
+      }
     }
     return (
       worktreesForRepo.find((worktree) => worktree.isMainWorktree) ??
       worktreesForRepo.find((worktree) => worktree.path === repo.path) ??
-      worktreesForRepo[0] ?? { id: `${repo.id}::${repo.path}`, path: repo.path }
+      worktreesForRepo[0] ?? { id: composeWorktreeId(repo.id, repo.path), path: repo.path }
     )
-  }, [activeWorktreeId, repo.id, repo.path, worktreesForRepo])
+  }, [activeWorktreeId, allWorktreesForRepo, repo.id, repo.path, worktreesForRepo])
   const targetWorktreeId = targetWorktree.id
   const targetRootPath = targetWorktree.path
+  const targetHostId = getWorktreeExecutionHostId(targetWorktree, repo)
+  const fileContext = useMemo(
+    (): RuntimeFileOperationArgs => ({
+      target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
+      worktreeId: targetWorktreeId,
+      worktreePath: targetRootPath,
+      connectionId
+    }),
+    [connectionId, runtimeEnvironmentId, targetRootPath, targetWorktreeId]
+  )
   const detectedCount = useMemo(() => configs.filter((config) => config.exists).length, [configs])
   const inspectionUnavailable = inspectionUnavailableMessage !== null
   const visibleConfigs = useMemo(
@@ -90,15 +131,12 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   )
   const missingInspections = useMemo(
     () =>
-      MCP_CONFIG_CANDIDATES.map(
-        (candidate): LoadedMcpConfigInspection => ({
-          ...inspectMcpConfigContent(candidate, null),
-          absolutePath: joinPath(targetRootPath, candidate.relativePath)
-        })
-      ),
+      MCP_CONFIG_CANDIDATES.map((candidate): LoadedMcpConfigInspection => ({
+        ...inspectMcpConfigContent(candidate, null),
+        absolutePath: joinPath(targetRootPath, candidate.relativePath)
+      })),
     [targetRootPath]
   )
-  const serverCount = useMemo(() => countServers(configs), [configs])
   const canCreateStarter = detectedCount === 0 && !inspectionUnavailable
 
   const loadConfigs = useCallback(async (): Promise<void> => {
@@ -117,7 +155,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         return
       }
 
-      if (!connectionId && !canInspectLocalMcpConfigRoot(targetRootPath, isWindows)) {
+      const isDesktopPath = !connectionId && !runtimeEnvironmentId
+      if (isDesktopPath && !canInspectLocalMcpConfigRoot(targetRootPath, isWindows)) {
         if (mountedRef.current) {
           setConfigs(missingInspections)
           setInspectionUnavailableMessage('This workspace path is not available from this host.')
@@ -125,7 +164,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         return
       }
 
-      if (!connectionId && !(await window.api.shell.pathExists(targetRootPath))) {
+      if (isDesktopPath && !(await window.api.shell.pathExists(targetRootPath))) {
         if (mountedRef.current) {
           setConfigs(missingInspections)
           setInspectionUnavailableMessage('This workspace path is not available on disk.')
@@ -133,7 +172,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         return
       }
 
-      const next = await loadMcpConfigInspections(targetRootPath, connectionId)
+      const next = await loadMcpConfigInspections(targetRootPath, fileContext)
       if (mountedRef.current) {
         setConfigs(next)
       }
@@ -149,7 +188,16 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         setLoading(false)
       }
     }
-  }, [connectionId, isWindows, missingInspections, mountedRef, sshConnectionStatus, targetRootPath])
+  }, [
+    connectionId,
+    fileContext,
+    isWindows,
+    missingInspections,
+    mountedRef,
+    runtimeEnvironmentId,
+    sshConnectionStatus,
+    targetRootPath
+  ])
 
   const clearCreateConfirmResetTimer = useCallback((): void => {
     if (createConfirmResetTimerRef.current !== null) {
@@ -164,7 +212,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   }, [clearCreateConfirmResetTimer, loadConfigs])
 
   const handleOpen = (config: LoadedMcpConfigInspection): void => {
-    setActiveWorktree(targetWorktreeId)
+    setActiveWorktree(targetWorktreeId, targetHostId)
     const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)
     openFile(
       {
@@ -172,9 +220,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         relativePath: config.candidate.relativePath,
         worktreeId: targetWorktreeId,
         language: 'json',
+        runtimeEnvironmentId,
         mode: 'edit'
       },
-      { targetGroupId }
+      { targetGroupId, suppressActiveRuntimeFallback: runtimeEnvironmentId === null }
     )
     setActiveView('terminal')
   }
@@ -195,22 +244,28 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     const target = joinPath(targetRootPath, '.mcp.json')
     try {
       const sshExpectation = connectionId
-        ? captureDirectSshMutationExpectation(useAppStore.getState(), connectionId)
+        ? captureDirectSshMutationExpectation(
+            useAppStore.getState(),
+            connectionId,
+            runtimeEnvironmentId
+          )
         : {}
-      // Why: v1 only creates the root workspace config so we do not need to
-      // guess per-agent directory layouts or mutate agent-specific files.
-      await window.api.fs.writeFile({
-        filePath: target,
-        content: MCP_STARTER_CONFIG,
-        connectionId,
-        ...sshExpectation
-      })
+      // Create only root workspace config; avoid agent-specific layouts and refuse to overwrite files created since the listing.
+      assertFileWriteApplied(
+        await writeRuntimeFile(
+          { ...fileContext, ...sshExpectation },
+          target,
+          MCP_STARTER_CONFIG,
+          undefined,
+          missingOrIdenticalPrecondition(MCP_STARTER_CONFIG)
+        )
+      )
       clearCreateConfirmResetTimer()
       if (mountedRef.current) {
         setCreateConfirm(false)
       }
       await loadConfigs()
-      setActiveWorktree(targetWorktreeId)
+      setActiveWorktree(targetWorktreeId, targetHostId)
       const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)
       openFile(
         {
@@ -218,9 +273,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           relativePath: '.mcp.json',
           worktreeId: targetWorktreeId,
           language: 'json',
+          runtimeEnvironmentId,
           mode: 'edit'
         },
-        { targetGroupId }
+        { targetGroupId, suppressActiveRuntimeFallback: runtimeEnvironmentId === null }
       )
       setActiveView('terminal')
       toast.success(
@@ -250,7 +306,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
               'Inspect MCP server definitions that agents can use while working in this repo.'
             )}
           </p>
-          {repo.connectionId ? (
+          {connectionId ? (
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.McpConfigSection.6bac9ddfc6',
@@ -299,13 +355,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
       <div className="rounded-md border border-border/50 bg-muted/20">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>
-            {detectedCount}{' '}
-            {translate('auto.components.settings.McpConfigSection.251b96564a', 'detected ·')}{' '}
-            {serverCount}{' '}
-            {translate('auto.components.settings.McpConfigSection.3b224167ff', 'server')}
-            {serverCount === 1 ? '' : 's'}
-          </span>
+          <span>{formatMcpConfigSummary(configs)}</span>
           {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
         </div>
         <div>

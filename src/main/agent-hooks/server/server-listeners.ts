@@ -1,0 +1,312 @@
+import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
+import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
+import type {
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload
+} from '../../../shared/agent-status-types'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { HookTransportInterferenceReport } from '../../../shared/agent-hook-transport-interference'
+import {
+  getLegacyStatusListingOrder,
+  type HookListenerState
+} from '../../../shared/agent-hook-listener/listener-state'
+import type {
+  AgentHookAuthorityEvidence,
+  AgentHookProviderSessionIdentity,
+  AgentHookStatusChangeEntry,
+  AgentHookStatusFreshnessObservation,
+  EnrichedAgentHookEventPayload,
+  StatusDropListener
+} from './server-types'
+import { toAgentStatusIpcPayload } from './server-status-identity'
+import { AgentHookServerState } from './server-state'
+import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
+import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import { PaneTimers } from './program-status/pane-timers'
+import { ProgramStatusFacetStore } from './program-status/facet-store'
+
+// Unassigned rows sort after the listing counter, which starts at 1.
+const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
+
+export abstract class AgentHookServerListeners extends AgentHookServerState {
+  protected statusChangeNotificationVersion = 0
+  protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
+
+  setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
+    this.cliWriterExecutionMatches = cliWriterExecutionMatcher(...args)
+  }
+  protected readonly programStatusFacets = new ProgramStatusFacetStore()
+  /** Retry yielded OSC 7501 reports when hook precedence expires; programs may not resend. */
+  protected readonly hookSilenceRechecks = new PaneTimers()
+  /** Coalesce facet-only ticks that arrive at PTY chunk rate. */
+  protected readonly programStatusFacetRepublishes = new PaneTimers()
+
+  setStartupPromptClaimListener(
+    listener: (body: unknown) => boolean | 'pending',
+    clear: () => void
+  ): void {
+    this.onStartupPromptClaim = listener
+    this.clearStartupPromptClaims = clear
+  }
+
+  protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {
+    const enriched = this.programStatusFacets.stitch(row)
+    this.onAgentStatus?.(enriched)
+    for (const listener of this.enrichedStatusListeners) {
+      try {
+        listener(enriched)
+      } catch (err) {
+        console.error('[agent-hooks] enriched status listener threw', err)
+      }
+    }
+  }
+
+  getCanonicalStatusSnapshot() {
+    return this.canonicalStatusStore.getSnapshot()
+  }
+
+  _resetCanonicalStatusForTests(): void {
+    this.resetCanonicalStatus()
+  }
+
+  private combinedStatusEntries(): EnrichedAgentHookEventPayload[] {
+    const rows: { entry: EnrichedAgentHookEventPayload; order: number }[] = []
+    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+      rows.push({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
+        entry: this.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload),
+        order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
+      })
+    }
+    for (const parent of this.canonicalStatusStore.getParents()) {
+      if (!parent.status || isTmuxInnerSubject(parent.subject)) {
+        continue
+      }
+      rows.push({
+        entry: structuredStatusLegacyEvent(parent.status),
+        order:
+          this.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
+          UNORDERED_STATUS_ROW
+      })
+    }
+    return rows.sort((a, b) => a.order - b.order).map(({ entry }) => entry)
+  }
+  /** Report repeated hook-body truncation once per process; fail-open handling otherwise hides it (#11217). */
+  setTransportInterferenceListener(
+    listener: ((report: HookTransportInterferenceReport) => void) | null
+  ): void {
+    this.onTransportInterference = listener
+  }
+
+  setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
+    this.onAgentStatus = listener
+    if (!listener) {
+      return
+    }
+    // One failing replay subscriber must not starve other panes.
+    for (const payload of this.combinedStatusEntries()) {
+      try {
+        listener({ ...payload, isReplay: true })
+      } catch (err) {
+        console.error('[agent-hooks] replay listener threw', err)
+      }
+    }
+  }
+
+  // Claude statusline carries usage windows for RateLimitService, not agent status.
+  setClaudeStatusLineListener(
+    listener: ((event: ClaudeStatusLineRateLimits) => void) | null
+  ): void {
+    this.onClaudeStatusLine = listener
+  }
+
+  subscribeStatusChanges(listener: (statuses: AgentHookStatusChangeEntry[]) => void): () => void {
+    this.statusChangeListeners.add(listener)
+    return () => {
+      this.statusChangeListeners.delete(listener)
+    }
+  }
+
+  /** Accepted duplicate evidence renews leases without becoming a semantic row mutation. */
+  subscribeStatusFreshness(
+    listener: (status: AgentHookStatusFreshnessObservation) => void
+  ): () => void {
+    this.statusFreshnessListeners.add(listener)
+    return () => {
+      this.statusFreshnessListeners.delete(listener)
+    }
+  }
+
+  protected emitStatusFreshnessObservation(status: AgentHookStatusFreshnessObservation): void {
+    for (const listener of this.statusFreshnessListeners) {
+      try {
+        listener(status)
+      } catch (err) {
+        console.error('[agent-hooks] status-freshness listener threw', err)
+      }
+    }
+  }
+
+  subscribeProviderSessionChanges(
+    listener: (providerSessions: AgentHookProviderSessionIdentity[]) => void
+  ): () => void {
+    this.providerSessionChangeListeners.add(listener)
+    return () => {
+      this.providerSessionChangeListeners.delete(listener)
+    }
+  }
+
+  /** Include user-dismissed rows, which bypass pane-clear events but must still retire pane-owned UI. */
+  subscribeStatusDrop(listener: StatusDropListener): () => void {
+    this.statusDropListeners.add(listener)
+    return () => {
+      this.statusDropListeners.delete(listener)
+    }
+  }
+
+  protected emitStatusDropped(paneKey: string): void {
+    for (const listener of this.statusDropListeners) {
+      try {
+        listener(paneKey)
+      } catch (err) {
+        console.error('[agent-hooks] status-drop listener threw', err)
+      }
+    }
+  }
+
+  /** Enriched changes only; no replay. */
+  subscribeEnrichedStatus(listener: (payload: EnrichedAgentHookEventPayload) => void): () => void {
+    this.enrichedStatusListeners.add(listener)
+    return () => {
+      this.enrichedStatusListeners.delete(listener)
+    }
+  }
+
+  /** Replay is durable evidence from a prior runtime, not a live observation. */
+  protected withdrawReplayObservation(paneKey: string): void {
+    if (this.runtimeObservedStatusPaneKeys.delete(paneKey)) {
+      this.notifyStatusChangeListeners()
+    }
+  }
+
+  setPaneStatusClearListener(listener: ((clear: AgentStatusClearIpcPayload) => void) | null): void {
+    this.onPaneStatusCleared = listener
+  }
+
+  /** Survives window teardown and works under headless serve, unlike the window's single listener slot. */
+  subscribePaneStatusClear(listener: (clear: AgentStatusClearIpcPayload) => void): () => void {
+    this.paneStatusClearListeners.add(listener)
+    return () => {
+      this.paneStatusClearListeners.delete(listener)
+    }
+  }
+
+  protected emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
+    this.onPaneStatusCleared?.(clear)
+    for (const listener of this.paneStatusClearListeners) {
+      // One throwing subscriber must not interrupt teardown for the others.
+      try {
+        listener(clear)
+      } catch (err) {
+        console.error('[agent-hooks] pane-status-clear listener threw', err)
+      }
+    }
+  }
+
+  getStatusSnapshot(): AgentStatusIpcPayload[] {
+    return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
+  }
+
+  /** Include metadata-only provider identities. */
+  getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
+    return this.buildStatusChangeNotification().providerSessions
+  }
+
+  getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
+    const legacy = this.state.lastStatusByPaneKey.get(paneKey)
+    if (legacy) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+      const row = legacy as EnrichedAgentHookEventPayload
+      return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
+    }
+    const rows: AgentStatusIpcPayload[] = []
+    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
+      const status = this.canonicalStatusStore.getParent(subject)?.status
+      if (status) {
+        rows.push(status)
+      }
+    }
+    return rows
+  }
+
+  getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {
+    return this.hydratedAuthorityCommitments
+  }
+
+  getCurrentAuthorityObservations(): readonly AgentHookAuthorityEvidence[] {
+    return Object.freeze(
+      Array.from(this.currentAuthorityObservations.values(), (entry) => Object.freeze({ ...entry }))
+    )
+  }
+
+  protected buildStatusChangeNotification(): {
+    statuses: AgentHookStatusChangeEntry[]
+    providerSessions: AgentHookProviderSessionIdentity[]
+  } {
+    const statuses: AgentHookStatusChangeEntry[] = []
+    const providerSessions: AgentHookProviderSessionIdentity[] = []
+    for (const enriched of this.combinedStatusEntries()) {
+      const paneKey = enriched.paneKey
+      if (enriched.providerSession) {
+        providerSessions.push({
+          paneKey,
+          sessionId: enriched.providerSession.id,
+          ...(enriched.providerSession.transcriptPath
+            ? { transcriptPath: enriched.providerSession.transcriptPath }
+            : {}),
+          ...(enriched.worktreeId ? { worktreeId: enriched.worktreeId } : {})
+        })
+      }
+      if (!enriched.providerSessionOnly) {
+        statuses.push({
+          paneKey,
+          state: enriched.payload.state,
+          receivedAt: enriched.receivedAt,
+          observedInCurrentRuntime:
+            Boolean(enriched.structuredHost) || this.runtimeObservedStatusPaneKeys.has(paneKey)
+        })
+      }
+    }
+    return { statuses, providerSessions }
+  }
+
+  protected notifyStatusChangeListeners(): void {
+    this.statusChangeNotificationVersion++
+    if (this.statusChangeListeners.size === 0 && this.providerSessionChangeListeners.size === 0) {
+      return
+    }
+    const { statuses, providerSessions } = this.buildStatusChangeNotification()
+    for (const listener of this.statusChangeListeners) {
+      try {
+        listener(statuses)
+      } catch (err) {
+        console.error('[agent-hooks] status-change listener threw', err)
+      }
+    }
+    for (const listener of this.providerSessionChangeListeners) {
+      try {
+        listener(providerSessions)
+      } catch (err) {
+        console.error('[agent-hooks] provider-session listener threw', err)
+      }
+    }
+  }
+
+  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
+    return this.buildStatusChangeNotification().statuses
+  }
+
+  _getStateForTests(): HookListenerState {
+    return this.state
+  }
+}

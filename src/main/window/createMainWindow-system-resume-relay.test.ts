@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -37,6 +34,7 @@ describe('createMainWindow', () => {
         on: vi.fn(),
         setZoomLevel: vi.fn(),
         setBackgroundThrottling: vi.fn(),
+        setWebRTCIPHandlingPolicy: vi.fn(),
         invalidate: vi.fn(),
         setWindowOpenHandler: vi.fn(),
         send: vi.fn(),
@@ -56,8 +54,8 @@ describe('createMainWindow', () => {
         setSize: vi.fn(),
         maximize: vi.fn(),
         show: vi.fn(),
-        loadFile: vi.fn(),
-        loadURL: vi.fn()
+        loadFile: vi.fn(() => Promise.resolve()),
+        loadURL: vi.fn(() => Promise.resolve())
       }
       browserWindowMock.mockImplementation(function () {
         return instance

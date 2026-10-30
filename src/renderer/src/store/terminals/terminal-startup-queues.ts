@@ -10,8 +10,6 @@ export function createTerminalStartupQueueActions(
   | 'queueTabInitialCwd'
   | 'consumeTabInitialCwd'
   | 'consumeTabStartupCommand'
-  | 'queueTabSetupSplit'
-  | 'consumeTabSetupSplit'
   | 'queueTabIssueCommandSplit'
   | 'consumeTabIssueCommandSplit'
   | 'consumePendingSnapshot'
@@ -53,35 +51,20 @@ export function createTerminalStartupQueueActions(
       })
       return pending
     },
-    consumeTabStartupCommand: (tabId) => {
+    consumeTabStartupCommand: (tabId, expected) => {
       const pending = get().pendingStartupByTabId[tabId]
-      if (!pending) {
+      // Why identity, not equality: the one-shot settle must only spend the exact captured
+      // startup; a newer queued command for the same tab is someone else's to consume.
+      if (!pending || (expected && pending !== expected)) {
         return null
       }
       set((s) => {
+        if (s.pendingStartupByTabId[tabId] !== pending) {
+          return s
+        }
         const next = { ...s.pendingStartupByTabId }
         delete next[tabId]
         return { pendingStartupByTabId: next }
-      })
-      return pending
-    },
-    queueTabSetupSplit: (tabId, startup) => {
-      set((s) => ({
-        pendingSetupSplitByTabId: {
-          ...s.pendingSetupSplitByTabId,
-          [tabId]: startup
-        }
-      }))
-    },
-    consumeTabSetupSplit: (tabId) => {
-      const pending = get().pendingSetupSplitByTabId[tabId]
-      if (!pending) {
-        return null
-      }
-      set((s) => {
-        const next = { ...s.pendingSetupSplitByTabId }
-        delete next[tabId]
-        return { pendingSetupSplitByTabId: next }
       })
       return pending
     },

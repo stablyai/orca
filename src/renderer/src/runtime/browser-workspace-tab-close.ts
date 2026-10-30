@@ -12,13 +12,10 @@ import {
   planBrowserWorkspaceTabClose,
   type BrowserWorkspaceTabClosePlan
 } from './browser-workspace-tab-close-plan'
-import { closeWebRuntimeSessionTab, isWebRuntimeSessionActive } from './web-runtime-session'
+import { closeWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 
-/**
- * The one place a browser workspace's tab is closed on the runtimes that own it. Every close entry
- * point (tab strip, tab-group menu, bulk close) goes through here so none of them can grow its own
- * ownership policy — a divergent one silently skipped the pageless host mirror and left the X inert.
- */
+/** All user close paths share runtime ownership policy here; divergent strip/menu/bulk handling once skipped pageless mirrors and left the X inert. */
 export function closeBrowserWorkspaceTabOnHosts({
   state,
   worktreeId,
@@ -44,17 +41,12 @@ export function closeBrowserWorkspaceTabOnHosts({
     focusedEnvironmentId,
     isEnvironmentActive: isWebRuntimeSessionActive
   })
-  // Why here: chrome the user was mid-way through — a half-typed URL, a URL submitted against a
-  // page the host had not minted yet — is parked outside React under the page id, waiting for the
-  // pane that owns it, and this funnel is where every user-driven close of that pane lands. The two
-  // teardowns that bypass the funnel by design (the staged-create rollback, shutdownWorktreeBrowsers)
-  // leave the entries to the registries' own bounds: a microtask fence, a TTL, and unique page ids.
+  // Every user close releases parked half-typed/submitted URLs. Staged rollback and shutdownWorktreeBrowsers bypass this funnel and rely on registry microtask/TTL/unique-ID bounds.
   for (const page of state.browserPagesByWorkspace[workspaceId] ?? []) {
     clearBrowserAddressBarEditSession(page.id)
     clearBrowserPageDeferredNavigation(page.id)
   }
-  // Collected before anything tears down: the handles this reads are exactly what the teardown
-  // drops, so a later read would see a workspace with no owners and record nothing.
+  // Capture owners before teardown drops their handles or the durable close intent loses its targets.
   const pending = collectPendingClientHostedBrowserCloses(state, {
     workspaceId,
     worktreeId,
@@ -64,9 +56,7 @@ export function closeBrowserWorkspaceTabOnHosts({
         : getBrowserWorkspaceRemoteOwnerEnvironmentIds(state, workspaceId)
   })
   if (plan.closesLocally) {
-    // Why: this renderer only promotes itself to owner when every owning host is unreachable, so
-    // the close is one none of them heard. The runtime persists client-hosted pages, so without a
-    // durable intent its next start faithfully restores the tab the user just dismissed.
+    // Local teardown with all owners unreachable needs durable intent: runtimes persist client-hosted pages and otherwise resurrect the dismissed tab on restart.
     state.recordClientHostedBrowserCloseIntents(pending)
     return plan
   }
@@ -76,8 +66,7 @@ export function closeBrowserWorkspaceTabOnHosts({
     workspaceId,
     visibleTabId,
     pending,
-    // Captured rather than re-read: store actions are stable, and the settle resolves long after
-    // this snapshot stops describing the tab.
+    // Capture stable actions now; settlement outlives this tab snapshot.
     recordCloseIntents: state.recordClientHostedBrowserCloseIntents
   })
   return plan
@@ -106,10 +95,7 @@ async function settleBrowserWorkspaceTabCloseOnHosts(args: {
     outcomes.filter((entry) => entry.outcome === 'failed').map((entry) => entry.environmentId)
   )
   args.recordCloseIntents(args.pending.filter((close) => unheard.has(close.environmentId)))
-  // Why every owner and not any: a host that still knows the page removes this mirror through tab
-  // sync, and tearing down here too would race that retraction. Only when all of them answer that
-  // the tab does not exist is there nobody left to do it — the case the connected-owner branch
-  // could not see, which left the X inert against a host that had forgotten the page.
+  // Remove locally only when every owner definitively forgot the tab; any remaining owner retracts through sync, and local teardown would race it.
   if (
     !args.plan.removesVisibleTab &&
     outcomes.length > 0 &&
@@ -124,12 +110,10 @@ function tearDownBrowserWorkspaceTabLocally(worktreeId: string, workspaceId: str
   if (!(state.browserTabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === workspaceId)) {
     return
   }
-  // Why before the teardown: closeBrowserTab announces the MRU page selection, and a guest torn
-  // down first leaves the fallback picking registration order instead (#16306).
+  // Close before guest teardown so MRU fallback uses announced selection, not registration order (#16306).
   state.closeBrowserTab(workspaceId)
   destroyWorkspaceWebviews(state.browserPagesByWorkspace, workspaceId)
-  // Read after: closeBrowserTab normally removes the mirror itself, and looking it up again is what
-  // keeps this from closing whatever tab later took its place.
+  // Re-read after closeBrowserTab: it usually removes the mirror, and a later occupant must not be closed.
   const mirroredTab = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
     (candidate) => candidate.contentType === 'browser' && candidate.entityId === workspaceId
   )

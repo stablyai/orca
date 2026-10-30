@@ -13,10 +13,12 @@ export type DiffSectionItemProps = {
     terminalFontSize?: number
     terminalFontFamily?: string
     diffWordWrap?: boolean
+    diffShowWhitespace?: boolean
   } | null
   sectionHeight: number | undefined
   worktreeId?: string
   loadSection: (index: number) => void
+  loadDeferredSection?: (index: number) => void
   retrySection: (index: number) => void
   toggleSection: (index: number) => void
   openSection: (index: number) => void
@@ -34,5 +36,6 @@ export type DiffSectionItemProps = {
   setSectionHeights: Dispatch<SetStateAction<Record<number, number>>>
   setSections: Dispatch<SetStateAction<DiffSection[]>>
   modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
-  handleSectionSaveRef: MutableRefObject<(index: number) => Promise<void>>
+  /** `overwrite` comes only from the section's conflict bar. */
+  handleSectionSaveRef: MutableRefObject<(index: number, mode?: 'overwrite') => Promise<void>>
 }

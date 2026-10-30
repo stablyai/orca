@@ -1,7 +1,6 @@
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comment-resolution'
-import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-acknowledgement'
 import type { ChecksPanelReviewDataState } from './use-checks-panel-review-data'
 import type { ChecksPanelCommentMutationState } from './use-checks-panel-comment-mutations'
 import type { ChecksPanelEntryRefreshAndTitleActionsState } from './use-checks-panel-entry-refresh-and-title-actions'
@@ -19,10 +18,12 @@ export type ChecksPanelActiveContentModel = Pick<
   | 'activeWorktreeId'
   | 'agentComposerState'
   | 'checks'
+  | 'checksError'
   | 'checksLoading'
   | 'claimedCommentResolutionRef'
   | 'commentResolutionLaunchAcceptedRef'
   | 'comments'
+  | 'commentsError'
   | 'commentsLoading'
   | 'commentsSelectionClearRequest'
   | 'conflictDetailsRefreshing'
@@ -46,7 +47,7 @@ export type ChecksPanelActiveContentModel = Pick<
     | 'activeConflictReview'
     | 'activeGitLabReview'
     | 'activeReview'
-    | 'linkedPR'
+    | 'linkedGitLabMR'
     | 'pr'
     | 'prRefreshState'
     | 'setChecksPanelContentRef'
@@ -54,16 +55,11 @@ export type ChecksPanelActiveContentModel = Pick<
   Pick<
     ChecksPanelCommentResolutionState,
     | 'aiActionDisabledReason'
+    | 'fixChecksDisabledReason'
     | 'canTargetPRComments'
     | 'commentsDisabledReason'
     | 'handleResolve'
     | 'resolveCommentsWithAIDisabledReason'
-  > &
-  Pick<
-    ChecksPanelAiAcknowledgementState,
-    | 'consumeClaimedCommentResolutionAfterDeliveryRef'
-    | 'handleLaunchAborted'
-    | 'handleLaunchAccepted'
   > &
   Pick<ChecksPanelReviewDataState, 'getGitLabProjectRef' | 'handleLoadCheckDetails'> &
   Pick<
@@ -85,10 +81,10 @@ export type ChecksPanelActiveContentModel = Pick<
   Pick<
     ChecksPanelCheckAndReviewActionsState,
     | 'handleFixChecksWithAI'
-    | 'handleLinkAnotherPullRequest'
+    | 'handleLinkAnotherReview'
     | 'handleOpenPR'
     | 'handleOpenStackPR'
-    | 'handleUnlinkPullRequest'
+    | 'handleUnlinkReview'
   > &
   Pick<ChecksPanelRefreshState, 'handleRefresh'> &
   Pick<ChecksPanelAiQueueState, 'handleResolveCommentsWithAI' | 'handleResolveConflictsWithAI'> &

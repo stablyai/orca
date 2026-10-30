@@ -11,15 +11,18 @@ import { registerRepoUpdateHandler } from './repos/repo-update-handler'
 import { registerSparsePresetHandlers } from './repos/sparse-preset-handlers'
 import { registerRepoFolderPickerHandlers } from './repos/repo-folder-picker-handlers'
 import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
-import { registerRepoGitUsernameHandler } from './repos/repo-git-username-handler'
 import { registerBaseRefQueryHandlers } from './repos/base-ref-query-handlers'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
-export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
-  // Remove previously registered handlers so we can re-register on macOS app re-activation (new window).
+export function registerRepoHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: OrcaRuntimeService
+): void {
+  // macOS window recreation re-registers these handlers.
   ipcMain.removeHandler('repos:list')
-  ipcMain.removeHandler('repos:listForExecutionHost')
+  ipcMain.removeHandler('repos:listWslMoved')
   ipcMain.removeHandler('repos:add')
-  ipcMain.removeHandler('repos:remove')
   ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:reorderForHost')
@@ -49,30 +52,25 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:pickDirectory')
   ipcMain.removeHandler('repos:clone')
   ipcMain.removeHandler('repos:cloneAbort')
-  ipcMain.removeHandler('repos:cloneRemote')
   ipcMain.removeHandler('repos:isGitAvailable')
   ipcMain.removeHandler('repos:getDefaultCreateProjectParent')
-  ipcMain.removeHandler('repos:getGitUsername')
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
   ipcMain.removeHandler('repos:searchBaseRefDetails')
-  ipcMain.removeHandler('repos:addRemote')
   ipcMain.removeHandler('repos:create')
-  ipcMain.removeHandler('repos:createRemote')
   ipcMain.removeHandler('sparsePresets:list')
   ipcMain.removeHandler('sparsePresets:save')
   ipcMain.removeHandler('sparsePresets:remove')
 
-  registerRepoCatalogHandlers(mainWindow, store)
+  registerRepoCatalogHandlers(mainWindow, store, runtime)
   registerProjectHostSetupHandlers(mainWindow, store)
   registerRepoCreationHandlers(mainWindow, store)
   registerProjectGroupHandlers(mainWindow, store)
-  registerFolderWorkspaceHandlers(mainWindow, store)
+  registerFolderWorkspaceHandlers(mainWindow, store, runtime)
   registerNestedRepoImportHandler(mainWindow, store)
   registerRepoUpdateHandler(mainWindow, store)
   registerSparsePresetHandlers(mainWindow, store)
   registerRepoFolderPickerHandlers(mainWindow)
   registerRepoCloneHandlers(mainWindow, store)
-  registerRepoGitUsernameHandler(store)
   registerBaseRefQueryHandlers(store)
 }

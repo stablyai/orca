@@ -87,15 +87,14 @@ export function GitHistoryPanel({
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
-  // Tracks commits whose files have been loaded (or are in flight) so re-expanding
-  // never refetches; an entry is cleared on error to allow a retry.
+  // Avoid duplicate/in-flight expansion fetches; clear errors to permit retry.
   const loadedCommitsRef = useRef<{
     result: GitHistoryResult | undefined
     ids: Set<string>
-  }>({ result, ids: new Set() })
+  }>(undefined!)
+  loadedCommitsRef.current ??= { result, ids: new Set() }
 
-  // A new history result can reorder or replace commits, so drop any expansion
-  // and cached file lists rather than risk showing stale files under a row.
+  // New history can replace rows; discard expansions and cached files to avoid stale associations.
   const [historyResult, setHistoryResult] = useState(result)
   if (historyResult !== result) {
     setHistoryResult(result)
@@ -116,8 +115,7 @@ export function GitHistoryPanel({
         }
         return next
       })
-      // Why: clear the in-flight lock in the click handler, not during render —
-      // a new history result can reuse commit ids with different file lists.
+      // Reset the in-flight lock in the click handler, not render; new results can reuse commit IDs with different files.
       if (loadedCommitsRef.current.result !== result) {
         loadedCommitsRef.current = { result, ids: new Set() }
       }

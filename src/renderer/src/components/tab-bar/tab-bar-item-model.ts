@@ -1,11 +1,18 @@
+import {
+  readStructuredChatTabSavedName,
+  projectedStructuredChatTabSavedName,
+  type StructuredChatTabNames
+} from '@/runtime/structured-chat-tab-name'
+import type { AppState } from '@/store/types'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { OpenFile } from '../../store/slices/editor'
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { normalizeRelativePath } from '@/lib/path'
-import { getBrowserTabLabel } from './BrowserTab'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { tabItemLabel } from './tab-bar-item-label'
 import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
@@ -40,18 +47,43 @@ export type TabBarItem =
       isPinned: boolean
       data: Tab
     }
+  | {
+      type: 'agent-session'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab & { contentType: 'agent-session' }
+    }
 
-export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolean): string {
-  if (item.type === 'terminal') {
-    return resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
+/** The terminal tab as the strip shows it: its title resolved against the generated-titles setting. */
+export function resolveTerminalItemTab(
+  tab: TerminalTab & { unifiedTabId?: string },
+  generatedTitlesEnabled: boolean
+): TerminalTab & { unifiedTabId?: string } {
+  return { ...tab, title: resolveTerminalTabTitle(tab, generatedTitlesEnabled, tab.title) }
+}
+
+export function resolveEditorTabGitStatus(
+  file: Pick<OpenFile, 'mode' | 'relativePath'>,
+  statusByRelativePath: Map<string, GitFileStatus>
+): GitFileStatus | null {
+  // Why: a virtual tab's relativePath is its title, which can collide with a real file's path.
+  if (file.relativePath === 'All Changes' || isVirtualEditorFile(file)) {
+    return null
   }
-  if (item.type === 'browser') {
-    return getBrowserTabLabel(item.data)
-  }
-  if (item.type === 'simulator') {
-    return item.data.label || 'Mobile Emulator'
-  }
-  return getEditorDisplayLabel(item.data)
+  return statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null
+}
+
+export function getTabDragLabel(
+  item: TabBarItem,
+  generatedTitlesEnabled: boolean,
+  state: AppState
+): string {
+  return tabItemLabel(
+    item,
+    generatedTitlesEnabled,
+    item.type === 'agent-session' ? readStructuredChatTabSavedName(item.data, state) : null
+  )
 }
 
 export function getTabLayoutSignature(
@@ -59,14 +91,20 @@ export function getTabLayoutSignature(
   {
     generatedTitlesEnabled,
     isExpanded,
-    status
+    status,
+    chatNames
   }: {
     generatedTitlesEnabled: boolean
     isExpanded: boolean
     status?: string | null
+    chatNames: StructuredChatTabNames
   }
 ): string {
-  const label = getTabDragLabel(item, generatedTitlesEnabled)
+  const label = tabItemLabel(
+    item,
+    generatedTitlesEnabled,
+    item.type === 'agent-session' ? projectedStructuredChatTabSavedName(item.data, chatNames) : null
+  )
   if (item.type === 'terminal') {
     return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
   }
@@ -99,9 +137,11 @@ export function buildOrderedTabItems({
   editorFileIds,
   browserTabIds,
   simulatorTabIds,
+  agentSessionTabIds,
   terminalMap,
   editorMap,
   browserMap,
+  agentSessionMap,
   unifiedTabByVisibleId
 }: {
   tabBarOrder?: string[]
@@ -109,9 +149,11 @@ export function buildOrderedTabItems({
   editorFileIds: string[]
   browserTabIds: string[]
   simulatorTabIds: string[]
+  agentSessionTabIds: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
   browserMap: Map<string, BrowserTabState & { tabId?: string }>
+  agentSessionMap: Map<string, Tab & { contentType: 'agent-session' }>
   unifiedTabByVisibleId: Map<string, Tab>
 }): TabBarItem[] {
   const ids = reconcileTabOrder(
@@ -119,7 +161,8 @@ export function buildOrderedTabItems({
     terminalIds,
     editorFileIds,
     browserTabIds,
-    simulatorTabIds
+    simulatorTabIds,
+    agentSessionTabIds
   )
   const items: TabBarItem[] = []
   for (const id of ids) {
@@ -168,6 +211,17 @@ export function buildOrderedTabItems({
         isPinned: simulatorTab.isPinned === true,
         data: simulatorTab
       })
+      continue
+    }
+    const agentSession = agentSessionMap.get(id)
+    if (agentSession) {
+      items.push({
+        type: 'agent-session',
+        id,
+        unifiedTabId: agentSession.id,
+        isPinned: agentSession.isPinned === true,
+        data: agentSession
+      })
     }
   }
   return items
@@ -210,6 +264,10 @@ export function findActiveVisibleTabId(
     if (item.type === 'simulator') {
       return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId
     }
+    if (item.type === 'agent-session') {
+      // Structured-chat callers pass their unified tab ID; the background terminal’s activeTabId cannot identify this item.
+      return active.activeTabType === 'agent-session' && item.id === active.activeTabId
+    }
     return (
       (active.activeTabType === 'editor' || active.activeTabType === 'simulator') &&
       active.activeFileId === item.id
@@ -222,12 +280,14 @@ export function buildTabStripLayoutKey(
   items: readonly TabBarItem[],
   generatedTitlesEnabled: boolean,
   expandedPaneByTabId: Record<string, boolean>,
-  statusByRelativePath: Map<string, string>
+  statusByRelativePath: Map<string, string>,
+  chatNames: StructuredChatTabNames
 ): string {
   return items
     .map((item) =>
       getTabLayoutSignature(item, {
         generatedTitlesEnabled,
+        chatNames,
         isExpanded: expandedPaneByTabId[item.id] === true,
         status:
           item.type === 'editor'

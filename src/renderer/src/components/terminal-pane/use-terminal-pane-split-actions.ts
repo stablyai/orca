@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
@@ -26,6 +26,7 @@ type UseTerminalPaneSplitActionsDeps = {
   paneCwdRef: React.RefObject<PaneCwdMap>
   contextPaneIdRef: React.RefObject<number | null>
   tabId: string
+  worktreeId: string
   fallbackCwd: string
   resolveMenuPane: () => ManagedPane | null
 }
@@ -41,6 +42,7 @@ export function useTerminalPaneSplitActions({
   paneCwdRef,
   contextPaneIdRef,
   tabId,
+  worktreeId,
   fallbackCwd,
   resolveMenuPane
 }: UseTerminalPaneSplitActionsDeps): TerminalPaneSplitActions {
@@ -55,6 +57,8 @@ export function useTerminalPaneSplitActions({
         return
       }
       splitTerminalPaneWithInheritedCwd({
+        worktreeId,
+        tabId,
         manager,
         getManager: () => managerRef.current,
         paneTransports: paneTransportsRef.current,
@@ -65,7 +69,7 @@ export function useTerminalPaneSplitActions({
         source
       })
     },
-    [fallbackCwd, managerRef, paneCwdRef, paneTransportsRef, resolveMenuPane]
+    [fallbackCwd, managerRef, paneCwdRef, paneTransportsRef, resolveMenuPane, tabId, worktreeId]
   )
 
   const onSplitRight = (): void => splitWithInheritedCwd('vertical')
@@ -83,8 +87,7 @@ export function useTerminalPaneSplitActions({
     window.addEventListener(REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT, onRequestSplit)
     return () =>
       window.removeEventListener(REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT, onRequestSplit)
-    // splitWithInheritedCwd closes over live refs; re-registering keeps the
-    // tour action aligned with the current focused pane and fallback cwd.
+    // Re-register the tour action so splitWithInheritedCwd uses the current pane and fallback cwd.
   }, [tabId, splitWithInheritedCwd, contextPaneIdRef])
 
   return { onSplitRight, onSplitDown }

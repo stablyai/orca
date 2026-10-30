@@ -47,17 +47,28 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       ...translateSearchKeyword('settings.appearance.language.system', 'System'),
       ...translateSearchKeyword('settings.appearance.language.english', 'English'),
       ...translateSearchKeyword('settings.appearance.language.chinese', '中文（简体）'),
+      ...translateSearchKeyword(
+        'settings.appearance.language.chineseTraditional',
+        '繁體中文（台灣）'
+      ),
       ...translateSearchKeyword('settings.appearance.language.korean', '한국어'),
       ...translateSearchKeyword('settings.appearance.language.japanese', '日本語'),
       ...translateSearchKeyword('settings.appearance.language.spanish', 'Español'),
-      // Why: the native word for "language" only reaches search via the localized
-      // title in its own UI locale — index each here so speakers can find (and
-      // switch to) their language whatever the current interface locale is.
-      '语言', // Chinese (Simplified)
-      '語言', // Chinese (Traditional)
-      '언어', // Korean
-      '言語', // Japanese
-      'Idioma', // Spanish
+      ...translateSearchKeyword('settings.appearance.language.french', 'Français'),
+      ...translateSearchKeyword('settings.appearance.language.portuguese', 'Português (Brasil)'),
+      ...translateSearchKeyword('settings.appearance.language.russian', 'Русский'),
+      ...translateSearchKeyword('settings.appearance.language.turkish', 'Türkçe'),
+      ...translateSearchKeyword('settings.appearance.language.german', 'Deutsch'),
+      // Index native language words in every locale so users can find their language from an unfamiliar UI.
+      '语言',
+      '語言',
+      '언어',
+      '言語',
+      'Idioma',
+      'Langue',
+      'Язык',
+      'Dil',
+      'Sprache',
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.language.locale',
         'locale'
@@ -115,6 +126,29 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+export const getFollowSymlinkedDirectoriesEntry = (): SettingsSearchEntry => ({
+  title: translate('settings.followSymlinkedDirectories', 'Follow symlinked directories'),
+  description: translate(
+    'settings.followSymlinkedDirectoriesDescription',
+    'Search linked folders in Quick Open and expand local linked folders in File Explorer.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('settings.followSymlinkedDirectoriesKeywords.symlink', 'symlink'),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.linkedFolder',
+      'linked folder'
+    ),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.quickOpen',
+      'quick open'
+    ),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.fileExplorer',
+      'file explorer'
+    )
+  ]
+})
+
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
@@ -139,7 +173,8 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
-  }
+  },
+  getFollowSymlinkedDirectoriesEntry()
 ])
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
@@ -221,13 +256,13 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
 ])
 
 type AppearancePaneSearchOptions = {
-  showWarpImport?: boolean
+  showDesktopThemeImports?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
 }
 
-function buildAppearancePaneSearchEntries(
-  options: AppearancePaneSearchOptions
+export function getAppearancePaneSearchEntries(
+  options: AppearancePaneSearchOptions = {}
 ): SettingsSearchEntry[] {
   return [
     ...getAppearanceSectionEntries(),
@@ -244,14 +279,4 @@ function buildAppearancePaneSearchEntries(
     ...getSystemTrayEntries(options),
     ...getMenuBarIconEntries(options)
   ]
-}
-
-export function getAppearancePaneSearchEntries(
-  options: AppearancePaneSearchOptions = {}
-): SettingsSearchEntry[] {
-  return buildAppearancePaneSearchEntries({
-    showWarpImport: options.showWarpImport ?? true,
-    showSystemTray: options.showSystemTray,
-    showMenuBarIcon: options.showMenuBarIcon
-  })
 }

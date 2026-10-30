@@ -2,7 +2,6 @@ import { vi } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import type { DaemonInitMockState } from './daemon-init-test-harness'
 
-/** Resets every mock plus the module registry, then re-imports daemon-init so its module-level spawner/adapter/restartInFlight start fresh. */
 export async function importFreshDaemonInit(state: DaemonInitMockState) {
   const {
     getPathMock,
@@ -41,7 +40,8 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     unbindLocalProviderListenersMock,
     rebindLocalProviderListenersMock,
     trackDaemonReplacedMock,
-    trackDaemonRetiredMock
+    trackDaemonRetiredMock,
+    trackDaemonAdoptedMock
   } = state
 
   vi.resetModules()
@@ -64,6 +64,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   rebindLocalProviderListenersMock.mockClear()
   trackDaemonReplacedMock.mockClear()
   trackDaemonRetiredMock.mockClear()
+  trackDaemonAdoptedMock.mockClear()
   checkDaemonHealthMock.mockClear()
   checkDaemonHealthMock.mockResolvedValue('healthy')
   healthCheckDaemonMock.mockClear()
@@ -75,8 +76,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   getDaemonLaunchIdentityMock.mockClear()
   isDaemonStaleForCurrentBundleMock.mockReset()
   isDaemonStaleForCurrentBundleMock.mockReturnValue(false)
-  // mockReset (not mockClear) also drops an unconsumed *Once queue, so a test that bails early
-  // can't leak a queued false into the next test's confirmedReplacement gate.
+  // Reset unconsumed once-only results so early test failures cannot contaminate later replacement decisions.
   killStaleDaemonMock.mockReset()
   killStaleDaemonMock.mockResolvedValue({
     killed: true,
@@ -91,6 +91,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   daemonClientMock.mockImplementation(function MockDaemonClient() {
     return {
       ensureConnected: vi.fn(async () => {}),
+      ensureConnectedWithin: vi.fn(async () => {}),
       getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
       request: vi.fn(async () => ({ sessions: [] })),
       disconnect: vi.fn()
@@ -110,8 +111,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   launchedStartedAtMs.current = 1_000_000
   getProcessStartedAtMsMock.mockReset()
   getProcessStartedAtMsMock.mockReturnValue(1_000_000)
-  // Why the real port rather than a module mock: daemon-init reads AppEnvironment, whose
-  // installed instance is anchored to a realm symbol precisely so it survives resetModules.
+  // AppEnvironment survives resetModules through a realm symbol; replace its installed instance.
   setAppEnvironment({
     getPath: getPathMock,
     getAppPath: getAppPathMock,
@@ -121,6 +121,10 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     exit: () => {},
     getAppMetrics: () => []
   } as unknown as AppEnvironment)
-  // Why: import after resetModules so module-level spawner/adapter/restartInFlight start fresh — needed to test first-init and the coalescer.
-  return import('./daemon-init')
+  // Why sequential: concurrent first imports can bypass Vitest's still-pending vi.mock registrations.
+  const init = await import('./daemon-provider-init')
+  const restart = await import('./daemon-provider-restart')
+  const providerState = await import('./daemon-provider-state')
+  const cleanup = await import('./daemon-protocol-cleanup')
+  return { ...init, ...restart, ...providerState, ...cleanup }
 }

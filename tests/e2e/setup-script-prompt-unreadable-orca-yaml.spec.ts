@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -35,12 +35,7 @@ function createRepoWithSharedSetupScript(repoPath: string, featureWorktreePath: 
   runGit(repoPath, ['worktree', 'add', '-b', 'setup-prompt-proof', featureWorktreePath])
 }
 
-/**
- * Makes the main process report the failure the fix now surfaces: orca.yaml could
- * not be read (SSH filesystem provider gone), so the hook check fails closed with
- * `status: 'error'` instead of an authoritative "no setup script".
- * The real handler stays captured so healing restores production behavior.
- */
+// Inject unreadable orca.yaml as status:error, not authoritative absence; retain the real handler for healing.
 async function installUnreadableOrcaYamlFault(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(({ ipcMain }) => {
     type InvokeHandler = (event: unknown, ...args: unknown[]) => unknown
@@ -62,7 +57,6 @@ async function installUnreadableOrcaYamlFault(electronApp: ElectronApplication):
   })
 }
 
-/** orca.yaml becomes readable again — every later check runs the production handler. */
 async function healOrcaYamlRead(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(() => {
     ;(
@@ -76,8 +70,7 @@ async function addRepoAndActivateMainWorktree(
   repoPath: string,
   featureWorktreePath: string
 ): Promise<WorktreeIds> {
-  // Why: repos hide externally created worktrees by default, so the second
-  // worktree only reaches the sidebar once the repo opts into showing them.
+  // Show external worktrees explicitly so the second fixture reaches the sidebar.
   const repoId = await page.evaluate(async (targetRepoPath) => {
     const store = window.__store
     if (!store) {
@@ -112,17 +105,10 @@ async function addRepoAndActivateMainWorktree(
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      const normalize = (value: string): string =>
-        value.startsWith('/private/var/') ? value.slice('/private'.length) : value
-
       const state = store.getState()
       const worktrees = state.worktreesByRepo[targetRepoId] ?? []
-      const mainWorktree = worktrees.find(
-        (entry) => normalize(entry.path) === normalize(targetRepoPath)
-      )
-      const featureWorktree = worktrees.find(
-        (entry) => normalize(entry.path) === normalize(targetFeaturePath)
-      )
+      const mainWorktree = worktrees.find((entry) => entry.path === targetRepoPath)
+      const featureWorktree = worktrees.find((entry) => entry.path === targetFeaturePath)
       if (!mainWorktree || !featureWorktree) {
         throw new Error(
           `Missing worktrees for ${targetRepoPath}: ${worktrees.map((entry) => entry.path).join(', ')}`
@@ -145,7 +131,11 @@ async function addRepoAndActivateMainWorktree(
         featureWorktreeId: featureWorktree.id
       }
     },
-    { targetRepoId: repoId, targetRepoPath: repoPath, targetFeaturePath: featureWorktreePath }
+    {
+      targetRepoId: repoId,
+      targetRepoPath: realpathSync.native(repoPath),
+      targetFeaturePath: realpathSync.native(featureWorktreePath)
+    }
   )
 }
 
@@ -195,7 +185,6 @@ test.describe('Setup script prompt', () => {
     await worktreeRowSurface(orcaPage, featureWorktreeId).click()
     await expect(featureRow).toHaveAttribute('aria-current', 'page')
 
-    // The repo has a valid orca.yaml scripts.setup, so no prompt may remain.
     await expect(inspectionError).toBeHidden({ timeout: 20_000 })
     await expect(promptCard).toHaveCount(0)
     await orcaPage.waitForTimeout(RECORDING_DWELL_MS)

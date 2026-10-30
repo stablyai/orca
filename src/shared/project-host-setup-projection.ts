@@ -8,8 +8,11 @@ import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-
 import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
 import type { Repo } from './repo-types'
 
+/** Own fresh mutable project drafts: using persisted/caller rows leaks mergeProjectRepo writes. Mirror sourceRepoIds in a set
+ * to avoid membership rescans. */
 type ProjectAccumulator = {
   project: Project
+  sourceRepoIds: Set<string>
 }
 
 export type ProjectHostSetupProjection = {
@@ -34,8 +37,7 @@ export function getProjectProviderIdentity(
     const parts = (repo.repoIcon.label?.trim() ?? '').split('/')
     const iconOwner = parts[0]?.trim()
     const iconRepo = parts[1]?.trim()
-    // Why: repo auto-detect can know the GitHub slug through the generated
-    // avatar icon even when legacy `upstream` has not been backfilled yet.
+    // Generated GitHub avatars can retain slugs when legacy upstream fields are not backfilled.
     if (iconOwner && iconRepo && parts.length === 2) {
       let host: string | undefined
       try {
@@ -52,8 +54,14 @@ export function getProjectProviderIdentity(
       }
     }
   }
-  // Why: the remote URL retains HTTP(S) endpoint ports that the canonical
-  // key omits, so prefer it when reconstructing a host-qualified GHES identity.
+  return getGitRemoteProviderIdentity(repo)
+}
+
+/** The GitHub identity the folder's own primary remote names, ignoring stamped `upstream`. */
+export function getGitRemoteProviderIdentity(
+  repo: Pick<Repo, 'gitRemoteIdentity'>
+): ProjectProviderIdentity | null {
+  // Prefer remote URLs preserving HTTP(S) API ports over canonical keys that omit them (GHES).
   return (
     parseGitHubRemoteUrl(repo.gitRemoteIdentity?.remoteUrl) ??
     parseGitHubCanonicalKey(repo.gitRemoteIdentity?.canonicalKey)
@@ -71,9 +79,7 @@ function getProjectGitRemoteIdentity(
   return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
 }
 
-/** True when the repo resolves to a GitHub provider identity (via explicit
- *  upstream or a GitHub-sourced avatar icon). Used to scope GitHub-CLI setup
- *  prompts to users who actually have GitHub-backed projects. */
+/** Limit gh setup prompts to GitHub-backed projects proven by remote, explicit upstream or generated GitHub avatar. */
 export function isGitHubBackedRepo(
   repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): boolean {
@@ -86,10 +92,8 @@ export function hasProjectRemoteIdentity(
   return getProjectProviderIdentity(repo) !== null || getProjectGitRemoteIdentity(repo) !== null
 }
 
-/** True while nothing has settled the repo's remote identity yet: the background
- *  probe has not answered (or could not reach the host), as distinct from the
- *  resolved `null` marker meaning "checked, no usable remote". Provider-neutral —
- *  GitHub repos usually settle through persisted `upstream` instead. */
+/** Undefined remote identity is pending/unreachable, distinct from resolved null (checked, unusable).
+ * Provider-neutral; GitHub repos usually resolve via persisted upstream. */
 export function isProjectRemoteIdentityPending(
   repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): boolean {
@@ -97,6 +101,8 @@ export function isProjectRemoteIdentityPending(
 }
 
 const HOST_LOCAL_PROJECT_ID_PREFIX = 'repo:'
+/** A project keyed by its primary Git remote rather than a provider identity. */
+export const GIT_REMOTE_PROJECT_ID_PREFIX = 'git:'
 
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
@@ -107,16 +113,12 @@ export function getProjectIdentityKey(
   }
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   if (gitRemoteIdentity) {
-    return `git:${gitRemoteIdentity.canonicalKey}`
+    return `${GIT_REMOTE_PROJECT_ID_PREFIX}${gitRemoteIdentity.canonicalKey}`
   }
   return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
 }
 
-/**
- * True for the `repo:<id>` fallback above — a folder project, or a git repo with no
- * remote. The id is a per-host repo id, so the same project on another host derives a
- * different one and can never be matched there.
- */
+/** repo:<id> fallback is host-local (folders/remote-less repos); identical projects elsewhere derive different IDs. */
 export function isHostLocalProjectId(projectId: string): boolean {
   return projectId.startsWith(HOST_LOCAL_PROJECT_ID_PREFIX)
 }
@@ -190,7 +192,8 @@ function parseGitHubRemoteUrl(remoteUrl: string | undefined): ProjectProviderIde
   if (!trimmed) {
     return null
   }
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
+  // Why: SSH certificate orgs use `org-<id>@github.com:<owner>/<repo>`, so the user is not always `git`.
+  const sshMatch = trimmed.match(/^[^@\s/:]+@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
   if (sshMatch?.[1] && sshMatch[2] && sshMatch[3]) {
     return projectProviderIdentity(sshMatch[1], sshMatch[2], sshMatch[3])
   }
@@ -211,15 +214,12 @@ function parseGitHubRemoteUrl(remoteUrl: string | undefined): ProjectProviderIde
   }
 }
 
-// Why: `addedAt || now` restamps Date.now() when addedAt is 0 / absent / NaN, so every
-// projection looks dirty and reconcileCatalogRows never reuses the project or setup.
+// Do not restamp missing/zero/NaN addedAt with now: every projection would look dirty and defeat row reuse.
 function catalogTimestampFromAddedAt(addedAt: number): number {
   return Number.isFinite(addedAt) ? addedAt : 0
 }
 
-// Why: 0 / absent / NaN means "the repo predates timestamped catalog rows", not epoch. Keeping
-// it out of min()/max() stops one unknown sibling from wiping a real timestamp — and unlike the
-// old `|| now` fallback it stays order-independent, so both merge orders agree.
+// Exclude unknown timestamps from min/max so they cannot erase known siblings; retain order-independent results without now fallbacks.
 function knownCatalogTimestamp(value: number): number | undefined {
   return Number.isFinite(value) && value !== 0 ? value : undefined
 }
@@ -244,12 +244,12 @@ export function mergeCatalogUpdatedAt(left: number, right: number): number {
   return Math.max(known, other)
 }
 
-function createProjectFromRepo(repo: Repo): Project {
+function createProjectFromRepo(repo: Repo, projectId: string): Project {
   const identity = getProjectProviderIdentity(repo)
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
   return {
-    id: getProjectId(repo),
+    id: projectId,
     displayName: repo.displayName,
     badgeColor: repo.badgeColor,
     ...(repo.repoIcon !== undefined ? { repoIcon: repo.repoIcon } : {}),
@@ -262,19 +262,16 @@ function createProjectFromRepo(repo: Repo): Project {
   }
 }
 
-function mergeProjectRepo(project: Project, repo: Repo): Project {
-  const sourceRepoIds = project.sourceRepoIds.includes(repo.id)
-    ? project.sourceRepoIds
-    : [...project.sourceRepoIds, repo.id]
-  // Why unknown-aware on both sides: the accumulator itself carries 0 when the first repo of the
-  // project had no addedAt, so a plain min() would let repo order decide the project's createdAt.
-  const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
-  return {
-    ...project,
-    sourceRepoIds,
-    createdAt: mergeCatalogCreatedAt(project.createdAt, addedAt),
-    updatedAt: mergeCatalogUpdatedAt(project.updatedAt, addedAt)
+/** Mutates the draft in place — only ever call this on an accumulator this projection owns. */
+function mergeProjectRepo(accumulator: ProjectAccumulator, repo: Repo): void {
+  const { project, sourceRepoIds } = accumulator
+  if (!sourceRepoIds.has(repo.id)) {
+    sourceRepoIds.add(repo.id)
+    project.sourceRepoIds.push(repo.id)
   }
+  const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
+  project.createdAt = mergeCatalogCreatedAt(project.createdAt, addedAt)
+  project.updatedAt = mergeCatalogUpdatedAt(project.updatedAt, addedAt)
 }
 
 function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
@@ -312,15 +309,14 @@ export function projectHostSetupProjectionFromRepos(
   for (const repo of repos) {
     const projectId = getProjectId(repo)
     const existing = projectById.get(projectId)
-    const project = existing
-      ? mergeProjectRepo(existing.project, repo)
-      : createProjectFromRepo(repo)
-    // Why normalize here: a repo row is untrusted persisted/wire data too, and these
-    // constructors copy repo.path / repo.id straight onto fields consumers call .trim() on.
+    if (existing) {
+      mergeProjectRepo(existing, repo)
+    } else {
+      const project = createProjectFromRepo(repo, projectId)
+      projectById.set(projectId, { project, sourceRepoIds: new Set(project.sourceRepoIds) })
+    }
+    // Repo rows are untrusted too; normalize constructors copying id/path into fields callers trim.
     const setup = normalizeProjectHostSetupRow(createSetupFromRepo(repo, projectId))
-    projectById.set(projectId, {
-      project
-    })
     setups.push(setup)
   }
 

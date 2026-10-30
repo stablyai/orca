@@ -1,20 +1,12 @@
 // @vitest-environment happy-dom
-/**
- * Why a render test: the board's open cost was mounting every card in every
- * lane at once. These assert the lane renders only the virtual window, and that
- * each rendered card still advertises its true lane index — drop-index math
- * reads that attribute now that DOM order no longer implies list order.
- *
- * The virtualizer itself is mocked (as the sidebar list tests do): it needs real
- * layout, which the test DOM has none of, and the contract under test is ours.
- */
+/** Mock layout-dependent virtualization; assert only the visible card window and true lane-index attributes. */
 import { cleanup, render } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { makeWorktree } from '../../store/slices/store-test-helpers'
+import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 
 const WINDOW_START = 20
 const WINDOW_END = 25

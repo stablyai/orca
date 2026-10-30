@@ -1,13 +1,12 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { OpenFile } from '@/store/slices/editor'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
 
 const WT_ROOT = path.join('tmp', 'wt-1')
@@ -135,17 +134,14 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
 
 describe('workspace-tab-palette-search', () => {
   it('stamps the row execution host so activation never resolves by id alone', () => {
-    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
-    // host's workspace behind a row labelled with this one's name and branch.
+    // Host-blind activation opens the wrong same-ID workspace behind another host’s row label.
     const worktree = makeWorktree({ hostId: 'ssh:box' })
     const entries = buildEntries({ worktrees: [worktree] })
     const [result] = searchWorkspaceTabs(entries, '')
     expect(result.executionHostId).toBe('ssh:box')
   })
 
-  it('keeps the resolvable twin when the first record under an id has no open file', () => {
-    // Why: dropping the id on sight would lose the row entirely — the leading
-    // record dies at the open-file lookup and the survivor never gets its turn.
+  it('omits colliding tab ids even when only one record has an open file', () => {
     const orphaned = makeUnifiedTab({
       id: 'unified-editor-dup',
       contentType: 'editor',
@@ -161,12 +157,26 @@ describe('workspace-tab-palette-search', () => {
       openFiles: [makeOpenFile()]
     })
 
-    expect(entries.map((entry) => entry.tab.id)).toEqual(['unified-editor-dup'])
-    expect(entries[0]?.secondaryText).toBe(SRC_APP_RELATIVE_PATH)
+    expect(entries).toEqual([])
   })
-  it('emits one entry per tab id when a session persisted the same id twice', () => {
-    // Why: the palette keys rows by tab id, and duplicated persisted records used
-    // to render the row twice under one React key, stranding a ghost row.
+
+  it('omits an editor row whose explicit file host disagrees with its unique worktree', () => {
+    const remote = makeWorktree({ hostId: 'ssh:remote' })
+    const editor = makeUnifiedTab({
+      id: 'remote-editor',
+      entityId: SRC_APP_PATH,
+      contentType: 'editor',
+      executionHostId: 'ssh:remote'
+    })
+    const entries = buildEntries({
+      worktrees: [remote],
+      unifiedTabsByWorktree: { 'wt-1': [editor] },
+      openFiles: [makeOpenFile({ externalSshTargetId: 'other-host' })]
+    })
+
+    expect(entries).toEqual([])
+  })
+  it('omits a tab id when a session persisted it twice', () => {
     const duplicate = makeUnifiedTab({ id: 'unified-terminal-dup' })
     const entries = buildEntries({
       unifiedTabsByWorktree: {
@@ -175,7 +185,7 @@ describe('workspace-tab-palette-search', () => {
     })
 
     const tabIds = entries.map((entry) => entry.tab.id)
-    expect(tabIds).toEqual(['unified-terminal-1', 'unified-terminal-dup'])
+    expect(tabIds).toEqual(['unified-terminal-1'])
 
     const results = searchWorkspaceTabs(entries, 'unified')
     expect(results.map((result) => result.tabId)).toEqual(tabIds)
@@ -225,8 +235,7 @@ describe('workspace-tab-palette-search', () => {
     expect(searchWorkspaceTabs(entries, 'fallback')[0]?.title).toBe('Fallback Terminal')
   })
 
-  // The tab strip shows the unified label; tabsByWorktree can lag on a default
-  // "Terminal N" while the label already has the live OSC agent title.
+  // Unified labels follow visible OSC titles while terminal records can lag at Terminal N.
   it('indexes the unified label when the terminal record title is stale', () => {
     const entries = buildEntries({
       tabsByWorktree: {
@@ -509,8 +518,7 @@ describe('workspace-tab-palette-search', () => {
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J receives the same possibly corrupt stored display names as workspace search.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/workspace-tab-search'
@@ -560,9 +568,8 @@ describe('workspace-tab-palette-search', () => {
       title: 'Fix login race',
       secondaryText: '',
       secondaryRanges: [],
-      // The bare alias matches exactly, so it outranks "terminal tab"; its range
-      // indexes the alias string, not the row.
-      typeAliasMatch: { text: 'terminal', ranges: [{ start: 0, end: 8 }] }
+      // Equal-strength aliases use the builder's stable display order.
+      typeAliasMatch: { text: 'terminal tab', ranges: [{ start: 0, end: 8 }] }
     })
   })
 
@@ -602,8 +609,15 @@ describe('workspace-tab-palette-search', () => {
   })
 
   it('rejects a query with more unique tokens than the matcher accepts', () => {
-    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
-    expect(searchWorkspaceTabs(buildEntries(), query)).toEqual([])
+    const query = 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16'
+    const entries = buildEntries({
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: query })] }
+    })
+    expect(
+      searchWorkspaceTabs(entries, 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15')
+    ).toHaveLength(1)
+    expect(searchWorkspaceTabs(entries, query)).toEqual([])
   })
 
   it('stamps grok occupancy from the idle OSC title the sidebar already shows', () => {

@@ -1,11 +1,14 @@
-import { StyleSheet, View } from 'react-native'
+import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import type { MobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
   client: RpcClient | null
@@ -17,11 +20,10 @@ type Props = {
   isGithubRepo?: boolean
   branchContextLoaded?: boolean
   controller: MobilePrSidebarController
+  workspaceLabel: string | null
 }
 
-// Chromeless PR sidebar body for the source-control hub's Pull Request segment.
-// The hub owns the header, segmented control, load triggers, and the shared
-// controller (one fetch feeds both the branch-card chip and this body).
+// Hub owns PR header/segments/load/controller; one fetch feeds branch chip and chromeless sidebar body.
 export function MobilePrViewPanelBody({
   client,
   connState,
@@ -31,8 +33,11 @@ export function MobilePrViewPanelBody({
   gitStatus,
   isGithubRepo = true,
   branchContextLoaded = true,
-  controller
+  controller,
+  workspaceLabel
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
 
   const sidebarState = !branchContextLoaded
@@ -40,12 +45,15 @@ export function MobilePrViewPanelBody({
     : !isGithubRepo
       ? ({
           kind: 'blocked',
-          message: 'Hosted review panel unavailable for this provider.'
+          message: t(
+            'pullRequest.prViewPanel.providerUnavailable',
+            'Hosted review panel unavailable for this provider.'
+          )
         } as const)
       : branch === null
         ? ({
             kind: 'error',
-            message: 'Current branch unavailable.'
+            message: t('pullRequest.prViewPanel.branchUnavailable', 'Current branch unavailable.')
           } as const)
         : controller.prSidebarState
 
@@ -64,14 +72,15 @@ export function MobilePrViewPanelBody({
         bottomInset={insets.bottom}
         // Hub header already hosts open-on-web while this segment is active.
         showOpenOnWeb={false}
+        workspaceLabel={workspaceLabel}
       />
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   }
-})
+}))

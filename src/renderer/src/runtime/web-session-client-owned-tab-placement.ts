@@ -1,3 +1,4 @@
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import {
   pickNextActiveTab,
@@ -24,12 +25,7 @@ export type ClientOwnedPlacementInput = {
   rekeyedTabIds: ReadonlyMap<string, string>
   /** Explicit navigation intent (caller focus intent or 'follow'); the only focus authority. */
   intentTabId: string | null
-  /**
-   * The sibling tab to fall back to when the active group is a reserved preview split that
-   * nothing visible occupies (STA-5001). Open Preview to the Side activates the empty split
-   * before the host page lands; treating that as focus would move the user off the source
-   * they are still editing.
-   */
+  // Reserved empty preview splits do not represent focus: fall back to the source still visible until the host browser lands (STA-5001).
   reservedEmptyGroupFallbackTabId: string | null
   currentActiveGroupId: string | null
   currentLayout: TabGroupLayoutNode | null
@@ -84,14 +80,7 @@ type WorkingGroup = {
   tabOrder: string[]
 }
 
-/**
- * Reconcile a snapshot into client-owned group state: place never-seen tabs at
- * the end of their target group, honor the client's own pending placement
- * records (which may move a tab placed provisionally before the create RPC
- * answered), drop vanished tabs (repairing a group's active tab exactly like a
- * local close), and change focus only on explicit navigation intent. The host
- * snapshot never reorders, regroups, or refocuses existing tabs here.
- */
+/** Append unseen snapshot tabs, apply client placements/rekeys and drop vanished tabs with local-close focus repair. Existing tabs keep client order/groups; only explicit intent changes focus. */
 export function reconcileClientOwnedTabPlacement(
   input: ClientOwnedPlacementInput
 ): ClientOwnedPlacementResult {
@@ -109,9 +98,12 @@ export function reconcileClientOwnedTabPlacement(
             activeTabId: group.activeTabId ? rekeyTabId(group.activeTabId) : group.activeTabId,
             recentTabIds: (group.recentTabIds ?? []).map(rekeyTabId)
           }
+    const slots = structuredLaunchSlotIds(input.worktreeId, group.id)
     working.set(group.id, {
       group: rekeyed,
-      tabOrder: rekeyed.tabOrder.filter((tabId) => input.validUnifiedTabIds.has(tabId))
+      tabOrder: rekeyed.tabOrder.filter(
+        (tabId) => input.validUnifiedTabIds.has(tabId) || slots.has(tabId)
+      )
     })
     groupOrder.push(group.id)
   }
@@ -144,7 +136,13 @@ export function reconcileClientOwnedTabPlacement(
     if (working.has(requestedGroupId) || layoutGroupIds.has(requestedGroupId)) {
       return requestedGroupId
     }
-    return activeGroupIdIfValid ?? groupOrder[0]
+    // Repair rendered leaves before creating requested groups; never publish tabs into an unrendered group.
+    return (
+      activeGroupIdIfValid ??
+      groupOrder[0] ??
+      layoutGroupIds.values().next().value ??
+      requestedGroupId
+    )
   }
 
   const movedTabIds = new Set<string>()
@@ -188,37 +186,39 @@ export function reconcileClientOwnedTabPlacement(
       continue
     }
     const { group, tabOrder } = entry
+    const realOrder = tabOrder.filter((id) => input.validUnifiedTabIds.has(id))
     const intentActive =
-      input.intentTabId && tabOrder.includes(input.intentTabId) ? input.intentTabId : null
+      input.intentTabId && realOrder.includes(input.intentTabId) ? input.intentTabId : null
     const displacedActive =
-      group.activeTabId && !tabOrder.includes(group.activeTabId) ? group.activeTabId : null
-    // Why: a host-side close (or a placement move away) must land the user where a local
-    // close would (MRU, then neighbor), picking only among tabs surviving this snapshot.
+      group.activeTabId && !realOrder.includes(group.activeTabId) ? group.activeTabId : null
+    // Close/move successors follow local-close MRU then neighbor, limited to surviving tabs.
     const repairOrder = displacedActive
-      ? group.tabOrder.filter((tabId) => tabOrder.includes(tabId) || tabId === displacedActive)
+      ? group.tabOrder.filter((tabId) => realOrder.includes(tabId) || tabId === displacedActive)
       : null
     const activeTabId =
       intentActive ??
       (displacedActive && repairOrder
         ? (pickNextActiveTab(repairOrder, group.recentTabIds, displacedActive) ??
-          tabOrder[0] ??
+          realOrder[0] ??
           null)
-        : (group.activeTabId ?? tabOrder[0] ?? null))
+        : (group.activeTabId ?? realOrder[0] ?? null))
     const validActiveTabId =
-      activeTabId && tabOrder.includes(activeTabId) ? activeTabId : (tabOrder[0] ?? null)
+      activeTabId && realOrder.includes(activeTabId) ? activeTabId : (realOrder[0] ?? null)
+    const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, realOrder)
+    // Only explicit intent or close/move succession is a visit; retaining/filling active tabs must not change MRU.
+    const recordsVisit = validActiveTabId === intentActive || displacedActive !== null
     reconciled.push({
       ...group,
       tabOrder,
       activeTabId: validActiveTabId,
-      recentTabIds: validActiveTabId
-        ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, tabOrder), validActiveTabId)
-        : []
+      recentTabIds:
+        validActiveTabId && recordsVisit
+          ? pushRecentTabId(sanitizedRecent, validActiveTabId)
+          : sanitizedRecent
     })
   }
 
-  // Why: a group emptied because its tabs vanished collapses exactly like a local
-  // last-tab close; only rendered-but-recordless repair groups and reserved
-  // pending-create groups may stay empty.
+  // Collapse groups emptied by removed tabs like local close; only hydration-repair and pending-create reservations may remain empty.
   const emptiedGroupIds = new Set(
     reconciled
       .filter(

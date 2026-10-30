@@ -1,7 +1,9 @@
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type { ManagedPane, ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
 import type { PaneManagerHost } from './pane-manager-host'
 import { applyPaneOpacity } from './pane-divider'
 import { createPaneDOM, openTerminal } from './pane-lifecycle'
+import { suspendTerminalCursorBlink } from './pane-cursor-blink-suspension'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import { toPublicPane } from './pane-public-view'
 
@@ -17,15 +19,18 @@ export function createInitialManagedPane(
     overflow: 'hidden'
   })
   host.root.appendChild(pane.container)
-  openTerminal(pane)
+  openTerminal(pane, {
+    ligatures: host.options.terminalLigaturesEnabled?.(),
+    inlineImages: host.options.terminalInlineImagesEnabled?.()
+  })
   host.setActivePaneId(pane.id)
   applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions())
 
   if (opts?.focus !== false) {
-    pane.terminal.focus()
+    focusPanePreservingOverlays(pane)
   }
 
-  host.publishPaneCreated(pane)
+  host.publishPaneCreated(pane, { placement: { kind: 'new-tab' } })
   return toPublicPane(pane)
 }
 
@@ -41,8 +46,7 @@ export function createManagedPaneInternal(
     host.options,
     host.dragState,
     host.getDragCallbacks(),
-    // Why: always re-focus even if already active — after splits the
-    // browser's real textarea focus can lag the manager's activePaneId.
+    // Refocus even when already active: browser textarea focus can lag activePaneId after splits.
     (paneId, options) => {
       if (!host.isDestroyed()) {
         host.setActivePane(paneId, { focus: options?.focusTerminal !== false })
@@ -53,6 +57,10 @@ export function createManagedPaneInternal(
     }
   )
   pane.webglAttachmentDeferred = host.isRenderingSuspended()
+  if (host.isRenderingSuspended()) {
+    // A pane that mounts behind a hidden surface never sees suspendPaneRendering().
+    suspendTerminalCursorBlink(pane.terminal)
+  }
   host.panes.set(id, pane)
   host.identities.register(id, leafId)
   return pane
@@ -63,8 +71,7 @@ export function publishManagedPaneCreated(
   pane: ManagedPaneInternal,
   spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
 ): void {
-  // Why: onPaneCreated wires PTY/status identity synchronously. After this
-  // point, replacing the leaf id would fork ORCA_PANE_KEY from layout state.
+  // onPaneCreated binds PTY/status identity synchronously; later leaf replacement would fork ORCA_PANE_KEY from layout state.
   host.identities.markPublished(pane.id)
   void host.options.onPaneCreated?.(toPublicPane(pane), spawnHints)
 }
@@ -74,11 +81,17 @@ function handleManagedPaneMouseEnter(
   paneId: number,
   event: MouseEvent
 ): void {
+  const pane = host.panes.get(paneId)
+  if (!pane) {
+    return
+  }
+  const focusedPane = document.activeElement?.closest('.pane[data-pane-id]')
   if (
     shouldFollowMouseFocus({
       featureEnabled: host.getStyleOptions().focusFollowsMouse ?? false,
       activePaneId: host.getActivePaneId(),
       hoveredPaneId: paneId,
+      focusInOtherPane: focusedPane != null && focusedPane !== pane.container,
       mouseButtons: event.buttons,
       windowHasFocus: document.hasFocus(),
       managerDestroyed: host.isDestroyed()

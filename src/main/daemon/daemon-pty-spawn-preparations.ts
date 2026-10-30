@@ -2,12 +2,11 @@ import { TerminalAttachCanceledError } from './types'
 
 export type PendingPtySpawnPreparation = {
   canceled: boolean
-  // Why: `canceled` is only polled between spawn steps; the signal is what
-  // actually interrupts an in-progress cwd probe on a dead share.
+  switchAnchor?: { token: string; invocationId: string; at: number; deadline: number }
+  // Unlike the polled canceled flag, the signal interrupts in-flight cwd probes on dead shares.
   readonly controller: AbortController
   cancelTimer?: ReturnType<typeof setTimeout>
-  // Why: preparations are keyed by sessionId, but a control-socket close must
-  // cancel only the disconnecting client's preps, not another client's (F4).
+  // Session IDs can be shared; disconnect cancels only this client's preparations.
   clientId: string
   requestId: string
 }
@@ -33,7 +32,14 @@ export class DaemonPtySpawnPreparations {
       clientId,
       requestId
     }
-    this.cancellationByPreparation.set(preparation, Promise.withResolvers<void>())
+    let resolveCancellation!: () => void
+    const cancellation = new Promise<void>((resolve) => {
+      resolveCancellation = resolve
+    })
+    this.cancellationByPreparation.set(preparation, {
+      promise: cancellation,
+      resolve: resolveCancellation
+    })
     if (Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0) {
       preparation.cancelTimer = setTimeout(
         () => this.cancelPreparation(preparation),
@@ -47,18 +53,83 @@ export class DaemonPtySpawnPreparations {
     return preparation
   }
 
+  prepareSwitch(sessionId: string, clientId: string, requestId: string, invocationId: string) {
+    const preparation = this.register(sessionId, clientId, requestId, undefined)
+    preparation.switchAnchor = {
+      token: requestId,
+      invocationId,
+      at: performance.now(),
+      deadline: Infinity
+    }
+    preparation.cancelTimer = setTimeout(() => {
+      this.cancelPreparation(preparation)
+      this.finish(sessionId, preparation)
+    }, 720_000)
+    preparation.cancelTimer.unref?.()
+    return { anchor: requestId }
+  }
+
+  commitSwitch(
+    sessionId: string,
+    clientId: string,
+    requestId: string,
+    execution: { invocationId: string; anchor?: string; remainingMs?: number }
+  ): PendingPtySpawnPreparation {
+    const preparation = [...(this.pending.get(sessionId) ?? [])].find(
+      (entry) =>
+        entry.clientId === clientId &&
+        entry.switchAnchor?.token === execution.anchor &&
+        entry.switchAnchor?.invocationId === execution.invocationId
+    )
+    const anchor = preparation?.switchAnchor
+    if (
+      !preparation ||
+      !anchor ||
+      preparation.canceled ||
+      !Number.isFinite(execution.remainingMs) ||
+      execution.remainingMs! <= 0 ||
+      execution.remainingMs! > 720_000 ||
+      anchor.deadline !== Infinity
+    ) {
+      throw new TerminalAttachCanceledError(sessionId)
+    }
+    anchor.deadline = anchor.at + execution.remainingMs!
+    preparation.requestId = requestId
+    if (performance.now() >= anchor.deadline) {
+      this.cancelPreparation(preparation)
+      this.finish(sessionId, preparation)
+      throw new TerminalAttachCanceledError(sessionId)
+    }
+    if (preparation.cancelTimer) {
+      clearTimeout(preparation.cancelTimer)
+    }
+    preparation.cancelTimer = setTimeout(
+      () => this.cancelPreparation(preparation),
+      anchor.deadline - performance.now()
+    )
+    preparation.cancelTimer.unref?.()
+    return preparation
+  }
+
+  isCanceled(preparation: PendingPtySpawnPreparation): boolean {
+    return (
+      preparation.canceled ||
+      (preparation.switchAnchor !== undefined &&
+        performance.now() >= preparation.switchAnchor.deadline)
+    )
+  }
+
   async prepareUnlessCanceled(
     sessionId: string,
     preparation: PendingPtySpawnPreparation
   ): Promise<void> {
-    // Race cancellation against preflight so shutdown/disconnect can return the
-    // protocol cancellation error before tearing down the client transport.
+    // Return protocol cancellation before shutdown tears down the client transport.
     const cancellation = this.cancellationByPreparation.get(preparation)
     const preparationTask = cancellation
       ? Promise.race([this.preparePtySpawn(), cancellation.promise])
       : this.preparePtySpawn()
     await preparationTask
-    if (preparation.canceled) {
+    if (this.isCanceled(preparation)) {
       throw new TerminalAttachCanceledError(sessionId)
     }
   }

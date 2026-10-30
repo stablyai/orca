@@ -1,20 +1,10 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
+import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
+import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveGitDir } from './resolve-git-dir'
 
-/**
- * Subprocess-free proof of every input one working-tree file diff is built from:
- * the HEAD tree, the index, `.gitmodules` (which decides submodule routing) and
- * the working-tree file itself.
- *
- * Two equal stamps mean `git show HEAD:<path>`, `git show :<path>` and the
- * working-tree bytes would still return what they returned when the stamp was
- * taken, so a caller may reuse a settled diff instead of respawning Git — on a
- * WSL/UNC worktree that trades two `wsl.exe` spawns for a handful of 9p stats.
- *
- * `null` means "cannot prove unchanged" — not a repo, an unreadable layout, or a
- * filesystem that reports no usable mtime — and callers must not cache.
- */
+/** Stamp HEAD, index, routing metadata and working-file inputs without Git; null forbids caching. */
 export type WorktreeDiffStamp = {
   /** Opaque; compare for equality only. */
   value: string
@@ -23,14 +13,7 @@ export type WorktreeDiffStamp = {
   capturedAtMs: number
 }
 
-/**
- * How long after a component's mtime the stamp has to be taken before a later
- * write is guaranteed to move that mtime.
- *
- * Why 2s: FAT/exFAT truncate mtime to a 2s bucket, the coarsest granularity a
- * repo can realistically sit on. Below the margin a second write inside the same
- * bucket would leave the stamp identical, so the read stays uncached instead.
- */
+// Wait beyond FAT/exFAT's 2s mtime bucket so another write cannot share a recent timestamp.
 export const DIFF_STAMP_RACY_WRITE_MARGIN_MS = 2_000
 
 const MISSING = '-'
@@ -38,52 +21,39 @@ const ABSENT: StampComponent = { text: MISSING, mtimeMs: Number.NEGATIVE_INFINIT
 
 type StampComponent = { text: string; mtimeMs: number }
 
-/**
- * A write that lands in the same timestamp bucket as the stamp is invisible, so
- * only a stamp taken a full bucket after its newest component can be trusted.
- *
- * The margin compares two clocks: `capturedAtMs` is this host's, while the mtimes
- * come from whatever wrote the files. On a `\\wsl.localhost` worktree the guest
- * sets them, and a guest running ahead pushes every recently-touched file past the
- * margin — silently, and for as long as the skew lasts. `isDiffStampClockSkewed`
- * separates that from an honestly-too-fresh file so the caller can count it.
- */
+/** Refuse stamps within the mtime bucket; separately count future mtimes to expose host/guest clock skew. */
 export function canProveUnchangedByStamp(stamp: WorktreeDiffStamp): boolean {
   return stamp.capturedAtMs - stamp.newestMtimeMs >= DIFF_STAMP_RACY_WRITE_MARGIN_MS
 }
 
-/**
- * True when a component's mtime is in this host's future, which no local write can
- * produce — so the margin above is measuring skew, not freshness, and will keep
- * refusing to store until the clocks converge.
- */
+/** Future component mtimes cannot satisfy the cache's freshness margin. */
 export function isDiffStampClockSkewed(stamp: WorktreeDiffStamp): boolean {
   return Number.isFinite(stamp.newestMtimeMs) && stamp.newestMtimeMs > stamp.capturedAtMs
 }
 
-/**
- * Stamp the inputs of one file diff. Pass `includeWorkingTree: false` for a
- * staged diff, which compares HEAD to the index and never reads the working tree.
- */
+/** Staged diffs compare HEAD/index only; omit working-tree inputs for those reads. */
 export async function readWorktreeDiffStamp(
   worktreePath: string,
   filePath: string,
-  includeWorkingTree: boolean
+  includeWorkingTree: boolean,
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
 ): Promise<WorktreeDiffStamp | null> {
   const capturedAtMs = Date.now()
   try {
-    const gitDir = await resolveGitDir(worktreePath)
+    // Git can run in the distro against a raw Linux worktree path while Node stats it through Win32.
+    const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
+    if (!hostWorktreePath) {
+      return null
+    }
+    // Retain distro options for non-drvfs gitdir pointers even after the worktree becomes a drive path.
+    const gitDir = await resolveGitDir(hostWorktreePath, options)
     const [head, index, gitmodules, workingTree] = await Promise.all([
       readHeadComponent(gitDir),
-      // Over-invalidates on purpose: git run outside Orca (a terminal `git status`/`git add`)
-      // can refresh a stat-dirty index and rewrite this file without changing a single blob,
-      // which costs one re-read. That is the safe direction — do not "fix" it by dropping the
-      // index from the stamp, because `git add` then becomes invisible and the cache serves a
-      // pre-staging diff.
+      // Keep index stamps even when only stat metadata changed: dropping them would make staging invisible.
       readFileStampComponent(path.join(gitDir, 'index')),
-      readFileStampComponent(path.join(worktreePath, '.gitmodules')),
+      readFileStampComponent(path.join(hostWorktreePath, '.gitmodules')),
       includeWorkingTree
-        ? readWorkingTreeComponent(path.join(worktreePath, filePath))
+        ? readWorkingTreeComponent(path.join(hostWorktreePath, filePath))
         : Promise.resolve(ABSENT)
     ])
     if (!head) {
@@ -91,8 +61,7 @@ export async function readWorktreeDiffStamp(
     }
     const components = [head, index, gitmodules, workingTree]
     return {
-      // Why JSON: a path or a ref can contain any separator character, and an ambiguous
-      // join is a stamp collision — two different states that compare equal.
+      // Structural encoding avoids collisions when paths or refs contain separators.
       value: JSON.stringify([
         worktreePath,
         filePath,
@@ -106,15 +75,7 @@ export async function readWorktreeDiffStamp(
   }
 }
 
-/**
- * Identify the commit HEAD resolves to. Reading the tip is what makes a plain
- * commit visible: it rewrites `refs/heads/<branch>` and leaves HEAD untouched.
- *
- * A loose tip is recorded by content, so it needs no mtime margin. Only when no
- * loose ref exists at all — packed refs, the reftable backend, or an unborn
- * branch — does this fall back to the coarser stamps of the files a packed tip
- * moves, and the recorded "no loose ref" marker still catches the ref appearing.
- */
+/** Read loose ref content to detect commits without HEAD changes; packed/reftable/unborn tips use file stamps. */
 async function readHeadComponent(gitDir: string): Promise<StampComponent | null> {
   const [head, commonDirEntry] = await Promise.all([
     readTrimmedFile(path.join(gitDir, 'HEAD')),
@@ -190,11 +151,7 @@ async function readFileStampComponent(filePath: string): Promise<StampComponent>
 async function readWorkingTreeComponent(filePath: string): Promise<StampComponent> {
   try {
     const stats = await stat(filePath)
-    // Why ino is optional: an atomic-rename save can keep both the size and the mtime bucket,
-    // so a changed inode is extra proof — but Windows reports 0 for it on the network
-    // redirector behind `\\wsl.localhost`, and requiring an unstable 0 to match would make
-    // the stamp never hit on exactly the host this cache exists for. Fold it in only when
-    // the filesystem gives a real one.
+    // Inodes detect atomic replacement, but zero/unstable network-redirector values cannot improve the stamp.
     const inode = isUsableInode(stats.ino) ? String(stats.ino) : MISSING
     return {
       text: `${requireMtimeMs(stats.mtimeMs)}:${stats.size}:${inode}`,

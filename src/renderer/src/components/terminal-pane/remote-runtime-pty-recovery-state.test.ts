@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
+  REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS,
+  REMOTE_RUNTIME_RECOVERY_DELAYS_MS,
   RemoteRuntimePtyRecoveryState,
   retryAllRemoteRuntimePtyRecoveriesNow
 } from './remote-runtime-pty-recovery-state'
@@ -63,7 +65,7 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     const epoch = state.begin()
     state.schedule(epoch, retry)
 
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
 
     expect(state.currentPhase).toBe('disconnected')
     expect(state.isActive).toBe(false)
@@ -112,7 +114,7 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     const state = new RemoteRuntimePtyRecoveryState()
     const firstEpoch = state.begin()
 
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
     const manualEpoch = state.begin()
 
     expect(manualEpoch).toBe(firstEpoch + 1)
@@ -135,25 +137,68 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(state.currentPhase).toBe('disconnected')
     expect(state.isCurrent(epoch)).toBe(false)
     expect(retry).not.toHaveBeenCalled()
+    state.dispose()
   })
 
-  it.each([
-    ['healthy', (state: RemoteRuntimePtyRecoveryState) => state.markHealthy()],
-    ['disconnected', (state: RemoteRuntimePtyRecoveryState) => state.markDisconnected()],
-    ['cancelled', (state: RemoteRuntimePtyRecoveryState) => state.cancel()],
-    ['disposed', (state: RemoteRuntimePtyRecoveryState) => state.dispose()]
-  ])('removes %s panes from the scheduled recovery registry', (_label, finish) => {
+  it('keeps a markDisconnected pane as revivable as the deadline it imitates', async () => {
     vi.useFakeTimers()
     const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
     const epoch = state.begin()
-    state.schedule(epoch, vi.fn())
-    const retryNow = vi.spyOn(state, 'retryNow')
+    state.schedule(epoch, retry)
 
-    finish(state)
-    retryAllRemoteRuntimePtyRecoveriesNow()
+    state.markDisconnected()
 
-    expect(retryNow).not.toHaveBeenCalled()
+    // Why: the latch stops self-initiated retries only; it must not un-register the pane.
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(retry).not.toHaveBeenCalled()
+    expect(state.currentPhase).toBe('disconnected')
+
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+    expect(retry).toHaveBeenCalledWith(epoch + 1)
+    expect(state.currentPhase).toBe('recovering')
+    state.dispose()
   })
+
+  it.each(['healthy', 'cancelled', 'disposed', 'deadline', 'exhausted', 'contact loss'] as const)(
+    'settles the owner caller once and retains only the allowance owned by %s',
+    async (finish) => {
+      vi.useFakeTimers()
+      const state = new RemoteRuntimePtyRecoveryState()
+      const epoch = state.begin()
+      const retry = vi.fn()
+      const claim = state.claimOwnerRefresh(epoch, retry)
+      const settled = vi.fn()
+      void claim?.promise.then(settled)
+      expect(state.claimOwnerRefresh(epoch, retry)).toEqual({
+        started: false,
+        promise: claim?.promise
+      })
+      const result = { id: 'owner', replay: '', isReattach: true }
+      await {
+        healthy: () => state.markHealthy(result),
+        cancelled: () => state.cancel(),
+        disposed: () => state.dispose(),
+        exhausted: () => state.markDisconnected(),
+        'contact loss': () => state.parkOwnerRefresh(epoch),
+        deadline: () => vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+      }[finish]()
+      expect(await claim?.promise).toEqual(finish === 'healthy' ? result : undefined)
+      if (finish === 'deadline' || finish === 'exhausted' || finish === 'contact loss') {
+        expect(state.hasOwnerRefresh).toBe(true)
+        expect(state.retryNow()).toBe(true)
+        const nextEpoch = finish === 'contact loss' ? epoch : epoch + 1
+        expect(retry).toHaveBeenCalledExactlyOnceWith(nextEpoch)
+        expect(state.claimOwnerRefresh(nextEpoch, retry)?.started).toBe(finish !== 'contact loss')
+      } else {
+        expect(state.hasOwnerRefresh).toBe(false)
+        expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
+      }
+      state.dispose()
+      await Promise.resolve()
+      expect(settled).toHaveBeenCalledOnce()
+    }
+  )
 
   it('keeps a timed-out pane revivable through the scheduled recovery registry', async () => {
     vi.useFakeTimers()
@@ -194,6 +239,33 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     state.dispose()
   })
 
+  it('fires a parked retry while still recovering, in the same epoch', () => {
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const epoch = state.begin()
+    expect(state.parkRetryForExternalTrigger(epoch, retry)).toBe(true)
+
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+    expect(retry).toHaveBeenCalledWith(epoch)
+    expect(state.currentPhase).toBe('recovering')
+    expect(state.retryNow()).toBe(false)
+    state.dispose()
+  })
+
+  it('reports a parked retry as waiting, not retrying, until a trigger fires it', () => {
+    const onChange = vi.fn()
+    const state = new RemoteRuntimePtyRecoveryState(onChange)
+    const epoch = state.begin()
+    onChange.mockClear()
+    expect(state.parkRetryForExternalTrigger(epoch, vi.fn())).toBe(true)
+
+    expect(state.awaitingExternalTrigger).toBe(true)
+    expect(onChange).toHaveBeenCalledOnce()
+    state.retryNow()
+    expect(state.awaitingExternalTrigger).toBe(false)
+    state.dispose()
+  })
+
   it('refuses to park over an armed backoff or a stale epoch', () => {
     vi.useFakeTimers()
     const state = new RemoteRuntimePtyRecoveryState()
@@ -205,6 +277,70 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     state.cancel()
     expect(state.parkRetryForExternalTrigger(epoch, vi.fn())).toBe(false)
     expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
+    state.dispose()
+  })
+
+  // #11305: the schedule and the deadline lived as two independent literals and drifted apart.
+  it('keeps the backoff schedule inside the auto-recovery budget it arms', () => {
+    const scheduleSumMs = REMOTE_RUNTIME_RECOVERY_DELAYS_MS.reduce(
+      (total, delayMs) => total + delayMs,
+      0
+    )
+
+    expect(scheduleSumMs).toBeLessThanOrEqual(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+    // Every step also needs room for the attempt it leads into, or the tail is dead code
+    // whenever a half-open link makes each attempt burn its full RPC timeout.
+    expect(
+      scheduleSumMs +
+        REMOTE_RUNTIME_RECOVERY_DELAYS_MS.length * REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS
+    ).toBeLessThanOrEqual(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+  })
+
+  it('reaches every backoff step when each attempt burns a full RPC timeout', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const attemptStartsMs: number[] = []
+    const epoch = state.begin()
+    const startedAt = Date.now()
+
+    const failSlowly = (currentEpoch: number): void => {
+      attemptStartsMs.push(Date.now() - startedAt)
+      // Silent-drop reconnects do not fail instantly; they time out.
+      setTimeout(() => {
+        if (state.isCurrent(currentEpoch)) {
+          state.schedule(currentEpoch, failSlowly)
+        }
+      }, REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS)
+    }
+    state.schedule(epoch, failSlowly)
+
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+
+    expect(attemptStartsMs.length).toBeGreaterThanOrEqual(REMOTE_RUNTIME_RECOVERY_DELAYS_MS.length)
+    expect(state.currentPhase).toBe('disconnected')
+    state.dispose()
+  })
+
+  // #12683: markDisconnected() is a UI latch, not proof the window ran out.
+  it('only reports the auto-recovery window spent when the deadline actually fired', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const epoch = state.begin()
+    state.schedule(epoch, vi.fn())
+
+    state.markDisconnected()
+    expect(state.currentPhase).toBe('disconnected')
+    expect(state.autoRecoveryDeadlineExpired).toBe(false)
+
+    const secondEpoch = state.begin()
+    state.schedule(secondEpoch, vi.fn())
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+
+    expect(state.currentPhase).toBe('disconnected')
+    expect(state.autoRecoveryDeadlineExpired).toBe(true)
+
+    state.markHealthy()
+    expect(state.autoRecoveryDeadlineExpired).toBe(false)
     state.dispose()
   })
 })

@@ -18,6 +18,7 @@ type WebAgentSessionHandoffState = {
 }
 
 const handoffByProvisionalTab = new Map<string, WebAgentSessionHandoffState>()
+export const MAX_WEB_AGENT_SESSION_HANDOFFS = 512
 
 function handoffKey(args: WebAgentSessionHandoffKey): string {
   return `${args.environmentId}\0${args.worktreeId}\0${args.provisionalTabId}`
@@ -33,11 +34,20 @@ export function recordWebAgentSessionHandoff(args: WebAgentSessionHandoff): void
   ) {
     return
   }
-  handoffByProvisionalTab.set(handoffKey(args), {
+  const key = handoffKey(args)
+  handoffByProvisionalTab.delete(key)
+  handoffByProvisionalTab.set(key, {
     hostTabId: args.hostTabId,
     hostTerminalHandle: args.hostTerminalHandle,
     postCreateSnapshotConfirmed: false
   })
+  while (handoffByProvisionalTab.size > MAX_WEB_AGENT_SESSION_HANDOFFS) {
+    const oldest = handoffByProvisionalTab.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    handoffByProvisionalTab.delete(oldest.value)
+  }
 }
 
 export function resolveWebAgentSessionHandoff(args: WebAgentSessionHandoffKey): string | null {

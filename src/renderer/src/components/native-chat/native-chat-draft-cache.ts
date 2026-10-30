@@ -1,28 +1,106 @@
-// Module-level cache for the composer's in-progress draft text, keyed by the
-// same stable pane scope as image attachments. The composer unmounts when the
-// pane toggles back to the hosted terminal, so without this the typed-but-unsent
-// draft would be lost on every TUI/GUI round-trip. Mirrors the attachment cache
-// so both halves of an unsent message survive toggles and reconnects.
+import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { JSONContent } from '@tiptap/react'
+import type {
+  NativeChatComposerDraftImage,
+  NativeChatComposerDraftOwner
+} from './native-chat-composer-draft-storage'
+// Expose text/document views of the durable whole-draft store so TUI switches and reloads retain unsent input.
 
-import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
-
-const draftCache = new Map<string, string>()
+import {
+  appendToNativeChatComposerDraft,
+  clearNativeChatComposerDraftsForTests,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
+import { clearNativeChatPendingAttachmentsForTests } from './native-chat-pending-attachment-cache'
 
 export function readNativeChatDraftCache(scopeKey: string): string {
-  return draftCache.get(scopeKey) ?? ''
+  return readNativeChatComposerDraft(scopeKey).text
 }
 
-export function writeNativeChatDraftCache(scopeKey: string, draft: string): void {
-  // An empty draft carries no state worth retaining; drop the entry so a stale
-  // scope key never resurrects cleared text.
-  if (draft === '') {
-    draftCache.delete(scopeKey)
+/** `unsaved` shows text this run without saving it while the draft is still exactly that text. */
+export function writeNativeChatDraftCache(
+  scopeKey: string,
+  draft: string,
+  options?: { unsaved?: boolean }
+): void {
+  if (readNativeChatComposerDraft(scopeKey).text === draft) {
     return
   }
-  // LRU-bounded so unsent drafts for permanently-removed panes can't accumulate.
-  setBoundedScopeCacheEntry(draftCache, scopeKey, draft)
+  // Cleared at once, so a sent or emptied draft never resurfaces.
+  updateNativeChatComposerDraft(
+    scopeKey,
+    { text: draft, document: undefined, ...(options?.unsaved ? { unsavedText: draft } : {}) },
+    draft === '' ? 'immediate' : 'deferred'
+  )
+}
+
+/** Append returned text and notify mounted composers; true means durable hand-back so its source copy may go. */
+export function appendNativeChatDraftCache(
+  scopeKey: string,
+  text: string,
+  owner?: NativeChatComposerDraftOwner,
+  /** A returned message's images, saved in the same step as the text whose chips name them. */
+  images?: readonly NativeChatComposerDraftImage[]
+): boolean {
+  if (text === '' && !images?.length) {
+    return true
+  }
+  return appendToNativeChatComposerDraft(scopeKey, { text, images }, owner)
 }
 
 export function clearNativeChatDraftCacheForTests(): void {
-  draftCache.clear()
+  clearNativeChatComposerDraftsForTests()
+}
+
+export function readNativeChatDraftDocument(
+  scopeKey: string,
+  text: string
+): JSONContent | undefined {
+  const draft = readNativeChatComposerDraft(scopeKey)
+  return draft.text === text ? draft.document : undefined
+}
+
+export function writeNativeChatDraftDocument(
+  scopeKey: string,
+  text: string,
+  document: JSONContent,
+  pastedTextFiles?: Readonly<Record<string, string>>
+): void {
+  if (!text) {
+    writeNativeChatDraftCache(scopeKey, '')
+    return
+  }
+  updateNativeChatComposerDraft(scopeKey, { text, document, pastedTextFiles }, 'deferred')
+}
+
+export function readNativeChatAttachmentCache(
+  scopeKey: string
+): NativeChatComposerImageAttachment[] {
+  return readNativeChatComposerDraft(scopeKey).images.map((image) => ({ ...image }))
+}
+
+/** Persist returned images immediately; only explicit user reattachment replaces same-named unavailable placeholders. */
+export function appendNativeChatAttachmentCache(
+  scopeKey: string,
+  appended: readonly NativeChatComposerImageAttachment[],
+  options?: { fromUser?: boolean }
+): void {
+  if (appended.length === 0) {
+    return
+  }
+  // Preview URLs can retain the full clipboard Blob, so only the path is kept.
+  appendToNativeChatComposerDraft(scopeKey, {
+    images: appended.map(({ id, path, connectionId }) => ({
+      id,
+      path,
+      ...(connectionId ? { connectionId } : {})
+    })),
+    ...(options?.fromUser ? { fromUser: true } : {})
+  })
+}
+
+export function clearNativeChatAttachmentCacheForTests(): void {
+  clearNativeChatComposerDraftsForTests()
+  clearNativeChatPendingAttachmentsForTests()
 }

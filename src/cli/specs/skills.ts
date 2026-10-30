@@ -40,81 +40,83 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Reads bundled guide metadata locally without contacting the Orca runtime.',
       'With --json, prints a topics array of canonical names and one-line descriptions.',
-      'Use `orca skills get <name>` for the full guide, or `orca skills install` to install skills.'
+      'Use `orca skills get <name>` for the compact guide, `--full` for its full reference package, or `orca skills install` to install skills.'
     ]
   },
   {
     path: ['skills', 'get'],
     aliases: [['skills', 'show']],
     summary: 'Print a version-matched skill guide as Markdown',
-    usage: 'orca skills get <topic> [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'topic', 'full'],
+    usage: 'orca skills get <topic> [--full | --reference <name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'topic', 'full', 'reference', 'references'],
     positionalArgs: ['topic'],
     notes: [
       'Reads bundled guide content locally without contacting the Orca runtime.',
-      'Use --full to include bundled reference documents when the guide provides them.',
+      'Prints the compact guide by default. Use --full to print the full guide with bundled references when provided.',
+      'Use --reference <name> to print one bundled reference alone, which is what an action gate in the compact guide needs; --references lists the available names.',
+      'A reference name may be given bare (recovery-and-cleanup) or as the guide spells it (references/recovery-and-cleanup.md).',
       'Use --json for a deterministic object containing canonical topic metadata and content.'
     ],
-    examples: ['orca skills get orca-cli', 'orca skills get orchestration --full']
+    examples: [
+      'orca skills get orca-cli',
+      'orca skills get orchestration --full',
+      'orca skills get orchestration --references',
+      'orca skills get orchestration --reference recovery-and-cleanup'
+    ]
   },
   {
     path: ['skills', 'install'],
-    summary: 'Install bundled Orca skills via the community skills CLI',
+    summary: 'Install bundled Orca skills on this machine',
     usage:
       'orca skills install [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
-      '[--local] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'dry-run'],
+      '[--local] [--force] [--dry-run] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
     notes: [
-      'Reads the bundled skill registry locally without contacting the Orca runtime.',
-      'Resolves to the same `npx skills add <repo> --skill <name> ...` command used by ' +
-        'Orca Settings, plus the non-interactive flags an unattended host needs ' +
-        '(`npx --yes` and `-y`), then runs it and forwards its output and exit code.',
-      'Installs globally (all projects, adds --global) by default. Use --local to install ' +
-        'into the current project instead.',
-      'Targets the coding agents Orca detects on this host, plus the shared ' +
-        '.agents/skills directory. Without an explicit target the skills CLI installs ' +
-        'into every agent it knows about, which litters a host with config ' +
-        'directories for agents it does not have.',
-      'Use --agent <name>[,<name>...] to choose targets yourself, or --agent universal ' +
-        'for the shared directory alone. Required when Orca detects no agent.',
-      'Use --dry-run to print the resolved command without running it.',
-      'With --json, the skill listing and --dry-run emit JSON; a real install streams ' +
-        "npx's own non-JSON output live and rejects --json.",
-      'Omit --skill and --all to list installable skill names.',
-      'Intended for headless hosts (SSH, containers, CI) with no desktop Settings UI to copy the install command from.'
+      'Reads the bundled skill registry locally without contacting the Orca runtime, ' +
+        'and needs no network, Node, Git or npx.',
+      'Writes the copy this Orca build ships into the shared .agents/skills folder and ' +
+        'links it into each detected agent\u2019s skills folder, the same way the app\u2019s ' +
+        'Update skills does.',
+      'Only copies Orca wrote and nobody changed are updated. A copy you changed, or a ' +
+        'different skill with the same name, is skipped and is reported; --force replaces ' +
+        'it after moving it to a backup under ~/.agents/.orca-skill-backups.',
+      'Installs globally (all projects) by default. Use --local to install into the ' +
+        'current project; it links only into agent folders the project already has.',
+      'Targets the coding agents Orca detects on this host. Use --agent <name>[,<name>...] ' +
+        'to choose them yourself, or --agent universal for the shared folder alone.',
+      'Use --dry-run to print what would change and the plan digest without writing; a ' +
+        'real run plans again and writes only if the plan still matches.',
+      'Exits 1 when a location failed or changed while it ran; skipped folders are warnings.',
+      'Omit --skill and --all to list installable skill names.'
     ],
     examples: [
-      'orca skills install',
       'orca skills install --skill orca-cli --skill orchestration',
       'orca skills install --skill orca-cli --local',
-      'orca skills install --skill orca-cli --agent claude-code,codex',
+      'orca skills install --skill orca-cli --agent claude,codex',
       'orca skills install --all --dry-run'
     ]
   },
   {
     path: ['skills', 'update'],
-    summary: 'Update already-installed Orca skills via the community skills CLI',
-    usage: 'orca skills update [--skill <name>]... [--all] [--local] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'local', 'dry-run'],
+    summary: 'Update Orca skills to the version this Orca build ships',
+    usage:
+      'orca skills update [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
+      '[--local] [--force] [--dry-run] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
     notes: [
-      'Reads the bundled skill registry locally without contacting the Orca runtime.',
-      'Resolves to the same `npx skills update <names...>` command used by Orca Settings, ' +
-        'plus the non-interactive flags an unattended host needs (`npx --yes` and `-y`), ' +
-        'then runs it and forwards its output and exit code.',
-      'Updates the global install (all projects, adds --global) by default. Use --local to ' +
-        'update the current project instead.',
-      'Only refreshes skills that are already installed; use `orca skills install` first.',
-      'Use --dry-run to print the resolved command without running it.',
-      'With --json, the skill listing and --dry-run emit JSON; a real update streams ' +
-        "npx's own non-JSON output live and rejects --json.",
-      'Omit --skill and --all to list updatable skill names.',
-      'Intended for headless hosts (SSH, containers, CI) with no desktop Settings UI to copy the update command from.'
+      'Runs the same planner as `orca skills install`, but only at locations that already ' +
+        'hold the skill; it never adds a skill, or an existing skill for another agent.',
+      'Updates each untouched copy where it is; other copies are skipped unless you ' +
+        'pass --force. Use `orca skills install` to add a skill for a newly detected agent.',
+      'Updates the global install by default. Use --local to update the current project.',
+      'Use --dry-run to print what would change and the plan digest without writing.',
+      'With --json, both dry runs and real runs print the plan, and real runs the result.',
+      'Omit --skill and --all to list updatable skill names.'
     ],
     examples: [
-      'orca skills update',
-      'orca skills update --skill orca-cli --skill orchestration',
-      'orca skills update --skill orca-cli --local',
-      'orca skills update --all --dry-run'
+      'orca skills update --all',
+      'orca skills update --skill orca-cli --dry-run',
+      'orca skills update --all --force'
     ]
   }
 ]

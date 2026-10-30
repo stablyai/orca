@@ -1,27 +1,27 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
-// Why: a restored pane's stale-account prompt can only be raised once a PTY is
-// actually attached — nothing is inspectable while the session hydrates.
+// Inspect stale-account state only after a concrete PTY attaches.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../shared/terminal-github-pr-link-detector'
 import { setRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS } from '../agent-task-complete-policy'
+import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
 
 import {
   isAgentTaskCompleteNotificationEnabled,
   isAgentTaskCompleteTrackingEnabled
 } from './agent-task-complete-settings'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/** PTY visibility reporting, active-PTY binding, and the spawn/rebind/bell handlers that follow it. */
 export function installPanePtyVisibilityBind(session: ConnectPanePtySession): void {
   session.observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   session.reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
-      // Why: remote-runtime PTYs use a relay path outside main's local
-      // renderer-visibility registry, so reporting them here is misleading.
+      // Remote-runtime streams bypass main’s renderer-visibility registry.
       return
     }
     setRendererPtyVisibilityClaim(session.transport, ptyId, visible)
@@ -34,8 +34,45 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       replacePtyId?: string
       sampleVisibleForegroundAgent?: boolean
     } = {}
-  ): void => {
-    session.bindProcessExitState(ptyId, options.replacePtyId)
+  ): boolean => {
+    // A disposed pane can still receive an already-queued transport callback; it no longer owns state.
+    if (session.disposed) {
+      return false
+    }
+    const state = useAppStore.getState()
+    const leafId = session.pane.leafId
+    const existingPtyId = leafId
+      ? state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[leafId]
+      : undefined
+    const tabPtyId = Object.values(state.tabsByWorktree)
+      .flat()
+      .find((tab) => tab.id === session.deps.tabId)?.ptyId
+    // Remounted mirrored panes may fresh-spawn while the tab names an old host handle; replace it atomically instead of retaining both identities.
+    const inferredReplacementPtyId =
+      existingPtyId && existingPtyId !== ptyId && tabPtyId === existingPtyId
+        ? existingPtyId
+        : undefined
+    const replacementPtyId = options.replacePtyId ?? inferredReplacementPtyId
+    if (!options.replacePtyId) {
+      const activePtyId = session.activePanePtyBinding
+      const isCurrentPaneTransport =
+        session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+      const isStaleTransportBinding =
+        !isCurrentPaneTransport || (activePtyId !== null && session.transport.getPtyId() !== ptyId)
+      const isInitialCurrentTransportBinding = isCurrentPaneTransport && activePtyId === null
+      if (
+        isStaleTransportBinding ||
+        (shouldIgnoreStalePanePtyLayoutBinding({
+          existingPtyId,
+          nextPtyId: ptyId,
+          tabPtyId
+        }) &&
+          !isInitialCurrentTransportBinding)
+      ) {
+        return false
+      }
+    }
+    session.bindProcessExitState(ptyId, replacementPtyId)
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {
       session.reportPanePtyVisibility(session.activePanePtyBinding, false)
     }
@@ -47,52 +84,45 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     session.activePanePtyBindingBoundAt = performance.now()
     session.registerSideEffectFactConsumerForPty(ptyId)
     session.syncHiddenRendererPtyDelivery()
-    session.deps.syncPanePtyLayoutBinding(session.pane.id, ptyId)
     // A live bind proves this pane is current again after detach/reattach.
     useAppStore.getState().restoreAgentPaneAuthority?.(session.cacheKey)
     notifyCodexPaneBoundForStaleSweep(ptyId)
     const tabPtyIds = useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId] ?? []
-    const directSshRetryAttemptId =
-      session.capturedDirectSshRetryPtyAccepted && session.directSshRetryAttempt
-        ? session.directSshRetryAttempt.attemptId
-        : undefined
-    if (
-      directSshRetryAttemptId ||
-      options.updateTabPtyId !== 'if-missing' ||
-      !tabPtyIds.includes(ptyId)
-    ) {
-      if (directSshRetryAttemptId) {
-        session.deps.updateTabPtyId(
-          session.deps.tabId,
-          ptyId,
-          options.replacePtyId,
-          directSshRetryAttemptId
-        )
-      } else if (options.replacePtyId) {
-        session.deps.updateTabPtyId(session.deps.tabId, ptyId, options.replacePtyId)
+    const updateTabPtyBinding = (): void => {
+      if (replacementPtyId) {
+        session.deps.updateTabPtyId(session.deps.tabId, ptyId, replacementPtyId)
       } else {
         session.deps.updateTabPtyId(session.deps.tabId, ptyId)
       }
     }
+    const shouldUpdateTabPtyId =
+      options.updateTabPtyId !== 'if-missing' || !tabPtyIds.includes(ptyId)
+    if (replacementPtyId) {
+      // Production replacement commits tab/layout atomically; keep lightweight test dependencies and pane bookkeeping synchronized too.
+      if (shouldUpdateTabPtyId) {
+        updateTabPtyBinding()
+      }
+      session.syncPanePtyLayoutBinding(ptyId)
+    } else {
+      if (shouldUpdateTabPtyId) {
+        updateTabPtyBinding()
+      }
+      // Publish the tab identity first so a late layout callback cannot leave a tab and pane split.
+      session.syncPanePtyLayoutBinding(ptyId)
+    }
+    if (session.paneStartup && !session.startupPtyBound) {
+      // Settles the captured one-shot startup only after this pane owns a concrete PTY.
+      session.startupPtyBound = true
+      session.deps.onStartupBound?.()
+    }
     if (options.seedInitialAgentStatus) {
       session.applyInitialAgentStatus()
     }
-    // Spawn/attach completion is when a pane gains a concrete PTY ID. The initial
-    // frame-level sync often runs before that async result arrives.
+    // Sync again at concrete binding because the frame-level sync may have run before async spawn/attach resolved.
     scheduleRuntimeGraphSync()
     session.agentCompletionCoordinator.startProcessTracking()
-    // Why: fresh spawns normally rely on a future OSC 133 command-start read to
-    // identify the launched agent; only adopted or restored PTYs may already be
-    // inside Codex with no new foreground signal. But no-OSC shells (Git Bash,
-    // cmd.exe) never emit a command-start, so an expected-agent pane spawned into
-    // one would never gain fresh evidence authorizing trusted Windows CSI-u
-    // routing for the launched agent, so Shift+Enter could submit (#7620, #9703).
-    // Seed the SAME command-start confirmation the manually-typed launch path
-    // uses (onCommandStarted): its bounded retry ladder spans agent boot, and a
-    // miss publishes shellForeground:false — recoverable by later focus/reveal
-    // samples. A visible-pty sample would instead let a slow boot latch a
-    // known-agent shell-confirm that clears launch identity and blocks recovery.
-    // A real OSC 133;C, if it arrives, simply supersedes this.
+    session.onAgentPreReadyDraftPtyBound?.(ptyId, session.spawnedFreshPtyId === ptyId)
+    // Seed command confirmation on fresh no-OSC agent launches: its retry ladder spans boot without latching a slow-start shell and poisoning recovery (#7620, #9703). Real OSC 133;C supersedes it.
     if (options.sampleVisibleForegroundAgent === true) {
       session.sampleVisiblePaneForegroundAgent()
     } else if (options.seedInitialAgentStatus === true) {
@@ -101,26 +131,18 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         session.paneForegroundAgentTracker.onCommandStarted(freshSpawnLaunchAgent)
       }
     }
+    return true
   }
 
   session.onPtySpawn = (ptyId: string): void => {
-    if (!session.claimCapturedDirectSshRetryPty(ptyId)) {
-      // Why: this callback proves a fresh process was created, so rejecting its obsolete lease must also retire it.
-      queueMicrotask(() => {
-        if (session.transport.getPtyId() === ptyId) {
-          session.transport.disconnect()
-        }
-      })
+    // Track actual fresh spawns so unused shell-startup failures remain visible; reattach/cold restore must retain ordinary exit semantics.
+    session.spawnedFreshPtyId = ptyId
+    // Seed Command Code working state once bound; it has no prompt-start hook, and later hooks refine it.
+    const bound = session.bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
+    if (!bound) {
+      // Late stale spawn callbacks cannot consume startup now owned by a successor pane.
       return
     }
-    // Why: record that this exact PTY was freshly spawned (not reattached), so a
-    // newborn shell that dies before any interaction (e.g. failing direnv on a
-    // just-created worktree) can be kept visible rather than tearing down the
-    // worktree. Reattach/coldRestore skip onPtySpawn (pty-transport.ts).
-    session.spawnedFreshPtyId = ptyId
-    // Why: Command Code has no prompt-start hook. Seed the visible working row
-    // once the PTY exists, then let real hook events refine or complete it.
-    session.bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
     // Spend queued startup only after this pane owns a concrete PTY.
     try {
       session.deps.onQueuedStartupSpawned?.()
@@ -128,41 +150,31 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       // Do not strand a successful spawn because a delivery callback failed.
     }
   }
-  session.onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
-    if (!session.canAdoptCapturedDirectSshRetryPty(ptyId)) {
+  session.onPtyRebind = (
+    ptyId: string,
+    replacedPtyId: string,
+    incarnationId?: string | null
+  ): void => {
+    if (session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport) {
       return
     }
-    // Why: provider handle rotation keeps the existing pane/session generation;
-    // replace its stale store identity without fresh-spawn exit semantics.
+    session.remotePtyIncarnationId = incarnationId ?? null
+    session.noteBoundProcessIncarnation(incarnationId)
+    // Handle rotation replaces store identity within the same pane/session generation, without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })
   }
-  // ─── Attention signal: BEL ────────────────────────────────────────────
-  //
-  // BEL (0x07) is the attention signal. A BEL raises tab- and worktree-level
-  // indicators, and fires an OS notification. The experimental pane marker
-  // clears when the user interacts with the exact pane.
-  //
-  // The one case where BEL falsely fires is when a crashed TUI left DEC
-  // private mode 1004 (focus event reporting) enabled — pane clicks then
-  // emit `\e[I`/`\e[O` into the shell, zsh treats them as unbound keys and
-  // rings the bell. This is specific to terminals with cross-restart
-  // persistence (as we have); our fix is to reset 1004 and friends after
-  // scrollback replay so the mode state matches the fresh shell
-  // underneath. See POST_REPLAY_MODE_RESET in shared/terminal-mode-reset-profiles.ts.
+  // BEL raises attention and OS notification; replay resets stale focus-report modes so shell clicks cannot generate false bells (shared/terminal-mode-reset-profiles.ts).
   session.onBell = (): void => {
-    // Why: restored Claude Code sessions have been observed to emit a real
-    // standalone BEL some time after daemon snapshot reattach, even when Orca
-    // did not just forward focus/control input. Treat the BEL as authoritative
-    // PTY output here; any product-side suppression should be an explicit UX
-    // decision higher up, not a transport-layer guess.
-    session.deps.markWorktreeUnread(session.deps.worktreeId)
-    session.deps.markTerminalTabUnread(session.deps.tabId)
-    if (useAppStore.getState().settings?.experimentalTerminalAttention === true) {
-      session.deps.markTerminalPaneUnread(session.cacheKey)
+    // Treat standalone restored-session BEL as authoritative output; any suppression belongs in explicit notification policy.
+    session.deps.markTerminalBell({
+      worktreeId: session.deps.worktreeId,
+      tabId: session.deps.tabId,
+      paneKey: session.cacheKey
+    })
+    // Delay BEL’s OS notice so a same-burst title completion can win the shared cooldown.
+    if (session.hookOwnedIdleAbsorbsBell === true) {
+      return
     }
-    // Why: agent CLIs often emit BEL in the same completion burst as their
-    // working->idle title change. Delay only the OS notification so the richer
-    // agent-complete notification can win the main-process worktree cooldown.
     session.pendingTerminalBellNotification = true
     if (!session.hasPendingAgentTaskCompleteNotification()) {
       session.scheduleTerminalBellNotification()
@@ -190,7 +202,19 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         return
       }
       session.pendingTerminalBellNotification = false
-      session.deps.dispatchNotification({ source: 'terminal-bell', paneKey: session.cacheKey })
+      // Why: the hook lane's pending Done announces this burst's turn end, superseding the BEL as a pane completion does.
+      if (
+        isAgentTaskCompleteNotificationEnabled() &&
+        hasPendingHookLaneCompletion(session.cacheKey, session.transport.getPtyId())
+      ) {
+        return
+      }
+      session.deps.dispatchNotification({
+        source: 'terminal-bell',
+        paneKey: session.cacheKey,
+        ptyId: session.transport.getPtyId(),
+        workspaceOwner: captureNotificationTransportOwner(session.transport)
+      })
     }, AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
   }
 
@@ -210,6 +234,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       clearTimeout(session.agentTaskCompleteNotificationMaxTimer)
       session.agentTaskCompleteNotificationMaxTimer = null
     }
+    session.hookOwnedIdleAbsorbsBell = false
     if (session.agentTaskCompleteStatusUnsubscribe !== null) {
       session.agentTaskCompleteStatusUnsubscribe()
       session.agentTaskCompleteStatusUnsubscribe = null
@@ -227,8 +252,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       session.scheduleTerminalBellNotification()
     }
     if (!enabled && session.wasAgentTaskCompleteTrackingEnabled) {
-      // Why: disabling every completion consumer is an event-time boundary.
-      // Drop pending alerts while preserving accepted-hook lifecycle state.
+      // Disabling all completion consumers drops pending alerts but preserves accepted-hook lifecycle state.
       session.agentTaskCompleteNotificationGeneration += 1
       session.requiresFreshWorkingForAgentTaskCompleteNotification = true
       session.clearPendingAgentTaskCompleteNotification()
@@ -236,8 +260,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         session.scheduleTerminalBellNotification()
       }
     } else if (enabled && !session.wasAgentTaskCompleteTrackingEnabled) {
-      // Why: a pane may have observed work while all completion consumers were
-      // disabled. Re-enabling should not let the next idle event report old work.
+      // Require fresh work after re-enable so an idle event cannot announce work observed while notifications were disabled.
       session.requiresFreshWorkingForAgentTaskCompleteNotification = true
     }
     session.wasAgentTaskCompleteTrackingEnabled = enabled

@@ -1,65 +1,68 @@
-// WebSocket transport letting mobile clients reach the Orca runtime over LAN (wss:// with TLS, else ws://); auth is per-device tokens, independent of transport encryption.
-import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
+// WebSocket transport letting mobile clients reach the Orca runtime over LAN (ws://); auth is per-device tokens, and E2EE runs above this layer.
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
-import { createStaticWebClientHandler } from './static-web-client-handler'
+import { answerWithoutWebClient, createStaticWebClientHandler } from './static-web-client-handler'
+import {
+  attachNodeWebSocketLifecycle,
+  clearNodeWebSocketPreAuthTimer,
+  rejectNodeWebSocketOverCapacity,
+  stopNodeWebSocketTransport,
+  type WebSocketConnectionCloseHandler,
+  type WebSocketMessageHandler
+} from './node-websocket-lifecycle'
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
+import { assertPortNotShadowingListener } from './shadowed-port-probe'
+import { REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 
-const MAX_WS_MESSAGE_BYTES = 1024 * 1024
-// Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
-const MAX_WS_CONNECTIONS = 128
-// Why: bound pre-upgrade descriptor use above the WS cap so raw sockets can't grow without bound.
-const MAX_TCP_CONNECTIONS = MAX_WS_CONNECTIONS * 2
+export const WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES
+// Allow many remote-desktop streams so stale ones cannot starve control RPCs.
+const WEBSOCKET_TRANSPORT_MAX_CONNECTIONS = 128
+// Bound pre-upgrade descriptors independently above the WS cap.
+const WEBSOCKET_TRANSPORT_MAX_TCP_CONNECTIONS = WEBSOCKET_TRANSPORT_MAX_CONNECTIONS * 2
+
 const PRE_AUTH_TIMEOUT_MS = 10_000
-type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
-type WebSocketMessageHandler = {
-  bivarianceHack(
-    msg: WebSocketMessagePayload,
-    reply: (response: string) => void,
-    ws: WebSocket
-  ): void
-}['bivarianceHack']
 
-// Why: mobile clients background-suspend sockets with no TCP FIN, leaving half-opens that otherwise only the OS keepalive (~2h) reaps; a 15s ping/pong sweep bounds that to ~60s (clients auto-pong per RFC 6455), since a reap needs consecutive unanswered probes rather than one (STA-3320).
+// Background phones leave half-opens without FIN; 15s probes plus consecutive misses bound ~2h OS cleanup to ~60s (STA-3320).
 const HEARTBEAT_INTERVAL_MS = 15_000
 
 export type WebSocketTransportOptions = {
   host: string
   port: number
-  tlsCert?: string
-  tlsKey?: string
   // Why: test-only override. Production uses HEARTBEAT_INTERVAL_MS.
   heartbeatIntervalMs?: number
-  // Why: deterministic suspension tests must advance wall time independently from timer callbacks.
+  // Suspend tests advance wall time independently from timer callbacks.
   heartbeatNow?: () => number
   // Why: test-only override. Production uses PRE_AUTH_TIMEOUT_MS.
   preAuthTimeoutMs?: number
-  // Why: the pairing server can also serve the browser client, avoiding a second static server.
+  // Serve browser assets from the pairing server to avoid another listener.
   staticRoot?: string
-  // Why: devices paired while the fallback port was active point at it, so it must bind first on later launches or those pairings strand (STA-1511).
+  // Retry persisted fallback first so previously paired endpoints remain reachable (STA-1511).
   fallbackPort?: number
-  // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
+  // Explicit serve pins precede stale fallbacks (#8535); defaults retain fallback-first for pairings.
   preferPinnedPort?: boolean
+  // Strict serve pins must refuse occupied ports rather than move (#26603).
+  requirePinnedPort?: boolean
+  // Deterministic rungs precede port 0 to keep fallbacks stable across reboots.
+  fallbackLadder?: readonly number[]
 }
 
 export class WebSocketTransport implements RpcTransport {
   private readonly host: string
   private readonly port: number
-  private readonly tlsCert: string | undefined
-  private readonly tlsKey: string | undefined
   private readonly heartbeat: RemoteRuntimeServerHeartbeat
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
-  private httpServer: HttpsServer | HttpServer | null = null
+  private readonly requirePinnedPort: boolean
+  private readonly fallbackLadder: readonly number[]
+  private persistedFallbackBindFailed = false
+  private httpServer: HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
-  private connectionCloseHandler:
-    | ((clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void)
-    | null = null
-  // Why: maps each socket to its authenticated clientId so close can report which device disconnected.
+  private connectionCloseHandler: WebSocketConnectionCloseHandler | null = null
+  // Track authenticated device ids so close can attribute disconnects.
   private wsClientIds = new Map<WebSocket, string>()
   private heartbeatConnections = new Set<WebSocket>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
@@ -67,44 +70,47 @@ export class WebSocketTransport implements RpcTransport {
   constructor({
     host,
     port,
-    tlsCert,
-    tlsKey,
     heartbeatIntervalMs,
     heartbeatNow,
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
-    preferPinnedPort
+    preferPinnedPort,
+    requirePinnedPort,
+    fallbackLadder
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
-    this.tlsCert = tlsCert
-    this.tlsKey = tlsKey
     this.heartbeat = new RemoteRuntimeServerHeartbeat(
       heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS,
       heartbeatNow,
-      MAX_WS_CONNECTIONS
+      WEBSOCKET_TRANSPORT_MAX_CONNECTIONS
     )
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
+    this.requirePinnedPort = requirePinnedPort === true
+    this.fallbackLadder = fallbackLadder ?? []
+  }
+
+  // True when the persisted fallback was tried and refused, so the caller can drop it.
+  get persistedFallbackFailed(): boolean {
+    return this.persistedFallbackBindFailed
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
     this.messageHandler = handler
   }
 
-  // Why: pass the closing `ws` and whether other sockets share its deviceToken, so client-scoped teardown fires only on the last disconnect.
-  onConnectionClose(
-    handler: (clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void
-  ): void {
+  // Pass socket and same-device peers so client-scoped cleanup runs only on last disconnect.
+  onConnectionClose(handler: WebSocketConnectionCloseHandler): void {
     this.connectionCloseHandler = handler
   }
 
   setClientId(ws: WebSocket, clientId: string): void {
     this.wsClientIds.set(ws, clientId)
-    this.clearPreAuthTimer(ws)
+    clearNodeWebSocketPreAuthTimer(ws, this.preAuthTimers)
   }
 
   terminateClientConnections(clientId: string): number {
@@ -112,13 +118,13 @@ export class WebSocketTransport implements RpcTransport {
       .filter(([, candidateClientId]) => candidateClientId === clientId)
       .map(([ws]) => ws)
     for (const ws of sockets) {
-      // Why: revocation is a security boundary; terminate() skips the handshake so a revoked stream stops immediately.
+      // Revocation must stop streams immediately; terminate skips the close handshake.
       ws.terminate()
     }
     return sockets.length
   }
 
-  // Why: with port 0 the OS assigns a random port; callers read the real bound port here for metadata and the mobile QR.
+  // Port 0 chooses a port at bind; advertise the actual port in metadata/QR.
   get resolvedPort(): number {
     const addr = this.httpServer?.address()
     if (addr && typeof addr === 'object') {
@@ -127,7 +133,7 @@ export class WebSocketTransport implements RpcTransport {
     return this.port
   }
 
-  // Why: the actual OS-reported bind interface, so callers can verify loopback vs all-interfaces (STA-2370).
+  // Expose actual bound interface to verify loopback versus all-interface scope (STA-2370).
   get resolvedHost(): string | null {
     const addr = this.httpServer?.address()
     return addr && typeof addr === 'object' ? addr.address : null
@@ -137,24 +143,38 @@ export class WebSocketTransport implements RpcTransport {
     if (this.wss) {
       return
     }
-
-    // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); on failure each candidate falls through to OS-assigned port 0.
+    if (this.requirePinnedPort) {
+      await this.tryListen(this.port).catch((error: unknown) => {
+        throw isPortListenFallbackError(error, this.port)
+          ? new PinnedPortUnavailableError(this.host, this.port, error)
+          : error
+      })
+      return
+    }
+    // Keep pairings on persisted fallback, unless explicitly pinned; try deterministic rungs before port 0 (STA-1511, #8535).
     const persistedFallbackPort =
       this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
         ? this.fallbackPort
         : undefined
-    const candidatePorts =
+    const configuredPorts =
       persistedFallbackPort === undefined
         ? [this.port]
         : this.preferPinnedPort
           ? [this.port, persistedFallbackPort]
           : [persistedFallbackPort, this.port]
+    const candidatePorts = [
+      ...configuredPorts,
+      ...this.fallbackLadder.filter((port) => !configuredPorts.includes(port))
+    ]
     for (const port of candidatePorts) {
       try {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
-        // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
+        if (port === persistedFallbackPort) {
+          this.persistedFallbackBindFailed = true
+        }
+        // Any fallback error may advance; configured ports advance only for occupied/denied binds.
         if (
           port !== persistedFallbackPort &&
           (!isPortListenFallbackError(error, port) || port === 0)
@@ -170,18 +190,13 @@ export class WebSocketTransport implements RpcTransport {
     await this.tryListen(0)
   }
 
-  private createHttpServer(): HttpServer | HttpsServer {
-    const requestListener = this.staticRoot
-      ? createStaticWebClientHandler(this.staticRoot)
-      : undefined
-    return this.tlsCert && this.tlsKey
-      ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey }, requestListener)
-      : createHttpServer(requestListener)
-  }
-
-  // Why: attach the WSS only after listen succeeds; earlier it re-emits httpServer's EADDRINUSE as an uncatchable exception and breaks the fallback.
+  // Attach WSS after successful listen or EADDRINUSE becomes an uncatchable re-emitted exception.
   private async tryListen(port: number): Promise<void> {
-    const httpServer = this.createHttpServer()
+    await assertPortNotShadowingListener(this.host, port)
+    // Without an HTTP request listener, plain HTTP hangs instead of receiving 404 (#30100).
+    const httpServer = createHttpServer(
+      this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : answerWithoutWebClient
+    )
 
     await new Promise<void>((resolve, reject) => {
       httpServer.once('error', reject)
@@ -191,17 +206,17 @@ export class WebSocketTransport implements RpcTransport {
       })
     })
 
-    // Why: the WS cap applies only post-upgrade; a separate TCP cap bounds raw/pre-upgrade descriptor use.
-    httpServer.maxConnections = MAX_TCP_CONNECTIONS
+    // Post-upgrade WS cap cannot bound raw TCP descriptors.
+    httpServer.maxConnections = WEBSOCKET_TRANSPORT_MAX_TCP_CONNECTIONS
 
     const wss = new WebSocketServer({
       server: httpServer,
-      maxPayload: MAX_WS_MESSAGE_BYTES
+      maxPayload: WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES
     })
 
     wss.on('connection', (ws) => {
-      if (wss.clients.size > MAX_WS_CONNECTIONS) {
-        this.rejectOverCapacity(ws)
+      if (wss.clients.size > WEBSOCKET_TRANSPORT_MAX_CONNECTIONS) {
+        rejectNodeWebSocketOverCapacity(ws)
         return
       }
       this.handleConnection(ws)
@@ -211,128 +226,43 @@ export class WebSocketTransport implements RpcTransport {
     this.wss = wss
   }
 
-  // Why: force-terminate soon after the 1013 close since a half-open phone may never ack and would hold the descriptor past the WS cap; the 'error' listener absorbs a reset while closing.
-  private rejectOverCapacity(ws: WebSocket): void {
-    ws.on('error', () => {})
-    ws.close(1013, 'Maximum connections reached')
-    const terminateTimer = setTimeout(() => ws.terminate(), 1_000)
-    terminateTimer.unref?.()
-    ws.once('close', () => clearTimeout(terminateTimer))
-  }
-
   async stop(): Promise<void> {
     const wss = this.wss
     const httpServer = this.httpServer
     this.wss = null
     this.httpServer = null
-    this.heartbeat.stop()
-    this.heartbeatConnections.clear()
-
-    if (wss) {
-      for (const client of wss.clients) {
-        // Why: a half-open mobile socket may never answer a close frame, which keeps httpServer.close pending.
-        client.terminate()
-      }
-      wss.close()
-    }
-
-    if (httpServer) {
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((error) => {
-          if (error) {
-            reject(error)
-            return
-          }
-          resolve()
-        })
-      })
-    }
+    await stopNodeWebSocketTransport({
+      wss,
+      httpServer,
+      heartbeat: this.heartbeat,
+      heartbeatConnections: this.heartbeatConnections
+    })
   }
 
-  // Why: WS connections are long-lived and multiplex many RPCs by `id`; auth and dispatch are delegated to the message handler.
   private handleConnection(ws: WebSocket): void {
-    let finalized = false
-    const onPong = (): void => {
-      this.heartbeat.noteAlive(ws)
-    }
-    const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
-      // Why: any inbound frame counts as proof of life, so an actively-talking client isn't reaped mid-request.
-      this.heartbeat.noteAlive(ws)
-      const msg =
-        typeof data === 'string'
-          ? data
-          : isBinary
-            ? new Uint8Array(data as Buffer)
-            : data.toString()
-      this.messageHandler?.(
-        msg,
-        (response) => {
-          // Why: mobile clients disconnect often; guard the write so we don't throw on a dead socket.
-          if (ws.readyState === ws.OPEN) {
-            ws.send(response)
-          }
-        },
-        ws
-      )
-    }
-    const onError = (): void => {
-      // Why: close isn't guaranteed after every error path; finalize here too so pre-auth E2EE state and connection ids can't leak.
-      finalizeConnection()
-      ws.close()
-    }
-    const finalizeConnection = (): void => {
-      if (finalized) {
-        return
-      }
-      finalized = true
-      ws.off('pong', onPong)
-      ws.off('message', onMessage)
-      ws.off('close', finalizeConnection)
-      ws.off('error', onError)
-      this.clearPreAuthTimer(ws)
-      this.heartbeatConnections.delete(ws)
-      if (this.heartbeatConnections.size === 0) {
-        this.heartbeat.stop()
-      }
-      const clientId = this.wsClientIds.get(ws) ?? null
-      this.wsClientIds.delete(ws)
-      const hasOtherConnections =
-        clientId !== null && Array.from(this.wsClientIds.values()).includes(clientId)
-      this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
-    }
-
-    const preAuthTimer = setTimeout(() => {
-      if (!this.wsClientIds.has(ws)) {
-        // Why: a silent auto-ponging client would otherwise hold a finite mobile slot forever without starting the E2EE handshake.
-        ws.terminate()
-      }
-    }, this.preAuthTimeoutMs)
-    if (typeof preAuthTimer.unref === 'function') {
-      preAuthTimer.unref()
-    }
-    this.preAuthTimers.set(ws, preAuthTimer)
-
-    ws.on('pong', onPong)
-    ws.on('message', onMessage)
-
-    // Why: clean up connection-scoped state (e.g. mobile-fit overrides) so a dropped phone doesn't leave orphaned phone-fit on desktop.
-    ws.on('close', finalizeConnection)
-    ws.on('error', onError)
-
-    // Why: every lifecycle event must have an owner before the first synchronous probe.
-    this.heartbeatConnections.add(ws)
-    this.heartbeat.noteAlive(ws)
-    if (this.heartbeatConnections.size === 1) {
-      this.heartbeat.start(() => this.wss?.clients ?? [])
-    }
+    attachNodeWebSocketLifecycle({
+      ws,
+      heartbeat: this.heartbeat,
+      preAuthTimeoutMs: this.preAuthTimeoutMs,
+      preAuthTimers: this.preAuthTimers,
+      clientIds: this.wsClientIds,
+      heartbeatConnections: this.heartbeatConnections,
+      getMessageHandler: () => this.messageHandler,
+      getConnectionCloseHandler: () => this.connectionCloseHandler
+    })
   }
+}
 
-  private clearPreAuthTimer(ws: WebSocket): void {
-    const timer = this.preAuthTimers.get(ws)
-    if (timer) {
-      clearTimeout(timer)
-      this.preAuthTimers.delete(ws)
-    }
+export class PinnedPortUnavailableError extends Error {
+  readonly code = 'pinned_port_unavailable'
+
+  constructor(host: string, port: number, cause: unknown) {
+    const reason = cause instanceof Error && 'code' in cause ? String(cause.code) : 'unavailable'
+    super(
+      `Port ${port} on ${host} is unavailable (${reason}). Stop whatever is using it, or pass a different --port.`,
+      { cause }
+    )
+    this.name = 'PinnedPortUnavailableError'
   }
 }
 

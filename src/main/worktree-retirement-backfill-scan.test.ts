@@ -11,7 +11,6 @@ const found = (names: string[], complete = true): RetirementScanResult => ({
   complete
 })
 
-/** A scan the test settles by hand, standing in for a `readdir` on a stalled NFS/SMB/WSL mount. */
 function stallingScan(): {
   run: () => Promise<RetirementScanResult>
   finish: (names: string[]) => void
@@ -26,13 +25,11 @@ function stallingScan(): {
         reject = rejectScan
       }),
     finish: (names) => settle(found(names)),
-    // A recovering mount usually errors the blocked call rather than answering it.
     fail: () => reject(new Error('EIO'))
   }
 }
 
-/** Drive one namespace to the state where its listing is abandoned but still stuck in the kernel. */
-async function stallPastDeadline(store: object, scanKey: string) {
+async function stallPastDeadline(store: WeakKey, scanKey: string) {
   const scan = stallingScan()
   const pending = runRetirementBackfillScan(store, scanKey, scan.run)
   const settled = expect(pending).rejects.toThrow(/exceeded/)
@@ -55,8 +52,6 @@ describe('runRetirementBackfillScan', () => {
   })
 
   it('does not stack a second listing while the first is still stuck', async () => {
-    // The deadline abandons a listing, it cannot cancel one. Retrying on the backoff alone would
-    // put another stuck `readdir` on the same wedged mount every 60s until the libuv pool starves.
     const store = {}
     await stallPastDeadline(store, 'ns')
     const retry = vi.fn(async () => found(['nautilus']))
@@ -72,7 +67,6 @@ describe('runRetirementBackfillScan', () => {
     const stalled = await stallPastDeadline(store, 'ns')
     const retry = vi.fn(async () => found(['nautilus']))
 
-    // The mount comes back: the kernel errors the blocked call, freeing the namespace to relist.
     stalled.fail()
     await vi.advanceTimersByTimeAsync(RETIREMENT_BACKFILL_RETRY_AFTER_FAILURE_MS)
 
@@ -86,15 +80,13 @@ describe('runRetirementBackfillScan', () => {
     const stalled = await stallPastDeadline(store, 'ns')
     const retry = vi.fn(async () => found(['nautilus']))
 
-    // The listing must be fully settled before this asserts anything: while it is still
-    // outstanding the no-restack rule answers first, and the backoff would go untested.
+    // Settle the listing first so the test exercises backoff, not the no-restack guard.
     stalled.fail()
     await vi.advanceTimersByTimeAsync(0)
 
     await expect(runRetirementBackfillScan(store, 'ns', retry)).rejects.toThrow(/exceeded/)
     expect(retry).not.toHaveBeenCalled()
 
-    // And it is the backoff, not the listing, that is holding it back.
     await vi.advanceTimersByTimeAsync(RETIREMENT_BACKFILL_RETRY_AFTER_FAILURE_MS)
     await expect(runRetirementBackfillScan(store, 'ns', retry)).resolves.toEqual(
       new Set(['nautilus'])
@@ -102,8 +94,6 @@ describe('runRetirementBackfillScan', () => {
   })
 
   it('never lets one wedged namespace stop another from scanning', async () => {
-    // A process-wide budget would let a single bad mount spend it on its own retries and starve
-    // every healthy repo, which is strictly worse than the wedge it replaces.
     const store = {}
     await stallPastDeadline(store, 'stuck-a')
     await stallPastDeadline(store, 'stuck-b')
@@ -130,8 +120,7 @@ describe('runRetirementBackfillScan', () => {
   })
 
   it('keeps a listing that lands after the deadline instead of discarding the answer', async () => {
-    // The WSL gate admits a single scan at a time and allows it 60s — four times this deadline —
-    // so a late-but-correct listing is the normal case there, not an edge case.
+    // WSL scan admission can exceed this deadline while still returning a valid answer.
     const store = {}
     const slow = await stallPastDeadline(store, 'ns')
     const rescan = vi.fn(async () => found(['orca']))

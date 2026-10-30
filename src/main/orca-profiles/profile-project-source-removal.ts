@@ -35,6 +35,10 @@ export function removeSourceRepo(
           ? null
           : state.ui.lastActiveWorktreeId,
       filterRepoIds: state.ui.filterRepoIds?.filter((id) => id !== repoId) ?? [],
+      explorerDisplayRootByWorktree: removeRepoWorktreeRecord(
+        state.ui.explorerDisplayRootByWorktree,
+        repoId
+      ),
       showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId)
     }
   }

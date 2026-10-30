@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { drawShape } from './markup-shape-render'
+import { drawShape, textInkBox } from './markup-shape-render'
 import { HIGHLIGHT_ALPHA, type MarkupShape } from './markup-drawing-model'
 
-// Minimal recording stand-in for CanvasRenderingContext2D — drawShape only uses
-// this subset, so we can assert the dispatch without a real canvas.
+// Record the context subset drawShape uses without requiring a real canvas.
 function makeRecordingCtx() {
   const calls: { method: string; args: unknown[] }[] = []
   const record =
@@ -24,6 +23,16 @@ function makeRecordingCtx() {
     strokeRect: record('strokeRect'),
     fillText: record('fillText'),
     strokeText: record('strokeText'),
+    // Records the style in force when measuring, and returns fixed ink metrics.
+    measureText: () => {
+      calls.push({ method: 'measureText', args: [ctx.font, ctx.textBaseline] })
+      return {
+        actualBoundingBoxLeft: 1,
+        actualBoundingBoxRight: 40,
+        actualBoundingBoxAscent: -2,
+        actualBoundingBoxDescent: 20
+      }
+    },
     lineCap: '',
     lineJoin: '',
     strokeStyle: '',
@@ -52,8 +61,11 @@ describe('drawShape dispatch', () => {
       ]
     }
     drawShape(ctx, shape)
-    expect(methods('moveTo')).toHaveLength(1)
-    expect(methods('lineTo')).toHaveLength(2)
+    expect(methods('moveTo')).toEqual([{ method: 'moveTo', args: [0, 0] }])
+    expect(methods('lineTo')).toEqual([
+      { method: 'lineTo', args: [5, 5] },
+      { method: 'lineTo', args: [9, 1] }
+    ])
     expect(methods('stroke')).toHaveLength(1)
   })
 
@@ -123,7 +135,7 @@ describe('drawShape dispatch', () => {
   })
 
   it('renders single-line text with a halo (stroke behind fill)', () => {
-    const { ctx, methods } = makeRecordingCtx()
+    const { ctx, calls } = makeRecordingCtx()
     drawShape(ctx, {
       id: 't',
       kind: 'text',
@@ -132,13 +144,14 @@ describe('drawShape dispatch', () => {
       text: 'fix this',
       fontSize: 18
     })
-    expect(methods('strokeText')).toHaveLength(1)
-    expect(methods('fillText')).toHaveLength(1)
-    expect(methods('fillText')[0].args[0]).toBe('fix this')
+    expect(calls.filter((call) => call.method.endsWith('Text'))).toEqual([
+      { method: 'strokeText', args: ['fix this', 5, 5] },
+      { method: 'fillText', args: ['fix this', 5, 5] }
+    ])
   })
 
-  it('save/restore brackets every shape so state never leaks', () => {
-    const { ctx, methods } = makeRecordingCtx()
+  it('brackets rectangle drawing with save and restore calls', () => {
+    const { ctx, calls } = makeRecordingCtx()
     drawShape(ctx, {
       id: 'r',
       kind: 'rect',
@@ -147,7 +160,31 @@ describe('drawShape dispatch', () => {
       from: { x: 0, y: 0 },
       to: { x: 1, y: 1 }
     })
-    expect(methods('save')).toHaveLength(1)
-    expect(methods('restore')).toHaveLength(1)
+    expect(calls).toEqual([
+      { method: 'save', args: [] },
+      { method: 'strokeRect', args: [0, 0, 1, 1] },
+      { method: 'restore', args: [] }
+    ])
+  })
+})
+
+describe('textInkBox', () => {
+  it('covers the measured glyphs plus the halo, measured in the style text is drawn with', () => {
+    const { ctx, methods } = makeRecordingCtx()
+
+    const box = textInkBox(ctx, {
+      id: 't',
+      kind: 'text',
+      color: '#111827',
+      at: { x: 100, y: 200 },
+      text: 'gy',
+      fontSize: 18
+    })
+
+    const [font, textBaseline] = methods('measureText')[0].args
+    expect(font).toContain('18px')
+    expect(textBaseline).toBe('top')
+    // The halo is 3px wide at 18px type, so it adds 1.5px on every side.
+    expect(box).toEqual({ x: 97.5, y: 200.5, width: 44, height: 21 })
   })
 })

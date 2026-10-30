@@ -1,18 +1,23 @@
 import { readFile } from 'node:fs/promises'
 import * as path from 'node:path'
+import { resolveGitMetadataPath, resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../../shared/gitdir-marker-payload'
+import type { GitRuntimeOptions } from '../git-runtime-options'
 
-export async function resolveGitDir(worktreePath: string): Promise<string> {
-  const dotGitPath = path.join(worktreePath, '.git')
+export async function resolveGitDir(
+  worktreePath: string,
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
+): Promise<string> {
+  // Translate guest paths before Node reads or resolves relative pointers in the Win32 namespace.
+  const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
+  const dotGitPath = path.join(hostWorktreePath, '.git')
 
   try {
-    const dotGitContents = await readFile(dotGitPath, 'utf-8')
-    const match = dotGitContents.match(/^gitdir:\s*(.+)\s*$/m)
-    if (match) {
-      return path.resolve(worktreePath, match[1])
+    const gitDir = parseGitdirMarkerPayload(await readFile(dotGitPath, 'utf-8'))
+    if (gitDir) {
+      return resolveGitMetadataPath(hostWorktreePath, gitDir, options) ?? dotGitPath
     }
-  } catch {
-    // `.git` is likely a directory in a non-worktree checkout.
-  }
+  } catch {}
 
   return dotGitPath
 }

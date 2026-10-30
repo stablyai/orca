@@ -3,6 +3,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
+  decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
@@ -26,7 +27,9 @@ type SubscribePayload = {
     desktopViewportClaims?: 1
     outputPause?: 1
     writeUnavailable?: 1
+    inputAck?: 1
   }
+  inputSessionId?: string
 }
 
 /** Frame-level emitters/readers for the multiplex stream a remote PTY transport talks to. */
@@ -68,12 +71,12 @@ export function createTerminalStreamFixtures(bindings: {
       })
   }
 
-  function emitOutput(streamId: number, data: string): void {
+  function emitOutput(streamId: number, data: string, seq = 1): void {
     bindings.getCallbacks()?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Output,
         streamId,
-        seq: 1,
+        seq,
         payload: encodeTerminalStreamText(data)
       })
     )
@@ -104,6 +107,21 @@ export function createTerminalStreamFixtures(bindings: {
         payload: new Uint8Array()
       })
     )
+  }
+
+  function inputFrameTexts(): string[] {
+    return bindings.sendBinary.mock.calls.flatMap(([bytes]) => {
+      const frame = decodeTerminalStreamFrame(bytes)
+      return frame?.opcode === TerminalStreamOpcode.Input
+        ? [decodeTerminalStreamText(frame.payload)]
+        : []
+    })
+  }
+
+  function subscribeFrameCount(): number {
+    return bindings.sendBinary.mock.calls.filter(
+      ([bytes]) => decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.Subscribe
+    ).length
   }
 
   function latestFrameForOpcode(opcode: TerminalStreamOpcode) {
@@ -137,6 +155,8 @@ export function createTerminalStreamFixtures(bindings: {
     emitOutput,
     emitSnapshot,
     latestFrameForOpcode,
+    inputFrameTexts,
+    subscribeFrameCount,
     emitSnapshotFrame
   }
 }

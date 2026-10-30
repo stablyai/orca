@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
   makeTab,
+  makeUnifiedTab,
   makeWorktree,
   TEST_REPO
 } from '../store/slices/store-test-helpers'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 import type { AppState } from '../store/types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
@@ -308,7 +311,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
 
-    // Fire an event for an unknown paneKey while not ready — must NOT call setAgentStatus.
     onSetListenerRef.current({
       paneKey: FUTURE_PANE_KEY,
       state: 'working',
@@ -356,11 +358,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('applies a large snapshot with one status and two bounded title publications', async () => {
+  it('applies a large snapshot with one status and bounded title publications', async () => {
     const paneCount = 100
     const snapshot: AgentStatusSetData[] = []
     const worktrees: AppState['worktreesByRepo'][string] = []
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
+    const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
     const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
     for (let index = 0; index < paneCount; index += 1) {
       const worktreeId = `wt-snapshot-${index}`
@@ -371,6 +374,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree[worktreeId] = [
         makeTab({ id: tabId, worktreeId, title: 'Pi', ptyId: `pty-${index}` })
       ]
+      unifiedTabsByWorktree[worktreeId] = [makeUnifiedTab({ id: tabId, worktreeId, groupId: 'g' })]
       terminalLayoutsByTabId[tabId] = {
         root: { type: 'leaf', leafId },
         activeLeafId: leafId,
@@ -407,6 +411,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         terminalFontSize: 13
       }
     } as Partial<AppState>)
+    store.setState({ unifiedTabsByWorktree })
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -417,11 +422,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     }))
     stubAuxiliaryModules()
+    const main = layoutApplyTestDouble()
     vi.stubGlobal(
       'window',
       buildWindowApi({
         getSnapshot,
-        onSet: () => () => {}
+        onSet: () => () => {},
+        runtime: { call: main.call }
       })
     )
 
@@ -439,16 +446,27 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
     resolveSnapshot?.(snapshot)
 
+    const renamed = () =>
+      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
         'Pi - action required'
       )
-      expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      // Main derives layout-owner tab titles; its unmodeled frames draw them without renderer writes.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeFalsy()
+      } else {
+        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      }
     })
+    for (let turn = 0; turn < 10; turn += 1) {
+      await Promise.resolve()
+    }
 
-    expect(relevantPublications).toBe(3)
+    expect(relevantPublications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 3)
     unsubscribe()
+    expect(renamed()).toEqual([])
   })
 
   it('indexes one 100-pane tab and its split tree once per snapshot', async () => {
@@ -486,17 +504,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
         return tabId
       }
     })
-    const snapshot = leafIds.map(
-      (leafId, index): AgentStatusSetData => ({
-        paneKey: makePaneKey(tabId, leafId),
-        worktreeId,
-        state: 'working',
-        prompt: `indexed prompt ${index}`,
-        agentType: 'claude',
-        receivedAt: 1_700_000_000_000 + index,
-        stateStartedAt: 1_700_000_000_000 + index
-      })
-    )
+    const snapshot = leafIds.map((leafId, index): AgentStatusSetData => ({
+      paneKey: makePaneKey(tabId, leafId),
+      worktreeId,
+      state: 'working',
+      prompt: `indexed prompt ${index}`,
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_000 + index,
+      stateStartedAt: 1_700_000_000_000 + index
+    }))
     let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
     const getSnapshot = vi.fn(
       () =>
@@ -653,11 +669,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(tabIdLookupCount).toBe(paneCount)
     expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)
 
+    // Repeated snapshots with unchanged tabs must reuse the ownership index.
     tabIdLookupCount = 0
     resolveUnsupportedSnapshot(unsupportedSnapshot)
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().migrationUnsupportedByPtyId)).toHaveLength(paneCount)
     })
-    expect(tabIdLookupCount).toBe(paneCount)
+    expect(tabIdLookupCount).toBe(0)
   })
 })

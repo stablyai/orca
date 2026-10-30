@@ -1,12 +1,16 @@
+import {
+  combinedDiffViewportAttributes,
+  combinedDiffRowAttributes
+} from '@/components/editor/combined-diff-viewport'
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import { translate } from '@/i18n/i18n'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
-import { CombinedDiffFileTree } from '@/components/editor/CombinedDiffFileTree'
+import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import type { DiffSection } from '@/components/editor/diff-section-types'
-import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
 import type { DiffSectionItemProps } from '@/components/editor/diff-section-item-props'
@@ -41,11 +45,11 @@ export function PRFilesCombinedDiffBody({
   openFilesOnGitHub,
   renderViewedCheckbox,
   handleAddLineComment,
-  fileByPath,
   setSectionHeights,
   setSections,
   modifiedEditorsRef,
-  handleSectionSaveRef
+  handleSectionSaveRef,
+  getCommentableLineNumbers
 }: {
   files: GitHubPRFile[]
   repoPath: string
@@ -78,7 +82,8 @@ export function PRFilesCombinedDiffBody({
     section: DiffSection,
     args: { lineNumber: number; startLine?: number; body: string }
   ) => Promise<boolean>
-  fileByPath: Map<string, GitHubPRFile>
+  // Keep this callback stable or every row’s comment decorator is re-keyed.
+  getCommentableLineNumbers: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   modifiedEditorsRef: React.RefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
@@ -107,7 +112,11 @@ export function PRFilesCombinedDiffBody({
           onCollapsedChange={setFileTreeCollapsed}
           onNavigate={handleTreeNavigate}
         />
-        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+        <div
+          {...combinedDiffViewportAttributes}
+          ref={scrollContainerRef}
+          className="min-w-0 flex-1 overflow-auto scrollbar-editor"
+        >
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]
@@ -117,6 +126,7 @@ export function PRFilesCombinedDiffBody({
               return (
                 <div
                   key={virtualItem.key}
+                  {...combinedDiffRowAttributes}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
                   className="absolute left-0 top-0 w-full"
@@ -150,9 +160,7 @@ export function PRFilesCombinedDiffBody({
                       'auto.components.GitHubItemDialog.86d84a17ca',
                       'Add a review comment'
                     )}
-                    getCommentableLineNumbers={(section) =>
-                      fileByPath.get(section.path)?.reviewCommentLineNumbers
-                    }
+                    getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
                     setSections={setSections}
                     modifiedEditorsRef={modifiedEditorsRef}

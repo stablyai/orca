@@ -6,10 +6,7 @@ const TOKEN_REQUEST_TIMEOUT_MS = 10_000
 const UPLOAD_TIMEOUT_MS = 30_000
 
 export type UploadBundleOptions = {
-  /** Server endpoint that issues short-lived tokens. From a build-time
-   *  constant or a user-set env var (developer mode). */
   readonly tokenEndpoint: string
-  /** Already-collected payload bytes retained by main after preview. */
   readonly payload: string
   readonly bundleSubmissionId: string
 }
@@ -34,20 +31,12 @@ type UploadResponse = {
   readonly ticket_id: string
 }
 
-/**
- * Two-step upload through a short-lived token. Failures throw an Error
- * with a human-readable message; the IPC handler in `ipc/diagnostics.ts`
- * surfaces them in the renderer toast.
- */
 export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBundleResult> {
   const bytes = Buffer.byteLength(opts.payload)
   if (bytes > MAX_BUNDLE_BYTES) {
     throw new Error(`bundle exceeds 4 MiB cap (${bytes} bytes)`)
   }
 
-  // (1) Request a token. The token endpoint is rate-limited per IP at the
-  // edge (10/hour). A failure here typically means the user has hit the
-  // rate limit or the network is offline.
   const tokenRes = (await postJsonForJson(
     opts.tokenEndpoint,
     {
@@ -67,15 +56,9 @@ export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBun
     throw new Error(`bundle exceeds server-issued cap (${bytes} > ${tokenRes.max_bytes})`)
   }
 
-  // Validate `upload_url` BEFORE we send the bearer token + user data to it.
-  // A misconfigured or compromised token endpoint could otherwise redirect
-  // the upload (with the bearer token and the user's NDJSON payload) to an
-  // attacker-controlled host. Require https in production and only relax to
-  // http when the configured tokenEndpoint is itself non-https for local dev.
+  // Validate the server-chosen destination before sending the token and diagnostic payload.
   validateUploadUrl(tokenRes.upload_url, opts.tokenEndpoint)
 
-  // (2) Upload using the bearer token. The server only accepts NDJSON uploads
-  // for this route and rejects other content-types at the edge.
   const uploadRes = (await postBodyForJson({
     url: tokenRes.upload_url,
     body: opts.payload,
@@ -100,13 +83,6 @@ export async function deleteBundle(opts: DeleteBundleOptions): Promise<void> {
   await postJsonForJson(endpoint, {}, TOKEN_REQUEST_TIMEOUT_MS)
 }
 
-/**
- * Reject an `upload_url` returned by the token endpoint that we can't safely
- * POST a bearer token + the user's diagnostic payload to. Exists because the
- * upload destination is chosen by the server response, not pinned at build
- * time — without this gate, a misconfigured or compromised token endpoint
- * could exfiltrate bundles to an attacker-controlled host.
- */
 export function validateUploadUrl(uploadUrl: string, tokenEndpoint: string): void {
   let parsedUpload: URL
   try {
@@ -127,8 +103,7 @@ export function validateUploadUrl(uploadUrl: string, tokenEndpoint: string): voi
   if (parsedUpload.protocol !== 'https:' && parsedUpload.protocol !== 'http:') {
     throw new Error('upload_url must use http(s)')
   }
-  // Same-origin host pin. Defends against a compromised token endpoint that
-  // returns a valid-https upload_url pointing at an attacker-controlled host.
+  // HTTPS alone cannot prevent a compromised endpoint from redirecting uploads to another host.
   if (parsedUpload.host !== parsedToken.host) {
     throw new Error('upload_url host must match tokenEndpoint host')
   }

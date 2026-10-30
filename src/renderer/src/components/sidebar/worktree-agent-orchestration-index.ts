@@ -1,3 +1,8 @@
+import {
+  selectVisibleAgentOrchestration,
+  representedOrchestrationWorktrees,
+  type VisibleOrchestrationState
+} from '@/runtime/visible-agent-orchestration'
 import type { AppState } from '@/store/types'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -8,7 +13,8 @@ type OrchestrationIndexState = Pick<
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
   | 'tabsByWorktree'
->
+> &
+  VisibleOrchestrationState
 
 type RuntimeOrchestrationRecord = Record<string, AgentStatusOrchestrationContext>
 
@@ -22,20 +28,26 @@ type TabMembershipCache = {
   worktreeIdsByTabId: Map<string, Set<string>>
 }
 
+type PaneWorktreeProjectionCache = {
+  runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey']
+  liveSource: OrchestrationIndexState['agentStatusByPaneKey']
+  retainedSource: OrchestrationIndexState['retainedAgentsByPaneKey']
+  representedSource: OrchestrationIndexState['unifiedTabsByWorktree']
+  paneWorktreeIds: readonly (string | undefined)[]
+}
+
 type OrchestrationIndexCache = {
   runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey']
   tabsSource: OrchestrationIndexState['tabsByWorktree']
-  liveSource: OrchestrationIndexState['agentStatusByPaneKey']
-  retainedSource: OrchestrationIndexState['retainedAgentsByPaneKey']
+  /** @see projectPaneWorktreeIds — the build's whole view of the live and retained maps. */
+  paneWorktreeIds: readonly (string | undefined)[]
   recordsByWorktree: ReadonlyMap<string, RuntimeOrchestrationRecord>
 }
 
-// Why: selector unit tests pass partial store mocks; a missing map must behave
-// like an empty slice while keeping a stable identity for the source cache.
+// Partial test stores need stable empty slices for source-cache identity.
 const EMPTY_SOURCE = {}
 
-// Why frozen: these are shared by every card, so an accidental write would
-// corrupt unrelated worktrees rather than fail locally.
+// Freeze shared empties so accidental writes cannot corrupt unrelated cards.
 export const EMPTY_WORKTREE_AGENT_ORCHESTRATION: RuntimeOrchestrationRecord = Object.freeze({})
 export const EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX: ReadonlyMap<
   string,
@@ -51,12 +63,78 @@ function createRecord(): RuntimeOrchestrationRecord {
 
 let runtimeEntriesCache: RuntimeEntriesCache | null = null
 let tabMembershipCache: TabMembershipCache | null = null
+let paneWorktreeProjectionCache: PaneWorktreeProjectionCache | null = null
 let orchestrationIndexCache: OrchestrationIndexCache | null = null
+let indexBuildCount = 0
 
 export function releaseWorktreeAgentOrchestrationIndexCache(): void {
   runtimeEntriesCache = null
   tabMembershipCache = null
+  paneWorktreeProjectionCache = null
   orchestrationIndexCache = null
+}
+
+export function _getWorktreeAgentOrchestrationIndexBuildCountForTest(): number {
+  return indexBuildCount
+}
+
+/** Key on live/retained attribution for exact runtime pane keys, preserving early SSH rows and ignoring stale entry.paneKey fields. */
+function projectPaneWorktreeIds(
+  runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey'],
+  runtimeEntries: readonly [string, AgentStatusOrchestrationContext][],
+  agentStatusByPaneKey: OrchestrationIndexState['agentStatusByPaneKey'],
+  retainedAgentsByPaneKey: OrchestrationIndexState['retainedAgentsByPaneKey'],
+  state: OrchestrationIndexState
+): readonly (string | undefined)[] {
+  // Cache by map identity so all cards share one attribution scan per publication.
+  if (
+    paneWorktreeProjectionCache?.runtimeSource === runtimeSource &&
+    paneWorktreeProjectionCache.liveSource === agentStatusByPaneKey &&
+    paneWorktreeProjectionCache.retainedSource === retainedAgentsByPaneKey &&
+    paneWorktreeProjectionCache.representedSource === state.unifiedTabsByWorktree
+  ) {
+    return paneWorktreeProjectionCache.paneWorktreeIds
+  }
+  const paneWorktreeIds: (string | undefined)[] = []
+  const represented = state.unifiedTabsByWorktree
+    ? representedOrchestrationWorktrees(state)
+    : new Map<string, string>()
+  for (const [paneKey, context] of runtimeEntries) {
+    paneWorktreeIds.push(
+      agentStatusByPaneKey[paneKey]?.worktreeId,
+      retainedAgentsByPaneKey[paneKey]?.worktreeId,
+      represented.get(paneKey),
+      represented.size > 0 && context.parentPaneKey
+        ? represented.get(context.parentPaneKey)
+        : undefined
+    )
+  }
+  paneWorktreeProjectionCache = {
+    runtimeSource,
+    liveSource: agentStatusByPaneKey,
+    retainedSource: retainedAgentsByPaneKey,
+    representedSource: state.unifiedTabsByWorktree,
+    paneWorktreeIds
+  }
+  return paneWorktreeIds
+}
+
+function hasSameOrderedValues(
+  previous: readonly (string | undefined)[],
+  next: readonly (string | undefined)[]
+): boolean {
+  if (previous === next) {
+    return true
+  }
+  if (previous.length !== next.length) {
+    return false
+  }
+  for (let index = 0; index < next.length; index += 1) {
+    if (previous[index] !== next[index]) {
+      return false
+    }
+  }
+  return true
 }
 
 function reuseRecordIfOrderedEqual(
@@ -88,8 +166,7 @@ function getWorktreeIdsByTabId(
   if (tabMembershipCache?.tabsSource === tabsByWorktree) {
     return tabMembershipCache.worktreeIdsByTabId
   }
-  // Why a Set per tab: the same tab id can appear under more than one worktree,
-  // and each of those worktrees must still see the pane's orchestration.
+  // A tab ID can belong to several worktrees; attribute its panes to each.
   const worktreeIdsByTabId = new Map<string, Set<string>>()
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     for (const tab of tabs ?? []) {
@@ -109,12 +186,13 @@ function getWorktreeIdsByTabId(
 function buildIndex(
   runtimeEntries: [string, AgentStatusOrchestrationContext][],
   tabsByWorktree: OrchestrationIndexState['tabsByWorktree'],
-  agentStatusByPaneKey: OrchestrationIndexState['agentStatusByPaneKey'],
-  retainedAgentsByPaneKey: OrchestrationIndexState['retainedAgentsByPaneKey']
+  paneWorktreeIds: readonly (string | undefined)[]
 ): ReadonlyMap<string, RuntimeOrchestrationRecord> {
+  indexBuildCount += 1
   const worktreeIdsByTabId = getWorktreeIdsByTabId(tabsByWorktree)
   const recordsByWorktree = new Map<string, RuntimeOrchestrationRecord>()
 
+  let projectionCursor = 0
   for (const [paneKey, orchestration] of runtimeEntries) {
     const parsed = parsePaneKey(paneKey)
     const parsedParent = orchestration.parentPaneKey
@@ -126,21 +204,26 @@ function buildIndex(
         targets.add(worktreeId)
       }
     }
-    // Why: child agent terminals can be attributed to a worktree before their
-    // tab reaches this renderer, or after the row has been retained as done.
-    // The parent link must still reach that worktree card.
+    // Keep parent links reachable before child tabs hydrate or after their status is retained.
     if (parsedParent) {
       for (const worktreeId of worktreeIdsByTabId.get(parsedParent.tabId) ?? []) {
         targets.add(worktreeId)
       }
     }
-    // Why exact runtime keys: this preserves early SSH attribution and ignores
-    // stale entry.paneKey fields carried by a live or retained row.
-    const liveWorktreeId = agentStatusByPaneKey[paneKey]?.worktreeId
+    const liveWorktreeId = paneWorktreeIds[projectionCursor]
+    const retainedWorktreeId = paneWorktreeIds[projectionCursor + 1]
+    const representedWorktreeId = paneWorktreeIds[projectionCursor + 2]
+    const parentWorktreeId = paneWorktreeIds[projectionCursor + 3]
+    if (representedWorktreeId) {
+      targets.add(representedWorktreeId)
+    }
+    if (parentWorktreeId) {
+      targets.add(parentWorktreeId)
+    }
+    projectionCursor += 4
     if (typeof liveWorktreeId === 'string') {
       targets.add(liveWorktreeId)
     }
-    const retainedWorktreeId = retainedAgentsByPaneKey[paneKey]?.worktreeId
     if (typeof retainedWorktreeId === 'string') {
       targets.add(retainedWorktreeId)
     }
@@ -165,26 +248,12 @@ function buildIndex(
   return recordsByWorktree
 }
 
-/**
- * Worktree-keyed index of runtime agent orchestration contexts, rebuilt only
- * when one of its four source maps changes identity.
- *
- * Why: every mounted worktree card subscribes to its own orchestration slice,
- * and Zustand re-runs every subscriber's selector on every store publication.
- * Scanning the whole context map per card made that O(cards x contexts). What
- * this removes is the per-card multiplier, not the rebuild itself: an agent
- * ping replaces the live map, so the index still rebuilds once per publication.
- * The first caller through a given store version pays O(tabs + contexts); the
- * rest are a Map lookup.
- */
+/** Share one worktree index, rebuilding only for context, tab or per-pane attribution changes; unrelated status pings are free. */
 export function selectWorktreeAgentOrchestrationIndex(
   state: OrchestrationIndexState
 ): ReadonlyMap<string, RuntimeOrchestrationRecord> {
-  const runtimeAgentOrchestrationByPaneKey =
-    state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_SOURCE
-  // Why cached separately from the index: enumerating the context map is the
-  // per-publication cost this index exists to remove, and the entry list stays
-  // valid even when a churning live/retained slice forces an index rebuild.
+  const runtimeAgentOrchestrationByPaneKey = selectVisibleAgentOrchestration(state)
+  // Cache context entries separately so unrelated live/retained churn cannot force enumeration.
   if (runtimeEntriesCache?.source !== runtimeAgentOrchestrationByPaneKey) {
     runtimeEntriesCache = {
       source: runtimeAgentOrchestrationByPaneKey,
@@ -192,41 +261,42 @@ export function selectWorktreeAgentOrchestrationIndex(
     }
   }
   const runtimeEntries = runtimeEntriesCache.entries
-  // Why here rather than before the enumeration: with no contexts the index is
-  // empty whatever the other slices hold, and callers rely on them staying unread.
+  // With no contexts, leave unrelated slices unread.
   if (runtimeEntries.length === 0) {
-    // Why the entries cache survives: dropping it would re-enumerate the empty
-    // map once per card, which is the per-publication cost this index removes.
+    // Keep empty entries cached to avoid re-enumerating once per card.
     tabMembershipCache = null
+    paneWorktreeProjectionCache = null
     orchestrationIndexCache = null
     return EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX
   }
 
   const tabsByWorktree = state.tabsByWorktree ?? EMPTY_SOURCE
-  const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_SOURCE
-  const retainedAgentsByPaneKey = state.retainedAgentsByPaneKey ?? EMPTY_SOURCE
+  const paneWorktreeIds = projectPaneWorktreeIds(
+    runtimeAgentOrchestrationByPaneKey,
+    runtimeEntries,
+    state.agentStatusByPaneKey ?? EMPTY_SOURCE,
+    state.retainedAgentsByPaneKey ?? EMPTY_SOURCE,
+    state
+  )
   if (
     orchestrationIndexCache?.runtimeSource === runtimeAgentOrchestrationByPaneKey &&
     orchestrationIndexCache.tabsSource === tabsByWorktree &&
-    orchestrationIndexCache.liveSource === agentStatusByPaneKey &&
-    orchestrationIndexCache.retainedSource === retainedAgentsByPaneKey
+    hasSameOrderedValues(orchestrationIndexCache.paneWorktreeIds, paneWorktreeIds)
   ) {
+    // Adopt the equal projection so later cards compare by identity without walking it.
+    orchestrationIndexCache.paneWorktreeIds = paneWorktreeIds
     return orchestrationIndexCache.recordsByWorktree
   }
 
+  // buildIndex reuses the previous build's records, so publish the new cache only after it runs.
+  const recordsByWorktree = buildIndex(runtimeEntries, tabsByWorktree, paneWorktreeIds)
   orchestrationIndexCache = {
     runtimeSource: runtimeAgentOrchestrationByPaneKey,
     tabsSource: tabsByWorktree,
-    liveSource: agentStatusByPaneKey,
-    retainedSource: retainedAgentsByPaneKey,
-    recordsByWorktree: buildIndex(
-      runtimeEntries,
-      tabsByWorktree,
-      agentStatusByPaneKey,
-      retainedAgentsByPaneKey
-    )
+    paneWorktreeIds,
+    recordsByWorktree
   }
-  return orchestrationIndexCache.recordsByWorktree
+  return recordsByWorktree
 }
 
 export function selectWorktreeAgentOrchestration(

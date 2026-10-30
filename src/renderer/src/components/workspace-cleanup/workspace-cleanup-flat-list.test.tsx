@@ -24,7 +24,6 @@ vi.mock('@/components/ui/tooltip', () => ({
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-// One row per bucket the retired tab partition used to hide behind a tab.
 const FLEET: WorkspaceCleanupFacets[] = [
   makeNamedFacets('ready-one', {
     candidate: { tier: 'ready' },

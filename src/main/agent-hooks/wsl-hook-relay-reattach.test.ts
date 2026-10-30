@@ -3,13 +3,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { ensureWslHookRelayForReattach } from './wsl-hook-relay-reattach'
 
 describe('ensureWslHookRelayForReattach', () => {
-  it('refreshes the surviving session distro after a local reattach', () => {
+  it('refreshes exact surviving distros across local reattachments', () => {
     const ensure = vi.fn()
 
-    ensureWslHookRelayForReattach({ isReattach: true, wslDistro: 'Ubuntu-24.04' }, null, ensure)
+    for (const wslDistro of ['Ubuntu-24.04', 'Ubuntu', 'Debian']) {
+      ensureWslHookRelayForReattach({ isReattach: true, wslDistro }, null, ensure)
+    }
 
-    expect(ensure).toHaveBeenCalledOnce()
-    expect(ensure).toHaveBeenCalledWith('Ubuntu-24.04')
+    expect(ensure.mock.calls).toEqual([['Ubuntu-24.04'], ['Ubuntu'], ['Debian']])
   })
 
   it.each([
@@ -24,14 +25,5 @@ describe('ensureWslHookRelayForReattach', () => {
     ensureWslHookRelayForReattach(result, connectionId, ensure)
 
     expect(ensure).not.toHaveBeenCalled()
-  })
-
-  it('preserves exact distro ownership across multiple local reattachments', () => {
-    const ensure = vi.fn()
-
-    ensureWslHookRelayForReattach({ isReattach: true, wslDistro: 'Ubuntu' }, null, ensure)
-    ensureWslHookRelayForReattach({ isReattach: true, wslDistro: 'Debian' }, null, ensure)
-
-    expect(ensure.mock.calls).toEqual([['Ubuntu'], ['Debian']])
   })
 })

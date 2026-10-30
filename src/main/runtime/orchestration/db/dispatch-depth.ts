@@ -7,16 +7,15 @@ import {
 import { OrchestrationError } from '../orchestration-error'
 import { isEquivalentPaneKey } from './pane-key-match'
 import type { OrchestrationDb } from './orchestration-db'
+import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
+import { potentiallyLiveRemoteAttachmentSql } from './federation/remote-attachment-liveness'
+import {
+  DISPATCH_CONTEXT_COLUMN_LIST,
+  REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST
+} from './row-column-lists'
 
-/**
- * Who is creating a dispatch row, for nesting-depth purposes.
- *
- * `system` is Orca's own in-process coordinator loop, which is host-local code
- * rather than a CLI caller and is a root by construction. It is an internal
- * discriminated branch on purpose — never a caller-supplied value, or a worker
- * could claim to be the loop.
- */
+/** The system root is internal host-local coordinator code; never let callers select it to bypass depth. */
 export type DispatchCreator =
   | { kind: 'system' }
   | {
@@ -25,24 +24,44 @@ export type DispatchCreator =
       paneKey?: string
       /** Remote attachment matching requires the exact incarnation; local rows do not. */
       processIncarnation?: string
+      /** A structured worker's bare Orca session id, recorded beside its handle. */
+      orcaSessionId?: OrcaSessionId | null
     }
+  /** A structured session with no terminal handle, identified by its Orca session id alone. */
+  | { kind: 'session'; orcaSessionId: OrcaSessionId }
 
-/**
- * Attachment states in which the worker may still be running.
- *
- * `start_unknown` means prompt delivery may have succeeded; `stopping` and
- * `stop_unknown` do not establish that the process exited. Loss of contact is
- * never evidence of process death — see docs/reference/ssh-execution-boundary.md.
- * An `unverifiable` worker must still count as a nesting parent.
- */
-const POTENTIALLY_LIVE_ATTACHMENT_STATES = [
-  'starting',
-  'ready',
-  'start_unknown',
-  'stopping',
-  'stop_unknown'
-] as const
+/** Creator identity to persist on a new row, so depth can later tell delegation from bookkeeping. */
+export function recordedCreatorIdentity(creator: DispatchCreator): {
+  creatorHandle: string | null
+  creatorPaneKey: string | null
+  creatorOrcaSessionId: OrcaSessionId | null
+} {
+  if (creator.kind === 'system') {
+    return { creatorHandle: null, creatorPaneKey: null, creatorOrcaSessionId: null }
+  }
+  if (creator.kind === 'session') {
+    return {
+      creatorHandle: null,
+      creatorPaneKey: null,
+      creatorOrcaSessionId: creator.orcaSessionId
+    }
+  }
+  return {
+    creatorHandle: creator.handle,
+    creatorPaneKey: creator.paneKey ?? null,
+    creatorOrcaSessionId: creator.orcaSessionId ?? null
+  }
+}
 
+/** Self-dispatch is bookkeeping; pre-v37 rows lack creator identity and conservatively count as parents. */
+export function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
+  if (row.creator_pane_key && row.assignee_pane_key) {
+    return isEquivalentPaneKey(row.creator_pane_key, row.assignee_pane_key)
+  }
+  return row.creator_handle != null && row.creator_handle === row.assignee_handle
+}
+
+/** Unknown start/stop outcomes cannot prove exit; count them as parents (docs/reference/ssh-execution-boundary.md). */
 export class AmbiguousDispatchParentError extends Error {
   constructor(message: string) {
     super(message)
@@ -50,14 +69,7 @@ export class AmbiguousDispatchParentError extends Error {
   }
 }
 
-/**
- * Depth of the deepest live role this caller currently holds.
- *
- * Why the maximum rather than the first match: one terminal process can hold a
- * local dispatch and a remote attachment at the same time, and the command
- * cannot say which role motivated it. Taking the maximum cannot undercount, so
- * it cannot let a deep worker pass as a shallow one.
- */
+/** Use the deepest live role: concurrent local and remote assignments must never undercount caller depth. */
 export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCreator): number {
   if (creator.kind === 'system') {
     return ROOT_DISPATCH_DEPTH
@@ -65,31 +77,60 @@ export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCrea
 
   const depths: number[] = []
 
-  // Local rows match on handle/pane as they always have. process_incarnation is
-  // nullable here and context-only dispatch stores null deliberately, so
-  // requiring it would drop real parents.
-  const local = this.findActiveDispatchForAssignee(creator.handle, creator.paneKey) as
-    | DispatchContextRow
-    | undefined
-  if (local) {
+  // Local context-only rows may lack incarnation; handle/pane identity must still count the parent.
+  const local = findActiveDispatchForCreator.call(this, creator)
+  if (local && !isSelfCreatedDispatch(local)) {
     depths.push(local.depth)
   }
 
-  for (const attachment of findPotentiallyLiveAttachmentsForCreator.call(this, creator)) {
+  const attachments =
+    creator.kind === 'terminal' ? findPotentiallyLiveAttachmentsForCreator.call(this, creator) : []
+  for (const attachment of attachments) {
     depths.push(attachment.depth)
   }
 
   return depths.length > 0 ? Math.max(...depths) : ROOT_DISPATCH_DEPTH
 }
 
-/**
- * Remote attachments matching this caller's pane AND exact process incarnation.
- *
- * Handle is deliberately not compared: identity survives handle remint and
- * nothing updates `remote_dispatch_attachments.terminal_handle` when it happens,
- * so a stored-handle predicate would reject a live federated parent. Pane
- * equivalence plus exact incarnation is what remote authority already uses.
- */
+/** Proven creator Attempt or null; multiple live matching remote attachments throw. */
+export function resolveCreatorDispatchId(
+  this: OrchestrationDb,
+  creator: DispatchCreator
+): string | null {
+  if (creator.kind === 'system') {
+    return null
+  }
+  const own = findActiveDispatchForCreator.call(this, creator)
+  // Self-dispatch is bookkeeping, not a parent Attempt.
+  const local = own && !isSelfCreatedDispatch(own) ? own : undefined
+  const remote =
+    creator.kind === 'terminal' ? findPotentiallyLiveAttachmentsForCreator.call(this, creator) : []
+  if ((local ? 1 : 0) + remote.length !== 1) {
+    return null
+  }
+  return local?.id ?? remote[0]?.dispatch_id ?? null
+}
+
+/** The live Dispatch this creator is itself working on, found the way its identity is recorded. */
+function findActiveDispatchForCreator(
+  this: OrchestrationDb,
+  creator: Exclude<DispatchCreator, { kind: 'system' }>
+): DispatchContextRow | undefined {
+  if (creator.kind === 'terminal') {
+    return this.findActiveDispatchForAssignee(creator.handle, creator.paneKey)
+  }
+  const row = this.db
+    .prepare(
+      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
+       WHERE assignee_orca_session_id = ? AND status IN ('pending', 'dispatched')
+       ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(creator.orcaSessionId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns one Dispatch row or undefined; the adapter exposes unknown.
+  return row as DispatchContextRow | undefined
+}
+
+/** Match pane and exact incarnation; stored remote handles can lag a remint. */
 function findPotentiallyLiveAttachmentsForCreator(
   this: OrchestrationDb,
   creator: Extract<DispatchCreator, { kind: 'terminal' }>
@@ -97,25 +138,21 @@ function findPotentiallyLiveAttachmentsForCreator(
   if (!creator.paneKey || !creator.processIncarnation) {
     return []
   }
-  const placeholders = POTENTIALLY_LIVE_ATTACHMENT_STATES.map(() => '?').join(', ')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
   const rows = this.db
     .prepare(
-      `SELECT * FROM remote_dispatch_attachments
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
        WHERE process_incarnation = ?
          AND pane_key IS NOT NULL
-         AND state IN (${placeholders})`
+         AND ${potentiallyLiveRemoteAttachmentSql()}`
     )
-    .all(
-      creator.processIncarnation,
-      ...POTENTIALLY_LIVE_ATTACHMENT_STATES
-    ) as RemoteDispatchAttachmentRow[]
+    .all(creator.processIncarnation) as RemoteDispatchAttachmentRow[]
 
   const matches = rows.filter(
     (row) => row.pane_key !== null && isEquivalentPaneKey(row.pane_key, creator.paneKey as string)
   )
 
-  // Two live attachments for one identity is an anomaly, not a depth question.
-  // Surface it rather than silently picking one.
+  // Multiple live attachments for one identity are ambiguous; never pick one silently.
   if (matches.length > 1) {
     throw new AmbiguousDispatchParentError(
       `Terminal ${creator.handle} matches ${matches.length} live remote attachments; cannot establish nesting depth.`
@@ -124,12 +161,7 @@ function findPotentiallyLiveAttachmentsForCreator(
   return matches
 }
 
-/**
- * Depth to stamp on a row this creator is about to make, rejecting over-cap.
- *
- * Every path that mints a live worker goes through here, so the cap cannot be
- * skipped by adding a new spawn verb.
- */
+/** Every live-worker insertion must enforce this depth cap before stamping the row. */
 export function resolveChildDispatchDepth(
   this: OrchestrationDb,
   creator: DispatchCreator,
@@ -148,9 +180,14 @@ export function resolveChildDispatchDepth(
 
 export type DispatchDepthMethods = {
   resolveCreatorDepth: typeof resolveCreatorDepth
+  resolveCreatorDispatchId: typeof resolveCreatorDispatchId
   resolveChildDispatchDepth: typeof resolveChildDispatchDepth
 }
 
 export function attachDispatchDepth(ctor: { prototype: object }): void {
-  Object.assign(ctor.prototype, { resolveCreatorDepth, resolveChildDispatchDepth })
+  Object.assign(ctor.prototype, {
+    resolveCreatorDepth,
+    resolveCreatorDispatchId,
+    resolveChildDispatchDepth
+  })
 }

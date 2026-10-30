@@ -5,36 +5,39 @@ import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-fe
 import { translate } from '@/i18n/i18n'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'
 
-/**
- * The preview's stand-in for an address bar. The guest's real origin is an internal scheme the
- * reader has no use for, so this names the document the way the workspace does — and says whose
- * machine it was read from, which is the part a paired or SSH reader cannot otherwise tell.
- */
+/** Show workspace path and host identity instead of the guest’s internal preview origin. */
 export function DocPreviewDocumentChip({
-  identity
+  identity,
+  onBeginEdit
 }: {
   identity: DocPreviewDocumentIdentity
+  /** When set, a click edits the address instead of copying the path (copy stays in the menu). */
+  onBeginEdit?: () => void
 }): React.JSX.Element {
   const { copyText, status } = useClipboardTextCopyFeedback(identity.absolutePath)
   const copied = status === 'copied'
+  const editLabel = translate(
+    'auto.components.editor.HtmlDocPreview.editAddressControl',
+    'Edit address'
+  )
   const copyLabel = translate(
     'auto.components.editor.HtmlDocPreview.copyDocumentPathControl',
     'Copy file path'
   )
-  // Why the label swaps: the icon change is the only other feedback, and an icon says nothing to
-  // a screen reader — the same trade TerminalLinkActionPopover makes.
+  // Announce copy feedback as text; an icon change alone is invisible to screen readers.
   const copiedLabel = translate(
     'auto.components.editor.HtmlDocPreview.documentPathCopied',
     'Copied'
   )
+  const label = onBeginEdit ? editLabel : copied ? copiedLabel : copyLabel
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          onClick={() => void copyText()}
-          aria-label={copied ? copiedLabel : copyLabel}
+          onClick={onBeginEdit ?? (() => void copyText())}
+          aria-label={label}
           className="@container flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-xl border border-border bg-background px-3 py-1 text-left shadow-sm hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {copied ? (
@@ -42,14 +45,12 @@ export function DocPreviewDocumentChip({
           ) : (
             <FileCode2 className="size-4 shrink-0 text-muted-foreground" />
           )}
-          {/* dir/ dimmed, filename normal — the same emphasis the file tree gives a path */}
+          {/* Match file-tree emphasis: muted directory, normal filename. */}
           <span className="min-w-0 flex-1 truncate text-sm">
             <span className="text-muted-foreground">{identity.directoryPrefix}</span>
             <span className="text-foreground">{identity.fileName}</span>
           </span>
-          {/* Below 24rem of chip width this row hides whole rather than clipping into slivers —
-              384px is what icon + label + a capped badge + a readable path stub need, so visible
-              implies contained. The tooltip keeps the full identity either way. */}
+          {/* Hide host details below their minimum readable width; the tooltip retains the full identity. */}
           <span className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground @[24rem]:flex">
             <span className="shrink-0">
               {translate(
@@ -59,8 +60,7 @@ export function DocPreviewDocumentChip({
             </span>
             {identity.hostLabel ? (
               <Badge variant="secondary" className="min-w-0 max-w-40 shrink font-normal">
-                {/* Why the inner span: text directly inside the flex pill clips both ends with no
-                    ellipsis — text-overflow needs a non-flex text box. */}
+                {/* Ellipsis needs a non-flex text box inside the badge. */}
                 <span className="min-w-0 truncate">{identity.hostLabel}</span>
               </Badge>
             ) : null}
@@ -68,7 +68,11 @@ export function DocPreviewDocumentChip({
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4}>
-        {copied ? copiedLabel : `${copyLabel} · ${identity.absolutePath}`}
+        {onBeginEdit
+          ? `${editLabel} · ${identity.absolutePath}`
+          : copied
+            ? copiedLabel
+            : `${copyLabel} · ${identity.absolutePath}`}
       </TooltipContent>
     </Tooltip>
   )

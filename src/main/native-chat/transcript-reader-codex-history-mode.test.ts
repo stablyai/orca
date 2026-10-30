@@ -1,7 +1,11 @@
+import { codexLegacyMirrorRecords } from './agent-session-journal/codex-history-test-fixture'
+import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
+import { createNativeChatMerger, replaceList } from '../../shared/native-chat/native-chat-merge'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { extractPendingAsk } from '../../shared/native-chat/input/native-chat-ask'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { readNativeChatTranscript } from './transcript-reader'
 import { readNativeChatTranscriptTail } from './transcript-tail-reader'
@@ -133,6 +137,19 @@ describe('Codex transcript history modes', () => {
         },
         '2026-08-09T10:00:01.000Z'
       ),
+      completedItem({ type: 'ContextCompaction', id: 'compaction-1' }, '2026-08-09T10:00:01.500Z'),
+      {
+        type: 'response_item',
+        payload: {
+          type: 'reasoning',
+          id: 'reason',
+          summary: [{ type: 'summary_text', text: 'why' }]
+        }
+      },
+      completedItem(
+        { type: 'Reasoning', id: 'reason', summary_text: ['why'], raw_content: [] },
+        '2026-08-09T10:00:01.750Z'
+      ),
       {
         type: 'response_item',
         payload: {
@@ -172,43 +189,48 @@ describe('Codex transcript history modes', () => {
           ]
         },
         {
+          id: 'compaction-1',
+          role: 'system',
+          timestamp: Date.parse('2026-08-09T10:00:01.500Z'),
+          blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }]
+        },
+        { id: 'reason', role: 'reasoning', blocks: [{ type: 'text', text: 'why' }] },
+        {
           id: 'assistant-1',
           role: 'assistant',
           blocks: [{ type: 'text', text: 'Visible response' }]
         }
       ]
     })
-    expect('messages' in result && result.messages).toHaveLength(2)
     expect(tail).toMatchObject({ messages: 'messages' in result ? result.messages : [] })
+    const snapshot = createNativeChatMerger()
+    replaceList(snapshot, 'messages' in result ? result.messages : [])
+    expect(snapshot.list.filter(({ role }) => role === 'reasoning')).toHaveLength(1)
+    const imported = await prepareLegacyTranscriptImport({
+      agent: 'codex',
+      sessionId: 'session-1',
+      options: { filePath }
+    })
+    expect(
+      imported.ok &&
+        imported.items
+          .filter(({ body }) => body.kind === 'message' && body.role === 'reasoning')
+          .map(({ body }) => body)
+    ).toEqual([{ kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text: 'why' }] }])
   })
 
   it('keeps legacy event messages without duplicating response copies', async () => {
-    const filePath = await writeCodexFixture([
-      {
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'input_text', text: 'Prompt' }]
-        }
-      },
-      { type: 'event_msg', payload: { type: 'user_message', message: 'Prompt' } },
-      { type: 'event_msg', payload: { type: 'agent_message', message: 'Response' } },
-      {
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'output_text', text: 'Response' }]
-        }
-      }
-    ])
+    const filePath = await writeCodexFixture(codexLegacyMirrorRecords())
 
     const result = await readNativeChatTranscript('codex', 'session-1', { filePath })
 
     expect(result).toMatchObject({
       messages: [
         { role: 'user', blocks: [{ type: 'text', text: 'Prompt' }] },
+        {
+          role: 'system',
+          blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }]
+        },
         { role: 'assistant', blocks: [{ type: 'text', text: 'Response' }] }
       ]
     })
@@ -239,12 +261,105 @@ describe('Codex transcript history modes', () => {
     expect(call).toMatchObject({
       id: 'call-1',
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name: 'exec', input: 'pwd' }]
+      blocks: [{ type: 'tool-call', name: 'exec', input: 'pwd', callId: 'durable-call-1' }]
     })
     expect(output).toMatchObject({
       id: 'fallback-output',
       role: 'tool',
       blocks: [{ type: 'tool-result', output: 'ok' }]
     })
+  })
+
+  it('passes an argument payload through untouched, so no consumer changes shape', () => {
+    const call = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          id: 'call-2',
+          name: 'shell',
+          arguments: '{"command":["bash","-lc","echo hi"]}'
+        }
+      }),
+      'fallback-args'
+    )
+
+    expect(call?.blocks[0]).toMatchObject({
+      type: 'tool-call',
+      name: 'shell',
+      input: '{"command":["bash","-lc","echo hi"]}'
+    })
+  })
+
+  it('does not raise a question card from an unrelated tool that carries a questions payload', () => {
+    const call = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          id: 'call-3',
+          name: 'some_mcp_tool',
+          arguments: '{"questions":[{"question":"Which branch?","options":["main","dev"]}]}'
+        }
+      }),
+      'fallback-questions'
+    )
+
+    expect(call).not.toBeNull()
+    expect(extractPendingAsk(call ? [call] : [])).toBeNull()
+  })
+
+  it('keeps an async question pending past its display acknowledgement until the user replies', () => {
+    const lines = [
+      {
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          name: 'request_user_input_async',
+          call_id: 'call-async',
+          arguments:
+            '{"questions":[{"title":"Which color?","options":["Red (Recommended)","Blue"]},{"title":"Any constraints?"}]}'
+        }
+      },
+      completedItem(
+        {
+          type: 'AgentMessage',
+          id: 'call-async',
+          content: [{ type: 'Text', text: 'Which color?\n- Red (Recommended)\n- Blue' }],
+          delivery: 'async'
+        },
+        '2026-10-21T00:00:01.000Z'
+      ),
+      {
+        type: 'response_item',
+        payload: {
+          type: 'function_call_output',
+          call_id: 'call-async',
+          output: '{"accepted":true}'
+        }
+      }
+    ]
+    const messages = lines.flatMap((line, index) => {
+      const message = decodeCodexTranscriptLine(JSON.stringify(line), `line-${index}`)
+      return message ? [message] : []
+    })
+
+    expect(extractPendingAsk(messages)).toEqual({
+      replyAsMessage: true,
+      questions: [
+        {
+          question: 'Which color?',
+          multiSelect: false,
+          options: [{ label: 'Red (Recommended)' }, { label: 'Blue' }]
+        },
+        { question: 'Any constraints?', multiSelect: false, options: [] }
+      ]
+    })
+
+    const reply = decodeCodexTranscriptLine(
+      JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: 'Red' } }),
+      'reply'
+    )
+    expect(extractPendingAsk([...messages, ...(reply ? [reply] : [])])).toBeNull()
   })
 })

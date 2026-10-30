@@ -5,28 +5,30 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  CHECKOUT_DIFF_FLAGS,
-  PNPM_DIFF_FLAGS,
   assertBuildStepsAllowed,
   assertPublishedCommit,
-  assertSourceDerivationsAgree,
   assertSourcemapPolicy,
-  firstDifferenceIndex,
-  formatCheckFailure,
+  lockfileHasPatchEntry,
   lockfilePatchHashIsStale,
-  normalizePnpmDiff,
   patchHash,
-  pnpmDiffEnvironment,
   readLockfilePatchHash,
   readLockfileResolutionHashes,
-  sourceHunks,
-  splitPatchEntries,
   stampVersionSource,
   updateLockfilePatchHash
 } from './regenerate-xterm-patches.mjs'
+import {
+  CHECKOUT_DIFF_FLAGS,
+  PNPM_DIFF_FLAGS,
+  assertSourceDerivationsAgree,
+  firstDifferenceIndex,
+  formatCheckFailure,
+  normalizePnpmDiff,
+  pnpmDiffEnvironment,
+  sourceHunks,
+  splitPatchEntries
+} from './xterm-patch-text.mjs'
 
-// Only the tests need to slice the generated half out of a patch; the generator
-// reads `generatedPaths` directly where it compares against the pristine build.
+// Only tests slice generated patch section; generator compares manifest generatedPaths directly with pristine build.
 function generatedHunks(patchText, generatedPaths) {
   return splitPatchEntries(patchText)
     .filter((entry) => generatedPaths.some((prefix) => entry.path.startsWith(prefix)))
@@ -94,31 +96,13 @@ const PATCHED = {
 }
 
 describe('pnpm diff format', () => {
-  it('keeps the exact git flags pnpm uses, so patches survive `pnpm patch-commit`', () => {
-    expect(PNPM_DIFF_FLAGS).toEqual([
-      '-c',
-      'core.safecrlf=false',
-      'diff',
-      '--src-prefix=a/',
-      '--dst-prefix=b/',
-      '--ignore-cr-at-eol',
-      '--irreversible-delete',
-      '--full-index',
-      '--no-index',
-      '--text',
-      '--no-ext-diff',
-      '--no-color'
-    ])
-  })
-
-  it('blanks the config-bearing environment variables', () => {
+  it('matches pnpm git config isolation', () => {
     const environment = pnpmDiffEnvironment({ PATH: '/usr/bin', HOME: '/Users/someone' })
     expect(environment).toMatchObject({
       PATH: '/usr/bin',
       GIT_CONFIG_NOSYSTEM: '1',
-      HOME: '',
-      XDG_CONFIG_HOME: '',
-      USERPROFILE: ''
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      HOME: '/Users/someone'
     })
   })
 
@@ -240,8 +224,7 @@ describe('round-trip stability', () => {
   })
 })
 
-// `--write` rewrites the source patch from the emitted patch, so a hunk the
-// emitted patch cannot name would delete itself on the next run.
+// --write derives source patch from emitted hunks; an unnameable hunk would delete itself next run.
 describe('source derivation agreement', () => {
   const publishedEntry = [
     'diff --git a/src/browser/Types.ts b/src/browser/Types.ts',
@@ -275,10 +258,26 @@ describe('source derivation agreement', () => {
     ).toThrow(/disagree on a source file/)
   })
 
-  it('diffs the checkout with pnpm formatting so the two halves stay comparable', () => {
-    expect(CHECKOUT_DIFF_FLAGS).toEqual(PNPM_DIFF_FLAGS.filter((flag) => flag !== '--no-index'))
-    expect(CHECKOUT_DIFF_FLAGS).toContain('--full-index')
-    expect(CHECKOUT_DIFF_FLAGS).not.toContain('--no-index')
+  it('diffs a nested checkout with package-relative paths and full object IDs', async () => {
+    const root = await createDirectory()
+    const checkout = path.join(root, 'checkout')
+    const packageRoot = path.join(checkout, 'addons', 'widget')
+    const pristine = path.join(root, 'pristine')
+    await writeTree(packageRoot, PRISTINE)
+    await writeTree(pristine, PRISTINE)
+    execFileSync('git', ['init', '--quiet', checkout], { env: pnpmDiffEnvironment() })
+    execFileSync('git', ['add', '.'], { cwd: checkout, env: pnpmDiffEnvironment() })
+    await writeTree(packageRoot, PATCHED)
+
+    const patch = execFileSync('git', [...CHECKOUT_DIFF_FLAGS, 'src/'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: pnpmDiffEnvironment()
+    })
+
+    expect(patch).toBe(sourceHunks(diffFolders(pristine, packageRoot)))
+    expect(patch).toContain('diff --git a/src/Widget.ts b/src/Widget.ts')
+    expect(patch).toMatch(/^index [0-9a-f]{40}\.\.[0-9a-f]{40} 100644$/m)
   })
 })
 
@@ -327,8 +326,7 @@ describe('manifest guards', () => {
 
   it('refuses a sourcemap policy it does not implement', () => {
     expect(assertSourcemapPolicy({ sourcemaps: { policy: 'include' } })).toBe('include')
-    // `delete` named a code path that no longer exists; accepting it would ship
-    // maps that do not match the bundle.
+    // Reject retired delete policy or source maps ship mismatched to bundle.
     expect(() => assertSourcemapPolicy({ sourcemaps: { policy: 'delete' } })).toThrow(
       /must be one of include, got "delete"/
     )
@@ -350,12 +348,8 @@ describe('manifest guards', () => {
 describe('lockfile coupling', () => {
   const lockfile = [
     'patchedDependencies:',
-    "  '@xterm/xterm@6.1.0-beta.287':",
-    `    hash: ${'0'.repeat(64)}`,
-    '    path: config/patches/@xterm__xterm@6.1.0-beta.287.patch',
-    '  node-pty@1.1.0:',
-    `    hash: ${'1'.repeat(64)}`,
-    '    path: config/patches/node-pty@1.1.0.patch',
+    `  '@xterm/xterm@6.1.0-beta.287': ${'0'.repeat(64)}`,
+    `  node-pty@1.1.0: ${'1'.repeat(64)}`,
     'snapshots:',
     `  '@xterm/addon-fit@0.12.0-beta.287(@xterm/xterm@6.1.0-beta.287(patch_hash=${'0'.repeat(64)}))':`,
     `      '@xterm/xterm': 6.1.0-beta.287(patch_hash=${'0'.repeat(64)})`,
@@ -381,8 +375,7 @@ describe('lockfile coupling', () => {
     expect(updated.split('\n')).toHaveLength(lockfile.split('\n').length)
   })
 
-  // pnpm repeats the hash in every resolution key. Rewriting only patchedDependencies
-  // installs fine on a warm store and drifts on a cold one, so it fails in CI only.
+  // Rewrite every resolution hash: patchedDependencies alone passes warm installs but fails cold CI stores.
   it('rewrites the resolution keys as well as patchedDependencies', () => {
     const key = '@xterm/xterm@6.1.0-beta.287'
     expect(readLockfileResolutionHashes(lockfile, key)).toEqual(['0'.repeat(64), '0'.repeat(64)])
@@ -396,7 +389,10 @@ describe('lockfile coupling', () => {
 
   it('reports a lockfile stale in its resolution keys alone', () => {
     const key = '@xterm/xterm@6.1.0-beta.287'
-    const halfUpdated = lockfile.replace(`hash: ${'0'.repeat(64)}`, `hash: ${'a'.repeat(64)}`)
+    const halfUpdated = lockfile.replace(
+      `'@xterm/xterm@6.1.0-beta.287': ${'0'.repeat(64)}`,
+      `'@xterm/xterm@6.1.0-beta.287': ${'a'.repeat(64)}`
+    )
 
     expect(readLockfilePatchHash(halfUpdated, key)).toBe('a'.repeat(64))
     expect(lockfilePatchHashIsStale(halfUpdated, key, 'a'.repeat(64))).toBe(true)
@@ -407,6 +403,12 @@ describe('lockfile coupling', () => {
     expect(() => readLockfilePatchHash(lockfile, '@xterm/addon-webgl@0.20.0-beta.286')).toThrow(
       /no patchedDependencies entry/
     )
+  })
+
+  it('reports a missing key without throwing, which is the state mid version bump', () => {
+    // Missing renamed key is normal mid-bump; let later pnpm install create it rather than aborting --write.
+    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.287')).toBe(true)
+    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.288')).toBe(false)
   })
 })
 
@@ -431,23 +433,8 @@ describe('check-mode reporting', () => {
   })
 })
 
-// These run without network or a build, so ordinary `pnpm test` catches the two
-// desyncs that would otherwise only surface in the heavy xterm_patch_sync job.
+// Offline/build-free tests catch desync before costly xterm_patch_sync job.
 describe('committed xterm patch artifacts', () => {
-  it('normalizes Chromium font-weight serialization in every WebGL runtime copy', async () => {
-    const patch = await readFile(
-      path.join(REPO_ROOT, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
-      'utf8'
-    )
-    expect(patch).not.toMatch(/desiredWeight !== '400'|orcaProbeWeight!=="400"/)
-    expect(
-      patch.match(/(?:actualWeightToken === 'normal'|orcaActualWeightToken==="normal")/g)
-    ).toHaveLength(3)
-    expect(
-      patch.match(/(?:actualWeight !== desiredWeight|orcaActualWeight!==orcaProbeWeight)/g)
-    ).toHaveLength(3)
-  })
-
   it('records the lockfile hash pnpm derives from the patch file', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     const lockfile = await readFile(path.join(REPO_ROOT, 'pnpm-lock.yaml'), 'utf8')
@@ -468,7 +455,7 @@ describe('committed xterm patch artifacts', () => {
     }
   })
 
-  it('pins a full upstream commit and a buildable package entry', async () => {
+  it('requires a full upstream commit, a package, and allowed build steps', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     expect(manifest.upstream.commit).toMatch(/^[0-9a-f]{40}$/)
     expect(manifest.packages.length).toBeGreaterThan(0)

@@ -1,15 +1,51 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { TuiAgent } from './tui-agent'
+import type { AgentLaunchPaneOutcome } from './agent-launch-pane-verdict'
 
-// ─── Terminal Tab (legacy — used by persistence and TerminalContentSlice) ─
+/** The tab row owns the recovery ledger, including the last reason it acted on. */
+export type TerminalPaneRecoveryReason =
+  | 'write-stalled'
+  | 'replay-wedged'
+  | 'input-undeliverable'
+  // A paired host explicitly refused input. Skip local liveness probing: remote IDs have no local registry entry and would falsely read as dead.
+  | 'input-rejected-by-host'
+  | 'reattach-unverifiable'
+  // A restore was requested for a certified-dead pipeline (reveal path).
+  | 'restore-blocked'
+  // A spawn with no PTY leaves no renderer binding; old-ID output can still be ACKed by the pre-handler buffer, hiding the blank pane from delivery health.
+  | 'spawn-left-pane-unbound'
+  // A pane ended on its host's exit record, then the host bound a new process to it.
+  | 'host-rebound-exited-pane'
+
+export type TerminalPaneRecoveryOutcome =
+  | 'pending'
+  | 'success'
+  | 'failed'
+  | 'timed-out'
+  | 'superseded'
+
+/** Keep the ledger on the tab row so recovery budget cannot disappear while the tab survives; closing drops both (crash b5cfc6ca). */
+export type TerminalTabRecoveryLedger = {
+  /** Remount timestamps inside the rolling window. Backstop, not the control. */
+  attemptedAt: number[]
+  /** Recovery epoch. A mounted pane captures it and stale requests are refused. */
+  generation: number
+  /** What the mounted pane observed for the attempt this ledger describes. */
+  outcome: TerminalPaneRecoveryOutcome
+  /** When that attempt was requested. Bounds how long 'pending' may block. */
+  startedAt: number
+  /** Refuse the same settled failure reason until a new trigger arrives. */
+  reason: TerminalPaneRecoveryReason
+  /** Capture tab.generation after remount; later authority/retry/activation bumps supersede this ledger without another writer. */
+  tabGeneration: number
+}
+
 export type TerminalTab = {
   id: string
   ptyId: string | null
   worktreeId: string
   title: string
-  /** Stable fallback label for default-named terminals ("Terminal 1", etc.).
-   *  Why: agent CLIs overwrite the live title via OSC updates, but Orca still
-   *  needs the original terminal label for numbering and reset behavior. */
+  /** Keep the original numbered label when agent OSC updates replace the live title. */
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
@@ -21,38 +57,30 @@ export type TerminalTab = {
   color: string | null
   /** Pinned tabs survive "close others"; host-persisted for remote servers. */
   isPinned?: boolean
-  /** Per-tab view preference (terminal xterm vs native chat); host-persisted so
-   *  paired clients converge. Optional: older persisted tabs default to 'terminal'. */
+  /** Host-persisted view preference converges paired clients; older saved tabs default to terminal. */
   viewMode?: 'terminal' | 'chat'
   sortOrder: number
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
   generation?: number
-  /** Why: records the shell this tab was opened with (e.g. 'wsl.exe') so the
-   *  PTY and tab icon stay stable even if the default shell setting changes
-   *  later. Older persisted tabs may omit this field. */
+  /** Keep shell identity/icon stable across default-setting changes; older saved tabs may omit this. */
   shellOverride?: string
   /** Keeps an ephemeral host fallback out of the active project's runtime. */
   forceHostRuntime?: boolean
-  /** Why: explorer-created terminals can start below the workspace root while
-   *  still belonging to that workspace for tab/session ownership. */
+  /** An explorer cwd below root retains workspace tab/session ownership. */
   startupCwd?: string
-  /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
-   *  show the provider icon immediately, before the agent emits its first hook
-   *  event (a freshly-launched, idle agent reports no live status yet). Live
-   *  hook status overrides this once the agent does anything. Plain terminals
-   *  and manually-started agents omit it. */
+  /** Show the launched agent’s icon before its first hook; live status later wins. Plain terminals/manually started agents omit this. */
   launchAgent?: TuiAgent
-  /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
-   *  TerminalPane remount, the fresh PTY that results is caused by navigation,
-   *  not by the user doing work. Without this flag the resulting
-   *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
-   *  sidebar's recency sort on every click — the reorder-on-click bug. The
-   *  flag is set by `setActiveWorktree` and consumed by the activation-driven
-   *  PTY lifecycle calls that follow, which then suppress activity bumps and
-   *  `sortEpoch` increments. Split layouts use a numeric count because one tab
-   *  can remount several panes. Never persisted — it is a transient handoff. */
+  /** Session-only agent.launch pane reservation, cleared on attachment/return to an ordinary terminal.
+   * Retain main’s outcome until it quits or a different operationId reuses the pane; same-launch retries do not change it. Never persist. */
+  agentLaunchPane?: { leafId: string; operationId?: string; outcome?: AgentLaunchPaneOutcome }
+  /** Navigation-driven remounts must not bump workspace activity/sortEpoch and reorder the sidebar on click.
+   * Transient handoff consumed by PTY lifecycle; split layouts count multiple pending spawns. Never persist. */
   pendingActivationSpawn?: boolean | number
+  /** Saved bindings identify restored panes; host retirement must match that identity. Transient until PTY binding. */
+  restoredFromSession?: true
+  /** Never persist in-flight recovery: stale ledgers would refuse valid post-restart recovery. Sanitize like pendingActivationSpawn. */
+  recovery?: TerminalTabRecoveryLedger
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'
@@ -75,14 +103,17 @@ export type TerminalLayoutSnapshot = {
   root: TerminalPaneLayoutNode | null
   activeLeafId: string | null
   expandedLeafId: string | null
-  /** Live PTY IDs per leaf for in-session remounts such as tab-group moves.
-   *  Not used for app restart because PTYs are transient processes. */
+  /** Stable leaf that owns the terminal tab's native chat surface. */
+  chatLeafId?: string
+  /** Live bindings support in-session remounts; transient PTYs cannot be reused after app restart. */
   ptyIdsByLeafId?: Record<string, string>
   /** Serialized terminal buffers per leaf for scrollback restoration on restart. */
   buffersByLeafId?: Record<string, string>
   /** Durable scrollback snapshot refs per leaf; raw bytes live outside session JSON. */
   scrollbackRefsByLeafId?: Record<string, string>
-  /** User-assigned pane titles, keyed by stable layout leaf UUID.
-   *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
+  /** Each pane's last grid, so main starts its terminal at that size. Older builds drop it. */
+  lastGridsByLeafId?: Record<string, TerminalGrid>
 }
+
+export type TerminalGrid = { cols: number; rows: number }

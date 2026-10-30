@@ -4,7 +4,11 @@ import type {
   SetupDecision
 } from '../../../src/shared/worktree/create-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
-import { getWorkspaceSourceName } from '../../../src/shared/new-workspace/workspace-source'
+import type { RpcSendParams } from '../transport/rpc-params-contract'
+import {
+  buildJiraWorkspaceSource,
+  getWorkspaceSourceName
+} from '../../../src/shared/new-workspace/workspace-source'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 
@@ -50,20 +54,25 @@ type WorkspaceCreateLinearItem = {
   }
 }
 
+type WorkspaceCreateJiraItem = {
+  provider: 'jira'
+  source: {
+    key: string
+    title: string
+    url: string
+  }
+}
+
 export type WorkspaceCreateTaskItem =
   | WorkspaceCreateGitHubItem
   | WorkspaceCreateGitLabItem
   | WorkspaceCreateLinearItem
+  | WorkspaceCreateJiraItem
 
-export type WorkspaceCreateParams = Record<string, unknown>
+export type WorkspaceCreateParams = RpcSendParams<'worktree.create'>
 
-/**
- * `worktree.create` fields for launching the picked agent in a fresh session.
- *
- * Why: send the agent id so the host resolves launch args (permission flags)
- * and host-shell quoting, matching the "+" new-tab and CLI paths.
- */
-export function agentLaunchCreateFields(agentId: TuiAgent | undefined): {
+// Send agent ids so the host applies launch flags and quoting; legacy create retains them while agent.launch strips them to choose a surface.
+export function startupAgentCreateFields(agentId: TuiAgent | undefined): {
   startupAgent?: TuiAgent
   createdWithAgent?: TuiAgent
 } {
@@ -108,8 +117,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   const comment = note?.trim()
   const selectedBaseBranch = baseBranch || hostedStartPoint?.baseBranch
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
-  // Why: desktop only sends displayName while the name is still auto-derived; a
-  // user-edited name suppresses it so the runtime keeps the user's chosen name.
+  // Retain provenance so the host distinguishes deliberate names from generated titles.
   const sourceName =
     item.provider === 'linear'
       ? getWorkspaceSourceName({
@@ -120,8 +128,14 @@ export function buildTaskWorkspaceCreateParams(args: {
           url: item.source.url,
           linearIdentifier: item.source.identifier
         })
-      : getWorkspaceSourceName({ provider: item.provider, ...item.source })
-  const displayName = nameIsAutoManaged ? { displayName: sourceName.displayName } : {}
+      : item.provider === 'jira'
+        ? getWorkspaceSourceName(buildJiraWorkspaceSource(item.source))
+        : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+  const displayName = nameIsAutoManaged
+    ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
+    : workspaceName?.trim()
+      ? { displayName: workspaceName, displayNameKind: 'user' as const }
+      : {}
   const common = {
     setupDecision,
     activate: true,
@@ -158,6 +172,19 @@ export function buildTaskWorkspaceCreateParams(args: {
       ...(item.source.type === 'issue'
         ? { linkedGitLabIssue: item.source.number }
         : { linkedGitLabMR: item.source.number })
+    }
+  }
+
+  if (item.provider === 'jira') {
+    return {
+      repo: `id:${targetRepoId}`,
+      name: resolveMobileWorkspaceCreateName({
+        draft: workspaceName,
+        fallback: item.source.key.toLowerCase()
+      }),
+      ...displayName,
+      linkedWorkItem: buildJiraWorkspaceSource(item.source),
+      ...common
     }
   }
 

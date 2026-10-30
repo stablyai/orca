@@ -1,164 +1,17 @@
 import React, { useCallback, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
-import { useAppStore } from '@/store'
 import MermaidBlock from './MermaidBlock'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { translate } from '@/i18n/i18n'
-
-/**
- * Common languages shown in the selector. The user can also type a language
- * name directly in the markdown fence (```rust) and it will be preserved —
- * this list is just for quick picking in the UI.
- */
-const LANGUAGES = [
-  {
-    value: '',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.13822cdfda', 'Plain text')
-    }
-  },
-  {
-    value: 'bash',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.4227cf50fe', 'Bash')
-    }
-  },
-  { value: 'c', label: 'C' },
-  {
-    value: 'cpp',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.4daed43ae3', 'C++')
-    }
-  },
-  {
-    value: 'css',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.026653f21f', 'CSS')
-    }
-  },
-  {
-    value: 'diff',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.bf6ee5caaa', 'Diff')
-    }
-  },
-  {
-    value: 'go',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.edfcc64182', 'Go')
-    }
-  },
-  {
-    value: 'graphql',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.706fd85738', 'GraphQL')
-    }
-  },
-  {
-    value: 'html',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.8c4a3fa02d', 'HTML')
-    }
-  },
-  {
-    value: 'java',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.36536ad539', 'Java')
-    }
-  },
-  {
-    value: 'javascript',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.a209c57063', 'JavaScript')
-    }
-  },
-  {
-    value: 'json',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.78eba32de4', 'JSON')
-    }
-  },
-  {
-    value: 'kotlin',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.bcb236e2d8', 'Kotlin')
-    }
-  },
-  {
-    value: 'markdown',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.983b9576b4', 'Markdown')
-    }
-  },
-  {
-    value: 'mermaid',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.89d6cc14fb', 'Mermaid')
-    }
-  },
-  {
-    value: 'python',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.2391f9cda9', 'Python')
-    }
-  },
-  {
-    value: 'ruby',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.96182a2f64', 'Ruby')
-    }
-  },
-  {
-    value: 'rust',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.e72e6b03f4', 'Rust')
-    }
-  },
-  {
-    value: 'scss',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.5af8251002', 'SCSS')
-    }
-  },
-  {
-    value: 'shell',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.d01f55be57', 'Shell')
-    }
-  },
-  {
-    value: 'sql',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.3009f722b9', 'SQL')
-    }
-  },
-  {
-    value: 'swift',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.9e384d48dc', 'Swift')
-    }
-  },
-  {
-    value: 'typescript',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.88d777bc07', 'TypeScript')
-    }
-  },
-  {
-    value: 'xml',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.5ef5605cb7', 'XML')
-    }
-  },
-  {
-    value: 'yaml',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.74eab1d9b2', 'YAML')
-    }
-  }
-]
+import {
+  getCodeBlockLanguageLabel,
+  getCodeBlockLanguages,
+  isKnownCodeBlockLanguage
+} from './rich-markdown-code-block-languages'
 
 export function RichMarkdownCodeBlock({
   node,
@@ -167,14 +20,12 @@ export function RichMarkdownCodeBlock({
   useTranslation()
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
+  // ProseMirror mounts every node view; defer full language options so large documents avoid per-block DOM cost on each keystroke.
+  const [languageListMounted, setLanguageListMounted] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after the node view unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Clipboard IPC may settle after unmount; do not start an orphan reset timer.
   const isMountedRef = useRef(false)
-  const settings = useAppStore((s) => s.settings)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = useDocumentDarkTheme()
 
   const isMermaid = language === 'mermaid'
 
@@ -194,6 +45,14 @@ export function RichMarkdownCodeBlock({
     },
     [clearCopiedResetTimer]
   )
+
+  const mountLanguageList = useCallback(() => {
+    if (languageListMounted) {
+      return
+    }
+    // Populate before the native popup’s default action; React’s normal flush would arrive too late.
+    flushSync(() => setLanguageListMounted(true))
+  }, [languageListMounted])
 
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -220,7 +79,7 @@ export function RichMarkdownCodeBlock({
           }, 1500)
         })
         .catch(() => {
-          // Silently swallow clipboard write failures (e.g. permission denied).
+          // Clipboard permission failures must not disrupt editing.
         })
     },
     [clearCopiedResetTimer, node]
@@ -233,15 +92,24 @@ export function RichMarkdownCodeBlock({
         contentEditable={false}
         value={language}
         onChange={onChange}
+        onMouseDown={mountLanguageList}
+        onFocus={mountLanguageList}
       >
-        {LANGUAGES.map((lang) => (
-          <option key={lang.value} value={lang.value}>
-            {lang.label}
+        {languageListMounted ? (
+          getCodeBlockLanguages().map((lang) => (
+            <option key={lang.value} value={lang.value}>
+              {lang.label}
+            </option>
+          ))
+        ) : (
+          // Closed selects need only their selected option until the user requests the list.
+          <option value={language}>{getCodeBlockLanguageLabel(language)}</option>
+        )}
+        {/* Preserve document languages absent from the built-in list. */}
+        {languageListMounted && language && !isKnownCodeBlockLanguage(language) ? (
+          <option key={language} value={language}>
+            {language}
           </option>
-        ))}
-        {/* If the document has a language not in our list, show it as-is */}
-        {language && !LANGUAGES.some((l) => l.value === language) ? (
-          <option value={language}>{language}</option>
         ) : null}
       </select>
       <button
@@ -268,11 +136,7 @@ export function RichMarkdownCodeBlock({
         )}
       </button>
       <NodeViewContent<'pre'> as="pre" />
-      {/* Why: mermaid diagrams render as a live SVG preview below the editable
-          source so users can see the result while editing. The code block stays
-          editable — the diagram is read-only output. This preview also goes
-          through MermaidBlock's sanitized SVG path, so it must opt out of
-          Mermaid HTML labels just like markdown preview to keep labels visible. */}
+      {/* Keep Mermaid source editable; native SVG labels survive the preview’s sanitization. */}
       {isMermaid && node.textContent.trim() && (
         <div contentEditable={false} className="mermaid-preview">
           <MermaidBlock content={node.textContent.trim()} isDark={isDark} htmlLabels={false} />

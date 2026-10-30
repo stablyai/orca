@@ -1,0 +1,924 @@
+import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
+import { RELAY_REGION_METRIC_SEGMENTS, type RelayRegion } from '@orca-cloud/relay-contract'
+import type { ControlRenewalOutcome } from './assignment-store.js'
+import type { ControlRenewalFlush } from './control-renewal-batch.js'
+import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
+import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'
+import type { RelayReadinessGraceEvent, RelayReadinessObservation } from './relay-readiness.js'
+import { RELAY_FIX_LEVEL } from './relay-fix-level.js'
+import { sandboxTcpCounterDeltas, type SandboxTcpCounters } from './sandbox-tcp-counters.js'
+import type { StickySlotSample } from './sticky-slot-statements.js'
+
+export type RelayRuntimeCounts = {
+  totalConnections: number
+  inFlightConnections?: number
+  reservedConnectionUnits?: number
+  enforcedConnectionUnits?: number
+  preAuthConnections: number
+  controls: number
+  splices: number
+  pendingSplices: number
+  queuedBytes: number
+  // Step 6: resume audit rows a memory cell dropped since boot; the watcher pages on any.
+  resumeAuditDropped?: number
+}
+
+export function observedRelayRequests(counts: RelayRuntimeCounts): number {
+  return counts.preAuthConnections + counts.controls + counts.splices + counts.pendingSplices
+}
+
+export type RelayProcessCounts = RelayRuntimeCounts &
+  PostgresPoolPressureCounts &
+  Partial<CellInventoryHoldCounts>
+
+export type RegionalRehomeRuntimeSafety = {
+  observedAt: number
+  sqlFailures: number
+  reconnects: number
+  controlActivityRecoveryFailures: number
+}
+
+export type RegionalRehomeSafetySnapshot = RegionalRehomeRuntimeSafety & {
+  databasePoolWaiting: number
+  databasePoolWaitersMax: number
+  databasePoolWaitMsMax: number
+}
+
+export type AssignmentAdmissionOutcome =
+  | 'sticky'
+  | 'sticky-rejected'
+  | 'placement'
+  | 'placement-rejected'
+  | 'drain-return'
+  | 'drain-return-deferred'
+
+export type AssignmentAdmissionLane = 'sticky' | 'placement' | 'drain-return'
+
+// Separate scheduled drain 503s or every fast drain trips availability gates.
+export type AssignmentUnavailableCause =
+  | 'disabled'
+  | 'sticky-lane'
+  | 'sticky-verify-database'
+  | 'placement-lane'
+  | 'drain-return-deferred'
+  | 'database'
+  | 'relay_capacity_exhausted'
+  | 'relay_connection_headroom_exhausted'
+  | 'relay_home_cell_unavailable'
+  | 'relay_assignment_row_busy'
+  // Step 5: a starting director's map, a never-seen host with the database down, or intake.
+  | 'reserve-map-incomplete'
+  | 'reserve-database'
+  | 'reserve-paced'
+  // Intake pacing for a host re-asking off a draining cell: scheduled by the drain, like a deferral.
+  | 'reserve-paced-drained'
+
+// Row-lock waiters seen in one pg_stat_activity sample, by who waits, on which
+// table, behind whom. Roles come from each pool's application_name.
+export type DatabaseLockWaitSample = {
+  waiterRole: string
+  table: string
+  holderRole: string
+  waiters: number
+}[]
+
+export interface RelayRuntimeObserver {
+  recordAuth(success: boolean): void
+  recordForwardedBytes(bytes: number): void
+  recordHttp(durationMs: number): void
+  recordReconnect(): void
+  recordSql(durationMs: number, success: boolean): void
+  recordControlRenewal?(durationMs: number, outcome: ControlRenewalOutcome): void
+  recordControlRenewalFlush?(flush: ControlRenewalFlush): void
+  recordControlActivityRecovery?(success: boolean): void
+  recordAssignmentAdmission?(outcome: AssignmentAdmissionOutcome): void
+  recordAssignmentRejectionReason?(lane: AssignmentAdmissionLane, reason: string): void
+  recordDrainReturnRetryAfter?(seconds: number): void
+  recordAdmissionServiceMs?(lane: 'sticky' | 'drain-return', durationMs: number): void
+  recordStickySlot?(sample: StickySlotSample): void
+  recordAssignmentUnavailable?(cause: AssignmentUnavailableCause): void
+  recordDatabaseLockWaitSample?(sample: DatabaseLockWaitSample): void
+  recordRegionRequest?(region: RelayRegion | undefined): void
+  recordRegionSelection?(input: {
+    targetRegion: RelayRegion
+    selectedRegion?: RelayRegion
+    fallback: boolean
+  }): void
+  recordControlClose?(code: number): void
+  recordPostProofClose?(reason: string): void
+  recordSpliceClose?(trigger: string): void
+  recordClientAcceptAbandoned?(stage: RelayClientAcceptStage, elapsedMs: number): void
+  recordClientAcceptCompleted?(sample: RelayClientAcceptSample): void
+  // Step 6: every phone refusal by close code, and the phone-path failures the watcher reads.
+  recordPhoneRejection?(code: number): void
+  recordPhoneAttachDeadline?(): void
+  recordPhoneAcceptDatabaseError?(): void
+  recordResumeConfirmFailure?(code: string): void
+  recordResumeRenewalFailure?(): void
+  recordControlRtt?(rttMs: number): void
+  recordHostPreAuth?(path: HostPreAuthPath, outcome: HostPreAuthOutcome, durationMs: number): void
+}
+
+// Hello decision source: reserve memory, database assignment, or beforeCheck for pre-check refusals/errors.
+export type HostPreAuthPath = 'beforeCheck' | 'db' | 'reserve'
+// Abandoned: the host hung up before a decision, or before the cell could act on one.
+export type HostPreAuthOutcome = 'admitted' | 'refused' | 'abandoned'
+
+// Left out of assignNonDrain503sDelta: the drain schedules these 503s.
+const DRAIN_503_CAUSES: ReadonlySet<string> = new Set<AssignmentUnavailableCause>([
+  'drain-return-deferred',
+  'reserve-paced-drained'
+])
+
+// Upper bounds in ms; the last bucket is unbounded. 450 is the step-5 t_preauth gate.
+const PRE_AUTH_BUCKET_BOUNDS_MS = [50, 100, 200, 300, 450, 700, 1_000, 2_000, 5_000] as const
+
+type PreAuthLatencyGroup = {
+  samplesMs: number[]
+  observed: number
+  maxMs: number
+  // Non-cumulative; one more slot than there are bounds, for the unbounded bucket.
+  bucketCounts: number[]
+}
+type PreAuthLatency = Record<HostPreAuthPath, Record<HostPreAuthOutcome, PreAuthLatencyGroup>>
+
+const emptyPreAuthLatencyGroup = (): PreAuthLatencyGroup => ({
+  samplesMs: [],
+  observed: 0,
+  maxMs: 0,
+  bucketCounts: Array.from({ length: PRE_AUTH_BUCKET_BOUNDS_MS.length + 1 }, () => 0)
+})
+
+const emptyPreAuthLatency = (): PreAuthLatency => {
+  const byOutcome = (): Record<HostPreAuthOutcome, PreAuthLatencyGroup> => ({
+    admitted: emptyPreAuthLatencyGroup(),
+    refused: emptyPreAuthLatencyGroup(),
+    abandoned: emptyPreAuthLatencyGroup()
+  })
+  return { beforeCheck: byOutcome(), db: byOutcome(), reserve: byOutcome() }
+}
+
+// Which serialized accept step the phone had already hung up behind.
+export type RelayClientAcceptStage = 'assignment' | 'credential' | 'activity'
+
+// Attach/basis durations join pre-attach steps only once the host data leg completes acceptance.
+export type RelayClientAcceptTimedStage = RelayClientAcceptStage | 'attach' | 'basis'
+
+export const RELAY_CLIENT_ACCEPT_TIMED_STAGES = [
+  'assignment',
+  'credential',
+  'activity',
+  'attach',
+  'basis'
+] as const satisfies readonly RelayClientAcceptTimedStage[]
+
+export type RelayClientAcceptSample = {
+  totalMs: number
+  stageMs: Record<RelayClientAcceptTimedStage, number>
+  phonePath?: 'db' | 'memory'
+}
+
+type RelayMetricDeltas = {
+  forwardedBytes: number
+  authSuccesses: number
+  authFailures: number
+  reconnects: number
+  sqlQueries: number
+  sqlFailures: number
+  sqlLatencyMsMax: number
+  httpLatencyMsMax: number
+  stickyAssignments: number
+  stickyAssignmentRejections: number
+  placementAssignments: number
+  placementAssignmentRejections: number
+  stickyRejectionsByReason: Record<string, number>
+  placementRejectionsByReason: Record<string, number>
+  drainReturnAssignments: number
+  drainReturnDeferrals: number
+  drainReturnRejectionsByReason: Record<string, number>
+  drainReturnRetryAfterSecondsMax: number
+  drainReturnRetryAfterSecondsSum: number
+  drainReturnServiceMs: number[]
+  stickyServiceMs: number[]
+  stickySlotQueueWaitMs: number[]
+  stickySlotPoolWaitMs: number[]
+  stickySlotSqlMs: number[]
+  stickySlotStatements: number[]
+  stickySlotByConnection: Map<number, StickyConnectionStatements>
+  stickySlotConnectionSamplesDropped: number
+  stickyStatementMs: number[]
+  stickyStatementsObserved: number
+  assign503sByCause: Record<string, number>
+  dbLockWaitSamples: number
+  dbLockWaitersByKey: Record<string, number>
+  requestedRegions: Record<string, number>
+  selectedRegions: Record<string, number>
+  regionFallbacks: Record<string, number>
+  unavailableRegions: Record<string, number>
+  controlClosesByCode: Record<string, number>
+  postProofClosesByReason: Record<string, number>
+  spliceClosesByTrigger: Record<string, number>
+  clientAcceptsAbandonedByStage: Record<string, number>
+  clientAcceptAbandonedMsMax: number
+  clientAcceptTotalsMs: number[]
+  clientAcceptStageSamplesMs: Record<RelayClientAcceptTimedStage, number[]>
+  clientAcceptsByPhonePath: Record<string, number>
+  phoneRejectionsByCode: Record<string, number>
+  phoneAttachDeadlines: number
+  phoneAcceptDatabaseErrors: number
+  resumeConfirmFailuresByCode: Record<string, number>
+  resumeRenewalFailures: number
+  controlRttSamplesMs: number[]
+  controlRttObserved: number
+  controlRenewalLatenciesMs: number[]
+  controlRenewalsByOutcome: Record<string, number>
+  controlRenewalFlushLatenciesMs: number[]
+  controlRenewalFlushRowsMax: number
+  controlActivityRecoveries: number
+  controlActivityRecoveryFailures: number
+  hostHellosShed: number
+  preAuthLatency: PreAuthLatency
+}
+
+type StickyConnectionStatements = {
+  requests: number
+  statements: number
+  maxMs: number
+  samplesMs: number[]
+}
+
+// Cap per-window connection tracking because pool replacements can otherwise grow log lines without bound.
+export const STICKY_CONNECTION_LIMIT = 64
+export const STICKY_STATEMENT_RESERVOIR_LIMIT = 1024
+
+// Host-driven pong frequency needs a bounded reservoir to cap flood memory and keep unbiased percentiles.
+export const CONTROL_RTT_RESERVOIR_LIMIT = 1024
+// Per path and outcome; a reconnect burst can put thousands of hellos in one window.
+export const PRE_AUTH_RESERVOIR_LIMIT = 1024
+
+// Algorithm R: every sample in the window keeps an equal chance of being kept.
+function keepInReservoir(
+  samples: number[],
+  observedBefore: number,
+  value: number,
+  limit: number
+): void {
+  if (samples.length < limit) {
+    samples.push(value)
+    return
+  }
+  const slot = Math.floor(Math.random() * (observedBefore + 1))
+  if (slot < limit) samples[slot] = value
+}
+
+type MetricWriter = (entry: Record<string, unknown>) => void
+
+const emptyDeltas = (): RelayMetricDeltas => ({
+  forwardedBytes: 0,
+  authSuccesses: 0,
+  authFailures: 0,
+  reconnects: 0,
+  sqlQueries: 0,
+  sqlFailures: 0,
+  sqlLatencyMsMax: 0,
+  httpLatencyMsMax: 0,
+  stickyAssignments: 0,
+  stickyAssignmentRejections: 0,
+  placementAssignments: 0,
+  placementAssignmentRejections: 0,
+  stickyRejectionsByReason: {},
+  placementRejectionsByReason: {},
+  drainReturnAssignments: 0,
+  drainReturnDeferrals: 0,
+  drainReturnRejectionsByReason: {},
+  drainReturnRetryAfterSecondsMax: 0,
+  drainReturnRetryAfterSecondsSum: 0,
+  drainReturnServiceMs: [],
+  stickyServiceMs: [],
+  stickySlotQueueWaitMs: [],
+  stickySlotPoolWaitMs: [],
+  stickySlotSqlMs: [],
+  stickySlotStatements: [],
+  stickySlotByConnection: new Map(),
+  stickySlotConnectionSamplesDropped: 0,
+  stickyStatementMs: [],
+  stickyStatementsObserved: 0,
+  assign503sByCause: {},
+  dbLockWaitSamples: 0,
+  dbLockWaitersByKey: {},
+  requestedRegions: {},
+  selectedRegions: {},
+  regionFallbacks: {},
+  unavailableRegions: {},
+  controlClosesByCode: {},
+  postProofClosesByReason: {},
+  spliceClosesByTrigger: {},
+  clientAcceptsAbandonedByStage: {},
+  clientAcceptAbandonedMsMax: 0,
+  clientAcceptTotalsMs: [],
+  clientAcceptStageSamplesMs: {
+    assignment: [],
+    credential: [],
+    activity: [],
+    attach: [],
+    basis: []
+  },
+  clientAcceptsByPhonePath: {},
+  phoneRejectionsByCode: {},
+  phoneAttachDeadlines: 0,
+  phoneAcceptDatabaseErrors: 0,
+  resumeConfirmFailuresByCode: {},
+  resumeRenewalFailures: 0,
+  controlRttSamplesMs: [],
+  controlRttObserved: 0,
+  controlRenewalLatenciesMs: [],
+  controlRenewalsByOutcome: {},
+  controlRenewalFlushLatenciesMs: [],
+  controlRenewalFlushRowsMax: 0,
+  controlActivityRecoveries: 0,
+  controlActivityRecoveryFailures: 0,
+  hostHellosShed: 0,
+  preAuthLatency: emptyPreAuthLatency()
+})
+
+function ascending(values: number[]): number[] {
+  return [...values].sort((left, right) => left - right)
+}
+
+// Holes and NaN land past the requested rank, so the fallback still applies.
+function nearestRank(sorted: number[], percentileRank: number): number {
+  return sorted[Math.ceil(percentileRank * sorted.length) - 1] ?? 0
+}
+
+export function percentile(values: number[], percentileRank: number): number {
+  if (values.length === 0) return 0
+  return nearestRank(ascending(values), percentileRank)
+}
+
+function roundMs(value: number): number {
+  return Number(value.toFixed(3))
+}
+
+// Fold maximum to avoid spreading unbounded samples onto the stack; zero seed also preserves negative/NaN behavior.
+function latencySummary(samples: number[]): {
+  p50: number
+  p95: number
+  p99: number
+  max: number
+} {
+  const sorted = samples.length === 0 ? samples : ascending(samples)
+  return {
+    p50: roundMs(nearestRank(sorted, 0.5)),
+    p95: roundMs(nearestRank(sorted, 0.95)),
+    p99: roundMs(nearestRank(sorted, 0.99)),
+    max: roundMs(samples.reduce((highest, sample) => Math.max(highest, sample), 0))
+  }
+}
+
+export class RelayObservability implements RelayRuntimeObserver {
+  private readonly eventLoop = monitorEventLoopDelay({ resolution: 20 })
+  private deltas = emptyDeltas()
+  private timer: ReturnType<typeof setInterval> | null = null
+  private lastFlushAt = 0
+  private instanceZone: string | undefined
+  private readTcpCounters: (() => SandboxTcpCounters | undefined) | undefined
+  private lastTcpCounters: SandboxTcpCounters | undefined
+  private lastFlushedSafety = {
+    sqlFailures: 0,
+    reconnects: 0,
+    controlActivityRecoveryFailures: 0
+  }
+
+  constructor(
+    private readonly identity: { role: string; cellId: string; region: RelayRegion },
+    private readonly write: MetricWriter = (entry) => console.log(JSON.stringify(entry))
+  ) {}
+
+  setInstanceZone(zone: string | undefined): void {
+    this.instanceZone = zone
+  }
+
+  // TCP retransmits per window, to tell a lossy network path from a slow server.
+  setTcpCounterReader(read: () => SandboxTcpCounters | undefined): void {
+    this.readTcpCounters = read
+    this.lastTcpCounters = read()
+  }
+
+  private tcpCounterFields(): Record<string, number> {
+    const current = this.readTcpCounters?.()
+    const previous = this.lastTcpCounters
+    this.lastTcpCounters = current
+    return (current && previous && sandboxTcpCounterDeltas(previous, current)) || {}
+  }
+
+  recordAuth(success: boolean): void {
+    if (success) this.deltas.authSuccesses++
+    else this.deltas.authFailures++
+  }
+
+  recordForwardedBytes(bytes: number): void {
+    this.deltas.forwardedBytes += bytes
+  }
+
+  recordHttp(durationMs: number): void {
+    this.deltas.httpLatencyMsMax = Math.max(this.deltas.httpLatencyMsMax, durationMs)
+  }
+
+  recordReconnect(): void {
+    this.deltas.reconnects++
+  }
+
+  recordHostHelloShed(): void {
+    this.deltas.hostHellosShed++
+  }
+
+  recordAssignmentAdmission(outcome: AssignmentAdmissionOutcome): void {
+    if (outcome === 'sticky') this.deltas.stickyAssignments++
+    else if (outcome === 'sticky-rejected') this.deltas.stickyAssignmentRejections++
+    else if (outcome === 'placement') this.deltas.placementAssignments++
+    else if (outcome === 'drain-return') this.deltas.drainReturnAssignments++
+    else if (outcome === 'drain-return-deferred') this.deltas.drainReturnDeferrals++
+    else this.deltas.placementAssignmentRejections++
+  }
+
+  recordAssignmentRejectionReason(lane: AssignmentAdmissionLane, reason: string): void {
+    const counts =
+      lane === 'sticky'
+        ? this.deltas.stickyRejectionsByReason
+        : lane === 'drain-return'
+          ? this.deltas.drainReturnRejectionsByReason
+          : this.deltas.placementRejectionsByReason
+    counts[reason] = (counts[reason] ?? 0) + 1
+  }
+
+  recordDrainReturnRetryAfter(seconds: number): void {
+    this.deltas.drainReturnRetryAfterSecondsMax = Math.max(
+      this.deltas.drainReturnRetryAfterSecondsMax,
+      seconds
+    )
+    this.deltas.drainReturnRetryAfterSecondsSum += seconds
+  }
+
+  recordAdmissionServiceMs(lane: 'sticky' | 'drain-return', durationMs: number): void {
+    if (lane === 'sticky') this.deltas.stickyServiceMs.push(durationMs)
+    else this.deltas.drainReturnServiceMs.push(durationMs)
+  }
+
+  recordStickySlot(sample: StickySlotSample): void {
+    const deltas = this.deltas
+    deltas.stickySlotQueueWaitMs.push(sample.queueWaitMs)
+    deltas.stickySlotPoolWaitMs.push(sample.poolWaitMs)
+    deltas.stickySlotSqlMs.push(sample.sqlMs)
+    deltas.stickySlotStatements.push(sample.statements)
+    for (const [connectionId, samplesMs] of sample.statementMsByConnection) {
+      for (const durationMs of samplesMs) {
+        keepInReservoir(
+          deltas.stickyStatementMs,
+          deltas.stickyStatementsObserved++,
+          durationMs,
+          STICKY_STATEMENT_RESERVOIR_LIMIT
+        )
+      }
+      let connection = deltas.stickySlotByConnection.get(connectionId)
+      if (!connection) {
+        if (deltas.stickySlotByConnection.size >= STICKY_CONNECTION_LIMIT) {
+          deltas.stickySlotConnectionSamplesDropped++
+          continue
+        }
+        connection = { requests: 0, statements: 0, maxMs: 0, samplesMs: [] }
+        deltas.stickySlotByConnection.set(connectionId, connection)
+      }
+      connection.requests++
+      for (const durationMs of samplesMs) {
+        const observedBefore = connection.statements++
+        connection.maxMs = Math.max(connection.maxMs, durationMs)
+        keepInReservoir(
+          connection.samplesMs,
+          observedBefore,
+          durationMs,
+          STICKY_STATEMENT_RESERVOIR_LIMIT
+        )
+      }
+    }
+  }
+
+  recordAssignmentUnavailable(cause: AssignmentUnavailableCause): void {
+    increment(this.deltas.assign503sByCause, cause)
+  }
+
+  recordDatabaseLockWaitSample(sample: DatabaseLockWaitSample): void {
+    this.deltas.dbLockWaitSamples++
+    for (const row of sample) {
+      const key = `${row.waiterRole}:${row.table}:${row.holderRole}`
+      this.deltas.dbLockWaitersByKey[key] = (this.deltas.dbLockWaitersByKey[key] ?? 0) + row.waiters
+    }
+  }
+
+  recordRegionRequest(region: RelayRegion | undefined): void {
+    increment(this.deltas.requestedRegions, region ?? 'unhinted')
+  }
+
+  recordRegionSelection(input: {
+    targetRegion: RelayRegion
+    selectedRegion?: RelayRegion
+    fallback: boolean
+  }): void {
+    if (input.selectedRegion) increment(this.deltas.selectedRegions, input.selectedRegion)
+    else increment(this.deltas.unavailableRegions, input.targetRegion)
+    if (input.fallback) increment(this.deltas.regionFallbacks, input.targetRegion)
+  }
+
+  recordSql(durationMs: number, success: boolean): void {
+    this.deltas.sqlQueries++
+    if (!success) this.deltas.sqlFailures++
+    this.deltas.sqlLatencyMsMax = Math.max(this.deltas.sqlLatencyMsMax, durationMs)
+  }
+
+  recordControlRenewal(durationMs: number, outcome: ControlRenewalOutcome): void {
+    this.deltas.controlRenewalLatenciesMs.push(durationMs)
+    this.deltas.controlRenewalsByOutcome[outcome] =
+      (this.deltas.controlRenewalsByOutcome[outcome] ?? 0) + 1
+  }
+
+  recordControlRenewalFlush(flush: ControlRenewalFlush): void {
+    this.deltas.controlRenewalFlushLatenciesMs.push(flush.durationMs)
+    this.deltas.controlRenewalFlushRowsMax = Math.max(
+      this.deltas.controlRenewalFlushRowsMax,
+      flush.rows
+    )
+  }
+
+  recordControlActivityRecovery(success: boolean): void {
+    if (success) this.deltas.controlActivityRecoveries++
+    else this.deltas.controlActivityRecoveryFailures++
+  }
+
+  recordReadiness(observation: RelayReadinessObservation): void {
+    this.write({
+      severity: observation.ready && !observation.degraded ? 'INFO' : 'WARNING',
+      message: 'Orca Relay readiness check',
+      event: 'orca_relay_readiness_check',
+      metricVersion: 1,
+      ...this.identity,
+      ...observation
+    })
+  }
+
+  recordReadinessGrace(event: RelayReadinessGraceEvent): void {
+    const entered = event.grace === 'entered'
+    this.write({
+      severity: event.grace === 'recovered' ? 'INFO' : 'WARNING',
+      message: entered
+        ? 'Orca Relay readiness entered last-known-good grace'
+        : 'Orca Relay readiness left last-known-good grace',
+      event: entered ? 'orca_relay_readiness_grace_entered' : 'orca_relay_readiness_grace_left',
+      metricVersion: 1,
+      ...this.identity,
+      ...event
+    })
+  }
+
+  recordControlClose(code: number): void {
+    const key = String(code)
+    this.deltas.controlClosesByCode[key] = (this.deltas.controlClosesByCode[key] ?? 0) + 1
+  }
+
+  recordPostProofClose(reason: string): void {
+    increment(this.deltas.postProofClosesByReason, reason)
+  }
+
+  recordSpliceClose(trigger: string): void {
+    this.deltas.spliceClosesByTrigger[trigger] =
+      (this.deltas.spliceClosesByTrigger[trigger] ?? 0) + 1
+  }
+
+  recordClientAcceptAbandoned(stage: RelayClientAcceptStage, elapsedMs: number): void {
+    increment(this.deltas.clientAcceptsAbandonedByStage, stage)
+    this.deltas.clientAcceptAbandonedMsMax = Math.max(
+      this.deltas.clientAcceptAbandonedMsMax,
+      elapsedMs
+    )
+  }
+
+  recordClientAcceptCompleted(sample: RelayClientAcceptSample): void {
+    if (sample.phonePath) increment(this.deltas.clientAcceptsByPhonePath, sample.phonePath)
+    this.deltas.clientAcceptTotalsMs.push(sample.totalMs)
+    for (const stage of RELAY_CLIENT_ACCEPT_TIMED_STAGES) {
+      this.deltas.clientAcceptStageSamplesMs[stage].push(sample.stageMs[stage])
+    }
+  }
+
+  recordPhoneRejection(code: number): void {
+    increment(this.deltas.phoneRejectionsByCode, String(code))
+  }
+
+  recordPhoneAttachDeadline(): void {
+    this.deltas.phoneAttachDeadlines += 1
+  }
+
+  recordPhoneAcceptDatabaseError(): void {
+    this.deltas.phoneAcceptDatabaseErrors += 1
+  }
+
+  recordResumeConfirmFailure(code: string): void {
+    increment(this.deltas.resumeConfirmFailuresByCode, code)
+  }
+
+  recordResumeRenewalFailure(): void {
+    this.deltas.resumeRenewalFailures += 1
+  }
+
+  recordControlRtt(rttMs: number): void {
+    const observedBefore = this.deltas.controlRttObserved++
+    keepInReservoir(
+      this.deltas.controlRttSamplesMs,
+      observedBefore,
+      rttMs,
+      CONTROL_RTT_RESERVOIR_LIMIT
+    )
+  }
+
+  recordHostPreAuth(path: HostPreAuthPath, outcome: HostPreAuthOutcome, durationMs: number): void {
+    const group = this.deltas.preAuthLatency[path][outcome]
+    const observedBefore = group.observed++
+    // Folded outside the reservoir so a dropped sample cannot hide the worst hello.
+    group.maxMs = Math.max(group.maxMs, durationMs)
+    const bucket = PRE_AUTH_BUCKET_BOUNDS_MS.findIndex((bound) => durationMs <= bound)
+    group.bucketCounts[bucket === -1 ? PRE_AUTH_BUCKET_BOUNDS_MS.length : bucket]! += 1
+    keepInReservoir(group.samplesMs, observedBefore, durationMs, PRE_AUTH_RESERVOIR_LIMIT)
+  }
+
+  start(readCounts: () => RelayProcessCounts, intervalMs = 30_000): void {
+    if (this.timer) return
+    this.eventLoop.enable()
+    this.timer = setInterval(() => this.flush(readCounts()), intervalMs)
+    this.timer.unref()
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer)
+    this.timer = null
+    this.eventLoop.disable()
+  }
+
+  regionalRehomeRuntimeSafety(): RegionalRehomeRuntimeSafety {
+    return {
+      observedAt: this.lastFlushAt,
+      sqlFailures: this.lastFlushedSafety.sqlFailures + this.deltas.sqlFailures,
+      reconnects: this.lastFlushedSafety.reconnects + this.deltas.reconnects,
+      controlActivityRecoveryFailures:
+        this.lastFlushedSafety.controlActivityRecoveryFailures +
+        this.deltas.controlActivityRecoveryFailures
+    }
+  }
+
+  flush(counts: RelayProcessCounts): void {
+    this.lastFlushAt = Date.now()
+    const deltas = this.deltas
+    this.lastFlushedSafety = {
+      sqlFailures: deltas.sqlFailures,
+      reconnects: deltas.reconnects,
+      controlActivityRecoveryFailures: deltas.controlActivityRecoveryFailures
+    }
+    this.deltas = emptyDeltas()
+    const acceptTotals = latencySummary(deltas.clientAcceptTotalsMs)
+    const acceptStageP95 = (stage: RelayClientAcceptTimedStage): number =>
+      roundMs(percentile(deltas.clientAcceptStageSamplesMs[stage], 0.95))
+    const controlRtt = latencySummary(deltas.controlRttSamplesMs)
+    const controlRenewal = latencySummary(deltas.controlRenewalLatenciesMs)
+    const controlRenewalFlush = latencySummary(deltas.controlRenewalFlushLatenciesMs)
+    const memory = process.memoryUsage()
+    const p99 = this.eventLoop.count === 0 ? 0 : this.eventLoop.percentile(99) / 1_000_000
+    // One sample covers a whole freeze, so p99 cannot see a single long one; max can.
+    const max = this.eventLoop.count === 0 ? 0 : this.eventLoop.max / 1_000_000
+    this.eventLoop.reset()
+    this.write({
+      severity: 'INFO',
+      message: 'Orca Relay runtime metrics',
+      event: 'orca_relay_runtime_metrics',
+      metricVersion: 2,
+      fixLevel: RELAY_FIX_LEVEL,
+      role: this.identity.role,
+      cellId: this.identity.cellId,
+      region: this.identity.region,
+      // Which zone this instance runs in; read once at boot, absent until then or off Cloud Run.
+      ...(this.instanceZone === undefined ? {} : { instanceZone: this.instanceZone }),
+      ...this.tcpCounterFields(),
+      ...counts,
+      forwardedBytesDelta: deltas.forwardedBytes,
+      authSuccessesDelta: deltas.authSuccesses,
+      authFailuresDelta: deltas.authFailures,
+      reconnectsDelta: deltas.reconnects,
+      stickyAssignmentsDelta: deltas.stickyAssignments,
+      stickyAssignmentRejectionsDelta: deltas.stickyAssignmentRejections,
+      placementAssignmentsDelta: deltas.placementAssignments,
+      placementAssignmentRejectionsDelta: deltas.placementAssignmentRejections,
+      stickyRejectionsByReasonDelta: deltas.stickyRejectionsByReason,
+      placementRejectionsByReasonDelta: deltas.placementRejectionsByReason,
+      drainReturnAssignmentsDelta: deltas.drainReturnAssignments,
+      drainReturnDeferralsDelta: deltas.drainReturnDeferrals,
+      drainReturnRejectionsByReasonDelta: deltas.drainReturnRejectionsByReason,
+      drainReturnRetryAfterSecondsMax: deltas.drainReturnRetryAfterSecondsMax,
+      drainReturnRetryAfterSecondsSum: deltas.drainReturnRetryAfterSecondsSum,
+      // Slot hold time determines throughput; omit empty percentiles like accepts below.
+      ...(deltas.drainReturnServiceMs.length === 0
+        ? {}
+        : {
+            drainReturnServiceMsP50: roundMs(percentile(deltas.drainReturnServiceMs, 0.5)),
+            drainReturnServiceMsP95: roundMs(percentile(deltas.drainReturnServiceMs, 0.95))
+          }),
+      ...(deltas.stickyServiceMs.length === 0
+        ? {}
+        : {
+            stickyServiceMsP50: roundMs(percentile(deltas.stickyServiceMs, 0.5)),
+            stickyServiceMsP99: roundMs(percentile(deltas.stickyServiceMs, 0.99))
+          }),
+      ...stickySlotFields(deltas),
+      assign503sByCauseDelta: deltas.assign503sByCause,
+      assignNonDrain503sDelta: Object.entries(deltas.assign503sByCause)
+        .filter(([cause]) => !DRAIN_503_CAUSES.has(cause))
+        .reduce((sum, [, count]) => sum + count, 0),
+      // Waiters summed over samples / sample count is mean waiting backends (lock-wait seconds per second).
+      dbLockWaitSamplesDelta: deltas.dbLockWaitSamples,
+      dbLockWaitersByKeyDelta: deltas.dbLockWaitersByKey,
+      dbCellRowLockWaitersDirectorDelta: lockWaiters(deltas.dbLockWaitersByKey, 'director'),
+      dbCellRowLockWaitersCellDelta: lockWaiters(deltas.dbLockWaitersByKey, 'cell'),
+      requestedRegionsDelta: deltas.requestedRegions,
+      selectedRegionsDelta: deltas.selectedRegions,
+      ...regionCounterFields('requestedRegion', deltas.requestedRegions),
+      ...regionCounterFields('selectedRegion', deltas.selectedRegions),
+      regionFallbacksDelta: deltas.regionFallbacks,
+      unavailableRegionsDelta: deltas.unavailableRegions,
+      controlClosesByCodeDelta: deltas.controlClosesByCode,
+      // Closes after a host proof but before its control was wired; none is in the line above.
+      postProofClosesByReasonDelta: deltas.postProofClosesByReason,
+      spliceClosesByTriggerDelta: deltas.spliceClosesByTrigger,
+      clientAcceptsAbandonedByStageDelta: deltas.clientAcceptsAbandonedByStage,
+      clientAcceptAbandonedMsMax: roundMs(deltas.clientAcceptAbandonedMsMax),
+      clientAcceptCompletedDelta: deltas.clientAcceptTotalsMs.length,
+      clientAcceptsByPhonePathDelta: deltas.clientAcceptsByPhonePath,
+      // Phone refusals by close code; attach deadlines are the 4404s sent with the control still up.
+      phoneRejectionsByCodeDelta: deltas.phoneRejectionsByCode,
+      phoneAttachDeadlinesDelta: deltas.phoneAttachDeadlines,
+      phoneAcceptDatabaseErrorsDelta: deltas.phoneAcceptDatabaseErrors,
+      resumeConfirmFailuresByCodeDelta: deltas.resumeConfirmFailuresByCode,
+      resumeRenewalFailuresDelta: deltas.resumeRenewalFailures,
+      // Omit empty accept percentiles or sparse windows pin p50 to zero and depress p95.
+      ...(deltas.clientAcceptTotalsMs.length === 0
+        ? {}
+        : {
+            clientAcceptTotalMsP50: acceptTotals.p50,
+            clientAcceptTotalMsP95: acceptTotals.p95,
+            clientAcceptTotalMsMax: acceptTotals.max,
+            clientAcceptAssignmentMsP95: acceptStageP95('assignment'),
+            clientAcceptCredentialMsP95: acceptStageP95('credential'),
+            clientAcceptActivityMsP95: acceptStageP95('activity'),
+            clientAcceptAttachMsP95: acceptStageP95('attach'),
+            clientAcceptBasisMsP95: acceptStageP95('basis')
+          }),
+      // Count all observed RTTs, including reservoir drops; percentiles describe retained samples only.
+      controlRttSamplesDelta: deltas.controlRttObserved,
+      controlRttSamplesDroppedDelta: deltas.controlRttObserved - deltas.controlRttSamplesMs.length,
+      ...(deltas.controlRttSamplesMs.length === 0
+        ? {}
+        : {
+            controlRttMsP50: controlRtt.p50,
+            controlRttMsP95: controlRtt.p95,
+            controlRttMsMax: controlRtt.max
+          }),
+      sqlQueriesDelta: deltas.sqlQueries,
+      sqlFailuresDelta: deltas.sqlFailures,
+      sqlLatencyMsMax: roundMs(deltas.sqlLatencyMsMax),
+      controlRenewalsByOutcomeDelta: deltas.controlRenewalsByOutcome,
+      controlRenewalsDelta: deltas.controlRenewalLatenciesMs.length,
+      controlRenewalSuccessesDelta: deltas.controlRenewalsByOutcome.renewed ?? 0,
+      controlRenewalLeaseMissesDelta:
+        deltas.controlRenewalsByOutcome.control_activity_not_found ?? 0,
+      controlActivityRecoveriesDelta: deltas.controlActivityRecoveries,
+      controlActivityRecoveryFailuresDelta: deltas.controlActivityRecoveryFailures,
+      hostHellosShedDelta: deltas.hostHellosShed,
+      preAuthLatencyMs: preAuthLatencyFields(deltas.preAuthLatency),
+      // Batched row latency is flush duration; use per-flush fields for statement cost.
+      controlRenewalLatencyMsP50: controlRenewal.p50,
+      controlRenewalLatencyMsP95: controlRenewal.p95,
+      controlRenewalLatencyMsMax: controlRenewal.max,
+      controlRenewalFlushesDelta: deltas.controlRenewalFlushLatenciesMs.length,
+      controlRenewalFlushRowsMax: deltas.controlRenewalFlushRowsMax,
+      controlRenewalFlushLatencyMsP95: controlRenewalFlush.p95,
+      controlRenewalFlushLatencyMsMax: controlRenewalFlush.max,
+      httpLatencyMsMax: roundMs(deltas.httpLatencyMsMax),
+      heapUsedBytes: memory.heapUsed,
+      heapTotalBytes: memory.heapTotal,
+      eventLoopDelayMsP99: Number(p99.toFixed(3)),
+      eventLoopDelayMsMax: Number(max.toFixed(3))
+    })
+  }
+}
+
+// Emit flat per-region siblings including zeros: quoted nested keys resist log metrics, and absent series disappear from skew joins.
+// Nested maps remain authoritative for uncatalogued values such as unhinted.
+function regionCounterFields(
+  prefix: 'requestedRegion' | 'selectedRegion',
+  counts: Record<string, number>
+): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(RELAY_REGION_METRIC_SEGMENTS).map(([region, segment]) => [
+      `${prefix}${segment}Delta`,
+      counts[region] ?? 0
+    ])
+  )
+}
+
+// Counts/buckets include every hello and sum across cells/windows; percentiles use the reservoir and omit empty windows.
+function preAuthLatencyFields(
+  latency: PreAuthLatency
+): Record<HostPreAuthPath, Record<HostPreAuthOutcome, Record<string, unknown>>> {
+  const summarize = (group: PreAuthLatencyGroup): Record<string, unknown> => {
+    if (group.observed === 0) return { count: 0 }
+    const { p50, p95, p99 } = latencySummary(group.samplesMs)
+    const bucketsLeMs: Record<string, number> = {}
+    PRE_AUTH_BUCKET_BOUNDS_MS.forEach((bound, index) => {
+      bucketsLeMs[String(bound)] = group.bucketCounts[index]!
+    })
+    bucketsLeMs['+Inf'] = group.bucketCounts[PRE_AUTH_BUCKET_BOUNDS_MS.length]!
+    return { count: group.observed, p50, p95, p99, max: roundMs(group.maxMs), bucketsLeMs }
+  }
+  const byOutcome = (
+    groups: Record<HostPreAuthOutcome, PreAuthLatencyGroup>
+  ): Record<HostPreAuthOutcome, Record<string, unknown>> => ({
+    admitted: summarize(groups.admitted),
+    refused: summarize(groups.refused),
+    abandoned: summarize(groups.abandoned)
+  })
+  return {
+    beforeCheck: byOutcome(latency.beforeCheck),
+    db: byOutcome(latency.db),
+    reserve: byOutcome(latency.reserve)
+  }
+}
+
+// What the sticky slot spent its hold on: the queue before it, then pool waits and
+// round trips inside it; per connection, whether one slow connection keeps serving it.
+function stickySlotFields(deltas: RelayMetricDeltas): Record<string, unknown> {
+  if (deltas.stickySlotQueueWaitMs.length === 0) return {}
+  const queueWait = latencySummary(deltas.stickySlotQueueWaitMs)
+  const poolWait = latencySummary(deltas.stickySlotPoolWaitMs)
+  const sql = latencySummary(deltas.stickySlotSqlMs)
+  const statements = latencySummary(deltas.stickySlotStatements)
+  const byConnection: Record<string, Record<string, number>> = {}
+  for (const [connectionId, connection] of deltas.stickySlotByConnection) {
+    const { p50, p99 } = latencySummary(connection.samplesMs)
+    byConnection[String(connectionId)] = {
+      requests: connection.requests,
+      statements: connection.statements,
+      statementMsP50: p50,
+      statementMsP99: p99,
+      statementMsMax: roundMs(connection.maxMs)
+    }
+  }
+  return {
+    stickySlotsDelta: deltas.stickySlotQueueWaitMs.length,
+    stickyQueueWaitMsP50: queueWait.p50,
+    stickyQueueWaitMsP99: queueWait.p99,
+    stickyQueueWaitMsMax: queueWait.max,
+    stickyPoolWaitMsP50: poolWait.p50,
+    stickyPoolWaitMsP99: poolWait.p99,
+    stickySqlMsP50: sql.p50,
+    stickySqlMsP99: sql.p99,
+    stickyStatementsP50: statements.p50,
+    stickyStatementsMax: statements.max,
+    // This instance's round-trip speed over every connection; slow-speed directors are the ones that stall.
+    stickyStatementMsP50: latencySummary(deltas.stickyStatementMs).p50,
+    stickySqlByConnection: byConnection,
+    // One per request-connection pair that found the window's table full.
+    stickySqlConnectionSamplesDroppedDelta: deltas.stickySlotConnectionSamplesDropped
+  }
+}
+
+function lockWaiters(byKey: Record<string, number>, waiterRole: string): number {
+  return Object.entries(byKey)
+    .filter(([key]) => key.startsWith(`${waiterRole}:relay_cells:`))
+    .reduce((sum, [, waiters]) => sum + waiters, 0)
+}
+
+function increment(counts: Record<string, number>, key: string): void {
+  counts[key] = (counts[key] ?? 0) + 1
+}
+
+export function timedRelayOperation<T>(
+  operation: () => Promise<T>,
+  observe: (durationMs: number, success: boolean) => void,
+  isExpectedError: (error: unknown) => boolean = () => false
+): Promise<T> {
+  const startedAt = performance.now()
+  return operation().then(
+    (result) => {
+      observe(performance.now() - startedAt, true)
+      return result
+    },
+    (error: unknown) => {
+      observe(performance.now() - startedAt, isExpectedError(error))
+      throw error
+    }
+  )
+}

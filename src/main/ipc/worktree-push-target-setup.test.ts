@@ -5,7 +5,9 @@ import {
   configureCreatedWorktreePushTargetWithExec,
   ensureUniqueRemoteName,
   findRemoteForUrl,
-  prepareWorktreePushTargetWithExec
+  prepareWorktreePushTargetWithExec,
+  remoteAlreadyMatchesUrl,
+  restoreUpstreamAfterMaterialize
 } from './worktree-push-target-setup'
 
 type ExecMock = Mock<GitRemoteExec>
@@ -14,12 +16,26 @@ const REPO = '/repo-root'
 const FORK_SSH = 'git@github.com:contributor/orca.git'
 const FORK_HTTPS = 'https://github.com/contributor/orca.git'
 
-// A stateful fake git: `remotes` maps name -> url. `remote add` mutates it so
-// later lookups see the new remote, matching real git behavior.
-function makeRepoExec(remotes: Record<string, string>): ExecMock {
+export function renderRemoteVerbose(remotes: Record<string, string>): string {
+  return Object.entries(remotes)
+    .flatMap(([name, url]) => [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`])
+    .join('\n')
+}
+
+// Stateful Git mock preserves remote additions and defaults HEAD to a real local branch.
+function makeRepoExec(
+  remotes: Record<string, string>,
+  checkedOutBranch = 'local-branch'
+): ExecMock {
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
+    if (args[0] === 'symbolic-ref' && args[1] === '--quiet' && args[2] === 'HEAD') {
+      return { stdout: `refs/heads/${checkedOutBranch}\n`, stderr: '' }
+    }
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: Object.keys(remotes).join('\n'), stderr: '' }
+    }
+    if (args[0] === 'remote' && args[1] === '-v' && args.length === 2) {
+      return { stdout: renderRemoteVerbose(remotes), stderr: '' }
     }
     if (args[0] === 'remote' && args[1] === 'get-url') {
       const url = remotes[args[2]!]
@@ -29,7 +45,7 @@ function makeRepoExec(remotes: Record<string, string>): ExecMock {
       return { stdout: `${url}\n`, stderr: '' }
     }
     if (args[0] === 'remote' && args[1] === 'add') {
-      remotes[args[2]!] = args[3]!
+      remotes[args.at(-2)!] = args.at(-1)!
       return { stdout: '', stderr: '' }
     }
     if (args[0] === 'remote' && args[1] === 'remove') {
@@ -62,13 +78,13 @@ describe('prepareWorktreePushTargetWithExec', () => {
     const result = await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
 
     expect(callsMatching(exec, ['remote', 'add'])).toEqual([
-      ['remote', 'add', 'pr-contributor-orca', FORK_SSH]
+      ['remote', 'add', '-t', 'contributor/fix', '--no-tags', 'pr-contributor-orca', FORK_SSH]
     ])
     expect(callsMatching(exec, ['fetch'])).toEqual([
       [
         'fetch',
         'pr-contributor-orca',
-        '+refs/heads/contributor/fix:refs/remotes/pr-contributor-orca/contributor/fix'
+        '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
       ]
     ])
     expect(result).toEqual({
@@ -77,6 +93,28 @@ describe('prepareWorktreePushTargetWithExec', () => {
       remoteUrl: FORK_SSH,
       remoteCreated: true
     })
+  })
+
+  it('records repo-local provenance on the remote it adds (#17828)', async () => {
+    const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
+
+    await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
+
+    // Ownership must survive store purge; isolate the config marker from unrelated refspec writes.
+    expect(callsMatching(exec, ['config', 'remote.pr-contributor-orca.orca-created'])).toEqual([
+      ['config', 'remote.pr-contributor-orca.orca-created', 'true']
+    ])
+  })
+
+  it('does not record provenance when reusing an existing remote', async () => {
+    const exec = makeRepoExec({
+      origin: 'git@github.com:stablyai/orca.git',
+      'pr-contributor-orca': FORK_HTTPS
+    })
+
+    await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
+
+    expect(callsMatching(exec, ['config', 'remote.pr-contributor-orca.orca-created'])).toEqual([])
   })
 
   it('reuses an existing remote pointing at the same fork (SSH vs HTTPS) without adding', async () => {
@@ -92,10 +130,9 @@ describe('prepareWorktreePushTargetWithExec', () => {
       [
         'fetch',
         'pr-contributor-orca',
-        '+refs/heads/contributor/fix:refs/remotes/pr-contributor-orca/contributor/fix'
+        '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
       ]
     ])
-    // remoteCreated omitted because the predicate says no known worktree owns it.
     expect(result).toEqual({
       remoteName: 'pr-contributor-orca',
       branchName: 'contributor/fix',
@@ -118,7 +155,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
     const result = await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
 
     expect(callsMatching(exec, ['remote', 'add'])).toEqual([
-      ['remote', 'add', 'pr-contributor-orca-2', FORK_SSH]
+      ['remote', 'add', '-t', 'contributor/fix', '--no-tags', 'pr-contributor-orca-2', FORK_SSH]
     ])
     expect(result.remoteName).toBe('pr-contributor-orca-2')
     expect(result.remoteCreated).toBe(true)
@@ -136,7 +173,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
 
     expect(callsMatching(exec, ['remote', 'add'])).toEqual([])
     expect(callsMatching(exec, ['fetch'])).toEqual([
-      ['fetch', 'origin', '+refs/heads/feature:refs/remotes/origin/feature']
+      ['fetch', 'origin', '+refs/heads/feature*:refs/remotes/origin/feature*']
     ])
     expect(result).toEqual({ remoteName: 'origin', branchName: 'feature' })
   })
@@ -154,6 +191,38 @@ describe('findRemoteForUrl', () => {
   it('returns null when no remote points at the fork', async () => {
     const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
     await expect(findRemoteForUrl(exec, REPO, FORK_SSH)).resolves.toBeNull()
+  })
+})
+
+describe('remoteAlreadyMatchesUrl', () => {
+  it('matches an exact URL', async () => {
+    const exec = makeRepoExec({ 'pr-contributor-orca': FORK_SSH })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(true)
+  })
+
+  it('matches by GitHub owner/repo across URL protocols', async () => {
+    const exec = makeRepoExec({ 'pr-contributor-orca': FORK_HTTPS })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(true)
+  })
+
+  it('returns false when the named remote points elsewhere', async () => {
+    const exec = makeRepoExec({
+      'pr-contributor-orca': 'git@github.com:someone-else/orca.git'
+    })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(false)
+  })
+
+  it('returns false when the named remote does not exist', async () => {
+    const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(false)
   })
 })
 
@@ -185,6 +254,46 @@ describe('configureCreatedWorktreePushTargetWithExec', () => {
       ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/fix', 'local-branch'],
       '/wt/path'
     )
+    expect(result).toBe(target)
+  })
+})
+
+describe('restoreUpstreamAfterMaterialize', () => {
+  it('points the checked-out branch upstream at the fork remote', async () => {
+    const exec = makeRepoExec({}, 'local-branch')
+    const target = forkTarget()
+
+    const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
+
+    expect(exec).toHaveBeenCalledWith(
+      ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/fix', 'local-branch'],
+      '/wt/path'
+    )
+    expect(result).toBe(target)
+  })
+
+  it('is a no-op when the target has no remoteUrl', async () => {
+    const exec = makeRepoExec({}, 'local-branch')
+    const target: GitPushTarget = { remoteName: 'origin', branchName: 'feature' }
+
+    const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
+
+    expect(callsMatching(exec, ['branch', '--set-upstream-to'])).toEqual([])
+    expect(result).toBe(target)
+  })
+
+  it('is a no-op when HEAD is detached (no checked-out branch)', async () => {
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        throw new Error('fatal: ref HEAD is not a symbolic ref')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+
+    const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
+
+    expect(callsMatching(exec, ['branch', '--set-upstream-to'])).toEqual([])
     expect(result).toBe(target)
   })
 })
@@ -239,8 +348,6 @@ describe('prepareWorktreePushTargetWithExec rollback', () => {
     expect(remotes.existing).toBe(FORK_SSH)
   })
 
-  // Regression: the rollback used to fire on inherited ownership, deleting a
-  // remote a live sibling worktree was still pushing through.
   it('keeps a reused remote a sibling worktree owns when the fetch fails', async () => {
     const remotes: Record<string, string> = {
       origin: 'git@github.com:stablyai/orca.git',

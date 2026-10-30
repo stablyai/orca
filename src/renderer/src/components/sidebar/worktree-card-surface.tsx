@@ -4,8 +4,7 @@ import { LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeContextMenu from './WorktreeContextMenu'
-import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
-import { WorktreeCardPortsDetails } from './WorktreeCardPorts'
+import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import { WorktreeCardParentContent } from './worktree-card-parent-content'
 import { buildWorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
@@ -34,86 +33,20 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     isQueuedForDeletion,
     deleteLabel,
     handleClick,
+    handlePointerDown,
+    handlePointerEnter,
+    handlePointerLeave,
     handleDoubleClick,
     handleDragStart,
     handleDragEnd,
     handleContextMenuSelect,
-    hoverIssue,
-    hoverLinearIssue,
-    hoverJiraIssue,
-    hoverReview,
-    hoverComment,
-    metaAutomationProvenance,
-    metaCliProvenance,
-    workspacePorts,
-    detailsHoverControl,
-    handleRenameTitle,
-    handleEditIssue,
-    handleEditComment,
-    handleOpenGitHubIssueInOrca,
-    linearIssue,
-    handleOpenLinearIssueInOrca,
-    handleOpenReviewInOrca,
-    handleOpenAutomation,
-    handleOpenAutomationRun,
-    hasExplicitLinkedReview,
-    handleUnlinkReview,
     showRenameErrorDialog,
     setShowRenameErrorDialog
   } = card
-  const { titleOnlyCard, hasHoverDetails, hoverBranchName, hoverWorkspaceTitle, cardStyle } =
-    presentation
+  const { titleOnlyCard, cardStyle } = presentation
+  const isSleeping = useIsSleepingWorktree(worktree.id)
 
   const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
-
-  const parentHoverTriggerBody = (
-    <div className="group/worktree-card w-full min-w-0" data-worktree-card-hover-trigger="">
-      {parentCardContent}
-    </div>
-  )
-
-  const parentCardBodyWithHoverDetails =
-    hasHoverDetails && !titleRenaming ? (
-      <WorktreeCardDetailsHover
-        issue={hoverIssue}
-        linearIssue={hoverLinearIssue}
-        jiraIssue={hoverJiraIssue}
-        review={hoverReview}
-        comment={hoverComment}
-        automationProvenance={metaAutomationProvenance}
-        cliProvenance={metaCliProvenance}
-        branchName={hoverBranchName}
-        workspaceTitle={hoverWorkspaceTitle}
-        workspaceTitleRenameDisabled={isDeleting || affiliateListMode}
-        detailsAfter={
-          workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
-        }
-        openDelay={100}
-        hoverControl={detailsHoverControl}
-        onRenameWorkspaceTitle={affiliateListMode ? undefined : handleRenameTitle}
-        onEditIssue={affiliateListMode ? undefined : handleEditIssue}
-        onEditComment={affiliateListMode ? undefined : handleEditComment}
-        onOpenGitHubIssueInOrca={
-          hoverIssue && 'url' in hoverIssue && hoverIssue.url
-            ? handleOpenGitHubIssueInOrca
-            : undefined
-        }
-        onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
-        onOpenReviewInOrca={
-          hoverReview?.url && hoverReview.provider === 'github' ? handleOpenReviewInOrca : undefined
-        }
-        onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
-        onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
-        // Why: branch lookup can surface a review without persisted metadata; only unlink when explicitly linked.
-        onUnlinkReview={
-          !affiliateListMode && hasExplicitLinkedReview ? handleUnlinkReview : undefined
-        }
-      >
-        {parentHoverTriggerBody}
-      </WorktreeCardDetailsHover>
-    ) : (
-      parentHoverTriggerBody
-    )
 
   const cardBody = (
     <div
@@ -121,16 +54,13 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         'relative flex cursor-pointer flex-col pr-1.5 transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
         titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
-        'rounded-lg',
-        // Why: the live data attribute updates before React state during navigation,
-        // so it must own the complete active style without stale utility classes.
+        'overflow-hidden rounded-lg',
+        // Navigation updates the live attribute before React; it must own the complete active style.
         isLineageDropTarget
-          ? 'border border-accent-foreground/20 bg-accent/80'
+          ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
           : isActiveSurface
             ? 'border border-transparent'
-            : isMultiSelected
-              ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-              : 'border border-transparent worktree-sidebar-card-hover',
+            : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
@@ -138,14 +68,21 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         ],
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-        // Why: no SSH dim — the inline host control now states the disconnected state
-        // explicitly, and a subtree opacity would composite its destructive tint and spinner
-        // down to an illegible alpha (a descendant cannot escape an ancestor's opacity).
+        // Dim disconnected runtimes only; ancestor opacity would make the SSH control’s error tint/spinner illegible.
         isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
-      data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
+      data-worktree-card-active={
+        isActiveSurface && !isLineageDropTarget ? activeSurfaceVariant : undefined
+      }
+      data-worktree-card-selected={
+        (isMultiSelected && !isActiveSurface && !isLineageDropTarget) || undefined
+      }
+      data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
       onClick={handleClick}
+      onPointerDown={affiliateListMode ? undefined : handlePointerDown}
+      onPointerEnter={affiliateListMode ? undefined : handlePointerEnter}
+      onPointerLeave={affiliateListMode ? undefined : handlePointerLeave}
       onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
       draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}
       onDragStart={!affiliateListMode && nativeDragEnabled ? handleDragStart : undefined}
@@ -163,11 +100,16 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           </div>
         </div>
       )}
-      {parentCardBodyWithHoverDetails}
+      {isSleeping && newCardStyle && !isDeleting ? (
+        // Mix tokens for background-independent sleep dimming; scope to the parent so awake children stay bright.
+        <div data-worktree-sleeping-dim="">{parentCardContent}</div>
+      ) : (
+        parentCardContent
+      )}
 
-      {newCardStyle && lineageChildren ? (
+      {lineageChildren ? (
         <div
-          className="mt-1.5 space-y-1"
+          className={cn('space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
           data-worktree-lineage-children=""
           style={lineageChildrenStyle}
         >
@@ -198,6 +140,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             open={showRenameErrorDialog}
             onOpenChange={setShowRenameErrorDialog}
             worktreeId={worktree.id}
+            executionHostId={worktree.hostId}
             worktreeName={worktree.displayName}
             error={worktree.firstAgentMessageRenameError}
           />

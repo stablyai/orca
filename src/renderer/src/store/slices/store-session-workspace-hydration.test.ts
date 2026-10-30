@@ -3,13 +3,11 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
+import { createTestStore, makeWorktree, makeTab, makeLayout, TEST_REPO } from './store-test-helpers'
 import { createStoreSessionMockApi, makeBrowserTab } from './store-session-test-harness'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -73,24 +71,19 @@ describe('hydrateWorkspaceSession', () => {
 
     const s = store.getState()
 
-    // Valid worktree tabs restored
     expect(s.tabsByWorktree[validWt]).toHaveLength(1)
     expect(s.tabsByWorktree[validWt][0].id).toBe('tab-valid')
 
-    // Invalid worktree tabs dropped
     expect(s.tabsByWorktree[invalidWt]).toBeUndefined()
 
-    // activeWorktreeId is null because it referenced an invalid worktree
     expect(s.activeWorktreeId).toBeNull()
 
-    // activeTabId is null because it referenced an invalid tab
     expect(s.activeTabId).toBeNull()
 
-    // Terminal layouts only contain valid tabs
     expect(s.terminalLayoutsByTabId['tab-valid']).toBeDefined()
     expect(s.terminalLayoutsByTabId['tab-invalid']).toBeUndefined()
 
-    // Why: two-phase hydration keeps workspaceSessionReady false until reconnectPersistedTerminals() flips it after eager spawns.
+    // Workspace readiness stays false until the reconnect phase completes.
     expect(s.workspaceSessionReady).toBe(false)
   })
 
@@ -445,5 +438,41 @@ describe('restored folder workspace hydration', () => {
     expect(state.browserTabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual(['browser-folder'])
     expect(state.browserPagesByWorkspace['browser-folder']?.[0]?.worktreeId).toBe(folderKey)
     expect(state.activeTabTypeByWorktree[folderKey]).toBe('browser')
+  })
+
+  it('clears unverified-loss markers for rows retired by scoped hydration', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-a::/target'
+    const retainedTab = makeTab({ id: 'tab-retained', worktreeId })
+    const retiredTab = makeTab({ id: 'tab-retired', worktreeId })
+    store.setState({
+      repos: [{ ...TEST_REPO, id: 'repo-a', connectionId: 'target-a' }],
+      worktreesByRepo: {
+        'repo-a': [makeWorktree({ id: worktreeId, repoId: 'repo-a', path: '/target' })]
+      },
+      tabsByWorktree: { [worktreeId]: [retainedTab, retiredTab] },
+      unverifiedPtyLossTabIds: {
+        [retainedTab.id]: true,
+        [retiredTab.id]: true,
+        'sibling-marker': true
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'repo-a',
+        activeWorktreeId: worktreeId,
+        activeTabId: retainedTab.id,
+        tabsByWorktree: { [worktreeId]: [retainedTab] },
+        terminalLayoutsByTabId: {}
+      },
+      { replaceWorkspaceKeys: [worktreeId] }
+    )
+
+    expect(store.getState().unverifiedPtyLossTabIds).toEqual({
+      [retainedTab.id]: true,
+      'sibling-marker': true
+    })
   })
 })

@@ -1,21 +1,7 @@
-// Seeded ANSI byte-stream generator for the terminal garble differential
-// fuzz suites (headless-emulator-fidelity.fuzz.test.ts and
-// hidden-reveal-reconciliation.fuzz.test.ts). The op mix models real agent
-// TUI output (Claude Code / Codex): CR status-line redraws, cursor-up panel
-// repaints, DEC 2026 synchronized frames, SGR color runs, wide CJK and ZWJ
-// emoji, wrapped long lines, alt-screen sessions, and scroll regions.
-//
-// Deliberately excluded ops (they would fuzz behavior the snapshot/restore
-// contract does not promise to preserve, so any diff would be noise, not a
-// garble bug):
-// - DECAWM (?7l) and IRM (CSI 4h): SerializeAddon does not re-emit them and
-//   rehydrateSequences (headless-emulator.ts buildRehydrateSequences) only
-//   covers alt-screen/bracketed-paste/app-cursor/mouse modes.
-// - Terminal queries (DA/DSR/DECRQM): the emulator is write-only by contract
-//   (headless-emulator.ts onQueryReply gating); replies are a separate
-//   authority problem with its own pinned tests (session.test.ts).
+// Model redraws, synchronized frames, Unicode, alt-screen and scroll-region output for terminal differential fuzz suites.
+// Exclude DECAWM/IRM: SerializeAddon/rehydrate does not preserve them. Exclude terminal queries: write-only replay has no reply authority (session.test.ts).
 
-/** Same seeded PRNG as retained-tail-redraw-window.equivalence.test.ts. */
+/** Seeded PRNG shared by the terminal fuzz and equivalence suites. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0
   return () => {
@@ -29,15 +15,9 @@ export function mulberry32(seed: number): () => number {
 export type AgentTuiStreamDims = { cols: number; rows: number }
 
 export type AgentTuiStreamProfile = {
-  /** Mouse-mode toggles require mirroring TerminalMouseModeMirror to build
-   *  rehydrate parity; the renderer-side fuzz cannot import that main-only
-   *  module (tsconfig.tc.web.json excludes src/main/daemon), so it opts out. */
+  /** Mouse modes need main-only daemon rehydrate, unavailable to renderer fuzz; renderer suites opt out. */
   includeMouseModes: boolean
-  /** OSC 8 hyperlinks mark their cells underlined in the xterm buffer, but
-   *  SerializeAddon never re-emits OSC 8 — production restores link ranges
-   *  out-of-band via snapshot.oscLinks (collectHeadlessOscLinkRanges), so
-   *  byte-replay fidelity legitimately drops that underline. The suites pin
-   *  the metadata compensation in a targeted test instead of fuzzing it. */
+  /** SerializeAddon omits OSC 8 underline state; production restores snapshot.oscLinks separately. Targeted metadata tests cover compensation instead of byte-replay fuzzing. */
   includeOscHyperlinks: boolean
   opCount: number
 }
@@ -202,9 +182,7 @@ function modeToggle(rng: () => number, profile: AgentTuiStreamProfile): string {
   return pick(rng, toggles)
 }
 
-/** One seeded agent-TUI-shaped op. Weights favor the redraw ops that have
- *  historically produced hidden-restore garble (CR rewrites, cursor-up panel
- *  repaints, DEC 2026 frames, alt-screen churn). */
+/** Weight redraw operations that historically garbled hidden restore: CR, cursor-up, DEC 2026 and alt-screen churn. */
 function nextOp(
   rng: () => number,
   dims: AgentTuiStreamDims,
@@ -256,9 +234,7 @@ export function buildAgentTuiStreamOps(
   return ops
 }
 
-/** Splits a stream at random boundaries, including inside escape sequences
- *  (PTY chunking does that constantly). Never splits a surrogate pair: PTY
- *  bytes are decoded to complete code points before reaching JS strings. */
+/** Split even inside escapes as PTYs do, but never surrogate pairs: byte decoding already delivers complete code points. */
 export function splitIntoRandomChunks(
   rng: () => number,
   stream: string,

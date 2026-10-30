@@ -4,11 +4,9 @@ import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
 import { normalizeSparseDirectories } from '../sparse-checkout-directories'
+import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {
-  // ── Sparse presets ─────────────────────────────────────────────
-  // Why: repo-scoped reusable directory lists for the new-workspace composer; broadcast on change so open composers refresh.
-
   ipcMain.handle('sparsePresets:list', (_event, args: { repoId: string }) => {
     return store.getSparsePresets(args.repoId)
   })
@@ -23,6 +21,7 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
       if (!repo) {
         throw new Error(`Repo "${args.repoId}" not found`)
       }
+      assertWslMoveProjectWritable(store, { repoId: args.repoId })
       const name = normalizeSparsePresetName(args.name)
       const directories = normalizeSparsePresetDirectories(args.directories)
       const now = Date.now()
@@ -48,6 +47,7 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
     if (!repo) {
       throw new Error(`Repo "${args.repoId}" not found`)
     }
+    assertWslMoveProjectWritable(store, { repoId: args.repoId })
     store.removeSparsePreset(args.repoId, args.presetId)
     notifySparsePresetsChanged(mainWindow, args.repoId)
   })

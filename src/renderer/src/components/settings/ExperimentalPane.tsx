@@ -11,6 +11,9 @@ import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
+import { BrowserExtensionsExperimentalSetting } from './BrowserExtensionsExperimentalSetting'
+import { WslHostsExperimentalSetting } from './WslHostsExperimentalSetting'
+import { wslHostsAvailable } from '../sidebar/use-wsl-hosts-enabled'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -24,8 +27,7 @@ const MS_PER_MINUTE = 60 * 1000
 type ExperimentalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  /** Hidden-experimental group is only rendered once the user has unlocked
-   *  it via Option-clicking the Experimental page title. */
+  /** Unlocked by Option-clicking the Experimental title. */
   hiddenExperimentalUnlocked?: boolean
 }
 
@@ -36,14 +38,11 @@ export function ExperimentalPane({
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
-  const showAgentsView = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().agentsView
+  const showNativeChat = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().nativeChat
   ])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
-  ])
-  const showNativeChat = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().nativeChat
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
@@ -56,14 +55,17 @@ export function ExperimentalPane({
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
-  // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
-  // while displaying the same effective clamped value the planner will use.
+  // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
   )
 
   return (
     <div className="space-y-4">
+      {showAgentDashboard ? (
+        <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
       {showPet ? (
         <SearchableSetting
           title={translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
@@ -96,48 +98,6 @@ export function ExperimentalPane({
             />
           </div>
         </SearchableSetting>
-      ) : null}
-
-      {showAgentsView ? (
-        <SearchableSetting
-          title={translate('auto.components.settings.ExperimentalPane.a05bcdaf57', 'Agents View')}
-          description={translate(
-            'auto.components.settings.ExperimentalPane.f63ea281e3',
-            'Threaded left-sidebar feed for agent completions and blocking states.'
-          )}
-          keywords={getExperimentalSearchEntry().agentsView.keywords}
-          className="space-y-3 py-2"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 shrink space-y-0.5">
-              <Label>
-                {translate('auto.components.settings.ExperimentalPane.a05bcdaf57', 'Agents View')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ExperimentalPane.0277901cf7',
-                  'Adds an Agents entry to the left sidebar with a threaded worktree feed for completed agents, blocking questions, unread state, and worktree creation events. Experimental — the event model and UI may change.'
-                )}
-              </p>
-            </div>
-            <Switch
-              aria-label={translate(
-                'auto.components.settings.ExperimentalPane.a05bcdaf57',
-                'Agents View'
-              )}
-              checked={settings.experimentalActivity}
-              onCheckedChange={(checked) =>
-                updateSettings({
-                  experimentalActivity: checked
-                })
-              }
-            />
-          </div>
-        </SearchableSetting>
-      ) : null}
-
-      {showAgentDashboard ? (
-        <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showNativeChat ? (
@@ -231,30 +191,32 @@ export function ExperimentalPane({
             />
           </div>
           {agentHibernationEnabled ? (
-            <NumberField
-              label={translate(
-                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
-                'Sleep after'
-              )}
-              description={translate(
-                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
-                'How many idle minutes a completed background agent must wait before Orca can sleep it.'
-              )}
-              value={agentHibernationIdleMinutes}
-              min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
-              max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
-              step={1}
-              suffix={translate(
-                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
-                'minutes'
-              )}
-              onChange={(minutes) =>
-                updateSettings({
-                  // Why: settings persist the planner contract, not the display unit.
-                  agentHibernationIdleMs: minutes * MS_PER_MINUTE
-                })
-              }
-            />
+            <div className="ml-4 space-y-3 border-l border-border pl-4">
+              <NumberField
+                className="py-0"
+                label={translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
+                  'Sleep after'
+                )}
+                description={translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
+                  'How many idle minutes a completed background agent must wait before Orca can sleep it.'
+                )}
+                value={agentHibernationIdleMinutes}
+                min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+                max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+                step={1}
+                suffix={translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
+                  'minutes'
+                )}
+                onChange={(minutes) =>
+                  updateSettings({
+                    agentHibernationIdleMs: minutes * MS_PER_MINUTE
+                  })
+                }
+              />
+            </div>
           ) : null}
         </SearchableSetting>
       ) : null}
@@ -284,7 +246,7 @@ export function ExperimentalPane({
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
-                  'Previews updated worktree-card layout and metadata behavior, including hover/context-menu ownership and status presentation.'
+                  'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
                 )}
               </p>
             </div>
@@ -305,6 +267,12 @@ export function ExperimentalPane({
       ) : null}
 
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+      <BrowserExtensionsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+      {wslHostsAvailable() ? (
+        <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}
     </div>

@@ -1,11 +1,16 @@
 import { errors } from '@stablyai/playwright-test'
+import { encodePaletteIdentity } from '../../src/shared/palette-match/palette-ranking'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import {
+  waitForActiveWorktree,
+  waitForSessionReady,
+  waitForStartupWorktreeRefresh
+} from './helpers/store'
 
 test('routes same-id browser and simulator Cmd-J rows to their owning paired host', async ({
   orcaPage
@@ -66,6 +71,9 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         { timeout: 60_000, message: 'paired client never mirrored the host browser tab' }
       )
       .toBe(remoteHostId)
+    // Why: hydration's deferred all-host scan rewrites worktreesByRepo; seeding ahead of it is silently reaped.
+    await waitForStartupWorktreeRefresh(page)
+    // Why: empties the mirror's reachable-target set, so the session.tabs subscription tears down before seeding.
     await page.evaluate(() => {
       window.__store!.setState({
         runtimeEnvironments: [],
@@ -112,6 +120,23 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           !remoteGroup
         ) {
           throw new Error('Paired client did not retain the mirrored host browser topology')
+        }
+        // Render the remote group before nesting the client’s own layout inside its local pane.
+        const renderedGroupIds = new Set<string>()
+        const pendingLayoutNodes = [state.layoutByWorktree[sharedWorktreeId]]
+        while (pendingLayoutNodes.length > 0) {
+          const node = pendingLayoutNodes.pop()
+          if (!node) {
+            continue
+          }
+          if (node.type === 'leaf') {
+            renderedGroupIds.add(node.groupId)
+            continue
+          }
+          pendingLayoutNodes.push(node.first, node.second)
+        }
+        if (renderedGroupIds.size > 0 && !renderedGroupIds.has(remoteGroup.id)) {
+          throw new Error('Paired client layout does not render the mirrored host browser group')
         }
         const local = {
           ...seed,
@@ -162,9 +187,15 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           sortOrder: 0,
           createdAt: 1
         })
+        // Keep live ids in tabOrder so session snapshots re-land known tabs instead of adopting them into a new group.
+        const retainedMirroredTabs = (state.unifiedTabsByWorktree[sharedWorktreeId] ?? []).map(
+          (candidate) =>
+            candidate.id === remoteUnifiedTab.id
+              ? { ...candidate, executionHostId: remoteHostId }
+              : candidate
+        )
         const tabs = [
           tab('browser-tab-local', 'browser-local', 'group-local', 'local', 'browser', 'Local'),
-          { ...remoteUnifiedTab, executionHostId: remoteHostId },
           tab(
             'simulator-local',
             'simulator-local',
@@ -180,15 +211,16 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
             remoteHostId,
             'simulator',
             'Remote emulator proof'
-          )
+          ),
+          ...retainedMirroredTabs
         ]
         store.setState({
-          repos: [{ ...seedRepo, connectionId: null, executionHostId: 'local' }, seedRepo],
-          worktreesByRepo: { [seed.repoId]: [local, remote] },
+          worktreesByRepo: { ...state.worktreesByRepo, [seed.repoId]: [local, remote] },
           activeRepoId: seed.repoId,
           activeWorktreeId: sharedWorktreeId,
           activeWorkspaceExecutionHostId: 'local',
           browserTabsByWorktree: {
+            ...state.browserTabsByWorktree,
             [sharedWorktreeId]: [localBrowser, seededRemoteBrowser]
           },
           browserPagesByWorkspace: {
@@ -212,8 +244,9 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
               }
             ]
           },
-          unifiedTabsByWorktree: { [sharedWorktreeId]: tabs },
+          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [sharedWorktreeId]: tabs },
           groupsByWorktree: {
+            ...state.groupsByWorktree,
             [sharedWorktreeId]: [
               {
                 id: 'group-local',
@@ -221,28 +254,45 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
                 activeTabId: 'browser-tab-local',
                 tabOrder: ['browser-tab-local', 'simulator-local']
               },
-              {
-                ...remoteGroup,
-                worktreeId: sharedWorktreeId,
-                activeTabId: remoteUnifiedTab.id,
-                tabOrder: [remoteUnifiedTab.id, 'simulator-remote']
-              }
+              ...(state.groupsByWorktree[sharedWorktreeId] ?? []).map((group) =>
+                group.id === remoteGroup.id
+                  ? {
+                      ...group,
+                      activeTabId: remoteUnifiedTab.id,
+                      tabOrder: [...group.tabOrder, 'simulator-remote']
+                    }
+                  : group
+              )
             ]
           },
-          activeGroupIdByWorktree: { [sharedWorktreeId]: 'group-local' },
+          activeGroupIdByWorktree: {
+            ...state.activeGroupIdByWorktree,
+            [sharedWorktreeId]: 'group-local'
+          },
           layoutByWorktree: {
+            ...state.layoutByWorktree,
             [sharedWorktreeId]: {
               type: 'split',
               direction: 'horizontal',
               first: { type: 'leaf', groupId: 'group-local' },
-              second: { type: 'leaf', groupId: remoteGroup.id },
+              // Why: wrap the client's own layout so a host-side split keeps rendering its panes.
+              second: state.layoutByWorktree[sharedWorktreeId] ?? {
+                type: 'leaf',
+                groupId: remoteGroup.id
+              },
               ratio: 0.5
             }
           },
           activeBrowserTabId: 'browser-local',
-          activeBrowserTabIdByWorktree: { [sharedWorktreeId]: 'browser-local' },
+          activeBrowserTabIdByWorktree: {
+            ...state.activeBrowserTabIdByWorktree,
+            [sharedWorktreeId]: 'browser-local'
+          },
           activeTabType: 'browser',
-          activeTabTypeByWorktree: { [sharedWorktreeId]: 'browser' }
+          activeTabTypeByWorktree: {
+            ...state.activeTabTypeByWorktree,
+            [sharedWorktreeId]: 'browser'
+          }
         })
         return {
           remoteGroupId: remoteGroup.id,
@@ -282,20 +332,37 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       browserCount: 2,
       owners: [
         ['browser-tab-local', 'local', seeded.sharedWorktreeId],
-        [seeded.remoteTabId, remoteHostId, seeded.sharedWorktreeId],
         ['simulator-local', 'local', seeded.sharedWorktreeId],
-        ['simulator-remote', remoteHostId, seeded.sharedWorktreeId]
+        ['simulator-remote', remoteHostId, seeded.sharedWorktreeId],
+        [seeded.remoteTabId, remoteHostId, seeded.sharedWorktreeId]
       ],
       workspaceOwners: [
         ['browser-local', seeded.sharedWorktreeId],
         [seeded.remoteWorkspaceId, seeded.sharedWorktreeId]
       ]
     })
+    // Require the same-id collision at click time; catalog refresh can reap one row and re-host the survivor.
+    const expectSameIdCollisionIntact = async (step: string): Promise<void> => {
+      expect(
+        await page.evaluate(
+          (worktreeId) =>
+            window
+              .__store!.getState()
+              .allWorktrees()
+              .filter((worktree) => worktree.id === worktreeId)
+              .map((worktree) => worktree.hostId)
+              .sort(),
+          seeded.sharedWorktreeId
+        ),
+        `same-id host rows before ${step}`
+      ).toEqual(['local', remoteHostId].sort())
+    }
     await page.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     let palette = page.getByRole('dialog', { name: 'Jump to...' })
     let input = palette.getByPlaceholder(
-      'Search chats, terminals, worktrees, settings, and actions...'
+      'Search chats, terminals, workspaces, tasks, settings, and actions...'
     )
+    await expectSameIdCollisionIntact('remote browser page palette open')
     const remoteBrowserAfterOpen = await page.evaluate(
       ({ tabId, worktreeId }) => {
         const state = window.__store!.getState()
@@ -304,10 +371,6 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         )
         return {
           browserCount: state.browserTabsByWorktree[worktreeId]?.length ?? 0,
-          hosts: state
-            .allWorktrees()
-            .filter((worktree) => worktree.id === worktreeId)
-            .map((worktree) => worktree.hostId),
           owner: tab?.executionHostId ?? null
         }
       },
@@ -316,31 +379,68 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         worktreeId: seeded.sharedWorktreeId
       }
     )
+    const remoteBrowserIdentity = encodePaletteIdentity([
+      'browser-page',
+      remoteHostId,
+      seeded.sharedWorktreeId,
+      seeded.remoteWorkspaceId,
+      seeded.remotePageId
+    ])
+    const localBrowserIdentity = encodePaletteIdentity([
+      'browser-page',
+      'local',
+      seeded.sharedWorktreeId,
+      'browser-local',
+      'page-local'
+    ])
+    const remoteSimulatorIdentity = encodePaletteIdentity([
+      'simulator-tab',
+      remoteHostId,
+      seeded.sharedWorktreeId,
+      'simulator-remote'
+    ])
+    const localSimulatorIdentity = encodePaletteIdentity([
+      'simulator-tab',
+      'local',
+      seeded.sharedWorktreeId,
+      'simulator-local'
+    ])
     expect(remoteBrowserAfterOpen.browserCount).toBe(2)
-    expect(remoteBrowserAfterOpen.hosts).toEqual(['local', remoteHostId])
     expect(remoteBrowserAfterOpen.owner).toBe(remoteHostId)
     await input.fill('New Tab')
-    await expect(
-      palette.locator(`[cmdk-item][data-value="browser-page:${seeded.remotePageId}"]`)
-    ).toHaveCount(1)
+    await expect(palette.locator(`[cmdk-item][data-value="${remoteBrowserIdentity}"]`)).toHaveCount(
+      1
+    )
     await expect(palette.getByText('Local browser proof', { exact: true })).toHaveCount(0)
     await testInfo.attach('cmd-j-host-qualified-browser.png', {
       body: await page.screenshot(),
       contentType: 'image/png'
     })
-    await palette.locator(`[cmdk-item][data-value="browser-page:${seeded.remotePageId}"]`).click()
+    await expectSameIdCollisionIntact('remote browser page click')
+    await palette.locator(`[cmdk-item][data-value="${remoteBrowserIdentity}"]`).click()
     await expect
       .poll(() =>
-        page.evaluate(() => {
+        page.evaluate((worktreeId) => {
           const state = window.__store!.getState()
+          const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
           return [
             state.activeWorkspaceExecutionHostId,
             state.activeBrowserTabId,
-            state.activeTabType
+            state.activeTabType,
+            activeGroupId,
+            (state.groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
+              ?.activeTabId
           ]
-        })
+        }, seeded.sharedWorktreeId)
       )
-      .toEqual([remoteHostId, seeded.remoteWorkspaceId, 'browser'])
+      // Wait on the group’s activeTabId because strip data-active can lead global activeBrowserTabId.
+      .toEqual([
+        remoteHostId,
+        seeded.remoteWorkspaceId,
+        'browser',
+        seeded.remoteGroupId,
+        seeded.remoteTabId
+      ])
     await expect(palette).not.toBeVisible()
     await expect(
       page.locator(`[data-tab-id="${seeded.remoteWorkspaceId}"][data-active="true"]`).first()
@@ -352,31 +452,40 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
 
     await page.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     palette = page.getByRole('dialog', { name: 'Jump to...' })
-    input = palette.getByPlaceholder('Search chats, terminals, worktrees, settings, and actions...')
+    input = palette.getByPlaceholder(
+      'Search chats, terminals, workspaces, tasks, settings, and actions...'
+    )
     await input.fill('local.example.test')
-    await expect(palette.locator('[cmdk-item][data-value="browser-page:page-local"]')).toHaveCount(
+    await expect(palette.locator(`[cmdk-item][data-value="${localBrowserIdentity}"]`)).toHaveCount(
       1
     )
-    await palette.locator('[cmdk-item][data-value="browser-page:page-local"]').click()
+    await expectSameIdCollisionIntact('local browser page click')
+    await palette.locator(`[cmdk-item][data-value="${localBrowserIdentity}"]`).click()
     await expect
       .poll(() =>
-        page.evaluate(() => {
+        page.evaluate((worktreeId) => {
           const state = window.__store!.getState()
+          const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
           return [
             state.activeWorkspaceExecutionHostId,
             state.activeBrowserTabId,
-            state.activeTabType
+            state.activeTabType,
+            activeGroupId,
+            (state.groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
+              ?.activeTabId
           ]
-        })
+        }, seeded.sharedWorktreeId)
       )
-      .toEqual(['local', 'browser-local', 'browser'])
+      .toEqual(['local', 'browser-local', 'browser', 'group-local', 'browser-tab-local'])
     await expect(
       page.locator('[data-tab-id="browser-local"][data-active="true"]').first()
     ).toBeVisible()
 
     await page.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     palette = page.getByRole('dialog', { name: 'Jump to...' })
-    input = palette.getByPlaceholder('Search chats, terminals, worktrees, settings, and actions...')
+    input = palette.getByPlaceholder(
+      'Search chats, terminals, workspaces, tasks, settings, and actions...'
+    )
     await input.fill('Remote emulator proof')
     await expect(palette.getByText('Local emulator proof', { exact: true })).toHaveCount(0)
     await expect(palette.getByText('Remote emulator proof', { exact: true })).toHaveCount(1)
@@ -384,7 +493,8 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       body: await page.screenshot(),
       contentType: 'image/png'
     })
-    await palette.locator('[cmdk-item][data-value="simulator-tab:simulator-remote"]').click()
+    await expectSameIdCollisionIntact('remote simulator click')
+    await palette.locator(`[cmdk-item][data-value="${remoteSimulatorIdentity}"]`).click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {
@@ -409,12 +519,13 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
 
     await page.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     palette = page.getByRole('dialog', { name: 'Jump to...' })
-    input = palette.getByPlaceholder('Search chats, terminals, worktrees, settings, and actions...')
-    await input.fill('Local emulator proof')
-    const localSimulatorRow = palette.locator(
-      '[cmdk-item][data-value="simulator-tab:simulator-local"]'
+    input = palette.getByPlaceholder(
+      'Search chats, terminals, workspaces, tasks, settings, and actions...'
     )
+    await input.fill('Local emulator proof')
+    const localSimulatorRow = palette.locator(`[cmdk-item][data-value="${localSimulatorIdentity}"]`)
     await expect(localSimulatorRow).toHaveCount(1)
+    await expectSameIdCollisionIntact('local simulator click')
     await localSimulatorRow.click()
     await expect
       .poll(() =>

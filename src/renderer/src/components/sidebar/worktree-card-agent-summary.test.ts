@@ -1,9 +1,7 @@
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { CompactAgentRow, getCompactAgentSecondary } from './worktree-card-compact-agent-row'
-import { getAgentDotState, summarizeAgents } from './worktree-card-agent-summary'
+import { getAgentDotState } from './worktree-card-agent-summary'
+import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 
 function monitoringAgent(): DashboardAgentRowData {
   return {
@@ -34,39 +32,21 @@ function monitoringAgent(): DashboardAgentRowData {
 }
 
 describe('worktree card agent summary', () => {
-  it('presents passive working as monitoring', () => {
-    const agent = monitoringAgent()
-
-    expect(getAgentDotState(agent)).toBe('monitoring')
-    expect(getCompactAgentSecondary(agent)).toBe('Monitoring background tasks')
-    expect(summarizeAgents([agent], 'Agent')).toBe('Agent monitoring')
-  })
-
-  it('keeps monitoring visible before a compact row prompt', () => {
-    const agent = monitoringAgent()
-    agent.entry.prompt = 'Run background checks'
-
-    const markup = renderToStaticMarkup(
-      createElement(CompactAgentRow, { agent, now: 2000, onActivate: vi.fn() })
-    )
-
-    expect(markup).toContain('title="Monitoring background tasks - Run background checks"')
-    expect(markup).toMatch(
-      /Monitoring background tasks<\/span><span[^>]*> - Run background checks<\/span>/
-    )
-  })
-
-  it('lists interrupted outcomes before clean completions', () => {
-    const done = monitoringAgent()
-    done.state = 'done'
-    done.entry.state = 'done'
-    done.entry.workingMode = undefined
-    const interrupted = {
-      ...done,
-      paneKey: 'tab-1:leaf-2',
-      entry: { ...done.entry, paneKey: 'tab-1:leaf-2', interrupted: true }
+  it('keeps a subagent row on its own state while its failed main agent reads failed', () => {
+    const parent = monitoringAgent()
+    parent.entry = {
+      ...parent.entry,
+      workingMode: undefined,
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 },
+      subagents: [{ id: 'child-1', state: 'working', startedAt: 1 }]
     }
+    const [child] = buildSubagentChildRows({
+      parentEntry: parent.entry,
+      tab: parent.tab,
+      parentIsFresh: true
+    })
 
-    expect(summarizeAgents([done, interrupted], 'Agents')).toBe('Agents: 1 interrupted, 1 done')
+    expect(getAgentDotState(parent)).toBe('failed')
+    expect(getAgentDotState(child)).toBe('working')
   })
 })

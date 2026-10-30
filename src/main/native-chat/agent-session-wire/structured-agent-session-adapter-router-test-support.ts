@@ -1,0 +1,97 @@
+import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
+import type { StructuredAgentDefinition } from './structured-agent-definition'
+import { StructuredAgentRegistry } from './structured-agent-registry'
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry reads only the optional methods a declaration needs; this double has none, so its agents declare none.
+const NO_METHODS = {} as StructuredAgentSessionAdapter
+
+function declaringNothing(definition: StructuredAgentDefinition): StructuredAgentDefinition {
+  return {
+    ...definition,
+    capabilities: {
+      rewind: false,
+      compact: false,
+      threadGoal: false,
+      contextUsage: false,
+      imagePrompts: false,
+      steering: definition.capabilities.steering,
+      approvalEnforcement: definition.capabilities.approvalEnforcement
+    },
+    restingOptions: {
+      acceptsKey: () => false,
+      fallbackModels: () => null,
+      effortDefaultsToModel: false
+    }
+  }
+}
+
+export function structuredAgentsDeclaringNothing(
+  definitions: readonly StructuredAgentDefinition[]
+): StructuredAgentRegistry {
+  return new StructuredAgentRegistry(
+    definitions.map((definition) => ({
+      definition: declaringNothing(definition),
+      adapter: NO_METHODS
+    }))
+  )
+}
+
+export const NO_STRUCTURED_AGENTS = structuredAgentsDeclaringNothing([
+  CLAUDE_STRUCTURED_AGENT,
+  CODEX_STRUCTURED_AGENT
+])
+
+/** Declare only each double’s implemented capabilities. */
+export function claudeAndCodexAgents(
+  adapters:
+    | { claude: StructuredAgentSessionAdapter; codex: StructuredAgentSessionAdapter }
+    | StructuredAgentSessionAdapter = NO_METHODS
+): StructuredAgentRegistry {
+  const { claude, codex } = 'claude' in adapters ? adapters : { claude: adapters, codex: adapters }
+  return new StructuredAgentRegistry([
+    { definition: implementedBy(CLAUDE_STRUCTURED_AGENT, claude), adapter: claude },
+    { definition: implementedBy(CODEX_STRUCTURED_AGENT, codex), adapter: codex }
+  ])
+}
+
+/** Keep real declarations for tests that add adapter methods per case. */
+export function claudeAndCodexDeclared(): StructuredAgentRegistry {
+  const unused = (): never => {
+    throw new Error('a registry never calls its adapters')
+  }
+  return claudeAndCodexAgents({
+    ...NO_METHODS,
+    compact: unused,
+    changeThreadGoal: unused,
+    rewind: unused,
+    recoverRewind: unused
+  })
+}
+
+export function claudeAndCodexRouter(
+  adapters: { claude: StructuredAgentSessionAdapter; codex: StructuredAgentSessionAdapter },
+  closeAdapters: () => Promise<void>
+): StructuredAgentSessionAdapterRouter {
+  return new StructuredAgentSessionAdapterRouter(claudeAndCodexAgents(adapters), closeAdapters)
+}
+
+function implementedBy(
+  definition: StructuredAgentDefinition,
+  adapter: StructuredAgentSessionAdapter
+): StructuredAgentDefinition {
+  const declared = definition.capabilities
+  return {
+    ...definition,
+    capabilities: {
+      ...declared,
+      compact: declared.compact && Boolean(adapter.compact),
+      threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
+      rewind:
+        declared.rewind &&
+        Boolean(adapter.forkForRewind || (adapter.rewind && adapter.recoverRewind))
+    }
+  }
+}

@@ -2,18 +2,20 @@ import { useEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
+import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
+import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
-import type { GrabIntent } from '../describe-page/browser-page-types'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useBrowserPageKeyboardShortcuts({
   browserTabId,
+  workspaceId,
   isActive,
+  chromeShortcutScope,
   isActiveRef,
   markupIsActive,
   webviewRef,
-  paneZoomLevelRef,
-  setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
   reloadWebviewOrRecoverGuest,
   startGrabIntent,
@@ -21,12 +23,12 @@ export function useBrowserPageKeyboardShortcuts({
   grabIsInteractive
 }: {
   browserTabId: string
+  workspaceId: string
   isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
   isActiveRef: MutableRefObject<boolean>
   markupIsActive: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
-  paneZoomLevelRef: MutableRefObject<number>
-  setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
   startGrabIntent: (intent: GrabIntent) => void
@@ -37,19 +39,18 @@ export function useBrowserPageKeyboardShortcuts({
 
   useBrowserPageWebviewShortcuts({
     browserTabId,
+    workspaceId,
     isActive,
+    chromeShortcutScope,
     isActiveRef,
     webviewRef,
-    paneZoomLevelRef,
-    setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest
   })
 
   // Why: Cmd+C is repurposed as the grab-mode gesture; native text copy in the guest is handled by Chromium and never reaches here.
   useEffect(() => {
-    // Why: gate on isActive so only the active pane's global keydown listener toggles grab mode.
-    if (!isActive) {
+    if (chromeShortcutScope === 'inactive') {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
@@ -58,27 +59,44 @@ export function useBrowserPageKeyboardShortcuts({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
+      const intent: GrabIntent | null = keybindingMatchesAction(
+        'browser.grabElement',
+        e,
+        shortcutPlatform,
+        keybindings
+      )
+        ? 'copy'
+        : keybindingMatchesAction('browser.annotateElement', e, shortcutPlatform, keybindings)
+          ? 'annotate'
+          : null
       if (
-        !markupIsActive &&
-        keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
+        intent === null ||
+        // Why: startGrabIntent toggles, so a held chord would flicker the picker on and off.
+        e.repeat ||
+        // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
+        markupIsActive ||
+        !browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId) ||
+        // Why: a live selection means copy; selecting in the floating panel or a sidebar keeps scope.
+        (intent === 'copy' && window.getSelection()?.isCollapsed === false)
       ) {
-        e.preventDefault()
-        startGrabIntent('copy')
+        return
       }
+      e.preventDefault()
+      startGrabIntent(intent)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, keybindings, markupIsActive, startGrabIntent])
+  }, [chromeShortcutScope, keybindings, markupIsActive, startGrabIntent, workspaceId])
 
-  // Why: a focused guest gets Cmd/Ctrl+C inside Chromium; main forwards it back only when the page wouldn't use it for native copy.
+  // Why: a focused guest keeps its key events; main forwards the grab/annotate chords back with their intent.
   useEffect(() => {
-    return window.api.browser.onGrabModeToggle((tabId) => {
-      if (tabId === browserTabId) {
-        startGrabIntent('copy')
+    return window.api.browser.onGrabModeToggle((tabId, intent) => {
+      // Why: a guest can hold keyboard focus under the markup overlay, whose toolbar disables both tools.
+      if (tabId === browserTabId && !markupIsActive) {
+        startGrabIntent(intent)
       }
     })
-  }, [browserTabId, startGrabIntent])
+  }, [browserTabId, markupIsActive, startGrabIntent])
 
   useEffect(() => {
     if (!grabIsInteractive) {
@@ -88,7 +106,6 @@ export function useBrowserPageKeyboardShortcuts({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      // Ignore if modifier keys are held — user may be doing Cmd+C etc.
       if (e.metaKey || e.ctrlKey || e.altKey) {
         return
       }
@@ -100,8 +117,8 @@ export function useBrowserPageKeyboardShortcuts({
       e.stopPropagation()
       handleGrabActionShortcut(key as 'c' | 's')
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [grabIsInteractive, handleGrabActionShortcut])
 
   useEffect(() => {

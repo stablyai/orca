@@ -1,17 +1,19 @@
-import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
+  CursorAccountsApi,
   GrokAccountsApi,
-  MinimaxCredentialsApi
+  MinimaxCredentialsApi,
+  ZcodePlanCredentialsApi
 } from './api/agent-account-api'
-import type { AgentHooksApi, HooksApi } from './api/agent-hook-api'
+import type { HooksApi } from './api/agent-hook-api'
 import type { SkillsApi } from './api/agent-skill-api'
-import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
+import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status-api'
 import type {
   ClaudeUsageApi,
   CodexUsageApi,
+  MuseUsageApi,
   OpenCodeUsageApi,
   RateLimitsApi
 } from './api/agent-usage-api'
@@ -28,6 +30,7 @@ import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
 import type { GitInspectionApi } from './api/git-inspection-api'
 import type { GitOperationApi } from './api/git-operation-api'
+import type { GithubAccountApi } from './api/github-account-api'
 import type { GithubPullRequestApi } from './api/github-pull-request-api'
 import type { GithubWorkItemApi } from './api/github-work-item-api'
 import type { GitLabApi } from './api/gitlab-api'
@@ -50,16 +53,22 @@ import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
 import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/repository-api'
 import type { RuntimeApi } from './api/runtime-api'
+import type { WslMoveApi } from './api/wsl-move-bridge'
+import type { WslDriveProjectApi } from './api/wsl-drive-project-bridge'
+import type { WslDriveUncConversionApi } from './api/wsl-drive-unc-conversion-bridge'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
 import type { SshApi } from './api/ssh-api'
+import type { PlainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
+import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
 import type { UiWindowApi } from './api/ui-window-api'
 import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
+import type { LinkPreviewApi } from './api/link-preview-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
@@ -80,11 +89,12 @@ export type PreloadApi = {
   workspaceCleanup: WorkspaceCleanupApi
   workspaceSpace: WorkspaceSpaceApi
   workspacePorts: WorkspacePortsApi
+  linkPreview: LinkPreviewApi
   pty: PtyApi
   feedback: FeedbackApi
   crashReports: CrashReportsApi
   export: ExportApi
-  gh: Merged<GithubPullRequestApi & GithubWorkItemApi>
+  gh: Merged<GithubPullRequestApi & GithubWorkItemApi & GithubAccountApi>
   hostedReview: HostedReviewApi
   gl: GitLabApi
   bitbucket: BitbucketApi
@@ -104,8 +114,6 @@ export type PreloadApi = {
   claudeAccounts: ClaudeAccountsApi
   cli: CliApi
   codexConfigSync: CodexConfigSyncApi
-  agentHooks: AgentHooksApi
-  agentTrust: AgentTrustApi
   preflight: PreflightApi
   notifications: NotificationsApi
   onboarding: OnboardingApi
@@ -123,7 +131,6 @@ export type PreloadApi = {
   ephemeralVm: EphemeralVmApi
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
-  remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   docPreview: DocPreviewApi['docPreview']
@@ -132,6 +139,7 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  museUsage: MuseUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
@@ -140,11 +148,25 @@ export type PreloadApi = {
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
+  opencodeGoCredentials: {
+    getStatus: () => Promise<{ apiKeyConfigured: boolean }>
+    saveApiKey: (key: string) => Promise<{ apiKeyConfigured: boolean }>
+    clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
+  }
   minimaxCredentials: MinimaxCredentialsApi
+  zcodePlanCredentials: ZcodePlanCredentialsApi
   grokAccounts: GrokAccountsApi
+  cursorAccounts: CursorAccountsApi
   ssh: SshApi
+  /** Desktop only: an unmanaged ssh login to a host whose move is blocked. */
+  plainSsh?: PlainSshTerminalApi
+  /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */
+  legacyRelayBridge?: LegacyRelayBridgeApi
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']
+  wslMove: WslMoveApi
+  wslDriveProject: WslDriveProjectApi
+  wslDriveUnc: WslDriveUncConversionApi
   pwsh: RuntimeApi['pwsh']
   gitBash: RuntimeApi['gitBash']
   plugins: PluginsApi
@@ -153,7 +175,12 @@ export type PreloadApi = {
   speech: SpeechApi
 }
 
-export type { ClaudeUsageApi, CodexUsageApi, OpenCodeUsageApi } from './api/agent-usage-api'
+export type {
+  ClaudeUsageApi,
+  CodexUsageApi,
+  MuseUsageApi,
+  OpenCodeUsageApi
+} from './api/agent-usage-api'
 export type { AiVaultApi } from './api/ai-vault-api'
 export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
 export type { AppApi } from './api/app-api'
@@ -169,6 +196,9 @@ export type {
   NativeChatSubscriptionFrame
 } from './api/native-chat-api'
 export type {
+  PluginAutoUpdateEvent,
+  PluginHostCustomEditor,
+  PluginHostNewFile,
   PluginHostInstallResult,
   PluginHostInstallSource,
   PluginHostListEntry,
@@ -187,8 +217,12 @@ export type {
 } from './api/preflight-api'
 export type {
   PtyManagementApi,
+  PtyManagementDaemonCwdClass,
+  PtyManagementFolderAccessMismatch,
   PtyManagementMacTccAttributionHealth,
-  PtyManagementSession
+  PtyManagementSession,
+  PtyManagementSeveredDaemon,
+  PtyManagementSeveredDaemonRestartResult
 } from './api/pty-management-api'
 export type {
   ShellOpenExternalEditorRequest,
@@ -206,7 +240,6 @@ export type {
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
-    electron: ElectronAPI
     api: PreloadApi
   }
 }

@@ -1,3 +1,4 @@
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Locator, Page } from '@stablyai/playwright-test'
 import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../src/shared/gitlab-types'
@@ -65,13 +66,24 @@ type TransitionFrame = {
   targetSelected: boolean
 }
 
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    // Per-provider capture buffers written by startTransitionCapture below.
+    __githubUrlTransitionFrames?: TransitionFrame[]
+    __gitlabUrlTransitionFrames?: TransitionFrame[]
+  }
+}
+
+type TransitionFrameKey = '__githubUrlTransitionFrames' | '__gitlabUrlTransitionFrames'
+
 function pasteChord(): string {
   return process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
 }
 
 async function startTransitionCapture(
   page: Page,
-  frameKey: string,
+  frameKey: TransitionFrameKey,
   wrongTitle: string,
   targetTitle: string
 ): Promise<void> {
@@ -94,20 +106,29 @@ async function startTransitionCapture(
           requestAnimationFrame(capture)
         }
       }
-      Reflect.set(window, frameKey, frames)
+      window[frameKey] = frames
       capture()
     },
     { frameKey, frameLimit: TRANSITION_FRAME_LIMIT, wrongTitle, targetTitle }
   )
 }
 
-async function readTransitionFrames(page: Page, frameKey: string): Promise<TransitionFrame[]> {
-  return page.evaluate((key) => Reflect.get(window, key) as TransitionFrame[], frameKey)
+async function readTransitionFrames(
+  page: Page,
+  frameKey: TransitionFrameKey
+): Promise<TransitionFrame[]> {
+  return page.evaluate((key) => {
+    const frames = window[key]
+    if (!frames) {
+      throw new Error(`Transition capture ${key} was never installed`)
+    }
+    return frames
+  }, frameKey)
 }
 
 async function expectLookupHeldWithoutStaleRow(
   page: Page,
-  frameKey: string,
+  frameKey: TransitionFrameKey,
   targetUrl: string,
   wrongOption: Locator,
   targetOption: Locator
@@ -124,7 +145,7 @@ async function expectLookupHeldWithoutStaleRow(
 
 async function expectExactTargetAfterLookup(
   page: Page,
-  frameKey: string,
+  frameKey: TransitionFrameKey,
   targetUrl: string,
   targetOption: Locator
 ): Promise<void> {
@@ -203,6 +224,12 @@ async function installHeldGitLabLookup(
         __releaseGitLabUrlLookup?: () => void
       }
       fixture.__gitlabUrlLookupStarted = false
+      ipcMain.removeHandler('preflight:check')
+      ipcMain.handle('preflight:check', () => ({
+        git: { installed: true },
+        gh: { installed: true, authenticated: true },
+        glab: { installed: true, authenticated: true }
+      }))
       ipcMain.removeHandler('gitlab:listMRs')
       ipcMain.handle('gitlab:listMRs', () => ({
         items: [wrongItem],
@@ -221,23 +248,12 @@ async function installHeldGitLabLookup(
     },
     { wrongItem: GITLAB_WRONG_ITEM, targetItem: GITLAB_TARGET_ITEM }
   )
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
     }
-    const state = store.getState()
-    if (!state.preflightStatusContextKey) {
-      throw new Error('preflight context is not ready')
-    }
-    store.setState({
-      preflightStatus: {
-        git: state.preflightStatus?.git ?? { installed: true },
-        gh: state.preflightStatus?.gh ?? { installed: true, authenticated: true },
-        glab: { installed: true, authenticated: true }
-      },
-      preflightStatusChecked: true
-    })
+    await store.getState().refreshPreflightStatus({ force: true })
   })
 }
 
@@ -259,7 +275,7 @@ test('a pasted GitHub URL never selects a stale cached issue', async ({
   await waitForActiveWorktree(orcaPage)
   await installHeldGitHubLookup(electronApp, orcaPage)
 
-  await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   const input = dialog.locator('[data-workspace-name-input="true"]')
   await expect(input).toBeVisible()
@@ -272,7 +288,7 @@ test('a pasted GitHub URL never selects a stale cached issue', async ({
   })
   await expect(wrongOption).toBeVisible()
 
-  const frameKey = '__githubUrlTransitionFrames'
+  const frameKey: TransitionFrameKey = '__githubUrlTransitionFrames'
   await startTransitionCapture(orcaPage, frameKey, WRONG_TITLE, TARGET_TITLE)
 
   await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), TARGET_URL)
@@ -305,7 +321,7 @@ test('a pasted GitLab URL never selects a stale cached merge request', async ({
   await waitForActiveWorktree(orcaPage)
   await installHeldGitLabLookup(electronApp, orcaPage)
 
-  await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   const input = dialog.locator('[data-workspace-name-input="true"]')
   await expect(input).toBeVisible()
@@ -321,7 +337,7 @@ test('a pasted GitLab URL never selects a stale cached merge request', async ({
   })
   await expect(wrongOption).toBeVisible()
 
-  const frameKey = '__gitlabUrlTransitionFrames'
+  const frameKey: TransitionFrameKey = '__gitlabUrlTransitionFrames'
   await startTransitionCapture(orcaPage, frameKey, GITLAB_WRONG_TITLE, GITLAB_TARGET_TITLE)
 
   await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), GITLAB_TARGET_URL)

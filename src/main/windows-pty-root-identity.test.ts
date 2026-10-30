@@ -8,9 +8,7 @@ import {
   verifyWindowsTreeKillTarget,
   WINDOWS_ROOT_IDENTITY_TIMEOUT_MS
 } from './windows-pty-root-identity'
-// A real snapshot always contains the process doing the querying; the reader
-// rejects a table without it, because that is what a blocked
-// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+// The native reader rejects snapshots that omit the querying process.
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
@@ -23,7 +21,6 @@ function link(pid: number, ppid: number): { pid: number; ppid: number } {
   return { pid, ppid }
 }
 
-/** Windows: services.exe → svchost.exe, a chain that never reaches Orca. */
 const SYSTEM_CHAIN = [link(4, 0), link(700, 4), link(900, 700)]
 
 describe('classifyWindowsTreeKillTarget', () => {
@@ -33,16 +30,12 @@ describe('classifyWindowsTreeKillTarget', () => {
   })
 
   it('accepts a winpty shell reached through the winpty-agent hop', () => {
-    // node-pty falls back to winpty below Windows build 18309, so the shell's
-    // parent is winpty-agent.exe rather than Orca itself.
     const rows = [link(ORCA_PID, 900), link(6100, ORCA_PID), link(4242, 6100)]
     expect(classifyWindowsTreeKillTarget(4242, rows, ORCA_PID)).toBe('own')
   })
 
   it('documents that a recycled PID under another Orca pane still classifies as own', () => {
-    // Dead PTY root 4242 recycled as a tool under a different pane's agent tree.
-    // Ancestry still reaches us, so taskkill is allowed — wrong process, own tree.
-    // Closing this needs spawn-time CreationDate / Job Object (#10680).
+    // Recycled as a tool under another pane, PID 4242 still has Orca ancestry.
     const rows = [link(ORCA_PID, 900), link(7000, ORCA_PID), link(7100, 7000), link(4242, 7100)]
     expect(classifyWindowsTreeKillTarget(4242, rows, ORCA_PID)).toBe('own')
   })
@@ -58,7 +51,6 @@ describe('classifyWindowsTreeKillTarget', () => {
   })
 
   it('rejects a recycled pid whose parent has itself already exited', () => {
-    // The orphan's ppid names a vacated pid, so the chain dead-ends away from us.
     const rows = [link(ORCA_PID, 900), link(4242, 31337)]
     expect(classifyWindowsTreeKillTarget(4242, rows, ORCA_PID)).toBe('foreign')
   })
@@ -159,10 +151,6 @@ describe('verifyWindowsTreeKillTarget', () => {
   })
 })
 
-// Regression guard on the DEFAULT reader, which the cases above bypass by
-// injecting readRows: worktree delete tears down PTYs 32-wide, so a probe that
-// reads the table uncached takes 32 full process-table scans per delete — the
-// churn #6288/#6667 fixed for POSIX. Exercises the real wiring, not a fake.
 describe('verifyWindowsTreeKillTarget scan volume', () => {
   const NATIVE_ROWS = [
     { pid: ORCA_PID, ppid: 900, name: 'orca.exe', commandLine: 'orca.exe' },
@@ -175,7 +163,7 @@ describe('verifyWindowsTreeKillTarget scan volume', () => {
       cb(withSelf(NATIVE_ROWS))
     })
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: getAllProcessesMock
     }))
   })

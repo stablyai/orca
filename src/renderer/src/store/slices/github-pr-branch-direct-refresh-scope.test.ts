@@ -116,6 +116,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     ).resolves.toMatchObject({ number: 44 })
     expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
     expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      reason: 'manual',
       candidate: expect.objectContaining({
         repoId: 'repo-1',
         repoPath,

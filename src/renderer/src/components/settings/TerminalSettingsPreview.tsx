@@ -5,10 +5,10 @@ import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
@@ -17,11 +17,11 @@ import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
-// Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
+// Pin 36 columns for the 32-character sample plus margin; large fonts clip instead of wrapping.
 const PREVIEW_COLS = 36
 const PREVIEW_ROWS = 15
 
-// Why: color-only stub pane; 40px is wide enough to read inactive-pane opacity dim, narrow enough not to crowd content.
+// A narrow color-only stub demonstrates inactive opacity without crowding the sample.
 const STUB_PANE_PX = 40
 
 type PreviewMode = 'dark' | 'light'
@@ -67,19 +67,17 @@ export function TerminalSettingsPreview({
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
-  // Why: lazy-init from the active app theme; after mount the toggle is independent of later app-theme changes.
+  // Seed from app theme once; preview toggles remain independent afterward.
   const [togglePreviewMode, setTogglePreviewMode] = useState<PreviewMode>(() =>
     resolveAppMode(settings, systemPrefersDark)
   )
   const [previewPaneDividerVisible, setPreviewPaneDividerVisible] = useState(false)
 
-  // Why: recomputed each render so plain previews (no override/toggle) track live app-theme changes.
   const effectiveMode: PreviewMode =
     modeOverride ??
     (showThemeToggle ? togglePreviewMode : resolveAppMode(settings, systemPrefersDark))
 
-  // Why: reuse the live-pane resolver so divider color, theme palette, and dark/light variant rules stay in lockstep.
-  // Why: list resolveEffectiveTerminalAppearance's inputs explicitly so unrelated changes (font, cursor) don't re-derive.
+  // Share live-pane appearance rules and list only relevant inputs so font/cursor edits avoid rederivation.
   const appearance = useMemo(
     () =>
       resolveEffectiveTerminalAppearance({ ...settings, theme: effectiveMode }, systemPrefersDark),
@@ -96,7 +94,7 @@ export function TerminalSettingsPreview({
     ]
   )
 
-  // Why: list composeActiveTerminalTheme inputs explicitly so font/cursor changes don't trigger a buffer rewrite.
+  // List only theme-composition inputs so font/cursor changes cannot rewrite the sample buffer.
   const composedTheme = useMemo(
     () => composeActiveTerminalTheme(appearance.theme, settings),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -123,12 +121,11 @@ export function TerminalSettingsPreview({
     )
     skipInitialOptionMutationRef.current = true
     skipInitialThemeRewriteRef.current = true
-    // Why: DOM renderer only — WebGL contexts are scarce and multiple previews can mount at once.
-    // Why disableStdin: read-only; tabIndex/aria-hidden on the wrapper don't reach xterm's internal textarea, but this does.
+    // Use DOM rendering to spare scarce WebGL contexts; disableStdin reaches xterm’s internal textarea when wrapper attributes cannot.
     const terminal = new Terminal({
       ...buildDefaultTerminalOptions(),
       disableStdin: true,
-      // Why mirror cursorInactiveStyle: preview is never focused, and xterm defaults the unfocused cursor to a hollow outline.
+      // Mirror inactive style because the unfocused preview would otherwise show xterm’s hollow outline.
       cursorInactiveStyle: settings.terminalCursorStyle,
       cursorStyle: settings.terminalCursorStyle,
       cursorBlink: settings.terminalCursorBlink,
@@ -160,11 +157,11 @@ export function TerminalSettingsPreview({
       terminal.dispose()
       terminalRef.current = null
     }
-    // Why empty deps: mount effect runs once; later setting changes flow through the option-mutation effects below.
+    // Mount once; later changes flow through option-mutation effects.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Why: mutate options directly so xterm repaints in its normal cycle; no refit needed since cols/rows are pinned.
+  // Mutate options for normal xterm repaint; pinned rows/cols need no refit.
   useEffect(() => {
     const terminal = terminalRef.current
     if (!terminal) {
@@ -184,7 +181,7 @@ export function TerminalSettingsPreview({
     terminal.options.fontWeightBold = weights.fontWeightBold
     terminal.options.lineHeight = terminalLineHeight
     terminal.options.cursorStyle = settings.terminalCursorStyle
-    // Why: mirror so the unfocused cursor reflects the chosen shape (xterm defaults inactive to 'outline'; see constructor).
+    // Mirror shape for the permanently unfocused preview cursor.
     terminal.options.cursorInactiveStyle = settings.terminalCursorStyle
     terminal.options.cursorBlink = settings.terminalCursorBlink
   }, [
@@ -203,22 +200,28 @@ export function TerminalSettingsPreview({
       return
     }
     terminal.options.theme = composedTheme
-    // Why: share applyTerminalAppearance's gating helper (#7934) so the preview can't drift from live panes.
+    // Share live-pane contrast gating so preview behavior cannot drift (#7934).
     terminal.options.minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       composedTheme.background,
-      effectiveMode
+      effectiveMode,
+      settings.terminalMinimumContrastRatio
     )
-    // Why: xterm renders an alpha-channel background opaque unless allowTransparency is set (matches applyTerminalAppearance).
+    // xterm needs allowTransparency for alpha backgrounds, matching live panes.
     terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
     if (skipInitialThemeRewriteRef.current) {
       skipInitialThemeRewriteRef.current = false
       return
     }
-    // Why reset() not clear(): buffer ends mid-line on the prompt, so clear()+write would duplicate the trailing fragment.
+    // Reset the mid-line sample; clear then write would duplicate its trailing fragment.
     terminal.reset()
     terminal.write(PREVIEW_BUFFER)
-  }, [composedTheme, effectiveMode, settings.terminalBackgroundOpacity])
+  }, [
+    composedTheme,
+    effectiveMode,
+    settings.terminalBackgroundOpacity,
+    settings.terminalMinimumContrastRatio
+  ])
 
   useEffect(() => {
     const terminal = terminalRef.current
@@ -232,7 +235,7 @@ export function TerminalSettingsPreview({
       try {
         terminal.loadAddon(addon)
         ligaturesAddonRef.current = addon
-        // Why: sample is written before this effect runs; repaint so already-rendered operators switch to ligature glyphs.
+        // Repaint prewritten operators after loading ligatures.
         terminal.refresh(0, terminal.rows - 1)
       } catch (err) {
         addon.dispose()
@@ -312,7 +315,7 @@ export function TerminalSettingsPreview({
         </div>
       </CardHeader>
       <CardContent className="px-4 pb-4">
-        {/* Why: stub pane on the right keeps inactive-pane opacity visible; divider is opt-in to keep the default preview clean. */}
+        {/* Keep opacity visible in the stub pane; opt-in dividers leave the default preview uncluttered. */}
         <div className="flex h-[300px] flex-col overflow-hidden rounded-md border border-border/50">
           <div className="flex min-h-0 flex-1 overflow-hidden" aria-hidden="true">
             <div

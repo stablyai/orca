@@ -1,12 +1,17 @@
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { toRelaySshPtyId } from '../../providers/ssh-pty-id'
+import { toComparableRelaySshPtyId, toRelaySshPtyId } from '../../providers/ssh-pty-id'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 
 type TerminalBindingRecoveryOperationsRuntime = Pick<StoreRuntimeState, 'state'>
+
+/** Expired means lost route, not exit: retain binding for reattach. Only terminated withdraws it. */
+function sshRemotePtyLeaseWithdrawsBinding(lease: SshRemotePtyLease): boolean {
+  return lease.state === 'terminated'
+}
 
 export class TerminalBindingRecoveryOperations {
   constructor(private readonly runtime: TerminalBindingRecoveryOperationsRuntime) {}
@@ -40,15 +45,11 @@ export class TerminalBindingRecoveryOperations {
     const leases = this.runtime.state.sshRemotePtyLeases?.filter((entry) =>
       this.sshRemotePtyLeaseMatchesBinding(entry, binding)
     )
-    return !leases?.some((lease) => lease.state === 'terminated' || lease.state === 'expired')
+    return !leases?.some(sshRemotePtyLeaseWithdrawsBinding)
   }
 
   getRelayPtyIdForSshLeaseComparison(targetId: string, ptyId: string): string {
-    try {
-      return toRelaySshPtyId(targetId, ptyId)
-    } catch {
-      return ptyId
-    }
+    return toComparableRelaySshPtyId(targetId, ptyId)
   }
 
   getRelayPtyIdForSshLeaseStorage(targetId: string, ptyId: string): string {
@@ -69,7 +70,7 @@ export class TerminalBindingRecoveryOperations {
     if (lease.ptyId !== bindingPtyId) {
       return false
     }
-    // Why: remote PTY ids are scoped to a relay target; require stored lease context to match so missing fields don't tombstone unrelated panes.
+    // Relay-local PTY IDs require matching target context to avoid retiring unrelated panes.
     return (
       (binding.targetId === undefined ||
         binding.targetId === null ||
@@ -91,8 +92,7 @@ export class TerminalBindingRecoveryOperations {
       this.runtime.state.sshRemotePtyLeases?.some(
         (lease) =>
           this.sshRemotePtyLeaseMatchesBinding(lease, binding) &&
-          lease.state !== 'terminated' &&
-          lease.state !== 'expired'
+          !sshRemotePtyLeaseWithdrawsBinding(lease)
       ) ?? false
     )
   }

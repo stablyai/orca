@@ -1,4 +1,5 @@
-import { callRuntimeRpc, hasRuntimeRpcErrorCode } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
   listClientHostedBrowserCloseIntents,
   type ClientHostedBrowserCloseIntentsByEnvironment
@@ -14,6 +15,12 @@ const REPLAY_TIMEOUT_MS = 15_000
  */
 const PAGE_UNKNOWN_CODES = ['browser_tab_not_found', 'browser_no_tab', 'selector_not_found']
 
+/** True when a failed close means the runtime has definitively forgotten the page — nothing left
+ *  to resurrect, so no intent should be recorded or kept. Anything else is a "not now". */
+export function isBrowserPageDefinitivelyGone(error: unknown): boolean {
+  return PAGE_UNKNOWN_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
+}
+
 const replayingEnvironmentIds = new Set<string>()
 
 export type ClientHostedBrowserCloseIntentReplayStore = {
@@ -24,18 +31,10 @@ export type ClientHostedBrowserCloseIntentReplayStore = {
   ) => void
 }
 
-/**
- * Re-issues the closes an environment never heard.
- *
- * Deliberately the same `browser.tabClose` a live close sends -- there is no replay method and no
- * new wire state, so an old runtime settles these exactly as it settles an ordinary close. An
- * intent clears on success or on a definitive page-unknown answer; a transport failure leaves it,
- * because "we could not ask" must never read as "it is gone".
- */
+/** Replay ordinary browser.tabClose for old-runtime compatibility. Clear on success/definitive unknown; transport failure proves no absence, so retain intent. */
 export async function replayClientHostedBrowserCloseIntents(
   environmentId: string,
-  // Why passed rather than imported: this runs from a store slice, and reaching back into the
-  // store from here closes an import cycle that leaves the slice factories undefined at load.
+  // Inject instead of importing the store; this runs from slices and an import cycle leaves factories undefined.
   store: ClientHostedBrowserCloseIntentReplayStore
 ): Promise<void> {
   const trimmed = environmentId.trim()
@@ -65,7 +64,7 @@ export async function replayClientHostedBrowserCloseIntents(
         )
         settled.push(intent.browserPageId)
       } catch (error) {
-        if (PAGE_UNKNOWN_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))) {
+        if (isBrowserPageDefinitivelyGone(error)) {
           settled.push(intent.browserPageId)
           continue
         }

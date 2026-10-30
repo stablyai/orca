@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parseOrcaYaml } from './hooks'
 
-// Mock fs used by loadHooks
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(),
@@ -19,6 +18,19 @@ describe('parseOrcaYaml', () => {
       scripts: {
         setup: 'echo "setting up"\nnpm install'
       }
+    })
+  })
+
+  it('parses a project requirement to finish setup before agent startup', () => {
+    const yaml = [
+      'setupAgentStartupPolicy: wait-for-setup',
+      'scripts:',
+      '  setup: node install-project-skills.mjs'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: { setup: 'node install-project-skills.mjs' },
+      setupAgentStartupPolicy: 'wait-for-setup'
     })
   })
 
@@ -325,9 +337,7 @@ describe('parseOrcaYaml', () => {
     expect(result?.worktree?.sharedDirectories).toEqual(['node_modules'])
   })
 
-  // Why: `resolve()` collapses `.` when the link is created, but Git reports the
-  // collapsed path — keeping the raw entry would leave a link that every later
-  // comparison misses, which is the permanently-dirty worktree this feature fixes.
+  // Resolve collapses path segments; raw entries would never match Git’s normalized paths.
   it('drops sharedDirectories entries that still need path collapsing', () => {
     const result = parseOrcaYaml(
       [

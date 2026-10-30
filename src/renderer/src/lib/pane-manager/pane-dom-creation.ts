@@ -1,10 +1,11 @@
-import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
+import type { ILink, ITerminalOptions } from '@xterm/xterm'
+import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
+import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-extraction'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
@@ -14,6 +15,8 @@ import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
+import { installTerminalMouseEncodingTracker } from './terminal-mouse-encoding-tracker'
+import { StableCellFitAddon } from './terminal-stable-cell-fit-addon'
 
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
   return `${uri} (${openLinkHint})`
@@ -45,22 +48,19 @@ export function createPaneDOM(
   }
 
   const terminal = new Terminal(terminalOpts)
-  // Why: a synchronous throw inside any link provider's provideLinks (notably
-  // xterm web-links' LinkComputer raising RangeError on a pathological wrapped
-  // line) escapes to window.onerror and gets the renderer killed. Guard every
-  // provider registered after this point — addon-internal and Orca's own.
+  // Contain every provider’s synchronous provideLinks errors, including pathological web-links RangeError, before they reach window.onerror and terminate the renderer.
   installGuardedLinkProviderRegistration(terminal)
   installWindowsCtrlAltChordRepair(terminal)
-  const fitAddon = new FitAddon()
+  // Why here: the tracker must see every byte, including the first snapshot replay.
+  const mouseEncodingTrackerDisposable = installTerminalMouseEncodingTracker(terminal)
+  const fitAddon = new StableCellFitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
-  // Why: async tooltip formatting can resolve after hover changes, so stale
-  // results must not overwrite the tooltip for the currently hovered link.
+  // Reject late tooltip results after hover changes so they cannot overwrite the current link.
   let linkTooltipHoverToken = 0
 
   const linkTooltip = document.createElement('div')
-  // Why: styles live in terminal.css (.pane-link-tooltip) so the hover URL stays
-  // flush to the pane corner without inline padding/offset drift.
+  // Keep tooltip corner geometry in terminal.css rather than drifting inline padding/offsets.
   linkTooltip.className = 'pane-link-tooltip xterm-hover'
   linkTooltip.style.display = 'none'
 
@@ -69,37 +69,42 @@ export function createPaneDOM(
   container.appendChild(dragHandle)
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
-  const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
-    {
-      hover: (_event, uri) => {
-        if (uri) {
-          linkTooltipHoverToken += 1
-          const hoverToken = linkTooltipHoverToken
-          const openLinkHint = options.linkOpenHint(id)
-          linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
-          linkTooltip.style.display = ''
-          const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
-          if (formatted && typeof formatted === 'object' && 'then' in formatted) {
-            void formatted.then(
-              (nextText) => {
-                if (hoverToken === linkTooltipHoverToken && nextText) {
-                  linkTooltip.textContent = nextText
-                }
-              },
-              () => undefined
-            )
-          } else if (formatted) {
-            linkTooltip.textContent = formatted
-          }
-        }
-      },
-      leave: () => {
+  const linkHandlers = {
+    activate: (event, uri) => options.onLinkClick?.(id, event, uri),
+    hover: (_event, uri) => {
+      if (uri) {
         linkTooltipHoverToken += 1
-        linkTooltip.style.display = 'none'
+        const hoverToken = linkTooltipHoverToken
+        const openLinkHint = options.linkOpenHint(id)
+        linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
+        linkTooltip.style.display = ''
+        const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
+        if (formatted && typeof formatted === 'object' && 'then' in formatted) {
+          void formatted.then(
+            (nextText) => {
+              if (hoverToken === linkTooltipHoverToken && nextText) {
+                linkTooltip.textContent = nextText
+              }
+            },
+            () => undefined
+          )
+        } else if (formatted) {
+          linkTooltip.textContent = formatted
+        }
       }
+    },
+    leave: () => {
+      linkTooltipHoverToken += 1
+      linkTooltip.style.display = 'none'
     }
-  )
+  } satisfies Pick<ILink, 'activate' | 'hover' | 'leave'>
+  if (options.onLinkClick) {
+    terminal.registerLinkProvider(createWrappedTerminalHttpLinkProvider(terminal, linkHandlers))
+  }
+  const webLinksAddon = new WebLinksAddon(options.onLinkClick ? linkHandlers.activate : undefined, {
+    ...linkHandlers,
+    urlRegex: TERMINAL_HTTP_URL_REGEX
+  })
 
   const panePointerDownHandler = (event: PointerEvent): void => {
     onPointerDown(id, {
@@ -134,12 +139,16 @@ export function createPaneDOM(
     webLinksAddon,
     webglAddon: null,
     ligaturesAddon: null,
+    imageAddon: null,
+    imageAttachmentDeferred: false,
     panePointerDownHandler,
     paneMouseEnterHandler,
     paneDragCleanup,
     compositionHandler: null,
     focusClassSyncCleanup: null,
+    domBlockFillCleanup: null,
     terminalScrollIntentDisposable: null,
+    mouseEncodingTrackerDisposable,
     linkifierMouseLeaveResetDisposable: null,
     arabicShapingJoinerCleanup: null,
     pendingSplitScrollState: null,

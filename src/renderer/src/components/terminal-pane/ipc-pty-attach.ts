@@ -1,3 +1,4 @@
+import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../shared/terminal-mode-reset-profiles'
 import { ensurePtyDispatcher, getEagerPtyBufferHandle } from './pty-dispatcher'
 import {
   hasTerminalDisplayContent,
@@ -53,7 +54,8 @@ function replayEagerPtyBuffer(options: PtyAttachOptions, context: IpcPtyAttachCo
     const shouldClearBeforeReplay =
       !options.isAlternateScreen && hasTerminalDisplayContent(replayData)
     if (shouldClearBeforeReplay && !options.callbacks.onReplayData) {
-      options.callbacks.onData?.('\x1b[2J\x1b[3J\x1b[H')
+      // Release synchronized output: trimming can drop its closing sequence, and clearing the screen does not reset the mode.
+      options.callbacks.onData?.(`${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H`)
     }
 
     context.setSuppressAttentionEvents(true)

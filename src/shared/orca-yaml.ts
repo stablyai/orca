@@ -1,4 +1,5 @@
 import { parseDocument } from 'yaml'
+import { isOrcaYamlConversionWithinLimit } from './orca-yaml-merge-expansion'
 import type {
   OrcaDefaultTabTemplate,
   OrcaHooks,
@@ -31,17 +32,11 @@ export const ORCA_VM_RECIPE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
 export const ORCA_VM_RECIPE_ID_RULE =
   'Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
 
-// Why: bound the work one repo file can request; entries beyond this are ignored.
+// Bound work requested by one repository file.
 const MAX_SHARED_DIRECTORIES = 100
 
-/** Normalize `worktree.sharedDirectories` into deduped repo-root-relative paths.
- *  `\` becomes `/`, a `./` prefix and trailing `/` are stripped. Absolute paths,
- *  `..` traversal and `.git` are dropped here so callers get only safe entries.
- *
- *  Entries that would still need collapsing (`apps/./web`) are dropped rather
- *  than rewritten: `resolve()` collapses them when the symlink is created, but
- *  Git reports the collapsed path, so every later comparison against the stored
- *  entry would miss and the link would look like permanent untracked work. */
+/** Normalize safe repo-relative paths. Reject internal ./ rather than collapsing it: Git reports the collapsed path,
+ * so stored comparisons would miss and symlinks would appear permanently untracked. */
 function normalizeSharedDirectories(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
@@ -193,9 +188,6 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   return { recipes, diagnostics }
 }
 
-/**
- * Parse the supported project defaults from `orca.yaml`.
- */
 export function parseOrcaYaml(content: string): OrcaHooks | null {
   if (!isOrcaYamlTextWithinLimit(content)) {
     return null
@@ -205,11 +197,12 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   try {
     const document = parseDocument(content, {
       keepSourceTokens: false,
+      merge: true,
       logLevel: 'silent',
       prettyErrors: false,
       uniqueKeys: true
     })
-    if (document.errors.length > 0) {
+    if (document.errors.length > 0 || !isOrcaYamlConversionWithinLimit(document)) {
       return null
     }
     root = document.toJS({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
@@ -225,6 +218,11 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const scriptsRecord = asRecord(record.scripts)
   const setup = scriptsRecord ? asTrimmedString(scriptsRecord.setup) : undefined
   const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
+  const setupAgentStartupPolicy =
+    record.setupAgentStartupPolicy === 'start-immediately' ||
+    record.setupAgentStartupPolicy === 'wait-for-setup'
+      ? record.setupAgentStartupPolicy
+      : undefined
   const issueCommand = asTrimmedString(record.issueCommand)
   const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
   const environmentRecipeParse = normalizeVmRecipes(record.environmentRecipes)
@@ -239,6 +237,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     !setup &&
     !archive &&
     !issueCommand &&
+    !setupAgentStartupPolicy &&
     defaultTabs.length === 0 &&
     environmentRecipes.length === 0 &&
     environmentRecipeDiagnostics.length === 0 &&
@@ -252,6 +251,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
       ...(setup ? { setup } : {}),
       ...(archive ? { archive } : {})
     },
+    ...(setupAgentStartupPolicy ? { setupAgentStartupPolicy } : {}),
     ...(issueCommand ? { issueCommand } : {}),
     ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
     ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),

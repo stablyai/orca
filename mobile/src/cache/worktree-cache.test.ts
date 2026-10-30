@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { setCachedWorktrees, getCachedWorktrees, getProvenCachedWorktrees } from './worktree-cache'
 
-// Why: AC #8498 guarantees a reconnect refetch writes through the
-// same cache path the host detail screen seeds from, so a reconnect can't
-// serve a stale snapshot. This unit pins the write-through contract.
+// Pin reconnect write-through to cache seeded by host detail (#8498), preventing stale reconnect snapshots.
 describe('worktree-cache write-through', () => {
   it('returns the most-recently written snapshot, not a stale one', () => {
     const hostId = 'host-write-through'
@@ -16,35 +14,14 @@ describe('worktree-cache write-through', () => {
     setCachedWorktrees(hostId, stale)
     expect(getCachedWorktrees(hostId)).toEqual(stale)
 
-    // Why: simulates the reconnect refetch write-through — the fresh
-    // worktree.ps snapshot must fully replace the poisoned cache entry.
+    // Reconnect write-through must fully replace poisoned cache.
     setCachedWorktrees(hostId, fresh)
     expect(getCachedWorktrees(hostId)).toEqual(fresh)
     expect(getCachedWorktrees(hostId)).not.toEqual(stale)
   })
-
-  it('exposes a fresh snapshot to a remounting screen after reconnect', () => {
-    // Why: the host detail screen reads getCachedWorktrees(hostId)
-    // on (re)mount as its initialCache. A reconnect that writes
-    // through must therefore surface here instead of the pre-reconnect data.
-    const hostId = 'host-remount'
-    setCachedWorktrees(hostId, [{ worktreeId: 'old', name: 'pre-reconnect' }])
-
-    // Reconnect refetch lands a fresh snapshot and writes it through.
-    const reconnected = [
-      { worktreeId: 'old', name: 'post-reconnect' },
-      { worktreeId: 'new', name: 'now-visible' }
-    ]
-    setCachedWorktrees(hostId, reconnected)
-
-    // A fresh screen mount reads the cache — must see the connected set.
-    expect(getCachedWorktrees(hostId)).toEqual(reconnected)
-  })
 })
 
-// Why (F7): home seeds this cache from a persisted cold-start snapshot as well as from a live
-// worktree.ps, and only the latter can prove a workspace *absent* — the Resume tap redirects
-// off that distinction, so a seeded entry must never look authoritative.
+// Only live worktree.ps can prove absence for Resume redirects; persisted cold-start seeds must never be authoritative (F7).
 describe('worktree-cache provenance', () => {
   it('withholds unmarked writes from the proven reader', () => {
     const hostId = 'host-seeded'

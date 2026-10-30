@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
+import type { z } from 'zod'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import {
   buildGithubPrParams,
   fetchAssignableUsers,
@@ -8,14 +10,36 @@ import {
   fetchHostedReviewForBranch,
   fetchPRCheckDetails,
   fetchPRChecks,
-  fetchPRForBranch,
-  readAssignableUsers,
-  readForBranch,
-  readPRCheckDetails,
-  readPRChecks,
-  readPRForBranch,
-  readWorkItemDetails
+  fetchPRForBranch
 } from './github-pr-rpc'
+import { githubPrCheckDetailsSchema } from './github-pr-check-reply-schema'
+import { assignableUsersSchema, prChecksSchema } from './github-pr-entity-reply-schema'
+import {
+  githubPrForBranchSchema,
+  githubWorkItemDetailsSchema,
+  hostedReviewForBranchSchema
+} from './github-pr-read-reply-schema'
+
+// Keep hand-parser parity cases; explicitly distinguish stricter schema refusal from legacy degradation.
+function parsed<T>(schema: z.ZodType<T, unknown>, value: unknown): T | null {
+  const result = schema.safeParse(value)
+  return result.success ? result.data : null
+}
+
+function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
+  return !schema.safeParse(value).success
+}
+
+const readForBranch = (value: unknown) => parsed(hostedReviewForBranchSchema, value)
+const readWorkItemDetails = (value: unknown) => parsed(githubWorkItemDetailsSchema, value)
+const readPRChecks = (value: unknown) => parsed(prChecksSchema, value) ?? []
+const readPRCheckDetails = (value: unknown) => parsed(githubPrCheckDetailsSchema, value)
+const readAssignableUsers = (value: unknown) => parsed(assignableUsersSchema, value) ?? []
+
+function readPRForBranch(value: unknown): PRInfo | null {
+  const outcome = parsed(githubPrForBranchSchema, value)
+  return outcome && outcome.kind === 'found' ? outcome.pr : null
+}
 
 function okResponse(result: unknown): RpcResponse {
   return { id: 'x', ok: true, result, _meta: { runtimeId: 'r' } }
@@ -49,9 +73,9 @@ describe('readForBranch', () => {
     expect(parsed?.state).toBe('open')
   })
 
-  it('returns null for null/non-record input', () => {
+  it('reads the host null as no review, and refuses a non-record', () => {
     expect(readForBranch(null)).toBeNull()
-    expect(readForBranch('nope')).toBeNull()
+    expect(refuses(hostedReviewForBranchSchema, 'nope')).toBe(true)
   })
 
   it('returns null when provider or number is unparseable', () => {
@@ -197,6 +221,10 @@ describe('readWorkItemDetails', () => {
     expect(readWorkItemDetails({ item: { number: 1 } })).toBeNull()
     expect(readWorkItemDetails(null)).toBeNull()
   })
+
+  it('refuses a details payload that is not a record at all', () => {
+    expect(refuses(githubWorkItemDetailsSchema, 'nope')).toBe(true)
+  })
 })
 
 describe('readPRChecks', () => {
@@ -210,9 +238,9 @@ describe('readPRChecks', () => {
     expect(parsed[1]).toMatchObject({ name: 'test', status: 'in_progress', conclusion: null })
   })
 
-  it('returns [] for non-array input', () => {
-    expect(readPRChecks(null)).toEqual([])
-    expect(readPRChecks({})).toEqual([])
+  it('refuses a non-array where main answered an empty check list', () => {
+    expect(refuses(prChecksSchema, null)).toBe(true)
+    expect(refuses(prChecksSchema, {})).toBe(true)
   })
 
   it('skips bad entries instead of throwing', () => {
@@ -247,9 +275,10 @@ describe('readPRCheckDetails', () => {
     expect(parsed?.jobs[0]?.steps).toHaveLength(1)
   })
 
-  it('returns null for null/garbage', () => {
-    expect(readPRCheckDetails(null)).toBeNull()
+  it('answers null for a run with no name, and refuses a non-record', () => {
     expect(readPRCheckDetails({ status: 'x' })).toBeNull()
+    expect(refuses(githubPrCheckDetailsSchema, 7)).toBe(true)
+    expect(readPRCheckDetails(null)).toBeNull()
   })
 })
 
@@ -263,9 +292,9 @@ describe('readAssignableUsers', () => {
     expect(parsed).toEqual([{ login: 'a', name: 'A', avatarUrl: 'av' }])
   })
 
-  it('returns [] for non-array (empty list edge)', () => {
-    expect(readAssignableUsers(undefined)).toEqual([])
+  it('reads an empty list, and refuses the absent one main read as empty', () => {
     expect(readAssignableUsers([])).toEqual([])
+    expect(refuses(assignableUsersSchema, undefined)).toBe(true)
   })
 })
 

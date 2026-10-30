@@ -6,7 +6,7 @@ import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-t
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()
 }))
@@ -52,10 +52,7 @@ describe('explicit empty terminal hydration', () => {
   })
 })
 
-// Why: this is the half of PR #15513's contract that activation must NOT undo — hydration restores
-// an emptied workspace as active, and the passive auto-create effect has to leave it alone. The
-// end-to-end pin is tests/e2e/terminal-tab-close-restart-persistence.spec.ts, which only runs when
-// an e2e spec changes, so assert the same decision here against a really-hydrated session.
+// Hydrated explicit-empty workspaces must suppress passive terminal creation (#15513); mirror terminal-tab-close-restart-persistence.spec.ts’s decision locally.
 describe('hydrated active workspace with a terminal tombstone', () => {
   it('reports no auto-create for the restored active worktree', () => {
     const store = createTestStore()

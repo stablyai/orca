@@ -4,11 +4,12 @@ import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getPairedMobileDevicesSnapshot,
-  replacePairedMobileDevices,
   usePairedMobileDevices
 } from '../mobile/paired-mobile-devices'
 import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
+import { useMobilePairedDeviceRevocation } from './use-mobile-paired-device-revocation'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
+import { MachineNameField } from './MachineNameField'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
 import { MobilePairedDevicesSection } from './MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
@@ -48,15 +49,11 @@ export function MobilePane(): React.JSX.Element {
   const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
   const wasSignedInRef = useRef(signedIn)
-  // Why: monotonically bumped per pairing request so a late getPairingQR
-  // response cannot paint a stale QR after sign-out, a mode switch, or an
-  // address change invalidated the request that produced it.
+  // Invalidate late pairing responses after sign-out, mode or address changes.
   const pairingRequestIdRef = useRef(0)
-  // Tracks the mode we last acted on so the connectionMode effect can tell a
-  // cross-window preference sync apart from our own path change.
+  // Distinguish cross-window mode sync from this window’s own changes.
   const handledModeRef = useRef(connectionMode)
-  // Ref mirrors of QR-visible / loading so invalidatePairing stays stable and
-  // cannot make loadNetworkInterfaces re-fetch on every generate.
+  // Keep invalidatePairing stable so QR/loading changes cannot refetch network interfaces.
   const qrDisplayedRef = useRef(false)
   const loadingRef = useRef(false)
   const mountedRef = useMountedRef()
@@ -65,6 +62,7 @@ export function MobilePane(): React.JSX.Element {
     loaded: devicesLoaded,
     refresh: refreshDevices
   } = usePairedMobileDevices({ refreshOnMount: false })
+  const revokeDevice = useMobilePairedDeviceRevocation(refreshDevices)
 
   useEffect(() => {
     qrDisplayedRef.current = qrDataUrl != null
@@ -74,10 +72,7 @@ export function MobilePane(): React.JSX.Element {
     loadingRef.current = loading
   }, [loading])
 
-  // Why: an offer encodes a specific policy + endpoint. When the selection that
-  // produced it changes, drop any displayed QR and invalidate the in-flight
-  // request so a late response can't restore it; arm rotation so the next mint
-  // issues a fresh credential rather than the discarded pending one.
+  // Policy/endpoint changes invalidate displayed and pending offers; rotate the next credential instead of reusing the discarded one.
   const invalidatePairing = useCallback((opts: { armRotate?: boolean } = {}): void => {
     pairingRequestIdRef.current += 1
     const hadPending = qrDisplayedRef.current || loadingRef.current
@@ -87,14 +82,10 @@ export function MobilePane(): React.JSX.Element {
     setQrError(false)
     setRelayMintFailure(null)
     setEndpoint(null)
-    // Why: a superseded in-flight generate no longer clears loading in its
-    // finally (the epoch bump skips it), so drop the spinner here or Generate
-    // stays disabled forever after a mid-flight path/sign-out/address change.
+    // Superseded finally handlers skip loading cleanup; release the spinner here so Generate cannot remain disabled.
     loadingRef.current = false
     setLoading(false)
-    // armRotate:false for path changes — the main process rotates exactly once
-    // when the requested mode differs from the pending token's minted mode, so
-    // an extra renderer rotate would only race other windows off the new token.
+    // Main rotates on mode mismatch; extra renderer rotation would race other windows off the fresh token.
     if (hadPending && opts.armRotate !== false) {
       setRotateNextQr(true)
     }
@@ -113,10 +104,7 @@ export function MobilePane(): React.JSX.Element {
     onSelectionInvalidated: invalidatePairingAddress
   })
 
-  // Why: a Relay QR minted while signed in must not linger on a now-signed-out
-  // desktop — Generate is disabled in that state. Invalidate any pending relay
-  // mint too, not just a displayed QR, so a late response can't paint a Relay
-  // code after sign-out. Anywhere stays selected.
+  // Invalidate displayed/pending Relay codes after sign-out while retaining Anywhere selection.
   useEffect(() => {
     const wasSignedIn = wasSignedInRef.current
     wasSignedInRef.current = signedIn
@@ -136,7 +124,7 @@ export function MobilePane(): React.JSX.Element {
     try {
       await refreshDevices()
     } catch {
-      // Silently fail — device list is non-critical
+      // Device-list failure must not block pairing.
     }
   }, [refreshDevices])
 
@@ -175,8 +163,7 @@ export function MobilePane(): React.JSX.Element {
       } = {}
     ) => {
       const preferredMode = opts.connectionModeOverride ?? connectionMode
-      // Why: refuse signed-out Anywhere rather than degrading to a local-only QR
-      // under the Relay label (canMint is the shared honesty gate).
+      // Refuse signed-out Anywhere; never disguise a LAN-only QR under the Relay label.
       if (!canMintMobilePairingOffer({ connectionMode: preferredMode, signedIn })) {
         return
       }
@@ -189,9 +176,7 @@ export function MobilePane(): React.JSX.Element {
           connectionMode: preferredMode,
           ...(opts.rotate || rotateNextQr ? { rotate: true } : {})
         })
-        // Why: sign-out, a mode switch, or an address change bump the epoch.
-        // A response for a superseded request must not paint a QR that no
-        // longer matches the current selection.
+        // Ignore superseded responses whose policy/address selection is no longer current.
         if (requestId !== pairingRequestIdRef.current) {
           return
         }
@@ -218,10 +203,11 @@ export function MobilePane(): React.JSX.Element {
           setEndpoint(null)
           if (result.reason === 'relay_mint_failed' && result.relayFailure) {
             setRelayMintFailure(result.relayFailure)
+            // Reread likely revoked auth so guidance can offer sign-in rather than futile retries.
+            void useAppStore.getState().fetchOrcaProfileAuthStatus()
           } else {
             setRelayMintFailure(null)
-            // Why: IPC now forwards reason/guidance for all unavailability paths;
-            // prefer that copy over a hard-coded WebSocket-only message.
+            // Prefer host-provided guidance across all unavailable paths.
             toast.error(
               result.guidance ??
                 translate(
@@ -263,18 +249,13 @@ export function MobilePane(): React.JSX.Element {
       if (nextMode === connectionMode) {
         return
       }
-      // Why: remember the path so reopening Settings keeps the user's choice
-      // instead of snapping back to the default.
       handledModeRef.current = nextMode
       setConnectionMode(nextMode)
       void updateSettings({ mobilePairingConnectionMode: nextMode })
-      // Why: after a Relay mint failure, LAN should mint immediately — including
-      // when the renderer has not chosen an address yet (main picks the default).
+      // Recover Relay failures through immediate LAN minting; main can choose the default address.
       const shouldRecoverWithLan = relayMintFailure != null && nextMode === 'local-only'
-      // A displayed or in-flight code encodes the old connection policy. The
-      // main process rotates on the mode mismatch, so don't arm a second rotate.
+      // Main rotates old-policy codes on mode mismatch; avoid arming a duplicate rotate.
       invalidatePairing({ armRotate: false })
-      // Why: switching to LAN after a Relay failure should mint immediately.
       if (
         shouldRecoverWithLan &&
         canMintMobilePairingOffer({ connectionMode: nextMode, signedIn })
@@ -328,10 +309,7 @@ export function MobilePane(): React.JSX.Element {
     }
   }, [connectionMode, mountedRef, relayMintFailure, selectedAddress])
 
-  // Why: another window can persist a different path; the shared hook syncs
-  // connectionMode here without routing through changeConnectionMode. Treat
-  // that external change like a user path change so a QR for the old policy
-  // can't linger. No updateSettings call here — avoids a cross-window loop.
+  // Invalidate cross-window mode changes without writing settings back and creating a sync loop.
   useEffect(() => {
     if (connectionMode === handledModeRef.current) {
       return
@@ -344,8 +322,7 @@ export function MobilePane(): React.JSX.Element {
     void loadNetworkInterfaces()
   }, [loadNetworkInterfaces])
 
-  // Why: another surface (e.g. the sidebar) may have already populated the
-  // shared cache; only fetch on mount when it hasn't loaded yet.
+  // Other surfaces share the device cache; fetch only when it has not loaded.
   useEffect(() => {
     if (!devicesLoaded) {
       void loadDevices()
@@ -358,37 +335,10 @@ export function MobilePane(): React.JSX.Element {
     loadDevices
   })
 
-  async function revokeDevice(deviceId: string) {
-    try {
-      const { revoked } = await window.api.mobile.revokeDevice({ deviceId })
-      // Why: the backend can resolve revoked=false without removing the device;
-      // surface that as an error instead of a false "Device revoked".
-      if (!revoked) {
-        throw new Error('mobile.revokeDevice returned revoked=false')
-      }
-      try {
-        // Why: the backend may have learned about another phone while Settings
-        // was open, so refresh from source-of-truth after mutating it.
-        await refreshDevices({ force: true })
-      } catch (err) {
-        console.error('mobile.listDevices failed after revoke', err)
-        const nextDevices = getPairedMobileDevicesSnapshot().filter((d) => d.deviceId !== deviceId)
-        replacePairedMobileDevices(nextDevices)
-      }
-      if (mountedRef.current) {
-        toast.success(translate('auto.components.settings.MobilePane.2e3dd0bc29', 'Device revoked'))
-      }
-    } catch {
-      if (mountedRef.current) {
-        toast.error(
-          translate('auto.components.settings.MobilePane.870e1b5ca5', 'Failed to revoke device')
-        )
-      }
-    }
-  }
-
   return (
     <div className="space-y-6">
+      <MachineNameField id="mobile-machine-name" />
+
       <MobilePairingSetupSection
         connectionMode={connectionMode}
         canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}

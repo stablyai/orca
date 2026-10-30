@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/source-control-generation-app'
 import {
   createBranchCommit,
   openSourceControl,
@@ -23,10 +23,7 @@ function writeLinkedIssuePrEchoGenerator(scriptPath: string, base: string): void
 }
 
 test.describe('Source Control AI pull request linkedIssue', () => {
-  // Why: the unlinked case separates a real resolver from one that always returns a number,
-  // and — because the generator echoes the whole line into the title — a literal
-  // `{linkedIssue}` reaches the assertion as `saw-issue:{linkedIssue}` instead of
-  // masquerading as the empty expansion.
+  // The unlinked control rejects constant issue numbers; whole-line title echo exposes literal {linkedIssue} instead of an empty expansion.
   for (const { label, linkedIssue, expected } of [
     { label: 'substitutes the workspace-linked issue into', linkedIssue: 4242, expected: '4242' },
     {

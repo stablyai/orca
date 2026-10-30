@@ -53,6 +53,7 @@ export function extractHermesToolFields(
         extractToolResponseText(hookPayload.output)
       if (responseText) {
         update.lastAssistantMessage = responseText
+        update.lastAssistantMessageIsToolOutput = true
       }
     }
     return update

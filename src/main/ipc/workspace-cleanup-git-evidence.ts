@@ -1,6 +1,5 @@
 import { getStatus } from '../git/status'
 import { gitExecFileAsync } from '../git/runner'
-import type { IGitProvider } from '../providers/types'
 import type { GitStatusResult } from '../../shared/git-status-types'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
@@ -11,6 +10,10 @@ import {
   withWorkspaceCleanupTimeout
 } from './workspace-cleanup-scan-primitives'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import {
+  resolveWorkspaceCleanupWorktreeGitRoute,
+  type WorkspaceCleanupGitRoute
+} from './workspace-cleanup-git-route'
 
 export type WorkspaceCleanupGitEvidence = {
   clean: boolean | null
@@ -33,23 +36,37 @@ export function createEmptyWorkspaceCleanupGitEvidence(): WorkspaceCleanupGitEvi
 export async function readWorkspaceCleanupGitEvidence(
   worktree: Worktree,
   repo: Repo,
-  provider: IGitProvider | null,
+  repoRoute: WorkspaceCleanupGitRoute,
   signal?: AbortSignal
 ): Promise<WorkspaceCleanupGitEvidence> {
   const blockers: WorkspaceCleanupBlocker[] = []
   let status: GitStatusResult
   const checkedAt = Date.now()
-  const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
+  const route = resolveWorkspaceCleanupWorktreeGitRoute(repoRoute, worktree, repo)
+  if (route.kind === 'host-mismatch') {
+    // Refusing beats reading one host's checkout and labelling the row with the other's.
+    console.warn(
+      `Workspace cleanup skipped git for ${worktree.id}: listed on ${route.listedHostId}, owned by ${route.hostId}`
+    )
+    return { ...createEmptyWorkspaceCleanupGitEvidence(), blockers: ['git-status-error'] }
+  }
+  // An unreachable remote host is an error, never a licence to read this machine's checkout.
+  if (route.kind === 'ssh') {
+    return {
+      ...createEmptyWorkspaceCleanupGitEvidence(),
+      blockers: ['git-status-error']
+    }
+  }
+  const sharedLinkPaths = getWorktreeSharedLinkPaths(repo)
 
   try {
     status = await withWorkspaceCleanupTimeout(
       (signal) =>
-        repo.connectionId
-          ? provider!.getStatus(worktree.path, { signal })
-          : getStatus(worktree.path, {
-              signal,
-              ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
-            }),
+        getStatus(worktree.path, {
+          includeLineStats: false,
+          signal,
+          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+        }),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
       'Timed out reading git status.',
       signal
@@ -82,7 +99,7 @@ export async function readWorkspaceCleanupGitEvidence(
     blockers.push('unpushed-commits')
   }
   if (clean && upstreamAhead === null) {
-    const unpushedCommitCount = await readUnpushedCommitCount(worktree, repo, provider, signal)
+    const unpushedCommitCount = await readUnpushedCommitCount(worktree, signal)
     if (unpushedCommitCount === null) {
       blockers.push('unknown-base')
     } else if (unpushedCommitCount > 0) {
@@ -101,21 +118,15 @@ export async function readWorkspaceCleanupGitEvidence(
 
 async function readUnpushedCommitCount(
   worktree: Worktree,
-  repo: Repo,
-  provider: IGitProvider | null,
   signal?: AbortSignal
 ): Promise<number | null> {
   try {
     const result = await withWorkspaceCleanupTimeout(
       (signal) =>
-        repo.connectionId
-          ? provider!.exec(['rev-list', '--count', 'HEAD', '--not', '--remotes'], worktree.path, {
-              signal
-            })
-          : gitExecFileAsync(['rev-list', '--count', 'HEAD', '--not', '--remotes'], {
-              cwd: worktree.path,
-              signal
-            }),
+        gitExecFileAsync(['rev-list', '--count', 'HEAD', '--not', '--remotes'], {
+          cwd: worktree.path,
+          signal
+        }),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
       'Timed out checking unpushed commits.',
       signal

@@ -1,7 +1,6 @@
 import type { WindowsTerminalCapabilities } from './windows-terminal-capabilities'
 
-// Why: an absent WSL must stay re-checkable (a distro can finish provisioning while Orca runs),
-// but every re-check spawns wsl.exe/pwsh.exe, so stable answers fall back to a low-frequency poll.
+// Keep absent WSL recheckable as provisioning finishes, but back off unchanged answers because each probe spawns wsl.exe/pwsh.exe.
 const REPROBE_BASE_DELAY_MS = 30_000
 const REPROBE_MAX_DELAY_MS = 5 * 60_000
 /** Consecutive identical answers before switching to the five-minute ceiling. */
@@ -35,9 +34,13 @@ function capabilitySignature(capabilities: WindowsTerminalCapabilities): string 
   ].join('|')
 }
 
-/** The answer #11295 waits for: a usable WSL. Nothing further to watch for. */
+/** A usable WSL is settled once the host's platform is known. */
 function isSettled(capabilities: WindowsTerminalCapabilities): boolean {
-  return capabilities.wslAvailable && capabilities.wslDistros.length > 0
+  if (!capabilities.wslAvailable || capabilities.wslDistros.length === 0) {
+    return false
+  }
+  // A missing platform means the status probe may have failed; keep checking until it recovers.
+  return capabilities.hostPlatform !== null
 }
 
 function clearRunnerTimer(runner: CapabilityReprobeRunner): void {
@@ -142,10 +145,7 @@ function detachFocusListenerWhenIdle(): void {
   globalThis.removeEventListener('focus', handleWindowFocus)
 }
 
-/**
- * Watch a host whose capabilities are not settled yet, and return an unregister callback.
- * Consumers of the same owner key share one backoff schedule; the last one to leave stops it.
- */
+/** Share one unsettled-capability backoff per host owner; return unregister, stopping when the final consumer leaves. */
 export function startWindowsTerminalCapabilityReprobe(options: {
   ownerKey: string
   probe: () => Promise<WindowsTerminalCapabilities>

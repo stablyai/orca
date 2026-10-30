@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+
+const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ getRuntimeGitSubmoduleStatus: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitSubmoduleStatus: mocks.getRuntimeGitSubmoduleStatus
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
@@ -51,12 +54,12 @@ function Probe({
   worktreeId: string
   worktreePath: string
   entries: GitStatusEntry[]
-  settings?: { activeRuntimeEnvironmentId: string | null } | null
+  settings?: RuntimeClientTarget | null
 }): null {
   latest = useSourceControlSubmoduleStatus({
     activeWorktreeId: worktreeId,
     worktreePath,
-    activeRepoSettings: settings,
+    activeRepoTarget: settings ?? LOCAL_TARGET,
     entries
   })
   return null
@@ -100,13 +103,11 @@ describe('useSourceControlSubmoduleStatus', () => {
     await act(async () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" entries={[submoduleEntry()]} />)
     })
-    // Expand a submodule in worktree A -> issues the (slow) A request.
     await act(async () => {
       latest?.toggleSubmodule(submoduleEntry())
     })
     await flush()
 
-    // Switch to worktree B (same submodule path) and expand it there.
     await act(async () => {
       root.render(<Probe worktreeId="B" worktreePath="/b" entries={[submoduleEntry()]} />)
     })
@@ -177,8 +178,10 @@ describe('useSourceControlSubmoduleStatus', () => {
     const envA = deferred<{ entries: GitStatusEntry[] }>()
     const envB = deferred<{ entries: GitStatusEntry[] }>()
     mocks.getRuntimeGitSubmoduleStatus.mockImplementation(
-      (ctx: { settings?: { activeRuntimeEnvironmentId?: string | null } | null }) =>
-        ctx.settings?.activeRuntimeEnvironmentId === 'env-b' ? envB.promise : envA.promise
+      (ctx: { target?: RuntimeClientTarget }) =>
+        ctx.target?.kind === 'environment' && ctx.target.environmentId === 'env-b'
+          ? envB.promise
+          : envA.promise
     )
 
     const container = document.createElement('div')
@@ -190,7 +193,7 @@ describe('useSourceControlSubmoduleStatus', () => {
         <Probe
           worktreeId="A"
           worktreePath="/a"
-          settings={{ activeRuntimeEnvironmentId: 'env-a' }}
+          settings={{ kind: 'environment', environmentId: 'env-a' }}
           entries={[submoduleEntry()]}
         />
       )
@@ -205,7 +208,7 @@ describe('useSourceControlSubmoduleStatus', () => {
         <Probe
           worktreeId="A"
           worktreePath="/a"
-          settings={{ activeRuntimeEnvironmentId: 'env-b' }}
+          settings={{ kind: 'environment', environmentId: 'env-b' }}
           entries={[submoduleEntry()]}
         />
       )

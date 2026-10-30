@@ -1,5 +1,7 @@
+import { preserveFolderUpgradeWorktreePath } from '../../../folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { parseWorktreeId, areWorktreePathsEqual, mergeWorktree } from '../../worktree-logic'
+import { parseWorktreeId } from '../../worktree-logic'
+import { mergeWorktree } from '../../worktree-metadata-merge'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
@@ -8,23 +10,21 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo, DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import {
-  readWorktreeMetaForHost,
-  writeWorktreeMetaForHost
-} from '../../../persistence/host-qualified-worktree-meta'
+import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
 import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../../../shared/worktree/ownership'
-import { dedupeWorktreesByPath } from '../../worktree-path-comparison'
+import { areWorktreePathsEqual, dedupeWorktreesByPath } from '../../../git/worktree-path-comparison'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
 } from '../../../../shared/worktree/visibility-sources'
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
 import { loggedMalformedWorktreeMetaKeys, warnOnce } from './worktree-listing-diagnostics'
 import {
   getProjectHostSetupMetaUpdates,
@@ -64,8 +64,7 @@ export function createSshWorktreeMetaIndex(
   return index
 }
 
-// Why: scopes parseWorktreeId to one repo's keys. The entry list itself is still materialized for the whole
-// store, so this is cheaper per call than the unfiltered index, not free.
+// Scope ID parsing to one repo; enumerating the store snapshot still costs a full pass.
 export function createSshWorktreeMetaIndexForRepo(
   allMeta: Record<string, WorktreeMeta>,
   repoId: string
@@ -115,12 +114,12 @@ export function listDisconnectedSshWorktrees(
         ? { ...candidate.meta, ...ownershipUpdates }
         : candidate.meta
     if (Object.keys(ownershipUpdates).length > 0) {
-      writeWorktreeMetaForHost(store, candidate.id, expectedHostId, ownershipUpdates)
+      store.setWorktreeMeta(
+        hostWorktreeTarget({ id: candidate.id, hostId: expectedHostId }),
+        ownershipUpdates
+      )
     }
-    // Why: synthesized rows carry no branch, so the title would fall through to the DESKTOP's basename()
-    // applied to a REMOTE path — a Windows remote then renders its whole C:\... path as the name. Rows must
-    // stay per-directory (repo.displayName would title every row identically), so use the separator-agnostic
-    // basename instead.
+    // Remote Windows paths need separator-independent basenames; host basename or repo displayName mislabels rows.
     const worktree = mergeWorktree(
       repo.id,
       synthesizeSshGitWorktree(repo, candidate.path, meta),
@@ -142,9 +141,11 @@ export function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  // Why: a prunable registration has no working directory (issue #8389); only this listing omits it — cleanup flows list separately.
+  // Keep failed removals retryable; other prunable registrations stay hidden (#8389).
   const liveWorktrees = dedupeWorktreesByPath(
-    gitWorktrees.filter((gitWorktree) => !gitWorktree.prunable)
+    preserveFolderUpgradeWorktreePath(repo, gitWorktrees).filter(
+      (gitWorktree) => !gitWorktree.prunable || !!gitWorktree.removalError
+    )
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
@@ -155,10 +156,11 @@ export function buildDetectedGitWorktrees(
   const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
-    const legacyMeta = store.getWorktreeMeta?.(worktreeId)
+    // Locator-keyed metadata is only a compatibility fallback when no host snapshot exists.
+    const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
     const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
-    let meta =
-      readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo)) ??
+    const meta =
+      readWorktreeMetaForRepo(store, worktreeId, repo) ??
       getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
     const detected = toDetectedWorktree({
@@ -174,32 +176,26 @@ export function buildDetectedGitWorktrees(
       return detected
     }
 
-    meta = resolveWorktreeMetaWithDiscoveryBackfill(
+    const backfilledMeta = resolveWorktreeMetaWithDiscoveryBackfill(
       store,
       repo,
       worktreeId,
       allMeta,
       repoOwnerCount
     )
+    // Unchanged backfill preserves object identity, letting pure builders reuse the classified row.
+    if (backfilledMeta === meta) {
+      return detected
+    }
     return toDetectedWorktree({
       repo,
-      worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-      meta,
+      worktree: mergeWorktree(repo.id, gitWorktree, backfilledMeta, repo.displayName),
+      meta: backfilledMeta,
       settings,
       knownOrcaLayouts,
       isLegacyRepoForVisibility,
       worktreeVisibilitySourceMatcher
     })
   })
-  return projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
-}
-
-export function stampAndMergeVisibleDetectedWorktree(
-  store: Store,
-  repo: Repo,
-  detected: DetectedWorktree,
-  allMetaOverride?: Record<string, WorktreeMeta>
-) {
-  const meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, detected.id, allMetaOverride)
-  return mergeWorktree(repo.id, detected, meta, repo.displayName)
+  return projectWorktreeLineageWithHostPeers(store, repo, detected)
 }

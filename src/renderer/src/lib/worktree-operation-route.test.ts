@@ -119,7 +119,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
-  it('uses the focused runtime only for legacy publications with no owner evidence', () => {
+  it('routes an unstamped row local, never to the focused runtime', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
@@ -131,10 +131,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
       )
     ).toEqual({
       kind: 'resolved',
-      route: {
-        executionHostId: 'runtime:legacy-hub',
-        runtimeEnvironmentId: 'legacy-hub'
-      }
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
     })
   })
 
@@ -239,7 +236,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
     ).toEqual({ kind: 'ambiguous' })
   })
 
-  it('routes a focused runtime only when it is the single saved runtime', () => {
+  it('never routes an unstamped row to the single saved, focused runtime', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
@@ -250,10 +247,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
         },
         WORKTREE_ID
       )
-    ).toEqual({
-      kind: 'resolved',
-      route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
-    })
+    ).toEqual({ kind: 'missing' })
   })
 
   it('ignores unrelated removed-runtime tombstones for positive local identity', () => {
@@ -277,21 +271,24 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
-  it('fails ownerless rows closed until the saved-runtime catalog is hydrated', () => {
+  it('fails ownerless rows closed mid-hydration while a saved runtime could own them', () => {
+    // No repo/active-runtime evidence can decide first: only the unhydrated saved-runtime catalog fails this closed. Marking it hydrated routes local via the detected row; adding other evidence would leave this branch uncovered.
     expect(
       resolveWorktreeOperationRouteResult(
         {
-          repos: [{ id: 'repo-1' } as never],
-          runtimeEnvironments: [],
+          runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }],
           runtimeEnvironmentCatalogHydrated: false,
-          worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          worktreesByRepo: { 'repo-1': [worktree(undefined)] },
+          detectedWorktreesByRepo: {
+            'repo-1': { worktrees: [worktree(undefined)] }
+          }
         },
         WORKTREE_ID
       )
     ).toEqual({ kind: 'missing' })
   })
 
-  it('does not treat runtime focus as ownership while the saved-runtime catalog is loading', () => {
+  it('keeps an unstamped row local while the saved-runtime catalog is loading, focus or not', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
@@ -303,7 +300,10 @@ describe('resolveWorktreeOperationRouteResult', () => {
         },
         WORKTREE_ID
       )
-    ).toEqual({ kind: 'missing' })
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
+    })
   })
 
   it('preserves ownerless local compatibility after an empty catalog hydrates', () => {
@@ -370,6 +370,253 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
+  // Unstamped legacy repo rows prove local host ownership (#16733), matching the folder carve-out (#10251/#10269). They do not prove worktree identity: require a listed/detected worktree too (#16841).
+  describe('local git worktrees without a host stamp (#16733)', () => {
+    const LOCAL_ROUTE = {
+      kind: 'resolved',
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
+    }
+
+    it('keeps a local worktree local when an unrelated runtime is saved', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual(LOCAL_ROUTE)
+    })
+
+    it('keeps a local worktree local when several unrelated runtimes are saved', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [{ id: 'a' }, { id: 'b' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual(LOCAL_ROUTE)
+    })
+
+    it('keeps a local worktree local while the saved-runtime catalog is still hydrating', () => {
+      // Repo stamps prove host ownership; an unhydrated runtime catalog cannot turn unstamped local rows remote.
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: false,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual(LOCAL_ROUTE)
+    })
+
+    it('keeps a local worktree local after an unrelated runtime has been removed', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            removedRuntimeEnvironmentIds: new Set(['gone-hub']),
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual(LOCAL_ROUTE)
+    })
+
+    it('still routes a local worktree local when no runtime is saved', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual(LOCAL_ROUTE)
+    })
+
+    it('still routes a local worktree local for adapters with no runtime catalog at all', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual(LOCAL_ROUTE)
+    })
+
+    it('never routes a connection-owned repo local when runtimes are saved', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1', connectionId: 'ssh-1' } as never],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('never routes a runtime-stamped repo local when runtimes are saved', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1', executionHostId: 'runtime:hub-a' } as never],
+            runtimeEnvironments: [{ id: 'hub-a' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+      })
+    })
+
+    it('keeps a host-stamped worktree row authoritative over its unstamped repo', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree('ssh:ssh-1')] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('fails a worktree closed when no repo row and no worktree row know it', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'other' } as never],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({ kind: 'missing' })
+    })
+
+    it('keeps an unstamped row local whichever of several runtimes is focused', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            settings: { activeRuntimeEnvironmentId: 'hub-b' } as never,
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('keeps an unstamped row local when the single saved runtime is focused', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            settings: { activeRuntimeEnvironmentId: 'hub-a' } as never,
+            repos: [{ id: 'repo-1' } as never],
+            runtimeEnvironments: [{ id: 'hub-a' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('refuses local when a second repo row for the id is connection-owned', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never, { id: 'repo-1', connectionId: 'ssh-1' } as never],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('routes an unstamped row of a project shared with a paired server here (#25467)', () => {
+      // Listings stamp every paired-server row, so the unstamped row was listed on this machine.
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [
+              { id: 'repo-1', executionHostId: 'local' },
+              { id: 'repo-1', executionHostId: 'runtime:hub-a' }
+            ],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('reports contradictory paired-server repo rows as ambiguous rather than defaulting to local', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [
+              { id: 'repo-1', executionHostId: 'runtime:hub-b' },
+              { id: 'repo-1', executionHostId: 'runtime:hub-a' }
+            ],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({ kind: 'ambiguous' })
+    })
+  })
+
   describe('active workspace host selection', () => {
     it('keeps the HUB transport when the paired SSH worktree is the active workspace', () => {
       expect(
@@ -428,7 +675,8 @@ describe('resolveWorktreeOperationRouteResult', () => {
       })
     })
 
-    it('drops the HUB transport when two HUBs project the active SSH worktree', () => {
+    // A transport-less route would go over this app's own SSH connection (review-5 #2).
+    it('refuses when two HUBs project the active SSH worktree', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
@@ -443,10 +691,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
           },
           WORKTREE_ID
         )
-      ).toEqual({
-        kind: 'resolved',
-        route: { executionHostId: 'ssh:same-private-target', runtimeEnvironmentId: null }
-      })
+      ).toEqual({ kind: 'ambiguous' })
     })
 
     it('keeps an unknown active worktree on its selected host', () => {
@@ -517,7 +762,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
       })
     })
 
-    it('scopes an ownerless folder workspace to the single focused runtime', () => {
+    it('keeps an ownerless folder workspace local when the single saved runtime is focused', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
@@ -529,7 +774,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
         )
       ).toEqual({
         kind: 'resolved',
-        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
       })
     })
 
@@ -545,11 +790,28 @@ describe('resolveWorktreeOperationRouteResult', () => {
         kind: 'resolved',
         route: { executionHostId: 'local', runtimeEnvironmentId: null }
       })
-      // Why: the folder record is positive identity evidence, so it routes where an unknown
-      // worktree in the same multi-runtime state still fails closed.
+      // Folder records prove identity, so route where unknown worktrees in the same multi-runtime state fail closed.
       expect(resolveWorktreeOperationRouteResult(state, 'repo-x::/tmp/unknown')).toEqual({
         kind: 'missing'
       })
+    })
+
+    it('routes a folder workspace and a git worktree alike in one local state (#16733)', () => {
+      // Local folders and git worktrees must route alike; #10269 fixed only folders, leaving the same-state git case missing.
+      const state = {
+        repos: [{ id: 'repo-1' } as never],
+        worktreesByRepo: { 'repo-1': [worktree(undefined)] },
+        folderWorkspaces: [folderWorkspace()],
+        projectGroups: [{ id: 'group-1', connectionId: null, executionHostId: null } as never],
+        runtimeEnvironments: [{ id: 'some-hub' }],
+        runtimeEnvironmentCatalogHydrated: true
+      }
+      const localRoute = {
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      }
+      expect(resolveWorktreeOperationRouteResult(state, FOLDER_KEY)).toEqual(localRoute)
+      expect(resolveWorktreeOperationRouteResult(state, WORKTREE_ID)).toEqual(localRoute)
     })
 
     it('routes a folder workspace to its restored runtime host during catalog hydration', () => {

@@ -2,12 +2,29 @@ import {
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
 } from './host-guest/webview-drag-passthrough'
+import { registerBrowserClientPagePositionSync } from './browser-client-page-position-driver'
+import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
 export type BrowserClientPageVisibleAttachment = {
   webview: Electron.WebviewTag
   nextMetadataRevision(): number
   detach(): void
+}
+
+export function findBrowserClientRetainedPageForAttachment(
+  pages: Map<string, RetainedPage>,
+  identity: Pick<RendererPageIdentity, 'browserPageId' | 'pageHostGeneration'>
+): RetainedPage | undefined {
+  for (const page of pages.values()) {
+    if (
+      page.identity.browserPageId === identity.browserPageId &&
+      page.identity.pageHostGeneration === identity.pageHostGeneration
+    ) {
+      return page
+    }
+  }
+  return undefined
 }
 
 export function attachBrowserClientRetainedPage(
@@ -24,9 +41,9 @@ export function attachBrowserClientRetainedPage(
   if (!page.host.parentElement) {
     throw new Error('browser_client_page_renderer_retained_host_unavailable')
   }
-  const attachment = { container }
-  page.visibleAttachment = attachment
   const stopTrackingViewport = showRetainedHost(page.host, container)
+  const attachment = { container, stopTrackingViewport }
+  page.visibleAttachment = attachment
   let detached = false
   return {
     webview: page.webview,
@@ -63,9 +80,7 @@ export function attachBrowserClientRetainedPage(
   }
 }
 
-/** The retained host's click-through state is derived, never saved and restored: it is the
- *  only writer of the property, and a drag spanning a hide/show would otherwise put back a
- *  value captured under the opposite visibility. */
+/** Derive pointer-events from current visibility and drag state; restoring a captured value would fail across mid-drag hide/show. */
 function applyRetainedHostPointerEvents(
   host: HTMLDivElement,
   visible: boolean,
@@ -74,9 +89,7 @@ function applyRetainedHostPointerEvents(
   host.style.pointerEvents = visible && !dragPassthrough ? 'auto' : 'none'
 }
 
-/** Enrols a retained host in the shared guest passthrough set, so a drag reaches the document
- *  through this body-level overlay the way it already does through local pane guests. A host
- *  enrolled mid-drag needs no settling: it is created hidden, and its show derives the state. */
+/** Register the body-level host for drag passthrough; hidden creation and derived show state also cover enrollment mid-drag. */
 export function enrolRetainedHostDragPassthrough(page: RetainedPage): () => void {
   return registerWebviewDragPassthroughSurface((passthrough) => {
     applyRetainedHostPointerEvents(page.host, page.visibleAttachment !== null, passthrough)
@@ -106,21 +119,17 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   observer?.observe(container)
   window.addEventListener('resize', syncViewport)
   window.addEventListener('scroll', syncViewport, true)
-  // Why: a pane can MOVE without resizing (tab dragged across an even split, sidebar toggles),
-  // which fires no resize/scroll event — the overlay would keep painting at the old pane's rect.
-  let positionFrame: number | null = null
-  const trackPosition = (): void => {
-    syncViewport()
-    positionFrame = requestAnimationFrame(trackPosition)
-  }
-  if (typeof requestAnimationFrame === 'function') {
-    positionFrame = requestAnimationFrame(trackPosition)
-  }
+  // Pane moves can fire no resize/scroll event; the shared position loop remeasures each shown host.
+  const releasePositionSync = registerBrowserClientPagePositionSync(syncViewport)
   syncViewport()
+  // Idempotent: the registry releases a page it tears down, and the pane's own detach follows.
+  let stopped = false
   return () => {
-    if (positionFrame !== null) {
-      cancelAnimationFrame(positionFrame)
+    if (stopped) {
+      return
     }
+    stopped = true
+    releasePositionSync()
     observer?.disconnect()
     window.removeEventListener('resize', syncViewport)
     window.removeEventListener('scroll', syncViewport, true)

@@ -4,9 +4,19 @@ import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../../../shared/git-status-limit'
+import { slowTaskRequiredIdleMs } from './coalesced-poll-runner'
+import {
+  admissionTierForGitStatusRefreshReason,
+  SLOW_GIT_POLL_BACKOFF
+} from './useGitStatusPolling'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
+const LOCAL = { kind: 'local' } as const
+const localGitOwnerModule = () => ({ getWorktreeGitOwnerTarget: () => LOCAL })
+const gitCopyModule = (connectionId?: string) => () => ({
+  resolveWorktreeGitCopyNow: (id: string) => ({ worktreeId: id, transport: LOCAL, connectionId })
+})
 
 type PollState = {
   activeWorktreeId: string
@@ -89,6 +99,7 @@ async function usePollingOnce(
     }
   })
 
+  vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
   vi.doMock('@/store', () => ({
     useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
       getState: () => ({ settings: null })
@@ -108,6 +119,7 @@ async function usePollingOnce(
   vi.doMock('@/lib/connection-context', () => ({
     getConnectionId: () => options.connectionId ?? undefined
   }))
+  vi.doMock('@/lib/worktree-git-copy', gitCopyModule(options.connectionId ?? undefined))
 
   vi.stubGlobal('window', {
     api: {
@@ -151,6 +163,22 @@ async function usePollingOnce(
 }
 
 describe('useGitStatusPolling', () => {
+  it('paces the safety scheduler and stale-conflict fan-out by one run duration', () => {
+    expect(
+      slowTaskRequiredIdleMs(
+        6_000,
+        SLOW_GIT_POLL_BACKOFF.idleMultiplier,
+        3_000,
+        SLOW_GIT_POLL_BACKOFF.maxIntervalMs
+      )
+    ).toBe(6_000)
+  })
+
+  it('keeps activity admission in status and safety admission in background', () => {
+    expect(admissionTierForGitStatusRefreshReason('activity')).toBe('status')
+    expect(admissionTierForGitStatusRefreshReason('safety')).toBe('background')
+  })
+
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -158,7 +186,7 @@ describe('useGitStatusPolling', () => {
   })
 
   it('uses upstream data from git status instead of spawning a separate upstream refresh', async () => {
-    const { state } = await usePollingOnce({
+    const { state, gitStatus } = await usePollingOnce({
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',
@@ -178,6 +206,7 @@ describe('useGitStatusPolling', () => {
       behind: 0
     })
     expect(state.fetchUpstreamStatus).not.toHaveBeenCalled()
+    expect(gitStatus).toHaveBeenCalledWith(expect.objectContaining({ admissionTier: 'status' }))
   })
 
   it('falls back to the upstream IPC for legacy status payloads', async () => {
@@ -195,7 +224,7 @@ describe('useGitStatusPolling', () => {
       undefined,
       undefined,
       {
-        runtimeTargetSettings: { activeRuntimeEnvironmentId: null },
+        runtimeTarget: { kind: 'local' },
         applyUpstreamStatus: false
       }
     )
@@ -219,7 +248,7 @@ describe('useGitStatusPolling', () => {
       undefined,
       pushTarget,
       {
-        runtimeTargetSettings: { activeRuntimeEnvironmentId: null },
+        runtimeTarget: { kind: 'local' },
         applyUpstreamStatus: false
       }
     )
@@ -258,6 +287,7 @@ describe('useGitStatusPolling', () => {
     )
 
     expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(gitStatus).toHaveBeenCalledWith(expect.objectContaining({ admissionTier: 'status' }))
     expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 
@@ -352,6 +382,7 @@ describe('useGitStatusPolling', () => {
         useRef: <T>(initial: T) => ({ current: initial })
       }
     })
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -365,6 +396,7 @@ describe('useGitStatusPolling', () => {
       useRepoMap: () => new Map([[repo.id, repo]])
     }))
     vi.doMock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+    vi.doMock('@/lib/worktree-git-copy', gitCopyModule())
     vi.stubGlobal('window', {
       api: {
         git: { status: gitStatus },
@@ -397,6 +429,8 @@ describe('useGitStatusPolling', () => {
     const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
     GitStatusPollingHarness({ runPolling })
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+    // The mount's status had no user switch; the user then switches here, so the next status wakes.
+    ;(await import('@/lib/workspace-switch-user-act')).noteUserWorkspaceSwitch(worktree.id)
 
     expect(windowListeners.get('orca:worktree-file-change')?.length).toBe(1)
     emitWorktreeFileChange({
@@ -417,6 +451,8 @@ describe('useGitStatusPolling', () => {
     // Why: evidence refreshes keep the 3s anti-churn floor from the last run.
     await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
+    // Only the first status after the user's own switch here may start its WSL distro (E9).
+    expect(gitStatus.mock.calls.map(([args]) => args?.wakeWslDistro)).toEqual([undefined, true])
     expect(window.api.fs.watchWorktree).not.toHaveBeenCalled()
     expect(window.api.fs.unwatchWorktree).not.toHaveBeenCalled()
 
@@ -465,6 +501,7 @@ describe('useGitStatusPolling', () => {
         useRef: <T>(initial: T) => ({ current: initial })
       }
     })
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -478,6 +515,7 @@ describe('useGitStatusPolling', () => {
       useRepoMap: () => new Map([[repo.id, repo]])
     }))
     vi.doMock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+    vi.doMock('@/lib/worktree-git-copy', gitCopyModule())
     vi.stubGlobal('window', {
       api: {
         git: { status: gitStatus },
@@ -589,6 +627,7 @@ describe('useGitStatusPolling', () => {
         }
       }
     })
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -602,6 +641,7 @@ describe('useGitStatusPolling', () => {
       useRepoMap: () => new Map([[repo.id, repo]])
     }))
     vi.doMock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+    vi.doMock('@/lib/worktree-git-copy', gitCopyModule())
     vi.stubGlobal('window', {
       api: {
         git: { status: gitStatus },
@@ -683,8 +723,7 @@ describe('useGitStatusPolling', () => {
     expect(globalThis.setInterval).not.toHaveBeenCalled()
     expect(gitStatus).not.toHaveBeenCalled()
 
-    // Push signals (e.g. a commit's metadata write) must stay subscribed while
-    // huge — a fresh non-huge status result is the only way the flag clears.
+    // Keep push signals subscribed while huge; only a fresh non-huge result can clear that flag.
     const onChanged = window.api.worktrees.onChanged as ReturnType<typeof vi.fn>
     expect(onChanged).toHaveBeenCalledTimes(1)
     const handleRepoSignal = onChanged.mock.calls[0][0] as (payload: { repoId: string }) => void
@@ -718,8 +757,7 @@ describe('useGitStatusPolling', () => {
         }
       }
     )
-    // Signals dropped while the window was hidden must be caught up on
-    // reveal so the huge flag can still clear.
+    // Visibility recovery must catch up hidden signals so the huge flag can clear.
     expect(gitStatus).not.toHaveBeenCalled()
 
     visibilityDocument.visibilityState = 'visible'
@@ -771,6 +809,7 @@ describe('useGitStatusPolling', () => {
       }
     })
 
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })

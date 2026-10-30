@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { serveSignalExitError } from './serve-signal-exit-diagnostic'
+import { MacServeStartupAbortError, serveSignalExitError } from './serve-signal-exit-diagnostic'
 import {
   SERVE_CHILD_FORCE_KILL_GRACE_MS,
   SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS,
@@ -35,9 +35,7 @@ function superviseUntilExit(code: number | null, signal: NodeJS.Signals | null):
 
 function superviseChild(child: FakeChildProcess): Promise<number> {
   return superviseForegroundServe({
-    executable: '/Applications/Orca.app/Contents/MacOS/Orca',
-    childArgs: ['--serve'],
-    spawnOptions: {},
+    spec: { program: '/Applications/Orca.app/Contents/MacOS/Orca', args: ['--serve'] },
     spawnChild: vi.fn() as never,
     handoffPath: null,
     child: child as never,
@@ -52,16 +50,18 @@ afterEach(() => {
 })
 
 describe('serveSignalExitError', () => {
-  it('explains the macOS window-server abort on darwin SIGABRT', () => {
+  it('explains the Launch Services startup abort on darwin SIGABRT', () => {
     const error = serveSignalExitError('SIGABRT', 'darwin')
 
+    expect(error).toBeInstanceOf(MacServeStartupAbortError)
     expect(error).toBeInstanceOf(RuntimeClientError)
     expect(error.code).toBe('runtime_serve_failed')
     expect(error.message).toContain('aborted with SIGABRT on macOS')
-    expect(error.message).toContain('macOS window server')
+    expect(error.message).toContain('_RegisterApplication')
     expect(error.data).toMatchObject({
       nextSteps: [
-        expect.stringContaining('macOS desktop login'),
+        expect.stringContaining('desktop Orca is already running'),
+        expect.stringContaining('refuse for 30 minutes'),
         expect.stringContaining('~/Library/Logs/DiagnosticReports/Orca-*.ips')
       ]
     })
@@ -134,15 +134,43 @@ describe('superviseForegroundServe signal exits', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('forwards Linux terminal hangup and removes the listener after exit', async () => {
+    setPlatform('linux')
+    const listenersBefore = process.listeners('SIGHUP')
+    const child = new FakeChildProcess()
+    const supervised = superviseChild(child)
+
+    expect(process.listeners('SIGHUP')).toHaveLength(listenersBefore.length + 1)
+    process.emit('SIGHUP', 'SIGHUP')
+    expect(child.kill).toHaveBeenCalledWith('SIGHUP')
+
+    child.emit('exit', null, 'SIGHUP')
+    await expect(supervised).resolves.toBe(0)
+    expect(process.listeners('SIGHUP')).toEqual(listenersBefore)
+
+    const killCallsAfterExit = child.kill.mock.calls.length
+    process.emit('SIGHUP', 'SIGHUP')
+    expect(child.kill).toHaveBeenCalledTimes(killCallsAfterExit)
+  })
+
+  it('treats a child exit through the caller-forwarded SIGINT as graceful', async () => {
+    setPlatform('linux')
+    const child = new FakeChildProcess()
+    const supervised = superviseChild(child)
+
+    process.emit('SIGINT', 'SIGINT')
+    child.emit('exit', null, 'SIGINT')
+
+    await expect(supervised).resolves.toBe(0)
+  })
+
   it('does not terminate an exited child when update handoff completion fails late', async () => {
     vi.useFakeTimers()
     const missingParent = await mkdtemp(join(tmpdir(), 'orca-serve-missing-handoff-'))
     await rm(missingParent, { recursive: true })
     const child = new FakeChildProcess()
     const supervised = superviseForegroundServe({
-      executable: '/Applications/Orca.app/Contents/MacOS/Orca',
-      childArgs: ['--serve'],
-      spawnOptions: {},
+      spec: { program: '/Applications/Orca.app/Contents/MacOS/Orca', args: ['--serve'] },
       spawnChild: vi.fn() as never,
       handoffPath: join(missingParent, 'handoff.json'),
       child: child as never,

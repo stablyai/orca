@@ -91,8 +91,7 @@ describe('cold-park store subscription narrowing', () => {
     container.remove()
   })
 
-  // Why: these two maps are app-global, so before narrowing any write re-rendered
-  // every mounted worktree's overlay layer.
+  // Global-map writes formerly rerendered every mounted worktree’s overlay.
   it('ignores a pending-startup write for another worktree tab', () => {
     act(() => {
       useAppStore.setState({ pendingStartupByTabId: { 'other-tab': { command: 'codex' } } })
@@ -105,21 +104,6 @@ describe('cold-park store subscription narrowing', () => {
       useAppStore.setState({
         sleepingAgentSessionsByPaneKey: {
           'other-tab:1': sleepingRecord('other-tab:1', OTHER_WORKTREE_ID)
-        }
-      })
-    })
-    expect(harness.renders).toBe(0)
-  })
-
-  // Why: a blocked record never resumes, so it leaves the exempt set — and the
-  // narrowed subscription's compared value — unchanged.
-  it('ignores a sleeping-session write this worktree can never resume', () => {
-    act(() => {
-      useAppStore.setState({
-        sleepingAgentSessionsByPaneKey: {
-          'tab-1:1': sleepingRecord('tab-1:1', WORKTREE_ID, {
-            automaticResumeBlockedBy: 'legacy-orchestration-worker'
-          })
         }
       })
     })

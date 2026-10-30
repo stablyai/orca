@@ -5,7 +5,6 @@ import type { useWorktreeDragRuntime } from './use-runtime'
 import type { useWorktreeDragSession } from './use-session'
 import type { useWorktreeLineageDropCommit } from './use-lineage-drop-commit'
 
-/** Bundles the drag session, lineage commits, and viewport callbacks every drop path reads. */
 export function useWorktreeDropCommitContext(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -24,8 +23,13 @@ export function useWorktreeDropCommitContext(args: {
     onReorderWorktrees,
     onPinWorktrees
   } = args
-  return useMemo<WorktreeDropCommitContext>(
-    () => ({
+  const { worktreePointerDragRef } = runtime
+  const { worktreeDragSessionRef } = session
+  return useMemo<WorktreeDropCommitContext>(() => {
+    // Read confirmed copies at drop time because IDs alone also name other-host twins.
+    const draggedCopies = () =>
+      worktreePointerDragRef.current?.draggedCopies ?? worktreeDragSessionRef.current?.draggedCopies
+    return {
       scrollRef,
       workspaceStatuses,
       worktreeDragGroups: session.worktreeDragGroups,
@@ -37,27 +41,31 @@ export function useWorktreeDropCommitContext(args: {
       commitWorktreeLineageParentDrop: lineageDrop.commitWorktreeLineageParentDrop,
       clearReorderedWorktreeParents: lineageDrop.clearReorderedWorktreeParents,
       clearWorktreeDrag: runtime.clearWorktreeDrag,
-      onMoveWorktreesToStatus,
-      onMoveWorktreesToStatusAtIndex,
-      onReorderWorktrees,
-      onPinWorktrees
-    }),
-    [
-      lineageDrop.clearReorderedWorktreeParents,
-      lineageDrop.commitWorktreeLineageParentDrop,
-      lineageDrop.getEligibleLineageDropTarget,
-      onMoveWorktreesToStatus,
-      onMoveWorktreesToStatusAtIndex,
-      onPinWorktrees,
-      onReorderWorktrees,
-      runtime.clearWorktreeDrag,
-      scrollRef,
-      session.computeWorktreeDrop,
-      session.computeWorktreeStatusDrop,
-      session.refreshWorktreeDragSession,
-      session.worktreeDragGroups,
-      session.worktreeDragUnitGroups,
-      workspaceStatuses
-    ]
-  )
+      onMoveWorktreesToStatus: (worktreeIds, status) =>
+        onMoveWorktreesToStatus(worktreeIds, status, draggedCopies()),
+      onMoveWorktreesToStatusAtIndex: (drop) =>
+        onMoveWorktreesToStatusAtIndex({ ...drop, draggedCopies: draggedCopies() }),
+      onReorderWorktrees: (reorder) =>
+        onReorderWorktrees({ ...reorder, draggedCopies: draggedCopies() }),
+      onPinWorktrees: (worktreeIds) => onPinWorktrees(worktreeIds, draggedCopies())
+    }
+  }, [
+    lineageDrop.clearReorderedWorktreeParents,
+    lineageDrop.commitWorktreeLineageParentDrop,
+    lineageDrop.getEligibleLineageDropTarget,
+    onMoveWorktreesToStatus,
+    onMoveWorktreesToStatusAtIndex,
+    onPinWorktrees,
+    onReorderWorktrees,
+    runtime.clearWorktreeDrag,
+    scrollRef,
+    session.computeWorktreeDrop,
+    session.computeWorktreeStatusDrop,
+    session.refreshWorktreeDragSession,
+    session.worktreeDragGroups,
+    session.worktreeDragUnitGroups,
+    workspaceStatuses,
+    worktreeDragSessionRef,
+    worktreePointerDragRef
+  ])
 }

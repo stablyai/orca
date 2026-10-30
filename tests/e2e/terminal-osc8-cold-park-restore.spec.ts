@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { Page } from '@stablyai/playwright-test'
+import { alternateScreenFixtureScript } from './alternate-screen-fixture-script'
 import { expect, test } from './helpers/orca-app'
+import { stageNodeScriptForTerminal } from './helpers/run-node-script-in-terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import {
   ensureTerminalVisible,
@@ -111,7 +113,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
     if (!state) {
       throw new Error('Orca store unavailable')
     }
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     state.setActiveTab(tabId)
   }, tabId)
   await expect.poll(() => getActiveTabId(page)).toBe(tabId)
@@ -130,54 +132,63 @@ test('restores and opens an OSC 8 link after its terminal is cold-parked', async
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const tabId = await getActiveTabId(orcaPage)
+  if (!tabId) {
+    throw new Error('No active terminal tab')
+  }
   const ptyId = await waitForActivePanePtyId(orcaPage)
   await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
 
   const label = `#${randomUUID().slice(0, 6)}`
   const url = `https://example.com/orca-osc8-${randomUUID()}`
   const linkedOutput = `\x1b[?1049h\x1b[2J\x1b[H\x1b]8;id=cold-park;${url}\x1b\\${label}\x1b]8;;\x1b\\\n`
-  await sendToTerminal(
-    orcaPage,
-    ptyId,
-    `${nodeTerminalCommand(['-e', `process.stdout.write(${JSON.stringify(linkedOutput)})`])}\r`
-  )
-  await expect.poll(() => getTerminalContent(orcaPage, 4_000)).toContain(label)
-
-  const baselineProbe = await locateLink(orcaPage, label)
-  await orcaPage.mouse.move(baselineProbe.clientX, baselineProbe.clientY)
-  await expect
-    .poll(() => readLinkState(orcaPage, tabId, label))
-    .toMatchObject({
-      bufferType: 'alternate',
-      serializedUri: true,
-      underlined: true,
-      uri: url
-    })
-
-  await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
-    parkDelayMs: PARKING_DELAY_MS
+  // Stage to avoid PowerShell escape mangling (#8521) and keep the readiness label out of command echo.
+  // Use nodeTerminalCommand instead of bare-node staged.command to pin Windows CI’s executable.
+  const staged = stageNodeScriptForTerminal(alternateScreenFixtureScript(linkedOutput), {
+    prefix: 'orca-osc8-cold-park'
   })
-  await activateTerminalTab(orcaPage, tabId)
-  await expect.poll(() => getTerminalContent(orcaPage, 4_000)).toContain(label)
+  try {
+    await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([staged.scriptPath])}\r`)
+    await expect.poll(() => getTerminalContent(orcaPage, 4_000)).toContain(label)
 
-  const restoredProbe = await locateLink(orcaPage, label)
-  await orcaPage.mouse.move(restoredProbe.clientX, restoredProbe.clientY)
-  await expect
-    .poll(() => readLinkState(orcaPage, tabId, label))
-    .toMatchObject({
-      bufferType: 'alternate',
-      serializedUri: true,
-      underlined: true,
-      uri: url
+    const baselineProbe = await locateLink(orcaPage, label)
+    await orcaPage.mouse.move(baselineProbe.clientX, baselineProbe.clientY)
+    await expect
+      .poll(() => readLinkState(orcaPage, tabId, label))
+      .toMatchObject({
+        bufferType: 'alternate',
+        serializedUri: true,
+        underlined: true,
+        uri: url
+      })
+
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
+      parkDelayMs: PARKING_DELAY_MS
     })
+    await activateTerminalTab(orcaPage, tabId)
+    await expect.poll(() => getTerminalContent(orcaPage, 4_000)).toContain(label)
 
-  const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
-  const modifier = isMac ? 'Meta' : 'Control'
-  await orcaPage.keyboard.down(modifier)
-  await orcaPage.mouse.down()
-  await orcaPage.mouse.up()
-  await orcaPage.keyboard.up(modifier)
-  await expect
-    .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).some((tab) => tab.url === url))
-    .toBe(true)
+    const restoredProbe = await locateLink(orcaPage, label)
+    await orcaPage.mouse.move(restoredProbe.clientX, restoredProbe.clientY)
+    await expect
+      .poll(() => readLinkState(orcaPage, tabId, label))
+      .toMatchObject({
+        bufferType: 'alternate',
+        serializedUri: true,
+        underlined: true,
+        uri: url
+      })
+
+    const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
+    const modifier = isMac ? 'Meta' : 'Control'
+    await orcaPage.keyboard.down(modifier)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.up()
+    await orcaPage.keyboard.up(modifier)
+    await expect
+      .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).some((tab) => tab.url === url))
+      .toBe(true)
+  } finally {
+    await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+    staged.cleanup()
+  }
 })

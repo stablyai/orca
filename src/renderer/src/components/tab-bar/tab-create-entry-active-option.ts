@@ -1,3 +1,4 @@
+import type { BrowserHistoryEntry } from '../../../../shared/browser-workspace-types'
 import type { TabEntryActionClassification, TabEntryOption } from './tab-create-entry-action'
 import type { OpenTabSearchResult } from './open-tab-search'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
@@ -7,8 +8,13 @@ export type ActiveEntryOption = TabEntryOption & {
   classification: TabEntryActionClassification
 }
 
-// A row the user can act on in the new-tab open entry: an open tab to switch
-// to, a create-menu action, a matched agent to launch, or a file/URL entry.
+export type BrowserHistoryOmniboxRow = {
+  entry: BrowserHistoryEntry
+  /** `history:${normalizedUrl}` — stable across renders, which selection pinning requires. */
+  id: string
+}
+
+// Unify actionable switch, create, agent, history and file/URL rows for selection.
 export type ActiveOption =
   | {
       kind: 'agent'
@@ -23,6 +29,10 @@ export type ActiveOption =
       option: ActiveEntryOption
     }
   | {
+      kind: 'history'
+      option: BrowserHistoryOmniboxRow
+    }
+  | {
       kind: 'menu'
       option: TabCreateMenuOption
     }
@@ -33,11 +43,11 @@ export function isActiveEntryOption(option: TabEntryOption): option is ActiveEnt
 
 export function getActiveOptionId(option: ActiveOption): string {
   if (option.kind === 'agent') {
-    return `agent:${option.option.agent}`
+    return option.option.id ?? `agent:${option.option.agent}`
   }
   if (option.kind === 'menu') {
     return `menu:${option.option.id}`
   }
-  // Tab result ids are already `open-tab:`-prefixed and stable across renders.
+  // Tab and history ids already carry their own prefix and are stable across renders.
   return option.option.id
 }

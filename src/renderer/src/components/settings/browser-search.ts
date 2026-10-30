@@ -1,9 +1,13 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { isMacUserAgent } from '../terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
+import { getBrowserProfileScopeSearchEntry } from './browser-profile-scope-search'
+import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
   getBrowserLinkRoutingDescription,
-  getTerminalLinkActionsDescription,
+  getLinkRoutingBackgroundSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
@@ -20,12 +24,6 @@ export type BrowserShortcutPlatform = {
   isMac: boolean
 }
 
-function getDefaultBrowserShortcutPlatform(): BrowserShortcutPlatform {
-  return {
-    isMac: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-  }
-}
-
 export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPlatform): string[] {
   return [
     ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
@@ -33,6 +31,10 @@ export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPla
     ...translateSearchKeyword(
       'auto.components.settings.browser.search.terminalLinkActions.terminal',
       'terminal'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.chat',
+      'chat'
     ),
     ...translateSearchKeyword(
       'auto.components.settings.browser.search.terminalLinkActions.click',
@@ -54,12 +56,17 @@ export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPla
       'auto.components.settings.browser.search.terminalLinkActions.disable',
       'disable'
     ),
+    'link click behavior',
+    'open directly',
+    'modifier-click only',
+    'middle click',
+    'mouse 3',
     platform.isMac ? 'cmd' : 'ctrl'
   ]
 }
 
 export function getBrowserPaneSearchEntries(
-  platform: BrowserShortcutPlatform = getDefaultBrowserShortcutPlatform()
+  platform: BrowserShortcutPlatform = { isMac: isMacUserAgent() }
 ): SettingsSearchEntry[] {
   return [
     {
@@ -173,8 +180,7 @@ export function getBrowserPaneSearchEntries(
           'auto.components.settings.browser.search.linkRoutingModifier.opposite',
           'opposite'
         ),
-        // Why: the row renders live copy but this entry is built with openLinksInApp
-        // false, so index the other title too or the row is unfindable by its own text.
+        // Index the alternate live title because this entry is built with openLinksInApp false.
         getLinkRoutingModifierTitle(true),
         platform.isMac ? 'cmd' : 'ctrl'
       ]
@@ -182,9 +188,12 @@ export function getBrowserPaneSearchEntries(
     {
       title: translate(
         'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
-        'Show terminal link actions'
+        'Terminal URL clicks'
       ),
-      description: getTerminalLinkActionsDescription(platform),
+      description: translate(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.descriptionV2',
+        'Control clicks on detected URLs printed in terminal panes and chat transcripts.'
+      ),
       keywords: getTerminalLinkActionSearchKeywords(platform)
     },
     {
@@ -216,6 +225,8 @@ export function getBrowserPaneSearchEntries(
         'Import cookies from Chrome, Edge, or other browsers to use existing logins inside Orca.'
       ),
       keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.8a489aab8d', 'google'),
+        ...translateSearchKeyword('browser.googleCookieClear.signInKeyword', 'sign-in'),
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
         ...translateSearchKeyword('auto.components.settings.browser.search.29193a51d5', 'cookies'),
         ...translateSearchKeyword('auto.components.settings.browser.search.66dd641a47', 'session'),
@@ -228,7 +239,7 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
       ]
     },
-    // Appended, not inserted: BrowserPane selects these entries by index.
+    // Append entries because BrowserPane indexes this catalog by position.
     {
       title: getBrowserClientHostedRemoteTitle(),
       description: getBrowserClientHostedRemoteDescription(),
@@ -283,6 +294,10 @@ export function getBrowserPaneSearchEntries(
           'network'
         )
       ]
-    }
+    },
+    getBrowserUserAgentSearchEntry(),
+    getBrowserSitePermissionsSearchEntry(),
+    getBrowserProfileScopeSearchEntry(),
+    getLinkRoutingBackgroundSearchEntry()
   ]
 }

@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canOpenAiVaultSessionLogInOrca,
   canUseLocalAiVaultSessionPathActions,
-  isSyntheticAiVaultSessionPath
+  isSyntheticAiVaultSessionPath,
+  revealAiVaultSessionPath
 } from './ai-vault-session-path-actions'
+
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 describe('canUseLocalAiVaultSessionPathActions', () => {
   it('allows OS path actions for local session history', () => {
@@ -29,30 +34,69 @@ describe('isSyntheticAiVaultSessionPath', () => {
 })
 
 describe('canOpenAiVaultSessionLogInOrca', () => {
-  it('allows a local, single-file, non-synthetic path', () => {
+  it.each<[AiVaultAgent, string]>([
+    ['opencode2', '/home/user/.local/share/opencode/opencode.db'],
+    ['opencode', '/home/user/.local/share/opencode/opencode-preview.db'],
+    ['zcode', 'C:\\Users\\a\\.zcode\\db.sqlite'],
+    ['opencode', '/home/user/.local/share/opencode/storage/session/project/ses_1.json'],
+    ['kimi', '/home/user/.kimi-code/sessions/session_1/state.json'],
+    ['claude', '/home/user/.claude/unrecognized.db']
+  ])('withholds %s storage without a single conversation file: %s', (agent, filePath) => {
+    const session: Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'> = {
+      agent,
+      filePath,
+      executionHostId: 'local'
+    }
+    expect(canOpenAiVaultSessionLogInOrca(session)).toBe(false)
+  })
+
+  it.each<[AiVaultAgent, string]>([
+    ['claude', '/home/user/.claude/sessions/log.jsonl'],
+    ['gemini', '/home/user/.gemini/tmp/project/chats/session.json'],
+    ['codex', '/home/user/project#1/session.jsonl']
+  ])('allows a local %s conversation file: %s', (agent, filePath) => {
     expect(
       canOpenAiVaultSessionLogInOrca({
-        filePath: '/home/user/.claude/sessions/log.jsonl',
+        agent,
+        filePath,
         executionHostId: 'local'
       })
     ).toBe(true)
   })
 
   it('withholds blank, remote, and synthetic identities', () => {
-    expect(canOpenAiVaultSessionLogInOrca({ filePath: '   ', executionHostId: 'local' })).toBe(
-      false
-    )
+    expect(
+      canOpenAiVaultSessionLogInOrca({ agent: 'claude', filePath: '   ', executionHostId: 'local' })
+    ).toBe(false)
     expect(
       canOpenAiVaultSessionLogInOrca({
+        agent: 'claude',
         filePath: '/remote/.claude/log.jsonl',
         executionHostId: 'ssh:dev-box'
       })
     ).toBe(false)
     expect(
       canOpenAiVaultSessionLogInOrca({
+        agent: 'claude',
         filePath: '/home/user/.opencode/db.sqlite#sess_1',
         executionHostId: 'local'
       })
     ).toBe(false)
+  })
+})
+
+describe('revealAiVaultSessionPath', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('refuses an SSH session log instead of revealing a same-named local path', async () => {
+    const openInFileManager = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('window', { api: { shell: { openInFileManager } } })
+
+    await revealAiVaultSessionPath({ executionHostId: 'ssh:dev-box' }, '/home/ada/.codex/log.jsonl')
+    expect(openInFileManager).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalled()
+
+    await revealAiVaultSessionPath({ executionHostId: 'local' }, '/Users/ada/.codex/log.jsonl')
+    expect(openInFileManager).toHaveBeenCalledWith('/Users/ada/.codex/log.jsonl', 'local')
   })
 })

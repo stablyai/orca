@@ -52,8 +52,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         if (progress.completedMeasurements?.length) {
           pendingMeasurements.push(...progress.completedMeasurements)
         }
-        // Why: large fleets can report one progress event per worktree; keep
-        // the UI responsive without repainting the full Space page for each row.
+        // Throttle per-worktree progress to avoid repainting the full Space page for every row.
         const now = Date.now()
         const isFirstProgress = lastProgressSentAt === 0
         const isTerminalProgress =
@@ -77,8 +76,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
           })
         }
       }
-      // Why: large worktree fleets require real disk traversal; duplicate
-      // requests should share that IO instead of starting competing scans.
+      // Concurrent fleet requests share expensive disk traversal.
       const scan: InFlightWorkspaceSpaceScan = {
         scanId,
         controller,
@@ -96,8 +94,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         }
       })
         .then((analysis): WorkspaceSpaceAnalyzeResult => {
-          // Fire-and-forget: a ~6-minute cold analysis must survive reload/restart, but
-          // persistence must never delay or fail the reply.
+          // Persist cold-analysis results without delaying or failing the reply.
           void persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis)
           return { ok: true, analysis }
         })
@@ -114,10 +111,8 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
     return inFlightScan.promise
   })
 
-  ipcMain.handle(
-    'workspaceSpace:getCachedAnalysis',
-    (): Promise<WorkspaceSpaceAnalysis | null> =>
-      readWorkspaceSpaceAnalysisSnapshot(snapshotDirectory)
+  ipcMain.handle('workspaceSpace:getCachedAnalysis', (): Promise<WorkspaceSpaceAnalysis | null> =>
+    readWorkspaceSpaceAnalysisSnapshot(snapshotDirectory)
   )
 
   ipcMain.handle('workspaceSpace:cancel', async (): Promise<boolean> => {

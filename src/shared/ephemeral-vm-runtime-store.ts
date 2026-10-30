@@ -4,11 +4,12 @@ import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
 import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
 import { hardenExistingSecureFile } from './secure-file'
+import { toCleanupLastErrorFields, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
 import {
   featureEntryFromRuntime,
   featureIdentity,
   readEphemeralVmRuntimeFeatureStore,
-  restoreRuntimeFeatures,
+  restoreRuntimeFeatureList,
   runtimeFeaturesEqual,
   writeEphemeralVmRuntimeFeatureStore,
   type EphemeralVmRuntimeFeatureStoreSnapshot
@@ -118,7 +119,8 @@ export function updateEphemeralVmRuntimeStatus(
     status?: EphemeralVmRuntimeStatus
     cleanupStatus?: EphemeralVmCleanupStatus
     cleanupLastAttemptAt?: number
-    cleanupLastError?: string | null
+    /** A string clears any stored code; null clears both. */
+    cleanupLastError?: string | EphemeralVmFailure | null
     workspaceId?: string
     workspaceName?: string
     connectionMode?: EphemeralVmRuntimeRecord['connectionMode'] | null
@@ -143,11 +145,13 @@ export function updateEphemeralVmRuntimeStatus(
     ...(args.cleanupLastAttemptAt !== undefined
       ? { cleanupLastAttemptAt: args.cleanupLastAttemptAt }
       : {}),
-    ...(args.cleanupLastError === null
-      ? { cleanupLastError: undefined }
-      : args.cleanupLastError
-        ? { cleanupLastError: args.cleanupLastError }
-        : {}),
+    ...(args.cleanupLastError === null || args.cleanupLastError
+      ? toCleanupLastErrorFields(
+          typeof args.cleanupLastError === 'string'
+            ? { error: args.cleanupLastError }
+            : args.cleanupLastError
+        )
+      : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
     // null explicitly clears the field (e.g. terminal cleanup); undefined leaves it unchanged.
@@ -225,9 +229,9 @@ function readEphemeralVmRuntimeStore(userDataPath: string): LoadedEphemeralVmRun
     const features = readEphemeralVmRuntimeFeatureStore(userDataPath)
     const store: EphemeralVmRuntimeStore = {
       version: 1,
-      runtimes: parsed.runtimes
-        .map((entry) => restoreRuntimeFeatures(entry, features.features))
-        .sort(compareRuntimeRecords)
+      runtimes: restoreRuntimeFeatureList(parsed.runtimes, features.features).sort(
+        compareRuntimeRecords
+      )
     }
     if (features.writable && !RollbackEphemeralVmRuntimeStoreSchema.safeParse(persisted).success) {
       try {

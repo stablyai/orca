@@ -4,12 +4,17 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AppState } from '@/store/types'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentStatusState
+} from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
-  PaletteLiveStatusProvider,
+  PaletteLiveStatusProvider as ProductionPaletteLiveStatusProvider,
   PaletteRecentTabStatusDot,
   PaletteWorktreeStatusDot
 } from './palette-live-status'
@@ -20,6 +25,16 @@ vi.mock('@/components/AgentWorkingSpinner', () => ({
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF = '11111111-2222-4333-8444-555555555555'
+
+function PaletteLiveStatusProvider(
+  props: React.ComponentProps<typeof ProductionPaletteLiveStatusProvider>
+): React.JSX.Element {
+  return (
+    <TooltipProvider>
+      <ProductionPaletteLiveStatusProvider {...props} />
+    </TooltipProvider>
+  )
+}
 
 let testRoot: Root
 let testContainer: HTMLDivElement
@@ -79,6 +94,13 @@ function dotLabels(): string[] {
   )
 }
 
+function expectStyledStatusTooltip(label: string): void {
+  const trigger = testContainer.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')
+  expect(trigger).not.toBeNull()
+  expect(trigger?.getAttribute('title')).toBeNull()
+  expect(trigger?.textContent).toContain(label)
+}
+
 describe('palette live status', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -114,9 +136,101 @@ describe('palette live status', () => {
     })
   }
 
+  // Stale pane rows must still suppress Orca-authored permission titles after the pane reports done.
+  it.each(['worktree', 'recent'] as const)(
+    'does not paint a stale self-authored title as a live %s question',
+    async (surface) => {
+      const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+      useAppStore.setState((s) => ({
+        tabsByWorktree: {
+          'wt-a': [{ ...makeTerminalTab('term-a', 'wt-a'), title: 'Codex - action required' }]
+        },
+        agentStatusByPaneKey: {
+          [makePaneKey('term-a', LEAF)]: makeAgentEntry('term-a', 'done', {
+            updatedAt: staleAt,
+            stateStartedAt: staleAt
+          })
+        },
+        agentStatusEpoch: s.agentStatusEpoch + 1
+      }))
+
+      if (surface === 'worktree') {
+        await render()
+      } else {
+        await act(async () => {
+          testRoot.render(
+            <PaletteLiveStatusProvider active>
+              <PaletteRecentTabStatusDot
+                row={{
+                  id: 'recent',
+                  worktreeId: 'wt-a',
+                  unifiedTabId: null,
+                  terminalTab: { id: 'term-a', title: 'Codex - action required' },
+                  worktreeLastActivityAt: 0
+                }}
+                fallback={<span data-fallback="true" />}
+              />
+            </PaletteLiveStatusProvider>
+          )
+        })
+        expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+      }
+
+      expect(dotLabels()).not.toContain('Needs permission')
+    }
+  )
+
   it('updates a worktree dot when the agent transitions', async () => {
     setAgentState('working')
     await render()
+    expect(dotLabels()).toEqual(['Working'])
+    expect(testContainer.querySelector('[data-slot="tooltip-trigger"]')).not.toBeNull()
+
+    await act(async () => {
+      setAgentState('blocked')
+    })
+    expect(dotLabels()).toEqual(['Needs permission'])
+  })
+
+  it('attributes stale permission titles to their split pane without hiding a live sibling', async () => {
+    const otherLeaf = '22222222-2222-4222-8222-222222222222'
+    const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+    setAgentState('done', { updatedAt: staleAt, stateStartedAt: staleAt })
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'term-a': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF },
+            second: { type: 'leaf', leafId: otherLeaf }
+          },
+          activeLeafId: otherLeaf,
+          expandedLeafId: null
+        }
+      },
+      runtimePaneTitlesByTabId: {
+        'term-a': { 1: 'Codex - action required', 2: 'shell' }
+      }
+    })
+
+    await render()
+    expect(dotLabels()).toEqual(['Active'])
+
+    await act(async () => {
+      useAppStore.setState({
+        runtimePaneTitlesByTabId: { 'term-a': { 2: 'Codex - action required' } }
+      })
+    })
+    expect(dotLabels()).toEqual(['Needs permission'])
+
+    await act(async () => {
+      useAppStore.setState({
+        runtimePaneTitlesByTabId: {
+          'term-a': { 1: 'Codex - action required', 2: '⠹ codex working' }
+        }
+      })
+    })
     expect(dotLabels()).toEqual(['Working'])
 
     await act(async () => {
@@ -136,12 +250,12 @@ describe('palette live status', () => {
     await render()
 
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
-    expect(testContainer.querySelector('.lucide-radio')?.classList).toContain('text-yellow-500')
+    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain(
+      'text-agent-working'
+    )
     expect(dotLabels()).toEqual(['Monitoring background tasks'])
   })
 
-  // Why this is the whole point: the palette body no longer subscribes to agent status, so if the
-  // dot didn't hold its own subscription it would freeze at whatever it showed when you opened.
   it('re-renders the dot without re-rendering the frozen body around it', async () => {
     setAgentState('working')
     await render()
@@ -155,8 +269,6 @@ describe('palette live status', () => {
     expect(bodyRenderCount).toBe(rendersAfterMount)
   })
 
-  // Why: unread writes are app-wide chatter. The pip owns them here so the palette body can read
-  // its unread from the open-time snapshot instead of re-rendering the whole list on every bell.
   it('re-renders the unread pip without re-rendering the frozen body around it', async () => {
     await act(async () => {
       testRoot.render(
@@ -189,8 +301,7 @@ describe('palette live status', () => {
   it('goes inert while the palette is closed', async () => {
     setAgentState('working')
     await render(false)
-    // No live maps flow through, so the dot falls back to the no-tabs state rather than
-    // reporting a worktree it isn't watching.
+    // Without live maps, fall back to no-tabs status rather than reporting an unwatched worktree.
     expect(dotLabels()).toEqual(['Inactive'])
   })
 
@@ -240,12 +351,10 @@ describe('palette live status', () => {
     await act(async () => {
       setAgentState('working')
     })
-    // Why: A2 — category identity stays on the content icon; only high-signal agent states get a pip.
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).not.toBeNull()
     expect(dotLabels()).toEqual(['Working'])
-    // Hover tooltip on the outer hit target (badge is pointer-events-none).
-    expect(testContainer.querySelector('[title="Working"]')).not.toBeNull()
+    expectStyledStatusTooltip('Working')
 
     await act(async () => {
       setAgentState('blocked')
@@ -253,7 +362,7 @@ describe('palette live status', () => {
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
     expect(dotLabels()).toEqual(['Needs permission'])
-    expect(testContainer.querySelector('[title="Needs permission"]')).not.toBeNull()
+    expectStyledStatusTooltip('Needs permission')
   })
 
   it('shows monitoring with a static radio instead of the working spinner', async () => {
@@ -276,9 +385,11 @@ describe('palette live status', () => {
     })
 
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
-    expect(testContainer.querySelector('.lucide-radio')?.classList).toContain('text-yellow-500')
+    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain(
+      'text-agent-working'
+    )
     expect(dotLabels()).toEqual(['Monitoring background tasks'])
-    expect(testContainer.querySelector('[title="Monitoring background tasks"]')).not.toBeNull()
+    expectStyledStatusTooltip('Monitoring background tasks')
   })
 
   it('shows only the content icon when a terminal-backed row is inactive', async () => {
@@ -331,7 +442,7 @@ describe('palette live status', () => {
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
     expect(dotLabels()).toEqual(['Unread agent completion'])
-    expect(testContainer.querySelector('[title="Unread agent completion"]')).not.toBeNull()
+    expectStyledStatusTooltip('Unread agent completion')
   })
 
   it('prefers working over unread on the same row', async () => {
@@ -379,8 +490,7 @@ describe('palette live status', () => {
     })
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(dotLabels()).toEqual(['Done'])
-    expect(testContainer.querySelector('[title="Done"]')).not.toBeNull()
-    // lucide CircleCheck class marker
+    expectStyledStatusTooltip('Done')
     expect(testContainer.innerHTML).toContain('lucide-circle-check')
   })
 
@@ -433,7 +543,7 @@ describe('palette live status', () => {
     expect(dotLabels()).toEqual(['Needs permission'])
   })
 
-  it('cuts the pip out of the dialog surface, and out of accent when selected', async () => {
+  it('keeps the attention glyph knockout popover-colored when its row is selected', async () => {
     setAgentState('working')
     await act(async () => {
       testRoot.render(
@@ -451,18 +561,11 @@ describe('palette live status', () => {
         </PaletteLiveStatusProvider>
       )
     })
-    const pip = testContainer.querySelector<HTMLElement>('[aria-hidden="true"].rounded-full')
+    const pip = testContainer.querySelector<HTMLElement>('[aria-hidden="true"]')
     expect(pip).not.toBeNull()
-    // Why popover and not background: the CommandDialog surface is --popover (#171717 dark), while
-    // --background is the app canvas (#0a0a0a) — the mismatch punched a dark halo through each row.
     expect(pip?.className).toContain('bg-popover')
     expect(pip?.className).toContain('ring-popover')
-    expect(pip?.className).not.toContain('bg-background')
-    expect(pip?.className).toContain(
-      'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)]'
-    )
-    expect(pip?.className).toContain(
-      'group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
-    )
+    expect(pip?.className).toContain('rounded-full')
+    expect(pip?.className).not.toContain('group-data-[selected=true]')
   })
 })

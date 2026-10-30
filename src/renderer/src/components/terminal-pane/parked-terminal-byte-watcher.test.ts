@@ -12,8 +12,7 @@ const PANE_ID = 1
 // Mirrors PARKED_NOTIFICATION_GRACE_MS / AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS.
 const NOTIFICATION_GRACE_MS = 250
 
-// Real agent-detection titles: braille spinner classifies as working,
-// the "✳ " Claude prefix as idle, and both as Claude agents.
+// Real titles classify braille spinners as working and Claude’s ✳ prefix as idle.
 const WORKING_TITLE_OSC = '\x1b]0;⠋ Build feature\x07'
 const IDLE_TITLE = '✳ Build feature'
 const IDLE_TITLE_OSC = `\x1b]0;${IDLE_TITLE}\x07`
@@ -30,12 +29,11 @@ type MockStoreState = {
   setRuntimePaneTitle: ReturnType<typeof vi.fn>
   clearRuntimePaneTitle: ReturnType<typeof vi.fn>
   updateTabTitle: ReturnType<typeof vi.fn>
-  markWorktreeUnread: ReturnType<typeof vi.fn>
-  markTerminalTabUnread: ReturnType<typeof vi.fn>
-  markTerminalPaneUnread: ReturnType<typeof vi.fn>
+  markTerminalBell: ReturnType<typeof vi.fn>
   setCacheTimerStartedAt: ReturnType<typeof vi.fn>
   observeTerminalGitHubPullRequestLink: ReturnType<typeof vi.fn>
   agentStatusByPaneKey: Record<string, { state: string; prompt: string; agentType?: string }>
+  paneForegroundAgentByPaneKey: Record<string, { agent: string | null }>
 }
 
 const dispatchTerminalNotification = vi.fn()
@@ -45,8 +43,7 @@ vi.mock('./use-notification-dispatch', () => ({
   dispatchTerminalNotification
 }))
 
-// Why: command-status semantics are covered in parked-terminal-command-status.test.ts;
-// these tests only prove the watcher wires bytes/facts into the policy.
+// Command-status semantics live in their own suite; verify watcher-to-policy wiring here.
 const commandStatusPolicy = {
   onCommandFinished: vi.fn(),
   onCommandCodeWorking: vi.fn(),
@@ -63,17 +60,11 @@ vi.mock('@/lib/terminal-theme', () => ({
   getSystemPrefersDark: () => true
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState
-  }
-}))
+vi.mock('@/store', () => ({ useAppStore: { getState: () => mockStoreState } }))
 
 function createMockStoreState(): MockStoreState {
   return {
-    // Why: terminalMainSideEffectAuthority false pins the legacy byte-parser
-    // mode this suite was written for; the authority-on fact-consumer mode is
-    // covered by the dedicated describe block below.
+    // Pin legacy byte mode here; dedicated cases below cover main-authority facts.
     settings: {
       theme: 'system',
       promptCacheTimerEnabled: true,
@@ -84,12 +75,11 @@ function createMockStoreState(): MockStoreState {
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabTitle: vi.fn(),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
-    agentStatusByPaneKey: {}
+    agentStatusByPaneKey: {},
+    paneForegroundAgentByPaneKey: {}
   }
 }
 
@@ -175,8 +165,7 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  // Why: a hookless Cursor pane has no other identity, so the literal reaches the store
-  // once (#10258); its redraw repeats must not stomp a synthesized Cursor title.
+  // Publish hookless Cursor identity once; redraws must not overwrite its synthesized status title (#10258).
   it('stores the bare cursor-agent native title once, then keeps the synthetic title', async () => {
     const { dispose } = await startWatcher()
 
@@ -209,14 +198,17 @@ describe('startParkedTerminalByteWatcher', () => {
   })
 
   it('marks unread on BEL and schedules the delayed terminal-bell OS notification', async () => {
-    const { dispose } = await startWatcher()
+    const workspaceOwner = { executionHostId: 'ssh:qa' as const, runtimeEnvironmentId: 'hub' }
+    const { dispose } = await startWatcher({ workspaceOwner })
 
     emit('build finished\x07')
     flushSideEffects()
 
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
-    expect(mockStoreState.markTerminalPaneUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      paneKey: PANE_KEY
+    })
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
@@ -224,22 +216,10 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'terminal-bell',
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID,
+      workspaceOwner
     })
-    dispose()
-  })
-
-  it('marks the exact pane unread when experimental terminal attention is enabled', async () => {
-    mockStoreState.settings = {
-      ...mockStoreState.settings,
-      experimentalTerminalAttention: true
-    }
-    const { dispose } = await startWatcher()
-
-    emit('\x07')
-    flushSideEffects()
-
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY)
     dispose()
   })
 
@@ -251,8 +231,7 @@ describe('startParkedTerminalByteWatcher', () => {
     flushSideEffects()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
-    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
     dispose()
   })
@@ -278,12 +257,13 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID
     })
     dispose()
   })
 
-  it('suppresses the completion OS notification when only terminal attention is on', async () => {
+  it('forwards completion to notification policy when only terminal attention is on', async () => {
     mockStoreState.settings = {
       ...mockStoreState.settings,
       experimentalTerminalAttention: true,
@@ -300,12 +280,12 @@ describe('startParkedTerminalByteWatcher', () => {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
       paneKey: PANE_KEY,
-      suppressOsNotification: true
+      ptyId: PTY_ID
     })
     dispose()
   })
 
-  it('skips completion dispatch when tracking is fully disabled, keeping the cache timer', async () => {
+  it('keeps mobile completion detection active when desktop notifications and attention are off', async () => {
     mockStoreState.settings = {
       ...mockStoreState.settings,
       experimentalTerminalAttention: false,
@@ -318,7 +298,10 @@ describe('startParkedTerminalByteWatcher', () => {
     flushSideEffects()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      expect.objectContaining({ source: 'agent-task-complete' })
+    )
     expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(
       PANE_KEY,
       expect.any(Number)
@@ -336,7 +319,11 @@ describe('startParkedTerminalByteWatcher', () => {
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 8)
 
     // The bell still marks unread immediately; only the OS notification yields.
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      paneKey: PANE_KEY
+    })
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       WORKTREE_ID,
@@ -360,9 +347,7 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  // Regression pin (#9993): DECSET 2031 subscribes to future color changes — it is not a
-  // query (that is CSI ?996n). A parked tab has no view to answer with and any reply lands
-  // after fish withdrew the mode, painting `?997;1n` at the prompt.
+  // DECSET 2031 subscribes rather than queries; replying after fish withdraws paints the reply at the prompt (#9993).
   it('never writes a color-scheme reply for a DECSET 2031 subscribe', async () => {
     const { dispose, ptyWrite } = await startWatcher()
 
@@ -388,7 +373,8 @@ describe('startParkedTerminalByteWatcher', () => {
         url: 'https://github.com/orca-dev/orca/pull/421',
         number: 421,
         slug: { owner: 'orca-dev', repo: 'orca', host: 'github.com' }
-      })
+      }),
+      expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
     )
     dispose()
   })
@@ -425,8 +411,7 @@ describe('startParkedTerminalByteWatcher', () => {
   })
 
   it('arms the Command Code scrape from a turn already in flight at park time', async () => {
-    // Why: the banner scrolled away long before the park, so only the live
-    // status row can tell the fresh detector this is a Command Code TUI.
+    // The banner is gone by park time; the live row must seed Command Code identity.
     mockStoreState.agentStatusByPaneKey = {
       [PANE_KEY]: { state: 'working', prompt: 'Fix the spinner', agentType: 'command-code' }
     }
@@ -453,8 +438,7 @@ describe('startParkedTerminalByteWatcher', () => {
   })
 
   it('fires completion when seeded with a working title and the agent goes idle while parked', async () => {
-    // Why: the pane was working at park time; the watcher's fresh tracker
-    // must be seeded or this working→idle transition can never fire.
+    // Seed prior working state so the recreated tracker can recognize working→idle.
     const { dispose } = await startWatcher({ initialTitle: '⠋ Build feature' })
 
     emit(IDLE_TITLE_OSC)
@@ -465,7 +449,8 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID
     })
     dispose()
   })
@@ -518,8 +503,7 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('final teardown flush\x07')
     flushSideEffects()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
-    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
   })
 
@@ -528,7 +512,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
     emit('\x07')
     flushSideEffects()
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledTimes(1)
 
     dispose()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
@@ -536,7 +520,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
     emit('\x07')
     flushSideEffects()
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledTimes(1)
 
     // Idempotent: a second dispose must not throw or clobber another watcher.
     dispose()
@@ -593,11 +577,7 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  // ─── Main side-effect authority (terminal-side-effect-authority.md) ────
-  //
-  // With the kill switch on, the watcher must not register byte parsers —
-  // main is the single byte parser and the watcher's policy block consumes
-  // pty:sideEffect facts instead; PR links arrive as facts.
+  // Main-authority mode parses bytes once in main; parked policy consumes derived facts, including PR links.
   describe('with main side-effect authority on', () => {
     function enableMainAuthority(): void {
       mockStoreState.settings = {
@@ -619,9 +599,7 @@ describe('startParkedTerminalByteWatcher', () => {
       })
     }
 
-    /** Feed chunks the way OrcaRuntimeService.onPtyData does: OSC 9999 strip,
-     *  shared title tracker, one fact batch per chunk — the main half of the
-     *  migration-safety parity check. */
+    // Derive one fact batch per chunk through main’s stripping/title pipeline for parity with byte mode.
     async function emitViaMainTrackerFacts(chunks: string[]): Promise<void> {
       const { createAgentStatusOscProcessor } = await import('../../../../shared/agent-status-osc')
       const { createTerminalTitleTracker } =
@@ -651,8 +629,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
     type RecordedCall = [string, ...unknown[]]
 
-    /** Wrap the policy-visible store actions so byte mode and fact mode can be
-     *  compared as one ordered outcome sequence. Timestamps are masked. */
+    // Compare ordered store outcomes across modes with timestamps masked.
     function recordPolicyOutcomes(): RecordedCall[] {
       const calls: RecordedCall[] = []
       mockStoreState.setRuntimePaneTitle.mockImplementation((...args: unknown[]) => {
@@ -661,14 +638,8 @@ describe('startParkedTerminalByteWatcher', () => {
       mockStoreState.updateTabTitle.mockImplementation((...args: unknown[]) => {
         calls.push(['updateTabTitle', ...args])
       })
-      mockStoreState.markWorktreeUnread.mockImplementation((...args: unknown[]) => {
-        calls.push(['markWorktreeUnread', ...args])
-      })
-      mockStoreState.markTerminalTabUnread.mockImplementation((...args: unknown[]) => {
-        calls.push(['markTerminalTabUnread', ...args])
-      })
-      mockStoreState.markTerminalPaneUnread.mockImplementation((...args: unknown[]) => {
-        calls.push(['markTerminalPaneUnread', ...args])
+      mockStoreState.markTerminalBell.mockImplementation((...args: unknown[]) => {
+        calls.push(['markTerminalBell', ...args])
       })
       mockStoreState.setCacheTimerStartedAt.mockImplementation((key: unknown, at: unknown) => {
         calls.push(['setCacheTimerStartedAt', key, typeof at === 'number' ? '<ts>' : at])
@@ -687,8 +658,7 @@ describe('startParkedTerminalByteWatcher', () => {
       flushSideEffects()
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-      expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
       dispose()
     })
@@ -758,7 +728,7 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(getSideEffectSnapshot).toHaveBeenCalledWith(PTY_ID)
       expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
       expect(mockStoreState.updateTabTitle).toHaveBeenCalledWith(TAB_ID, IDLE_TITLE)
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
       dispose()
@@ -770,14 +740,18 @@ describe('startParkedTerminalByteWatcher', () => {
 
       await dispatchFacts([{ kind: 'bell' }])
 
-      expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
+      expect(mockStoreState.markTerminalBell).toHaveBeenCalledWith({
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        paneKey: PANE_KEY
+      })
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
       expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
         source: 'terminal-bell',
-        paneKey: PANE_KEY
+        paneKey: PANE_KEY,
+        ptyId: PTY_ID
       })
       dispose()
     })
@@ -805,7 +779,8 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
         source: 'agent-task-complete',
         terminalTitle: IDLE_TITLE,
-        paneKey: PANE_KEY
+        paneKey: PANE_KEY,
+        ptyId: PTY_ID
       })
       dispose()
     })
@@ -818,8 +793,7 @@ describe('startParkedTerminalByteWatcher', () => {
         { kind: 'title', normalizedTitle: '⠋ Build feature', rawTitle: '⠋ Build feature' },
         { kind: 'agent-working' }
       ])
-      // Main's unthrottled 3s stale-title rewrite: titles/cache clear, but a
-      // merely-paused agent must not earn a task-complete notification.
+      // Stale-title expiry clears caches without granting completion to a merely paused agent.
       await dispatchFacts([
         {
           kind: 'title',
@@ -838,7 +812,7 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(PANE_KEY, null)
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       dispose()
     })
 
@@ -857,15 +831,14 @@ describe('startParkedTerminalByteWatcher', () => {
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
       expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
       dispose()
     })
 
     it('stays silent on a main 2031-subscribe fact', async () => {
-      // Regression pin (#9993): the fact records a subscription for theme-flip
-      // pushes; a parked watcher must never answer it.
+      // Subscription facts authorize theme-flip pushes, never an immediate parked reply (#9993).
       enableMainAuthority()
       const { dispose, ptyWrite } = await startWatcher()
 
@@ -873,8 +846,7 @@ describe('startParkedTerminalByteWatcher', () => {
       await dispatchFacts([{ kind: '2031-subscribe' }])
       expect(ptyWrite).not.toHaveBeenCalled()
 
-      // Why: pr-link facts arrive on the channel; byte-scanning here too
-      // would observe every link twice.
+      // PR links already arrive as facts; byte-scanning would observe each twice.
       emit('PR: https://github.com/orca-dev/orca/pull/42\r\n')
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).not.toHaveBeenCalled()
       dispose()
@@ -891,8 +863,7 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(setHiddenRendererPty).toHaveBeenCalledWith(PTY_ID, true)
 
       dispose()
-      // Why: the unhide must land before reveal re-registers pane handlers —
-      // the watcher registry disposes watchers before the remount effect runs.
+      // Dispose watchers and unhide before reveal remount registers pane handlers.
       expect(setHiddenRendererPty).toHaveBeenLastCalledWith(PTY_ID, false)
     })
 
@@ -932,7 +903,8 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledTimes(1)
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
         WORKTREE_ID,
-        link
+        link,
+        expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
       )
       dispose()
     })
@@ -949,17 +921,14 @@ describe('startParkedTerminalByteWatcher', () => {
 
       await dispatchFacts([{ kind: 'bell' }])
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
     })
 
-    // The key migration-safety check: the same bytes produce the identical
-    // ordered store outcome whether the watcher parses them directly (kill
-    // switch off) or consumes main-derived facts over the channel.
+    // Identical input must produce identical ordered store outcomes in byte mode and main-derived fact mode.
     it('produces identical store outcomes via the channel as the byte parser did', async () => {
       const fixtureChunks = [WORKING_TITLE_OSC, 'agent response body\r\n', `${IDLE_TITLE_OSC}\x07`]
 
-      // Pass 1: legacy byte-parser mode.
       const byteModeCalls = recordPolicyOutcomes()
       {
         const { dispose } = await startWatcher()
@@ -971,8 +940,7 @@ describe('startParkedTerminalByteWatcher', () => {
         dispose()
       }
 
-      // Pass 2: fresh modules/store, authority on, facts derived by the
-      // shared main tracker from the same bytes.
+      // Use fresh modules/store with main-derived facts from the same bytes.
       vi.resetModules()
       mockStoreState = createMockStoreState()
       dispatchTerminalNotification.mockReset()

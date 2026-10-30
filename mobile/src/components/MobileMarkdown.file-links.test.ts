@@ -3,10 +3,11 @@ import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 
-const openURL = vi.fn(() => Promise.resolve())
+const openURL = vi.fn((_url: string) => Promise.resolve())
 
 vi.mock('react-native', () => ({
   Linking: { openURL: (url: string) => openURL(url) },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -14,6 +15,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 function flattenText(node: ReactTestInstance): string {
   return node.children
@@ -53,6 +55,22 @@ describe('MobileMarkdown file links', () => {
     })
     return renderer!
   }
+
+  it('preserves a long unmatched bracket run as literal rendered text', () => {
+    const text = '['.repeat(60_000)
+    const tree = render(text)
+    expect(flattenText(tree.root)).toBe(text)
+    expect(pressables(tree)).toEqual([])
+  })
+
+  it('links the inner label of a nested bracket, and names an empty image label', () => {
+    const tree = render('[[nested](https://example.com) ![](https://example.com/image)')
+    expect(flattenText(tree.root)).toBe('[nested image')
+    pressByText(tree, 'nested')
+    expect(openURL).toHaveBeenLastCalledWith('https://example.com')
+    pressByText(tree, 'image')
+    expect(openURL).toHaveBeenLastCalledWith('https://example.com/image')
+  })
 
   it('opens a tapped POSIX absolute path in prose', () => {
     pressByText(render('Edit /Users/me/wt/src/app.tsx now'), '/Users/me/wt/src/app.tsx')
@@ -116,6 +134,29 @@ describe('MobileMarkdown file links', () => {
   it('excludes trailing sentence punctuation from autolinks', () => {
     pressByText(render('see https://example.com/a.'), 'https://example.com/a')
     expect(openURL).toHaveBeenCalledWith('https://example.com/a')
+  })
+
+  it.each([
+    [
+      '投稿（https://github.com/stablyai/orca/pull/1078）。',
+      'https://github.com/stablyai/orca/pull/1078',
+      'https://github.com/stablyai/orca/pull/1078'
+    ],
+    ['詳細は「www.example.com/docs」、次へ', 'www.example.com/docs', 'http://www.example.com/docs'],
+    [
+      'https://ja.wikipedia.org/wiki/ジョン・スミス。',
+      'https://ja.wikipedia.org/wiki/ジョン・スミス',
+      'https://ja.wikipedia.org/wiki/%E3%82%B8%E3%83%A7%E3%83%B3%E3%83%BB%E3%82%B9%E3%83%9F%E3%82%B9'
+    ]
+  ])('ends the autolink in %s at CJK punctuation', (content, linkText, url) => {
+    pressByText(render(content), linkText)
+    expect(openURL).toHaveBeenCalledExactlyOnceWith(url)
+  })
+
+  it('renders text whose url candidate ends before its host', () => {
+    expect(flattenText(render('https://（ユーザー）@example.com').root)).toBe(
+      'https://（ユーザー）@example.com'
+    )
   })
 
   it('opens inline-code path:line citations', () => {

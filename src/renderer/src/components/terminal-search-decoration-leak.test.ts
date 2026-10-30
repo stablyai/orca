@@ -4,30 +4,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-/**
- * Regression for STA-2707: search highlights stayed painted after the find bar
- * closed, until the window was minimized and restored.
- *
- * Mechanism, in @xterm/xterm's SortedList (patched in
- * config/patches/@xterm__xterm@6.1.0-beta.287.patch):
- *
- *   - DecorationService keys its SortedList on `decoration.marker.line`.
- *   - `delete()` only records an index and defers the array compaction, while
- *     `Marker.dispose()` sets `line = -1` — mutating that very sort key.
- *   - So after the first disposal the array is no longer sorted, and the binary
- *     search inside `delete()` can miss a decoration that IS present. `delete()`
- *     returns false, `onDecorationRemoved` never fires, and the decoration keeps
- *     reporting itself at its cells forever.
- *
- * `clearDecorations()` disposes the active (top-layer) match first and the
- * match highlights after, which is exactly the order that trips this — so
- * closing search left one match highlighted. Repaints don't help: the leaked
- * decoration is still live, so every repaint faithfully re-paints it.
- *
- * These tests drive the REAL Terminal + SearchAddon and assert through
- * `forEachDecorationAtCell` — the same lookup both renderers use to decide a
- * cell's background — so a regression fails here regardless of renderer.
- */
+/** SortedList keys mutate to -1 on marker disposal, so deferred deletion can miss live decorations (STA-2707). Real Terminal/SearchAddon cell lookups prove closing search removes every highlight. */
 
 type LeakProbeDecoration = { marker: { line: number } }
 
@@ -64,9 +41,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
 type SearchHarness = {
   terminal: Terminal
   search: SearchAddon
-  /** Cells whose background a renderer would still paint from a decoration. */
   highlightedCellCount: () => number
-  /** Closes the find bar exactly the way TerminalSearch does. */
   closeSearch: () => void
 }
 
@@ -101,12 +76,8 @@ function openTerminalWithSearch(): SearchHarness {
   }
 }
 
-/**
- * Content shapes that produce different match/marker layouts. The leak only
- * showed up for some of them, so the regression has to sweep rather than pin
- * one lucky case.
- */
-const CONTENT_SHAPES: readonly (readonly [string, string])[] = [
+/** Vary marker layouts: the mutated sort-key leak depends on disposal order. */
+const CONTENT_LAYOUTS: readonly (readonly [string, string])[] = [
   ['matches on two lines', 'needle one\r\nneedle two\r\n'],
   ['matches on three lines', 'needle one\r\nneedle two\r\nneedle three\r\n'],
   ['matches on four lines', 'needle a\r\nneedle b\r\nneedle c\r\nneedle d\r\n'],
@@ -127,11 +98,10 @@ describe('terminal search decoration cleanup (STA-2707)', () => {
     document.body.replaceChildren()
   })
 
-  it.each(CONTENT_SHAPES)(
+  it.each(CONTENT_LAYOUTS)(
     'leaves no highlighted cells after closing search (%s)',
     async (_name, content) => {
-      // Sweeping the match-navigation count matters: which decoration is the
-      // active one decides whether the stale sort key hides a later delete.
+      // Navigation changes the active decoration and hence the stale-key deletion order.
       for (const navigations of [0, 1, 2, 3]) {
         const harness = openTerminalWithSearch()
         await write(harness.terminal, content)
@@ -165,8 +135,7 @@ describe('terminal search decoration cleanup (STA-2707)', () => {
     const harness = openTerminalWithSearch()
     await write(harness.terminal, 'needle one\r\nneedle two\r\nneedle three\r\n')
 
-    // The find bar re-searches on every keystroke, so each character disposes
-    // the previous run's decorations — the same path that leaked.
+    // Each search keystroke disposes the preceding decorations through the same leaking path.
     for (const query of ['n', 'ne', 'nee', 'need', 'needl', 'needle']) {
       harness.search.findNext(query, { decorations: SEARCH_DECORATIONS, incremental: true })
       await settle(10)

@@ -6,8 +6,10 @@ export { getIssueComments } from './jira-issue-comments'
 export { listProjects } from './jira-project-queries'
 export {
   listAssignableUsers,
+  listAssignableUsersForProject,
   listCreateFields,
   listIssueTypes,
-  listPriorities
+  listPriorities,
+  searchUsers
 } from './jira-issue-create-metadata'
 export { getProjectStatusOrder, listTransitions } from './jira-transition-queries'

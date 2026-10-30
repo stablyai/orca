@@ -5,8 +5,10 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as TranscriptTailReader from './transcript-tail-reader'
 
-const { watchers, watchCallbacks, watchMock } = vi.hoisted(() => ({
+const { tailReaderState, watchers, watchCallbacks, watchMock } = vi.hoisted(() => ({
+  tailReaderState: { failure: null as Error | null },
   watchers: [] as (EventEmitter & { close: ReturnType<typeof vi.fn> })[],
   watchCallbacks: [] as ((event: string, filename: string | Buffer | null) => void)[],
   watchMock: vi.fn()
@@ -23,6 +25,21 @@ vi.mock('node:fs', async () => {
   return { ...actual, watch: watchMock }
 })
 
+vi.mock('./transcript-tail-reader', async () => {
+  const actual = await vi.importActual<typeof TranscriptTailReader>('./transcript-tail-reader')
+  return {
+    ...actual,
+    readNativeChatTranscriptTailFile: (
+      ...args: Parameters<typeof actual.readNativeChatTranscriptTailFile>
+    ) => {
+      if (tailReaderState.failure) {
+        return Promise.reject(tailReaderState.failure)
+      }
+      return actual.readNativeChatTranscriptTailFile(...args)
+    }
+  }
+})
+
 import { subscribeNativeChatTranscript } from './transcript-watch'
 
 const roots: string[] = []
@@ -31,6 +48,7 @@ afterEach(async () => {
   watchers.length = 0
   watchCallbacks.length = 0
   watchMock.mockClear()
+  tailReaderState.failure = null
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -98,11 +116,9 @@ describe('native chat transcript watcher errors', () => {
   it('surfaces an error snapshot when the initial drain throws', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-error-'))
     roots.push(root)
-    // A directory sitting at the transcript path: it exists (so install does not
-    // defer to the not-yet-flushed resolve poll, #8401) but every tail read
-    // throws EISDIR — a persistent real read error, not a missing file.
     const filePath = join(root, 'transcript.jsonl')
-    await mkdir(filePath)
+    await writeFile(filePath, '')
+    tailReaderState.failure = new Error('deterministic read failure')
     const onInitialSnapshot = vi.fn()
     const onAppend = vi.fn()
     const subscription = await subscribeNativeChatTranscript({
@@ -119,7 +135,6 @@ describe('native chat transcript watcher errors', () => {
     await vi.waitFor(() =>
       expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
     )
-    // Surfaced once, not spammed by the capped rotation retry loop.
     await new Promise((resolve) => setTimeout(resolve, 120))
     expect(onInitialSnapshot).toHaveBeenCalledOnce()
 
@@ -129,10 +144,9 @@ describe('native chat transcript watcher errors', () => {
   it('still wins with a real initial snapshot once the transcript becomes readable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-recover-'))
     roots.push(root)
-    // Same unreadable-directory setup as above; the error frame must not be
-    // terminal once the path is replaced with a readable transcript.
     const filePath = join(root, 'transcript.jsonl')
-    await mkdir(filePath)
+    await writeFile(filePath, '')
+    tailReaderState.failure = new Error('deterministic read failure')
     const onInitialSnapshot = vi.fn()
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
@@ -147,16 +161,14 @@ describe('native chat transcript watcher errors', () => {
       expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
     )
 
-    // initialDrain stays true after the error, so a recovered read delivers the
-    // real snapshot instead of stranding the client on the error frame.
-    await rm(filePath, { recursive: true, force: true })
+    // Write content before read recovery: an intervening empty success legitimately consumes initialDrain.
     await writeFile(filePath, claudeLine('u-recovered', 'user', 'back'))
+    tailReaderState.failure = null
     watchCallbacks[0]!('change', 'transcript.jsonl')
-    await vi.waitFor(() =>
-      expect(onInitialSnapshot.mock.calls.flat(2)).toEqual(
-        expect.arrayContaining([expect.objectContaining({ id: 'u-recovered' })])
-      )
-    )
+    await vi.waitFor(() => expect(onInitialSnapshot).toHaveBeenCalledTimes(2))
+    expect(onInitialSnapshot.mock.calls[1]![0]).toEqual([
+      expect.objectContaining({ id: 'u-recovered' })
+    ])
 
     subscription.unsubscribe()
   })

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { parse as parseDomain } from 'tldts'
 import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser-url'
 
 const HOST_FILE_EXTENSIONS = new Set([
@@ -32,6 +33,11 @@ export type HostUrlClassification =
   | { kind: 'blocked'; message: string }
   | { kind: 'host-url'; url: string }
 
+export type HostUrlClassificationOptions = {
+  /** Require a listed suffix even without a path, so `App.vue` is not a host. */
+  requireListedDomain?: boolean
+}
+
 function invalidUrl(): { kind: 'blocked'; message: string } {
   return {
     kind: 'blocked',
@@ -53,13 +59,26 @@ function parseHttpUrl(query: string): ExplicitUrlClassification {
   }
 }
 
-function splitHostCandidate(query: string): { host: string; port: string | null } | null {
-  if (/[\\/\s?#]/.test(query)) {
+// Hosting-provider suffixes such as `github.io` are themselves registrable ICANN domains.
+function isListedDomain(host: string): boolean {
+  const parsed = parseDomain(host, { allowPrivateDomains: false })
+  return parsed.domain !== null && parsed.isIcann === true
+}
+
+function splitHostCandidate(
+  query: string,
+  requireListedDomain = false
+): { host: string; port: string | null } | null {
+  if (/[\\\s]/.test(query)) {
     return null
   }
-  const colonIndex = query.indexOf(':')
-  const host = colonIndex === -1 ? query : query.slice(0, colonIndex)
-  const port = colonIndex === -1 ? null : query.slice(colonIndex + 1)
+
+  // Parse authority before path/query/hash so domain URLs remain navigations; exact files can still win later.
+  const authorityEnd = query.search(/[/?#]/)
+  const authority = authorityEnd === -1 ? query : query.slice(0, authorityEnd)
+  const colonIndex = authority.indexOf(':')
+  const host = colonIndex === -1 ? authority : authority.slice(0, colonIndex)
+  const port = colonIndex === -1 ? null : authority.slice(colonIndex + 1)
   const extension = host.split('.').pop()?.toLowerCase() ?? ''
   if (HOST_FILE_EXTENSIONS.has(extension)) {
     return null
@@ -67,15 +86,15 @@ function splitHostCandidate(query: string): { host: string; port: string | null 
   if (
     host.toLowerCase() !== 'localhost' &&
     !IPV4_PATTERN.test(host) &&
-    !DOMAIN_PATTERN.test(host)
+    (!DOMAIN_PATTERN.test(host) ||
+      ((authorityEnd !== -1 || requireListedDomain) && !isListedDomain(host)))
   ) {
     return null
   }
   return { host, port }
 }
 
-// Why: a bare LAN/dev address almost never serves TLS, but a public IP still
-// deserves https — plaintext there would be a downgrade, and IPs get no HSTS.
+// Prefer HTTP for private development addresses; public IPs need HTTPS because HSTS cannot protect them.
 function isPrivateIpv4(host: string): boolean {
   if (!IPV4_PATTERN.test(host)) {
     return false
@@ -126,8 +145,11 @@ export function classifyExplicitUrl(query: string): ExplicitUrlClassification | 
   return invalidUrl()
 }
 
-export function classifyHostUrl(query: string): HostUrlClassification | null {
-  const candidate = splitHostCandidate(query)
+export function classifyHostUrl(
+  query: string,
+  options: HostUrlClassificationOptions = {}
+): HostUrlClassification | null {
+  const candidate = splitHostCandidate(query, options.requireListedDomain)
   if (!candidate) {
     const localDevUrl = classifySchemeLessLocalDevAddress(query)
     if (localDevUrl?.hostname) {
@@ -136,8 +158,7 @@ export function classifyHostUrl(query: string): HostUrlClassification | null {
     return BRACKETED_IPV6_ATTEMPT_PATTERN.test(query) ? invalidUrl() : null
   }
   if (candidate.port !== null && !/^\d+$/.test(candidate.port)) {
-    // Why: "docker.io:latest" reads as a tag, not a URL attempt — fall through so
-    // file matches and search still get offered instead of blocking every row.
+    // Non-numeric ports may be tags such as docker.io:latest; allow file/search fallbacks instead of blocking the query.
     return null
   }
   try {

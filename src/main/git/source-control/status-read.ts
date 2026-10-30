@@ -1,4 +1,5 @@
 import type {
+  GitBranchLineTotal,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
@@ -6,18 +7,22 @@ import type {
 import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
 import { resolveGitStatusLimit } from '../../../shared/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
-import type { GitBranchLineTotal } from '../../../shared/git-branch-line-total'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../../../shared/git-status-line-stats-cache'
+import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
+import { readGitCommandFailureStderr } from '../../../shared/git-command-failure-text'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
+import {
+  findExistingWorktreeSymlinkPaths,
+  getSafeRelativePath
+} from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
-import { parseUnmergedEntry } from './status-conflict-entries'
+import { parseUnmergedEntry } from '../../../shared/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
 import {
   getShortBranchName,
@@ -29,18 +34,14 @@ import {
   createBranchLineTotalInput,
   getStatusLineStatsCacheKey
 } from './status-branch-line-total-input'
+import { reconcileDriveCheckoutSuspects } from './drive-checkout-suspect-status'
+import { markRecursiveSubmoduleRestores } from './submodule-restore-recurse'
 
-/**
- * Parse `git status --porcelain=v2` output into structured entries.
- */
 export async function getStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
-  // Why nothing is cleared here: a status poll is a read. Dropping the in-flight diff entry
-  // mid-read only made a concurrent identical request start duplicate git work, and the
-  // settled diff cache is keyed on stamped git state, which a read cannot change anyway.
-  // Mutations invalidate both, through invalidateGitReadCaches.
+  // Reads preserve diff caches; mutations invalidate them and settled entries also validate input stamps.
   const cacheKey = getStatusReadKey(worktreePath, options)
   return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
     runGetStatus(worktreePath, { ...options, signal: sharedSignal })
@@ -48,44 +49,48 @@ export async function getStatus(
 }
 
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
-  // Why: each key part can change the output shape or runtime routing.
   const limit = resolveGitStatusLimit(options.limit)
   return stableInFlightKey([
     worktreePath,
     options.wslDistro ?? '',
+    options.admissionTier ?? 'status',
     options.includeIgnored === true,
+    options.includeLineStats !== false,
     options.reuseLineStats === true,
-    // Why: the result carries a total only for callers who asked, and only for
-    // this fork point, so a shared lease must never serve one to the other.
+    // Totals for different fork points or opt-in states cannot share a lease.
     options.branchLineTotalMergeBase ?? '',
     options.bypassEffectiveUpstreamNegativeCache === true,
     limit,
-    // Why: this changes which entries survive, so it must not share a cache slot.
+    // Filtering options affect which rows survive and must participate in the cache key.
     options.sharedLinkPaths ?? []
   ])
 }
 
-/** Remove untracked entries that are shared symlinks Orca created.
- *
- *  Why this can't be left to Git: a directory-only ignore rule (`node_modules/`)
- *  matches the primary checkout's real directory but never the worktree's
- *  symlink, so Git reports it untracked forever — a phantom row in the diff and
- *  a permanently "dirty" worktree.
- *
- *  Tight on both axes: an entry must be configured as shared *and* actually be a
- *  symlink. A regular file the user created at a configured name still shows up,
- *  and so does a symlink at a path nobody declared shared. Mutates `entries`. */
+/** Hide only configured, real, untracked shared symlinks; directory-only Git ignore rules cannot hide them. */
 async function dropSharedSymlinkUntrackedEntries(
   worktreePath: string,
   entries: GitStatusEntry[],
-  sharedLinkPaths: readonly string[]
+  options: GetStatusOptions
 ): Promise<void> {
-  // Why: a clean tree has no untracked entries, so this costs nothing on the
-  // common status-poll path — no syscall, no config read, no subprocess.
+  const sharedLinkPaths = options.sharedLinkPaths ?? []
   if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
     return
   }
-  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  const untrackedPaths = new Set(
+    entries.filter((entry) => entry.area === 'untracked').map((entry) => entry.path)
+  )
+  const candidatePaths = sharedLinkPaths.filter((rawPath) => {
+    const path = getSafeRelativePath(rawPath)
+    return path.safe && untrackedPaths.has(path.rel)
+  })
+  if (candidatePaths.length === 0) {
+    return
+  }
+  const sharedLinks = new Set(
+    await findExistingWorktreeSymlinkPaths(worktreePath, candidatePaths, {
+      wslDistro: options.wslDistro
+    })
+  )
   if (sharedLinks.size === 0) {
     return
   }
@@ -97,20 +102,29 @@ async function dropSharedSymlinkUntrackedEntries(
   }
 }
 
+// Git's stderr is unbounded and travels to remote clients; the first lines say what failed.
+const STATUS_READ_ERROR_MAX_LENGTH = 1_000
+
+function describeStatusReadError(error: unknown): string {
+  const stderr = readGitCommandFailureStderr(error)?.trim()
+  const text = stderr || (error instanceof Error ? error.message : String(error))
+  return text.slice(0, STATUS_READ_ERROR_MAX_LENGTH)
+}
+
 async function runGetStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
   const lineStatsCacheKey = getStatusLineStatsCacheKey(worktreePath, options)
-  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
+  const lineStatsWriteToken =
+    options.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
-  // Why: a bad limit (negative/fractional/NaN) breaks early-stop; require a valid non-negative int (0 disables the cap).
+  let readError: string | undefined
   const limit = resolveGitStatusLimit(options.limit)
 
-  // Why: detectConflictOperation and git status are independent, so run them concurrently to save I/O latency.
-  const conflictPromise = detectConflictOperation(worktreePath)
-  // Why: core.quotePath=false keeps non-ASCII paths as raw UTF-8, not octal escapes, so entry.path is readable and lookups match.
+  const conflictPromise = detectConflictOperation(worktreePath, options)
+  // Keep non-ASCII paths readable instead of Git's octal escapes.
   const statusArgs = [
     '-c',
     'core.quotePath=false',
@@ -123,17 +137,18 @@ async function runGetStatus(
     statusArgs.push('--ignored=matching')
   }
 
-  // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.
+  // Bound streaming status so huge unignored folders cannot exhaust process memory.
   const parser = new StatusPorcelainParser()
   let didHitLimit = false
-  // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
+  // Own rejections before marker I/O so fast Git failures cannot become unhandled.
   const statusSettlementPromise = Promise.allSettled([
     (async () => {
       const result = await gitStreamStdout(statusArgs, {
         cwd: worktreePath,
         wslDistro: options.wslDistro,
+        admissionTier: options.admissionTier,
         preferWslDirectGit: true,
-        // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
+        // Read-only polls must not compete with terminal Git for index.lock.
         env: gitOptionalLocksDisabledEnv(),
         signal: options.signal,
         onStdout: (chunk) => parser.update(chunk, limit)
@@ -154,18 +169,19 @@ async function runGetStatus(
     didHitLimit = statusResult.value.stoppedEarly
     statusSucceeded = true
   } catch (error) {
-    // Why: an aborted scan must reject, not resolve as an empty result.
+    // Cancellation must reject rather than look like an empty status.
     if (options.signal?.aborted) {
       throw error
     }
-    // Not a git repo or git not available
+    readError = describeStatusReadError(error)
   }
 
-  const entries: GitStatusEntry[] = []
+  let entries: GitStatusEntry[] = []
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
+  // Node filesystem probes need host paths even when Git reports guest spellings.
+  const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
 
-  // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
-  // an early conflict behind ordinary rows that appeared later in the stream.
+  // Resolve conflicts in Git output order so the cap cannot hide early conflicts behind later ordinary rows.
   for (const record of parser.statusRecords) {
     if (didHitLimit && entries.length >= limit) {
       break
@@ -173,14 +189,20 @@ async function runGetStatus(
     if (record.type === 'entry') {
       entries.push(record.entry)
     } else {
-      const unmergedEntry = await parseUnmergedEntry(worktreePath, record.line)
+      const unmergedEntry = await parseUnmergedEntry(hostWorktreePath, record.line)
       if (unmergedEntry) {
         entries.push(unmergedEntry)
       }
     }
   }
 
-  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options.sharedLinkPaths ?? [])
+  if (statusSucceeded && !didHitLimit) {
+    entries = await reconcileDriveCheckoutSuspects(worktreePath, entries, options)
+  }
+  if (statusSucceeded) {
+    entries = await markRecursiveSubmoduleRestores(worktreePath, entries, options)
+  }
+  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options)
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
     const branchName = getShortBranchName(branch)
@@ -192,7 +214,7 @@ async function runGetStatus(
         options
       )
       try {
-        // Why: the shared probe/caches serve concurrent reads, so run it unbound from this signal — one abort mustn't reject it for others.
+        // Shared probes outlive individual callers; one abort must not reject other readers.
         const { signal: _requestSignal, ...sharedProbeOptions } = options
         effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
           cacheKey,
@@ -202,14 +224,15 @@ async function runGetStatus(
           options.bypassEffectiveUpstreamNegativeCache === true
         )
       } catch {
-        // Why: don't fail status polling on a transient upstream-probe error; the explicit upstream path surfaces those.
+        // Polling tolerates upstream probe failures; explicit upstream actions surface them.
       }
     }
   }
 
-  // Why: line counts run only for areas with entries (clean tree = 0 calls); skip past the limit to avoid numstat over a huge set.
+  // Count only populated areas and skip truncated scans to avoid unbounded numstat work.
   let branchLineTotal: GitBranchLineTotal | undefined
-  if (!didHitLimit) {
+  let branchLineTotalUnavailable: string | undefined
+  if (!didHitLimit && lineStatsWriteToken !== null) {
     const branchLineTotalInput = createBranchLineTotalInput(
       worktreePath,
       entries,
@@ -227,11 +250,12 @@ async function runGetStatus(
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     })
     branchLineTotal = lineStats.branchLineTotal
-  } else {
+    branchLineTotalUnavailable = lineStats.branchLineTotalUnavailable
+  } else if (lineStatsWriteToken !== null) {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 
-  // Why: an abort after the stream (unmerged/upstream/line-stats work) must still reject, not resolve.
+  // Cancellation during follow-up probes must still reject.
   if (options.signal?.aborted) {
     const error = new Error('The operation was aborted.')
     error.name = 'AbortError'
@@ -243,8 +267,10 @@ async function runGetStatus(
     conflictOperation,
     head,
     branch,
+    ...(readError !== undefined ? { readError } : {}),
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
+    ...(branchLineTotalUnavailable ? { branchLineTotalUnavailable } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
       ? {

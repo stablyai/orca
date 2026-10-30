@@ -4,48 +4,22 @@ import { setupTerminalCreateSurfacing } from './ipc-events-terminal-create-test-
 
 describe('useIpcEvents updater integration', () => {
   it('surfaces terminal creates without stealing focus unless requested', async () => {
-    let floatingPanelFocused = false
-    const scenario = await setupTerminalCreateSurfacing(() => floatingPanelFocused)
+    const scenario = await setupTerminalCreateSurfacing(() => false)
     const { createTab, setActiveView, setActiveWorktree, markWorktreeVisited } = scenario
     const { recordWorktreeVisit, setActiveTabType, setActiveTab } = scenario
     const { revealWorktreeInSidebar, setTabCustomTitle, queueTabStartupCommand } = scenario
     const { registerAgentLaunchConfig, updateTabPtyId, setTabLayout } = scenario
     const { replyTerminalCreate, dispatchEvent } = scenario
-    const { createFloatingWorkspaceTerminalTab } = scenario
     const { createWebRuntimeSessionTerminal, focusRuntimeTerminalSurface } = scenario
     const { focusTerminalTabSurface, storeState, createTerminalListenerRef } = scenario
     const { requestTerminalCreateListenerRef, focusTerminalListenerRef } = scenario
-    const { newTerminalTabListenerRef } = scenario
 
-    // The harness registers both listeners before returning; narrow them once.
-    if (!newTerminalTabListenerRef.current || !createTerminalListenerRef.current) {
-      throw new Error('Expected create-terminal and new-terminal-tab listeners to be registered')
+    // The harness registers the listener before returning; narrow it once.
+    if (!createTerminalListenerRef.current) {
+      throw new Error('Expected create-terminal listener to be registered')
     }
 
-    floatingPanelFocused = true
-    newTerminalTabListenerRef.current()
-    expect(createFloatingWorkspaceTerminalTab).toHaveBeenCalledWith(storeState)
-    expect(createTab).not.toHaveBeenCalled()
-
-    floatingPanelFocused = false
-    createFloatingWorkspaceTerminalTab.mockClear()
-    createTab.mockClear()
-    newTerminalTabListenerRef.current()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(createFloatingWorkspaceTerminalTab).not.toHaveBeenCalled()
-    expect(createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      // Why: multi-host scopes the new terminal to the worktree's own runtime
-      // env (null here -> falls back to the active env inside the helper).
-      environmentId: null,
-      activate: true
-    })
-    expect(createTab).toHaveBeenCalledWith('wt-1')
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
-
-    // Exact regression sequence: Local default -> connect/navigate Windows 2 ->
-    // reveal a local terminal -> restart. Connection and navigation are transient.
+    // Reproduce local default → remote navigation → local reveal → restart; transient connection/navigation must not change durable default.
     storeState.repos.push({
       id: 'windows-2-repo',
       connectionId: null,
@@ -107,7 +81,7 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
-    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined, 'wt-2')
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Runner', {
       recordInteraction: false
@@ -139,10 +113,10 @@ describe('useIpcEvents updater integration', () => {
     expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
     expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-2')
     expect(setActiveTab).toHaveBeenCalledWith('tab-new')
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
-    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined, 'wt-2')
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
 
     if (typeof requestTerminalCreateListenerRef.current !== 'function') {
@@ -179,7 +153,7 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-3')
-    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined, 'wt-3')
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -210,8 +184,7 @@ describe('useIpcEvents updater integration', () => {
     focusTerminalTabSurface.mockClear()
     storeState.settings = {
       ...storeState.settings,
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
+      experimentalNativeChat: true
     }
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed',
@@ -232,8 +205,15 @@ describe('useIpcEvents updater integration', () => {
       activate: false,
       recordInteraction: false,
       launchAgent: 'codex',
-      viewMode: 'chat',
-      startupCwd: '/repo/packages/app'
+      startupCwd: '/repo/packages/app',
+      pendingStartup: {
+        command: 'codex',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'request' }
+        },
+        launchAgent: 'codex'
+      }
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
@@ -242,7 +222,7 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
-    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined, 'wt-2')
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -253,14 +233,7 @@ describe('useIpcEvents updater integration', () => {
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Codex', {
       recordInteraction: false
     })
-    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
-      command: 'codex',
-      launchConfig: {
-        agentArgs: '--model gpt-5',
-        agentEnv: { CODEX_PROFILE: 'request' }
-      },
-      launchAgent: 'codex'
-    })
+    expect(queueTabStartupCommand).not.toHaveBeenCalled()
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-renderer-backed',
       tabId: 'tab-new',
@@ -284,7 +257,8 @@ describe('useIpcEvents updater integration', () => {
 
     expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, {
       launchAgent: 'codex',
-      viewMode: 'terminal'
+      viewMode: 'terminal',
+      pendingStartup: { command: 'codex', launchAgent: 'codex' }
     })
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-runtime-session',
@@ -405,7 +379,7 @@ describe('useIpcEvents updater integration', () => {
     expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-4')
     expect(setActiveTab).toHaveBeenCalledWith('tab-focus')
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-4')
-    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-focus', 'leaf-focus')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-focus', 'leaf-focus', 'wt-4')
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-focus', 'leaf-focus')
 
     storeState.isNavigatingHistory = true
@@ -446,7 +420,8 @@ describe('useIpcEvents updater integration', () => {
 
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       activate: false,
-      recordInteraction: false
+      recordInteraction: false,
+      pendingStartup: { command: 'codex' }
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
@@ -481,8 +456,7 @@ describe('useIpcEvents updater integration', () => {
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg',
       activate: false,
-      launchAgent: 'codex',
-      viewMode: 'chat'
+      launchAgent: 'codex'
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
@@ -517,7 +491,7 @@ describe('useIpcEvents updater integration', () => {
     })
 
     createTab.mockClear()
-    storeState.settings.openAgentTabsInChatByDefault = false
+    storeState.settings.experimentalNativeChat = false
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
       ptyId: 'pty-explicit-chat',
@@ -530,7 +504,7 @@ describe('useIpcEvents updater integration', () => {
       launchAgent: 'codex',
       viewMode: 'chat'
     })
-    storeState.settings.openAgentTabsInChatByDefault = true
+    storeState.settings.experimentalNativeChat = true
 
     createTab.mockClear()
     setActiveView.mockClear()
@@ -701,7 +675,7 @@ describe('useIpcEvents updater integration', () => {
     })
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
-    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId)
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId, 'wt-2')
     expect(focusTerminalTabSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId)
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-adopt-pending',
@@ -765,6 +739,7 @@ describe('useIpcEvents updater integration', () => {
         type: 'orca-split-terminal-pane',
         detail: {
           tabId: 'tab-existing',
+          worktreeId: 'wt-2',
           paneRuntimeId: -1,
           direction: 'vertical',
           sourceLeafId: 'leaf-source',

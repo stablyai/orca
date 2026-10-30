@@ -1,16 +1,4 @@
-/**
- * The mount rig for AutomationsPage tests: child stand-ins, the preload API
- * double, and the per-test store reset.
- *
- * The presentational children are stood in for because what these tests check
- * is the data flow into them, not their markup — asserting on the real picker,
- * badges, and empty states would test the wrong layer. The stand-ins record the
- * props they were handed so a test can read them back.
- *
- * The `vi.mock` calls live here rather than in each test file: they must run
- * before `./AutomationsPage` is imported, which importing this module first
- * guarantees.
- */
+/** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
 import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -27,6 +15,7 @@ import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { AutomationListRow } from './automation-list-row-identity'
+import type { AutomationListViewItem } from './automation-list-view'
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
@@ -39,14 +28,8 @@ export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
 export const RUNTIME_WORKSPACE_ID = RUNTIME_WORKSPACE_ID_FIXTURE
 
 export type ListPanelProps = {
-  filteredAutomations: Automation[]
-  filteredExternalAutomationEntries: ExternalAutomationListEntry[]
+  sortedListItems: readonly AutomationListViewItem[]
   selectedExternal: ExternalAutomationListEntry | null
-  openEditExternalDialog: (
-    manager: ExternalAutomationListEntry['manager'],
-    job: ExternalAutomationListEntry['job'],
-    scope: ExternalAutomationListEntry['scope']
-  ) => void
   externalActionKey: string | null
   requestExternalAction: (
     manager: ExternalAutomationListEntry['manager'],
@@ -56,7 +39,6 @@ export type ListPanelProps = {
   ) => void
   hasListItems: boolean
   hasFilteredListItems: boolean
-  filteredRows: readonly AutomationListRow[]
   selectedRowKey: string | null
   selectedExternalKey: string | null
   hostCatalog: AutomationHostCatalogView
@@ -68,6 +50,7 @@ export type ListPanelProps = {
   selectExternalKey: (entryKey: string | null) => void
   onOpenDetail: () => void
   onRefresh: () => void
+  onOpenRuns: () => void
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
   toggleAutomation: (row: AutomationListRow) => void
@@ -85,13 +68,6 @@ export type DetailPaneProps = {
   toggleAutomation: (automation: Automation) => void
   requestDeleteAutomation: (automation: Automation) => void
   openEditDialog: (automation: Automation) => void
-  fetchExternalAutomationRuns: (input: {
-    scope: ExternalAutomationListEntry['scope']
-    manager: ExternalAutomationListEntry['manager']
-    job: ExternalAutomationListEntry['job']
-    page: number
-    pageSize: number
-  }) => Promise<unknown>
 }
 
 export type EditorDialogProps = {
@@ -113,7 +89,7 @@ export type DeleteDialogProps = {
 }
 
 type AutomationsPageMocks = {
-  state: Record<string, unknown>
+  state: AutomationsPageFixtureState
   repoMap: Map<string, unknown>
   worktreeMap: Map<string, unknown>
   listPanel: ListPanelProps | null
@@ -129,10 +105,9 @@ type AutomationsPageMocks = {
   setPendingRunNavigation: Mock
 }
 
-// Not `vi.hoisted`: the mock factories below only close over this, and a hoisted
-// binding cannot be exported.
+// Mock factories only close over this exported binding; vi.hoisted bindings cannot be exported.
 export const mocks: AutomationsPageMocks = {
-  state: {},
+  state: { repos: [], projectHostSetups: [], worktreesByRepo: {} },
   repoMap: new Map<string, unknown>(),
   worktreeMap: new Map<string, unknown>(),
   listPanel: null,
@@ -162,10 +137,7 @@ vi.mock('@/store/selectors', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args),
-  // Matches the real matcher's contract: the code is a `: <token>` message tail.
-  hasRuntimeRpcErrorCode: (error: unknown, code: string) =>
-    error instanceof Error && error.message.trimEnd().endsWith(`: ${code}`)
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args)
 }))
 
 vi.mock('sonner', () => ({
@@ -212,30 +184,32 @@ vi.mock('./AutomationsListPanel', () => ({
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
-        {props.filteredRows.map((row) => (
-          <button
-            type="button"
-            data-testid="automation-row"
-            key={row.key}
-            onClick={() => selectAutomationRow(row.key)}
-          >
-            {row.automation.name}
-          </button>
-        ))}
-        {props.filteredExternalAutomationEntries.map((entry) => (
-          <button
-            type="button"
-            data-testid="external-row"
-            key={entry.key}
-            onClick={() => {
-              props.selectAutomationRow(null)
-              props.selectExternalKey(entry.key)
-              props.onOpenDetail()
-            }}
-          >
-            {entry.job.name}
-          </button>
-        ))}
+        <button onClick={props.onOpenRuns}>Runs</button>
+        {props.sortedListItems.map((item) =>
+          item.kind === 'local' ? (
+            <button
+              type="button"
+              data-testid="automation-row"
+              key={item.id}
+              onClick={() => selectAutomationRow(item.id)}
+            >
+              {item.row.automation.name}
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="external-row"
+              key={item.id}
+              onClick={() => {
+                props.selectAutomationRow(null)
+                props.selectExternalKey(item.id)
+                props.onOpenDetail()
+              }}
+            >
+              {item.entry.job.name}
+            </button>
+          )
+        )}
         {props.hasListItems ? null : <div data-testid="empty-state" />}
       </div>
     )
@@ -270,7 +244,12 @@ vi.mock('./AutomationDeleteDialogs', () => ({
 }))
 
 import AutomationsPage from './AutomationsPage'
-import { makeAutomation, makeRun, makeStoreState } from './automations-page-fixtures'
+import {
+  makeAutomation,
+  makeRun,
+  makeStoreState,
+  type AutomationsPageFixtureState
+} from './automations-page-fixtures'
 
 function mockGroup<K extends string>(...names: K[]): Record<K, Mock> {
   return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<K, Mock>
@@ -286,9 +265,6 @@ export const api = {
     'runNow',
     'listScoped',
     'listExternalManagerForOwner',
-    'listExternalRunsForOwner',
-    'createExternalForOwner',
-    'updateExternalForOwner',
     'runExternalActionForOwner',
     'retainExternalScopes'
   ),
@@ -313,8 +289,7 @@ export const RUNTIME_SELF_FILTER = {
   }
 }
 
-/** The local authority's automation RPC surface, served from the same programmable
- *  `api.automations` mocks; an environment target answers from `runtimeHost()` state. */
+/** Serve desktop-local RPCs from the programmable API mocks and runtime-target RPCs from runtimeHost state. */
 async function answerAutomationRpc(
   target: unknown,
   method: string,
@@ -381,8 +356,7 @@ export async function renderPage(options?: { strict?: boolean }): Promise<{
   roots.push(root)
   const rerender = async (): Promise<void> => {
     await act(async () => {
-      // Strict mounts double-invoke effects the way the dev app does, which is
-      // where a dispose-without-revive lifecycle bug becomes visible.
+      // StrictMode doubles effects to expose dispose-without-revive controller bugs.
       const page = options?.strict
         ? createElement(StrictMode, null, createElement(AutomationsPage))
         : createElement(AutomationsPage)
@@ -408,25 +382,13 @@ export async function refreshOnFocus(): Promise<void> {
   })
 }
 
-/**
- * The row the page actually listed for an ID, so tests act through the same
- * authority-qualified key the user's click carries rather than a synthesized one.
- */
-export function listedRow(automationId: string): AutomationListRow {
-  const row = mocks.listPanel?.filteredRows.find((entry) => entry.automation.id === automationId)
-  if (!row) {
-    throw new Error(`no listed row for ${automationId}`)
-  }
-  return row
-}
-
 export function rows(container: HTMLElement, testId: string): string[] {
   return [...container.querySelectorAll(`[data-testid="${testId}"]`)].map(
     (node) => node.textContent ?? ''
   )
 }
 
-/** Registers the reset both page test files depend on; call once per file. */
+/** Registers the per-case store reset and renderer cleanup for the current suite. */
 export function installAutomationsPageHarness(): void {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true

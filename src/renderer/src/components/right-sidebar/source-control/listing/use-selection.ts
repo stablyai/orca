@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, type RefObject } from 'react'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlRowOpenEvent } from './split-open'
 
@@ -12,28 +12,16 @@ export type FlatEntry = {
   area: 'unstaged' | 'staged' | 'untracked'
 }
 
-export function reconcileSelectionKeys(
-  selectedKeys: ReadonlySet<string>,
-  flatEntries: FlatEntry[]
-): Set<string> {
-  const validKeys = new Set(flatEntries.map((e) => e.key))
-  const nextSelected = new Set<string>()
-
-  for (const key of selectedKeys) {
-    if (validKeys.has(key)) {
-      nextSelected.add(key)
-    }
-  }
-
-  return nextSelected
-}
-
 export function reconcileSourceControlSelectionState(args: {
   selectedKeys: ReadonlySet<string>
   anchorKey: string | null
   flatEntries: FlatEntry[]
 }): { selectedKeys: ReadonlySet<string>; anchorKey: string | null } {
   const { anchorKey, flatEntries, selectedKeys } = args
+  // Nothing to prune and no anchor to invalidate: skip building the key set over every visible row.
+  if (selectedKeys.size === 0 && anchorKey === null) {
+    return { selectedKeys, anchorKey }
+  }
   const validKeys = new Set(flatEntries.map((e) => e.key))
   const nextSelected = new Set<string>()
   let selectedChanged = false
@@ -111,14 +99,13 @@ export function useSourceControlSelection({
     shouldOpenAsSplitRef.current = shouldOpenAsSplit
   }, [shouldOpenAsSplit])
 
-  const reconciledSelection = reconcileSourceControlSelectionState({
-    selectedKeys,
-    anchorKey,
-    flatEntries
-  })
+  // Memoize reconciliation across keystrokes/polls; only selected/anchor/row references can change it.
+  const reconciledSelection = useMemo(
+    () => reconcileSourceControlSelectionState({ selectedKeys, anchorKey, flatEntries }),
+    [selectedKeys, anchorKey, flatEntries]
+  )
   if (reconciledSelection.selectedKeys !== selectedKeys) {
-    // Why: visible source-control rows can disappear after filtering, staging,
-    // or status refresh; prune stale bulk-action keys before children see them.
+    // Prune disappeared rows before children receive stale bulk-action keys.
     setSelectedKeys(new Set(reconciledSelection.selectedKeys))
   }
   if (reconciledSelection.anchorKey !== anchorKey) {
@@ -143,10 +130,7 @@ export function useSourceControlSelection({
         return
       }
 
-      // Why: when the anchor row disappears from the visible list because a
-      // section collapsed or status changed, the next Shift-click should
-      // fall back to the single-click behavior instead of selecting from a
-      // stale invisible anchor.
+      // If the anchor disappeared, Shift-click falls back to a plain click instead of selecting from an invisible row.
       setSelectedKeys(new Set())
       setAnchorKey(key)
       onOpenDiffRef.current(entry)
@@ -166,7 +150,6 @@ export function useSourceControlSelection({
         setAnchorKey(key)
       }
     } else {
-      // Plain click
       setSelectedKeys((prev) => {
         if (prev.size > 0) {
           return new Set()
@@ -216,8 +199,7 @@ export function useSourceControlSelection({
       clearSelection()
     }
 
-    // Why: use capture so outside clicks clear the selection before the next
-    // UI surface handles the pointer event, matching standard desktop list UX.
+    // Clear outside selections during capture before the destination surface handles the pointer.
     document.addEventListener('pointerdown', handlePointerDown, true)
     return () => document.removeEventListener('pointerdown', handlePointerDown, true)
   }, [selectedKeys.size, containerRef, clearSelection])

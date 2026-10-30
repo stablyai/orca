@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { getWorktreeCardDetails } from '../../../../shared/worktree/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -8,8 +9,9 @@ import {
 } from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
+import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
@@ -28,6 +30,7 @@ export function useWorktreeCardFoundation({
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
@@ -41,14 +44,18 @@ export function useWorktreeCardFoundation({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
-  const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  const compactWorktreeCards = settings?.compactWorktreeCards === true
+  const cardDetails = useMemo(
+    () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
+    [cardProps, compactWorktreeCards, newCardStyle]
+  )
+  const { compactCards } = cardDetails
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       openModal('edit-meta', {
         worktreeId: worktree.id,
-        // Why: the same workspace ID can exist under two hosts. Naming the owner
-        // keeps the dialog on the clicked row instead of the ambiguous lookup.
+        // Qualify the owner because the same workspace ID may exist on multiple hosts.
         repoId: worktree.repoId,
         executionHostId: worktree.hostId,
         currentDisplayName: worktree.displayName,
@@ -56,6 +63,21 @@ export function useWorktreeCardFoundation({
         currentPR: worktree.linkedPR,
         currentComment: worktree.comment,
         focus: 'issue'
+      })
+    },
+    [worktree, openModal]
+  )
+
+  const handleManageLinks = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation()
+      openModal('edit-meta', {
+        worktreeId: worktree.id,
+        repoId: worktree.repoId,
+        executionHostId: worktree.hostId,
+        currentDisplayName: worktree.displayName,
+        currentComment: worktree.comment,
+        focus: 'links'
       })
     },
     [worktree, openModal]
@@ -136,8 +158,9 @@ export function useWorktreeCardFoundation({
       EMPTY_WORKSPACE_PORTS
   )
 
+  // Avoid per-card host-qualified scans; twins use direct SSH status for this status-only chip.
   const sshOwnerEnvironmentId = useAppStore((s) =>
-    repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
+    repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
@@ -152,9 +175,7 @@ export function useWorktreeCardFoundation({
     }
   }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-  // Why: only reported on positive evidence, so a removed host never offers a Connect that can
-  // only fail. Runtime-owned targets are excluded for the same reason sshStatus excludes them —
-  // ssh:listTargets filters them out, so "absent from the target list" is not evidence of removal.
+  // Require positive removal evidence; runtime-owned targets are absent from listTargets by design.
   const sshTargetRemoved = useAppStore((s) =>
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
       ? selectRuntimeAwareSshTargetRemoved(s, sshOwnerEnvironmentId, repo.connectionId)
@@ -177,13 +198,8 @@ export function useWorktreeCardFoundation({
   const runtimeHostLabel = runtimeHostId
     ? (getHostDisplayLabelOverrides(settings).get(runtimeHostId) ?? runtimeEnvironmentName)
     : null
-  // Why: runtime ("Orca server") hosts get the same disconnected dimming as SSH when their environment has no live status.
-  const isRuntimeDisconnected = useAppStore((s) => {
-    if (!runtimeOwnerEnvironmentId) {
-      return false
-    }
-    return !s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)?.status
-  })
+  // Missing runtime probe data means unknown, not disconnected.
+  const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
@@ -197,6 +213,7 @@ export function useWorktreeCardFoundation({
     openModal,
     openTaskPage,
     updateWorktreeMeta,
+    setWorkspaceUnreadByUser,
     deleteFolderWorkspace,
     setActiveWorktree,
     renamingWorktreeId,
@@ -210,7 +227,9 @@ export function useWorktreeCardFoundation({
     projectGroups,
     newCardStyle,
     compactCards,
+    cardDetails,
     handleEditIssue,
+    handleManageLinks,
     handleEditComment,
     handleOpenAutomation,
     handleOpenAutomationRun,

@@ -1,27 +1,43 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
+import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
-  getProcessTableSnapshot,
-  type ProcessTableRow
-} from '../../shared/process-table-snapshot'
+  getFreshShellForegroundSnapshot,
+  getProcessTableSnapshot
+} from '../../shared/process-table-snapshot-reader'
+import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
   shouldInspectWindowsAgentForeground,
   type AgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
 import { isShellProcess } from '../../shared/shell-process-detection'
+import {
+  selectForegroundProcessCandidate,
+  type SelectedForegroundProcess
+} from '../../shared/foreground-process-selection'
+import { isWindowsShellAloneInJob } from './windows-shell-alone-in-job'
+import {
+  readWindowsProcessIdentityTableFresh,
+  type WindowsProcessIdentityRow
+} from '../windows/windows-process-table'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
+export {
+  resolveAgentForegroundProcessesBatch,
+  resolveAgentForegroundProcessesFromIndex,
+  resolveRemoteForegroundEvidence,
+  toForegroundProcessEvidence,
+  type BatchedForegroundProcessOptions,
+  type BatchedForegroundProcessRequest,
+  type BatchedForegroundProcessResult
+} from './agent-foreground-process-batch'
 
 export type AgentForegroundProcessResolution = {
   available: boolean
   processName: string | null
-  /**
-   * Windows: pid of the process a recognized name belongs to — a liveness
-   * anchor callers may check against the pane's job. Absent when the name is a
-   * fallback, ambiguous, or resolved on POSIX (where `+` already marks it).
-   */
+  /** Windows liveness anchor for an unambiguous recognized name; omitted for fallbacks and POSIX. */
   processId?: number
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
   anchorPidForeign?: boolean
@@ -32,29 +48,7 @@ type ShellForegroundConfirmationOptions = {
     | ReadonlySet<number>
     | null
     | Promise<ReadonlySet<number> | null>
-}
-
-function collectDescendants<Row extends { pid: number; ppid: number }>(
-  rows: Row[],
-  rootPid: number
-): (Row & { depth: number })[] {
-  const childrenByParent = new Map<number, Row[]>()
-  for (const row of rows) {
-    const children = childrenByParent.get(row.ppid) ?? []
-    children.push(row)
-    childrenByParent.set(row.ppid, children)
-  }
-
-  const descendants: (Row & { depth: number })[] = []
-  const stack = (childrenByParent.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
-  while (stack.length > 0) {
-    const { row, depth } = stack.pop()!
-    descendants.push({ ...row, depth })
-    for (const child of childrenByParent.get(row.pid) ?? []) {
-      stack.push({ row: child, depth: depth + 1 })
-    }
-  }
-  return descendants
+  readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
 }
 
 function commandExecutable(command: string): string {
@@ -80,21 +74,26 @@ export async function confirmShellForegroundProcess(
   }
   if (process.platform === 'win32') {
     try {
-      const processIds = await options.readWindowsPtyJobProcessIds?.()
-      return processIds?.size === 1 && processIds.has(shellPid)
+      return await isWindowsShellAloneInJob(
+        shellPid,
+        spawnedShellProcess,
+        await options.readWindowsPtyJobProcessIds?.(),
+        options.readWindowsProcessIdentityTable ?? readWindowsProcessIdentityTableFresh
+      )
     } catch {
-      // Unavailable job inspection is missing proof, never a thrown confirmation.
+      // Unavailable job or process-table inspection is missing proof, never a thrown confirmation.
       return false
     }
   }
   try {
-    const rows = await getFreshProcessTableSnapshot()
-    if (!rows.some((row) => row.pid === shellPid)) {
+    const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
+    const root = index.byPid.get(shellPid)
+    if (!root) {
       return false
     }
-    const root = rows.find((row) => row.pid === shellPid)!
-    const tree = [{ ...root, depth: 0 }, ...collectDescendants(rows, shellPid)]
-    const spawnedShellBasename = executableBasename(spawnedShellProcess)
+    const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, shellPid)]
+    // Shell paths may contain spaces; command-line tokenization would truncate their basename.
+    const spawnedShellBasename = spawnedShellProcess.split(/[\\/]/).pop()?.toLowerCase() ?? ''
     const foregroundShell = tree
       .filter(
         (row) =>
@@ -110,13 +109,6 @@ export async function confirmShellForegroundProcess(
   } catch {
     return false
   }
-}
-
-function candidateScore(row: ProcessTableRow & { depth: number }): number {
-  // Why: foreground descendants carry `+` in `ps stat` on Unix PTYs. Prefer
-  // them, then prefer leaf/deeper wrappers so `node /path/bin/codex` beats the
-  // parent shell but still lets the native child confirm the same identity.
-  return (row.stat.includes('+') ? 10_000 : 0) + row.depth
 }
 
 export async function resolveAgentForegroundProcess(
@@ -151,8 +143,7 @@ export async function resolveAgentForegroundProcessWithAvailability(
     )
     return {
       available: resolution.available,
-      // Why: a forced confirmation scan that no longer sees the recognized
-      // fallback is authoritative evidence that the agent exited meanwhile.
+      // A forced scan that loses the recognized fallback proves exit during confirmation.
       processName:
         resolution.processName ??
         (options.forceProcessScan && recognizeAgentProcessFromCommandLine(fallbackProcess)
@@ -170,7 +161,15 @@ export async function resolveAgentForegroundProcessWithAvailability(
     const rows = options.fresh
       ? await getFreshProcessTableSnapshot()
       : await getProcessTableSnapshot()
-    if (options.fresh && !rows.some((row) => row.pid === shellPid)) {
+    if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
+      return { available: false, processName: fallbackProcess }
+    }
+    // A foreground descendant whose argv ps withheld could be the agent, so its absence is not proof.
+    if (
+      collectDescendantsFromIndex(getProcessTableIndex(rows), shellPid).some(
+        (row) => row.stat.includes('+') && unreadableArgvName(row.command) !== null
+      )
+    ) {
       return { available: false, processName: fallbackProcess }
     }
     return {
@@ -183,30 +182,50 @@ export async function resolveAgentForegroundProcessWithAvailability(
   }
 }
 
-function resolveAgentForegroundProcessFromPs(
-  rows: ProcessTableRow[],
+export function resolveAgentForegroundProcessFromPs(
+  rows: readonly ProcessTableRow[],
   shellPid: number
 ): string | null {
-  const shellRow = rows.find((row) => row.pid === shellPid)
-  const candidates = collectDescendants(rows, shellPid).sort(
-    (a, b) => candidateScore(b) - candidateScore(a)
-  )
-  // Why: `+` in `ps stat` marks the process holding the terminal foreground.
-  // The root shell can hold it after Ctrl-Z, so use the whole PTY tree as the
-  // foreground gate; otherwise a stopped agent child still masquerades as live.
+  const found = selectAgentForegroundFromPs(rows, shellPid)
+  // Preserve the outer OMP identity across its embedded Pi child.
+  return found
+    ? resolveOuterWrapperForegroundProcess(
+        found.selected.recognized,
+        found.selected.candidate,
+        found.candidates
+      )
+    : null
+}
+
+/** The full command line of the pane's foreground agent process, for argv-level policy. */
+export async function resolveAgentForegroundCommandLine(shellPid: number): Promise<string | null> {
+  try {
+    const rows = await getFreshShellForegroundSnapshot()
+    return selectAgentForegroundFromPs(rows, shellPid)?.selected.candidate.command ?? null
+  } catch {
+    return null
+  }
+}
+
+function selectAgentForegroundFromPs(
+  rows: readonly ProcessTableRow[],
+  shellPid: number
+): {
+  selected: SelectedForegroundProcess
+  candidates: (ProcessTableRow & { depth: number })[]
+} | null {
+  const index = getProcessTableIndex(rows)
+  const shellRow = index.byPid.get(shellPid)
+  const candidates = collectDescendantsFromIndex(index, shellPid)
+  // Include the shell in the foreground gate: after Ctrl-Z it owns + while the stopped agent remains a child.
   const foregroundIsKnown =
     shellRow?.stat.includes('+') === true ||
     candidates.some((candidate) => candidate.stat.includes('+'))
-  for (const candidate of candidates) {
-    if (foregroundIsKnown && !candidate.stat.includes('+')) {
-      continue
-    }
-    const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
-    if (recognized) {
-      // Why: return the outer wrapper (omp) rather than the deeper wrapped child
-      // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
-      return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
-    }
-  }
-  return null
+  const foregroundCandidates = foregroundIsKnown
+    ? candidates.filter((candidate) => candidate.stat.includes('+'))
+    : candidates
+  // Keep non-foreground helpers in ancestry so wrapper recognition can traverse them.
+  const ancestryCandidates = shellRow ? [{ ...shellRow, depth: 0 }, ...candidates] : candidates
+  const selected = selectForegroundProcessCandidate(foregroundCandidates, ancestryCandidates)
+  return selected ? { selected, candidates } : null
 }

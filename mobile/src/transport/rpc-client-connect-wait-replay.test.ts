@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
@@ -12,6 +14,10 @@ vi.mock('./e2ee', () => ({
   encrypt: (plaintext: string) => `encrypted:${plaintext}`,
   decrypt: (raw: string) => raw.replace(/^encrypted:/, ''),
   decryptBytes: (bytes: Uint8Array) => bytes
+}))
+
+vi.mock('./mobile-runtime-capability-negotiation', () => ({
+  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
 }))
 
 class MockWebSocket {
@@ -80,6 +86,7 @@ describe('mobile rpc-client connect-wait replay', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   })
 
@@ -109,6 +116,7 @@ describe('mobile rpc-client connect-wait replay', () => {
       await vi.advanceTimersByTimeAsync(500)
       mockSockets[1]!.open()
       await vi.advanceTimersByTimeAsync(0)
+      expect(client.getState()).toBe('connected')
       expect(terminalSendFrames(mockSockets[1]!)).toEqual([])
     } finally {
       client.close()
@@ -135,6 +143,22 @@ describe('mobile rpc-client connect-wait replay', () => {
       mockSockets[1]!.open()
       await vi.advanceTimersByTimeAsync(0)
       expect(terminalSendFrames(mockSockets[1]!)).toHaveLength(1)
+      const frame: unknown = JSON.parse(
+        terminalSendFrames(mockSockets[1]!)[0]!.replace(/^encrypted:/, '')
+      )
+      expect(frame).toEqual({
+        id: expect.any(String),
+        deviceToken: 'token',
+        method: 'terminal.send',
+        params: { terminal: 't1', text: 'YZZY' }
+      })
+      if (!frame || typeof frame !== 'object' || !('id' in frame) || typeof frame.id !== 'string') {
+        throw new Error('Expected the written request ID')
+      }
+      mockSockets[1]!.receive(
+        `encrypted:${JSON.stringify({ id: frame.id, ok: true, result: { sent: true } })}`
+      )
+      await expect(request).resolves.toMatchObject({ ok: true, result: { sent: true } })
     } finally {
       client.close()
       await request.catch(() => undefined)

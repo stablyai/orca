@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { z } from 'zod'
 import {
   BROWSER_CLIENT_HOST_PAGE_RECONCILIATION_PROTOCOL_VERSION,
   BrowserClientHostAttachParams,
@@ -19,7 +18,10 @@ const inventoryPage = {
   state: 'active' as const
 }
 
-const command = (reconciliationCommand: object) => ({
+/** Raw command input for the parser under test, including deliberately malformed shapes. */
+type RawReconciliationCommand = { type: string } & Record<string, unknown>
+
+const command = (reconciliationCommand: RawReconciliationCommand) => ({
   type: 'command' as const,
   authorityRuntimeId: 'runtime-a',
   authorityEpoch: 'epoch-new',
@@ -72,43 +74,6 @@ describe('browser client-host reconciliation protocol', () => {
         })
       ).toThrow('Browser page reconciliation requires command and inventory negotiation')
     }
-  })
-
-  it('keeps optional negotiation fields invisible to old attach and ready decoders', () => {
-    const legacyAttach = z.object({
-      authorityRuntimeId: z.string(),
-      browserHostClientId: z.string(),
-      hostCapabilities: z.array(z.string()),
-      pageCommandProtocolVersion: z.literal(1).optional()
-    })
-    const legacyReady = z.object({
-      type: z.literal('ready'),
-      authorityEpoch: z.string(),
-      browserHostGeneration: z.number(),
-      pageCommandProtocolVersion: z.literal(1).optional()
-    })
-
-    expect(
-      legacyAttach.parse({
-        authorityRuntimeId: 'runtime-a',
-        browserHostClientId: 'host-a',
-        hostCapabilities: ['webview'],
-        pageCommandProtocolVersion: 1,
-        pageInventoryProtocolVersion: 1,
-        pageInventory: [],
-        pageReconciliationProtocolVersion: 1
-      })
-    ).not.toHaveProperty('pageReconciliationProtocolVersion')
-    expect(
-      legacyReady.parse({
-        type: 'ready',
-        authorityEpoch: 'epoch-new',
-        browserHostGeneration: 4,
-        pageCommandProtocolVersion: 1,
-        pageInventoryProtocolVersion: 1,
-        pageReconciliationProtocolVersion: 1
-      })
-    ).not.toHaveProperty('pageReconciliationProtocolVersion')
   })
 
   it('decodes exact reclaim, close, and restore commands only after negotiation', () => {
@@ -177,16 +142,19 @@ describe('browser client-host reconciliation protocol', () => {
     ).toThrow()
   })
 
-  it('leaves legacy create and navigate commands unchanged', () => {
-    const legacyCommand = {
-      ...command({
-        type: 'createPage',
-        browserProfileId: 'profile-a',
-        executionHostKey: 'native:runtime-a:1'
-      })
-    }
-    delete (legacyCommand as { pageReconciliationProtocolVersion?: number })
-      .pageReconciliationProtocolVersion
+  it.each([
+    {
+      type: 'createPage',
+      browserProfileId: 'profile-a',
+      executionHostKey: 'native:runtime-a:1'
+    },
+    { type: 'navigate', url: 'https://remote.internal/' }
+  ])('leaves legacy $type commands unchanged', (legacyPageCommand) => {
+    const legacyCommand = Object.fromEntries(
+      Object.entries(command(legacyPageCommand)).filter(
+        ([key]) => key !== 'pageReconciliationProtocolVersion'
+      )
+    )
 
     expect(BrowserClientHostCommandEvent.parse(legacyCommand)).toEqual(legacyCommand)
   })

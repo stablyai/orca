@@ -24,13 +24,7 @@ function shouldForceHide(viewport: { scrollTop: number; maxScroll: number }): bo
   )
 }
 
-/**
- * Offers a jump-to-top affordance when the user is hard-scrolling up a long
- * worktree list (common with smart/agent-activity ranking).
- *
- * Visibility is deadline-based from `lastIntentAt` so scroll noise cannot keep
- * the button stuck forever.
- */
+/** Offer jump-to-top on strong upward intent; expire from lastIntentAt so scroll noise cannot prolong visibility. */
 export function useWorktreeListScrollToTop({
   scrollElement,
   onUserScrollIntent
@@ -42,7 +36,8 @@ export function useWorktreeListScrollToTop({
   showScrollToTop: boolean
   scrollToTop: () => void
 } {
-  const detectorRef = useRef<HardScrollUpDetectorState>(createHardScrollUpDetectorState())
+  const detectorRef = useRef<HardScrollUpDetectorState>(undefined!)
+  detectorRef.current ??= createHardScrollUpDetectorState()
   const [showScrollToTop, setShowScrollToTop] = useState(false)
   const showScrollToTopRef = useRef(false)
   const idleTimerRef = useRef<number | null>(null)
@@ -88,7 +83,7 @@ export function useWorktreeListScrollToTop({
           ...viewport,
           t: now
         })
-        // Belt-and-suspenders: if still visible past the deadline, force dismiss.
+        // Force dismissal if the idle reducer leaves visibility past its deadline.
         if (next.visible && now - next.lastIntentAt >= HARD_SCROLL_UP.hideAfterIdleMs) {
           publishVisible(createHardScrollUpDetectorState())
           return

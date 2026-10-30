@@ -34,13 +34,19 @@ function isWhitespace(code: number): boolean {
   return code === 9 || code === 10 || code === 12 || code === 13 || code === 32
 }
 
+/** `quartetLength` under 4 is a final short group; the missing slots decode as `=` padding. */
 function writeQuartet(
   output: Uint8Array,
   offset: number,
-  quartet: readonly number[]
+  quartet: readonly number[],
+  quartetLength: number
 ): { bytesWritten: number; padded: boolean } | null {
-  const [a, b, c, d] = quartet
-  if (a === undefined || b === undefined || a < 0 || b < 0) {
+  // Index reads avoid iterator setup/four next calls per input quartet.
+  const a = quartet[0]
+  const b = quartet[1]
+  const c = quartetLength > 2 ? quartet[2] : BASE64_PADDING
+  const d = quartetLength > 3 ? quartet[3] : BASE64_PADDING
+  if (quartetLength < 2 || a === undefined || b === undefined || a < 0 || b < 0) {
     return null
   }
   if (c === BASE64_PADDING) {
@@ -73,10 +79,13 @@ function writeQuartet(
   return { bytesWritten: Math.min(3, output.length - offset), padded: false }
 }
 
-function decodeBase64Prefix(content: string, maxBytes: number): Uint8Array | null {
+/** Exported so the decode can be compared byte-for-byte against a reference implementation. */
+export function decodeBase64Prefix(content: string, maxBytes: number): Uint8Array | null {
   const capacity = Math.min(maxBytes, Math.ceil(content.length / 4) * 3)
   const output = new Uint8Array(capacity)
-  const quartet: number[] = []
+  // Fixed four slots plus a counter, never resized: `quartet.length = 0` deoptimizes the array.
+  const quartet = [0, 0, 0, 0]
+  let quartetLength = 0
   let outputLength = 0
   let padded = false
 
@@ -92,27 +101,27 @@ function decodeBase64Prefix(content: string, maxBytes: number): Uint8Array | nul
     if (value === INVALID_BASE64) {
       return null
     }
-    quartet.push(value)
-    if (quartet.length !== 4) {
+    quartet[quartetLength] = value
+    quartetLength += 1
+    if (quartetLength !== 4) {
       continue
     }
-    const decoded = writeQuartet(output, outputLength, quartet)
+    const decoded = writeQuartet(output, outputLength, quartet, 4)
     if (!decoded) {
       return null
     }
     outputLength += decoded.bytesWritten
     padded = decoded.padded
-    quartet.length = 0
+    quartetLength = 0
   }
 
-  if (!padded && outputLength < capacity && quartet.length > 0) {
-    if (quartet.length === 1 || quartet.includes(BASE64_PADDING)) {
-      return null
+  if (!padded && outputLength < capacity && quartetLength > 0) {
+    for (let index = 0; index < quartetLength; index += 1) {
+      if (quartet[index] === BASE64_PADDING) {
+        return null
+      }
     }
-    while (quartet.length < 4) {
-      quartet.push(BASE64_PADDING)
-    }
-    const decoded = writeQuartet(output, outputLength, quartet)
+    const decoded = writeQuartet(output, outputLength, quartet, quartetLength)
     if (!decoded) {
       return null
     }
@@ -121,13 +130,12 @@ function decodeBase64Prefix(content: string, maxBytes: number): Uint8Array | nul
   return output.subarray(0, outputLength)
 }
 
-/**
- * Whether the encoded dimensions are known to exceed the preview limits.
- *
- * Distinct from a failed read: an unrecognized or truncated header means we could not measure the
- * image, not that it is too large. Treating those the same blanks out valid images that no decoder
- * has trouble with, so only a confident over-limit answer should suppress a preview.
- */
+// 64 bytes clears fixed headers/JFIF SOF, measuring ordinary screenshots/icons without decoding the full image.
+export const RASTER_IMAGE_HEADER_PROBE_BYTES = 64
+// JPEG metadata can push SOF arbitrarily far; geometric growth keeps repeated decoding within ~1.07x of needed header bytes.
+export const RASTER_IMAGE_HEADER_PROBE_GROWTH = 16
+
+/** Only confidently oversized images suppress previews; unknown/truncated headers mean unmeasurable, not invalid images. */
 export function exceedsRasterImagePreviewLimits(
   content: string,
   mimeType: string | undefined
@@ -135,10 +143,32 @@ export function exceedsRasterImagePreviewLimits(
   if (!isKnownRasterImageMimeType(mimeType)) {
     return false
   }
-  const prefix = decodeBase64Prefix(content, RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES)
-  if (!prefix) {
-    return false
+  let probeBytes = RASTER_IMAGE_HEADER_PROBE_BYTES
+  for (;;) {
+    const prefix = decodeBase64Prefix(content, probeBytes)
+    // Prefix failures also fail the full decoder because both use the same state machine.
+    if (!prefix) {
+      return false
+    }
+    // Shorter than asked for means the payload ran out, so a wider probe cannot add bytes.
+    const exhausted =
+      prefix.byteLength < probeBytes || probeBytes >= RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
+    const dimensions = readRasterImageDimensions(prefix)
+    if (dimensions !== null) {
+      const withinLimits = isRasterImagePreviewDimensions(dimensions)
+      if (withinLimits || exhausted) {
+        return !withinLimits
+      }
+      // Revalidate the full payload before suppression so invalid trailing base64 preserves the old unmeasurable verdict.
+      probeBytes = RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
+      continue
+    }
+    if (exhausted) {
+      return false
+    }
+    probeBytes = Math.min(
+      probeBytes * RASTER_IMAGE_HEADER_PROBE_GROWTH,
+      RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
+    )
   }
-  const dimensions = readRasterImageDimensions(prefix)
-  return dimensions !== null && !isRasterImagePreviewDimensions(dimensions)
 }

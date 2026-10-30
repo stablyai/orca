@@ -11,20 +11,25 @@ import {
   migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
 } from '../../terminal-scrollback-snapshot-async-migration'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
-import { preserveMissingLeafRecordEntries } from '../restoring-sessions/terminal-layout-normalization'
+import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
+import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import {
   normalizeWorkspaceSessionPaneIdentities,
   remapAcknowledgedAgentPaneKeys,
+  remapActivityClearedAtPaneKeys,
+  remapManuallyUnreadTurnPaneKeys,
   remapSshRemotePtyLeaseLeafIds,
   type WorkspaceSessionPaneIdentityRemap
 } from '../restoring-sessions/workspace-pane-normalization'
 import { deleteRemovedTerminalScrollbackSnapshots } from './terminal-session-cleanup'
+import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-session-terminal-binding-replay'
 import {
   getSessionSnapshotOperationsContext,
   type SessionSnapshotOperations
 } from './session-snapshot-operations'
 import { scheduleSave } from './write-scheduling'
+import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,
@@ -33,15 +38,15 @@ export function setLocalWorkspaceSession(
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
-  // Why here and not at the callers: the before-unload stage path writes the renderer's payload
-  // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
-  session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
+  session = keepWslMoveFrozenSessionsForStore(session, prior)
+  // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
+  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
   session = pruneWorkspaceSessionBrowserHistory(
     pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
   )
 
-  // Why (Issue #217): merge existing bindings when the incoming binding is empty, so a stale pre-spawn snapshot can't overwrite the durable PTY binding.
+  // Recover bindings from stale pre-spawn snapshots without reviving proven closes.
   const normalized = normalizeWorkspaceSessionPaneIdentities(session, prior?.terminalLayoutsByTabId)
   for (const entry of normalized.migrationUnsupportedEntries) {
     setMigrationUnsupportedPty(entry)
@@ -50,10 +55,30 @@ export function setLocalWorkspaceSession(
     context.runtime.state.ui?.acknowledgedAgentsByPaneKey,
     normalized.leafIdByInputLeafIdByTabId
   )
-  if (remappedAcknowledgements.changed) {
+  const remappedActivityCutoffs = remapActivityClearedAtPaneKeys(
+    context.runtime.state.ui?.activityClearedAtByPaneKey,
+    normalized.leafIdByInputLeafIdByTabId
+  )
+  const remappedManualUnread = remapManuallyUnreadTurnPaneKeys(
+    context.runtime.state.ui?.manuallyUnreadTurnsByPaneKey,
+    normalized.leafIdByInputLeafIdByTabId
+  )
+  if (
+    remappedAcknowledgements.changed ||
+    remappedActivityCutoffs.changed ||
+    remappedManualUnread.changed
+  ) {
     context.runtime.state.ui = {
       ...context.runtime.state.ui,
-      acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements
+      ...(remappedAcknowledgements.changed
+        ? { acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements }
+        : {}),
+      ...(remappedActivityCutoffs.changed
+        ? { activityClearedAtByPaneKey: remappedActivityCutoffs.cutoffs }
+        : {}),
+      ...(remappedManualUnread.changed
+        ? { manuallyUnreadTurnsByPaneKey: remappedManualUnread.turns }
+        : {})
     }
   }
   for (const entry of normalized.legacyPaneKeyAliasEntries) {
@@ -71,105 +96,7 @@ export function setLocalWorkspaceSession(
   if (remappedLeases.changed) {
     context.runtime.state.sshRemotePtyLeases = remappedLeases.leases
   }
-  if (session && prior) {
-    const priorTabs = prior.tabsByWorktree ?? {}
-    const nextTabs = session.tabsByWorktree ?? {}
-    const worktreeIdByTabId = new Map<string, string>()
-    for (const [worktreeId, tabs] of Object.entries({ ...priorTabs, ...nextTabs })) {
-      for (const tab of tabs) {
-        worktreeIdByTabId.set(tab.id, worktreeId)
-      }
-    }
-    for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
-      const priorList = priorTabs[worktreeId]
-      if (!priorList) {
-        continue
-      }
-      for (const tab of tabs) {
-        if (tab.ptyId) {
-          continue
-        }
-        const priorTab = priorList.find((t) => t.id === tab.id)
-        if (
-          priorTab?.ptyId &&
-          context.bindingRecovery.isRestorablePtyBinding({
-            ptyId: priorTab.ptyId,
-            worktreeId,
-            targetId: context.bindingRecovery.getConnectionIdForWorktree(worktreeId),
-            tabId: tab.id
-          })
-        ) {
-          tab.ptyId = priorTab.ptyId
-        }
-      }
-    }
-    const priorLayouts = prior.terminalLayoutsByTabId ?? {}
-    const nextLayouts = session.terminalLayoutsByTabId ?? {}
-    for (const [tabId, layout] of Object.entries(nextLayouts)) {
-      const priorLayout = priorLayouts[tabId]
-      if (!priorLayout?.ptyIdsByLeafId) {
-        continue
-      }
-      const incoming = layout.ptyIdsByLeafId ?? {}
-      const incomingHasAnyBinding = Object.keys(incoming).length > 0
-      const liveLeafIds = context.bindingRecovery.getTerminalLayoutLeafIds(layout.root)
-      const worktreeId = worktreeIdByTabId.get(tabId)
-      const targetId = worktreeId
-        ? context.bindingRecovery.getConnectionIdForWorktree(worktreeId)
-        : null
-      const restorableBindings = Object.fromEntries(
-        Object.entries(priorLayout.ptyIdsByLeafId).filter(
-          ([leafId, ptyId]) =>
-            liveLeafIds.has(leafId) &&
-            incoming[leafId] === undefined &&
-            // Why: an empty layout map may be a stale pre-spawn snapshot; a partial map is intentional unless a durable SSH lease proves it.
-            (incomingHasAnyBinding
-              ? context.bindingRecovery.hasRestorableSshRemotePtyLease({
-                  ptyId,
-                  targetId,
-                  worktreeId,
-                  tabId,
-                  leafId
-                })
-              : context.bindingRecovery.isRestorablePtyBinding({
-                  ptyId,
-                  targetId,
-                  worktreeId,
-                  tabId,
-                  leafId
-                }))
-        )
-      )
-      if (Object.keys(restorableBindings).length > 0) {
-        layout.ptyIdsByLeafId = { ...restorableBindings, ...incoming }
-        // Why: the same stale write that drops ptyIdsByLeafId may come from an older renderer lacking UUID-keyed metadata.
-        const buffersByLeafId = preserveMissingLeafRecordEntries(
-          priorLayout.buffersByLeafId,
-          layout.buffersByLeafId,
-          liveLeafIds
-        )
-        const scrollbackRefsByLeafId = preserveMissingLeafRecordEntries(
-          priorLayout.scrollbackRefsByLeafId,
-          layout.scrollbackRefsByLeafId,
-          liveLeafIds
-        )
-        const titlesByLeafId = preserveMissingLeafRecordEntries(
-          priorLayout.titlesByLeafId,
-          layout.titlesByLeafId,
-          liveLeafIds
-        )
-        if (buffersByLeafId) {
-          layout.buffersByLeafId = buffersByLeafId
-        }
-        if (scrollbackRefsByLeafId) {
-          layout.scrollbackRefsByLeafId = scrollbackRefsByLeafId
-        }
-        if (titlesByLeafId) {
-          layout.titlesByLeafId = titlesByLeafId
-        }
-      }
-    }
-  }
+  session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
   session = pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
   if (!deferSnapshotFiles) {
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
@@ -180,14 +107,30 @@ export function setLocalWorkspaceSession(
     deleteRemovedTerminalScrollbackSnapshots(
       prior,
       session,
-      context.runtime.terminalScrollbackSnapshotStorage
+      context.runtime.terminalScrollbackSnapshotStorage,
+      retainedScrollbackRefs(context.runtime)
     )
   }
+  // Apply group ordering after prior steps finish rebasing stored rows.
+  session = orderTerminalRowsByTabGroups(session)
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
   }
-  scheduleSave(context.scheduling)
+  if (
+    remappedAcknowledgements.changed ||
+    remappedActivityCutoffs.changed ||
+    remappedManualUnread.changed
+  ) {
+    // UI remaps include protected fields, so keep the complete serializer boundary.
+    scheduleSave(context.scheduling, undefined, LOCAL_EXECUTION_HOST_ID)
+  } else {
+    scheduleSave(
+      context.scheduling,
+      remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession'],
+      LOCAL_EXECUTION_HOST_ID
+    )
+  }
 }
 
 export function enqueueTerminalScrollbackSnapshotWork(
@@ -204,7 +147,8 @@ export function enqueueTerminalScrollbackSnapshotWork(
           await deleteRemovedTerminalScrollbackSnapshotsAsync(
             prior,
             context.runtime.state.workspaceSession,
-            context.runtime.terminalScrollbackSnapshotStorage
+            context.runtime.terminalScrollbackSnapshotStorage,
+            retainedScrollbackRefs(context.runtime)
           )
         }
         return
@@ -223,14 +167,16 @@ export function enqueueTerminalScrollbackSnapshotWork(
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           migrated,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
         )
       }
       if (current) {
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           prior,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
         )
       }
     })
@@ -243,4 +189,12 @@ export function enqueueTerminalScrollbackSnapshotWork(
       }
     })
   context.runtime.pendingSnapshotFileWork = work
+}
+
+function retainedScrollbackRefs(runtime: {
+  retainedScrollbackRefsByMigrationId: ReadonlyMap<string, ReadonlySet<string>>
+}): ReadonlySet<string> {
+  return new Set(
+    [...runtime.retainedScrollbackRefsByMigrationId.values()].flatMap((refs) => [...refs])
+  )
 }

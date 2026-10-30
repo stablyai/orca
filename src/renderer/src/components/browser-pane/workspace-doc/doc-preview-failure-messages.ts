@@ -11,19 +11,14 @@ export function docPreviewFailureDetail(reason: DocPreviewFileFailureReason | nu
       'This document is too large to preview. Open it in the editor instead.'
     )
   }
-  // Why no 'unsupported-asset' sentence here: the entry document is served as text by every owner
-  // — only a subresource can be refused for its format, and that failure is a notice, not a panel.
+  // Entry documents are served as text; unsupported formats fail only as subresources and belong in a notice.
   return translate(
     'auto.components.editor.HtmlDocPreview.documentUnreadablePanel',
     'Orca could not read this file from the workspace.'
   )
 }
 
-/**
- * Why a notice and not the failure panel: only the entry document's failure leaves the reader with
- * nothing to look at. A stylesheet, image or font the workspace would not send is a document that
- * rendered — degraded, and the reader deserves to know which piece is missing, but rendered.
- */
+/** Keep rendered documents visible when only an asset fails; reserve the failure panel for the entry document. */
 export function docPreviewAssetNotice(failures: DocPreviewFileFailure[]): string | null {
   const [first] = failures
   if (!first) {
@@ -57,14 +52,24 @@ export function docPreviewAssetNotice(failures: DocPreviewFileFailure[]): string
   )
 }
 
-/**
- * Why the sentence names no file and does not count attempts: the document chooses both, and this
- * row is Orca's chrome. Constant text is also what makes repeated attempts unspammable — the
- * hundredth refusal renders exactly what the first one did.
- */
+/** Use constant chrome text so document-controlled filenames and repeat counts cannot spam the refusal notice. */
 export function docPreviewDownloadBlockedNotice(): string {
   return translate(
     'auto.components.editor.HtmlDocPreview.downloadBlockedNotice',
     'Downloads are disabled in document previews.'
   )
+}
+
+export function docPreviewNotices(
+  isUnavailable: boolean,
+  downloadBlocked: boolean,
+  assetFailures: DocPreviewFileFailure[]
+): string[] {
+  // Nothing rendered on an unavailable preview, so a notice strip would be a footnote on a blank page.
+  return isUnavailable
+    ? []
+    : [
+        downloadBlocked ? docPreviewDownloadBlockedNotice() : null,
+        docPreviewAssetNotice(assetFailures)
+      ].filter((notice): notice is string => notice !== null)
 }

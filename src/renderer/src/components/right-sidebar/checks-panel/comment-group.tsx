@@ -34,6 +34,7 @@ export function PRCommentGroupView({
   selectionControl,
   actionState,
   isQueued,
+  now,
   replyDisabled,
   replyDisabledReason,
   presentation,
@@ -44,7 +45,8 @@ export function PRCommentGroupView({
   onEditComment,
   onDeleteComment,
   onSetReaction,
-  onQueueForAgent
+  onQueueForAgent,
+  onOpenLocation
 }: {
   group: PRCommentGroup
   botAuthorOverrides: ReadonlySet<string>
@@ -52,6 +54,7 @@ export function PRCommentGroupView({
   selectionControl?: React.ReactNode
   actionState: PRCommentGroupActionState
   isQueued: boolean
+  now: number
   replyDisabled?: boolean
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
@@ -67,16 +70,15 @@ export function PRCommentGroupView({
     reacted: boolean
   ) => Promise<boolean>
   onQueueForAgent?: () => void
+  onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element {
-  // Reply targets a specific comment id so any comment in a thread — root or
-  // nested reply — can be replied to, not just the thread root.
+  // Replies target any comment ID, including nested replies, rather than only the thread root.
   const renderReplyComposer = (comment: PRComment, nested = false): React.ReactNode =>
     replyingCommentId === comment.id && onReply ? (
       <div
         className={cn(
           'px-3 pb-2',
-          // Why: nest the composer under the parent the same way GitHub nests thread replies —
-          // the replies container already draws that rail, so only the root composer adds one.
+          // Nested replies already have a rail; only the root composer adds one.
           group.kind === 'thread' && !nested && 'ml-3 border-l-2 border-border/50 pl-3'
         )}
       >
@@ -86,7 +88,10 @@ export function PRCommentGroupView({
             'Reply to {{value0}}',
             { value0: comment.author }
           )}
-          submitLabel="Reply"
+          submitLabel={translate(
+            'auto.components.right.sidebar.checks.panel.content.c1f6fc006a',
+            'Reply'
+          )}
           autoFocus
           disabled={replyDisabled}
           disabledReason={replyDisabledReason}
@@ -106,6 +111,7 @@ export function PRCommentGroupView({
     botAuthorOverrides,
     actionState,
     isQueued,
+    now,
     replyDisabled,
     replyDisabledReason,
     presentation,
@@ -113,7 +119,8 @@ export function PRCommentGroupView({
     onEditComment,
     onDeleteComment,
     onSetReaction,
-    onQueueForAgent
+    onQueueForAgent,
+    onOpenLocation
   }
 
   const content =
@@ -153,6 +160,7 @@ export function PRCommentGroupView({
                   showResolve={false}
                   showReply={Boolean(onReply)}
                   isQueued={false}
+                  now={now}
                   onReply={startReply}
                 />
                 {renderReplyComposer(reply, true)}
@@ -187,6 +195,7 @@ export function ResolvedCommentGroupsSection({
   groups,
   botAuthorOverrides,
   replyingCommentId,
+  now,
   replyDisabled,
   replyDisabledReason,
   presentation,
@@ -196,11 +205,13 @@ export function ResolvedCommentGroupsSection({
   onReply,
   onEditComment,
   onDeleteComment,
-  onSetReaction
+  onSetReaction,
+  onOpenLocation
 }: {
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
   replyingCommentId: number | null
+  now: number
   replyDisabled?: boolean
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
@@ -215,6 +226,7 @@ export function ResolvedCommentGroupsSection({
     content: GitHubReactionContent,
     reacted: boolean
   ) => Promise<boolean>
+  onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element | null {
   if (groups.length === 0) {
     return null
@@ -239,6 +251,7 @@ export function ResolvedCommentGroupsSection({
                 group={group}
                 botAuthorOverrides={botAuthorOverrides}
                 replyingCommentId={replyingCommentId}
+                now={now}
                 actionState="resolved"
                 isQueued={false}
                 replyDisabled={replyDisabled}
@@ -251,6 +264,7 @@ export function ResolvedCommentGroupsSection({
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
                 onSetReaction={onSetReaction}
+                onOpenLocation={onOpenLocation}
               />
             ))}
           </AccordionContent>

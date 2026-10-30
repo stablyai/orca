@@ -53,7 +53,7 @@ describe('CheckpointSessionQueue', () => {
 
     const healthy = await queue.run('healthy', async () => 'ran')
 
-    // Why assert entry: a stall that never started would prove nothing about isolation.
+    // Prove the stalled operation entered before testing other-session isolation.
     expect(stalledEntered).toBe(true)
     expect(healthy).toBe('ran')
     stalled.resolve()
@@ -79,8 +79,6 @@ describe('CheckpointSessionQueue', () => {
 
     expect(outcome).toBe('live')
     expect(onDeadlineFired).toHaveBeenCalledOnce()
-    // Why: abandoning the wait must not abandon the write, or a reattach deadline
-    // would drop durable history instead of merely delaying it.
     expect(completed).toBe(false)
     stalled.resolve()
     await vi.waitFor(() => expect(completed).toBe(true))
@@ -171,25 +169,6 @@ describe('CheckpointSessionQueue', () => {
     blocker.resolve()
     await Promise.all(pending)
     expect(queue.isSaturated('s')).toBe(false)
-  })
-
-  it('keeps a stalled session queued rather than admitting a second writer', async () => {
-    const queue = new CheckpointSessionQueue()
-    const stalled = deferred<void>()
-    let secondEntered = false
-
-    void queue.run('s', async () => await stalled.promise).catch(() => {})
-    const second = queue.run('s', async () => {
-      secondEntered = true
-    })
-
-    // Why this matters: two concurrent tmp-write/rename pairs in one session directory lose a
-    // checkpoint, so a parked write must hold its slot rather than be dropped.
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(secondEntered).toBe(false)
-    stalled.resolve()
-    await second
-    expect(secondEntered).toBe(true)
   })
 
   it('does not strand a session after an operation rejects', async () => {

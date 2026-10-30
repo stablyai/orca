@@ -23,6 +23,8 @@ export type ClaudeUsageSummary = {
   cacheWriteTokens: number
   cacheReuseRate: number | null
   estimatedCostUsd: number | null
+  /** A row carried a model name that has no pricing entry, so its tokens are missing from `estimatedCostUsd`. */
+  hasUnpricedModels: boolean
   topModel: string | null
   topProject: string | null
   hasAnyClaudeData: boolean

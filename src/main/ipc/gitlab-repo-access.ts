@@ -11,12 +11,25 @@ export type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
+  repoOwnerExecutionHostId?: string
 }
 
 function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): Repo | undefined {
   const sourceRepoId =
     args.sourceContext?.provider === 'gitlab' ? args.sourceContext.repoId?.trim() : null
   const repoId = args.repoId?.trim() || sourceRepoId || null
+  if (args.repoOwnerExecutionHostId) {
+    const resolvedRepoPath = resolve(args.repoPath)
+    const matches = store
+      .getRepos()
+      .filter(
+        (repo) =>
+          (!repoId || repo.id === repoId) &&
+          resolve(repo.path) === resolvedRepoPath &&
+          getRepoExecutionHostId(repo) === args.repoOwnerExecutionHostId
+      )
+    return matches.length === 1 ? matches[0] : undefined
+  }
   if (repoId) {
     const repo = store.getRepo(repoId)
     if (repo) {
@@ -27,10 +40,7 @@ function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): R
   return store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath)
 }
 
-// Why: mirror github.ts assertRegisteredRepo — main-process handlers
-// must never operate on a path the user hasn't explicitly registered as
-// a repo (filesystem-auth boundary). Source context adds a host check so a
-// task fetched from one machine cannot mutate a same-path repo on another.
+// Require registered paths and the captured host so same-path twins cannot receive cross-host mutations.
 export function assertRegisteredRepo(args: GitLabRepoSelectorArgs, store: Store): Repo {
   const repo = findRegisteredGitLabRepo(args, store)
   if (!repo) {

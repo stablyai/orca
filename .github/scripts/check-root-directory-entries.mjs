@@ -2,16 +2,16 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 
 function readRootEntries(sha) {
-  // Why: a git pathname is arbitrary bytes, and 'utf8' folds every invalid
-  // sequence to U+FFFD — that mangles the reported name and makes two different
-  // entries compare equal, so a genuinely new one can slip past the Set below.
-  // latin1 maps each byte to one code unit, so the bytes survive the round trip.
+  // Git paths are arbitrary bytes; latin1 round-trips them while utf8 merges invalid sequences into U+FFFD, hiding distinct entries.
   const stdout = execFileSync('git', ['ls-tree', '-z', '--name-only', sha], {
     encoding: 'latin1',
     stdio: ['ignore', 'pipe', 'inherit']
   })
   return stdout.split('\0').filter(Boolean)
 }
+
+// These reviewed additions stay listed until the base tree carries them.
+const REVIEWED_ROOT_ENTRIES = new Set(['.claude', '.mcp.json', 'cloud', 'opencode.json'])
 
 function checkRootDirectoryEntries(argv) {
   if (argv.length !== 2) {
@@ -21,7 +21,9 @@ function checkRootDirectoryEntries(argv) {
 
   const [baseSha, headSha] = argv
   const baseEntries = new Set(readRootEntries(baseSha))
-  const blockedEntries = readRootEntries(headSha).filter((entry) => !baseEntries.has(entry))
+  const blockedEntries = readRootEntries(headSha).filter(
+    (entry) => !baseEntries.has(entry) && !REVIEWED_ROOT_ENTRIES.has(entry)
+  )
 
   if (blockedEntries.length === 0) {
     console.log('Root directory guard passed: no new root-level files or folders.')
@@ -37,10 +39,7 @@ function checkRootDirectoryEntries(argv) {
   )
   console.log('Move each new entry under an existing top-level directory.')
   console.log('Blocked entries:')
-  // Why: an entry name is attacker-controlled and may start with '::' (the runner
-  // trims leading spaces before matching) or embed a newline, so printing it bare
-  // lets a PR forge annotations. Fence the untrusted list with an unguessable
-  // stop-commands token, and write the raw bytes rather than a re-encoded string.
+  // Untrusted names can forge runner commands/newlines; fence them with a random stop-commands token and preserve raw bytes.
   const resumeToken = randomUUID()
   console.log(`::stop-commands::${resumeToken}`)
   for (const entry of blockedEntries) {
@@ -51,12 +50,10 @@ function checkRootDirectoryEntries(argv) {
 }
 
 try {
-  // Why: process.exit truncates a piped write part-way through on macOS, so set
-  // exitCode and let node flush the blocked-entry list before it exits.
+  // Let piped output flush; process.exit can truncate it on macOS.
   process.exitCode = checkRootDirectoryEntries(process.argv.slice(2))
 } catch (error) {
-  // Why: git already reported the failure on the inherited stderr, so surface its
-  // status rather than a node stack trace. Anything else is a real bug — rethrow.
+  // Git already reported failures; preserve its exit status and rethrow other bugs.
   if (typeof error.status !== 'number') {
     throw error
   }

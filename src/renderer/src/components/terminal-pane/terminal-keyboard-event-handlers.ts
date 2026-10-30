@@ -1,8 +1,9 @@
-import type { KeybindingPlatform } from '../../../../shared/keybindings'
+import { keybindingMatchesAction, type KeybindingPlatform } from '../../../../shared/keybindings'
 import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'
 import type { createTerminalKeyboardRuntime } from './terminal-keyboard-runtime'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
+import { useAppStore } from '@/store'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
   isTerminalImeConsumedKey,
@@ -19,6 +20,7 @@ import { dispatchTerminalShortcutAction } from './terminal-keyboard-action-dispa
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { createTerminalKeyboardReleaseHandlers } from './terminal-keyboard-release-handlers'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
+import { isInsideNativeChatCover } from './native-chat-covered-pane'
 
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
 
@@ -46,6 +48,8 @@ type EventContext = KeyboardHandlersDeps & {
 
 export function createTerminalKeyboardEventHandlers(context: EventContext) {
   const {
+    tabId,
+    worktreeId,
     isMac,
     isWindows,
     shortcutPlatform,
@@ -61,6 +65,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    focusSearchInput,
     onSearchSelectedText,
     onRequestClosePane,
     onClearPaneScrollback,
@@ -86,8 +91,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
   } = context
 
   const onKeyDown = (e: KeyboardEvent): void => {
-    // Why: replace stale state only for this physical key so rollover cannot
-    // disarm a still-held native-only chord before its Kitty keyup arrives.
+    // Replace only this key’s stale state; rollover must preserve held native chords awaiting Kitty keyup.
     nativeOnlyShortcutTracker.prepareKeyDown(e)
     // Record before early returns so every observed Enter disqualifies keyup synthesis.
     if (
@@ -112,9 +116,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       return
     }
 
-    // The browser's focused xterm helper is the input owner. A split can retain
-    // a stale manager activePaneId after focus moved, so repair it before any
-    // shortcut policy reads pane-scoped host/agent state.
+    // Repair activePaneId from the focused helper before policies read pane-specific host/agent state.
     const keyboardPane = synchronizeTerminalKeyboardPane(manager, e.target)
 
     const modifiedEnterChord = isWindows ? getModifiedEnterChord(e) : null
@@ -155,10 +157,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       }
     }
 
-    // Cmd+G / Cmd+Shift+G navigates terminal search matches even when focus
-    // is inside the search input itself, so this check must run before the
-    // editable-target guard would otherwise bypass all terminal shortcuts.
-    // stopImmediatePropagation prevents App.tsx's Cmd+Shift+G (source-control sidebar) from also firing.
+    // Handle terminal search navigation before editable-target bypass so search-input focus still works.
     const direction = matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
     if (direction !== null) {
       if (e.repeat) {
@@ -176,10 +175,29 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     if (isEditableTarget(e.target)) {
+      if (
+        searchOpenRef.current &&
+        e.target instanceof HTMLElement &&
+        e.target.closest('[data-terminal-search-root]') &&
+        resolveShortcutEvent(e)?.type === 'toggleSearch'
+      ) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (!e.repeat) {
+          focusSearchInput()
+        }
+      }
       return
     }
 
-    if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
+    if (
+      handleEmptyFloatingWorkspacePanelCloseShortcut(
+        useAppStore.getState(),
+        e,
+        shortcutPlatform,
+        keybindings
+      )
+    ) {
       return
     }
 
@@ -199,10 +217,19 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     if (!action) {
       return
     }
+    // Covering chat owns find and selection; the hidden terminal buffer is not the visible surface.
+    if (
+      isInsideNativeChatCover(e.target) &&
+      (action.type === 'toggleSearch' ||
+        action.type === 'selectAll' ||
+        action.type === 'copySelection' ||
+        keybindingMatchesAction('chat.find', e, shortcutPlatform, keybindings))
+    ) {
+      return
+    }
 
     if (action.type === 'switchInputSource') {
-      // Why: the OS must receive its default action, while xterm must receive
-      // none of the keydown, keypress, or keyup sequence.
+      // Preserve the OS default action while suppressing the entire key lifecycle from xterm.
       nativeOnlyShortcutTracker.armKeyDown(e)
       e.stopImmediatePropagation()
       return
@@ -248,14 +275,13 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
         deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
         return
       }
-      // Why: the composed glyph reaches the pty from the composition session-end handler, which
-      // runs after this keydown. Sending now puts a cursor chord ahead of the text it was typed
-      // after — `가나다` then Cmd+Left leaves `다가나` (#12871). Enter is handled above, where a
-      // fallback timer is right because a newline arriving late still arrives; a chord arriving
-      // mid-preedit is the corruption itself, so this one waits on the composition rather than a
-      // deadline. The sender owns the wait so blur and teardown can drop it.
+      // The held copy already sends a chord the IME replays on commit, even while xterm is still finalizing (#17616).
+      if (deferredChordSender.absorbReplay(e)) {
+        return
+      }
+      // Defer cursor chords until composed text commits or they overtake it (#12871); unlike Enter, timeout must drop rather than fire mid-preedit. Sender owns cancellation on blur/teardown.
       if (e.isComposing || hasPendingImeComposition) {
-        deferredChordSender.defer(pane.terminal.element, sendResolvedInput)
+        deferredChordSender.defer(e, pane.terminal.element, sendResolvedInput)
         return
       }
       sendResolvedInput()
@@ -263,6 +289,8 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     dispatchTerminalShortcutAction(action, e, manager, {
+      tabId,
+      worktreeId,
       fallbackCwd,
       expandedPaneIdRef,
       setExpandedPane,
@@ -271,6 +299,8 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       persistLayoutSnapshot,
       toggleExpandPane,
       setSearchOpen,
+      focusSearchInput,
+      searchOpenRef,
       onRequestClosePane,
       onClearPaneScrollback,
       onSetTitle,

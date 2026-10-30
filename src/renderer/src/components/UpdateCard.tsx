@@ -6,6 +6,7 @@ import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { translate } from '@/i18n/i18n'
+import { updaterMessageText } from '@/lib/updater-message-copy'
 import { UpdateCardStateContent } from './maintenance/update-card/UpdateCardStateContent'
 import { buildUpdateCardErrorModel } from './maintenance/update-card/update-card-error-model'
 import {
@@ -34,7 +35,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const [installError, setInstallError] = useState<string | null>(null)
   const [compatibilityRelaunching, setCompatibilityRelaunching] = useState(false)
   const [compatibilitySetupError, setCompatibilitySetupError] = useState<string | null>(null)
-  const [errorDismissed, setErrorDismissed] = useState(false)
   const [autoDismissed, setAutoDismissed] = useState(false)
   const [exiting, setExiting] = useState(false)
   const isLocalBuild = status.source === 'local'
@@ -64,9 +64,6 @@ export function UpdateCard(): React.JSX.Element | null {
     }
     if (exiting) {
       setExiting(false)
-    }
-    if (errorDismissed) {
-      setErrorDismissed(false)
     }
   }
 
@@ -112,10 +109,8 @@ export function UpdateCard(): React.JSX.Element | null {
       status,
       dismissedVersion,
       cachedVersion,
-      hasStartedDownload: hasStartedDownload.current,
       updateUserInitiatedCycle,
       autoDismissed,
-      errorDismissed,
       collapsed
     })
   ) {
@@ -130,13 +125,6 @@ export function UpdateCard(): React.JSX.Element | null {
     void window.api.updater.download()
   }
   const handleClose = (): void => {
-    if (status.state === 'error') {
-      setErrorDismissed(true)
-      if (cachedVersion) {
-        dismissUpdate(cachedVersion)
-      }
-      return
-    }
     dismissUpdate()
   }
   const handleInstallRetry = (): void => {
@@ -156,7 +144,13 @@ export function UpdateCard(): React.JSX.Element | null {
       .catch((error) => {
         const message = String((error as Error)?.message ?? error)
         console.error('[updates] failed to enable HTTP/1.1 compatibility:', error)
-        setCompatibilitySetupError(`Could not enable compatibility mode. ${message}`)
+        setCompatibilitySetupError(
+          translate(
+            'auto.components.UpdateCard.compatibilityModeFailed',
+            'Could not enable compatibility mode. {{message}}',
+            { message }
+          )
+        )
         setCompatibilityRelaunching(false)
       })
   }
@@ -175,9 +169,8 @@ export function UpdateCard(): React.JSX.Element | null {
   })
   const linuxPackageRecovery =
     status.state === 'error' && status.recovery?.kind === 'linux-package-install'
-      ? { recovery: status.recovery, diagnostic: status.message }
+      ? { recovery: status.recovery, diagnostic: updaterMessageText(status) }
       : null
-
   const handleDismissWithAnimation = (): void => {
     if (prefersReducedMotion) {
       handleClose()
@@ -230,7 +223,6 @@ export function UpdateCard(): React.JSX.Element | null {
       errorCard={errorCard}
       linuxPackageRecovery={linuxPackageRecovery}
       isLocalBuild={isLocalBuild}
-      cachedVersion={cachedVersion}
       hasStartedDownload={hasStartedDownload.current}
       prefersReducedMotion={prefersReducedMotion}
       mediaFailed={mediaFailed}
@@ -250,12 +242,10 @@ export function UpdateCard(): React.JSX.Element | null {
       ? 'animate-update-card-exit'
       : 'animate-update-card-enter'
   const showReassurance =
-    !reassuranceSeen && (status.state === 'available' || status.state === 'downloading')
+    !reassuranceSeen &&
+    ((status.state === 'available' && !status.externallyManaged) || status.state === 'downloading')
   return (
-    <div
-      ref={cardRootRef}
-      className="fixed bottom-10 right-4 z-40 w-[360px] max-w-[calc(100vw-32px)] flex flex-col gap-2 max-[480px]:left-4 max-[480px]:right-4 max-[480px]:w-auto"
-    >
+    <div ref={cardRootRef} className="flex flex-col gap-2">
       {showReassurance && (
         <Card className={`py-0 gap-0 ${animationClass}`}>
           <div className="flex items-center gap-3 p-3">

@@ -164,7 +164,7 @@ describe('fetchWorktrees', () => {
       displayName: 'feature-two'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -194,7 +194,7 @@ describe('fetchWorktrees', () => {
       pushTarget: { remoteName: 'origin', branchName: 'feature-one' }
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -301,6 +301,236 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.head).toBe('def456')
   })
 
+  it('does not merge a stale display name over a rename completed during refresh', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const requestStarted = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      path: '/path/wt1',
+      displayName: 'old label',
+      displayNameMode: 'fixed'
+    })
+    const staleResponse = makeWorktree({
+      ...requestStarted,
+      head: 'stale-head'
+    })
+    let resolveListing!: (worktrees: Worktree[]) => void
+    const listing = new Promise<Worktree[]>((resolve) => {
+      resolveListing = resolve
+    })
+    worktreeListMock.mockReturnValueOnce(listing)
+    store.setState({ worktreesByRepo: { repo1: [requestStarted] } } as Partial<AppState>)
+
+    const refresh = store.getState().fetchWorktrees('repo1')
+    await vi.waitFor(() => expect(worktreeListMock).toHaveBeenCalledTimes(1))
+    await store.getState().updateWorktreeMeta(worktreeId, { displayName: 'new label' })
+    resolveListing([staleResponse])
+
+    await refresh
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      head: 'stale-head',
+      displayName: 'new label',
+      displayNameMode: 'fixed'
+    })
+  })
+
+  it('keeps a rename when an older host omits display-name mode', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const requestStarted = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      path: '/path/wt1',
+      displayName: 'old label',
+      displayNameMode: 'automatic'
+    })
+    const staleResponse = { ...requestStarted, displayNameMode: undefined }
+    let resolveListing!: (worktrees: Worktree[]) => void
+    worktreeListMock.mockReturnValueOnce(
+      new Promise<Worktree[]>((resolve) => {
+        resolveListing = resolve
+      })
+    )
+    store.setState({ worktreesByRepo: { repo1: [requestStarted] } } as Partial<AppState>)
+
+    const refresh = store.getState().fetchWorktrees('repo1')
+    await vi.waitFor(() => expect(worktreeListMock).toHaveBeenCalledTimes(1))
+    await store.getState().updateWorktreeMeta(worktreeId, { displayName: 'new label' })
+    resolveListing([staleResponse])
+
+    await refresh
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      displayName: 'new label',
+      displayNameMode: 'fixed'
+    })
+  })
+
+  it('keeps a rename when an old-host refresh is projected with a newer mode', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const requestStarted = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      path: '/path/wt1',
+      displayName: 'old label',
+      displayNameMode: undefined
+    })
+    const staleResponse = { ...requestStarted, displayNameMode: 'fixed' as const }
+    let resolveListing!: (worktrees: Worktree[]) => void
+    worktreeListMock.mockReturnValueOnce(
+      new Promise<Worktree[]>((resolve) => {
+        resolveListing = resolve
+      })
+    )
+    store.setState({ worktreesByRepo: { repo1: [requestStarted] } } as Partial<AppState>)
+
+    const refresh = store.getState().fetchWorktrees('repo1')
+    await vi.waitFor(() => expect(worktreeListMock).toHaveBeenCalledTimes(1))
+    await store.getState().updateWorktreeMeta(worktreeId, { displayName: 'new label' })
+    resolveListing([staleResponse])
+
+    await refresh
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      displayName: 'new label',
+      displayNameMode: 'fixed'
+    })
+  })
+
+  it('retains an existing pinned mode when an older host omits it', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'feature',
+      displayNameMode: 'fixed'
+    })
+    const staleResponse = { ...existing, displayNameMode: undefined }
+
+    worktreeListMock.mockResolvedValueOnce([staleResponse])
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+    store.getState().updateWorktreeGitIdentity(existing.id, { branch: 'refs/heads/next' }, null)
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      displayName: 'feature',
+      displayNameMode: 'fixed'
+    })
+  })
+
+  it('accepts a peer rename from an older host over a pinned label', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'my label',
+      displayNameMode: 'fixed'
+    })
+    // A changed non-branch label from a mode-less host is explicit meta a peer wrote there.
+    const peerRenamed = { ...existing, displayName: 'peer label', displayNameMode: undefined }
+
+    worktreeListMock.mockResolvedValueOnce([peerRenamed])
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('peer label')
+  })
+
+  it('suppresses an older host branch-derived relabel of a pinned name', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'my label',
+      displayNameMode: 'fixed'
+    })
+    const rederived = {
+      ...existing,
+      branch: 'refs/heads/next',
+      displayName: 'next',
+      displayNameMode: undefined
+    }
+
+    worktreeListMock.mockResolvedValueOnce([rederived])
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: 'refs/heads/next',
+      displayName: 'my label',
+      displayNameMode: 'fixed'
+    })
+  })
+
+  it('suppresses an older host detached-HEAD path relabel of a pinned name', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'my label',
+      displayNameMode: 'fixed'
+    })
+    const rederived = { ...existing, branch: '', displayName: 'wt1', displayNameMode: undefined }
+
+    worktreeListMock.mockResolvedValueOnce([rederived])
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: '',
+      displayName: 'my label',
+      displayNameMode: 'fixed'
+    })
+  })
+
+  it('does not merge a host response captured before an optimistic rename settles', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      displayName: 'old label',
+      displayNameMode: 'automatic'
+    })
+    const staleResponse = { ...existing }
+    let resolvePersist!: () => void
+    mockApi.worktrees.updateMeta.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolvePersist = resolve
+      })
+    )
+    worktreeListMock.mockResolvedValueOnce([staleResponse])
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    const rename = store.getState().updateWorktreeMeta(existing.id, { displayName: 'new label' })
+    await vi.waitFor(() => expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(1))
+    const refresh = store.getState().fetchWorktrees('repo1')
+
+    await refresh
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      displayName: 'new label',
+      displayNameMode: 'fixed'
+    })
+
+    resolvePersist()
+    await rename
+  })
+
   it('updates the repo entry when only the persisted base ref changes', async () => {
     const store = createTestStore()
     const existing = makeWorktree({
@@ -316,7 +546,7 @@ describe('fetchWorktrees', () => {
       baseRef: 'upstream/release'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -339,7 +569,7 @@ describe('fetchWorktrees', () => {
       priorWorktreeIds: ['repo1::/path/old-name']
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -363,6 +593,46 @@ describe('fetchWorktrees', () => {
     const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().sortEpoch).toBe(7)
+    expect(result).toBe(false)
+  })
+
+  it('keeps the scanned rows and their tabs when a stopped WSL distro returns stored rows', async () => {
+    const store = createTestStore()
+    const scanned = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature'
+    })
+    const notStored = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+    const stored = { ...scanned, branch: '', head: '' }
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repo1', [stored], {
+        authoritative: false,
+        source: 'metadata-fallback',
+        unavailableReason: "WSL distro 'Ubuntu' is not running.",
+        wslDistroStopped: { distro: 'Ubuntu', state: 'stopped' }
+      })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only these tab fields.
+    store.setState({
+      worktreesByRepo: { repo1: [scanned, notStored] },
+      sortEpoch: 7,
+      tabsByWorktree: { [notStored.id]: [{ id: 'tab-2', worktreeId: notStored.id }] }
+    } as unknown as Partial<AppState>)
+
+    const result = await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([scanned, notStored])
+    expect(store.getState().tabsByWorktree[notStored.id]).toEqual([
+      { id: 'tab-2', worktreeId: notStored.id }
+    ])
+    expect(store.getState().detectedWorktreesByRepo.repo1?.wslDistroStopped).toEqual({
+      distro: 'Ubuntu',
+      state: 'stopped'
+    })
     expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
   })

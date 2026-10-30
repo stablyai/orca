@@ -41,32 +41,34 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
-  it('normalizes a BOM-prefixed Cursor hook payload to a working state', () => {
-    const event = normalizeHookPayload(
-      state,
-      'cursor',
-      {
-        paneKey: PANE_KEY,
-        payload: '\uFEFF{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}'
-      },
-      'production'
-    )
+  it.each([0, 1, 2, 3])(
+    'normalizes %i leading Cursor BOMs to a working state (#21421)',
+    (count) => {
+      const event = normalizeHookPayload(
+        state,
+        'cursor',
+        {
+          paneKey: PANE_KEY,
+          payload: `${'\uFEFF'.repeat(count)}{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}`
+        },
+        'production'
+      )
 
-    expect(event?.payload).toMatchObject({
-      agentType: 'cursor',
-      state: 'working',
-      prompt: 'Synthetic Cursor prompt'
-    })
-    expect(event?.hookEventName).toBe('beforeSubmitPrompt')
-  })
+      expect(event?.payload).toMatchObject({
+        agentType: 'cursor',
+        state: 'working',
+        prompt: 'Synthetic Cursor prompt'
+      })
+      expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+    }
+  )
 
-  // Why: pins the allowance to exactly one leading U+FEFF, so nobody widens it into a trim.
-  it('still rejects a hook payload that is malformed once the BOM is removed', () => {
+  // Only contiguous leading BOMs are transport framing; misplaced BOMs remain invalid JSON.
+  it('still rejects malformed JSON after leading BOMs are removed', () => {
     const bom = '\uFEFF'
     const body = '{"hook_event_name":"beforeSubmitPrompt"}'
     for (const payload of [
-      `${bom}${bom}${body}`,
-      `${bom}not json`,
+      `${bom}${bom}not json`,
       ` ${bom}${body}`,
       `{"hook_event_name"${bom}:"beforeSubmitPrompt"}`
     ]) {
@@ -123,12 +125,11 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload.toolName).toBe('AskUserQuestion')
-    // Why: the auto-allowed AskUserQuestion PreToolUse is a human-input boundary,
-    // so it must read as waiting (amber attention) rather than a working spinner.
+    // AskUserQuestion needs human input even when auto-allowed; show waiting.
     expect(event?.payload.state).toBe('waiting')
     const expected = JSON.stringify(questions)
     expect(event?.payload.interactivePrompt).toBe(expected)
-    // Why: must NOT be truncated to the 160-char toolInput preview cap.
+    // Keep the full interactive prompt beyond the 160-character tool preview.
     expect(expected.length).toBeGreaterThan(200)
     expect(event?.payload.interactivePrompt!.length).toBe(expected.length)
   })
@@ -364,8 +365,7 @@ describe('shared agent-hook-listener', () => {
   })
 
   it('does not re-assert the AskUserQuestion prompt on PostToolUse', () => {
-    // The question was answered, so PostToolUse must clear the live card instead
-    // of re-deriving the `{questions}` prompt from the carried tool input.
+    // Answered questions must clear the card instead of rebuilding it from carried tool input.
     const event = normalizeHookPayload(
       state,
       'claude',

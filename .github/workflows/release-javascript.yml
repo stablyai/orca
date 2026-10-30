@@ -1,0 +1,101 @@
+name: Release JavaScript bundle
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      dev_build:
+        description: Build without official-channel telemetry constants
+        type: boolean
+        default: false
+      runner:
+        type: string
+        default: blacksmith-8vcpu-ubuntu-2404
+    outputs:
+      supported:
+        value: ${{ jobs.bundle.outputs.supported }}
+      source_sha:
+        value: ${{ jobs.bundle.outputs.source_sha }}
+    secrets:
+      ORCA_POSTHOG_WRITE_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  bundle:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 20
+    outputs:
+      supported: ${{ steps.source.outputs.supported }}
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      # Older release refs retain their original per-platform build commands.
+      - name: Resolve bundle source and support
+        id: source
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const fs = require('node:fs')
+          const { scripts, devDependencies } = require('./package.json')
+          const supported = Boolean(scripts['build:release:javascript'] && scripts['build:release:host'])
+          const devSupported = supported && Boolean(
+            scripts['build:release:javascript:parallel'] && devDependencies?.tsrs &&
+            fs.readFileSync('config/scripts/release-javascript-artifact.mjs', 'utf8')
+              .includes('ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY')
+          )
+          console.log('supported=' + (process.env.DEV_BUILD === 'true' ? devSupported : supported))
+          NODE
+        env:
+          DEV_BUILD: ${{ inputs.dev_build }}
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: steps.source.outputs.supported == 'true'
+        with:
+          native-runtime: node
+
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.source.outputs.supported == 'true'
+
+      - name: Resolve release build identity
+        id: identity
+        if: steps.source.outputs.supported == 'true' && !inputs.dev_build
+        run: |
+          RELEASE_TAG="v$(node -p 'require("./package.json").version')"
+          export RELEASE_TAG
+          echo "value=$(node config/scripts/release-javascript-artifact.mjs identity)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and archive release JavaScript
+        if: steps.source.outputs.supported == 'true'
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          JAVASCRIPT_BUILD_SCRIPT: ${{ inputs.dev_build && 'build:release:javascript:parallel' || 'build:release:javascript' }}
+          ORCA_CLI_BUILD_COMPILER: ${{ inputs.dev_build && 'tsrs' || 'bun' }}
+          ORCA_BUILD_IDENTITY: ${{ steps.identity.outputs.value }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: ${{ inputs.dev_build && 'dev' || '' }}
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_POSTHOG_WRITE_KEY: ${{ !inputs.dev_build && secrets.ORCA_POSTHOG_WRITE_KEY || '' }}
+        run: |
+          pnpm run "$JAVASCRIPT_BUILD_SCRIPT"
+          node config/scripts/release-javascript-artifact.mjs pack
+
+      - uses: actions/upload-artifact@v7
+        if: steps.source.outputs.supported == 'true'
+        with:
+          name: release-javascript
+          path: .build/release-javascript/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

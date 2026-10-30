@@ -3,10 +3,24 @@ import { existsSync, readFileSync, realpathSync, unlinkSync, writeFileSync } fro
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 
-// Repro command:
-//   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/git-no-upstream-polling-churn.spec.ts --config tests/playwright.config.ts --project electron-headless --reporter=json
-// Trigger: active worktree branch "Initi-Project" has no configured upstream
-// and no same-name origin ref, then the source-control poller runs for 7.2s.
+// This isolated app needs local trace files; network telemetry remains disabled.
+test.use({
+  orcaAppExtraEnv: {
+    CI: '',
+    GITHUB_ACTIONS: '',
+    GITLAB_CI: '',
+    CIRCLECI: '',
+    TRAVIS: '',
+    BUILDKITE: '',
+    JENKINS_URL: '',
+    TEAMCITY_VERSION: '',
+    ORCA_DIAGNOSTICS_DISABLED: '',
+    DO_NOT_TRACK: '1',
+    ORCA_TELEMETRY_DISABLED: '1'
+  }
+})
+
+// Reproduce #4559: poll a branch with neither configured upstream nor a same-name origin ref.
 
 type DiagnosticsStatus = {
   localFileEnabled: boolean
@@ -21,6 +35,7 @@ type RendererTimerMeasurement = {
 }
 
 type GitProbeFailureCounts = {
+  observedGitCommands: number
   noConfiguredUpstreamFailures: number
   missingSameNameOriginFailures: number
 }
@@ -138,11 +153,11 @@ async function measureRendererDuringPolling(page: Page): Promise<RendererTimerMe
 }
 
 function readGitProbeFailureCounts(traceFilePath: string, repoPath: string): GitProbeFailureCounts {
-  if (!existsSync(traceFilePath)) {
-    return { noConfiguredUpstreamFailures: 0, missingSameNameOriginFailures: 0 }
+  const counts = {
+    observedGitCommands: 0,
+    noConfiguredUpstreamFailures: 0,
+    missingSameNameOriginFailures: 0
   }
-
-  const counts = { noConfiguredUpstreamFailures: 0, missingSameNameOriginFailures: 0 }
   for (const line of readFileSync(traceFilePath, 'utf8').split(/\r?\n/)) {
     if (!line.trim()) {
       continue
@@ -157,11 +172,12 @@ function readGitProbeFailureCounts(traceFilePath: string, repoPath: string): Git
     } catch {
       continue
     }
-    if (
-      record.name !== 'git.exec' ||
-      record.attributes?.cwd !== repoPath ||
-      record.exit?._tag !== 'Failure'
-    ) {
+    if (record.name !== 'git.exec' || record.attributes?.cwd !== repoPath) {
+      continue
+    }
+
+    counts.observedGitCommands += 1
+    if (record.exit?._tag !== 'Failure') {
       continue
     }
 
@@ -185,7 +201,7 @@ function annotatePolling(
     type: 'git-no-upstream-polling-repro',
     description: `elapsed=${measurement.elapsedMs.toFixed(1)}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(
       1
-    )}ms samples=${measurement.samples} noUpstreamFailures=${
+    )}ms samples=${measurement.samples} gitCommands=${counts.observedGitCommands} noUpstreamFailures=${
       counts.noConfiguredUpstreamFailures
     } missingOriginFailures=${counts.missingSameNameOriginFailures}`
   })
@@ -201,7 +217,8 @@ test.describe('Git no-upstream polling churn repro', () => {
     await selectRepoForActivePolling(orcaPage, testRepoPath, repoPath)
 
     const diagnostics = await readDiagnosticsStatus(orcaPage)
-    test.skip(!diagnostics.localFileEnabled, 'local diagnostic traces are disabled')
+    expect(diagnostics.localFileEnabled).toBe(true)
+    expect(diagnostics.bundleEnabled).toBe(false)
 
     clearTraceFile(diagnostics)
     const measurement = await measureRendererDuringPolling(orcaPage)
@@ -209,10 +226,12 @@ test.describe('Git no-upstream polling churn repro', () => {
     const counts = readGitProbeFailureCounts(diagnostics.traceFilePath, repoPath)
     annotatePolling(testInfo, measurement, counts)
 
+    expect(
+      counts.observedGitCommands,
+      'No Git activity was recorded for the measured repo'
+    ).toBeGreaterThan(0)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
-    // Why: the #4559 trace showed these stable negative upstream probes being
-    // retried every poll. Under parallel e2e load one in-flight refresh can
-    // overlap the trace reset, but the count should not keep climbing.
+    // Allow one refresh overlapping trace reset; cached negative upstream probes must not grow every poll (#4559).
     expect(counts.noConfiguredUpstreamFailures).toBeLessThanOrEqual(2)
     expect(counts.missingSameNameOriginFailures).toBeLessThanOrEqual(2)
   })

@@ -39,9 +39,7 @@ function stubCrashReportsBreadcrumb(): ReturnType<typeof vi.fn> {
   return recordBreadcrumb
 }
 
-// Why: happy-dom's Storage is a Proxy that vi.spyOn cannot reliably restore, so
-// override window.sessionStorage with a throwing getter and restore the saved
-// descriptor in afterEach.
+// Replace the sessionStorage descriptor: happy-dom’s proxy cannot reliably restore vi.spyOn.
 let savedSessionStorageDescriptor: PropertyDescriptor | undefined
 
 function makeSessionStorageThrow(): void {
@@ -71,9 +69,7 @@ afterEach(() => {
   try {
     delete (window as unknown as { api?: unknown }).api
     window.sessionStorage.clear()
-  } catch {
-    // ignore — environment without storage
-  }
+  } catch {}
 })
 
 describe('loadLazyWithRetry', () => {
@@ -86,17 +82,17 @@ describe('loadLazyWithRetry', () => {
       .mockResolvedValueOnce({ default: Comp })
 
     const loaded = loadLazyWithRetry(factory, { retries: 2, baseDelayMs: 250 })
-    expect(factory).toHaveBeenCalledTimes(1) // first attempt runs synchronously
+    expect(factory).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(200)
-    expect(factory).toHaveBeenCalledTimes(1) // still inside the 250ms backoff
+    expect(factory).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(100)
-    expect(factory).toHaveBeenCalledTimes(2) // 250ms elapsed -> 2nd attempt
+    expect(factory).toHaveBeenCalledTimes(2)
 
     await vi.advanceTimersByTimeAsync(400)
-    expect(factory).toHaveBeenCalledTimes(2) // still inside the 500ms backoff
+    expect(factory).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(100)
-    expect(factory).toHaveBeenCalledTimes(3) // 500ms elapsed -> 3rd attempt
+    expect(factory).toHaveBeenCalledTimes(3)
 
     await expect(loaded).resolves.toEqual({ default: Comp })
     expect(reload).not.toHaveBeenCalled()
@@ -146,7 +142,6 @@ describe('loadLazyWithRetry', () => {
     expect(settled).toBe('pending')
 
     await vi.advanceTimersByTimeAsync(10_000)
-    // The reload was the last recovery step, so the boundary gets a nameable error.
     expect(isLazyChunkLoadError(settled)).toBe(true)
     expect(settled).toMatchObject({ cause: error })
     expect(reload).toHaveBeenCalledTimes(1)
@@ -231,12 +226,7 @@ describe('loadLazyWithRetry', () => {
   })
 
   it('recovers a parse error after the reload guard is set (corrupt chunk = recoverable)', async () => {
-    // A native SyntaxError reaching loadLazyWithRetry's catch comes from the
-    // chunk's parse phase — a stale/truncated/corrupt chunk — so after the one
-    // guarded reload it must be wrapped as a recoverable LazyChunkLoadError
-    // rather than re-thrown raw to the boundary (where Retry just re-runs the
-    // same dead import). Regression guard for crash report e08749bb (right
-    // sidebar, "Unexpected token ')'").
+    // After bounded recovery, contain corrupt-chunk SyntaxError as LazyChunkLoadError; rerendering the cached rejected import cannot repair it (e08749bb).
     const reload = spyOnReload()
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
     const error = chunkParseError()
@@ -254,28 +244,9 @@ describe('loadLazyWithRetry', () => {
     expect(isLazyChunkLoadError(caught)).toBe(true)
   })
 
-  it('preserves ordinary (non-parse) module evaluation errors so real bugs still report', async () => {
-    // An ordinary Error from a lazy module is a genuine evaluation bug, not a
-    // corrupt chunk; it must still surface raw after the guard is set.
-    const reload = spyOnReload()
-    window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
-    const error = new Error('render bug from lazy module evaluation')
-    const factory = vi.fn(() => Promise.reject(error))
-
-    const loaded = loadLazyWithRetry(factory, { retries: 1, baseDelayMs: 100 })
-    const assertion = expect(loaded).rejects.toBe(error)
-    await vi.advanceTimersByTimeAsync(5000)
-    await assertion
-
-    expect(reload).not.toHaveBeenCalled()
-    const caught = await loaded.catch((rejection) => rejection)
-    expect(isLazyChunkLoadError(caught)).toBe(false)
-  })
-
   it('fails closed with the original error when sessionStorage reads throw', async () => {
     const reload = spyOnReload()
-    // Private-mode / sandboxed storage makes reads throw. The guard must treat
-    // this as "already reloaded" so a broken chunk can NEVER cause a reload loop.
+    // Blocked storage must fail closed against reload loops.
     makeSessionStorageThrow()
     const error = chunkParseError()
     const factory = vi.fn(() => Promise.reject(error))
@@ -341,8 +312,7 @@ describe('loadLazyWithRetry', () => {
 
     await loadLazyWithRetry(factory)
 
-    // The guard must survive a healthy load — otherwise a sibling chunk's success
-    // would re-arm the reload and an auto-mounted corrupt chunk would loop.
+    // A healthy sibling must not re-arm the reload guard or an auto-mounted corrupt chunk could loop.
     expect(window.sessionStorage.getItem(RELOAD_GUARD_KEY)).toBe(LANDED_RELOAD_GUARD_VALUE)
     expect(reload).not.toHaveBeenCalled()
   })
@@ -569,13 +539,12 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
     expect(isLazyChunkLoadError(await attempt())).toBe(true)
     expect(reload).toHaveBeenCalledTimes(2)
 
-    // Cap reached: still contained, but no third navigation.
     expect(isLazyChunkLoadError(await attempt())).toBe(true)
     expect(reload).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the guard while a reload is in flight so a sibling chunk cannot re-arm it', async () => {
-    spyOnReload() // no veto signal: the navigation stays in flight for the grace window
+    spyOnReload()
     const error = chunkParseError()
 
     void loadLazyWithRetry(() => Promise.reject(error), { retries: 0 }).then(

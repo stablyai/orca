@@ -3,10 +3,8 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -69,10 +67,7 @@ describe('TabsSlice', () => {
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBeNull()
     })
 
-    // Regression for #9911: a reconnecting terminal (ptyId/ptyIdsByTabId cleared
-    // on SSH-relay drop or hydration, live session held in a reconnect map) whose
-    // unified entry is transiently absent must not be hard-deleted by the orphan
-    // sweep before reconnect rebinds it.
+    // Reconnect-map-only liveness must prevent orphan sweep from deleting terminals before rebind (#9911).
     it('keeps a reconnecting terminal whose live session survives only in a reconnect map', () => {
       store.setState({
         tabsByWorktree: {
@@ -99,18 +94,46 @@ describe('TabsSlice', () => {
       const result = store.getState().reconcileWorktreeTabModel(WT)
       const state = store.getState()
 
-      // The live tab survives the sweep…
       expect(state.tabsByWorktree[WT].map((tab) => tab.id)).toContain('reconnecting-terminal')
-      // …and is re-migrated into the unified model so it renders and can reattach.
       expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.entityId)).toContain(
         'reconnecting-terminal'
       )
       expect(result.renderableTabCount).toBe(1)
     })
 
-    // A session mirrored from a runtime host used to append a fresh leaf for a
-    // group the layout already held, so returning to a split workspace showed the
-    // same tab strip in several columns. Reconciliation collapses the repeats.
+    it('restores a marker-only terminal when the host loss omitted its unified row', () => {
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-lost-terminal',
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'host-lost-terminal': [] },
+        unverifiedPtyLossTabIds: { 'host-lost-terminal': true },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {}
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(state.unifiedTabsByWorktree[WT]?.map((tab) => tab.entityId)).toContain(
+        'host-lost-terminal'
+      )
+    })
+
+    // Mirrored layouts could append a second leaf for one group and repeat tab strips; collapse duplicates.
     it('collapses a layout that repeats one group across leaves', () => {
       const groupId = 'g-1'
       store.setState({
@@ -263,6 +286,83 @@ describe('TabsSlice', () => {
         direction: 'horizontal',
         first: { type: 'leaf', groupId: terminalGroupId },
         second: { type: 'leaf', groupId: simulatorGroupId }
+      })
+    })
+
+    it('keeps a structured session activation target during worktree reconciliation', () => {
+      const groupId = 'g-structured'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              entityId: 'terminal-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'structured-session-1',
+              entityId: 'session-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'agent-session',
+              label: 'Codex Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 2,
+              agentSessionAgent: 'codex'
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'structured-session-1',
+              tabOrder: ['terminal-1', 'structured-session-1']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              ptyId: 'pty-1',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'terminal-1': ['pty-1'] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result).toEqual({
+        renderableTabCount: 2,
+        activeRenderableTabId: 'structured-session-1'
+      })
+      expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual([
+        'terminal-1',
+        'structured-session-1'
+      ])
+      expect(state.groupsByWorktree[WT][0]).toMatchObject({
+        activeTabId: 'structured-session-1',
+        tabOrder: ['terminal-1', 'structured-session-1']
       })
     })
 
@@ -443,7 +543,6 @@ describe('TabsSlice', () => {
         unifiedTabsByWorktree: { [WT]: [] },
         groupsByWorktree: { [WT]: [] },
         activeGroupIdByWorktree: {},
-        // The user had Terminal 2 active before leaving this worktree.
         activeTabIdByWorktree: { [WT]: secondTerminalId }
       })
 

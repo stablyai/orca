@@ -41,9 +41,12 @@ export type HostQualifiedKnownWorktreeResult =
       executionHostId: SshExecutionHostId
     }
 
+/** Off-host metadata is outside gcStaleWorktreeMeta’s local/local authority; only an authoritative host scan can retire it. */
+export type OffHostExecutionHostId = Extract<ExecutionHostId, `ssh:${string}` | `runtime:${string}`>
+
 export type ForgetRemovedWorktreesForExecutionHostArgs = {
   repoId: string
-  executionHostId: SshExecutionHostId
+  executionHostId: OffHostExecutionHostId
   /** Ids an authoritative scan of this host proved gone — the only evidence that retires persisted metadata. */
   worktreeIds: readonly string[]
 }

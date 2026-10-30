@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+vi.mock('../wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 vi.mock('./wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
@@ -22,16 +25,12 @@ function lastArgv(): string[] {
   return runProcessMock.mock.calls.at(-1)?.[0].args as string[]
 }
 
-/**
- * Default mock: echo the fence back. The interactive lane now treats a missing
- * fence as a failure rather than as empty output, so a bare '' stdout would
- * mean "the login shell never ran our command".
- */
+/** Echo the real fence; empty stdout means the login shell never ran the command, not a successful empty result. */
 function fencedEcho(payload = ''): void {
   runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
     const script = spec.args.at(-1) ?? ''
-    const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-    const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
+    const begin = (/__ORCA_WSL_CAPTURE_BEGIN_ [a-z0-9]+__/.exec(script)?.[0] ?? '').replace(' ', '')
+    const end = (/__ORCA_WSL_CAPTURE_END_ [a-z0-9]+__/.exec(script)?.[0] ?? '').replace(' ', '')
     return {
       environmentResolved: true,
       code: 0,
@@ -57,10 +56,7 @@ describe('separator', () => {
   it.each([['none'], ['preferred']] as const)(
     'uses --exec and never -- with loginPath %s',
     async (lane) => {
-      // Why this is pinned on both lanes: under `--`, wsl.exe expands $name in
-      // every forwarded argument before the guest runs -- even with no shell in
-      // the command -- so a script means something other than what it says
-      // (#12964). No escaping on our side is a reliable substitute.
+      // #12964: -- expands $name in every forwarded argument before guest execution; only --exec reliably preserves argv.
       seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
       await runWslProcess({ loginPath: lane, program: '/usr/bin/git', args: ['status'] })
       expect(lastArgv()).toContain('--exec')
@@ -73,12 +69,16 @@ describe('separator', () => {
     await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: '/bin/true' })
     expect(lastArgv().slice(0, 3)).toEqual(['-d', 'Ubuntu', '--exec'])
   })
+
+  it('passes the guest user before --exec', async () => {
+    await runWslProcess({ loginPath: 'none', distro: 'Ubuntu', user: 'root', program: '/bin/true' })
+    expect(lastArgv().slice(0, 5)).toEqual(['-d', 'Ubuntu', '-u', 'root', '--exec'])
+  })
 })
 
 describe('probe lane', () => {
   it('runs with the cached login PATH and no shell', async () => {
-    // The whole point: the user's real PATH without paying for -- or being
-    // blocked by -- a login shell on every call (#14288, #9768).
+    // Keep user PATH without repeated blocking login shells (#14288/#9768).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({ loginPath: 'preferred', program: 'codex', args: ['--version'] })
     expect(lastArgv()).toEqual([
@@ -92,10 +92,7 @@ describe('probe lane', () => {
   })
 
   it('runs anyway and says the PATH is unresolved', async () => {
-    // A missing login PATH used to throw, and every knob this runner carried --
-    // cooldown tiers, budget splitting, a re-probe heuristic, an opt-out on 19
-    // of 23 sites -- existed to work around that. It is now just a fact in the
-    // result.
+    // Missing login PATH is result metadata, never a fatal runner error.
     runProcessMock.mockResolvedValue({
       code: 1,
       signal: null,
@@ -117,10 +114,7 @@ describe('probe lane', () => {
 
 describe('scripts', () => {
   it('passes a script in argv by default, leaving the command its own stdin', async () => {
-    // A script the runner pipes cannot coexist with a command that reads stdin:
-    // the command drains the rest of the script, the shell hits EOF and exits
-    // 0, and the truncation is silent. argv has no such conflict, and --exec
-    // means no host-side shell re-parses the quotes (#14292).
+    // Piped scripts conflict with commands reading stdin; argv preserves stdin and --exec avoids quote reparsing (#14292).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = `case "$x" in a) echo 'it'\\''s fine';; esac`
     await runWslProcess({ loginPath: 'preferred', script, args: ['/tmp/root'] })
@@ -139,9 +133,7 @@ describe('scripts', () => {
   })
 
   it('leaves stdin free so a stdin-reading command cannot truncate the script', async () => {
-    // The regression this pins: with the script piped, `ssh -T` in a user hook
-    // drains the pipe, bash reads EOF, exits 0, and every later line of the
-    // hook silently never runs -- while the caller logs success.
+    // A hook's ssh -T can drain a piped script, silently skipping later commands while bash exits 0.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({
       loginPath: 'preferred',
@@ -154,10 +146,7 @@ describe('scripts', () => {
   })
 
   it('falls back to stdin for a script too large for a command line', async () => {
-    // A user hook is the one unbounded script here (`run-both` concatenates two
-    // orca.yaml scripts, and a vendored installer is ~15KB). Windows caps the
-    // command line at 32767, so argv would fail to spawn at all; stdin still
-    // runs it, which is the lesser loss.
+    // Unbounded hooks can exceed Windows' command-line cap; stdin degradation is preferable to spawn failure.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = `echo ${'x'.repeat(31_000)}`
     await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
@@ -167,16 +156,12 @@ describe('scripts', () => {
   })
 
   it('flips to stdin when the login PATH, not the script, is what overflows', async () => {
-    // The perverse band a script-only threshold created: with a long enough
-    // PATH spliced in as `PATH=...`, a 7,999-char hook went to argv and failed
-    // to spawn, while the SAME hook at 8,001 chars flipped to stdin and ran.
-    // Size decided how a hook behaved, in the wrong direction.
+    // Count injected PATH too or shorter hooks can fail argv while longer hooks succeed through stdin.
     seedWslGuestEnvironmentForTests(undefined, {
       ...ENVIRONMENT,
       path: '/opt/x/bin:'.repeat(2_500)
     })
-    // Deliberately UNDER any script-only threshold: 7k of script with 27k of
-    // PATH overflows the line, and the old rule sent exactly this to argv.
+    // Keep script below the old threshold while combined PATH exceeds the Windows ceiling.
     const script = `echo ${'x'.repeat(7_000)}`
     expect(script.length).toBeLessThan(8_000)
     await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
@@ -186,9 +171,7 @@ describe('scripts', () => {
   })
 
   it('charges quoting, so a quote-dense script cannot slip over the real cap', async () => {
-    // libuv escapes every `"` and doubles backslash runs, so a script's cost is
-    // more than its length. Counting length alone put a quote-heavy ~26KB
-    // script on argv and over the 32767 ceiling.
+    // libuv quoting/backslash escaping expands argv; raw script length undercounts the Windows ceiling.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = '"'.repeat(26_000)
     await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
@@ -203,7 +186,7 @@ describe('scripts', () => {
   })
 
   it('adds every propagated key so the value actually crosses the boundary', async () => {
-    // Unset, a Windows-side variable silently never reaches the guest (#12557).
+    // WSLENV is required to propagate Windows-side values (#12557).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({
       loginPath: 'preferred',
@@ -216,8 +199,7 @@ describe('scripts', () => {
   })
 
   it('always sets WSL_UTF8, even with nothing to propagate', async () => {
-    // Without it wsl.exe writes its own error text as UTF-16LE, so anything
-    // surfacing stderr shows NUL-riddled output (#9010).
+    // Always set WSL_UTF8 or surfaced wsl.exe errors contain UTF-16 NULs (#9010).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({ loginPath: 'preferred', program: '/bin/true' })
     const env = runProcessMock.mock.calls.at(-1)?.[0].env as NodeJS.ProcessEnv
@@ -236,14 +218,15 @@ describe('guest cwd', () => {
   it('cds inside the guest rather than passing a Windows cwd to wsl.exe', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({ loginPath: 'preferred', program: '/usr/bin/git', cwd: '/home/u/repo' })
-    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).toBeUndefined()
+    // Use stable Windows cwd, never the guest path or a deletable inherited worktree (#16463).
+    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).not.toBe('/home/u/repo')
+    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).toEqual('C:\\Windows')
     expect(lastArgv()).toContain('/home/u/repo')
     expect(lastArgv()).toContain('sh')
   })
 
   it.each([['C:\\repo'], ['relative/path']])('rejects %s as a guest cwd', async (cwd) => {
-    // A Windows path here means a mistake further up; converting it silently
-    // hides that.
+    // Reject mistaken Windows cwd instead of hiding it through translation.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await expect(
       runWslProcess({ loginPath: 'preferred', program: '/bin/true', cwd })
@@ -262,8 +245,7 @@ describe('program is a binary, not a shell string', () => {
   )
 
   it('allows a guest path containing a space', async () => {
-    // --exec passes the program as one argv element, so a space is harmless;
-    // rejecting it would fail legitimate installs under a spaced directory.
+    // --exec preserves spaced executable paths as single argv elements.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await expect(
       runWslProcess({ loginPath: 'preferred', program: '/home/u/my tools/codex' })
@@ -273,8 +255,7 @@ describe('program is a binary, not a shell string', () => {
 
 describe('program is not an assignment', () => {
   it('rejects a name=value program that env would swallow', async () => {
-    // `env PATH=… HOME=… FOO=bar` has no command left: it prints the whole
-    // guest environment and exits 0 -- success, with the environment as stdout.
+    // name=value after env is another assignment; without a program it prints secrets and exits 0.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await expect(runWslProcess({ loginPath: 'preferred', program: 'FOO=bar' })).rejects.toThrow(
       /assignment/
@@ -284,9 +265,7 @@ describe('program is not an assignment', () => {
 
 describe('timeout budget', () => {
   it('leaves the command time after a slow probe', async () => {
-    // The probe used to run on its own 10s timer ahead of the timed leg, so a
-    // 5s caller could reach runProcess with 1ms left and report a timeout for a
-    // command that would have taken milliseconds.
+    // Probe shares the command's timeout instead of spending an independent 10s first.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({ loginPath: 'preferred', program: '/bin/true', timeoutMs: 5_000 })
     const passed = runProcessMock.mock.calls.at(-1)?.[0].timeoutMs as number
@@ -301,12 +280,7 @@ describe('the probe never starves the command', () => {
     [8_000, 4_000],
     [10_000, 6_000]
   ])('leaves a %ims caller at least %ims', async (timeoutMs, floor) => {
-    // The probe used to take two thirds, so a 5s caller reached runProcess with
-    // ~1667ms -- less than the 5s it had before the runner existed, which is
-    // how a cold distro came back as "not installed".
-    // No seed: the probe must actually run, or this measures the command leg
-    // and passes for any split. A failed probe is non-fatal now, so the call
-    // still reaches its command.
+    // Run the actual probe (no seed) to prove budget splitting leaves time for the command even after probe failure.
     await runWslProcess({
       loginPath: 'preferred',
       program: '/bin/true',
@@ -326,10 +300,7 @@ describe('script interpreter', () => {
   })
 
   it('honours an explicit bash request', async () => {
-    // A payload using process substitution (`done < <(find ...)`), `local` or
-    // `[[ ]]` is bash-only. Running it under dash yields `Syntax error: word
-    // unexpected` -- the #14292 signature -- so a bash caller must be able to
-    // say so rather than be silently downgraded.
+    // Bash-only payloads need explicit bash; silent dash fallback reproduces #14292.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({ loginPath: 'preferred', script: 'done < <(find .)', shell: 'bash' })
     expect(lastArgv()).toContain('bash')
@@ -339,9 +310,7 @@ describe('script interpreter', () => {
 
 describe('a script never rides a login shell', () => {
   it('runs the script shell-free even when the distro cannot be probed', async () => {
-    // No login shell in the way: it would own stdin and could consume it,
-    // leaving the script's shell to read EOF, run nothing and exit 0 -- a
-    // silent wrong answer, worse than the degraded PATH this avoids.
+    // No login-shell fallback: it can consume piped script stdin and report empty success, worse than degraded PATH.
     runProcessMock.mockResolvedValue({
       environmentResolved: true,
       code: 1,
@@ -358,9 +327,7 @@ describe('a script never rides a login shell', () => {
 
 describe('WSLENV', () => {
   it('never forwards a path-shaped variable', async () => {
-    // wsl.exe translates path-shaped variables between Windows and Linux form,
-    // so naming PATH in WSLENV replaces the guest's own PATH with a translated
-    // Windows one. Silent, and fatal to every lookup that follows.
+    // WSLENV path translation would replace guest PATH with Windows PATH and break lookup.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({
       loginPath: 'none',

@@ -24,6 +24,7 @@ import {
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
@@ -106,8 +107,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       setRenderState(null)
       return
     }
-    // Why: reset before the measurement layout effect below, otherwise the
-    // first passive effect can hide a freshly measured tour until the next tick.
+    // Reset before layout measurement; a later passive reset could hide the freshly measured tour.
     markedTourIdRef.current = null
     telemetryTourIdRef.current = null
     telemetryOutcomeSentRef.current = false
@@ -163,8 +163,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     )
 
     if (measurement.kind !== 'render') {
-      // Why: drop the old target so the next scroll runs a full pass instead of
-      // probing an element the step no longer uses (and may have detached).
+      // Discard stale/detached targets so the next scroll performs a full scan.
       measuredTargetRef.current = null
     }
     if (measurement.kind === 'advance') {
@@ -204,10 +203,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTourId) {
       return
     }
-    // Why: all three triggers land on one frame, and scroll — which the
-    // capture-phase listener receives for every scrollable pane in the app —
-    // pays one rect read unless the tour's own target actually moved. Step
-    // targets appearing or vanishing are still caught by the 500ms pass.
+    // Coalesce triggers per frame; scroll probes only the target rect, while 500ms scans detect appearing/disappearing steps.
     let frame: number | null = null
     let fullPassQueued = false
     const scheduleMeasure = (fullPass: boolean): void => {
@@ -228,14 +224,18 @@ export function ContextualTourOverlay(): JSX.Element | null {
     const scheduleFullMeasure = (): void => scheduleMeasure(true)
     window.addEventListener('resize', scheduleFullMeasure)
     window.addEventListener('scroll', scheduleTargetMeasure, true)
-    const interval = window.setInterval(scheduleFullMeasure, 500)
+    // Hidden windows cannot run queued rAF; resume full measurement when visible instead of polling idle.
+    const stopFullPassInterval = installWindowVisibilityInterval({
+      run: scheduleFullMeasure,
+      intervalMs: 500
+    })
     return () => {
       if (frame !== null) {
         window.cancelAnimationFrame(frame)
       }
       window.removeEventListener('resize', scheduleFullMeasure)
       window.removeEventListener('scroll', scheduleTargetMeasure, true)
-      window.clearInterval(interval)
+      stopFullPassInterval()
     }
   }, [activeTourId, measureTourOverlay])
 
@@ -247,8 +247,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTourId || !renderState || markedTourIdRef.current === activeTourId) {
       return
     }
-    // Why: a tour is considered seen only after its first measured target
-    // paints, so missing or removed surfaces can retry on a later visit.
+    // Mark seen only after the first measured target paints so missing surfaces may retry.
     markedTourIdRef.current = activeTourId
     markContextualToursSeen([activeTourId])
   }, [activeTourId, markContextualToursSeen, renderState])
@@ -293,8 +292,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     window.addEventListener('beforeunload', emitPendingCancellation)
     return () => {
       window.removeEventListener('beforeunload', emitPendingCancellation)
-      // Why: analytics expects every shown tour to have an outcome, even when
-      // the renderer closes or unmounts before the user presses Skip/Done.
+      // Record an outcome for shown tours even if the renderer exits before Skip/Done.
       emitPendingCancellation()
     }
   }, [activeTourId, emitContextualTourOutcome])

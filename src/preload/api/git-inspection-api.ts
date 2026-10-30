@@ -3,6 +3,7 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
+import type { GitMutationInFlight } from '../../shared/git-mutation-in-flight'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -20,12 +21,16 @@ export type GitInspectionApi = {
   status: (args: {
     worktreePath: string
     connectionId?: string
+    admissionTier?: 'interactive' | 'status' | 'background'
     includeIgnored?: boolean
+    includeLineStats?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
     branchLineTotalMergeBase?: string
     requestToken?: string
+    /** The active workspace's first status: a user act that may start its WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<GitStatusResult>
   cancelStatus: (args: { requestToken: string }) => Promise<void>
   setStatusUpstreamRefWatch: (args: {
@@ -49,23 +54,34 @@ export type GitInspectionApi = {
   }) => Promise<string[]>
   findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
   history: (
-    args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    args: {
+      worktreePath: string
+      connectionId?: string
+      wakeWslDistro?: boolean
+    } & GitHistoryOptions
   ) => Promise<GitHistoryResult>
   conflictOperation: (args: {
     worktreePath: string
     connectionId?: string
   }) => Promise<GitConflictOperation>
+  mutationInFlight: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<GitMutationInFlight>
   diff: (args: {
     worktreePath: string
     filePath: string
     staged: boolean
     compareAgainstHead?: boolean
+    oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
   branchCompare: (args: {
     worktreePath: string
     baseRef: string
     connectionId?: string
+    admissionTier?: 'interactive' | 'status' | 'background'
   }) => Promise<GitBranchCompareResult>
   commitCompare: (args: {
     worktreePath: string
@@ -88,6 +104,7 @@ export type GitInspectionApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
   commitDiff: (args: {
     worktreePath: string
@@ -96,6 +113,7 @@ export type GitInspectionApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
   discoverCommitMessageModels: (args: {
     agentId: string
@@ -115,6 +133,7 @@ export type GitInspectionApi = {
     worktreePath: string
     relativePath: string
     line: number
+    endLine?: number
     connectionId?: string
   }) => Promise<string | null>
   remoteCommitUrl: (args: {

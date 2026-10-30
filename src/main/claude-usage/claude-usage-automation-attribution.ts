@@ -1,6 +1,8 @@
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { ClaudeUsagePersistedState } from './types'
 import { estimateCostUsd } from './claude-model-pricing'
+import { addBillableTokens, NO_TOKENS, type ClaudeBillableTokens } from './claude-billable-tokens'
+import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'
 
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -14,16 +16,7 @@ export type AutomationUsageLookupInput = {
 type ClaudeUsageStateAccess = {
   getState: () => ClaudeUsagePersistedState
   refresh: (force: boolean) => Promise<{ lastScanError: string | null }>
-}
-
-function shouldForceAutomationUsageScan(
-  state: ClaudeUsagePersistedState,
-  completedAt: number
-): boolean {
-  const { lastScanCompletedAt, lastScanError } = state.scanState
-  // Why: attribution needs a scan after the run finishes, but repeated
-  // lookups after that point should not rescan all Claude transcript history.
-  return Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
+  isScanning: () => boolean
 }
 
 export async function resolveAutomationRunUsage(
@@ -61,7 +54,11 @@ export async function resolveAutomationRunUsage(
   }
 
   const scanState = await access.refresh(
-    shouldForceAutomationUsageScan(access.getState(), input.completedAt)
+    shouldForceAutomationUsageScan(
+      access.getState().scanState,
+      input.completedAt,
+      access.isScanning()
+    )
   )
   if (scanState.lastScanError) {
     return unavailable('scan_failed', scanState.lastScanError)
@@ -99,33 +96,8 @@ export async function resolveAutomationRunUsage(
     (entry) => entry.worktreeId === input.worktreeId
   )
   const locations = scopedLocations.length > 0 ? scopedLocations : session.locationBreakdown
-  const totals = locations.reduce(
-    (acc, entry) => {
-      acc.turns += entry.turnCount
-      acc.inputTokens += entry.inputTokens
-      acc.outputTokens += entry.outputTokens
-      acc.cacheReadTokens += entry.cacheReadTokens
-      acc.cacheWriteTokens += entry.cacheWriteTokens
-      acc.cacheWrite1hTokens += entry.cacheWrite1hTokens
-      return acc
-    },
-    {
-      turns: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      cacheWrite1hTokens: 0
-    }
-  )
-  const estimatedCostUsd = estimateCostUsd(
-    session.model,
-    totals.inputTokens,
-    totals.outputTokens,
-    totals.cacheReadTokens,
-    totals.cacheWriteTokens,
-    totals.cacheWrite1hTokens
-  )
+  const totals = locations.reduce<ClaudeBillableTokens>(addBillableTokens, NO_TOKENS)
+  const estimatedCostUsd = estimateCostUsd(session.model, totals)
 
   return {
     status: 'known',
@@ -141,9 +113,7 @@ export async function resolveAutomationRunUsage(
     estimatedCostUsd,
     estimatedCostSource: estimatedCostUsd === null ? null : 'api_equivalent',
     providerSessionId: session.sessionId,
-    // Why: Orca terminal tab ids and Claude usage session ids are different
-    // systems today, so attribution is intentionally limited to one local
-    // provider session in the run's worktree/time window.
+    // Terminal tab IDs differ from provider session IDs, so use a unique worktree/time match.
     attribution: 'provider_session_time_window',
     collectedAt,
     unavailableReason: null,

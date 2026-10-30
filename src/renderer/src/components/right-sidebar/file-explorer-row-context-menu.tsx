@@ -26,8 +26,15 @@ import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
 import { openFileInBrowserTab } from '@/lib/file-preview'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { translate } from '@/i18n/i18n'
+import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import {
+  getRevealInFileManagerLabel,
+  getWorkspaceFileRevealOwner,
+  revealInFileManager
+} from '@/lib/reveal-in-file-manager'
+import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -38,23 +45,15 @@ import {
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
+import { fileExplorerNodeTabRelativePath } from './file-explorer-directory-listing'
 
 const isMac = navigator.userAgent.includes('Mac')
-const isLinux = navigator.userAgent.includes('Linux')
-
-/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
-const revealLabel = isMac
-  ? 'Reveal in Finder'
-  : isLinux
-    ? 'Open Containing Folder'
-    : 'Reveal in File Explorer'
 
 function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
     return
   }
-  // Why: Radix opens context menus under the pointer; on some macOS/Electron
-  // paths the right-button release lands on the first item and selects it.
+  // Right-button release can hit Radix's first menu item on macOS/Electron; suppress accidental selection.
   event.preventDefault()
   event.stopPropagation()
 }
@@ -121,6 +120,15 @@ export function FileExplorerRowContextMenu({
     supportsFolderDownload
   )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, s.activeWorktreeId, {
+      connectionId,
+      runtimeEnvironmentId: runtimeEnvironmentIdOrLocalUnlessTwin(s, s.activeWorktreeId)
+    })
+  )
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
+  // Why: only opened files save outside projects; main refuses tree edits under an outside folder link.
+  const writesBlocked = node.outsideProject === true
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -143,15 +151,21 @@ export function FileExplorerRowContextMenu({
 
   return (
     <ContextMenuContent
-      className="w-64 bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]"
+      className="min-w-64"
       onPointerUpCapture={stopRightButtonMenuSelection}
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
-      <ContextMenuItem onSelect={() => onStartNew('file', targetDir, targetDepth)}>
+      <ContextMenuItem
+        disabled={writesBlocked}
+        onSelect={() => onStartNew('file', targetDir, targetDepth)}
+      >
         <FilePlus />
         {translate('auto.components.right.sidebar.FileExplorerRow.37c875d827', 'New File')}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => onStartNew('folder', targetDir, targetDepth)}>
+      <ContextMenuItem
+        disabled={writesBlocked}
+        onSelect={() => onStartNew('folder', targetDir, targetDepth)}
+      >
         <FolderPlus />
         {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
       </ContextMenuItem>
@@ -187,7 +201,7 @@ export function FileExplorerRowContextMenu({
         ) : null}
       </ContextMenuItem>
       {!node.isDirectory && (
-        <ContextMenuItem onSelect={() => onDuplicate(node)}>
+        <ContextMenuItem disabled={writesBlocked} onSelect={() => onDuplicate(node)}>
           <Files />
           {translate('auto.components.right.sidebar.FileExplorerRow.0fec99bfd7', 'Duplicate')}
         </ContextMenuItem>
@@ -230,7 +244,7 @@ export function FileExplorerRowContextMenu({
           onSelect={() =>
             openMarkdownPreview({
               filePath: node.path,
-              relativePath: node.relativePath,
+              relativePath: fileExplorerNodeTabRelativePath(node),
               worktreeId: activeWorktreeId,
               language: 'markdown'
             })
@@ -270,30 +284,15 @@ export function FileExplorerRowContextMenu({
         </ContextMenuItem>
       )}
       <ContextMenuItem
-        onSelect={() => {
-          const state = useAppStore.getState()
-          const activeWorktree = Object.values(state.worktreesByRepo)
-            .flat()
-            .find((worktree) => worktree.id === activeWorktreeId)
-          const activeRepo = activeWorktree
-            ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
-            : null
-          if (
-            isLocalPathOpenBlocked(state.settings, {
-              connectionId: activeRepo?.connectionId ?? null
-            })
-          ) {
-            showLocalPathOpenBlockedToast()
-            return
-          }
-          window.api.shell.openPath(node.path)
-        }}
+        disabled={revealBlocked}
+        onSelect={() => void revealInFileManager(node.path, revealOwner)}
       >
         <ExternalLink />
-        {revealLabel}
+        {getRevealInFileManagerLabel()}
+        {revealBlocked ? <LocalOnlyMenuHint /> : null}
       </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => onStartRename(node)}>
+      <ContextMenuItem disabled={writesBlocked} onSelect={() => onStartRename(node)}>
         <Pencil />
         {translate('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
         <ContextMenuShortcut>
@@ -302,7 +301,7 @@ export function FileExplorerRowContextMenu({
             : translate('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
         </ContextMenuShortcut>
       </ContextMenuItem>
-      <ContextMenuItem variant="destructive" onSelect={onRequestDelete}>
+      <ContextMenuItem variant="destructive" disabled={writesBlocked} onSelect={onRequestDelete}>
         <Trash2 />
         {translate('auto.components.right.sidebar.FileExplorerRow.addc01145f', 'Delete')}
         <ContextMenuShortcut>{deleteShortcutLabel}</ContextMenuShortcut>

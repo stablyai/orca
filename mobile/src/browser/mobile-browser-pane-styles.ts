@@ -1,7 +1,9 @@
 import { StyleSheet } from 'react-native'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileBrowserPaneStyles = StyleSheet.create({
+export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     minHeight: 0,
@@ -102,6 +104,15 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     lineHeight: 20,
     marginTop: spacing.sm
   },
+  dialogButtonDisabled: {
+    opacity: 0.5
+  },
+  dialogError: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    lineHeight: 18,
+    marginTop: spacing.sm
+  },
   dialogActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -150,7 +161,8 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    fontSize: 14,
+    // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
+    fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
   },
@@ -168,4 +180,4 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
   disabledText: {
     color: colors.textMuted
   }
-})
+}))

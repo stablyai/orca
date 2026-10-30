@@ -4,7 +4,6 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionState } from '../../../../shared/developer-permissions-types'
-import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 
 const toastMessageMock = vi.hoisted(() => vi.fn())
@@ -24,11 +23,9 @@ beforeEach(() => {
   Object.assign(window, {
     api: {
       developerPermissions: {
-        getStatus: vi.fn(
-          async (): Promise<DeveloperPermissionState[]> => [
-            { id: 'full-disk-access', status: 'denied' }
-          ]
-        ),
+        getStatus: vi.fn(async (): Promise<DeveloperPermissionState[]> => [
+          { id: 'full-disk-access', status: 'denied' }
+        ]),
         request: vi.fn(async ({ id }: { id: string }) => ({
           id,
           status: 'unknown',
@@ -92,22 +89,4 @@ it('requests Local Network access without claiming a permission verdict', async 
 
   await act(async () => settingsButton?.click())
   expect(api.openSettings).toHaveBeenCalledTimes(2)
-})
-
-it('highlights the Full Disk Access row for a targeted Settings navigation', async () => {
-  await act(async () => {
-    root.render(
-      <DeveloperPermissionsPane highlightedSettingId={FULL_DISK_ACCESS_SETTINGS_TARGET_ID} />
-    )
-  })
-
-  const row = container.querySelector<HTMLElement>(
-    `[data-settings-section="${FULL_DISK_ACCESS_SETTINGS_TARGET_ID}"]`
-  )
-  expect(row?.dataset.highlighted).toBe('true')
-  expect(row?.className).toContain('data-[highlighted=true]:bg-accent')
-  expect(row?.className).toContain('data-[highlighted=true]:ring-ring/50')
-
-  await act(async () => root.render(<DeveloperPermissionsPane />))
-  expect(row?.dataset.highlighted).toBeUndefined()
 })

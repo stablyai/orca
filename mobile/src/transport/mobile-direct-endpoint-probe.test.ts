@@ -1,17 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from './rpc-client'
-import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
-import type { ConnectionState, HostProfile, RpcResponse } from './types'
+import {
+  directPathForEndpoint,
+  openAuthenticatedDirectEndpoint
+} from './mobile-direct-endpoint-probe'
+import type { ConnectionState, RpcResponse } from './types'
 
 class FakeClient implements RpcClient {
-  readonly sendRequest = vi.fn(
-    async (): Promise<RpcResponse> => ({
-      id: 'rpc-1',
-      ok: true,
-      result: {},
-      _meta: { runtimeId: 'runtime-1' }
-    })
-  )
+  readonly sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
+    id: 'rpc-1',
+    ok: true,
+    result: {},
+    _meta: { runtimeId: 'runtime-1' }
+  }))
   readonly subscribe = vi.fn(() => () => {})
   readonly updateTerminalSubscriptionViewport = vi.fn()
   readonly notifyForeground = vi.fn()
@@ -28,6 +29,10 @@ class FakeClient implements RpcClient {
     return () => this.listeners.delete(listener)
   }
 
+  get listenerCount(): number {
+    return this.listeners.size
+  }
+
   publishState(state: ConnectionState): void {
     this.state = state
     for (const listener of this.listeners) {
@@ -36,41 +41,129 @@ class FakeClient implements RpcClient {
   }
 }
 
-const host: HostProfile = {
-  id: 'host-1',
-  name: 'Blue Whale',
-  endpoint: 'ws://192.168.1.10:6768',
-  deviceToken: 'device-token',
-  publicKeyB64: 'A'.repeat(44),
-  lastConnected: 1,
-  endpoints: [
-    { id: 'lan', kind: 'lan', url: 'ws://192.168.1.10:6768' },
-    { id: 'tailscale', kind: 'tailscale', url: 'ws://100.64.0.2:6768' }
-  ]
-}
-
 describe('mobile direct endpoint probe', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('uses the first authenticated candidate without waiting for a stale primary', async () => {
-    const clients = new Map<string, FakeClient>()
-    const openDirect = vi.fn((endpoint: string) => {
+  it('classifies a tailnet endpoint apart from a LAN one', () => {
+    expect(directPathForEndpoint('ws://100.64.0.2:6768')).toBe('tailscale')
+    expect(directPathForEndpoint('wss://desk.tail1234.ts.net:6768')).toBe('tailscale')
+    expect(directPathForEndpoint('ws://[fd7a:115c:a1e0::1]:6768')).toBe('tailscale')
+    // 100.0.0.0/10 is not the tailnet's 100.64.0.0/10.
+    expect(directPathForEndpoint('ws://100.12.0.2:6768')).toBe('lan')
+    expect(directPathForEndpoint('ws://192.168.1.10:6768')).toBe('lan')
+  })
+
+  it('fails a whole dead LAN in seconds instead of holding the 12s bound', async () => {
+    // A dead LAN can immediately close into client backoff; the probe must not hold the recovery mutex for its full outer bound.
+    const clients: FakeClient[] = []
+    const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
-      clients.set(endpoint, client)
-      if (endpoint.includes('100.64.0.2')) {
-        setTimeout(() => client.publishState('connected'), 100)
-      }
+      clients.push(client)
+      setTimeout(() => client.publishState('reconnecting'), 20)
       return client
     })
 
-    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
-    await vi.advanceTimersByTimeAsync(100)
-    const result = await probing
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(20)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await expect(probing).resolves.toBeNull()
 
-    expect(result?.path).toBe('tailscale')
-    expect(openDirect).toHaveBeenCalledTimes(2)
-    expect(clients.get(host.endpoint)?.close).toHaveBeenCalledOnce()
-    expect(result?.client.close).not.toHaveBeenCalled()
+    expect(clients).toHaveLength(1)
+    expect(clients[0]!.close).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('rides out one access-point flap that the first redial recovers', async () => {
+    // Allow one redial so an access-point flap does not immediately incur direct-failure cooldown.
+    const client = new FakeClient('connecting')
+    const openDirect = vi.fn(() => {
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      setTimeout(() => client.publishState('connected'), 600)
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(599)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(await probing).toBe(client)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(client.listenerCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('extends the grace once when the redial reaches a handshake', async () => {
+    // Extend for handshake progress because connection also waits for capability RPC completion.
+    const client = new FakeClient('connecting')
+    const openDirect = vi.fn(() => {
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      setTimeout(() => client.publishState('handshaking'), 1_500)
+      setTimeout(() => client.publishState('connected'), 3_000)
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(2_999)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(await probing).toBe(client)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(client.listenerCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('fails a handshake that stalls, one grace after it started', async () => {
+    const openDirect = vi.fn(() => {
+      const client = new FakeClient('connecting')
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      setTimeout(() => client.publishState('handshaking'), 1_500)
+      setTimeout(() => client.publishState('handshaking'), 2_500)
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(3_499)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(probing).resolves.toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('gives up at the grace window when the redial never lands', async () => {
+    const openDirect = vi.fn(() => {
+      const client = new FakeClient('connecting')
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(2_019)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(probing).resolves.toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

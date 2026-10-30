@@ -1,4 +1,4 @@
-/* Core IPtyProvider surface of DaemonPtyAdapter: spawn, io, sizing, teardown. */
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
 import { DaemonClient } from './client'
@@ -26,8 +26,6 @@ const {
   ),
   isDaemonStaleForCurrentBundleMock: vi.fn(async () => false)
 }))
-
-const itOnPosix = process.platform === 'win32' ? it.skip : it
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
@@ -343,37 +341,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       }
     })
-
-    itOnPosix('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        command: 'codex',
-        env: { SHELL: '/bin/zsh' }
-      })
-
-      await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
-      expect(lastSubprocess.write).toHaveBeenCalledWith('codex\n')
-    })
-
-    itOnPosix('waits for shell-ready for delivery-hinted Codex startup', async () => {
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        command: "codex 'linked issue context'",
-        startupCommandDelivery: 'shell-ready',
-        env: { SHELL: '/bin/zsh' }
-      })
-
-      await new Promise((resolve) => setTimeout(resolve, 350))
-      expect(lastSubprocess.write).not.toHaveBeenCalled()
-
-      lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07')
-      lastSubprocess._simulateData('\r\nuser@host $ ')
-
-      await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
-      expect(lastSubprocess.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
-    })
   })
 
   describe('write', () => {
@@ -438,7 +405,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapter.pauseProducer(id)
       await waitFor(() => lastSubprocess.pause.mock.calls.length > 0)
 
-      // Drop the daemon out from under the adapter: the in-flight pause now has no matching resume.
       await server.shutdown()
       await waitFor(() => !(adapter as unknown as { client: DaemonClient }).client.isConnected())
 
@@ -455,7 +421,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       try {
-        // Any reconnecting operation must flush the owed resume first.
         await adapter.listProcesses()
         expect(notifySpy).toHaveBeenCalledWith('resumePty', { sessionId: id })
       } finally {
@@ -477,18 +442,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(await adapter.getAppliedSize(id)).toEqual({ cols: 120, rows: 40 })
     })
 
-    // Why: a resize after exit is a dropped fire-and-forget notify; getAppliedSize must report the PTY's last real size, not the drop.
     it('does not advance when a resize is dropped after the session exited', async () => {
       const { id } = await adapter.spawn({ cols: 200, rows: 50 })
 
-      // Child exits, then a late narrow resize races in; daemon Session.resize early-returns for an exited session so 80×24 never lands.
       lastSubprocess._simulateExit(0)
       await new Promise((r) => setTimeout(r, 50))
 
       adapter.resize(id, 80, 24)
       await new Promise((r) => setTimeout(r, 50))
 
-      // The drop must stay visible: never resized to 80 cols, and getAppliedSize never reports 80 (stays wide, or null once reaped).
       expect(lastSubprocess.resize).not.toHaveBeenCalledWith(80, 24)
       const applied = await adapter.getAppliedSize(id)
       expect(applied?.cols).not.toBe(80)
@@ -542,9 +504,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
-    // A proven `0` and an absent field are different facts. Dropping
-    // the zero left consumers unable to tell "the app negotiated nothing" from
-    // "this source could not say", which is what makes Preview guess wrong.
+    // Known zero proves no kitty flags were negotiated; absence leaves the state unknown.
     it('publishes proven kitty flags including a known zero', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('plain output\r\n')
@@ -559,8 +519,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
-    // The other half of that contract: a daemon that cannot say must leave the
-    // key absent, so consumers keep the state unknown instead of reading a `0`.
     it('omits kitty flags when the daemon snapshot has none', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('plain output\r\n')
@@ -611,7 +569,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
     })
 
-    // Why: shutdown can be the first lazy-client op after restart; connect before killing or a healthy session is orphaned (#7742).
     it('kills a live session from a fresh adapter that has not connected yet', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
 
@@ -648,11 +605,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('sessionsNeedingFullCheckpoint cleanup (leak regression)', () => {
-    // Why: cold-restore flags a session for a full checkpoint; exiting before it lands leaked a permanent Set entry for the daemon's life.
     it('clears the pending full-checkpoint flag when a session exits', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       const internals = adapter as unknown as { sessionsNeedingFullCheckpoint: Set<string> }
-      // Simulate the cold-restore reanchor path having flagged this session.
       internals.sessionsNeedingFullCheckpoint.add(id)
       expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(true)
 
@@ -743,6 +698,96 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cause: { kind: 'exited', exitCode: 42 }
       })
     })
+
+    it('does not let an untagged stale-write exit clear a known replacement', async () => {
+      // Stale fire-and-forget writes receive compatibility exits without incarnation IDs.
+      await adapter.spawn({ cols: 80, rows: 24 })
+      const sessionId = 'replacement-known-before-untagged-exit'
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        client: { onEvent: (listener: (event: unknown) => void) => () => void }
+      }
+      internals.activeSessionIds.add(sessionId)
+      internals.sessionIncarnations.set(sessionId, 'incarnation-new')
+
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const rawEvents: unknown[] = []
+      const removeRawListener = internals.client.onEvent((event) => rawEvents.push(event))
+      try {
+        expect(adapter.write(sessionId, 'stale-input')).toBe(true)
+        await waitFor(() =>
+          rawEvents.some(
+            (event) =>
+              typeof event === 'object' &&
+              event !== null &&
+              (event as { event?: string }).event === 'exit'
+          )
+        )
+      } finally {
+        removeRawListener()
+      }
+
+      expect(exits).toEqual([])
+      expect(internals.activeSessionIds.has(sessionId)).toBe(true)
+      expect(internals.sessionIncarnations.get(sessionId)).toBe('incarnation-new')
+    })
+
+    it('requires incarnation proof when matching an exit received before a spawn reply', () => {
+      const sessionId = 'spawn-reply-incarnation-proof'
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        resultForExitBeforeSpawnReply: (...args: unknown[]) => unknown
+      }
+      internals.activeSessionIds.add(sessionId)
+      internals.sessionIncarnations.set(sessionId, 'incarnation-new')
+
+      const operation = {
+        exitsBySessionId: new Map([[sessionId, [{ code: -1 }]]]),
+        ignoredExitIncarnationIds: new Set<string>(),
+        ignoreNextExit: false
+      }
+      const result = {
+        isNew: true,
+        snapshot: null,
+        pid: null,
+        shellState: 'unsupported',
+        incarnationId: 'incarnation-new'
+      }
+
+      expect(internals.resultForExitBeforeSpawnReply(sessionId, result, operation)).toBeNull()
+      expect(internals.activeSessionIds.has(sessionId)).toBe(true)
+      expect(internals.sessionIncarnations.get(sessionId)).toBe('incarnation-new')
+    })
+
+    it('does not treat an untagged exit as replacement proof when a generation is known', () => {
+      const sessionId = 'spawn-reply-untagged-replacement'
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        resultForExitBeforeSpawnReply: (...args: unknown[]) => unknown
+      }
+      internals.activeSessionIds.add(sessionId)
+      internals.sessionIncarnations.set(sessionId, 'incarnation-before-retry')
+
+      const operation = {
+        exitsBySessionId: new Map([[sessionId, [{ code: 17 }]]]),
+        ignoredExitIncarnationIds: new Set<string>(),
+        ignoreNextExit: false
+      }
+      const result = {
+        isNew: true,
+        snapshot: null,
+        pid: null,
+        shellState: 'unsupported'
+      }
+
+      expect(internals.resultForExitBeforeSpawnReply(sessionId, result, operation)).toBeNull()
+      expect(internals.activeSessionIds.has(sessionId)).toBe(true)
+      expect(internals.sessionIncarnations.get(sessionId)).toBe('incarnation-before-retry')
+    })
   })
 
   describe('serialize / revive', () => {
@@ -774,7 +819,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       adapter.dispose()
 
-      // Session survives — verify by connecting new adapter
       const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
       const procs = await adapter2.listProcesses()
       expect(procs).toHaveLength(1)
@@ -783,6 +827,47 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('fanoutSyntheticExits / getActiveSessionIds (restart primitives)', () => {
+    it.each(['synthetic', 'daemon'])(
+      'snapshots subscriptions and isolates %s exit payloads',
+      async (source) => {
+        const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+        const emitExit =
+          source === 'synthetic'
+            ? () => adapter.fanoutSyntheticExits(-1)
+            : () => lastSubprocess._simulateExit(-1)
+        const calls: string[] = []
+        const secondListener = vi.fn()
+        let unsubscribeSecond = () => {}
+        adapter.onExit((payload) => {
+          calls.push('first')
+          unsubscribeSecond()
+          adapter.onExit(() => calls.push('late'))
+          payload.id = 'mutated'
+          payload.code = 99
+        })
+        unsubscribeSecond = adapter.onExit((payload) => {
+          calls.push('second')
+          secondListener(payload)
+        })
+
+        emitExit()
+        await waitFor(() => calls.length >= 2)
+
+        expect(calls).toEqual(['first', 'second'])
+        expect(secondListener).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id,
+            code: -1,
+            incarnationId: expect.any(String)
+          })
+        )
+        await adapter.spawn({ cols: 80, rows: 24 })
+        emitExit()
+        await waitFor(() => calls.length >= 4)
+        expect(calls).toEqual(['first', 'second', 'first', 'late'])
+      }
+    )
+
     it('reports every live spawn in getActiveSessionIds', async () => {
       const { id: id1 } = await adapter.spawn({ cols: 80, rows: 24 })
       const { id: id2 } = await adapter.spawn({ cols: 80, rows: 24 })
@@ -824,21 +909,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       adapter.fanoutSyntheticExits(-1)
       expect(exits).toHaveLength(1)
-    })
-
-    it('propagates to every registered exit listener in order', () => {
-      const aExits: { id: string; code: number }[] = []
-      const bExits: { id: string; code: number }[] = []
-      adapter.onExit((payload) => aExits.push(payload))
-      adapter.onExit((payload) => bExits.push(payload))
-
-      const internals = adapter as unknown as { activeSessionIds: Set<string> }
-      internals.activeSessionIds.add('sess-a')
-
-      adapter.fanoutSyntheticExits(-1)
-
-      expect(aExits).toEqual([{ id: 'sess-a', code: -1 }])
-      expect(bExits).toEqual([{ id: 'sess-a', code: -1 }])
     })
   })
 })

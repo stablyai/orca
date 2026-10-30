@@ -1,10 +1,10 @@
-import { materializeReleaseCheckout, type ReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  type ReleaseCheckout
+} from './release-checkout'
 
-/**
- * Structural views of the three modules that make up the remote terminal wire.
- * Kept minimal on purpose: the harness pairs two builds of these modules, so it
- * must not depend on internals that legitimately differ between versions.
- */
+// Keep cross-build structural views minimal so legitimate internal differences cannot bind the harness to one version.
 
 export type TerminalStreamFrame = {
   opcode: number
@@ -112,19 +112,15 @@ async function loadWorkingTreeBuild(): Promise<TerminalWireBuild> {
   }
 }
 
-// Why @vite-ignore: the checkout is created at run time, so Vite cannot glob it at
-// transform time. Vite-node still resolves and transforms the target on demand.
-function importFromCheckout(specifier: string): Promise<Record<string, unknown>> {
-  return import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
-}
-
 async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWireBuild> {
-  const base = `${checkout.root}/src`
   const [codec, dispatcher, terminalMethods, client] = await Promise.all([
-    importFromCheckout(`${base}/shared/terminal-stream-protocol.ts`),
-    importFromCheckout(`${base}/main/runtime/rpc/dispatcher.ts`),
-    importFromCheckout(`${base}/main/runtime/rpc/methods/terminal.ts`),
-    importFromCheckout(`${base}/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts`)
+    importReleaseCheckoutModule(checkout, '/src/shared/terminal-stream-protocol.ts'),
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/dispatcher.ts'),
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/terminal.ts'),
+    importReleaseCheckoutModule(
+      checkout,
+      '/src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+    )
   ])
   return {
     label: checkout.ref,
@@ -138,14 +134,38 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWire
   }
 }
 
-/**
- * Load the wire modules for one build. `WORKING_TREE` imports current source (so a
- * locally injected violation is exercised); any other value is a git ref extracted
- * into a cached checkout.
- */
+// Import current source for WORKING_TREE so injected violations execute; extract other refs into the cache.
 export async function loadTerminalWireBuild(ref: string): Promise<TerminalWireBuild> {
   if (ref === WORKING_TREE) {
     return loadWorkingTreeBuild()
   }
-  return loadReleaseBuild(materializeReleaseCheckout(ref))
+  return loadReleaseBuild(await materializeReleaseCheckout(ref))
+}
+
+// Remove decoder support to model an older peer’s silent frame drops without requiring a pre-opcode release.
+export function withoutOpcodeSupport(
+  build: TerminalWireBuild,
+  opcodeName: string
+): TerminalWireBuild {
+  const opcode = build.codec.TerminalStreamOpcode[opcodeName]
+  if (typeof opcode !== 'number') {
+    throw new Error(`Build ${build.label} publishes no terminal stream opcode named ${opcodeName}`)
+  }
+  return {
+    ...build,
+    label: `${build.label}-without-${opcodeName}`,
+    codec: {
+      ...build.codec,
+      // Remove both mapping directions so observers cannot retain a name the decoder no longer knows.
+      TerminalStreamOpcode: Object.fromEntries(
+        Object.entries(build.codec.TerminalStreamOpcode).filter(
+          ([name, value]) => name !== opcodeName && value !== opcodeName
+        )
+      ),
+      decodeTerminalStreamFrame: (bytes) => {
+        const frame = build.codec.decodeTerminalStreamFrame(bytes)
+        return frame && frame.opcode === opcode ? null : frame
+      }
+    }
+  }
 }

@@ -60,7 +60,7 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
-          if (method === 'git.remoteCommitUrl') {
+          if (method === 'git.remoteCommitUrl' || method === 'git.remoteFileUrl') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
               ok: true,
@@ -96,6 +96,12 @@ describe('web git preload API', () => {
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
     ])
+    const range = { relativePath: 'a.ts', line: 10, endLine: 20 }
+    await globals.window.api.git.remoteFileUrl({ worktreePath: worktree.path, ...range })
+    expect(runtimeCalls.at(-1)).toEqual({
+      method: 'git.remoteFileUrl',
+      params: { worktree: 'id:wt-1', ...range }
+    })
   })
 
   it('sends the branch line total merge base only when the chip asked for one', async () => {
@@ -164,16 +170,25 @@ describe('web git preload API', () => {
       branchLineTotalMergeBase: TEST_COMMIT_OID
     })
     await globals.window.api.git.status({ worktreePath: '/workspace/repo' })
+    await globals.window.api.git.status({
+      worktreePath: '/workspace/repo',
+      includeLineStats: false
+    })
+    await globals.window.api.git.branchCompare({
+      worktreePath: '/workspace/repo',
+      baseRef: 'origin/main',
+      admissionTier: 'background'
+    })
 
     const statusCalls = runtimeCalls.filter((call) => call.method === 'git.status')
-    // Why: strict — `toEqual` would pass on a forwarded `branchLineTotalMergeBase: undefined`,
-    // which is exactly what the conditional spread must avoid sending.
+    // Strict equality catches forwarded undefined keys that older hosts must not receive.
     expect(statusCalls).toStrictEqual([
       {
         method: 'git.status',
         params: {
           worktree: 'id:wt-1',
           includeIgnored: undefined,
+          includeLineStats: undefined,
           bypassEffectiveUpstreamNegativeCache: undefined,
           reuseLineStats: undefined,
           branchLineTotalMergeBase: TEST_COMMIT_OID
@@ -184,10 +199,29 @@ describe('web git preload API', () => {
         params: {
           worktree: 'id:wt-1',
           includeIgnored: undefined,
+          includeLineStats: undefined,
+          bypassEffectiveUpstreamNegativeCache: undefined,
+          reuseLineStats: undefined
+        }
+      },
+      {
+        method: 'git.status',
+        params: {
+          worktree: 'id:wt-1',
+          includeIgnored: undefined,
+          includeLineStats: false,
           bypassEffectiveUpstreamNegativeCache: undefined,
           reuseLineStats: undefined
         }
       }
     ])
+    expect(runtimeCalls.find((call) => call.method === 'git.branchCompare')).toStrictEqual({
+      method: 'git.branchCompare',
+      params: {
+        worktree: 'id:wt-1',
+        baseRef: 'origin/main',
+        admissionTier: 'background'
+      }
+    })
   })
 })

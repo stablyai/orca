@@ -68,6 +68,7 @@ export function normalizeCopilotEvent(
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
 }

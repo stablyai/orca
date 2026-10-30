@@ -1,19 +1,13 @@
 import { decodeTerminalStreamJson } from '../../../../../shared/terminal-stream-protocol'
 import { TerminalMultiplexSubscribeFrame } from './stream-schemas'
-import type {
-  TerminalMultiplexConnection,
-  TerminalMultiplexSlotFramesStage
-} from './terminal-multiplex-connection'
+import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import { resolveMultiplexSubscribePty } from './terminal-multiplex-subscribe-resolution'
 import { initializeMultiplexStream } from './terminal-multiplex-stream-initialization'
 import { publishMultiplexInitialSnapshot } from './terminal-multiplex-initial-snapshot'
 import { activateMultiplexStream } from './terminal-multiplex-live-stream'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
-export function installMultiplexSubscribeFrame(
-  build: TerminalMultiplexSlotFramesStage
-): asserts build is TerminalMultiplexConnection {
-  const state = build as TerminalMultiplexConnection
+export function installMultiplexSubscribeFrame(state: TerminalMultiplexConnection): void {
   state.handleSubscribeFrame = async (payload) => {
     const raw = decodeTerminalStreamJson<unknown>(payload)
     const parsed = TerminalMultiplexSubscribeFrame.safeParse(raw)
@@ -27,6 +21,7 @@ export function installMultiplexSubscribeFrame(
     if (!ptyId) {
       return
     }
+    const incarnationId = state.runtime.getPtyExecutionHostMetadata(ptyId).incarnationId
     let stream: TerminalMultiplexStream | null = null
     let installedStream: TerminalMultiplexStream | null = null
     try {
@@ -40,7 +35,7 @@ export function installMultiplexSubscribeFrame(
       if (state.streams.get(request.streamId) !== installedStream) {
         return
       }
-      state.detachStream(request.streamId, false)
+      state.detachStream(request.streamId, null)
       state.sendStreamError(
         request.streamId,
         error instanceof Error ? error.message : String(error)
@@ -52,7 +47,7 @@ export function installMultiplexSubscribeFrame(
       return
     }
     try {
-      const published = await publishMultiplexInitialSnapshot(state, request, stream)
+      const published = await publishMultiplexInitialSnapshot(state, request, stream, incarnationId)
       if (!published) {
         return
       }
@@ -62,7 +57,7 @@ export function installMultiplexSubscribeFrame(
       if (state.streams.get(request.streamId) !== stream) {
         return
       }
-      state.detachStream(request.streamId, false)
+      state.detachStream(request.streamId, null)
       state.sendStreamError(
         request.streamId,
         error instanceof Error ? error.message : String(error)

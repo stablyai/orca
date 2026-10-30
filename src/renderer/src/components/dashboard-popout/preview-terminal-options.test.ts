@@ -58,6 +58,42 @@ describe('buildPreviewTerminalOptions', () => {
     scrollback: 1000
   }
 
+  // Match the pane’s automatic contrast floor so the same live Powerline buffer renders consistently.
+  it('mirrors the automatic contrast floor when no override is set', () => {
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        theme: { background: '#1e242a' }
+      }).minimumContrastRatio
+    ).toBe(3)
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        theme: { background: '#ffffff' },
+        themeMode: 'light'
+      }).minimumContrastRatio
+    ).toBe(4.5)
+  })
+
+  it('honors the user contrast override, clamped to xterm range', () => {
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        settings: { ...SETTINGS, terminalMinimumContrastRatio: 1 }
+      }).minimumContrastRatio
+    ).toBe(1)
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        settings: { ...SETTINGS, terminalMinimumContrastRatio: 0 }
+      }).minimumContrastRatio
+    ).toBe(1)
+  })
+
   it('keeps the kitty advertisement and skips ConPTY options off Windows', () => {
     const options = buildPreviewTerminalOptions({
       ...base,

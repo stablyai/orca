@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  getTerminalUrlOpenHint,
-  terminalHttpLinkActionDestinationsFor,
-  terminalUrlOpenHintOptionsFor
-} from './terminal-link-open-hints'
+import { getTerminalUrlOpenHint, terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
 
 function stubPlatform(isMac: boolean): void {
   vi.stubGlobal('navigator', { userAgent: isMac ? 'Mac OS X' : 'Windows NT 10.0' })
@@ -28,8 +24,7 @@ describe('getTerminalUrlOpenHint', () => {
     )
   })
 
-  // Why: with links already opening in Orca, inverting still lands on the system
-  // browser, so the hint must not promise Orca.
+  // When links already open in Orca, inversion must advertise the system browser.
   it('keeps the system-browser wording when inverting but links open in Orca', () => {
     stubPlatform(true)
     expect(getTerminalUrlOpenHint({ openLinksInApp: true, modifierInverts: true })).toContain(
@@ -73,8 +68,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     ).toEqual({ openLinksInApp: false, modifierInverts: true })
   })
 
-  // Why: openHttpLink refuses to route a remote-owned URL into Orca, so promising
-  // "open in Orca" there would advertise a click that lands somewhere else.
+  // Remote-ineligible routes must not promise Orca when clicking opens externally.
   it('drops inversion while a remote runtime is active', () => {
     stubPlatform(true)
     const options = terminalUrlOpenHintOptionsFor({
@@ -104,9 +98,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     })
   })
 
-  // Why: a workspace-bound remote pane routes externally even with no globally
-  // active runtime, so the global setting alone would advertise an impossible
-  // "open in Orca" destination.
+  // Workspace-bound remote ownership can forbid Orca even without a global active runtime.
   it.each([
     ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
     ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const,
@@ -126,8 +118,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     expect(getTerminalUrlOpenHint(options)).toContain('for system browser')
   })
 
-  // Why: the clicked pane's owner wins over the global runtime — a local pane
-  // can still reach Orca while some other pane's runtime is active.
+  // Pane ownership beats global runtime selection; another remote pane cannot disable local Orca links.
   it('keeps inversion for a local pane while a remote runtime is active', () => {
     stubPlatform(true)
     const options = terminalUrlOpenHintOptionsFor(
@@ -155,29 +146,17 @@ describe('terminalUrlOpenHintOptionsFor', () => {
 
     expect(options.modifierInverts).toBe(true)
   })
-})
 
-describe('terminalHttpLinkActionDestinationsFor', () => {
-  it('offers both destinations for a capable runtime and follows the preference', () => {
-    const owner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
+  it('keeps inversion for an eligible SSH pane', () => {
+    const options = terminalUrlOpenHintOptionsFor(
+      {
+        openLinksInApp: false,
+        openLinksInAppModifierInverts: true
+      },
+      { kind: 'ssh', connectionId: 'ssh-1' },
+      true
+    )
 
-    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, true)).toEqual({
-      primary: 'orca',
-      alternate: 'system'
-    })
-    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: false }, owner, true)).toEqual({
-      primary: 'system',
-      alternate: 'orca'
-    })
-  })
-
-  it.each([
-    ['incapable runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const],
-    ['SSH', { kind: 'ssh', connectionId: 'ssh-1' } as const],
-    ['unknown owner', { kind: 'unknown' } as const]
-  ])('offers only the system browser for an %s', (_label, owner) => {
-    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, false)).toEqual({
-      primary: 'system'
-    })
+    expect(options.modifierInverts).toBe(true)
   })
 })

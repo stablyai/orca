@@ -1,12 +1,16 @@
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
+import { pruneGitWorktrees } from './git/worktree-prune-guard'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
-import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktree-logic'
-import { gitExecFileAsync } from './git/runner'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
+import { formatWorktreeRemovalError, isOrphanedWorktreeError } from './ipc/worktree-logic'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
+import { normalizeLocalBranchRef } from './git/worktree-operation-options'
+import { deleteBranchOfUnregisteredWorktree } from './git/worktree-removal'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
+import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
 
-type LocalWindowsRemovalRecoveryArgs = {
+type LocalPartialRemovalRecoveryArgs = {
   error: unknown
   force: boolean
   canonicalWorktreePath: string
@@ -15,11 +19,12 @@ type LocalWindowsRemovalRecoveryArgs = {
   registeredWorktree: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
   deleteBranch: boolean
   closeWatcher: (worktreePath: string) => Promise<void>
+  signal?: AbortSignal
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
-  LocalWindowsRemovalRecoveryArgs,
-  'error' | 'force' | 'closeWatcher'
+  LocalPartialRemovalRecoveryArgs,
+  'error' | 'force' | 'closeWatcher' | 'signal'
 >
 
 function preservedBranchResult(
@@ -37,25 +42,20 @@ function preservedBranchResult(
   }
 }
 
-function staleRegistrationRecoveryError(
-  error: unknown,
-  canonicalWorktreePath: string,
-  force: boolean
-): Error {
+function staleRegistrationRecoveryError(error: unknown, canonicalWorktreePath: string): Error {
   return new Error(
     `${formatWorktreeRemovalError(
       error,
       canonicalWorktreePath,
-      force
-    )} The worktree directory was removed, but Git still has stale worktree registration. Retry deletion after resolving the Git registration error.`
+      true
+    )} Git still has stale worktree registration. Retry deletion after resolving the Git registration error.`
   )
 }
 
 async function verifyGitWorktreeRegistrationRemoved(
   repoPath: string,
   localWorktreeGitOptions: GitWorktreeExecOptions,
-  canonicalWorktreePath: string,
-  force: boolean
+  canonicalWorktreePath: string
 ): Promise<void> {
   try {
     const remainingWorktrees = await listWorktreesStrict(repoPath, localWorktreeGitOptions)
@@ -67,92 +67,96 @@ async function verifyGitWorktreeRegistrationRemoved(
       throw new Error('Git still reports the worktree registration after cleanup.')
     }
   } catch (error) {
-    throw staleRegistrationRecoveryError(error, canonicalWorktreePath, force)
+    throw staleRegistrationRecoveryError(error, canonicalWorktreePath)
   }
 }
 
-async function removeRequiredGitWorktreeRegistration(
-  args: StaleLocalWorktreeRegistrationArgs,
-  forceForError = true
+export async function removeStaleLocalWorktreeRegistration(
+  args: StaleLocalWorktreeRegistrationArgs
 ): Promise<RemoveWorktreeResult> {
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
   let result: RemoveWorktreeResult | undefined
   let removalError: unknown
   try {
-    await gitExecFileAsync(['worktree', 'prune'], {
-      cwd: args.repoPath,
-      ...args.localWorktreeGitOptions
-    })
+    await pruneGitWorktrees({ cwd: args.repoPath, ...args.localWorktreeGitOptions })
     result = preservedBranchResult(args.registeredWorktree, args.deleteBranch)
   } catch (error) {
     removalError = error
   }
 
-  // Why: Git prune exits successfully while retaining locked registrations;
-  // a failed remove can also have detached the row before filesystem cleanup.
+  // Successful prune can retain locked registrations; verify the row is gone.
   try {
     await verifyGitWorktreeRegistrationRemoved(
       args.repoPath,
       args.localWorktreeGitOptions,
-      args.canonicalWorktreePath,
-      forceForError
+      args.canonicalWorktreePath
     )
   } catch (verificationError) {
     throw removalError
-      ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath, forceForError)
+      ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath)
       : verificationError
   }
-  // Why: if Git detached the row before reporting its filesystem error, keep
-  // the branch rather than guessing whether the normal branch cleanup ran.
+  // Preserve the branch when Git may have detached the row before reporting a filesystem error.
   return result ?? preservedBranchResult(args.registeredWorktree, args.deleteBranch)
 }
 
-export async function recoverLocalWindowsWorktreeRemoval(
-  args: LocalWindowsRemovalRecoveryArgs
+export async function recoverPartialLocalWorktreeRemoval(
+  args: LocalPartialRemovalRecoveryArgs
 ): Promise<RemoveWorktreeResult | undefined> {
-  // Why: recovery can recursively delete the remaining directory, so a Git
-  // lock must reject the attempt before classification or any side effects.
+  // Reject Git locks before recovery can recursively delete files.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
-  if (!(await isRecoverableWindowsFilesystemRemovalFailure(args))) {
+  if (!(await isRecoverablePartialRemovalFailure(args))) {
     return undefined
   }
 
-  // Why: this error means Git accepted removal and started deleting the path;
-  // finish that partial success with Windows retries, then verify Git metadata.
-  // Why: Windows recovery recursively deletes the remaining directory, so it
-  // must fail closed while a watcher process may still own a native handle.
+  // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
   try {
-    await removeLocalWorktreePath(args.canonicalWorktreePath, args.localWorktreeGitOptions)
+    await removeLocalWorktreePath(
+      args.canonicalWorktreePath,
+      args.localWorktreeGitOptions,
+      args.signal
+    )
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
-  return removeRequiredGitWorktreeRegistration(args, args.force)
+  const { branch, head } = args.registeredWorktree
+  // Same -d policy as a normal delete: merged branches go, unmerged ones are preserved.
+  return deleteBranchOfUnregisteredWorktree(
+    args.repoPath,
+    args.canonicalWorktreePath,
+    args.deleteBranch && branch ? { name: normalizeLocalBranchRef(branch), head } : null,
+    args.localWorktreeGitOptions
+  )
 }
 
-async function isRecoverableWindowsFilesystemRemovalFailure(
-  args: LocalWindowsRemovalRecoveryArgs
+async function isRecoverablePartialRemovalFailure(
+  args: LocalPartialRemovalRecoveryArgs
 ): Promise<boolean> {
-  if (process.platform !== 'win32' || typeof args.error !== 'object' || args.error === null) {
+  // Leave English orphan errors (Git refused before deleting) to the proven-orphan cleanup.
+  if (
+    typeof args.error !== 'object' ||
+    args.error === null ||
+    isOrphanedWorktreeError(args.error)
+  ) {
     return false
   }
 
+  let worktrees: GitWorktreeInfo[]
   try {
-    const worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
-    // Why: error prose can be localized or ambiguous. Only a missing Git row
-    // proves removal started and makes recursive Windows cleanup safe.
-    return !worktrees.some((worktree) =>
-      areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath)
-    )
+    worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
   } catch {
     return false
   }
-}
-
-export async function removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval(
-  args: StaleLocalWorktreeRegistrationArgs
-): Promise<RemoveWorktreeResult> {
-  return removeRequiredGitWorktreeRegistration(args)
+  // Localized error text cannot prove removal started; require the Git row to be absent.
+  if (
+    worktrees.some((worktree) => areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath))
+  ) {
+    return false
+  }
+  // A worktree registered inside the checkout during Git's delete must not be removed with it.
+  assertWorktreeDoesNotContainRegisteredWorktree(args.canonicalWorktreePath, worktrees)
+  return true
 }

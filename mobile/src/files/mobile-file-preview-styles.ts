@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const filePreviewStyles = StyleSheet.create({
+export const filePreviewStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -58,20 +59,6 @@ export const filePreviewStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.bodySize,
     textAlign: 'center'
-  },
-  retryButton: {
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.lg
-  },
-  retryText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
   },
   saveButton: {
     width: 36,
@@ -166,4 +153,4 @@ export const filePreviewStyles = StyleSheet.create({
     lineHeight: 19,
     padding: 0
   }
-})
+}))

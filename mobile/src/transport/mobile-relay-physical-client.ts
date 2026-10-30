@@ -1,5 +1,6 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { RelayPhoneHelloSchema } from '../../../src/shared/mobile-relay-phone-protocol'
+import { latchHostToE2EEV2 } from './e2ee-v2-host-latch'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { createPairingRelayLogger, pairingRelayErrorDetail } from './pairing-relay-log'
@@ -7,6 +8,8 @@ import { isRpcResponse } from './rpc-response-shape'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogSink, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
+import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
 export { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
@@ -34,7 +37,7 @@ export function connectMobileRelayForPairing(args: {
   onLog?: ConnectionLogSink
 }): PairingCandidateClient {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
-  const socketUrl = relayPhoneWebSocketUrl(args.relay)
+  const socketUrl = relayConnectWebSocketUrl(args.relay.cellUrl, args.relay.relayHostId)
   const log = createPairingRelayLogger(args.onLog)
   const cellHost = redactSocketEndpoint(socketUrl)
   log('info', 'Relay: dialing cell', cellHost)
@@ -64,6 +67,7 @@ export function connectMobileRelayForPairing(args: {
     decodeBinary: websocketPayloadToUint8,
     onAuthenticated: () => {
       authenticated = true
+      latchHostToE2EEV2(args.desktopPublicKeyB64)
       log('success', 'Relay: authenticated', 'Channel ready for RPC')
       resolveAuthenticated()
     },
@@ -99,24 +103,28 @@ export function connectMobileRelayForPairing(args: {
       })
     )
   }
-  let inboundChain: Promise<void> = Promise.resolve()
+  const inbound = new WsInboundMessageQueue(
+    async (raw) => {
+      if (closed) {
+        return
+      }
+      if (!outerReady) {
+        acceptRelayHello(raw)
+        return
+      }
+      await channel.handleMessage(raw)
+    },
+    (error) => fail(asError(error))
+  )
   socket.onmessage = (event) => {
-    inboundChain = inboundChain
-      .then(async () => {
-        if (closed) {
-          return
-        }
-        if (!outerReady) {
-          acceptRelayHello(event.data)
-          return
-        }
-        await channel.handleMessage(event.data)
-      })
-      .catch((error: unknown) => fail(asError(error)))
+    void inbound.enqueue(event.data)
   }
   // WebSocket implementations commonly emit `error` immediately before
   // `close`; the bounded fallback represents an opaque 1006 close.
   socket.onerror = () => {
+    if (closed) {
+      return
+    }
     transportErrorTimer ??= setTimeout(() => {
       transportErrorTimer = null
       fail(new RelayOuterError(1006))
@@ -145,7 +153,7 @@ export function connectMobileRelayForPairing(args: {
       throw new Error('invalid relay hello')
     }
     if (!parsed.data.ok) {
-      throw new RelayOuterError(parsed.data.code)
+      throw new RelayOuterError(parsed.data.code, true)
     }
     if (parsed.data.credentialKind !== (args.expectedCredentialKind ?? 'invite')) {
       throw new Error('relay credential resolved as an unexpected credential kind')
@@ -160,6 +168,7 @@ export function connectMobileRelayForPairing(args: {
       return
     }
     closed = true
+    inbound.dispose()
     if (transportErrorTimer) {
       clearTimeout(transportErrorTimer)
       transportErrorTimer = null
@@ -206,13 +215,6 @@ export function connectMobileRelayForPairing(args: {
       fail(new Error('relay pairing client closed'))
     }
   }
-}
-
-export function relayPhoneWebSocketUrl(relay: PairingRelay): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
 }
 
 function asError(error: unknown): Error {

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   NOW,
@@ -80,7 +81,6 @@ function makeUnifiedTab(row: BrowserRow, sortOrder: number): Tab {
   }
 }
 
-/** A worktree whose only tabs are the given browser rows, in the given strip order. */
 function makeBrowserState(rows: BrowserRow[], activeUnifiedTabId: string): WebSessionTabsSyncState {
   return makeState({
     activeGroupIdByWorktree: { [WT]: GROUP_ID },
@@ -165,7 +165,6 @@ function browserTabIds(state: WebSessionTabsSyncState): string[] {
     .sort()
 }
 
-/** The order the tab strip renders. */
 function stripOrder(state: WebSessionTabsSyncState): string[] {
   return state.groupsByWorktree[WT]?.[0]?.tabOrder ?? []
 }
@@ -181,16 +180,14 @@ describe('staged browser tab adoption', () => {
       makeSnapshot([hostBrowserTab(STAGED.remotePageId), hostBrowserTab(MIRRORED.remotePageId)])
     )
 
-    // The host's own workspace/tab ids never surface: the staged rows are reused, so the tab
-    // is renamed in place rather than dropped and re-added at the end of the strip.
+    // Reuse staged IDs in place; host IDs must not drop/reappend the tab at strip end.
     expect(next.browserTabsByWorktree[WT]?.map((workspace) => workspace.id).sort()).toEqual(
       [MIRRORED.workspaceId, STAGED.workspaceId].sort()
     )
     expect(browserTabIds(next)).toEqual([MIRRORED.unifiedTabId, STAGED.unifiedTabId].sort())
     expect(stripOrder(next)).toEqual([MIRRORED.unifiedTabId, STAGED.unifiedTabId])
     expect(next.groupsByWorktree[WT]?.[0]?.activeTabId).toBe(STAGED.unifiedTabId)
-    // Adoption is what clears the optimism; a handle left staged would freeze the pane and
-    // keep the create's materialization gate from ever passing.
+    // Clear staged on adoption or the pane freezes and materialization never passes.
     expect(next.remoteBrowserPageHandlesByPageId[STAGED.pageId]).toEqual({
       environmentId: ENV,
       remotePageId: STAGED.remotePageId

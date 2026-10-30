@@ -45,7 +45,6 @@ describe('listOmpSubagentSessions', () => {
         'Read the DC API spec'
       )
     )
-    // Artifacts are not transcripts; nested files belong to their own parents.
     await writeFile(join(artifactDir, 'notes.md'), 'not a transcript')
     await writeFile(join(artifactDir, 'local', 'plan.jsonl'), '{}')
 
@@ -55,8 +54,6 @@ describe('listOmpSubagentSessions', () => {
     })
 
     expect(result.issues).toEqual([])
-    // Newest first, titled by the coordinator-given task label, each linked to
-    // the parent derived from the layout (not the child's own session record).
     expect(
       result.sessions.map((session) => ({
         title: session.title,
@@ -77,5 +74,43 @@ describe('listOmpSubagentSessions', () => {
     await expect(
       listOmpSubagentSessions({ parentFilePath: parentPath, platform: 'darwin' })
     ).resolves.toEqual({ sessions: [], issues: [] })
+  })
+  it('traverses each saved generation through its own transcript without flattening descendants', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-nested-list-'))
+    tempRoots.push(workspace)
+    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
+    const childPath = join(workspace, SESSION_STEM, 'Worker.jsonl')
+    const grandchildPath = join(workspace, SESSION_STEM, 'Worker', 'Research.jsonl')
+    await mkdir(join(workspace, SESSION_STEM, 'Worker'), { recursive: true })
+    await writeFile(
+      parentPath,
+      childTranscript(PARENT_SESSION_ID, '2026-05-01T10:00:00Z', 'Coordinate')
+    )
+    await writeFile(
+      childPath,
+      childTranscript('worker-id', '2026-05-01T10:01:00Z', 'Delegate research')
+    )
+    await writeFile(
+      grandchildPath,
+      childTranscript('research-id', '2026-05-01T10:02:00Z', 'Investigate')
+    )
+    const children = await listOmpSubagentSessions({ parentFilePath: parentPath })
+    expect(children.issues).toEqual([])
+    expect(children.sessions).toHaveLength(1)
+    expect(children.sessions[0]).toMatchObject({
+      filePath: childPath,
+      sessionId: 'worker-id',
+      subagentTranscriptCount: 1
+    })
+    const grandchildren = await listOmpSubagentSessions({
+      parentFilePath: children.sessions[0].filePath
+    })
+    expect(grandchildren.issues).toEqual([])
+    expect(grandchildren.sessions).toHaveLength(1)
+    expect(grandchildren.sessions[0]).toMatchObject({
+      filePath: grandchildPath,
+      sessionId: 'research-id',
+      subagentTranscriptCount: 0
+    })
   })
 })

@@ -4,21 +4,34 @@ import type {
   GitDiffResult
 } from '../../../shared/git-diff-compare-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+
+/** Showing a diff tab or its Retry: a user act that may start a stopped WSL distro. Local only. */
+type GitDiffWakeOptions = { wakeWslDistro?: boolean }
+
+function localWakeArgs(
+  context: RuntimeGitContext,
+  options: GitDiffWakeOptions | undefined
+): { wakeWslDistro?: true } {
+  return options?.wakeWslDistro && !context.connectionId ? { wakeWslDistro: true } : {}
+}
 
 export async function getRuntimeGitDiff(
   context: RuntimeGitContext,
-  args: { filePath: string; staged: boolean; compareAgainstHead?: boolean }
+  args: { filePath: string; staged: boolean; compareAgainstHead?: boolean; oldPath?: string },
+  options?: GitDiffWakeOptions
 ): Promise<GitDiffResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.diff({
       worktreePath: resolveLocalWorktreePath(context),
       filePath: args.filePath,
       staged: args.staged,
       compareAgainstHead: args.compareAgainstHead,
-      connectionId: context.connectionId
+      ...(args.oldPath ? { oldPath: args.oldPath } : {}),
+      connectionId: context.connectionId,
+      ...localWakeArgs(context, options)
     })
   }
   return callRuntimeRpc<GitDiffResult>(
@@ -31,20 +44,26 @@ export async function getRuntimeGitDiff(
 
 export async function getRuntimeGitBranchCompare(
   context: RuntimeGitContext,
-  baseRef: string
+  baseRef: string,
+  admissionTier: 'interactive' | 'background' = 'interactive'
 ): Promise<GitBranchCompareResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.branchCompare({
       worktreePath: resolveLocalWorktreePath(context),
       baseRef,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      admissionTier
     })
   }
   return callRuntimeRpc<GitBranchCompareResult>(
     target,
     'git.branchCompare',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      baseRef,
+      admissionTier
+    },
     { timeoutMs: 15_000 }
   )
 }
@@ -53,7 +72,7 @@ export async function getRuntimeGitCommitCompare(
   context: RuntimeGitContext,
   commitId: string
 ): Promise<GitCommitCompareResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.commitCompare({
       worktreePath: resolveLocalWorktreePath(context),
@@ -75,16 +94,18 @@ export async function getRuntimeGitBranchDiff(
     compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
     filePath: string
     oldPath?: string
-  }
+  },
+  options?: GitDiffWakeOptions
 ): Promise<GitDiffResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.branchDiff({
       worktreePath: resolveLocalWorktreePath(context),
       compare: args.compare,
       filePath: args.filePath,
       oldPath: args.oldPath,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...localWakeArgs(context, options)
     })
   }
   return callRuntimeRpc<GitDiffResult>(
@@ -102,9 +123,10 @@ export async function getRuntimeGitCommitDiff(
     parentOid?: string | null
     filePath: string
     oldPath?: string
-  }
+  },
+  options?: GitDiffWakeOptions
 ): Promise<GitDiffResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.commitDiff({
       worktreePath: resolveLocalWorktreePath(context),
@@ -112,7 +134,8 @@ export async function getRuntimeGitCommitDiff(
       parentOid: args.parentOid,
       filePath: args.filePath,
       oldPath: args.oldPath,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...localWakeArgs(context, options)
     })
   }
   return callRuntimeRpc<GitDiffResult>(

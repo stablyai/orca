@@ -2,11 +2,10 @@ import { normalizeRelativePath } from '@/lib/path'
 import type { GitStagingArea, GitStatusEntry } from '../../../../shared/git-status-types'
 import { compareFileNames } from '../../../../shared/file-name-sort'
 import { splitPathSegments } from './path-tree'
-import { compareGitStatusEntries } from './source-control-status-sort'
+import { compareGitStatusEntries } from '../../../../shared/git-status-sort'
 
 export type SourceControlTreeArea = Extract<GitStagingArea, 'unstaged' | 'staged' | 'untracked'>
-// Why: committed branch rows share the same path tree but do not carry
-// uncommitted status metadata, so the tree builder stays entry-shape generic.
+// Keep entry shapes generic because committed branch rows lack uncommitted status metadata.
 export type SourceControlTreeEntry = {
   path: string
 }
@@ -91,8 +90,7 @@ function finalizeDirectoryNode<Entry extends SourceControlTreeEntry, Area extend
     }
   }
 
-  // Why: keep directory ordering consistent with the numeric path collator used
-  // for the file rows one line below.
+  // Use the same numeric ordering for directories and file rows.
   directories.sort((a, b) => compareFileNames(a.name, b.name))
   files.sort((a, b) => compareEntries(a.entry, b.entry))
   const fileCount =
@@ -128,12 +126,14 @@ export function buildSourceControlTree<
     }
 
     let parent = root
+    // Build ancestor strings only on misses; slice/join per segment was quadratic in depth during every filter keystroke.
+    let ancestorPath = ''
     for (let index = 0; index < segments.length - 1; index += 1) {
       const name = segments[index]
-      const path = segments.slice(0, index + 1).join('/')
+      ancestorPath = ancestorPath ? `${ancestorPath}/${name}` : name
       let dir = parent.directoryChildren.get(name)
       if (!dir) {
-        dir = makeDirectoryNode<Entry, Area>(area, path, name, index)
+        dir = makeDirectoryNode<Entry, Area>(area, ancestorPath, name, index)
         parent.directoryChildren.set(name, dir)
         parent.children.push(dir)
       }
@@ -159,13 +159,12 @@ export function buildGitStatusSourceControlTree(
   area: SourceControlTreeArea,
   entries: GitStatusEntry[]
 ): SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea>[] {
-  // Why: uncommitted trees must preserve the conflict-first ordering used by
-  // the flat Source Control list; branch trees can sort by path.
+  // Preserve flat-list conflict-first ordering for uncommitted trees; branch trees may sort by path.
   return buildSourceControlTree(area, entries, compareGitStatusEntries)
 }
 
 export function flattenSourceControlTree<Entry extends SourceControlTreeEntry, Area extends string>(
-  nodes: SourceControlTreeNode<Entry, Area>[],
+  nodes: readonly SourceControlTreeNode<Entry, Area>[],
   collapsedDirectoryKeys: ReadonlySet<string>
 ): SourceControlTreeNode<Entry, Area>[] {
   const result: SourceControlTreeNode<Entry, Area>[] = []
@@ -204,9 +203,7 @@ export function compactSourceControlTree<Entry extends SourceControlTreeEntry, A
       names.push(compacted.name)
     }
 
-    // Why: Source Control trees often contain path-only folder chains from a
-    // small changed-file subset. Compressing them matches VS Code and keeps
-    // branch change trees readable without changing the underlying file set.
+    // Compact single-folder chains in sparse changed-file trees without changing file identity.
     return {
       ...compacted,
       name: names.join('/'),
@@ -232,8 +229,7 @@ export function namespaceSourceControlTreeDirectoryKeys<
       return node
     }
 
-    // Why: pinned conflict folders share git area semantics with Changes, but
-    // collapse state is UI-section-local and needs a distinct directory key.
+    // Pinned conflicts share Git areas but need section-local collapse keys.
     return {
       ...node,
       key: `dir::${namespace}::${node.path}`,

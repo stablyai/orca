@@ -1,3 +1,4 @@
+import { structuredLaunchSlotIds } from './agent-session/launch/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
@@ -6,10 +7,6 @@ type PersistedUnifiedTabSessionData = Pick<
   WorkspaceSessionState,
   'activeGroupIdByWorktree' | 'tabGroupLayouts' | 'tabGroups' | 'unifiedTabs'
 >
-
-function dedupePersistedTabIds(tabIds: string[]): string[] {
-  return Array.from(new Set(tabIds))
-}
 
 function prunePersistedLayoutForGroups(
   root: TabGroupLayoutNode,
@@ -32,7 +29,11 @@ function prunePersistedLayoutForGroups(
   return { ...root, first, second }
 }
 
-function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGroup[] {
+function buildPersistedGroupsForWorktree(
+  tabs: Tab[],
+  groups: TabGroup[],
+  worktreeId: string
+): TabGroup[] {
   const validTabIds = new Set(tabs.map((tab) => tab.id))
   const tabIdsByGroup = new Map<string, string[]>()
   for (const tab of tabs) {
@@ -43,17 +44,19 @@ function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGr
 
   return groups
     .map((group) => {
-      const tabOrder = dedupePersistedTabIds([
-        ...group.tabOrder.filter((tabId) => validTabIds.has(tabId)),
+      const slots = structuredLaunchSlotIds(worktreeId, group.id)
+      const orderedTabIds = new Set([
+        ...group.tabOrder.filter((tabId) => validTabIds.has(tabId) || slots.has(tabId)),
         ...(tabIdsByGroup.get(group.id) ?? [])
       ])
+      const tabOrder = Array.from(orderedTabIds)
       const activeTabId =
-        group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null
+        group.activeTabId && validTabIds.has(group.activeTabId) ? group.activeTabId : null
       return {
         ...group,
         activeTabId,
         tabOrder,
-        recentTabIds: group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
+        recentTabIds: group.recentTabIds?.filter((tabId) => validTabIds.has(tabId))
       }
     })
     .filter((group) => group.tabOrder.length > 0)
@@ -81,18 +84,18 @@ export function buildPersistedUnifiedTabSessionData(
 
   for (const worktreeId of worktreeIds) {
     const tabs = sourceTabs[worktreeId] ?? []
-    if (tabs.length === 0) {
+    if (tabs.length === 0 && structuredLaunchSlotIds(worktreeId).size === 0) {
       continue
     }
 
-    const groups = buildPersistedGroupsForWorktree(tabs, sourceGroups[worktreeId] ?? [])
+    const groups = buildPersistedGroupsForWorktree(tabs, sourceGroups[worktreeId] ?? [], worktreeId)
     if (groups.length === 0) {
       continue
     }
 
     const groupIds = new Set(groups.map((group) => group.id))
     const persistedTabs = tabs.filter((tab) => groupIds.has(tab.groupId))
-    if (persistedTabs.length === 0) {
+    if (persistedTabs.length === 0 && structuredLaunchSlotIds(worktreeId).size === 0) {
       continue
     }
 

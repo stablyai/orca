@@ -5,6 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session-salvage'
+import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 
 export function workspaceSessionSalvageLogDetails(result: {
   droppedCount: number
@@ -17,11 +18,11 @@ export function workspaceSessionSalvageLogDetails(result: {
   }
 }
 
-/** Normalize non-'local' host partitions; 'local' (the legacy workspaceSession blob) is dropped so the two surfaces never diverge.
- *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
+/** Validate hosts independently; local stays in legacy workspaceSession to prevent duplicate authority. */
 export function parseWorkspaceSessionsByHostId(
   raw: unknown,
-  defaults: WorkspaceSessionState
+  defaults: WorkspaceSessionState,
+  localSession?: WorkspaceSessionState
 ): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; repaired: boolean } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { partitions: {}, repaired: raw !== undefined }
@@ -30,7 +31,7 @@ export function parseWorkspaceSessionsByHostId(
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
-    // Why: 'local' lives in workspaceSession; a local/invalid key here is legacy noise that must not shadow the canonical partition.
+    // Reject local/invalid aliases so they cannot shadow the canonical local partition.
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue
     }
@@ -50,7 +51,11 @@ export function parseWorkspaceSessionsByHostId(
       )
       repaired = true
     }
-    partitions[hostId] = { ...defaults, ...result.value }
+    // Drop redundant fields before defaults restore required map entries.
+    partitions[hostId] = {
+      ...defaults,
+      ...withoutRedundantGlobalFields(result.value, localSession)
+    }
   }
   return { partitions, repaired }
 }

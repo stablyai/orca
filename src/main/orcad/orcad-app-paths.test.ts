@@ -1,3 +1,4 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -47,8 +48,6 @@ describe('resolveOrcadPath', () => {
     for (const [name, answer] of answers) {
       expect(answer, `${name} answered nothing`).toBeTruthy()
       if (name !== 'userData') {
-        // The catch-all this replaced returned the data directory for four of seven
-        // names, 'exe' included — a data directory is not an executable.
         expect(answer, `${name} answered the userData directory`).not.toBe(
           join(sep, 'srv', 'orca-state')
         )
@@ -109,9 +108,25 @@ describe('resolveOrcadInstallRoot', () => {
     )
   })
 
+  // Bundle siblings live beside symlink targets, not the link.
+  it.skipIf(process.platform === 'win32')('follows a symlinked script to the real bundle', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orcad-install-root-')))
+    try {
+      const bundle = join(root, 'slot')
+      const bin = join(root, 'bin')
+      mkdirSync(bundle)
+      mkdirSync(bin)
+      writeFileSync(join(bundle, 'orcad.js'), '')
+      symlinkSync(join(bundle, 'orcad.js'), join(bin, 'orcad'))
+      expect(resolveOrcadInstallRoot(join(bin, 'orcad'))).toBe(bundle)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('refuses instead of guessing when the process has no main script', () => {
     const originalArgv = process.argv
-    // `node -e` leaves argv[1] unset; cwd would be a guess, not an answer.
+    // node -e omits argv[1]; cwd cannot establish the install root.
     process.argv = [process.execPath]
     try {
       expect(() => resolveOrcadInstallRoot()).toThrow(/orcad_install_root_unavailable/)

@@ -5,10 +5,11 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/terminal-tab-types'
-import { toHostSessionTabId } from './web-terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 
 export type WebTerminalOrphanTopologyState = {
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  ptyIdsByTabId?: Record<string, string[] | undefined>
   activeTabIdByWorktree: Record<string, string | null | undefined>
   activeGroupIdByWorktree: Record<string, string | null | undefined>
   groupsByWorktree?: Record<string, TabGroup[] | undefined>

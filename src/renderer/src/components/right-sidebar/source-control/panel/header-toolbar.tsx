@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
@@ -6,10 +7,10 @@ import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-t
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import type { PrimaryAction } from '../../source-control-primary-action'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
 import { translate } from '@/i18n/i18n'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
 import { SourceControlBranchContextRow } from './branch-context-row'
 import { shouldShowSourceControlBranchContextChrome } from './branch-context-stats'
@@ -26,6 +27,8 @@ type SourceControlHeaderToolbarProps = {
   isCreatingPr: boolean
   onCreatePrHeaderClick: () => void
   onOpenHostedReviewInChecks: () => void
+  suppressedGitHubPRNumber: number | null
+  onRelinkSuppressedGitHubPR: () => void
   sourceControlViewMode: SourceControlViewMode
   viewModeToggleDisabled: boolean
   onToggleViewMode: () => void
@@ -78,30 +81,44 @@ function CreatePrHeaderButton({
   onClick: () => void
 }): React.JSX.Element {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0">
-          <Button
-            type="button"
-            size="xs"
-            disabled={action.disabled}
-            onClick={onClick}
-            className="h-6 shrink-0 px-2 text-[11px]"
-            title={action.title}
-          >
-            {isCreatePrIntentInFlight || isCreatingPr ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-            )}
-            {action.label}
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-        {action.title}
-      </TooltipContent>
-    </Tooltip>
+    <PrimaryActionTooltip action={action} side="bottom">
+      <span className="inline-flex shrink-0">
+        <Button
+          type="button"
+          size="xs"
+          disabled={action.disabled}
+          onClick={onClick}
+          className="h-6 shrink-0 px-2 text-[11px]"
+        >
+          {isCreatePrIntentInFlight || isCreatingPr ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
+          )}
+          {action.label}
+        </Button>
+      </span>
+    </PrimaryActionTooltip>
+  )
+}
+
+function SuppressedGitHubPRToolbar({
+  number,
+  onRelink
+}: {
+  number: number
+  onRelink: () => void
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-[11.5px] text-muted-foreground">
+        {translate('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })}
+      </span>
+      <Button type="button" variant="outline" size="xs" onClick={onRelink} className="shrink-0">
+        <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
+        {translate('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
+      </Button>
+    </div>
   )
 }
 
@@ -132,6 +149,8 @@ export function SourceControlHeaderToolbar({
   isCreatingPr,
   onCreatePrHeaderClick,
   onOpenHostedReviewInChecks,
+  suppressedGitHubPRNumber,
+  onRelinkSuppressedGitHubPR,
   sourceControlViewMode,
   viewModeToggleDisabled,
   onToggleViewMode,
@@ -200,6 +219,11 @@ export function SourceControlHeaderToolbar({
                 review={hostedReview}
                 onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
               />
+            ) : suppressedGitHubPRNumber !== null ? (
+              <SuppressedGitHubPRToolbar
+                number={suppressedGitHubPRNumber}
+                onRelink={onRelinkSuppressedGitHubPR}
+              />
             ) : visibleCreatePrHeaderAction ? (
               <CreatePrHeaderButton
                 action={visibleCreatePrHeaderAction}
@@ -210,8 +234,8 @@ export function SourceControlHeaderToolbar({
             ) : (
               <span className="min-w-0 flex-1" aria-hidden="true" />
             )}
-            {visibleCreatePrHeaderAction && !hostedReview ? (
-              // Why: keep filter/overflow pinned right without stretching Create PR.
+            {(visibleCreatePrHeaderAction || suppressedGitHubPRNumber !== null) && !hostedReview ? (
+              // Pin filter/overflow right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}
             <button
@@ -235,11 +259,10 @@ export function SourceControlHeaderToolbar({
           </>
         ) : (
           <>
-            {/* Why: expanded filter owns the toolbar row so typing isn't squeezed
-                beside PR links or overflow actions — collapse to reach those. */}
+            {/* Give expanded search the row so PR links and overflow controls do not squeeze typing. */}
             <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
-              <input
+              <ImeInput
                 ref={filterInputRef}
                 data-testid="source-control-filter-input"
                 type="text"

@@ -2,6 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TerminalContextMenu from './TerminalContextMenu'
+import { translate } from '@/i18n/i18n'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
 type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
@@ -13,9 +14,12 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
     React_.createElement(React_.Fragment, null, children)
+  const OpenContext = React_.createContext(false)
   return {
-    DropdownMenu: passthrough,
-    DropdownMenuContent: passthrough,
+    DropdownMenu: ({ open, children }: { open: boolean; children?: React.ReactNode }) =>
+      React_.createElement(OpenContext.Provider, { value: open }, children),
+    DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
+      React_.useContext(OpenContext) ? passthrough({ children }) : null,
     DropdownMenuLabel: passthrough,
     DropdownMenuSeparator: () => null,
     DropdownMenuShortcut: ({ children }: { children?: React.ReactNode }) => {
@@ -36,7 +40,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     }
   }
 })
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({ translate: vi.fn((_key: string, fallback: string) => fallback) }))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
 vi.mock('./terminal-context-menu-dismiss', () => ({
   shouldIgnoreTerminalMenuPointerDownOutside: () => false
@@ -62,6 +66,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     menuPoint: { x: 0, y: 0 },
     menuOpenedAtRef: { current: 0 },
     canClosePane: true,
+    closePaneLabel: 'Close Pane',
     canExpandPane: true,
     menuPaneIsExpanded: false,
     onCopy: vi.fn(),
@@ -74,6 +79,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onEqualizePaneSizes: vi.fn(),
     onClosePane: vi.fn(),
     onClearScreen: vi.fn(),
+    onResetTerminal: vi.fn(),
     canContinueAgentSessionInNewSession: false,
     onContinueAgentSessionInNewSession: vi.fn(),
     onForkAgentSession: vi.fn(),
@@ -95,6 +101,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     canClearPaneTitle: false,
     onCopyTerminalId: vi.fn(),
     onCopyPaneId: vi.fn(),
+    canCopyAgentSessionId: false,
+    onCopyAgentSessionId: vi.fn(),
     ...overrides
   }
   return renderToStaticMarkup(React.createElement(TerminalContextMenu, props))
@@ -102,6 +110,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
 
 describe('TerminalContextMenu', () => {
   beforeEach(() => {
+    vi.mocked(translate).mockClear()
     items.list = []
     shortcuts.list = []
     vi.stubGlobal('navigator', { userAgent: 'Linux' })
@@ -110,6 +119,28 @@ describe('TerminalContextMenu', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
+
+  it('does no menu-copy work while closed, then builds the opened menu', () => {
+    renderMenu({ open: false })
+    expect(translate).not.toHaveBeenCalled()
+    expect(items.list).toHaveLength(0)
+
+    renderMenu()
+    expect(translate).toHaveBeenCalled()
+    expect(items.list.length).toBeGreaterThan(0)
+  })
+
+  // Why: revealing a terminal file link lives in its click popover, not the right-click menu.
+  it.each(['Macintosh', 'Windows NT 10.0', 'Linux'])(
+    'offers no file-manager reveal item on %s',
+    (userAgent) => {
+      vi.stubGlobal('navigator', { userAgent })
+      renderMenu()
+      const labels = items.list.map((item) => childrenText(item.children))
+      expect(labels.length).toBeGreaterThan(0)
+      expect(labels.some((label) => /Reveal in|Open Containing Folder/.test(label))).toBe(false)
+    }
+  )
 
   it('renders a "Copy Context" item that triggers onCopyAgentSessionContext (issue #5020)', () => {
     const onCopyAgentSessionContext = vi.fn()
@@ -135,12 +166,61 @@ describe('TerminalContextMenu', () => {
     })
 
     const handoffItem = items.list.find(
-      (item) => childrenText(item.children) === 'Continue in New Session…'
+      (item) => childrenText(item.children) === 'Hand Off to Another Agent'
     )
     expect(handoffItem).toBeDefined()
 
     handoffItem?.onSelect?.()
     expect(onContinueAgentSessionInNewSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides chat continuation when the pane cannot switch views', () => {
+    renderMenu()
+
+    const labels = items.list.map((item) => childrenText(item.children))
+    expect(labels.some((label) => label.includes('Continue in Chat UI'))).toBe(false)
+    expect(labels.some((label) => label.includes('Continue with Terminal Agent'))).toBe(false)
+  })
+
+  it('shows Copy Session ID only for panes with provider identity', () => {
+    const onCopyAgentSessionId = vi.fn()
+    renderMenu({ canCopyAgentSessionId: true, onCopyAgentSessionId })
+
+    const item = items.list.find(
+      (candidate) => childrenText(candidate.children) === 'Copy Session ID'
+    )
+    expect(item).toBeDefined()
+    expect(
+      items.list
+        .map((candidate) => childrenText(candidate.children))
+        .filter((label) => ['Copy Session ID', 'Copy Terminal ID', 'Copy Pane ID'].includes(label))
+    ).toEqual(['Copy Session ID', 'Copy Terminal ID', 'Copy Pane ID'])
+    item?.onSelect?.()
+    expect(onCopyAgentSessionId).toHaveBeenCalledTimes(1)
+
+    vi.mocked(translate).mockClear()
+    items.list = []
+    renderMenu({ canCopyAgentSessionId: false })
+    expect(
+      items.list.some((candidate) => childrenText(candidate.children) === 'Copy Session ID')
+    ).toBe(false)
+  })
+
+  it('uses nominal primary toggle labels, including default and unbound', () => {
+    for (const [bindings, label] of [
+      [undefined, 'Ctrl+⇧+J'],
+      [['Mod+Alt+Y', 'Mod+Alt+K'], 'Ctrl+Alt+Y'],
+      [[], null]
+    ] as const) {
+      shortcuts.list = []
+      renderMenu({
+        canToggleNativeChat: true,
+        keybindings: bindings === undefined ? {} : { 'terminal.toggleNativeChat': [...bindings] }
+      })
+      expect(shortcuts.list.filter((value) => value.endsWith('J') || value.endsWith('Y'))).toEqual(
+        label ? [label] : []
+      )
+    }
   })
 
   it('shows one shortcut per terminal menu action on Windows', () => {
@@ -156,11 +236,11 @@ describe('TerminalContextMenu', () => {
 
     renderMenu({ keybindings })
 
-    expect(shortcuts.list).toContain('Ctrl+Shift+C')
-    expect(shortcuts.list).toContain('Ctrl+Shift+A')
+    expect(shortcuts.list).toContain('Ctrl+⇧+C')
+    expect(shortcuts.list).toContain('Ctrl+⇧+A')
     expect(shortcuts.list).toContain('Ctrl+V')
-    expect(shortcuts.list).toContain('Ctrl+Shift+D')
-    expect(shortcuts.list).toContain('Alt+Shift+D')
+    expect(shortcuts.list).toContain('Ctrl+⇧+D')
+    expect(shortcuts.list).toContain('Alt+⇧+D')
     expect(shortcuts.list.some((shortcut) => shortcut.includes(','))).toBe(false)
   })
 

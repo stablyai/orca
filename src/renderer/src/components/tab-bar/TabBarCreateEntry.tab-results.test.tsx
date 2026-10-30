@@ -4,16 +4,16 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
+import { buildPaletteTabDocument } from '../../../../shared/palette-match/tab-document'
 import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import type { OpenTabSearchResult } from './open-tab-search'
 import type { OpenTabSearchEntries } from './open-tab-search-entries'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { TabEntryOption } from './tab-create-entry-action'
+import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 
-// Why: the real entry-action module pulls in runtime IPC + the app store; these
-// tests only need a controllable option list beneath the tab rows.
+// Stub only create options; preserve real tab search and selection routing.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
@@ -33,8 +33,7 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => null
 }))
 
-// `hold` stands in for the hook's deferred query: it pins the results to the
-// query they were built from, so later keystrokes leave them stale.
+// Pin deferred results to their originating query so newer keystrokes leave stale rows visible.
 const tabSearchMock = vi.hoisted(() => {
   const worktree = {
     id: 'wt',
@@ -46,8 +45,7 @@ const tabSearchMock = vi.hoisted(() => {
   return {
     hold: null as string | null,
     resultsByQuery: {} as Record<string, OpenTabSearchResult[]>,
-    // Retention re-checks each row against the live query with the real engines,
-    // so every registered row needs the searchable entry it came from.
+    // Retention rechecks searchable entries, including fields omitted from rendered rows.
     entries(): OpenTabSearchEntries {
       const rows = Object.values(tabSearchMock.resultsByQuery).flat()
       return {
@@ -103,8 +101,7 @@ vi.mock('./use-open-tab-search', () => ({
   }
 }))
 
-// Selection routing itself stays real, so the focus handoff and failure messages
-// under test are the shipped ones; only the palette activations are stubbed.
+// Keep shipped selection routing for focus/failure behavior; stub palette activation only.
 const activationMocks = vi.hoisted(() => ({
   workspace: vi.fn(),
   browser: vi.fn(),
@@ -132,11 +129,15 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
+function openWorkspaceTabId(tabId: string): string {
+  return encodePaletteIdentity(['workspace-tab', 'local', 'wt', tabId])
+}
+
 function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSearchResult {
   return {
     executionHostId: 'local',
     source: 'workspace',
-    id: 'open-tab:workspace:tab-1',
+    id: openWorkspaceTabId('tab-1'),
     title: 'Add tab search and jump in worktree',
     matchedText: null,
     worktreeId: 'wt',
@@ -186,8 +187,7 @@ function queryInput(): HTMLInputElement {
 
 function setQuery(value: string): void {
   const input = queryInput()
-  // Why: React patches the input value setter to track changes; bypass it with
-  // the native setter so the synthetic onChange actually fires.
+  // Use the native value setter to bypass React tracking and trigger synthetic onChange.
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
@@ -264,14 +264,17 @@ describe('TabBarCreateEntry tab results', () => {
   it('shows the matched text rather than the shared label when tabs share a title (AE2)', () => {
     tabSearchMock.resultsByQuery['fix the flaky'] = [
       terminalResult({ title: 'Claude Code', matchedText: 'fix the flaky retry test' }),
-      terminalResult({ id: 'open-tab:workspace:tab-2', tabId: 'tab-2', title: 'Claude Code' })
+      terminalResult({
+        id: openWorkspaceTabId('tab-2'),
+        tabId: 'tab-2',
+        title: 'Claude Code'
+      })
     ]
     renderEntry()
 
     setQuery('fix the flaky')
 
     expect(rowTexts()[0]).toContain('fix the flaky retry test')
-    // The unmatched sibling falls back to its own title.
     expect(rowTexts()[1]).toContain('Claude Code')
   })
 
@@ -346,7 +349,6 @@ describe('TabBarCreateEntry tab results', () => {
     setQuery('add tab')
     expect(rowTexts()[0]).toContain('Switch to tab')
 
-    // The user backspaces; the deferred search still describes 'add tab'.
     tabSearchMock.hold = 'add tab'
     setQuery('add ta')
 
@@ -366,7 +368,6 @@ describe('TabBarCreateEntry tab results', () => {
     setQuery('add tab')
     expect(rowTexts()[0]).toContain('Switch to tab')
 
-    // The user keeps typing; the deferred search still describes 'add tab'.
     tabSearchMock.hold = 'add tab'
     setQuery('add tabs')
 
@@ -415,7 +416,11 @@ describe('TabBarCreateEntry tab results', () => {
     activationMocks.workspace.mockReturnValue({ status: 'failed', reason: 'missing-tab' })
     tabSearchMock.resultsByQuery['add tab'] = [
       terminalResult(),
-      terminalResult({ id: 'open-tab:workspace:tab-2', tabId: 'tab-2', title: 'second tab' })
+      terminalResult({
+        id: openWorkspaceTabId('tab-2'),
+        tabId: 'tab-2',
+        title: 'second tab'
+      })
     ]
     const onDidOpenEntry = vi.fn()
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
@@ -431,7 +436,6 @@ describe('TabBarCreateEntry tab results', () => {
     )
     expect(rowTexts()).toHaveLength(3)
 
-    // The other tab row and the create row below it still act.
     pressKey(queryInput(), 'ArrowDown')
     submitForm()
     expect(activationMocks.workspace).toHaveBeenLastCalledWith(

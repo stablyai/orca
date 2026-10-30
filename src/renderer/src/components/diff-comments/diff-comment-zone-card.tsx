@@ -1,10 +1,10 @@
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 import { DiffCommentCard } from './DiffCommentCard'
+import { DiffCommentDraftCard } from './DiffCommentDraftCard'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
@@ -38,7 +38,8 @@ function getSingleCommentSendScopes(
         'This note'
       ),
       notes: comment.sentAt ? [] : [comment],
-      prompt: formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
+      formatPrompt: () =>
+        formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
     }
   ]
 }
@@ -78,7 +79,6 @@ export function renderDiffCommentZoneCard(
       <DiffCommentCard
         lineNumber={comment.lineNumber}
         startLine={comment.startLine}
-        label={comment.author ? getDiffCommentLineLabel(comment).toLowerCase() : undefined}
         body={comment.body}
         sentAt={comment.sentAt}
         author={comment.author}
@@ -107,13 +107,62 @@ export function renderDiffCommentZoneCard(
               groupId={activeGroupId}
               modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
               scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
-              targetModeLabel="This note"
+              targetModeLabel={translate(
+                'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
+                'This note'
+              )}
               triggerClassName="orca-diff-comment-edit"
-              disabledTooltip="Note already sent"
+              disabledTooltip={translate(
+                'auto.components.diff.comments.diffCommentZoneCard.noteAlreadySent',
+                'Note already sent'
+              )}
               onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
             />
           ) : null
         }
+      />
+    </TooltipProvider>
+  )
+}
+
+export type DiffCommentDraftCardContext = {
+  placeholder?: string
+  submitLabel?: string
+  submittingLabel?: string
+  initialBody?: string
+  onBodyChange?: (body: string) => void
+  resizeZone: () => void
+  onCancel: () => void
+  onSubmit: (body: string) => Promise<boolean>
+}
+
+export function renderDiffCommentDraftCard(
+  root: Root,
+  draft: { lineNumber: number; startLine?: number },
+  {
+    placeholder,
+    submitLabel,
+    submittingLabel,
+    initialBody,
+    onBodyChange,
+    resizeZone,
+    onCancel,
+    onSubmit
+  }: DiffCommentDraftCardContext
+): void {
+  root.render(
+    <TooltipProvider delayDuration={400}>
+      <DiffCommentDraftCard
+        lineNumber={draft.lineNumber}
+        startLine={draft.startLine}
+        placeholder={placeholder}
+        submitLabel={submitLabel}
+        submittingLabel={submittingLabel}
+        initialBody={initialBody}
+        onBodyChange={onBodyChange}
+        onCancel={onCancel}
+        onSubmit={onSubmit}
+        onContentResize={resizeZone}
       />
     </TooltipProvider>
   )

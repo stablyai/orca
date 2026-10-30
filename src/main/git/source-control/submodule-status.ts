@@ -1,23 +1,19 @@
 import type { GitStatusEntry, GitStatusResult } from '../../../shared/git-status-types'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../../shared/git-status-limit'
-import { parseNumstat } from '../../../shared/git-uncommitted-line-stats'
+import { gitChangeListArgs, parseGitChangeList } from '../../../shared/git-change-list'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import type { GetStatusOptions } from './get-status-options'
 import { getStatus } from './status-read'
 import { resolveSubmoduleWorktreePath } from './submodule-paths'
-import { parseBranchChangeLine } from './branch-change-entries'
 import {
   readGitlinkOidFromIndex,
   readGitlinkOidFromTree,
   readWorkingSubmoduleHead
 } from './submodule-gitlink-oid'
 
-/**
- * Run a plain status inside a submodule's own worktree (lazy "expand submodule"
- * flow). Entry paths are relative to the submodule root; the renderer prefixes them.
- */
+/** Return submodule-relative entries; the renderer supplies the parent prefix. */
 export async function getSubmoduleStatus(
   worktreePath: string,
   submodulePath: string,
@@ -25,18 +21,22 @@ export async function getSubmoduleStatus(
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
   const limit = resolveGitStatusLimit(options.limit)
-  // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
-  const workingResult = options.staged
-    ? ({ entries: [], conflictOperation: 'unknown' } satisfies GitStatusResult)
-    : await getStatus(submoduleWorktreePath, options)
-  // Why: a moved gitlink (clean worktree) has no status rows; surface the parent-commit→checkout range as inner rows.
-  const fromOid = options.staged
-    ? await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
-    : (await readGitlinkOidFromIndex(worktreePath, submodulePath, options)) ||
-      (await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options))
-  const toOid = options.staged
-    ? await readGitlinkOidFromIndex(worktreePath, submodulePath, options)
-    : await readWorkingSubmoduleHead(submoduleWorktreePath, options)
+  // Read independent inputs concurrently; staged expansion needs HEAD/index only, not inner status.
+  const [workingResult, fromOid, toOid] = await Promise.all([
+    options.staged
+      ? Promise.resolve<GitStatusResult>({ entries: [], conflictOperation: 'unknown' })
+      : getStatus(submoduleWorktreePath, options),
+    // A clean moved gitlink still needs committed range rows.
+    options.staged
+      ? readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
+      : readGitlinkOidFromIndex(worktreePath, submodulePath, options).then(
+          (indexOid) =>
+            indexOid || readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
+        ),
+    options.staged
+      ? readGitlinkOidFromIndex(worktreePath, submodulePath, options)
+      : readWorkingSubmoduleHead(submoduleWorktreePath, options)
+  ])
   if (fromOid && toOid && fromOid !== toOid) {
     const rangeEntries = await computeSubmoduleRangeEntries(
       submoduleWorktreePath,
@@ -64,10 +64,6 @@ export async function getSubmoduleStatus(
   return workingResult
 }
 
-/**
- * List files changed between two submodule commits as status rows — used when a
- * gitlink pointer moved so the expanded submodule shows committed changes.
- */
 async function computeSubmoduleRangeEntries(
   submoduleWorktreePath: string,
   fromOid: string,
@@ -78,41 +74,10 @@ async function computeSubmoduleRangeEntries(
     ...gitOptionsForWorktree(submoduleWorktreePath, options),
     env: gitOptionalLocksDisabledEnv()
   }
-  let nameStatus = ''
-  let numstat = ''
   try {
-    const [statusResult, numstatResult] = await Promise.all([
-      gitExecFileAsync(
-        ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', fromOid, toOid],
-        gitOptions
-      ),
-      gitExecFileAsync(
-        ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', fromOid, toOid],
-        gitOptions
-      )
-    ])
-    nameStatus = statusResult.stdout
-    numstat = numstatResult.stdout
+    const { stdout } = await gitExecFileAsync(gitChangeListArgs(fromOid, toOid), gitOptions)
+    return parseGitChangeList(stdout).map((entry) => ({ ...entry, area: 'unstaged' }))
   } catch {
     return []
   }
-  const statsByPath = parseNumstat(numstat)
-  const entries: GitStatusEntry[] = []
-  for (const line of nameStatus.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-    const change = parseBranchChangeLine(line)
-    if (!change) {
-      continue
-    }
-    entries.push({
-      path: change.path,
-      status: change.status,
-      area: 'unstaged',
-      ...(change.oldPath ? { oldPath: change.oldPath } : {}),
-      ...statsByPath.get(change.path)
-    })
-  }
-  return entries
 }

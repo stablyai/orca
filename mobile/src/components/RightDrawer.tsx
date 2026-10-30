@@ -1,36 +1,28 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import {
-  View,
-  Pressable,
-  StyleSheet,
-  Platform,
-  useWindowDimensions,
-  Keyboard,
-  BackHandler
-} from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { View, Pressable, StyleSheet, Platform, Keyboard } from 'react-native'
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedScrollHandler,
   withSpring,
   withTiming,
   runOnJS,
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
+import { useBackClaim } from '../navigation/use-back-claim'
 import { colors, spacing } from '../theme/mobile-theme'
-// Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
-// the exact same gate as BottomDrawer rather than duplicating it.
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+// Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
-// Why: leftward drags (negative translateX) pull the panel past its docked edge;
-// damp them with a rubber-band factor so the drawer resists over-pulling inward.
+// Damp negative translateX so panel resists pulling inward past docked edge.
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
 const HIDE_DURATION = 150
@@ -47,14 +39,12 @@ export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Pro
   const [mounted, setMounted] = useState(visible)
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
-  // Why: opening drawers should mount before commit; waiting for a passive
-  // Effect adds a null render before the drawer can animate in.
+  // Mount opening drawer before commit; passive effect adds blank render before animation.
   if (resolvedMounted !== mounted) {
     setMounted(resolvedMounted)
   }
 
-  // Why: hidden drawers are rendered by parent screens even while closed; keep
-  // their Reanimated/Gesture setup out of hot paths until they are actually shown.
+  // Keep Reanimated/Gesture setup out of closed-drawer parent hot paths.
   if (!resolvedMounted) {
     return null
   }
@@ -84,10 +74,10 @@ function MountedRightDrawer({
   zIndex = 1000,
   widthPx
 }: MountedRightDrawerProps) {
+  useMobileColorScheme()
   const translateX = useSharedValue(0)
   const progress = useSharedValue(0)
-  const scrollOffsetY = useSharedValue(0)
-  const { width: screenWidth } = useWindowDimensions()
+  const { width: screenWidth } = useSafeAreaFrame()
   const insets = useSafeAreaInsets()
   const { isWideLayout } = useResponsiveLayout()
   const panelWidth = resolveRightDrawerPanelWidth(screenWidth, isWideLayout, widthPx)
@@ -95,7 +85,6 @@ function MountedRightDrawer({
   useEffect(() => {
     if (visible) {
       translateX.value = 0
-      scrollOffsetY.value = 0
       progress.value = withTiming(1, { duration: SHOW_DURATION })
     } else {
       Keyboard.dismiss()
@@ -107,28 +96,22 @@ function MountedRightDrawer({
     }
   }, [onHidden, visible])
 
-  useEffect(() => {
-    if (!visible) {
-      return
-    }
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose()
-      return true
-    })
-    return () => sub.remove()
-  }, [visible, onClose])
+  // Use native hardware Back or page’s shell Back claim; review route reaches both platform seams.
+  useBackClaim(
+    visible
+      ? () => {
+          onClose()
+          return true
+        }
+      : null
+  )
 
   const dismiss = useCallback(() => {
     onClose()
   }, [onClose])
 
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
-  })
-
   const scrollGesture = Gesture.Native()
-  // Why: swipe-from-right (positive translationX) dismisses; the horizontal
-  // activeOffset lets the inner vertical ScrollView keep its gestures.
+  // Positive horizontal swipe dismisses; activeOffset leaves vertical ScrollView gestures intact.
   const panGesture = Gesture.Pan()
     .activeOffsetX([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
@@ -153,20 +136,23 @@ function MountedRightDrawer({
       }
     })
 
-  const drawerStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP) +
-          translateX.value
-      }
-    ]
-  }))
+  const drawerStyle = useAnimatedStyle(
+    () => ({
+      transform: [
+        {
+          translateX:
+            interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP) +
+            translateX.value
+        }
+      ]
+    }),
+    [progress, translateX, panelWidth]
+  )
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateX.value, [0, panelWidth], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateX, panelWidth])
 
   return (
     <Animated.View
@@ -198,8 +184,6 @@ function MountedRightDrawer({
                 <Animated.ScrollView
                   bounces={false}
                   keyboardShouldPersistTaps="handled"
-                  onScroll={scrollHandler}
-                  scrollEventThrottle={16}
                   showsVerticalScrollIndicator={false}
                 >
                   {children}
@@ -213,7 +197,7 @@ function MountedRightDrawer({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000
@@ -248,4 +232,4 @@ const styles = StyleSheet.create({
       android: { elevation: 8 }
     })
   }
-})
+}))

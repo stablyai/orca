@@ -6,27 +6,30 @@ import { Button } from '@/components/ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
-  getGitHubMutationRoutingSettings,
+  getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId
 } from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import {
-  GITHUB_PR_MERGE_METHOD_LABELS,
-  resolveGitHubPRMergeMethods
-} from '../../../../../shared/github/pull-request-merge-methods'
+import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page-github-dialog-state-authority'
+import {
+  getPullRequestMergeConfirmationTitle,
+  getPullRequestMergeMethodLabel,
+  getPullRequestStateConfirmationTitle
+} from '@/components/github/pull-request-confirmation-copy'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { runPullRequestStateUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 import { PRActionsMergeMenu } from './pr-actions-merge-menu'
 import { WorkItemStateBadge } from '../load-item-details/work-item-state-badge'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function PRActionsPanel({
   item,
@@ -55,12 +58,9 @@ export function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const sourceSettings = useAppStore(
-    useShallow((s) =>
-      getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
-    )
+  const mergeTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
-  const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const prRepo = resolvePullRequestRepo(item, projectOrigin)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
@@ -98,11 +98,7 @@ export function PRActionsPanel({
         ? translate('auto.components.GitHubItemDialog.4aecf121e7', 'Close')
         : translate('auto.components.GitHubItemDialog.8812225174', 'Reopen')
     const confirmed = await confirm({
-      title: translate(
-        'auto.components.GitHubItemDialog.03d7216d62',
-        '{{value0}} PR #{{value1}}?',
-        { value0: label, value1: item.number }
-      ),
+      title: getPullRequestStateConfirmationTitle(nextState, item.number),
       description:
         nextState === 'closed'
           ? translate(
@@ -121,8 +117,7 @@ export function PRActionsPanel({
     }
     const previousState = localState
     setStatePending(true)
-    // Why: without registry authority a search-lagged Tasks refetch silently
-    // reverts this row to its pre-mutation state (STA-3343).
+    // Keep registry authority so search-lagged Tasks refetches cannot revert this mutation.
     const authority = assertTaskPageGitHubDialogStateAuthority({
       repoId: item.repoId,
       itemId: item.id,
@@ -174,13 +169,9 @@ export function PRActionsPanel({
     if (mergeDisabled) {
       return
     }
-    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+    const label = getPullRequestMergeMethodLabel(method)
     const confirmed = await confirm({
-      title: translate(
-        'auto.components.GitHubItemDialog.03d7216d62',
-        '{{value0}} PR #{{value1}}?',
-        { value0: label, value1: item.number }
-      ),
+      title: getPullRequestMergeConfirmationTitle(method, item.number),
       description: translate(
         'auto.components.GitHubItemDialog.a27ee5ca1a',
         'This will update the pull request on GitHub.'
@@ -215,7 +206,7 @@ export function PRActionsPanel({
             })
       if (!result.ok) {
         toast.error(
-          result.error ||
+          codeHostErrorText(result) ||
             translate('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request')
         )
         return
@@ -284,7 +275,7 @@ export function PRActionsPanel({
             })
       if (!result.ok) {
         toast.error(
-          result.error ||
+          codeHostErrorText(result) ||
             (enabled
               ? translate(
                   'auto.components.GitHubItemDialog.825a8fb8cd',

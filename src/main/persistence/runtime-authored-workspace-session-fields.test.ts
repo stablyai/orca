@@ -16,8 +16,7 @@ const row = {
 
 describe('preserving runtime-authored workspace session fields', () => {
   it('carries the rows across a write that never mentions them', () => {
-    // The desktop renderer builds its payload from Zustand, which has no idea the runtime
-    // authority sharing this profile persists client-hosted pages.
+    // Zustand snapshots omit pages persisted by the runtime sharing this profile.
     const next = preserveRuntimeAuthoredWorkspaceSessionFields(
       session(),
       session({ 'repo-1::wt-a': [row] })
@@ -47,8 +46,7 @@ describe('preserving runtime-authored workspace session fields', () => {
   })
 
   it('treats an explicit undefined as never having mentioned the field', () => {
-    // The one ambiguous input: a writer that spreads the field through as undefined is still a
-    // writer that knows nothing about it, so it must inherit rather than clear.
+    // Explicit undefined still means the writer lacks this field; inherit rather than clear.
     const next = preserveRuntimeAuthoredWorkspaceSessionFields(
       { ...session(), clientHostedBrowserPagesByWorktree: undefined },
       session({ 'repo-1::wt-a': [row] })
@@ -62,6 +60,27 @@ describe('preserving runtime-authored workspace session fields', () => {
 
     expect(preserveRuntimeAuthoredWorkspaceSessionFields(next, session())).toBe(next)
     expect(preserveRuntimeAuthoredWorkspaceSessionFields(next, null)).toBe(next)
+  })
+
+  it('keeps default-terminal-tab markers a persist snapshot omitted', () => {
+    const next = preserveRuntimeAuthoredWorkspaceSessionFields(session(), {
+      ...session(),
+      defaultTerminalTabsAppliedByWorktreeId: { 'repo-1::/wt-a': true }
+    })
+
+    expect(next.defaultTerminalTabsAppliedByWorktreeId).toEqual({ 'repo-1::/wt-a': true })
+  })
+
+  it('unions default-terminal-tab markers instead of replacing with a partial snapshot', () => {
+    const next = preserveRuntimeAuthoredWorkspaceSessionFields(
+      { ...session(), defaultTerminalTabsAppliedByWorktreeId: { 'repo-1::/wt-b': true } },
+      { ...session(), defaultTerminalTabsAppliedByWorktreeId: { 'repo-1::/wt-a': true } }
+    )
+
+    expect(next.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      'repo-1::/wt-a': true,
+      'repo-1::/wt-b': true
+    })
   })
 })
 

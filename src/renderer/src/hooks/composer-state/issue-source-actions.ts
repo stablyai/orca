@@ -3,6 +3,7 @@ import type { ComposerModel } from './composer-model'
 type IssueSourceActionsInput = Pick<
   ComposerModel,
   | 'baseBranch'
+  | 'baseBranchNamesWorkspace'
   | 'branchAutoNameRef'
   | 'isProjectGroupTarget'
   | 'lastAutoNameRef'
@@ -27,12 +28,12 @@ type IssueSourceActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setStartFromResetHint'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
 >
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import {
   toLinearLinkedWorkItem,
   getLinkedItemDisplayName,
@@ -43,6 +44,7 @@ import {
   getLinearLinkedWorkItemBranchName
 } from '@/lib/linear-linked-work-item'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -53,12 +55,13 @@ import {
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {
     baseBranch,
+    baseBranchNamesWorkspace,
     branchAutoNameRef,
     isProjectGroupTarget,
     lastAutoNameRef,
@@ -83,11 +86,12 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   } = input
 
   const handleSmartLinearIssueSelect = useCallback(
     (issue: LinearIssue): void => {
+      smartSourceSelectionRef.current = null
       if (isProjectGroupTarget) {
         const linkedItem = toLinearLinkedWorkItem(issue)
         setLinkedIssue('')
@@ -101,9 +105,10 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
         if (
           shouldApplyWorkspaceSourceAutoName({
             currentName: name,
-            lastAutoName: lastAutoNameRef.current
+            lastAutoName: lastAutoNameRef.current,
+            lookupTextIsQuery: !linkedWorkItem
           }) ||
-          name.trim().toLowerCase() === issue.identifier.toLowerCase()
+          (!linkedWorkItem && name.trim().toLowerCase() === issue.identifier.toLowerCase())
         ) {
           setName(suggestedName)
           lastAutoNameRef.current = suggestedName
@@ -118,13 +123,14 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
-      // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed Linear identifier ("STA-123") that matched this issue.
+      // Treat typed Linear identifiers as lookup text too, rather than user-owned names.
       if (
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
-          lastAutoName: lastAutoNameRef.current
+          lastAutoName: lastAutoNameRef.current,
+          lookupTextIsQuery: !linkedWorkItem
         }) ||
-        name.trim().toLowerCase() === issue.identifier.toLowerCase()
+        (!linkedWorkItem && name.trim().toLowerCase() === issue.identifier.toLowerCase())
       ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
@@ -134,11 +140,12 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)
       branchAutoNameRef.current = linearBranchName ?? ''
-      // Why: don't prefill the note for a Linear pick — that would turn a source selection into user-authored instructions (matches the GitHub flow).
+      // Source selection must not inject user instructions through note prefill; match GitHub behavior.
     },
     [
       isProjectGroupTarget,
       name,
+      linkedWorkItem,
       branchAutoNameRef,
       lastAutoNameRef,
       setBranchNameOverride,
@@ -150,18 +157,22 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedPR,
       setLinkedTaskSourceContext,
       setLinkedWorkItem,
-      setName
+      setName,
+      smartSourceSelectionRef
     ]
   )
 
   const handleSmartJiraIssueSelect = useCallback(
     (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
+      smartSourceSelectionRef.current = null
       const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
-      setBaseBranch(undefined)
+      if (baseBranchNamesWorkspace) {
+        setBaseBranch(undefined)
+      }
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       setBranchNameOverride(undefined)
@@ -171,14 +182,15 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedWorkItem(linkedItem)
       setLinkedTaskSourceContext(sourceContext)
       const suggestedName =
-        getLinkedWorkItemWorkspaceName(linkedItem)?.seedName ??
+        getLinkedWorkItemWorkspaceName(linkedItem, getJiraIssueKeyCasingSeedOptions())?.seedName ??
         getLinkedWorkItemSuggestedName(linkedItem)
       // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
       if (
         suggestedName &&
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
-          lastAutoName: lastAutoNameRef.current
+          lastAutoName: lastAutoNameRef.current,
+          lookupTextIsQuery: !linkedWorkItem
         })
       ) {
         setName(suggestedName)
@@ -187,6 +199,8 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     },
     [
       name,
+      linkedWorkItem,
+      baseBranchNamesWorkspace,
       branchAutoNameRef,
       lastAutoNameRef,
       setBaseBranch,
@@ -201,19 +215,22 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedTaskSourceContext,
       setLinkedWorkItem,
       setName,
-      setPushTarget
+      setPushTarget,
+      smartSourceSelectionRef
     ]
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
-    smartGitHubPrStartPointSelectionRef.current = null
+    smartSourceSelectionRef.current = null
     setLinkedIssue('')
     setLinkedPR(null)
     setLinkedGitLabIssue(null)
     setLinkedGitLabMR(null)
     setLinkedWorkItem(null)
     setLinkedTaskSourceContext(null)
-    setBaseBranch(undefined)
+    if (baseBranchNamesWorkspace) {
+      setBaseBranch(undefined)
+    }
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
@@ -233,6 +250,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     }
   }, [
     name,
+    baseBranchNamesWorkspace,
     branchAutoNameRef,
     lastAutoNameRef,
     lastAutoNoteRef,
@@ -254,7 +272,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   ])
 
   const smartNameSelection = useMemo<SmartWorkspaceNameSelection | null>(() => {
@@ -263,9 +281,11 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     }
     return buildWorkspaceSourceSelection({
       linkedWorkItem,
-      baseBranch
+      // Why: only a branch picked to NAME the workspace becomes a source pill; a base ref
+      // chosen in the composer's own picker must leave a typed name on screen.
+      baseBranch: baseBranchNamesWorkspace ? baseBranch : undefined
     }) as SmartWorkspaceNameSelection | null
-  }, [baseBranch, isProjectGroupTarget, linkedWorkItem])
+  }, [baseBranch, baseBranchNamesWorkspace, isProjectGroupTarget, linkedWorkItem])
 
   return {
     handleSmartLinearIssueSelect,

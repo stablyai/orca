@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { OUTSTANDING_MAILBOX_INDEX_SQL } from './migrate-v41'
 
 export function hasColumn(this: OrchestrationDb, table: string, column: string): boolean {
   const rows = this.db.pragma(`table_info(${table})`) as { name: string }[]
@@ -6,12 +7,37 @@ export function hasColumn(this: OrchestrationDb, table: string, column: string):
 }
 
 export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): void {
+  if (
+    ['assignee_orca_session_id', 'status', 'completed_at'].every((column) =>
+      this.hasColumn('dispatch_contexts', column)
+    )
+  ) {
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dispatch_session_presentation
+      ON dispatch_contexts(status, completed_at) WHERE assignee_orca_session_id IS NOT NULL`)
+  }
+  if (this.hasColumn('deliveries', 'mailbox_handle')) {
+    this.db.exec(OUTSTANDING_MAILBOX_INDEX_SQL)
+  }
   const hasDeliveredAt = this.hasColumn('messages', 'delivered_at')
   if (hasDeliveredAt) {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_messages_undelivered_inbox
         ON messages(to_handle, read, delivered_at, sequence)
     `)
+  }
+  if (this.hasColumn('messages', 'pointer_enter_pending')) {
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_messages_pending_pointer_enter
+        ON messages(to_handle, sequence)
+        WHERE read = 0 AND pointer_enter_pending > 0;
+    `)
+    if (this.hasColumn('messages', 'pointer_pty_id')) {
+      // Working-title frames release one PTY's reservations, including already-read rows.
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_messages_pending_pointer_pty
+          ON messages(pointer_pty_id) WHERE pointer_enter_pending > 0;
+      `)
+    }
   }
 
   if (
@@ -38,7 +64,7 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   `)
 }
 
-// Why: sqlite_master holds the table's CREATE SQL incl. the CHECK — cheapest reliable probe for whether it already allows 'heartbeat'.
+// Probe sqlite_master's CHECK to verify heartbeat support without rebuilding.
 export function messagesTypeCheckAllowsHeartbeat(this: OrchestrationDb): boolean {
   const row = this.db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'")

@@ -13,7 +13,7 @@ import {
   getActiveStickyHeaderIndexForScroll
 } from './virtual-rows'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { Row } from '../grouping/row-types'
+import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -31,7 +31,7 @@ const makeHeaderRow = (
   key,
   label: key,
   count: 0,
-  tone: 'text-foreground',
+  icon: { kind: 'project' },
   ...overrides
 })
 
@@ -45,6 +45,14 @@ const makeImportedCardRow = (): Extract<Row, { type: 'imported-worktrees-card' }
 
 const makeScrollContainer = (scrollTop: number, clientHeight: number): HTMLElement =>
   ({ scrollTop, clientHeight }) as HTMLElement
+
+const eligibleRemeasurement = {
+  itemStart: 0,
+  itemEnd: 100,
+  scrollOffset: 500,
+  isFirstMeasurement: false,
+  scrollDirection: 'forward' as const
+}
 
 describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('counts record keys once per object reference', () => {
@@ -65,6 +73,7 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('suppresses measured-row scroll correction while TanStack is scrolling', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
         isScrolling: true,
         now: 1_000,
         suppressUntil: 0
@@ -72,9 +81,10 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
     ).toBe(false)
   })
 
-  it('suppresses measured-row scroll correction during direct scroll input grace period', () => {
+  it('suppresses measured-row scroll correction even for eligible geometry during direct scroll input grace period', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
         isScrolling: false,
         now: 1_000,
         suppressUntil: 1_250
@@ -85,11 +95,93 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('allows measured-row scroll correction after direct scrolling settles', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
         isScrolling: false,
         now: 1_500,
         suppressUntil: 1_250
       })
     ).toBe(true)
+  })
+
+  it('rejects measured-row scroll correction for a row below the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 600,
+        itemEnd: 700,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
+  })
+
+  it('rejects measured-row scroll correction for a row spanning the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 450,
+        itemEnd: 550,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
+  })
+
+  it('allows remeasurement for a row ending at the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 400,
+        itemEnd: 500,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(true)
+  })
+
+  it('allows a first estimate measurement whose top is above the scroll anchor even when its end crosses it', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 450,
+        itemEnd: 550,
+        isFirstMeasurement: true,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(true)
+  })
+
+  it('rejects a first measurement beginning exactly at the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 500,
+        itemEnd: 550,
+        isFirstMeasurement: true,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
+  })
+
+  it('rejects backward remeasurement even when the row is fully above the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 400,
+        itemEnd: 450,
+        scrollDirection: 'backward',
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
   })
 
   it('keeps pending reveal requests when the worktree still exists but the row is unresolved', () => {
@@ -237,9 +329,6 @@ describe('estimateRenderRowSize', () => {
   })
 
   it('activates a secondary header as soon as its row reaches the top (no spacer dead zone)', () => {
-    // Regression: the swap must fire when the header row reaches the top
-    // (scrollOffset === start), not 8px later. Gating on start + spacer left
-    // the previous repo's opaque header pinned over the incoming one.
     expect(
       getActiveStickyHeaderIndexForScroll({
         rangeStartIndex: 1,

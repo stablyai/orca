@@ -1,21 +1,4 @@
-/**
- * Forces a full synchronous repaint through xterm's RenderService even when its
- * IntersectionObserver still reports the screen element as not intersecting.
- *
- * Why: on tab/worktree reveal the pane is DOM-visible but xterm's own
- * observer callback can lag a frame (worse under load), leaving
- * `RenderService._isPaused === true`. While paused, `refreshRows` early-returns
- * and only latches `_needsFullRefresh`, so the reveal-repaint's
- * `terminal.refresh()` is swallowed — the freshly-cleared render model never
- * repaints and the canvas keeps compositing stale rows (classic "bottom rows
- * missing until you drag-select" symptom). We can't wait for the observer, so
- * we clear the latch and drive one synchronous full render ourselves; the
- * observer reasserts authority naturally on its next callback.
- *
- * All access is behind typeof guards: an xterm upgrade that renames these
- * internals degrades to a no-op (callers keep their existing refresh path), it
- * never throws into a render frame.
- */
+/** Visible reveal can beat IntersectionObserver, leaving refresh swallowed behind pause/full-refresh latches and stale rows until selection. Release the pause and repaint; the next observer callback resumes authority. Guard private members so upgrades fall back to normal refresh without throwing. */
 
 type MaybeWebglRenderer = {
   renderRows?: (start: number, end: number) => void
@@ -24,6 +7,7 @@ type MaybeWebglRenderer = {
 type MaybePausableRenderService = {
   _isPaused?: boolean
   _needsFullRefresh?: boolean
+  _pausedResizeTask?: { flush?: () => void } | null
   refreshRows?: (start: number, end: number, sync?: boolean) => void
   _renderer?: { value?: MaybeWebglRenderer | null } | MaybeWebglRenderer | null
 }
@@ -41,6 +25,18 @@ type TerminalWithRenderService = {
   }
 }
 
+/** Flush the renderer resize parked while paused before clearing full-refresh latches; only the observer normally flushes it, and presenting old canvas/model geometry produces fragments/bars until resize. */
+function releaseRenderPause(service: PausableRenderService): void {
+  // Clear the full-refresh latch as serviced to avoid a duplicate observer repaint.
+  service._isPaused = false
+  service._needsFullRefresh = false
+  try {
+    service._pausedResizeTask?.flush?.()
+  } catch {
+    // Why: a resize that throws mid-dispose must not block the present.
+  }
+}
+
 function getRenderService(terminal: unknown): PausableRenderService | null {
   const service = (terminal as TerminalWithRenderService | null)?._core?._renderService
   return service && typeof service.refreshRows === 'function'
@@ -48,13 +44,7 @@ function getRenderService(terminal: unknown): PausableRenderService | null {
     : null
 }
 
-/**
- * If xterm's renderer is paused (observer hasn't caught up to the reveal),
- * clear the pause latch and force a synchronous full-viewport repaint.
- * Returns true when it drove the render, false when it left the terminal
- * untouched (not paused, or internals unavailable) so the caller can fall back
- * to its normal `terminal.refresh()`.
- */
+/** If paused, release the latch and synchronously present the full viewport. False leaves normal refresh to callers when unpaused or internals are unavailable. */
 export function forceRepaintThroughRenderPause(terminal: unknown): boolean {
   const service = getRenderService(terminal)
   if (!service || service._isPaused !== true) {
@@ -66,11 +56,7 @@ export function forceRepaintThroughRenderPause(terminal: unknown): boolean {
     return false
   }
 
-  // Why: leave the latch as if the pending full refresh was serviced — we are
-  // about to service it — so the observer's next callback doesn't queue a
-  // redundant second full repaint.
-  service._isPaused = false
-  service._needsFullRefresh = false
+  releaseRenderPause(service)
   try {
     service.refreshRows(0, rows - 1, true)
     return true
@@ -79,13 +65,7 @@ export function forceRepaintThroughRenderPause(terminal: unknown): boolean {
   }
 }
 
-/**
- * Requests a full viewport while preserving a TUI's synchronized-output frame.
- *
- * Why: ordinary reveal must not publish a half-built DEC 2026 frame. Routing
- * through RenderService keeps the previous canvas coherent and arms xterm's
- * bounded safety timeout if the TUI never closes the frame.
- */
+/** Preserve the coherent canvas through DEC 2026; RenderService waits for frame close with xterm’s bounded safety timeout. */
 export function requestFullViewportPresent(terminal: unknown): boolean {
   const service = getRenderService(terminal)
   if (!service) {
@@ -102,8 +82,7 @@ export function requestFullViewportPresent(terminal: unknown): boolean {
   }
 
   if (paused) {
-    service._isPaused = false
-    service._needsFullRefresh = false
+    releaseRenderPause(service)
   }
 
   try {
@@ -126,7 +105,7 @@ function getRenderer(service: MaybePausableRenderService): MaybeWebglRenderer | 
   return wrapped ?? null
 }
 
-function isSynchronizedOutputHeld(terminal: unknown): boolean {
+export function isSynchronizedOutputHeld(terminal: unknown): boolean {
   const core = (terminal as TerminalWithRenderService)._core
   return (
     (core?.coreService?.decPrivateModes ?? core?._coreService?.decPrivateModes)
@@ -134,15 +113,7 @@ function isSynchronizedOutputHeld(terminal: unknown): boolean {
   )
 }
 
-/**
- * One synchronous full-viewport present when xterm would otherwise swallow it:
- * IntersectionObserver pause, or DEC 2026 synchronized output.
- *
- * Why not on every paint: a forced renderer.renderRows on a fresh, unpaused
- * splash paints before cell metrics settle and leaves a 1px black gutter under
- * a TUI composer — production never does that. Callers fall back to
- * terminal.refresh() for the normal path.
- */
+/** Force a full present through pause/DEC 2026 only for held keystroke echo, replay hold-cap expiry, or revealing a released canvas (no coherent frame left to keep). Mid-frame painting exposes unfinished TUIs (#32198); reveal/recovery use requestFullViewportPresent. Normal unpaused paint falls back to refresh: direct first-splash renderRows precedes stable cell metrics and leaves a 1px gutter. */
 export function forceFullViewportPresent(terminal: unknown): boolean {
   const service = getRenderService(terminal)
   if (!service) {
@@ -160,16 +131,12 @@ export function forceFullViewportPresent(terminal: unknown): boolean {
   }
 
   if (paused) {
-    service._isPaused = false
-    service._needsFullRefresh = false
+    releaseRenderPause(service)
   }
 
   const renderer = getRenderer(service)
   try {
-    // Why: a new TUI tab is often still paused (observer lag). Painting
-    // via renderer.renderRows skips RenderService's dimension clamp and draws
-    // 1px short of the composer box. Production uses refreshRows here.
-    // renderer.renderRows is only for DEC 2026, which swallows refreshRows.
+    // New tabs can still be observer-paused; use refreshRows for its dimension clamp to avoid a 1px gutter. Only DEC 2026 requires direct renderRows.
     if (syncHeld && typeof renderer?.renderRows === 'function') {
       renderer.renderRows(0, rows - 1)
       return true
@@ -177,9 +144,7 @@ export function forceFullViewportPresent(terminal: unknown): boolean {
     service.refreshRows(0, rows - 1, true)
     return true
   } catch {
-    // Why: same as forceRepaintThroughRenderPause — leave the latch cleared so
-    // the caller's terminal.refresh() fallback can still paint. Restoring
-    // _isPaused would swallow that refresh until IntersectionObserver fires.
+    // Keep pause cleared so the caller’s refresh fallback is not swallowed while waiting for IntersectionObserver.
     return false
   }
 }

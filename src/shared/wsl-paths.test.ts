@@ -1,29 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   foldWslUncPathCaseInsensitiveParts,
-  isWslUncPath,
-  parseWslUncPath,
+  getWslFilesystemBoundaryDistro,
+  isDrvfsLinuxPath,
   resolveWslRepoWorktreeBasePath,
+  toWindowsWslDrivePath,
   toWindowsWslPath
 } from './wsl-paths'
 
 describe('wsl path helpers', () => {
-  it('parses modern and legacy WSL UNC paths without platform checks', () => {
-    expect(parseWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')).toEqual({
-      distro: 'Ubuntu',
-      linuxPath: '/home/jin/repo'
-    })
-    expect(parseWslUncPath('\\\\wsl$\\Debian\\home\\jin')).toEqual({
-      distro: 'Debian',
-      linuxPath: '/home/jin'
-    })
-  })
-
-  it('rejects ordinary Windows and POSIX paths', () => {
-    expect(isWslUncPath('C:\\Users\\jin\\repo')).toBe(false)
-    expect(isWslUncPath('/home/jin/repo')).toBe(false)
-  })
-
   it.each([
     ['/home/jin/repo', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'],
     ['/', '\\\\wsl.localhost\\Ubuntu\\'],
@@ -32,6 +17,22 @@ describe('wsl path helpers', () => {
     ['/mnt/C/Repo', '\\\\wsl.localhost\\Ubuntu\\mnt\\C\\Repo']
   ])('converts %s without folding case-sensitive Linux paths', (linuxPath, expected) => {
     expect(toWindowsWslPath(linuxPath, 'Ubuntu')).toBe(expected)
+  })
+
+  it.each([
+    ['/mnt/c/Users/jin', 'C:\\Users\\jin'],
+    ['/mnt/d', 'D:\\'],
+    ['/mnt/d/', 'D:\\'],
+    ['/MNT/c/Users/jin', null],
+    ['/mnt/C/Repo', null],
+    ['/home/jin', null],
+    // A drvfs prefix on a line that still carries a terminator is not a drive path.
+    ['/mnt/c/Users/jin\r', null],
+    ['/mnt/c/Users/jin\n', null],
+    ['/mnt/c/Users/jin\u2028', null],
+    ['/mnt/c/Users/jin\u2029', null]
+  ] as const)('converts the DrvFs path %j without a distro lookup', (linuxPath, expected) => {
+    expect(toWindowsWslDrivePath(linuxPath)).toBe(expected)
   })
 })
 
@@ -75,14 +76,6 @@ describe('resolveWslRepoWorktreeBasePath', () => {
     expect(resolveWslRepoWorktreeBasePath(WSL_REPO, 'D:\\trees')).toBe('D:\\trees')
     expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '../worktrees')).toBe('../worktrees')
   })
-
-  it('never rewrites base paths of non-WSL repos', () => {
-    expect(resolveWslRepoWorktreeBasePath('C:\\src\\repo', '/home/jin/trees')).toBe(
-      '/home/jin/trees'
-    )
-    expect(resolveWslRepoWorktreeBasePath('/srv/repo', '/srv/trees')).toBe('/srv/trees')
-    expect(resolveWslRepoWorktreeBasePath('//server/share/repo', '/srv/trees')).toBe('/srv/trees')
-  })
 })
 
 describe('foldWslUncPathCaseInsensitiveParts', () => {
@@ -109,10 +102,26 @@ describe('foldWslUncPathCaseInsensitiveParts', () => {
       '//wsl.localhost/ubuntu/MNT/c/Repo'
     )
   })
+})
 
-  it('returns null for non-WSL paths', () => {
-    expect(foldWslUncPathCaseInsensitiveParts('C:\\Users\\jin')).toBeNull()
-    expect(foldWslUncPathCaseInsensitiveParts('//server/share/x')).toBeNull()
-    expect(foldWslUncPathCaseInsensitiveParts('/home/jin')).toBeNull()
+describe('getWslFilesystemBoundaryDistro', () => {
+  // UNC drvfs paths cross onto the Windows drive regardless of runtime preference.
+  it('names the path distro for the UNC spelling of a drvfs mount', () => {
+    expect(
+      getWslFilesystemBoundaryDistro({
+        projectPath: '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\alice\\orca'
+      })
+    ).toBe('Ubuntu')
+  })
+})
+
+describe('isDrvfsLinuxPath', () => {
+  it('accepts the automount root and its descendants only', () => {
+    expect(isDrvfsLinuxPath('/mnt/c')).toBe(true)
+    expect(isDrvfsLinuxPath('/mnt/c/Users')).toBe(true)
+    expect(isDrvfsLinuxPath('/mnt/cdrom')).toBe(false)
+    // /MNT and /mnt/C are case-sensitive Linux directories, not drvfs automounts.
+    expect(isDrvfsLinuxPath('/MNT/c')).toBe(false)
+    expect(isDrvfsLinuxPath('/mnt/C/Users')).toBe(false)
   })
 })

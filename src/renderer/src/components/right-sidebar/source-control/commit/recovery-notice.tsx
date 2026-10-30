@@ -11,7 +11,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
@@ -94,6 +95,7 @@ function useRecoveryCopy(recoveryKind: SourceControlRecoveryKind): {
   launchDialogTitle: string
   dialogDescription: string
 } {
+  const languageRevision = useUiLanguageRevision()
   return useMemo(() => {
     if (recoveryKind === 'push') {
       return {
@@ -171,7 +173,8 @@ function useRecoveryCopy(recoveryKind: SourceControlRecoveryKind): {
         'Choose the agent and edit the full command input before launch.'
       )
     }
-  }, [recoveryKind])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [recoveryKind, languageRevision])
 }
 
 export function SourceControlRecoveryNotice({

@@ -70,7 +70,7 @@ function createHarness(
       preparingPartition = partition
       return session
     }),
-    setupPolicies: vi.fn(() => {
+    setupPolicies: vi.fn(async () => {
       order.push('setup-policies')
       if (options.setupError) {
         throw options.setupError
@@ -138,6 +138,45 @@ function deferred(): {
 }
 
 describe('BrowserRouteSessionRegistry', () => {
+  it('prepares authority-scoped remote metadata without needing a desktop profile record', async () => {
+    const { dependencies, registry } = createHarness()
+    const profileMetadata = {
+      id: identity.browserProfileId,
+      label: 'Remote profile',
+      scope: 'isolated'
+    }
+    await prepare(registry, { profileMetadata })
+    expect(dependencies.validateProfile).toHaveBeenCalledWith(
+      identity.browserProfileId,
+      profileMetadata
+    )
+    expect(dependencies.setupPolicies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profileMetadata,
+        browserProfileId: identity.browserProfileId,
+        partition: 'persist:route-a'
+      })
+    )
+  })
+
+  it.each([
+    { id: 'other-profile', label: 'Remote', scope: 'isolated' },
+    {
+      id: identity.browserProfileId,
+      label: 'Remote',
+      scope: 'isolated',
+      partition: 'persist:local-default'
+    }
+  ])(
+    'rejects inconsistent or arbitrary partition metadata before touching storage',
+    async (profileMetadata) => {
+      const { registry, dependencies } = createHarness()
+      await expect(prepare(registry, { profileMetadata })).rejects.toThrow()
+      expect(dependencies.getSession).not.toHaveBeenCalled()
+      expect(dependencies.bindingStore.set).not.toHaveBeenCalled()
+    }
+  )
+
   it('rekeys one prepared authority and makes the old release handle inert', async () => {
     const { dependencies, registry } = createHarness()
     const previousHandle = await prepare(registry)
@@ -510,7 +549,7 @@ describe('BrowserRouteSessionRegistry', () => {
     expect(dependencies.clearPolicies).toHaveBeenCalledTimes(1)
   })
 
-  it('clears partially installed policies when policy setup fails', async () => {
+  it('clears partially installed policies when async policy setup fails', async () => {
     const { dependencies, registry, session } = createHarness({
       setupError: new Error('policy setup failed')
     })

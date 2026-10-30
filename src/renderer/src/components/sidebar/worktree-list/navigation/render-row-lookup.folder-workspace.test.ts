@@ -36,9 +36,7 @@ const PROJECT_GROUP: ProjectGroup = {
 
 describe('host-qualified reveal lookup finds folder workspaces', () => {
   it('returns the folder row index instead of -1', () => {
-    // Reveal requests for the current workspace carry executionHostId, which
-    // routes here. A walker that only knows item rows returned -1 and the
-    // reveal silently never completed (#15362).
+    // Current-workspace reveals carry a host; folder rows must be reachable by that qualified lookup.
     const rows: RenderRow[] = [
       {
         type: 'folder-workspace',
@@ -47,7 +45,7 @@ describe('host-qualified reveal lookup finds folder workspaces', () => {
         projectGroup: PROJECT_GROUP,
         depth: 0,
         groupDepth: 0
-      } as RenderRow
+      }
     ]
 
     const index = findPreferredRenderRowIndexForWorktreeIdentity(
@@ -68,7 +66,7 @@ describe('host-qualified reveal lookup finds folder workspaces', () => {
         projectGroup: PROJECT_GROUP,
         depth: 0,
         groupDepth: 0
-      } as RenderRow
+      }
     ]
 
     expect(
@@ -78,5 +76,29 @@ describe('host-qualified reveal lookup finds folder workspaces', () => {
         'single-location'
       )
     ).toBe(-1)
+  })
+
+  it.each([
+    ['local', 0],
+    ['runtime:env', 1],
+    [undefined, 0],
+    ['runtime:missing', -1]
+  ] as const)('matches the folder row for host %s', (hostId, expectedIndex) => {
+    const rows: RenderRow[] = (['local', 'runtime:env'] as const).map((executionHostId) => ({
+      type: 'folder-workspace',
+      key: `folder-workspace:${executionHostId}:${FOLDER_WORKSPACE.id}`,
+      folderWorkspace: { ...FOLDER_WORKSPACE, executionHostId },
+      projectGroup: PROJECT_GROUP,
+      depth: 0,
+      groupDepth: 0
+    }))
+
+    expect(
+      findPreferredRenderRowIndexForWorktreeIdentity(
+        rows,
+        { id: folderWorkspaceKey(FOLDER_WORKSPACE.id), hostId },
+        'single-location'
+      )
+    ).toBe(expectedIndex)
   })
 })

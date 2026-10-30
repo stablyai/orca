@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { selectConnectableHostProfiles, sortHostsByLastConnected } from './host-catalog-selection'
-import type { HostCatalogEntry, HostProfile } from './types'
+import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
 
-const profile: HostProfile = {
+const stored: StoredHostProfile = {
   id: 'host-ready',
   name: 'Ready',
   endpoint: 'ws://127.0.0.1:1',
-  deviceToken: 'token',
   publicKeyB64: 'key-ready',
   lastConnected: 0
 }
+
+const profile: HostProfile = { ...stored, deviceToken: 'token' }
 
 function unavailable(
   id: string,
@@ -30,7 +31,7 @@ describe('selectConnectableHostProfiles', () => {
   it('excludes unavailable catalog entries from connection priming', () => {
     expect(
       selectConnectableHostProfiles([
-        { ...profile, credentialStatus: 'ready', profile },
+        { ...stored, credentialStatus: 'ready', profile },
         unavailable('host-locked', 'temporarily-unavailable'),
         unavailable('host-missing', 'missing')
       ])

@@ -1,3 +1,5 @@
+import { isQoderTerminalTitle } from './qoder-terminal-title'
+import { getPiStateTitleBrand } from './pi-state-title-marker'
 import {
   AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
@@ -10,30 +12,34 @@ import {
   isPiAgentTitle,
   titleHasAgentName
 } from './agent-title-core'
+import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
-import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
+import {
+  getPiCompatibleSyntheticAgentLabel,
+  getPiCompatibleTitleBrand
+} from './pi-compatible-synthetic-title'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
-/**
- * Returns true when the terminal title matches Claude Code's title conventions.
- * Used to scope prompt-cache-timer behavior to Claude sessions only.
- */
-export function isClaudeAgent(title: string): boolean {
+/** Scope prompt-cache timers to Claude title conventions. */
+function computeIsClaudeAgent(title: string): boolean {
   if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
     return false
   }
   const lower = title.toLowerCase()
 
-  // Why: Claude title prefixes are stronger than task text, which can mention
-  // other agents without changing the owning CLI.
+  // Claude prefixes identify the owner more strongly than other agents named in task text.
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return true
   }
   if (title.startsWith('. ') || title.startsWith('* ')) {
     return true
   }
+  // Why: a working DeepSeek Build title uses Claude's braille frame.
+  if (isDeepSeekBuildTerminalTitle(title)) {
+    return false
+  }
   if (containsAgentSpinnerGlyph(title)) {
-    // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
-    // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
+    // Other agents use braille too; require controlled Cursor identity rather than a task-text token.
     return !isCursorAgentTitle(title) && !lower.includes('openclaude')
   }
 
@@ -43,12 +49,15 @@ export function isClaudeAgent(title: string): boolean {
   )
 }
 
-export function getAgentLabel(title: string): string | null {
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const isClaudeAgent: (title: string) => boolean =
+  memoizeTitleClassification(computeIsClaudeAgent)
+
+function computeAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
   }
-  // Why: the native marker owns the whole title; its session text may name or
-  // include status glyphs from other agents without changing OpenCode identity.
+  // OpenCode's native envelope owns session text even when it names other agents or carries their glyphs.
   if (isOpenCodeNativeTitle(title)) {
     return 'OpenCode'
   }
@@ -62,11 +71,21 @@ export function getAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
+  const piBrand = getPiStateTitleBrand(title) ?? getPiCompatibleTitleBrand(title)
+  if (piBrand) {
+    return piBrand
+  }
+  if (isQoderTerminalTitle(title)) {
+    return title.includes('Qoder CLI CN') ? 'Qoder CLI CN' : 'Qoder CLI'
+  }
+  // Why: the DSB matcher distinguishes native prefixes from glyphs inside task text.
+  if (isDeepSeekBuildTerminalTitle(title)) {
+    return 'DeepSeek Build'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
-  // Why: Pi-compatible synthetic titles can carry braille spinners, which the
-  // generic agent-title heuristics would otherwise claim first.
+  // Resolve Pi-compatible synthetic titles before generic braille identity heuristics.
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
   if (piCompatibleSyntheticAgentLabel) {
     return piCompatibleSyntheticAgentLabel
@@ -90,6 +109,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
+  if (titleHasAgentName(title, 'jcode')) {
+    return 'Jcode'
+  }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
@@ -102,8 +124,7 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
-  // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
-  // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
+  // Cursor is ordinary vocabulary: match its closed title set before Claude claims the braille frame (matching @cursor routing).
   if (isCursorAgentTitle(title)) {
     return 'Cursor'
   }
@@ -119,3 +140,7 @@ export function getAgentLabel(title: string): string | null {
 
   return null
 }
+
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const getAgentLabel: (title: string) => string | null =
+  memoizeTitleClassification(computeAgentLabel)

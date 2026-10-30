@@ -1,13 +1,8 @@
 import { isWindowsBatchScript, resolveWindowsCommand } from '../../win32-utils'
+import { isMissingCommandBinaryError } from '../exec-error'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import { execFileCapture } from './exec-file-capture'
 import { spawnCommandCapture, type CommandExecOptions } from './spawn-command-capture'
-
-function isMissingCommandError(error: unknown): boolean {
-  return Boolean(
-    error && typeof error === 'object' && (error as { code?: unknown }).code === 'ENOENT'
-  )
-}
 
 function hasPathSeparator(command: string): boolean {
   return command.includes('/') || command.includes('\\')
@@ -17,16 +12,13 @@ function shouldRetryWindowsCommandShim(error: unknown, resolved: ResolvedCommand
   return (
     process.platform === 'win32' &&
     resolved.wsl === null &&
-    isMissingCommandError(error) &&
+    isMissingCommandBinaryError(error) &&
     !hasPathSeparator(resolved.binary) &&
     !/\.[A-Za-z0-9]+$/.test(resolved.binary)
   )
 }
 
-/**
- * Async command execution with the same WSL cwd translation as repo-scoped git.
- * Keep this for fixed binary+argv call sites; never pass shell fragments.
- */
+/** WSL-aware execution for a fixed binary and argv; never pass shell fragments. */
 export async function commandExecFileAsync(
   command: string,
   args: string[],

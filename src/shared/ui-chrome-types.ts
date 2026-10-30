@@ -17,6 +17,9 @@ export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 /** Strategy for the prefix prepended to worktree branch names. */
 export type BranchPrefixStrategy = 'git-username' | 'custom' | 'none'
 
+/** Casing of the Jira issue key inside generated Jira-linked workspace and branch names. */
+export type JiraIssueKeyCasing = 'lowercase' | 'preserve'
+
 export type FloatingTerminalCwdRequest = {
   path?: string
   requireTrusted?: boolean
@@ -44,10 +47,15 @@ export type WorktreeCardProperty =
   | 'ports'
   // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
   | 'inline-agents'
+  // Execution-host pill, shown only when the visible workspaces span more than one host; on by default.
+  | 'host'
 
 export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
+
+// Keep existing chrome imports compatible; normalizers own these value domains.
+export type { ActivityGroupBy, ThreadReadFilter } from './agents-view-thread-filters'
 
 export type StatusBarItem =
   | 'claude'
@@ -58,6 +66,8 @@ export type StatusBarItem =
   | 'kimi'
   | 'minimax'
   | 'grok'
+  | 'cursor'
+  | 'zcode'
   | 'ssh'
   | 'resource-usage'
   | 'ports'
@@ -90,8 +100,7 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
-  // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
-  // static union stays closed while plugin tabs remain type-representable.
+  // Plugin IDs encode their dynamic panel namespace without opening the static tab union.
   | `plugin:${string}`
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'

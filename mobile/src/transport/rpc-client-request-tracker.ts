@@ -1,6 +1,7 @@
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import type { SendRequestOptions } from './rpc-client'
+import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
 import type { ConnectionState, RpcResponse } from './types'
 
 const REQUEST_TIMEOUT_MS = 30_000
@@ -14,8 +15,7 @@ type RequestTrackerOptions = {
   nextId: () => string
   getState: () => ConnectionState
   waitForConnected: (timeoutMs?: number) => Promise<void>
-  sendEncrypted: (request: unknown) => boolean
-  deviceToken: string
+  sendFrame: (frame: RpcRequestFrame) => boolean
 }
 
 export class RpcClientRequestTracker {
@@ -42,9 +42,30 @@ export class RpcClientRequestTracker {
       })
     }
 
+    return this.sendConnectedRequest(
+      method,
+      params,
+      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS),
+      requestOptions?.envelope
+    )
+  }
+
+  sendAuthenticatedRequest(
+    method: string,
+    params: unknown,
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<RpcResponse> {
+    return this.sendConnectedRequest(method, params, timeoutMs)
+  }
+
+  private sendConnectedRequest(
+    method: string,
+    params: unknown,
+    timeoutMs: number,
+    envelope?: RpcEnvelopeFields
+  ): Promise<RpcResponse> {
     return new Promise((resolve, reject) => {
       const id = this.options.nextId()
-      const timeoutMs = resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
       const timeout = setTimeout(() => {
         this.pending.delete(id)
         console.log('[net] sendRequest TIMEOUT', {
@@ -64,14 +85,7 @@ export class RpcClientRequestTracker {
           reject(error)
         }
       })
-      if (
-        !this.options.sendEncrypted({
-          id,
-          deviceToken: this.options.deviceToken,
-          method,
-          params
-        })
-      ) {
+      if (!this.options.sendFrame({ id, method, params, envelope })) {
         this.pending.delete(id)
         clearTimeout(timeout)
         reject(new Error('Connection interrupted'))

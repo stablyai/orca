@@ -50,8 +50,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     unsubscribeSystemResumed.mockClear()
     onSystemResumed.mockClear()
     resetTerminalFreezeBreadcrumbsForTesting()
-    // Why: without requestAnimationFrame the hook skips its settled-frame
-    // follow-up, so every trigger maps to exactly one synchronous recovery.
+    // Without requestAnimationFrame, each trigger has exactly one synchronous recovery.
     vi.stubGlobal('requestAnimationFrame', undefined)
     ;(window as unknown as { api: unknown }).api = { ui: { onSystemResumed } }
   })
@@ -61,11 +60,16 @@ describe('useTerminalWindowWakeRecovery', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
-  function renderWakeRecoveryHook(isVisible = true) {
+  function renderWakeRecoveryHook(
+    isVisible = true,
+    isChatViewMode = false,
+    wakeManager: PaneManager = manager
+  ) {
     return renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible,
-        managerRef: { current: manager },
+        isChatViewMode,
+        managerRef: { current: wakeManager },
         isActiveRef: { current: true },
         isVisibleRef: { current: true }
       })
@@ -73,9 +77,7 @@ describe('useTerminalWindowWakeRecovery', () => {
   }
 
   it('clears the glyph atlas on system resume but not on plain window focus', () => {
-    // Why: wiping the shared WebGL glyph atlas on a plain refocus provokes
-    // xterm's page-merge race and paints garbled glyphs (#7604). Only a genuine
-    // OS resume — which can leave a stale renderer surface — clears the atlas.
+    // Refocus atlas clearing races xterm page merging (#7604); reserve it for OS resume.
     renderWakeRecoveryHook()
 
     window.dispatchEvent(new Event('focus'))
@@ -83,6 +85,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenNthCalledWith(1, {
       manager,
       isActive: true,
+      isChatViewMode: false,
       clearGlyphAtlases: false
     })
 
@@ -93,6 +96,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenNthCalledWith(2, {
       manager,
       isActive: true,
+      isChatViewMode: false,
       clearGlyphAtlases: true
     })
   })
@@ -109,14 +113,33 @@ describe('useTerminalWindowWakeRecovery', () => {
     expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenLastCalledWith({
       manager,
       isActive: true,
+      isChatViewMode: false,
+      clearGlyphAtlases: false
+    })
+  })
+
+  it.each([
+    ['covered chat leaf', true],
+    ['split terminal leaf', false]
+  ])('routes chat coverage into wake recovery only for the %s', (_label, covered) => {
+    const chatManager = {
+      getActivePane: () => ({ container: { querySelector: () => (covered ? {} : null) } }),
+      getPanes: () => []
+    } as unknown as PaneManager
+    renderWakeRecoveryHook(true, true, chatManager)
+
+    window.dispatchEvent(new Event('focus'))
+
+    expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenLastCalledWith({
+      manager: chatManager,
+      isActive: true,
+      isChatViewMode: covered,
       clearGlyphAtlases: false
     })
   })
 
   it('records a wake-recovery breadcrumb with the trigger source and atlas decision', () => {
-    // Why: a post-wake garble report attributes to the trigger that ran (or its
-    // absence). Pin that focus records source=focus/atlas=false and system
-    // resume records source=system-resumed/atlas=true.
+    // Record focus/atlas=false versus system-resumed/atlas=true for post-wake garble diagnosis.
     renderWakeRecoveryHook()
 
     window.dispatchEvent(new Event('focus'))
@@ -136,6 +159,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible: true,
+        isChatViewMode: false,
         managerRef: { current: manager },
         isActiveRef: { current: true },
         isVisibleRef: { current: true },
@@ -163,6 +187,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible: true,
+        isChatViewMode: false,
         managerRef: { current: manager },
         isActiveRef: { current: true },
         isVisibleRef: { current: true },
@@ -209,6 +234,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     const { unmount } = renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible: true,
+        isChatViewMode: false,
         managerRef: { current: resizeManager },
         isActiveRef: { current: true },
         isVisibleRef: { current: true }
@@ -238,6 +264,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible: true,
+        isChatViewMode: false,
         managerRef,
         isActiveRef: { current: true },
         isVisibleRef: { current: true }
@@ -265,6 +292,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible: true,
+        isChatViewMode: false,
         managerRef: { current: { getPanes: () => [pane] } as unknown as PaneManager },
         isActiveRef: { current: true },
         isVisibleRef: { current: true }
@@ -295,6 +323,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible: true,
+        isChatViewMode: false,
         managerRef: { current: { getPanes: () => [pane] } as unknown as PaneManager },
         isActiveRef: { current: true },
         isVisibleRef: { current: true }

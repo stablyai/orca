@@ -7,16 +7,15 @@ import type { ProjectGroupImportResult } from '../../../shared/project-group-typ
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
-import { isGitRepo, getRepoName } from '../../git/repo'
+import { isGitRepoAsync, getRepoName } from '../../git/repo'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { getActiveMultiplexer } from '../ssh'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
@@ -67,31 +66,21 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
 
       for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
-          let importRepoPath = repoPath
+          // This process cannot validate SSH paths with local Git.
           if (args.connectionId) {
-            const gitProvider = getSshGitProvider(args.connectionId)
-            const check = gitProvider ? await gitProvider.isGitRepoAsync(repoPath) : null
-            if (!gitProvider || !check?.isRepo) {
-              results.push({
-                path: repoPath,
-                status: 'failed',
-                error: 'Not a valid git repository'
-              })
-              continue
-            }
-            importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
-          } else {
-            await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-            if (!isGitRepo(repoPath)) {
-              results.push({
-                path: repoPath,
-                status: 'failed',
-                error: 'Not a valid git repository'
-              })
-              continue
-            }
-            importRepoPath = await importTargetResolver.resolveLocal(repoPath)
+            results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+            continue
           }
+          await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
+          if (!(await isGitRepoAsync(repoPath))) {
+            results.push({
+              path: repoPath,
+              status: 'failed',
+              error: 'Not a valid git repository'
+            })
+            continue
+          }
+          const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
           const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
           const alreadyImportedProjectId =
             importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
@@ -113,7 +102,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
-              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
+              store.moveProjectToGroup(existing, group.id, projectGroupOrder)
             }
             importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -122,7 +111,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           const detected = await detectRepoIconAndUpstream({
             repoPath: importRepoPath,
             kind: 'git',
-            connectionId: args.connectionId
+            executionHostId: LOCAL_EXECUTION_HOST_ID
           })
           const repo: Repo = {
             id: randomUUID(),
@@ -132,7 +121,6 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             ...detected,
             addedAt: Date.now(),
             kind: 'git',
-            ...(args.connectionId ? { connectionId: args.connectionId } : {}),
             externalWorktreeVisibilityLegacy: false,
             projectHostSetupMethod: 'imported-existing-folder',
             ...(group
@@ -144,14 +132,8 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           }
           store.addRepo(repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
-          if (args.connectionId) {
-            getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
-              rootPath: importRepoPath
-            })
-          }
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
-          // Why: reaches here only after the isGitRepo guard above confirmed a git repo, so always true.
           emitRepoAdded('folder_picker', false, true)
         } catch (error) {
           results.push({

@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -57,6 +54,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
@@ -73,8 +71,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const onQuitAborted = vi.fn()
     browserWindowMock.mockImplementation(function () {
@@ -105,6 +103,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -122,8 +121,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
@@ -161,6 +160,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -178,8 +178,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn(),
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve()),
       close: vi.fn(() => {
         windowHandlers.close({} as never)
       })
@@ -220,6 +220,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -238,8 +239,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const updateUI = vi.fn()
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -279,6 +280,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -296,8 +298,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
@@ -336,6 +338,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -353,8 +356,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -372,10 +375,7 @@ describe('createMainWindow', () => {
     )
   })
 
-  // Why (#5787): a hung-but-ALIVE renderer (never gone, never crashed) must NOT
-  // silently bypass the close guard — force-killing it that way is what destroyed
-  // other sessions. It must route through window:close-requested so the
-  // save/running-process confirmation runs.
+  // #5787: hung-but-live renderers still need save/process confirmation; bypassing close guards destroys other sessions.
   it('requests confirmation for a hung-but-alive renderer instead of bypassing', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -384,6 +384,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -401,8 +402,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -410,7 +411,6 @@ describe('createMainWindow', () => {
 
     createMainWindow(null)
 
-    // No render-process-gone and isCrashed() === false: the renderer is alive.
     const preventDefault = vi.fn()
     windowHandlers.close({ preventDefault } as never)
 
@@ -431,6 +431,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -451,8 +452,8 @@ describe('createMainWindow', () => {
         maximize: vi.fn(),
         show: vi.fn(),
         destroy,
-        loadFile: vi.fn(),
-        loadURL: vi.fn()
+        loadFile: vi.fn(() => Promise.resolve()),
+        loadURL: vi.fn(() => Promise.resolve())
       }
     })
     createMainWindow(null, { getIsQuitting: () => true })
@@ -480,6 +481,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -500,8 +502,8 @@ describe('createMainWindow', () => {
         maximize: vi.fn(),
         show: vi.fn(),
         destroy,
-        loadFile: vi.fn(),
-        loadURL: vi.fn()
+        loadFile: vi.fn(() => Promise.resolve()),
+        loadURL: vi.fn(() => Promise.resolve())
       }
     })
     createMainWindow(null, { getIsQuitting: () => true })

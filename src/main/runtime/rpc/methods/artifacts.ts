@@ -1,72 +1,52 @@
-import { z } from 'zod'
+import { defineMethod } from '../core'
 import {
-  ARTIFACT_CLI_MAX_RPC_BYTES,
-  artifactWriteRequestByteLength
-} from '../../../../shared/artifacts'
-import { defineMethod, type RpcAnyMethod } from '../core'
+  ArtifactsDeleteParams,
+  ListOptions,
+  SourceRequest,
+  WriteRequest
+} from '../../../../shared/rpc-contract/artifacts-params'
 
-const CloudOptions = {
-  apiUrl: z.string().max(2_048).optional(),
-  authToken: z.string().max(16_384).optional()
-}
-
-const ListOptions = z.object({
-  ...CloudOptions,
-  cursor: z.string().min(1).max(2_048).optional()
-})
-
-const SourceRequest = z.object({
-  sourceKey: z.string().min(1).max(32_768),
-  ...CloudOptions
-})
-
-const WriteRequest = z
-  .object({
-    sourceKey: z.string().min(1).max(32_768),
-    content: z.string().min(1).max(ARTIFACT_CLI_MAX_RPC_BYTES),
-    contentType: z.enum(['text/html', 'text/markdown']),
-    fileName: z.string().min(1).max(512),
-    title: z.string().max(512).optional(),
-    ...CloudOptions
-  })
-  .refine((request) => artifactWriteRequestByteLength(request) <= ARTIFACT_CLI_MAX_RPC_BYTES, {
-    message: 'Artifact request exceeds the local RPC size limit.'
-  })
-
-export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [
+export const ARTIFACT_METHODS = [
   defineMethod({
     name: 'artifacts.list',
+    permission: 'workspace',
     params: ListOptions,
     handler: (params, { runtime }) => runtime.listArtifacts(params)
   }),
   defineMethod({
     name: 'artifacts.getPublishedLink',
+    permission: 'workspace',
     params: SourceRequest,
     handler: (params, { runtime }) => runtime.getPublishedArtifactLink(params)
   }),
   defineMethod({
     name: 'artifacts.share',
+    permission: 'workspace',
     params: WriteRequest,
     handler: (params, { runtime }) => runtime.shareArtifact(params)
   }),
   defineMethod({
     name: 'artifacts.publish',
+    permission: 'workspace',
     params: WriteRequest,
     handler: (params, { runtime }) => runtime.publishArtifact(params)
   }),
   defineMethod({
     name: 'artifacts.update',
+    permission: 'workspace',
     params: WriteRequest,
     handler: (params, { runtime }) => runtime.updateArtifact(params)
   }),
   defineMethod({
     name: 'artifacts.unshare',
+    permission: 'workspace',
     params: SourceRequest,
     handler: (params, { runtime }) => runtime.unshareArtifact(params)
   }),
   defineMethod({
     name: 'artifacts.delete',
-    params: z.object({ id: z.string().min(1), ...CloudOptions }),
+    permission: 'workspace',
+    params: ArtifactsDeleteParams,
     handler: (params, { runtime }) => runtime.deleteArtifact(params.id, params)
   })
 ]

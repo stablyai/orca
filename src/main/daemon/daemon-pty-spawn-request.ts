@@ -1,3 +1,4 @@
+import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import type { DaemonAuditObservation } from './daemon-audit-classifier'
 import {
@@ -16,7 +17,14 @@ import {
   TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS
 } from './terminal-history-seed-chunks'
 import type { CreateOrAttachResult, GetSnapshotResult } from './types'
-import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
+import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { isMissingWorkingDirectoryError } from '../providers/working-directory-validation'
+
+/** A daemon kept running across an update trusts `interactive` even for a claimed resume. */
+function forwardedSpawnIntent(intent: SpawnIntent, claim: unknown): SpawnIntent {
+  return intent === 'interactive' && claim !== undefined ? 'automatic-restore' : intent
+}
 
 export type DaemonPtySpawnContext = {
   opts: PtySpawnOptions
@@ -56,7 +64,6 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract setupEventRouting(): void
   protected abstract scheduleCheckpointTimer(): void
   protected abstract stopCheckpointTimer(): void
-  protected abstract stopCheckpointTimerIfIdle(): void
   protected abstract recordAuthenticatedIdentity(): void
   protected abstract runExclusiveCheckpoint(
     operation: () => Promise<void>,
@@ -68,7 +75,6 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     sessionId: string,
     operation: () => Promise<T>
   ): Promise<T>
-  protected abstract clearSessionAwaitingDaemonRecovery(sessionId: string): void
   protected abstract reconnectAfterWriteFailure(): void
   protected abstract checkpointSessions(
     sessionIds: Iterable<string>,
@@ -120,6 +126,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
         shellOverride: context.attachOnly ? undefined : opts.shellOverride,
+        terminalShellArgs: context.attachOnly ? undefined : opts.terminalShellArgs,
         terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: context.attachOnly
           ? undefined
@@ -132,6 +139,9 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         ...(historySeedTransferId ? { historySeedTransferId } : {}),
         ...(this.supportsStartupIngress && !context.attachOnly && opts.startupIngress
           ? { startupIngress: opts.startupIngress }
+          : {}),
+        ...(!context.attachOnly && opts.spawnIntent
+          ? { spawnIntent: forwardedSpawnIntent(opts.spawnIntent, opts.agentSessionEnsure) }
           : {}),
         ...(!context.attachOnly && opts.agentSessionEnsure
           ? { agentSessionEnsure: opts.agentSessionEnsure }
@@ -194,9 +204,40 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       }
       return requestCreateOrAttach(undefined, transferId)
     }
-    const result = await deliverSeedAndCreate()
+    const requestedCwd = context.opts.cwd ?? resolveSafePtyDefaultCwd()
+    const result = await deliverSeedAndCreate().catch((error: unknown) => {
+      const recovered = context.restoreInfo
+      // Why: the folder a pane slept in can be deleted before it wakes; it then opens where it
+      // was asked to, as it did before the folder was kept.
+      if (
+        !recovered ||
+        context.effectiveCwd === requestedCwd ||
+        !isMissingWorkingDirectoryError(error)
+      ) {
+        throw error
+      }
+      context.effectiveCwd = requestedCwd
+      context.restoreInfo = { ...recovered, cwd: requestedCwd }
+      return deliverSeedAndCreate()
+    })
     return historySeedUnavailable && result.historySeeded === undefined
       ? { ...result, historySeeded: false }
       : result
+  }
+
+  /** Records a spawn result's WSL distro (and its boot id), or clears it when `clear`. */
+  protected noteSpawnWslDistro(
+    sessionId: string,
+    wslDistro: string | undefined,
+    clear: boolean,
+    incarnationId?: string
+  ): void {
+    if (wslDistro) {
+      this.wslDistrosBySessionId.set(sessionId, wslDistro)
+      this.wslBridgeBootIdentity.noteSpawn(sessionId, wslDistro, incarnationId)
+    } else if (clear) {
+      this.wslDistrosBySessionId.delete(sessionId)
+      this.wslBridgeBootIdentity.forget(sessionId)
+    }
   }
 }

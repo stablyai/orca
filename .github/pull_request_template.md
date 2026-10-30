@@ -1,24 +1,26 @@
 ## ELI5
 
-<!-- Simple high-level explanation -->
+<!-- Simple high-level explanation, in plain language. No jargon. -->
 
 ## What Changed
 
-<!-- Describe the change clearly and keep scope tight. -->
+<!-- Describe the change clearly and keep scope tight. Cover the before and after as the user experiences it, and the mechanism you changed — not just the symptom. -->
 
 ## Why
 
-<!-- What problem does this solve, and why is this approach right? -->
+<!-- What problem does this solve, and why is this approach better than the alternatives you considered? -->
 
 ## Linked Issue
 
-<!-- Link the issue this PR addresses, there should ALWAYS be one -->
+_If you do not have one and are an outside contributor, your PR **will** be ignored. Refs is not sufficient. Link an actual issue_
+<!-- Link the issue this PR addresses, there should ALWAYS be one (for outside contributors) -->
+<!-- SPECIAL CASE: If you are a maintainer (member of stablyai org) AVOID opening needless issues. Only attach pre-existing ones -->
 
 Fixes #
 
 ## Visual Proof
 
-<!-- REQUIRED for UI / behavior changes. Please attach a BEFORE and AFTER that can easily tabbed/switched. Use videos for when appropriate over screenshots -->
+<!-- REQUIRED for UI / behavior changes. Please attach a BEFORE and AFTER that can easily be tabbed/switched. Use videos for when appropriate over screenshots -->
 <!-- If there is truly no visual or interaction change, write exactly: `N/A` and briefly say why. -->
 <!-- For attachments NEVER add directly to the PR files (do not commit to files), use `gh image` extension or drag + drop (works for any attachment) -->
 
@@ -38,16 +40,16 @@ Fixes #
 
 ## Agent skill upstream boundary
 
-- [ ] Not applicable, or this change follows `docs/reference/agent-skill-sharing-upstream-boundary.md` and copies or mechanically translates no upstream skill-installer source, tests, fixtures, registry entries, path tables, comments, or documentation.
+- [ ] Not applicable, or this change copies or mechanically translates no upstream skill-installer source, tests, fixtures, registry entries, path tables, comments, or documentation.
 
 ## Notes
 
-Ensure no issues in: Security, Cross-platoform support (Linux, Windows, Mac), Remote SSH, Mobile, general backwards compatibility, performance
+Ensure no issues in: Security, Cross-platform support (Linux, Windows, Mac), Remote SSH, Mobile, general backwards compatibility, performance
 
 ## Checklist
 
 - [ ] This PR is small and focused
-- [ ] I explained what changed and why (including ELI5)
+- [ ] I explained what changed and why (ELI5, the user-facing before/after, the mechanism, and why over the alternatives)
 - [ ] Before/after screenshots or videos attached for UI changes, or `N/A` with reason
 - [ ] Self-reviewed for correctness, security, and performance
 - [ ] Cross-platform, SSH/remote, and path/shortcut impact considered (or N/A)

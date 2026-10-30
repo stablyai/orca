@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render as renderWithProviders, screen } from '@testing-library/react'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
 
@@ -36,8 +37,7 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
 }))
 
 vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
-  // Suggestions and select-on-focus are the shared bar's own suites; what matters here is that
-  // the pane hands it the ref the chrome focus rules aim at.
+  // Keep the shared bar’s own behavior out of this suite; preserve the ref targeted by pane focus rules.
   default: (props: {
     value: string
     onNavigate: (value: string) => void
@@ -53,6 +53,10 @@ import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { requestBrowserFocus } from './host-guest/browser-focus'
 import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
+
+function render(ui: React.ReactElement) {
+  return renderWithProviders(ui, { wrapper: TooltipProvider })
+}
 
 describe('ClientHostedBrowserPagePane', () => {
   beforeEach(() => {
@@ -108,7 +112,7 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(detach).toHaveBeenCalledTimes(1)
   })
 
-  it('updates local chrome from guest navigation without remote stream work', () => {
+  it('updates local chrome from the retained guest navigation', () => {
     const { webview, setUrl, setTitle } = createWebview()
     mocks.attach.mockReturnValue(retainedAttachment(webview))
     const onUpdatePageState = vi.fn()
@@ -249,8 +253,7 @@ describe('ClientHostedBrowserPagePane', () => {
         onSetUrl={vi.fn()}
       />
     )
-    // Why: after chrome-error://, reload() only refreshes the error page — retry must force
-    // navigation back to the attempted URL, exactly as the local pane's Retry does.
+    // Reload on chrome-error:// refreshes the error page; Retry must navigate to the attempted URL.
     act(() => screen.getByText('Retry').click())
     expect(webview.reload).not.toHaveBeenCalled()
     expect(webview.src).toBe(normalizeBrowserNavigationUrl(loadError.validatedUrl))
@@ -274,6 +277,10 @@ describe('ClientHostedBrowserPagePane', () => {
     )
 
     expect(mocks.attach).toHaveBeenCalledTimes(1)
+    expect(mocks.attach).toHaveBeenCalledWith(
+      { browserPageId: 'page-a', pageHostGeneration: 8 },
+      expect.any(HTMLElement)
+    )
     expect(screen.getByText('Client-hosted browser unavailable')).not.toBeNull()
     expect(document.querySelector('webview')).toBeNull()
   })
@@ -311,6 +318,7 @@ describe('ClientHostedBrowserPagePane', () => {
   })
 
   it('requests the one-time intro tour on the first active client-hosted page', async () => {
+    vi.useFakeTimers()
     const { useAppStore } = await import('@/store')
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
@@ -345,15 +353,17 @@ describe('ClientHostedBrowserPagePane', () => {
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(0)
       })
       expect(useAppStore.getState().activeContextualTourId).toBe('client-hosted-browser')
     } finally {
       useAppStore.setState(prior)
+      vi.useRealTimers()
     }
   })
 
   it('never re-requests the intro tour once it has been seen', async () => {
+    vi.useFakeTimers()
     const { useAppStore } = await import('@/store')
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
@@ -388,11 +398,12 @@ describe('ClientHostedBrowserPagePane', () => {
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(0)
       })
       expect(useAppStore.getState().activeContextualTourId).toBeNull()
     } finally {
       useAppStore.setState(prior)
+      vi.useRealTimers()
     }
   })
 
@@ -501,6 +512,8 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
 
   it('still hands focus to the guest when the tab opens on a real page', () => {
     const { webview, focus, setUrl } = createWebview()
+    // Why: the attach is mocked, so place the guest where the real attach would put it.
+    document.body.appendChild(webview)
     setUrl('https://remote.internal/path')
     mocks.attach.mockReturnValue(retainedAttachment(webview))
 
@@ -525,6 +538,8 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
 
   it('gives the guest focus back after the palette hands the address bar a turn', () => {
     const { webview, focus, setUrl } = createWebview()
+    // Why: the attach is mocked, so place the guest where the real attach would put it.
+    document.body.appendChild(webview)
     setUrl('https://remote.internal/path')
     mocks.attach.mockReturnValue(retainedAttachment(webview))
     const renderPane = (isActive: boolean): React.JSX.Element => (
@@ -544,8 +559,7 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
     act(() => flushFrames())
     focus.mockClear()
 
-    // Why: dismissing Cmd+J on a browser surface re-requests address-bar focus, and this pane
-    // has none of the local pane's load handlers to clear the latch afterwards.
+    // Cmd+J dismissal reclaims the bar repeatedly; this pane has no local load handlers to clear the latch.
     for (let cycle = 0; cycle < 3; cycle += 1) {
       act(() => requestBrowserFocus({ pageId: 'page-a', target: 'address-bar' }))
       act(() => flushFrames())
@@ -558,8 +572,7 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
   })
 
   it('takes focus off the guest itself when the chord claims the address bar', () => {
-    // Why: the chord is Cmd+L on macOS and Ctrl+L everywhere else, so the platform can't be left
-    // to whatever the test runner reports.
+    // Pin macOS so the Cmd+L test does not depend on the runner platform.
     Object.defineProperty(navigator, 'userAgent', {
       configurable: true,
       value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
@@ -588,8 +601,7 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
       )
     })
 
-    // Why: the guest is its own WebContents, so focusing a renderer input leaves it holding
-    // keyboard focus until it is told to let go.
+    // A guest owns separate WebContents focus until explicitly blurred, even after an input is focused.
     expect(blur).toHaveBeenCalled()
     expect(document.activeElement).toBe(screen.getByLabelText('Address'))
   })
@@ -649,9 +661,13 @@ function createWebview(): {
   const webview = document.createElement('webview') as Electron.WebviewTag
   let url = 'about:blank'
   let title = 'New Tab'
-  const focus = vi.fn()
-  const blur = vi.fn()
+  // Why: a real <webview> becomes activeElement when focused; focus code checks for that.
+  webview.tabIndex = -1
+  const focus = vi.fn(() => HTMLElement.prototype.focus.call(webview))
+  const blur = vi.fn(() => HTMLElement.prototype.blur.call(webview))
   Object.assign(webview, {
+    // An attached guest has a WebContents id; focus waits for one.
+    getWebContentsId: vi.fn(() => 7),
     getURL: vi.fn(() => url),
     getTitle: vi.fn(() => title),
     isLoading: vi.fn(() => false),

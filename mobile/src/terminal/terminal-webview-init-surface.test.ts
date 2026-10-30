@@ -1,17 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { XTERM_HTML } from './terminal-webview-html'
-
-function iifeSource(): string {
-  const start = XTERM_HTML.indexOf('(function() {')
-  const end = XTERM_HTML.lastIndexOf('})();')
-  return XTERM_HTML.slice(start, end + '})();'.length)
-}
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
+import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
 function bodyMarkup(): string {
-  const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
-  const end = XTERM_HTML.indexOf('<script>', start)
-  return XTERM_HTML.slice(start, end)
+  return TERMINAL_DOCUMENT_MARKUP
 }
 
 type TerminalStub = ReturnType<typeof makeTerminal>
@@ -27,6 +20,7 @@ type RegisteredWindowListener = {
 }
 
 function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
+  const dimensions = { css: { cell: { width: 8, height: 15 } } }
   const terminal = {
     cols: 80,
     rows: 24,
@@ -34,7 +28,16 @@ function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
     modes: {},
     element: null as HTMLElement | null,
     disposed: false,
-    _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } },
+    _core: {
+      _renderService: {
+        get dimensions(): typeof dimensions {
+          if (terminal.disposed) {
+            throw new Error('Renderer dimensions are unavailable after terminal disposal')
+          }
+          return dimensions
+        }
+      }
+    },
     buffer: {
       active: {
         viewportY: 0,
@@ -130,8 +133,7 @@ describe('terminal WebView init surface replacement', () => {
     } as unknown as new (options: TerminalOptions) => TerminalStub
     webWindow.ReactNativeWebView = { postMessage: vi.fn() }
     document.body.innerHTML = bodyMarkup()
-    // eslint-disable-next-line no-new-func
-    new Function(iifeSource())()
+    new Function(TERMINAL_DOCUMENT_SCRIPT)()
   })
 
   afterEach(() => {
@@ -164,8 +166,7 @@ describe('terminal WebView init surface replacement', () => {
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {
-    // Why: restored terminals can receive desktop scrollback, a phone resize,
-    // and phone scrollback before any xterm replay callback has completed.
+    // Restored terminals may receive desktop replay, resize and phone replay before any xterm write completes.
     dispatchInit(120, 'desktop')
     animationFrames.shift()?.()
     dispatchInit(51, 'phone-resize')

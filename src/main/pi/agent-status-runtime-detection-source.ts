@@ -1,26 +1,13 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
-export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): string[] {
-  if (kind === 'prime-agent') {
-    return [
-      `const CONFIGURED_HOOK_PATH = '/hook/${kind}'`,
-      '',
-      'function isOmpRuntime(): boolean {',
-      '  return false',
-      '}',
-      '',
-      'function resolveHookPath(_ompRuntime: boolean): string {',
-      '  return CONFIGURED_HOOK_PATH',
-      '}'
-    ]
-  }
-
+/** Bare-shell OMP can run inside a Pi-kind pane; every approval-aware extension needs runtime detection. */
+export function getPiOmpRuntimeDetectionSourceLines(configuredHookPath: string): string[] {
   return [
     'function processName(value: unknown): string {',
     "  return String(value || '').split(/[\\\\/]/).pop()?.toLowerCase() || ''",
     '}',
     '',
-    `const CONFIGURED_HOOK_PATH = '/hook/${kind}'`,
+    `const CONFIGURED_HOOK_PATH = '${configuredHookPath}'`,
     'let cachedOmpRuntime: boolean | null = null',
     '',
     'function isOmpRuntime(): boolean {',
@@ -39,10 +26,30 @@ export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): 
     "    ['omp', 'omp.js', 'omp.sh', 'omp.cmd', 'omp.exe', 'omp.bat'].includes(name)",
     '  )',
     '  return cachedOmpRuntime',
-    '}',
+    '}'
+  ]
+}
+
+export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): string[] {
+  if (kind === 'prime-agent') {
+    return [
+      `const CONFIGURED_HOOK_PATH = '/hook/${kind}'`,
+      '',
+      'function isOmpRuntime(): boolean {',
+      '  return false',
+      '}',
+      '',
+      'function resolveHookPath(_ompRuntime: boolean): string {',
+      '  return CONFIGURED_HOOK_PATH',
+      '}'
+    ]
+  }
+
+  return [
+    ...getPiOmpRuntimeDetectionSourceLines(`/hook/${kind}`),
     '',
     'function resolveHookPath(ompRuntime: boolean): string {',
-    '  // Why: runtime detection keeps a bare-shell OMP launch from reporting as Pi.',
+    '  // Bare-shell OMP may run inside a configured Pi pane.',
     "  if (ompRuntime) return '/hook/omp'",
     '  return CONFIGURED_HOOK_PATH',
     '}'

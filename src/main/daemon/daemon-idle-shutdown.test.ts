@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { EventEmitter } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -206,7 +207,7 @@ describe('current daemon lifecycle retirement', () => {
       expect(clock.pendingCount).toBe(0)
       expect(existsSync(tokenPath)).toBe(false)
       expect(existsSync(pidPath)).toBe(false)
-      // Why: the dead entry remains for the next publisher to replace.
+      // The dead socket entry stays; check reachability rather than file existence.
       expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
     }
   )
@@ -441,6 +442,39 @@ describe('current daemon lifecycle retirement', () => {
     adopted.dispose()
   })
 
+  it('atomically retires an idle daemon and permanently fences adapter spawns', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+
+    await expect(adapter.requestIdleRetirement()).resolves.toEqual({ state: 'retiring' })
+    await expect(
+      adapter.spawn({ sessionId: 'late-after-decommission', cols: 80, rows: 24 })
+    ).rejects.toThrow('Terminal daemon is decommissioning')
+    await waitFor(() => onIdleShutdown.mock.calls.length === 1)
+    adapter.dispose()
+  })
+
+  it('reopens adapter admission when the daemon refuses retirement for a live session', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    await adapter.spawn({ sessionId: 'already-live', cols: 80, rows: 24 })
+
+    await expect(adapter.requestIdleRetirement()).resolves.toEqual({
+      state: 'busy',
+      liveSessions: 1,
+      admissionReopened: true
+    })
+    const alreadyLiveSubprocess = subprocess
+    subprocess = createMockSubprocess()
+    await expect(
+      adapter.spawn({ sessionId: 'allowed-after-refusal', cols: 80, rows: 24 })
+    ).resolves.toMatchObject({ id: 'allowed-after-refusal' })
+    expect(onIdleShutdown).not.toHaveBeenCalled()
+    alreadyLiveSubprocess.exit(0)
+    subprocess.exit(0)
+    adapter.dispose()
+  })
+
   it('does not let repeated authenticated control probes extend the startup deadline', async () => {
     await startServer()
     const healthControl = connect(socketPath)
@@ -590,7 +624,7 @@ describe('current daemon lifecycle retirement', () => {
     expect(currentRequest).toHaveBeenCalledOnce()
     expect(currentRequest.mock.calls[0]?.slice(0, 2)).toEqual(['shutdownIfIdle', undefined])
     const timeoutMs = currentRequest.mock.calls[0]?.[2]
-    // Why: connection and RPC share a wall-clock budget, so elapsed setup time is expected.
+    // Connection setup consumes the shared RPC deadline.
     expect(timeoutMs).toEqual(expect.any(Number))
     expect(timeoutMs).toBeGreaterThan(0)
     expect(timeoutMs).toBeLessThanOrEqual(250)

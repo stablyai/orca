@@ -16,6 +16,7 @@ export type SkillUploadStagingOwnershipOptions = {
 export class SkillUploadStagingOwnership {
   readonly directory: string
   private readonly processIsAlive: (pid: number) => boolean
+  private removal: Promise<void> | null = null
 
   constructor(
     private readonly root: string,
@@ -35,8 +36,17 @@ export class SkillUploadStagingOwnership {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
   }
 
+  // Coalesce removal: concurrent retries hit Windows delete-pending EPERM after the first rmdir.
   async remove(): Promise<void> {
-    await rm(this.directory, { recursive: true, force: true })
+    const removal = (this.removal ??= rm(this.directory, { recursive: true, force: true }))
+    try {
+      await removal
+    } catch (error) {
+      if (this.removal === removal) {
+        this.removal = null
+      }
+      throw error
+    }
   }
 
   private async cleanupAbandonedOwners(): Promise<void> {

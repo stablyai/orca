@@ -3,13 +3,16 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import { normalizeOrcadMigrationEvictedReceipts } from '../../../shared/orcad-migration/orcad-migration-evicted-receipts'
+import { normalizeOrcadMigrationImportReceipts } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import { normalizeOrcadMigrationStagedCatalogs } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
 } from '../leasing-ssh-ptys/ssh-normalization'
+import { migrateExistingHostsRemoteCliControl } from '../leasing-ssh-ptys/ssh-remote-cli-control-migration'
 import {
-  normalizeClaudeLivePtySessionIds,
   normalizeLegacyPaneKeyAliasEntries,
   normalizeMigrationUnsupportedPtyEntries
 } from '../restoring-sessions/pane-alias-normalization'
@@ -25,6 +28,7 @@ import {
   normalizeLoadedProjectCatalog
 } from './normalize-loaded-state-collections'
 import { normalizeRetiredNameRegistryMap } from './retired-name-registry-normalization'
+import { hydrateWorktreeMetaAliasProjection } from './worktree-meta-alias-projection'
 
 export function normalizeLoadedProfileState(
   parsed: PersistedState,
@@ -35,6 +39,8 @@ export function normalizeLoadedProfileState(
   const { defaults, migratedExternalVisibility, osc52ClipboardNoticePending } = terminal
   const { normalizedOnboarding, normalizedProjectGroups, loadedCompactWorktreeCards } = profile
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
+  // Normalize local first; host partitions drop global fields already owned here.
+  const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
 
   return {
     ...defaults,
@@ -44,13 +50,16 @@ export function normalizeLoadedProfileState(
     ),
     projectGroups: normalizedProjectGroups,
     repos: migratedExternalVisibility.repos,
-    // Why: persisted catalog rows are untrusted JSON; consumers call string methods on fields the type says are strings.
     projects: projectCatalog.projects,
     projectHostSetups: projectCatalog.projectHostSetups,
     folderWorkspaces: normalizeFolderWorkspaces(parsed.folderWorkspaces, normalizedProjectGroups),
     folderWorkspaceDiffComments: normalizeFolderWorkspaceDiffComments(
       parsed.folderWorkspaceDiffComments
     ),
+    // Rehydrate canonical aliases/shared references omitted by serialization; absence stays absent.
+    ...(parsed.worktreeMetaByIdentity === undefined
+      ? {}
+      : { worktreeMetaByIdentity: hydrateWorktreeMetaAliasProjection(parsed) }),
     worktreeLineageById: parsed.worktreeLineageById ?? {},
     mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
       parsed.mobileClientTabSelectionsByDeviceId
@@ -59,7 +68,6 @@ export function normalizeLoadedProfileState(
       parsed.workspaceLineageByChildKey
     ),
     settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
-    // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
     ui: normalizeLoadedUiState(
       parsed,
       defaults,
@@ -68,11 +76,19 @@ export function normalizeLoadedProfileState(
       osc52ClipboardNoticePending,
       markNeedsSave
     ),
-    // Why: volatile schema; zod-validate workspaceSession at read so a bad payload falls to defaults, not a renderer crash.
-    workspaceSession: normalizeLoadedLocalSession(parsed, defaults, markNeedsSave),
-    // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
-    workspaceSessionsByHostId: normalizeLoadedHostSessions(parsed, defaults, markNeedsSave),
-    sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+    workspaceSession,
+    // Keep local in workspaceSession for downgrade compatibility; validate other hosts independently.
+    workspaceSessionsByHostId: normalizeLoadedHostSessions(
+      parsed,
+      defaults,
+      workspaceSession,
+      markNeedsSave
+    ),
+    sshTargets: migrateExistingHostsRemoteCliControl(
+      (parsed.sshTargets ?? []).map(normalizeSshTarget),
+      parsed.settings?.sshRemoteCliControlExistingHostsMigrated === true,
+      markNeedsSave
+    ),
     deletedSshConfigAliases: Array.isArray(parsed.deletedSshConfigAliases)
       ? parsed.deletedSshConfigAliases.filter((alias): alias is string => typeof alias === 'string')
       : [],
@@ -84,13 +100,21 @@ export function normalizeLoadedProfileState(
       .map(normalizeSshRemotePtyLease)
       .filter((lease): lease is SshRemotePtyLease => lease !== null),
     sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
-    claudeLivePtySessionIds: normalizeClaudeLivePtySessionIds(parsed.claudeLivePtySessionIds),
     migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
       parsed.migrationUnsupportedPtyEntries
     ),
     legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
+    orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
+      parsed.orcadMigrationImportReceipts
+    ),
+    orcadMigrationEvictedReceipts: normalizeOrcadMigrationEvictedReceipts(
+      parsed.orcadMigrationEvictedReceipts
+    ),
+    orcadMigrationStagedCatalogs: normalizeOrcadMigrationStagedCatalogs(
+      parsed.orcadMigrationStagedCatalogs
+    ),
     onboarding: normalizedOnboarding
   }
 }

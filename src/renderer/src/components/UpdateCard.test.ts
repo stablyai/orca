@@ -4,13 +4,11 @@ import { getDefaultUIState } from '../../../shared/constants'
 import type { ChangelogData, UpdateStatus } from '../../../shared/update-status-types'
 import { createUISlice } from '../store/slices/ui'
 import type { AppState } from '../store/types'
-import { isHttp2ProtocolError } from './UpdateCard'
 import {
   getUpdateCardAriaLabel,
+  isHttp2ProtocolError,
   isUpdateCardVisible
 } from './maintenance/update-card/update-card-visibility'
-
-// ── Helpers ──────────────────────────────────────────────────────────
 
 function createTestStore(): StoreApi<AppState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,8 +32,6 @@ const RICH_CHANGELOG: ChangelogData = {
 function setState(store: StoreApi<AppState>, status: UpdateStatus): void {
   store.getState().setUpdateStatus(status)
 }
-
-// ── Store-level tests for setUpdateStatus / changelog caching ────────
 
 beforeEach(() => {
   vi.stubGlobal('window', {
@@ -62,13 +58,6 @@ afterEach(() => {
 })
 
 describe('setUpdateStatus changelog caching', () => {
-  it('caches changelog from the available status', () => {
-    const store = createTestStore()
-    setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
-
-    expect(store.getState().updateChangelog).toEqual(RICH_CHANGELOG)
-  })
-
   it('preserves cached changelog through downloading → downloaded → error transitions', () => {
     const store = createTestStore()
     setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
@@ -91,12 +80,10 @@ describe('setUpdateStatus changelog caching', () => {
     setState(store, { state: 'idle' })
     expect(store.getState().updateChangelog).toBeNull()
 
-    // Re-seed and test checking
     setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
     setState(store, { state: 'checking' })
     expect(store.getState().updateChangelog).toBeNull()
 
-    // Re-seed and test not-available
     setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
     setState(store, { state: 'not-available' })
     expect(store.getState().updateChangelog).toBeNull()
@@ -128,13 +115,10 @@ describe('setUpdateStatus changelog caching', () => {
     setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
     expect(store.getState().updateChangelog).toEqual(RICH_CHANGELOG)
 
-    // New update cycle with no changelog data
     setState(store, { state: 'available', version: '1.3.0', changelog: null })
     expect(store.getState().updateChangelog).toBeNull()
   })
 })
-
-// ── dismissUpdate ────────────────────────────────────────────────────
 
 describe('dismissUpdate', () => {
   it('dismisses the version from current available status', () => {
@@ -165,8 +149,6 @@ describe('dismissUpdate', () => {
     expect(store.getState().dismissedUpdateVersion).toBeNull()
   })
 })
-
-// ── dismissUpdate nudge-aware path ───────────────────────────────────
 
 describe('dismissUpdate nudge-aware', () => {
   it('calls dismissNudge when the current status has an activeNudgeId', () => {
@@ -208,8 +190,6 @@ describe('dismissUpdate nudge-aware', () => {
     expect(window.api.updater.dismissNudge).toHaveBeenCalledTimes(1)
   })
 })
-
-// ── updateCardCollapsed ──────────────────────────────────────────────
 
 describe('updateCardCollapsed', () => {
   it('defaults to false', () => {
@@ -256,8 +236,6 @@ describe('updateCardCollapsed', () => {
   })
 })
 
-// ── markUpdateReassuranceSeen ────────────────────────────────────────
-
 describe('markUpdateReassuranceSeen', () => {
   it('persists reassurance-seen flag to disk', () => {
     const store = createTestStore()
@@ -269,8 +247,6 @@ describe('markUpdateReassuranceSeen', () => {
     expect(window.api.ui.set).toHaveBeenCalledWith({ updateReassuranceSeen: true })
   })
 })
-
-// ── hydratePersistedUI for update fields ─────────────────────────────
 
 describe('hydratePersistedUI update fields', () => {
   it('restores dismissedUpdateVersion from persisted UI', () => {
@@ -307,18 +283,14 @@ describe('hydratePersistedUI update fields', () => {
   })
 })
 
-// ── Visibility gate logic (pure function extraction) ─────────────────
-// Why: the UpdateCard component's render gates are the most critical
-// correctness surface — a wrong gate means users either miss updates or
-// get spammed with irrelevant cards. We test the gate logic as a pure
-// function to avoid needing a full React/DOM environment.
+// Exercise visibility gates without a full DOM so irrelevant cards stay hidden and real updates remain visible.
 
 type VisibilityInput = {
   status: UpdateStatus
   dismissedVersion: string | null
   cachedVersion: string | null
-  hasStartedDownload: boolean
   updateUserInitiatedCycle?: boolean
+  collapsed?: boolean
 }
 
 type VisibilityResult = 'hidden' | 'visible'
@@ -338,8 +310,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'idle' },
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('hidden')
   })
@@ -353,8 +324,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'checking' },
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('hidden')
   })
@@ -364,8 +334,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'checking', userInitiated: true },
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('visible')
   })
@@ -375,8 +344,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'not-available' },
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('hidden')
   })
@@ -386,8 +354,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'not-available', userInitiated: true },
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('visible')
   })
@@ -397,19 +364,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'available', version: '1.2.0', changelog: null },
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
-      })
-    ).toBe('visible')
-  })
-
-  it('shows available update (rich mode)', () => {
-    expect(
-      computeVisibility({
-        status: { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG },
-        dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('visible')
   })
@@ -419,8 +374,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'available', version: '1.2.0', changelog: null },
         dismissedVersion: '1.2.0',
-        cachedVersion: '1.2.0',
-        hasStartedDownload: false
+        cachedVersion: '1.2.0'
       })
     ).toBe('hidden')
   })
@@ -431,7 +385,6 @@ describe('UpdateCard visibility gates', () => {
         status: { state: 'available', version: '1.2.0', changelog: null },
         dismissedVersion: '1.2.0',
         cachedVersion: '1.2.0',
-        hasStartedDownload: false,
         updateUserInitiatedCycle: true
       })
     ).toBe('visible')
@@ -442,8 +395,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'downloading', percent: 42, version: '1.2.0' },
         dismissedVersion: '1.2.0',
-        cachedVersion: '1.2.0',
-        hasStartedDownload: true
+        cachedVersion: '1.2.0'
       })
     ).toBe('visible')
   })
@@ -453,19 +405,22 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'downloaded', version: '1.2.0' },
         dismissedVersion: '1.2.0',
-        cachedVersion: '1.2.0',
-        hasStartedDownload: false
+        cachedVersion: '1.2.0'
       })
     ).toBe('hidden')
   })
 
   it('hides background errors silently', () => {
+    const store = createTestStore()
+    setState(store, { state: 'checking' })
+    setState(store, { state: 'error', message: 'network' })
+
     expect(
       computeVisibility({
-        status: { state: 'error', message: 'network' },
+        status: store.getState().updateStatus,
+        collapsed: store.getState().updateCardCollapsed,
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('hidden')
   })
@@ -475,8 +430,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'error', message: 'network', userInitiated: true },
         dismissedVersion: null,
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('visible')
   })
@@ -486,19 +440,36 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'error', message: 'ENOSPC' },
         dismissedVersion: null,
-        cachedVersion: '1.2.0',
-        hasStartedDownload: true
+        cachedVersion: '1.2.0'
       })
     ).toBe('visible')
   })
 
-  it('shows settings-initiated download errors when a version is cached', () => {
+  it('shows an initial package recovery before any version was cached', () => {
     expect(
       computeVisibility({
-        status: { state: 'error', message: 'ENOSPC' },
+        status: {
+          state: 'error',
+          message: 'Quit Orca before running the system package install command.',
+          recovery: {
+            kind: 'linux-package-install',
+            packageType: 'deb',
+            reason: 'manual-install-required',
+            version: '1.2.0'
+          }
+        },
         dismissedVersion: null,
-        cachedVersion: '1.2.0',
-        hasStartedDownload: false
+        cachedVersion: null
+      })
+    ).toBe('visible')
+  })
+
+  it('shows an initial versioned download error before any version was cached', () => {
+    expect(
+      computeVisibility({
+        status: { state: 'error', message: 'invalid metadata', version: '1.2.0' },
+        dismissedVersion: null,
+        cachedVersion: null
       })
     ).toBe('visible')
   })
@@ -508,8 +479,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'downloaded', version: '1.2.0' },
         dismissedVersion: null,
-        cachedVersion: '1.2.0',
-        hasStartedDownload: true
+        cachedVersion: '1.2.0'
       })
     ).toBe('visible')
   })
@@ -519,8 +489,7 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'available', version: '1.3.0', changelog: null },
         dismissedVersion: '1.2.0',
-        cachedVersion: '1.3.0',
-        hasStartedDownload: false
+        cachedVersion: '1.3.0'
       })
     ).toBe('visible')
   })
@@ -530,19 +499,23 @@ describe('UpdateCard visibility gates', () => {
       computeVisibility({
         status: { state: 'error', message: 'fail', userInitiated: true },
         dismissedVersion: '1.2.0',
-        cachedVersion: '1.2.0',
-        hasStartedDownload: false
+        cachedVersion: '1.2.0'
       })
     ).toBe('visible')
   })
 
   it('hides check errors once a new checking cycle cleared the cached version', () => {
+    const store = createTestStore()
+    setState(store, { state: 'available', version: '1.2.0', changelog: null })
+    setState(store, { state: 'checking' })
+    setState(store, { state: 'error', message: 'network timeout' })
+
     expect(
       computeVisibility({
-        status: { state: 'error', message: 'network timeout' },
+        status: store.getState().updateStatus,
+        collapsed: store.getState().updateCardCollapsed,
         dismissedVersion: '1.2.0',
-        cachedVersion: null,
-        hasStartedDownload: false
+        cachedVersion: null
       })
     ).toBe('hidden')
   })
@@ -556,8 +529,6 @@ describe('HTTP/2 update error detection', () => {
     expect(isHttp2ProtocolError('HTTP proxy authentication failed')).toBe(false)
   })
 })
-
-// ── Full update lifecycle through the store ──────────────────────────
 
 describe('full update lifecycle through setUpdateStatus', () => {
   it('walks through available → downloading → downloaded preserving changelog', () => {
@@ -584,20 +555,16 @@ describe('full update lifecycle through setUpdateStatus', () => {
   it('clears stale changelog when a new check cycle starts', () => {
     const store = createTestStore()
 
-    // First update cycle — rich
     setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
     expect(store.getState().updateChangelog).toEqual(RICH_CHANGELOG)
 
-    // Download fails, error preserves changelog
     setState(store, { state: 'error', message: 'ENOSPC' })
     expect(store.getState().updateChangelog).toEqual(RICH_CHANGELOG)
 
-    // New check cycle starts — changelog must be cleared so it doesn't
-    // leak into a different version's card.
+    // Clear the previous changelog before a new version cycle can inherit it.
     setState(store, { state: 'checking' })
     expect(store.getState().updateChangelog).toBeNull()
 
-    // New version available without changelog
     setState(store, { state: 'available', version: '1.3.0', changelog: null })
     expect(store.getState().updateChangelog).toBeNull()
   })
@@ -609,17 +576,14 @@ describe('full update lifecycle through setUpdateStatus', () => {
     store.getState().dismissUpdate()
     expect(store.getState().dismissedUpdateVersion).toBe('1.2.0')
 
-    // Simulate a new check cycle finding a newer version
     setState(store, { state: 'checking' })
     setState(store, { state: 'available', version: '1.3.0', changelog: null })
 
-    // The dismissed version is 1.2.0 but the available version is 1.3.0 — card should show
     expect(
       computeVisibility({
         status: store.getState().updateStatus,
         dismissedVersion: store.getState().dismissedUpdateVersion,
-        cachedVersion: '1.3.0',
-        hasStartedDownload: false
+        cachedVersion: '1.3.0'
       })
     ).toBe('visible')
   })

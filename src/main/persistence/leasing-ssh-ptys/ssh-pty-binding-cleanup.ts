@@ -10,7 +10,6 @@ export type SshPtyBindingCleanupOperations = {
 }
 
 function sshRemotePtyLeaseMayReferenceBinding(
-  operations: SshPtyBindingCleanupOperations,
   lease: SshRemotePtyLease,
   binding: {
     ptyId: string
@@ -20,11 +19,9 @@ function sshRemotePtyLeaseMayReferenceBinding(
     leafId?: string
   }
 ): boolean {
-  const bindingPtyId = operations.toComparablePtyId(binding.targetId, binding.ptyId)
-  if (lease.targetId !== binding.targetId || lease.ptyId !== bindingPtyId) {
+  if (lease.targetId !== binding.targetId || lease.ptyId !== binding.ptyId) {
     return false
   }
-  // Why: target removal is destructive; scrub matching bindings before deleting the lease, else removing the tombstone can revive stale PTY ids.
   return (
     (binding.worktreeId === undefined ||
       lease.worktreeId === undefined ||
@@ -50,6 +47,30 @@ export function clearSshRemotePtyBindingsForLeases(
   if (!leases?.length) {
     return false
   }
+  // Normalize binding IDs before lookup; preserve unmatched bindings to avoid stranding live shells.
+  let leasesByPtyId: Map<string, SshRemotePtyLease[]> | undefined
+  const referencesBinding = (
+    binding: Parameters<typeof sshRemotePtyLeaseMayReferenceBinding>[1]
+  ): boolean => {
+    if (!leasesByPtyId) {
+      leasesByPtyId = new Map()
+      for (const lease of leases) {
+        if (lease.targetId !== targetId) {
+          continue
+        }
+        const entries = leasesByPtyId.get(lease.ptyId)
+        if (entries) {
+          entries.push(lease)
+        } else {
+          leasesByPtyId.set(lease.ptyId, [lease])
+        }
+      }
+    }
+    const ptyId = operations.toComparablePtyId(binding.targetId, binding.ptyId)
+    return (leasesByPtyId.get(ptyId) ?? []).some((lease) =>
+      sshRemotePtyLeaseMayReferenceBinding(lease, { ...binding, ptyId })
+    )
+  }
   let changed = false
   const sessions = new Set(
     [
@@ -62,14 +83,7 @@ export function clearSshRemotePtyBindingsForLeases(
       for (const tab of tabs) {
         if (
           tab.ptyId &&
-          leases.some((lease) =>
-            sshRemotePtyLeaseMayReferenceBinding(operations, lease, {
-              ptyId: tab.ptyId!,
-              worktreeId,
-              targetId,
-              tabId: tab.id
-            })
-          )
+          referencesBinding({ ptyId: tab.ptyId, worktreeId, targetId, tabId: tab.id })
         ) {
           tab.ptyId = null
           changed = true
@@ -92,16 +106,7 @@ export function clearSshRemotePtyBindingsForLeases(
       const worktreeId = worktreeIdByTabId.get(tabId)
       const nextBindings = Object.fromEntries(
         Object.entries(bindings).filter(
-          ([leafId, ptyId]) =>
-            !leases.some((lease) =>
-              sshRemotePtyLeaseMayReferenceBinding(operations, lease, {
-                ptyId,
-                targetId,
-                worktreeId,
-                tabId,
-                leafId
-              })
-            )
+          ([leafId, ptyId]) => !referencesBinding({ ptyId, targetId, worktreeId, tabId, leafId })
         )
       )
       if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {

@@ -1,15 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import * as paths from '../../../../shared/cross-platform-path'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
 import {
   buildAiVaultProjectContext,
-  buildAiVaultSessionProjectById,
-  toAiVaultProjectKey
+  buildAiVaultSessionProjectById
 } from './ai-vault-session-projects'
-import { groupAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
+import { truncateAiVaultListResult } from '../../../../shared/ai-vault-session-depth'
+import {
+  groupAiVaultSessions,
+  filterAiVaultSessions
+} from '../../../../shared/ai-vault-session-filters'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
@@ -497,7 +502,6 @@ describe('buildAiVaultSessionProjectById', () => {
 
     const standalone = buildAiVaultSessionProjectById(shared)
 
-    // The active repo/worktree must never leak into attribution.
     for (const [activeRepo, activeWorktree] of [
       [repoA, worktreeA],
       [repoB, worktreeB],
@@ -510,7 +514,6 @@ describe('buildAiVaultSessionProjectById', () => {
   })
 
   it('attributes non-ASCII cwds across unicode normalization forms', () => {
-    // NFC worktree path vs NFD session cwd — both spell /Users/ada/café.
     const repo = makeRepo({ id: 'repo-1', displayName: 'Café', path: '/Users/ada/caf\u00e9' })
     const worktree = makeWorktree({ id: 'wt-1', repoId: repo.id, path: '/Users/ada/caf\u00e9' })
 
@@ -522,6 +525,53 @@ describe('buildAiVaultSessionProjectById', () => {
     })
 
     expect(map.get('claude:nfd')).toMatchObject({ kind: 'repo', key: 'repo:repo-1' })
+  })
+  it('attributes a real-path session to the symlinked workspace its host alias names', () => {
+    const parent = makeRepo({ id: 'parent', displayName: 'Work', path: '/Users/ada/work' })
+    const child = makeRepo({ id: 'child', displayName: 'Api', path: '/Users/ada/work/api' })
+    const map = buildAiVaultSessionProjectById({
+      repos: [parent, child],
+      worktrees: [
+        makeWorktree({ id: 'wt-parent', repoId: parent.id, path: parent.path }),
+        makeWorktree({ id: 'wt-child', repoId: child.id, path: child.path })
+      ],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        makeSession({
+          id: 'claude:linked',
+          cwd: '/data/src/api/pkg',
+          cwdAliases: ['/Users/ada/work/api/pkg']
+        })
+      ]
+    })
+
+    expect(map.get('claude:linked')).toMatchObject({ kind: 'repo', key: 'repo:child' })
+  })
+
+  it('keeps a nested project over a longer-spelled parent link that reaches it through an alias', () => {
+    const parent = makeRepo({
+      id: 'parent',
+      displayName: 'Parent',
+      path: '/a-very-long-parent-link'
+    })
+    const child = makeRepo({ id: 'child', displayName: 'Child', path: '/real/child' })
+    const map = buildAiVaultSessionProjectById({
+      repos: [parent, child],
+      worktrees: [
+        makeWorktree({ id: 'wt-parent', repoId: parent.id, path: parent.path }),
+        makeWorktree({ id: 'wt-child', repoId: child.id, path: child.path })
+      ],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        makeSession({
+          id: 'claude:nested',
+          cwd: '/real/child/pkg',
+          cwdAliases: ['/a-very-long-parent-link/child/pkg']
+        })
+      ]
+    })
+
+    expect(map.get('claude:nested')).toMatchObject({ kind: 'repo', key: 'repo:child' })
   })
 })
 
@@ -600,3 +650,156 @@ function makeProjection(
     ...overrides
   }
 }
+
+describe('AI vault session project attribution reuse', () => {
+  it('shares project attribution only within the same host and raw cwd during one build', () => {
+    const repos = Array.from({ length: 200 }, (_, i) =>
+      makeRepo({ id: `repo-${i}`, path: `/repo-${i}` })
+    )
+    const sessions = Array.from({ length: 1000 }, (_, i) => ({
+      ...baseSession,
+      id: String(i),
+      cwd: '/repo-199/sub'
+    }))
+    let comparisons = 0
+    const original = paths.createNormalizedPathInsideOrEqualMatcher
+    const spy = vi
+      .spyOn(paths, 'createNormalizedPathInsideOrEqualMatcher')
+      .mockImplementation((root) => {
+        const matches = original(root)
+        return (cwd) => {
+          comparisons++
+          return matches(cwd)
+        }
+      })
+    let result: ReturnType<typeof buildAiVaultSessionProjectById>
+    try {
+      result = buildAiVaultSessionProjectById({
+        repos,
+        worktrees: [],
+        projectHostSetupProjection: { projects: [], setups: [] },
+        sessions
+      })
+      expect(comparisons).toBe(200)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(result.get('0')?.key).toBe('repo:repo-199')
+    expect(result.get('0')).toEqual(result.get('999'))
+    expect(result.get('0')).not.toBe(result.get('999'))
+    const hosts = buildAiVaultSessionProjectById({
+      repos,
+      worktrees: [],
+      projectHostSetupProjection: { projects: [], setups: [] },
+      sessions: [sessions[0], { ...sessions[0], id: 'remote', executionHostId: 'ssh:other' }]
+    })
+    expect(hosts.get('remote')?.kind).toBe('folder')
+  })
+
+  it('gives sessions on one host distinct attribution per cwd', () => {
+    const repos = [
+      makeRepo({ id: 'repo-a', path: '/repo-a' }),
+      makeRepo({ id: 'repo-b', path: '/repo-b' })
+    ]
+    const result = buildAiVaultSessionProjectById({
+      repos,
+      worktrees: [],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        { ...baseSession, id: 'a1', cwd: '/repo-a/sub' },
+        { ...baseSession, id: 'b1', cwd: '/repo-b/sub' },
+        { ...baseSession, id: 'a2', cwd: '/repo-a/other' },
+        { ...baseSession, id: 'none', cwd: '/elsewhere/sub' }
+      ]
+    })
+
+    expect(result.get('a1')?.key).toBe('repo:repo-a')
+    expect(result.get('a2')?.key).toBe('repo:repo-a')
+    expect(result.get('b1')?.key).toBe('repo:repo-b')
+    expect(result.get('none')?.kind).toBe('folder')
+  })
+
+  it('keys on the raw cwd so equivalent spellings still resolve correctly', () => {
+    // Raw spellings intentionally miss one another's cache entries; recomputation remains correct.
+    const repos = [makeRepo({ id: 'repo-win', path: 'C:\\Users\\Ada\\repo' })]
+    const result = buildAiVaultSessionProjectById({
+      repos,
+      worktrees: [],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        { ...baseSession, id: 'back', cwd: 'C:\\Users\\Ada\\repo\\app' },
+        { ...baseSession, id: 'fwd', cwd: 'c:/users/ada/repo/app' },
+        { ...baseSession, id: 'trail', cwd: 'C:/Users/Ada/repo/app/' }
+      ]
+    })
+
+    for (const id of ['back', 'fwd', 'trail']) {
+      expect({ id, key: result.get(id)?.key }).toEqual({ id, key: 'repo:repo-win' })
+    }
+  })
+
+  it('separates sessions that carry no cwd from sessions that do', () => {
+    const result = buildAiVaultSessionProjectById({
+      repos: [makeRepo({ id: 'repo-a', path: '/repo-a' })],
+      worktrees: [],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        { ...baseSession, id: 'empty', cwd: '' },
+        { ...baseSession, id: 'real', cwd: '/repo-a/sub' }
+      ]
+    })
+
+    expect(result.get('empty')?.kind).toBe('unknown')
+    expect(result.get('real')?.key).toBe('repo:repo-a')
+  })
+})
+
+it('keeps WSL distro identity through project memoization, Workspace filtering and cache depth', () => {
+  const scope = String.raw`\\wsl.localhost\Ubuntu\home\ada\repo`
+  const repo = makeRepo({ id: 'ubuntu', path: scope })
+  const sessions = ['Debian', 'Ubuntu'].map((distro) =>
+    makeSession({
+      id: distro,
+      cwd: '/home/ada/repo/src',
+      filePath: `//wsl$/${distro}/home/ada/session.jsonl`
+    })
+  )
+  const projects = buildAiVaultSessionProjectById({
+    repos: [repo],
+    worktrees: [],
+    projectHostSetupProjection: makeProjection({}),
+    sessions
+  })
+  expect(projects.get('Debian')?.kind).toBe('folder')
+  expect(projects.get('Ubuntu')?.key).toBe('repo:ubuntu')
+  const loaded = {
+    sessions: [makeSession({ id: 'global', cwd: '/other' }), ...sessions],
+    issues: [],
+    scannedAt: '2026-10-10T00:00:00.000Z'
+  }
+  for (const depth of [2, 1]) {
+    const trimmed = truncateAiVaultListResult(loaded, depth, [scope])
+    expect(
+      filterAiVaultSessions(trimmed.sessions, {
+        query: '',
+        agents: ['claude'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: [scope],
+        hideEmptySessions: true
+      }).map((row) => row.id)
+    ).toEqual(['Ubuntu'])
+  }
+  expect(
+    filterAiVaultSessions(sessions, {
+      query: '',
+      agents: ['claude'],
+      scope: 'project',
+      sort: 'updated',
+      activeWorktreePaths: [scope],
+      activeProjectKey: 'repo:ubuntu',
+      sessionProjectById: projects,
+      hideEmptySessions: true
+    }).map((row) => row.id)
+  ).toEqual(['Ubuntu'])
+})

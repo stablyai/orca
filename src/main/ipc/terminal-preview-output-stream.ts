@@ -19,13 +19,7 @@ export type TerminalPreviewOutputMeta = {
 
 type PendingOutput = { data: string; bytes: number; meta?: TerminalPreviewOutputMeta }
 
-/**
- * Split one buffered chunk against the snapshot boundary, keeping WHY it
- * survived. Only a chunk whose sequence metadata proves it is the suffix after
- * that boundary may advance kitty state with live stack semantics; an overlap
- * that cannot be sliced is redelivery, and a redelivered `CSI > u` applied as a
- * push would leave the TUI's single pop landing on a stale frame.
- */
+/** Only sequence-proven suffixes use live kitty stack semantics; uncertain redelivery must not duplicate pushes. */
 function outputAfterSnapshotSeq(
   output: PendingOutput,
   snapshotSeq?: number
@@ -45,8 +39,7 @@ function outputAfterSnapshotSeq(
     return { data: output.data, mode: 'live' }
   }
   if (output.meta.transformed === true) {
-    // Transformed payloads make raw offsets unmappable, so the covered head
-    // cannot be sliced off and the whole chunk stays uncertain redelivery.
+    // Transformed bytes cannot be split by raw offsets; retain uncertain redelivery.
     return { data: output.data, mode: 'replay' }
   }
   return { data: output.data.slice(snapshotSeq - startSeq), mode: 'live' }
@@ -120,9 +113,12 @@ export class TerminalPreviewOutputStream {
   }
 
   completeSnapshot(snapshotSeq?: number): TerminalPreviewReplayChunk[] {
-    const replay = this.initialPending.flatMap((output) => {
+    const replay: TerminalPreviewReplayChunk[] = []
+    this.initialPending.forEach((output) => {
       const uncovered = outputAfterSnapshotSeq(output, snapshotSeq)
-      return uncovered && uncovered.data.length > 0 ? [uncovered] : []
+      if (uncovered && uncovered.data.length > 0) {
+        replay.push(uncovered)
+      }
     })
     this.initialPending = []
     this.initialPendingBytes = 0
@@ -130,9 +126,7 @@ export class TerminalPreviewOutputStream {
     return replay
   }
 
-  // Why: the PTY grid changed under this stream (viewer fit, host reclaim,
-  // phone takeover) — buffered bytes were parsed for the old grid, so drop
-  // them and hand the renderer a fresh authoritative snapshot instead.
+  // Grid changes invalidate buffered parsing; resync from a snapshot at the new width.
   requestResync(): void {
     if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
       return
@@ -224,7 +218,7 @@ export class TerminalPreviewOutputStream {
     this.pendingBatches.push({ data, bytes })
     this.pendingBatchBytes += bytes
     if (this.pendingBatchBytes > OUTPUT_PENDING_MAX_BYTES) {
-      // Why: a stuck renderer heals from a fresh authoritative snapshot instead of retaining output without bound.
+      // Bound stuck-renderer memory by reconnecting from a fresh snapshot.
       this.pendingBatches = []
       this.pendingBatchBytes = 0
       this.resyncPending = true

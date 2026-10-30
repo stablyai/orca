@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, vi } from 'vitest'
-import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
-import { resetSshConnectionGenerations } from '../ssh/ssh-connection-generation'
+import { awaitRuntimeFileWatcherUnsubscribes } from './files/watch/file-watcher-leases'
+import { RuntimeFileCommands } from './orca-runtime-files'
+import { resetSshConnectionGenerations } from '../ssh/connection/ssh-connection-generation'
 import { resetRuntimeFileMocks } from './orca-runtime-files-mock-registry'
+import {
+  getConnectionExecutionHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 
-/** Restores the shared fs/auth/watcher mock state and fake timers around each test. */
 export function useRuntimeFileCommandsLifecycle(): void {
   const originalPlatform = process.platform
 
@@ -36,12 +41,10 @@ export function createRuntimeFileCommands(options?: {
   resolveKnownWorkspaceFileTarget?: ReturnType<typeof vi.fn>
   resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
   resolveTerminalCwd?: ReturnType<typeof vi.fn>
-  resolveTerminalContext?: ReturnType<typeof vi.fn>
   resolveTerminalFileUriHostname?: ReturnType<typeof vi.fn>
-  hasRecentTerminalOutputPath?: ReturnType<typeof vi.fn>
-  hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
+    getSettings: vi.fn(() => ({ followSymlinkedDirectories: false })),
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
   const path = options?.path ?? '/repo'
@@ -51,32 +54,26 @@ export function createRuntimeFileCommands(options?: {
     path,
     ...(options?.hostId ? { hostId: options.hostId } : {})
   }
+  // Worktree host outranks repo metadata, matching the real resolver.
+  const runtimeFileTargetExecutionHostId = (): ExecutionHostId => {
+    const connectionId = store.getRepo(worktree.repoId)?.connectionId
+    return normalizeExecutionHostId(options?.hostId) ?? getConnectionExecutionHostId(connectionId)
+  }
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
-    resolveWorktreeSelector: vi.fn(async () => worktree),
     resolveRuntimeFileTarget:
       options?.resolveRuntimeFileTarget ??
       vi.fn(async () => ({
         worktree,
-        connectionId: store.getRepo(worktree.repoId)?.connectionId
+        executionHostId: runtimeFileTargetExecutionHostId()
       })),
     ...(options?.resolveKnownWorkspaceFileTarget
       ? { resolveKnownWorkspaceFileTarget: options.resolveKnownWorkspaceFileTarget }
       : {}),
     resolveTerminalCwd: options?.resolveTerminalCwd ?? vi.fn(() => path),
-    resolveTerminalContext:
-      options?.resolveTerminalContext ??
-      vi.fn(() => ({
-        worktreeId: worktree.id,
-        connectionId: store.getRepo(worktree.repoId)?.connectionId ?? null
-      })),
     ...(options?.resolveTerminalFileUriHostname
       ? { resolveTerminalFileUriHostname: options.resolveTerminalFileUriHostname }
-      : {}),
-    hasRecentTerminalOutputPath: options?.hasRecentTerminalOutputPath ?? vi.fn(() => true),
-    ...(options?.hasRecentNativeChatOutputPath
-      ? { hasRecentNativeChatOutputPath: options.hasRecentNativeChatOutputPath }
       : {}),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),

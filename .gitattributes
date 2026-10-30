@@ -1,24 +1,79 @@
-/config/scripts/create-draft-release.mjs text eol=lf
-/config/scripts/orca-dev.mjs text eol=lf
-/config/scripts/latest-stable-release.mjs text eol=lf
-/config/scripts/publish-complete-draft-releases.mjs text eol=lf
-/config/scripts/release-rc-history.mjs text eol=lf
-/config/scripts/run-internal-dev-setup.mjs text eol=lf
-/config/scripts/verify-cli-bin.mjs text eol=lf
-/config/scripts/verify-release-required-assets.mjs text eol=lf
+# CRLF shebangs break Vite's SSR transform.
+/config/scripts/**/*.mjs text eol=lf
 /skill-guides/*.md text eol=lf
 /skill-stubs/*.md text eol=lf
+/skill-stubs/_shared/*.md text eol=lf
 /skills/*/SKILL.md text eol=lf
 /src/cli/bundled-skill-guides.ts text eol=lf
+# SVG bytes feed embedded data URLs and asset hashes on every build host.
+*.svg text eol=lf
+# Compiler input line breaks must not depend on the checkout OS.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.html text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
-# pnpm hashes every patch byte-for-byte, so a CRLF checkout breaks the install.
+# Keep patch diffs stable; pnpm hashes them with LF normalization.
+# CRLF upstream sources still need git -c core.autocrlf=input apply (windows-process-tree-gyp-rebuild.mjs).
 /config/patches/*.patch -text
-# The xterm bundle hunks also make a diff nobody can read; review the hand-written
-# source patch under xterm-src/ instead. The sibling patches stay diffable.
+# CRLF patches fail pnpm parsing on Windows.
+/mobile/patches/*.patch -text
+# Review xterm-src/ instead of generated bundle hunks.
 /config/patches/@xterm__xterm@*.patch -diff
 /config/patches/xterm-src/*.patch text eol=lf
-# Generated wrapper fixtures: collapse them in the PR diff so they stop drowning
-# the reviewable change, and pin LF because they are compared byte-for-byte.
-# Not -diff: the shell diff is the review surface when a wrapper does change.
+# pnpm parses these unified diffs during Windows installs; keep checkout bytes stable.
+/mobile/patches/*.patch -text
+# Collapse generated wrappers but keep diffs available; tests compare LF bytes.
 /src/main/__fixtures__/shell-wrapper-snapshots/*.txt linguist-generated=true text eol=lf
+# PTY transcripts must retain captured CR and CRLF bytes.
+/src/main/runtime/__fixtures__/*.txt -text
+/src/main/daemon/__fixtures__/pty-transcripts/*.txt -text
+/src/renderer/src/components/terminal-pane/terminal-link-transcripts/*.txt -text whitespace=cr-at-eol
+# verify:localization-runtime-catalog compares LF bytes.
+/src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf
+# verify:rpc-params-catalog compares LF bytes.
+/src/shared/rpc-contract/rpc-params-catalog.generated.ts linguist-generated=true text eol=lf
+# RPC recording goldens must match rpc:record's LF output.
+/mobile/rpc-foundation/goldens/*.json text eol=lf
+# Mobile build IDs hash source bytes; checkout line endings must match across hosts.
+/mobile/src/** text eol=lf
+/mobile/app/** text eol=lf
+/mobile/web-entry/** text eol=lf
+# Preserve binary assets under the text-pinned mobile directories.
+/mobile/src/**/*.png -text
+/mobile/src/**/*.jpg -text
+/mobile/src/**/*.jpeg -text
+/mobile/src/**/*.gif -text
+/mobile/src/**/*.ico -text
+/mobile/src/**/*.webp -text
+/mobile/src/**/*.ttf -text
+/mobile/src/**/*.otf -text
+/mobile/src/**/*.woff -text
+/mobile/src/**/*.woff2 -text
+/mobile/app/**/*.png -text
+/mobile/app/**/*.jpg -text
+/mobile/app/**/*.jpeg -text
+/mobile/app/**/*.gif -text
+/mobile/app/**/*.ico -text
+/mobile/app/**/*.webp -text
+/mobile/app/**/*.ttf -text
+/mobile/app/**/*.otf -text
+/mobile/app/**/*.woff -text
+/mobile/app/**/*.woff2 -text
+/mobile/web-entry/**/*.png -text
+/mobile/web-entry/**/*.jpg -text
+/mobile/web-entry/**/*.jpeg -text
+/mobile/web-entry/**/*.gif -text
+/mobile/web-entry/**/*.ico -text
+/mobile/web-entry/**/*.webp -text
+/mobile/web-entry/**/*.ttf -text
+/mobile/web-entry/**/*.otf -text
+/mobile/web-entry/**/*.woff -text
+/mobile/web-entry/**/*.woff2 -text
+
+# Generated ACP schemas are checked byte-for-byte against formatted output.
+/src/main/acp/generated/*.generated.ts linguist-generated=true text eol=lf
+# Generated skill bundle artifacts are verified byte-for-byte against fresh output.
+/resources/skills/*.json linguist-generated=true text eol=lf
+# Vitest writes snapshots with LF, so checkout bytes must match on every host.
+**/__snapshots__/*.snap text eol=lf

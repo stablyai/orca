@@ -1,20 +1,14 @@
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 
-// Why: on a black-holed LAN endpoint the direct dial sits in 'connecting' for the
-// whole 12s connect timeout (rpc-client CONNECT_TIMEOUT_MS), and relay recovery
-// cannot even start meanwhile because connecting/handshaking count as live direct
-// progress. Happy eyeballs: give direct this much of a head start, then race the
-// relay dial — migrateTo hands the logical client to whichever authenticates first.
+// Give direct a head start, then race relay so a black-holed LAN cannot block recovery for its whole connect deadline.
 const DIRECT_DIAL_GRACE_MS = 2500
 
 type DirectGraceTimerDependencies = {
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
 }
 
-// One-shot timer that releases the relay dial when the direct dial has not
-// authenticated within the grace. The supervisor arms it at start and on
-// foreground restore, and clears it on connect, background, and stop.
 export class MobileRelayDirectGraceTimer {
   private timer: ReturnType<typeof setTimeout> | null = null
 
@@ -24,8 +18,7 @@ export class MobileRelayDirectGraceTimer {
     private readonly dialRelay: () => void
   ) {}
 
-  // No-op unless the direct dial is still unauthenticated, so a healthy LAN and
-  // an already-failed direct path (recovery owns that) never open a relay socket.
+  // Race only unauthenticated direct progress; healthy LAN and already-failed direct recovery need no extra relay socket.
   arm(): void {
     const state = this.logical.getState()
     if (this.timer || (state !== 'connecting' && state !== 'handshaking')) {

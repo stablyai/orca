@@ -1,12 +1,4 @@
-/**
- * Synchronous lookup of the active keyboard layout's characters with Option absent.
- *
- * Why: kitty keyboard CSI-u reports must carry the codepoint of the key in
- * the *current layout* with no modifiers. Deriving it from the physical code
- * alone assumes US QWERTY and reports the wrong key on Dvorak, Colemak,
- * AZERTY, QWERTZ, etc. — misfiring TUI hotkeys. Chromium supplies the base
- * layer; a native snapshot supplies Shift because the web API omits modifier layers.
- */
+/** Kitty CSI-u needs current-layout characters, not US physical guesses; Chromium supplies base keys and a native snapshot adds Shift layers the web API lacks. */
 import type { LayoutMapLike } from './detect-option-as-alt'
 import type {
   KeyboardLayoutKeyCharacters,
@@ -89,9 +81,7 @@ function refreshAfterKeyboardLayoutChange(event: KeyboardLayoutChangeEvent): voi
   }
 }
 
-/** Idempotent. Kicks off the initial fetch and keeps the cache fresh across
- *  layout switches. Call from terminal keyboard setup so the map is resolved
- *  before the first Option chord. */
+/** Initialize once from terminal keyboard setup and refresh on layout changes before Option chords need the map. */
 export function prefetchLayoutCharacters(): void {
   if (focusListenerAttached || typeof window === 'undefined') {
     return
@@ -108,9 +98,22 @@ function refreshOnFocus(): void {
   void refreshLayoutMap()
 }
 
-/** A layout map entry is usable as a kitty base key only if it is a single
- *  printable codepoint (dead keys report names like 'Dead'; some entries are
- *  empty). Exposed for tests. */
+function disposeLayoutCharacterPrefetch(): void {
+  if (attachedWindow) {
+    attachedWindow.removeEventListener('focus', refreshOnFocus)
+    attachedWindow = null
+  }
+  unsubscribeLayoutChange?.()
+  unsubscribeLayoutChange = null
+  focusListenerAttached = false
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Remove global hooks on Vite replacement so HMR cannot accumulate layout listeners.
+  import.meta.hot.dispose(disposeLayoutCharacterPrefetch)
+}
+
+/** Accept one printable codepoint; dead-key names and empty entries cannot become kitty base keys. */
 export function normalizeLayoutBaseCharacter(value: string | undefined): string | undefined {
   return normalizeLayoutCharacter(value?.toLowerCase())
 }
@@ -127,9 +130,7 @@ function normalizeLayoutCharacter(value: string | null | undefined): string | un
   return codePoint < 0x20 ? undefined : value
 }
 
-/** The active layout's unshifted character for a physical key code, or
- *  undefined when the map is unavailable or the key has no single printable
- *  base character (callers fall back to the US table). */
+/** Read the current unshifted base character; undefined lets callers use the US fallback table. */
 export function getLayoutBaseCharacterForCode(code: string): string | undefined {
   const nativeCharacters = cachedLayoutCharacters.nativeKeyCharacters
   return normalizeLayoutBaseCharacter(

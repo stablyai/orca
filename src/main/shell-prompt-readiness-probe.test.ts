@@ -1,14 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const lineEditorProbe = vi.hoisted(() => vi.fn())
+const relayedLineEditorProbe = vi.hoisted(() => vi.fn())
+const listChildPids = vi.hoisted(() => vi.fn())
 const processReadinessProbe = vi.hoisted(() => vi.fn())
 const resolveExecutablePath = vi.hoisted(() => vi.fn((value: string) => Promise.resolve(value)))
+const resolveInstalledExecutablePaths = vi.hoisted(() =>
+  vi.fn((): Promise<string[]> => Promise.resolve([]))
+)
 vi.mock('../shared/pty-slave-line-discipline-echo', () => ({
-  createPtySlaveLineEditorProbe: () => lineEditorProbe
+  createPtySlaveLineEditorProbe: (ttyPath: string) =>
+    ttyPath === '/dev/ttys099' ? relayedLineEditorProbe : lineEditorProbe
 }))
 vi.mock('../shared/shell-process-readiness', () => ({
   readShellProcessReadiness: processReadinessProbe,
-  resolveShellExecutablePath: resolveExecutablePath
+  listChildProcessIds: listChildPids,
+  resolveShellExecutablePath: resolveExecutablePath,
+  resolveInstalledShellExecutablePaths: resolveInstalledExecutablePaths
 }))
 
 import { createShellPromptReadinessProbe } from './shell-prompt-readiness-probe'
@@ -17,8 +25,12 @@ describe('shell prompt readiness probe', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     lineEditorProbe.mockReset()
+    relayedLineEditorProbe.mockReset()
+    listChildPids.mockReset().mockResolvedValue([])
     processReadinessProbe.mockReset()
     resolveExecutablePath.mockClear()
+    resolveInstalledExecutablePaths.mockClear()
+    resolveInstalledExecutablePaths.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -91,8 +103,133 @@ describe('shell prompt readiness probe', () => {
 
     expect(onPromptReady).not.toHaveBeenCalled()
     if (terminalState === 'other') {
-      expect(processReadinessProbe).not.toHaveBeenCalled()
+      expect(listChildPids).not.toHaveBeenCalled()
     }
+  })
+
+  it.each([
+    ['accepts', 'line-editor', true],
+    ['rejects', 'other', false]
+  ])(
+    '%s a relayed shell whose inner pty is in %s mode (#25586)',
+    async (_verb, innerState, expected) => {
+      lineEditorProbe.mockResolvedValue('other')
+      relayedLineEditorProbe.mockResolvedValue(innerState)
+      listChildPids.mockResolvedValue([43])
+      processReadinessProbe.mockImplementation((pid: number) =>
+        Promise.resolve(
+          pid === 42
+            ? { executablePath: '/usr/local/bin/kiro-cli-term', foreground: true, ttyPath: null }
+            : { executablePath: '/bin/zsh', foreground: true, ttyPath: '/dev/ttys099' }
+        )
+      )
+      const onPromptReady = vi.fn()
+      const probe = createShellPromptReadinessProbe({
+        slavePath: '/dev/ttys048',
+        shellPath: '/bin/zsh',
+        getShellPid: () => 42,
+        onPromptReady,
+        settleMs: 10
+      })
+
+      probe?.notifyOutput('\x1b[?2004h')
+      await vi.advanceTimersByTimeAsync(10)
+
+      expect(onPromptReady).toHaveBeenCalledTimes(expected ? 1 : 0)
+    }
+  )
+
+  it('accepts a second installation of the same shell that the pane PATH resolves', async () => {
+    lineEditorProbe.mockResolvedValue('line-editor')
+    processReadinessProbe.mockResolvedValue({
+      executablePath: '/opt/homebrew/bin/bash',
+      foreground: true
+    })
+    resolveInstalledExecutablePaths.mockResolvedValue(['/bin/bash', '/opt/homebrew/bin/bash'])
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/bash',
+      shellCwd: '/work',
+      shellPathEnv: '/opt/homebrew/bin:/usr/bin:/bin',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(resolveInstalledExecutablePaths).toHaveBeenCalledWith(
+      'bash',
+      '/work',
+      '/opt/homebrew/bin:/usr/bin:/bin'
+    )
+    expect(onPromptReady).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a replacement with the shell basename that the pane PATH cannot reach', async () => {
+    lineEditorProbe.mockResolvedValue('line-editor')
+    processReadinessProbe.mockResolvedValue({ executablePath: '/tmp/bash', foreground: true })
+    resolveInstalledExecutablePaths.mockResolvedValue(['/bin/bash', '/opt/homebrew/bin/bash'])
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/bash',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(onPromptReady).not.toHaveBeenCalled()
+  })
+
+  it('does not widen identity when the launched shell path resolves exactly', async () => {
+    lineEditorProbe.mockResolvedValue('line-editor')
+    processReadinessProbe.mockResolvedValue({ executablePath: '/bin/zsh', foreground: true })
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/zsh',
+      getShellPid: () => 42,
+      onPromptReady: vi.fn(),
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(resolveInstalledExecutablePaths).not.toHaveBeenCalled()
+  })
+
+  it('invalidates an alternate-installation result that resolves after disposal', async () => {
+    const pending: { resolve?: (value: string[]) => void } = {}
+    lineEditorProbe.mockResolvedValue('line-editor')
+    processReadinessProbe.mockResolvedValue({
+      executablePath: '/opt/homebrew/bin/bash',
+      foreground: true
+    })
+    resolveInstalledExecutablePaths.mockImplementation(
+      () => new Promise((resolve) => (pending.resolve = resolve))
+    )
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/bash',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+    probe?.dispose()
+    pending.resolve?.(['/opt/homebrew/bin/bash'])
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onPromptReady).not.toHaveBeenCalled()
   })
 
   it('does no external work when the ready marker cancels the settle window', async () => {

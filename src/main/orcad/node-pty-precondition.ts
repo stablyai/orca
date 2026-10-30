@@ -1,59 +1,28 @@
-/**
- * Prove `node-pty` can be loaded on this host BEFORE anything in the process requires it.
- *
- * Why this exists: of the two ways node-pty fails, only one is catchable. A missing
- * module throws `MODULE_NOT_FOUND` and a caller can degrade. A module that is present but
- * built against the wrong libc or Node ABI is refused by the dynamic loader, and in the
- * worst case takes the process down before any handler exists — that is #9902, which
- * crashed the desktop app on Ubuntu 20.04 before a window appeared
- * (docs/reference/linux-glibc-compatibility.md).
- *
- * So the load happens in a CHILD process. Whatever the child does — throw, abort, die on
- * a signal — is data to us rather than our own death, and the operator gets a sentence
- * naming what to change instead of a loader stack trace.
- *
- * The cost is one short-lived `node -e` at startup. That is the price of turning an
- * uncatchable failure into a catchable one, and it is paid once per boot.
- */
+// Probe node-pty in a child before any require: native loader aborts cannot be caught in-process.
 import { existsSync, accessSync, constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { runProcessSync, type ProcessResult } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
+import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
 import type { RuntimeTerminalUnavailableReason } from '../../shared/runtime-types'
 import {
   buildToolchainProbeCommand,
   parseBuildToolchainProbe,
   toolchainInstallHintLines
-} from '../ssh/build-toolchain-diagnosis'
-import {
-  detectNativeHostAbi,
-  nativeSlotName,
-  parseNodeAbiMismatch,
-  parseUnmetGlibcVersion,
-  type NativeHostAbi
-} from './native-host-abi'
+} from './build-toolchain-diagnosis'
+import { detectNativeHostAbi, nativeSlotName, type NativeHostAbi } from './native-host-abi'
+import { classifyNodePtyLoaderMessage, firstErrorLine } from './node-pty-loader-diagnosis'
 import { installPrebuiltSlot, type PrebuiltSlotOutcome } from './node-pty-prebuilt-slot'
 
-// Why every verdict travels on STDOUT: node echoes the whole `-e` source into stderr
-// before the stack trace, so any substring test against stderr also matches this file's
-// own token strings. stdout carries only what the child chose to print.
+// Parse stdout verdicts only; Node may echo the script’s own token strings into stderr.
 const PROBE_OK_TOKEN = 'ORCA_NODE_PTY_LOAD_OK'
 const NO_BINARY_TOKEN = 'ORCA_NODE_PTY_NO_BINARY'
 const LOAD_ERROR_TOKEN = 'ORCA_NODE_PTY_LOAD_ERROR'
 const PROBE_TIMEOUT_MS = 20_000
 
-/**
- * `ok` — proved loadable. `degraded` — loads, but something only spawn-time needs is
- * broken, so the host should still serve everything else. `blocked` — proved unloadable,
- * so nothing in this process may require it. `unverifiable` — the probe itself did not
- * answer, which is not evidence either way.
- *
- * Why `unverifiable` is separate from `blocked`: a probe that times out or cannot spawn
- * says nothing about node-pty, and refusing to boot on it would brick working hosts for
- * a reason that was never established. Same verdict discipline as
- * docs/reference/ssh-execution-boundary.md — loss of contact is not proof of death.
- */
-export type NodePtyPreconditionStatus = 'ok' | 'degraded' | 'blocked' | 'unverifiable'
+/** Degraded allows other services; blocked proves unloadable; unverifiable proves nothing about the addon. */
+type NodePtyPreconditionStatus = 'ok' | 'degraded' | 'blocked' | 'unverifiable'
 
 export type NodePtyPreconditionVerdict = {
   status: NodePtyPreconditionStatus
@@ -61,64 +30,84 @@ export type NodePtyPreconditionVerdict = {
   abi: NativeHostAbi
   reason?: RuntimeTerminalUnavailableReason
   detail?: string
-  /** What the slot install did, when one was attempted. */
   prebuilt?: PrebuiltSlotOutcome
 }
 
-export type NodePtyProbeFailure = {
+type NodePtyProbeFailure = {
   status: 'blocked' | 'unverifiable'
   reason: RuntimeTerminalUnavailableReason
   detail: string
 }
 
-/**
- * Read the child's exit into a cause. Pure, so every failure shape is testable from a
- * host that cannot reproduce it — the whole point, since the shapes that matter belong
- * to Alpine and Ubuntu 20.04.
- */
-export function classifyNodePtyProbeResult(
+type NodePtyProbeOutcome =
+  | { kind: 'loaded'; loadedDir: string | null }
+  | { kind: 'noBinary' }
+  | { kind: 'loaderError'; message: string }
+  | { kind: 'signalled'; signal: NodeJS.Signals }
+  | { kind: 'unanswered'; detail: string }
+  | { kind: 'unexplained'; detail: string }
+
+function readNodePtyProbeOutcome(
   result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
-): NodePtyProbeFailure | null {
+): NodePtyProbeOutcome {
   const stdout = result.stdout
   if (result.code === 0 && stdout.includes(PROBE_OK_TOKEN)) {
-    return null
+    return {
+      kind: 'loaded',
+      loadedDir: stdout.split(PROBE_OK_TOKEN)[1]?.trim().split('\n')[0]?.trim() || null
+    }
   }
   if (result.timedOut) {
     return {
-      status: 'unverifiable',
-      reason: 'unknown',
+      kind: 'unanswered',
       detail: 'the node-pty load probe did not finish in time, so nothing was established'
     }
   }
-  // Why signal before anything the child said: a binary that aborts or segfaults inside
-  // the loader never reaches the catch, and often prints nothing at all. That silence is
-  // exactly the uncatchable case this probe is a separate process for.
+  // Loader aborts can signal without emitting a verdict; prioritize the signal.
   if (result.signal) {
-    return {
-      status: 'blocked',
-      reason: 'load_crashed',
-      detail: `the load probe was killed by ${result.signal}`
-    }
+    return { kind: 'signalled', signal: result.signal }
   }
   if (stdout.includes(NO_BINARY_TOKEN)) {
-    return {
-      status: 'blocked',
-      reason: 'dependency_missing',
-      detail: 'node-pty is installed but has no compiled binary for this platform'
-    }
+    return { kind: 'noBinary' }
   }
   const reported = readReportedLoadError(stdout)
   if (reported !== null) {
-    return classifyLoaderMessage(reported)
+    return { kind: 'loaderError', message: reported }
   }
   return {
-    status: 'blocked',
-    reason: 'load_failed',
-    detail: firstLine(result.stderr) || `the load probe exited with code ${result.code}`
+    kind: 'unexplained',
+    detail: firstErrorLine(result.stderr) || `the load probe exited with code ${result.code}`
   }
 }
 
-/** The message the child caught, or null when it never got that far. */
+export function classifyNodePtyProbeResult(
+  result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
+): NodePtyProbeFailure | null {
+  const outcome = readNodePtyProbeOutcome(result)
+  switch (outcome.kind) {
+    case 'loaded':
+      return null
+    case 'unanswered':
+      return { status: 'unverifiable', reason: 'unknown', detail: outcome.detail }
+    case 'signalled':
+      return {
+        status: 'blocked',
+        reason: 'load_crashed',
+        detail: `the load probe was killed by ${outcome.signal}`
+      }
+    case 'noBinary':
+      return {
+        status: 'blocked',
+        reason: 'dependency_missing',
+        detail: 'node-pty is installed but has no compiled binary for this platform'
+      }
+    case 'loaderError':
+      return classifyLoaderMessage(outcome.message)
+    case 'unexplained':
+      return { status: 'blocked', reason: 'load_failed', detail: outcome.detail }
+  }
+}
+
 function readReportedLoadError(stdout: string): string | null {
   const line = stdout.split('\n').find((candidate) => candidate.startsWith(LOAD_ERROR_TOKEN))
   if (!line) {
@@ -131,72 +120,22 @@ function readReportedLoadError(stdout: string): string | null {
   }
 }
 
-/** Read a dynamic-loader message. Pure, so shapes this host cannot reproduce are testable. */
-export function classifyLoaderMessage(message: string): NodePtyProbeFailure {
-  const abiMismatch = parseNodeAbiMismatch(message)
-  if (abiMismatch) {
-    return {
-      status: 'blocked',
-      reason: 'abi_mismatch',
-      detail: `built for Node ABI ${abiMismatch.built}, this host runs ABI ${abiMismatch.host}`
-    }
-  }
-  const unmetGlibc = parseUnmetGlibcVersion(message)
-  if (unmetGlibc) {
-    return {
-      status: 'blocked',
-      reason: 'libc_floor',
-      detail: `the binary requires GLIBC_${unmetGlibc}`
-    }
-  }
-  if (/(GLIBCXX_|CXXABI_)[0-9.]+'? not found/.test(message)) {
-    return { status: 'blocked', reason: 'libc_floor', detail: firstLine(message) }
-  }
-  if (/MODULE_NOT_FOUND|Cannot find module/.test(message)) {
-    return { status: 'blocked', reason: 'dependency_missing', detail: firstLine(message) }
-  }
-  return { status: 'blocked', reason: 'load_failed', detail: firstLine(message) }
+function classifyLoaderMessage(message: string): NodePtyProbeFailure {
+  return { status: 'blocked', ...classifyNodePtyLoaderMessage(message) }
 }
 
-/**
- * Why not simply the first non-empty line: when the child dies without catching, node
- * prints the offending source line and a caret before the error, so line one is the
- * script rather than the diagnosis. Prefer the first line that reads as an error.
- */
-function firstLine(text: string): string {
-  const lines = text.split('\n').filter((candidate) => candidate.trim().length > 0)
-  const errorLine = lines.find((candidate) => /^[A-Za-z]*(Error|Exception):/.test(candidate.trim()))
-  return (errorLine ?? lines[0] ?? text).trim().slice(0, 400)
-}
-
-/**
- * The script the child runs.
- *
- * Why it dlopens the file itself rather than trusting node-pty's loader: that loader
- * tries several directories and rethrows only the LAST error, so a `pty.node` the
- * dynamic loader refused is reported as `Cannot find module './prebuilds/...'`. Acting on
- * that sends the operator to install a module that is already there. The dlopen has to
- * come BEFORE `require(index.js)` for the same reason: node-pty's unixTerminal calls the
- * loader at module scope, so requiring the package first re-wraps the error we came for.
- *
- * Why it catches and prints instead of throwing: a thrown error reaches us as a stack
- * trace with the script source echoed above it, and the message we need is then one line
- * inside a blob that also contains these very tokens. What the child cannot catch — a
- * loader that aborts the process — still reaches us as a signal, which is the case this
- * whole indirection exists for.
- */
+/** Dlopen before the wrapper can hide loader failures as module misses; print caught causes
+ * as stdout verdicts, while uncatchable loader aborts remain child signals. */
 export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
   const entry = JSON.stringify(join(nodePtyDir, 'lib', 'index.js'))
   const utils = JSON.stringify(join(nodePtyDir, 'lib', 'utils.js'))
   const root = JSON.stringify(nodePtyDir)
-  // Same directory order node-pty's own loader walks, so the file opened here is the file
-  // it would load. Windows defers conpty.node to the first spawn, which is why the name is
-  // chosen the way node-pty chooses it rather than always being 'pty'.
+  // Follow node-pty’s search order and platform module name; Windows defers conpty until spawn.
   return [
     `const fs=require('fs'),p=require('path');`,
     `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=18309?'conpty':'pty';`,
     `let f=null;`,
-    `for(const d of ['build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
+    `for(const d of ['build/orca-napi-'+process.platform+'-'+process.arch,'build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
     `for(const r of [${root},p.join(${root},'lib')]){`,
     `const c=p.join(r,d,n+'.node');if(fs.existsSync(c)){f=c;break}}if(f)break}`,
     `if(!f){console.log(${JSON.stringify(NO_BINARY_TOKEN)});process.exit(3)}`,
@@ -213,22 +152,18 @@ export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
 
 function resolveNodePtyDir(): string | null {
   try {
-    // Why require.resolve and not import: resolution only — the load itself happens in
-    // the child process, which is the whole point of the precondition.
+    // Resolve without loading; native execution belongs only in the child.
     return dirname(require.resolve('node-pty/package.json'))
   } catch {
     return null
   }
 }
 
-/** Local equivalent of the relay's remote toolchain probe, reusing its pure half. */
 export function probeLocalBuildToolchainHints(platform: NodeJS.Platform): string[] {
   if (platform === 'win32') {
     return []
   }
-  // Why macOS is not routed through the relay's hints: that function answers with a
-  // cross-distro apt/dnf/pacman/apk menu when it finds no package manager, and none of
-  // those lines is the macOS answer. Printing them here would be confidently wrong.
+  // Generic Linux package-manager hints are wrong for macOS.
   if (platform === 'darwin') {
     return ['  xcode-select --install']
   }
@@ -249,8 +184,7 @@ export function checkNodePtyPrecondition(
 ): NodePtyPreconditionVerdict {
   const abi = options.abi ?? detectNativeHostAbi()
   const slot = nativeSlotName(abi)
-  // Why `in` and not `??`: an explicit `null` means "this host cannot resolve node-pty",
-  // which is a case tests must be able to state. `??` would silently re-detect instead.
+  // Explicit null disables detection; nullish fallback would erase that caller choice.
   const nodePtyDir = 'nodePtyDir' in options ? options.nodePtyDir : resolveNodePtyDir()
   if (!nodePtyDir) {
     return {
@@ -262,8 +196,7 @@ export function checkNodePtyPrecondition(
     }
   }
 
-  // Why install before probing: on a toolchain-free deployment the compiled binary does
-  // not exist yet, and the shipped slot is the only thing that can make the probe pass.
+  // Toolchain-free installs need the shipped slot before any load probe can pass.
   let prebuilt: PrebuiltSlotOutcome | undefined
   if (!existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))) {
     prebuilt = installPrebuiltSlot({
@@ -302,11 +235,10 @@ export function checkNodePtyPrecondition(
     }
   }
 
-  // Loaded. The remaining way terminals fail is spawn-time: node-pty posix_spawns
-  // build/Release/spawn-helper, and a missing one turns every terminal.create into ENOENT
-  // on a host that otherwise looks healthy. That is a degradation, not a boot blocker.
-  const loadedDir = result.stdout.split(PROBE_OK_TOKEN)[1]?.trim().split('\n')[0]?.trim()
-  if (abi.platform !== 'win32') {
+  // macOS spawn-helper failures degrade terminals without blocking otherwise healthy host services.
+  const outcome = readNodePtyProbeOutcome(result)
+  const loadedDir = outcome.kind === 'loaded' ? outcome.loadedDir : null
+  if (usesNodePtySpawnHelper(abi.platform)) {
     const helper = join(loadedDir || join(nodePtyDir, 'build', 'Release'), 'spawn-helper')
     if (!isExecutableFile(helper)) {
       return {
@@ -331,7 +263,6 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
-/** The operator-facing report. Names the host, the cause, and the next action. */
 export function formatNodePtyPreconditionReport(
   verdict: NodePtyPreconditionVerdict,
   message: string,
@@ -355,7 +286,7 @@ export function formatNodePtyPreconditionReport(
         ? `No shipped prebuilt matches slot ${verdict.slot}.`
         : verdict.prebuilt.why === 'no-prebuilds-dir'
           ? 'This install ships no prebuilds directory.'
-          : `Shipped prebuilds are unusable here: ${verdict.prebuilt.detail ?? 'ABI mismatch'}.`
+          : `Shipped prebuilds are unusable here: ${verdict.prebuilt.detail ?? verdict.prebuilt.why}.`
     )
   }
   if (toolchainHints.length > 0) {

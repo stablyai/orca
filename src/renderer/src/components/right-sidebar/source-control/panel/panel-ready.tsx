@@ -5,7 +5,6 @@ import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
-/** The panel chrome: toolbar, notes shelf, the scrolling file surface, bulk bar and dialog layer. */
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
   const {
@@ -30,6 +29,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     handleCopyDiffComments,
     handleCreatePrHeaderClick,
     handleOpenComment,
+    handleRelinkSuppressedGitHubPR,
     handleSourceControlKeyDown,
     handleToggleSourceControlViewMode,
     hostedReview,
@@ -50,6 +50,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     setSourceControlRoot,
     settings,
     sourceControlViewMode,
+    suppressedGitHubPRState,
     visibleCreatePrHeaderAction
   } = model
 
@@ -71,6 +72,10 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           isCreatingPr={isCreatingPr || prGenerating}
           onCreatePrHeaderClick={handleCreatePrHeaderClick}
           onOpenHostedReviewInChecks={openHostedReviewInChecks}
+          suppressedGitHubPRNumber={
+            suppressedGitHubPRState?.status === 'matched' ? suppressedGitHubPRState.number : null
+          }
+          onRelinkSuppressedGitHubPR={handleRelinkSuppressedGitHubPR}
           sourceControlViewMode={sourceControlViewMode}
           viewModeToggleDisabled={settings === null}
           onToggleViewMode={handleToggleSourceControlViewMode}
@@ -86,7 +91,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           manualReviewUrl={manualReviewUrl}
         />
 
-        {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf
             activeWorktreeId={activeWorktreeId}

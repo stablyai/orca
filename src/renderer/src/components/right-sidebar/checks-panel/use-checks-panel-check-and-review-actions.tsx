@@ -1,25 +1,23 @@
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import {
   buildFixBrokenChecksPrompt,
+  collectFixChecksPromptDetails,
   getBrokenChecks,
-  getCheckDetailsPromptKey
-} from '../../pr-checks-fix-prompt'
+  hasGitHubCheckHandle
+} from '../../../../../shared/pr-checks-fix-prompt'
 
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { openChecksPanelHostedReviewUrl } from '../checks-panel-hosted-review-click-routing'
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
 import { translate } from '@/i18n/i18n'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
 import type { GitHubPRStackMapNavigationModifiers } from '../GitHubPRStackMap'
 import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
-
-function hasGitHubCheckHandle(check: PRCheckDetail): boolean {
-  return Boolean(check.checkRunId || check.workflowRunId || check.url)
-}
+import { useChecksPanelReviewLinkActions } from './use-checks-panel-review-link-actions'
 
 export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndReviewActionsInput) {
   const {
@@ -41,22 +39,18 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     linkedBitbucketPR,
     linkedGiteaPR,
     linkedGitLabMR,
-    linkedPR,
-    openModal,
     panelContextKey,
     panelContextKeyRef,
     pr,
     prCacheKey,
     repo,
-    settings,
     setChecks,
     setChecksLoading,
     setComments,
     setCommentsLoading,
     setIsFixingChecksWithAI,
     sourceControlAiActionsVisible,
-    stateRequestKey,
-    updateWorktreeMeta
+    stateRequestKey
   } = model
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
     if (
@@ -81,24 +75,23 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     const requestKey = stateRequestKey
     setIsFixingChecksWithAI(true)
     try {
-      const checkRunDetailsByCheckKey: Record<string, PRCheckRunDetails> = {}
-      await Promise.all(
-        broken.slice(0, 5).map(async (check, index) => {
+      const checkRunDetailsByCheckKey = await collectFixChecksPromptDetails(
+        checks,
+        async (check) => {
           const isGitLabJob = Boolean(check.gitlabJobId)
           if (
             !isGitLabJob &&
             (activeReview.provider === 'gitlab' || !hasGitHubCheckHandle(check))
           ) {
-            return
+            return null
           }
           try {
-            // Why: GitLab job logs are now loadable, so the fix prompt gets the same
-            // failure context the sidebar shows instead of check names alone.
-            const details = isGitLabJob
+            // Give GitLab fix prompts the same failure logs as the sidebar, not just check names.
+            return isGitLabJob
               ? await loadGitLabJobLogDetails({
                   repoPath: repo.path,
                   repoId: repo.id,
-                  settings,
+                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
                   check,
                   projectRef: gitLabProjectRefRef.current
                 })
@@ -113,13 +106,11 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
                   },
                   { repoId: repo.id }
                 )
-            if (details) {
-              checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
-            }
-          } catch (error) {
-            console.warn('[ChecksPanel] failed to load check details for AI fix prompt', error)
+          } catch {
+            console.warn('[ChecksPanel] failed to load check details for AI fix prompt')
+            return null
           }
-        })
+        }
       )
       if (!isCurrentAsyncResult(requestKey)) {
         return
@@ -159,7 +150,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     isFixingChecksWithAI,
     pr?.prRepo,
     repo,
-    settings,
+    activeWorktree,
     sourceControlAiActionsVisible,
     stateRequestKey,
     setIsFixingChecksWithAI,
@@ -229,7 +220,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
             refreshedPR.prRepo,
             {
               force: true,
-              repoId: repo.id
+              repoId: repo.id,
+              wakeWslDistro: true
             }
           )
             .then(
@@ -320,11 +312,10 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     ]
   )
 
-  // Open hosted review in browser
   const handleOpenPR = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       if (activeReview?.url) {
-        // Why: route through openHttpLink so PR/MR links honor the "open links in app" setting; Shift+Cmd/Ctrl is the escape hatch.
+        // Use shared link routing for in-app settings and the Shift+Cmd/Ctrl escape hatch.
         openChecksPanelHostedReviewUrl({
           url: activeReview.url,
           event: event.nativeEvent,
@@ -348,52 +339,16 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     [activeWorktreeId]
   )
 
-  const handleUnlinkPullRequest = useCallback(() => {
-    if (
-      !activeWorktreeId ||
-      !activeWorktree ||
-      activeReview?.provider !== 'github' ||
-      linkedPR === null
-    ) {
-      return
-    }
-    void updateWorktreeMeta(
-      activeWorktreeId,
-      { linkedPR: null },
-      { executionHostId: activeWorktree.hostId }
-    )
-  }, [activeReview?.provider, activeWorktree, activeWorktreeId, linkedPR, updateWorktreeMeta])
-
-  const handleLinkAnotherPullRequest = useCallback(() => {
-    if (!activeWorktreeId || !activeWorktree || activeReview?.provider !== 'github') {
-      return
-    }
-    openModal('edit-meta', {
-      worktreeId: activeWorktreeId,
-      // Why: the same workspace ID can exist under two hosts. Naming the owner
-      // keeps the dialog on this workspace instead of the ambiguous lookup.
-      repoId: activeWorktree.repoId,
-      executionHostId: activeWorktree.hostId,
-      currentDisplayName: activeWorktree.displayName,
-      currentIssue: activeWorktree.linkedIssue,
-      currentPR: activeWorktree.linkedPR ?? activeReview.number,
-      currentComment: activeWorktree.comment,
-      focus: 'pr',
-      afterSave: ({ updates }: { updates?: { linkedPR?: unknown } }) => {
-        const nextLinkedPR = updates?.linkedPR
-        if (typeof nextLinkedPR === 'number') {
-          void refreshLinkedGitHubPullRequest(nextLinkedPR)
-        }
-      }
-    })
-  }, [activeReview, activeWorktree, activeWorktreeId, openModal, refreshLinkedGitHubPullRequest])
+  const { handleUnlinkReview, handleLinkAnotherReview, handleLinkSuppressedPullRequest } =
+    useChecksPanelReviewLinkActions(model, refreshLinkedGitHubPullRequest)
   return {
     handleFixChecksWithAI,
     refreshLinkedGitHubPullRequest,
     handleOpenPR,
     handleOpenStackPR,
-    handleUnlinkPullRequest,
-    handleLinkAnotherPullRequest
+    handleUnlinkReview,
+    handleLinkAnotherReview,
+    handleLinkSuppressedPullRequest
   }
 }
 

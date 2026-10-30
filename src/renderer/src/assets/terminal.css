@@ -1,5 +1,3 @@
-/* ── Terminal ────────────────────────────────────────── */
-
 .terminal-container {
   flex: 1;
   overflow: hidden;
@@ -11,13 +9,11 @@
   --orca-terminal-link-tooltip-height: 25px;
 }
 
-/* Ensure pane manager root fills its absolutely-positioned container */
 .pane-manager-root {
   width: 100% !important;
   height: 100% !important;
 }
 
-/* Reset the global border/outline base rule inside terminal panes */
 .pane-manager-root *,
 .pane-manager-root *::before,
 .pane-manager-root *::after {
@@ -31,32 +27,22 @@
 }
 
 .pane-manager-root .xterm-viewport {
-  /* Why: xterm/VS Code keep the scrollbar gutter stable. `auto` lets Linux
-     DOM scrollbars appear/disappear, which can feed resize/reflow jitter. */
+  /* Keep xterm’s gutter stable; Linux auto-scrollbar churn can feed resize/reflow jitter. */
   overflow-y: scroll;
 }
 
-/* xterm.css hard-codes the viewport background to #000 (for opaque macOS
-   scrollbars). On light-themed terminals at fractional-pixel positions (e.g.
-   the install terminals inside centered setup modals), that black layer
-   anti-aliases into a faint 1px line above/below the themed .xterm. Match
-   xterm's own selector so this also covers terminals mounted outside the pane
-   manager, and let the themed .xterm background show through; the viewport
-   reuses the canonical editor scrollbar rules in main.css. */
+/* Override xterm.css’s black viewport layer, which leaks 1px lines on light terminals at fractional positions.
+   Reuse the themed xterm background and main.css scrollbar rules, including outside the pane manager. */
 .xterm:not(.allow-transparency) .xterm-viewport {
   background-color: transparent;
 }
 
-/* Round the xterm DOM scrollbar thumb; xterm has no option for this, and its
-   default .xterm-slider has square corners. */
+/* Round DOM scrollbar thumbs; xterm’s square default has no configuration option. */
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {
   border-radius: 4px;
 }
 
-/* xterm.css sets position:absolute;top:0 on .xterm-helpers but omits left,
-   leaving left:auto. In Electron's Blink, left:auto can resolve to a non-zero
-   value and offset the IME candidate window away from the cursor. Anchoring it
-   explicitly to 0 matches the intended layout and fixes the IME position. */
+/* Set left:0 explicitly: xterm’s left:auto lets Blink offset IME candidates from the cursor. */
 .pane-manager-root .xterm .xterm-helpers {
   left: 0;
 }
@@ -65,6 +51,10 @@
   /* Why: Chromium can still paint the native caret for xterm's hidden helper
      textarea on Windows, which shows up as a stale cursor during redraws. */
   caret-color: transparent;
+}
+
+.xterm.orca-ime-composer-placeholder .xterm-composition-remainder {
+  visibility: hidden;
 }
 
 /* Divider: the element is a wide transparent hit area; the visible line is
@@ -111,9 +101,8 @@
   );
 }
 
-/* ── Pane drag handle ─────────────────────────────────── */
-
 .pane-drag-handle {
+  pointer-events: none;
   position: absolute;
   top: 0;
   left: 0;
@@ -129,7 +118,6 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* Three-dot ellipsis indicator */
 .pane-drag-handle::after {
   content: '···';
   font-size: 10px;
@@ -138,7 +126,6 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
-/* Only show when hovering the handle itself, and only with multiple panes */
 .has-multiple-panes .pane-drag-handle {
   pointer-events: auto;
 }
@@ -151,7 +138,6 @@
   cursor: grabbing;
 }
 
-/* Dim the source pane while dragging */
 .pane.is-drag-source {
   opacity: 0.4 !important;
 }
@@ -207,12 +193,9 @@
   }
 }
 
-/* Suppress pointer events on terminals during pane drag so overlay works */
 .is-pane-dragging .pane {
   pointer-events: none;
 }
-
-/* ── Drop overlay ─────────────────────────────────────── */
 
 .pane-drop-overlay,
 .tab-drop-overlay {
@@ -236,8 +219,6 @@
   background: color-mix(in srgb, var(--chart-2) 20%, transparent);
 }
 
-/* ── Pane title bar ──────────────────────────────────── */
-
 :root {
   --orca-pane-title-height: 24px;
   --orca-pane-title-fg: var(--terminal-pane-title-on-dark-fg);
@@ -259,8 +240,7 @@
   --orca-pane-title-separator: var(--terminal-pane-title-on-light-separator);
 }
 
-/* Floating title overlay. The title owns the top strip of the pane, while titled
-   panes reserve matching terminal height so the first row remains visible. */
+/* Reserve title-strip height so the terminal’s first row remains visible. */
 .pane-title-overlay-layer {
   position: absolute;
   inset: 0;
@@ -445,6 +425,13 @@
   opacity: 1;
 }
 
+/* A shown but unavailable action (pending, or its host needs an update) reads as dimmed. */
+.pane-title-bar[data-active-pane] .pane-title-split-trigger:disabled,
+.pane-title-bar:hover .pane-title-split-trigger:disabled,
+.pane-title-bar:focus-within .pane-title-split-trigger:disabled {
+  opacity: 0.5;
+}
+
 .pane-title-bar:hover .pane-title-close,
 .pane-title-bar:focus-within .pane-title-close,
 .pane-title-close:focus-visible {
@@ -463,10 +450,12 @@
   color: var(--orca-pane-title-button-hover-fg, rgb(255 255 255 / 0.8));
 }
 
-/* Inline edit input — matches the title text styling exactly to prevent
-   layout shift. A subtle bottom border indicates active edit mode. */
-/* When inline-editing, remove the bar's side padding so the input
-   stretches edge-to-edge; the input carries its own left padding. */
+.pane-title-split-trigger:disabled:hover {
+  color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
+}
+
+/* Match title text while editing to prevent layout shift. */
+/* Remove title padding while editing; the input supplies edge-to-edge padding. */
 .pane-title-bar[data-editing] {
   padding: 0;
 }
@@ -498,9 +487,7 @@
   border-color: var(--ring);
 }
 
-/* Baseline xterm-container layout — padding is driven by CSS custom properties
-   so Ghostty-imported window-padding-x/y can be applied without inline styles.
-   The fallback 4px preserves the legacy default. */
+/* Use CSS variables for Ghostty-imported window padding, retaining the legacy 4px fallback. */
 .xterm-container {
   box-sizing: border-box;
   position: relative;
@@ -508,15 +495,39 @@
   height: calc(100% - var(--pane-padding-y, 4px));
   margin-top: var(--pane-padding-y, 4px);
   margin-left: var(--pane-padding-x, 4px);
+  /* Why (#10481): a blinking cursor otherwise invalidates paint all the way up
+     the pane ancestry. The link tooltip and drag handle are .pane siblings, so
+     clipping to this box costs no visible chrome. */
+  contain: paint;
 }
 
-/* When a pane has a title, shift the terminal content down to make room.
-   The .pane container uses position: relative, so the absolutely-positioned
-   title bar occupies the top title-height pixels. Height is reduced by the
-   same amount to prevent overflow/clipping. */
+/* Offset titled terminals and subtract the same height to prevent clipping. */
 .pane[data-has-title] .xterm-container {
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
+}
+
+/* A pane-top banner takes real height: the terminal starts below it and refits. */
+.pane-top-banner {
+  position: absolute;
+  top: var(--orca-pane-top-banner-offset, 0px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+}
+
+.pane[data-has-title] .pane-top-banner {
+  top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-offset, 0px));
+}
+
+.pane:has(> .pane-top-banner) .xterm-container {
+  margin-top: calc(var(--pane-padding-y, 4px) + var(--orca-pane-top-banner-height, 0px));
+  height: calc(100% - var(--pane-padding-y, 4px) - var(--orca-pane-top-banner-height, 0px));
+}
+
+.pane[data-has-title]:has(> .pane-top-banner) .xterm-container {
+  margin-top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-height, 0px));
+  height: calc(100% - var(--orca-pane-title-height) - var(--orca-pane-top-banner-height, 0px));
 }
 
 /* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */

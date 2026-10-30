@@ -1,0 +1,94 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "tasks.setup-hook-trust",
+  "family": "worktree.setup-hook-trust",
+  "namedDeltas": [],
+  "values": {
+    "86d0d8f71257": {
+      "name": "ui.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}"
+    },
+    "a406b068aeca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "repo-1": {
+          "setup": {
+            "approvedAt": 1767225600000,
+            "contentHash": "hash-1"
+          }
+        }
+      }
+    },
+    "b2aa9ff12623": {
+      "trust": {
+        "repo-1": {
+          "setup": {
+            "approvedAt": 1767225600000,
+            "contentHash": "hash-1"
+          }
+        }
+      }
+    },
+    "e2089203d4dd": {
+      "name": "ui.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-setup-hook-trust-approved",
+    "checkpoints": [
+      {
+        "id": "approved",
+        "observation": {
+          "sender": ["e2089203d4dd"],
+          "payloads": ["86d0d8f71257"],
+          "settlements": {
+            "approve": "a406b068aeca"
+          },
+          "state": "b2aa9ff12623",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

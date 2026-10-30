@@ -137,12 +137,8 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     return `${renderTmuxFormat(tmuxValue(parsed, '-F'), formatContext(team, pane), fakePaneId)}\n`
   }
 
-  // Why: Claude Code's pane backend creates a teammate pane in two steps — it
-  // splits a holding pane running `cat`, then `respawn-pane -k`s it with the
-  // real teammate command. Orca panes are PTYs that cannot swap their program in
-  // place, so we honor respawn by closing the placeholder terminal and
-  // re-splitting from the same origin with the real command, keeping the fake
-  // pane id stable so later send-keys/kill-pane/list-panes still resolve.
+  /** PTYs cannot swap programs: emulate Claude's cat-placeholder respawn by close/re-split.
+   * Keep the fake pane id stable for later send-keys/kill-pane/list-panes commands. */
   private async respawnPane(
     team: AgentTeam,
     args: string[],
@@ -226,7 +222,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const pane = this.resolvePane(team, tmuxValue(parsed, '-t') ?? envPane)
     const text = tmuxSendKeysText(parsed.positional, parsed.flags.has('-l'))
     if (text) {
-      await api.sendTerminal(pane.handle, { text })
+      await api.sendTerminal(pane.handle, { text }, { inputKind: 'orchestration' })
     }
     return ''
   }

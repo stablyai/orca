@@ -1,39 +1,106 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
+import type { NativeChatDraftAppend } from './native-chat-composer-draft-memory'
+import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
+import {
+  subscribeToNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraftAppend,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
 import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
 
-/**
- * Composer draft state backed by the scope cache so a typed-but-unsent message
- * survives the composer unmounting on a TUI/GUI toggle. `scopeKey` is the stable
- * pane key also used for image attachments; when it changes (the composer is
- * reused for a different pane) the cached draft is reloaded.
- */
-export function useNativeChatDraft(scopeKey: string): {
+/** Text appended mid-IME-composition: saved at once, shown once the composition settles. */
+type CompositionHold = {
+  scopeKey: string
+  shown: string
+  base: NativeChatComposerDraft
+  additions: NativeChatDraftAppend[]
+}
+
+/** Mutate the durable scope store’s current draft, never a composer copy, so unsent text survives toggles, remounts and restarts. */
+export function useNativeChatDraft(
+  scopeKey: string,
+  isComposing: () => boolean
+): {
   draft: string
-  setDraft: (next: string | ((previous: string) => string)) => void
+  setDraft: (next: string | ((previous: string) => string), options?: { unsaved?: boolean }) => void
+  /** Shows text appended during an IME composition, which owns the field until it settles. */
+  flushDraftAppends: () => void
 } {
-  const [draft, setDraftState] = useState(() => readNativeChatDraftCache(scopeKey))
-
-  // Reload the cached draft when reused for a different pane (scope change),
-  // adjusting state during render rather than in an effect so the restored draft
-  // is visible on the first paint after the switch.
-  const lastScopeKey = useRef(scopeKey)
-  if (lastScopeKey.current !== scopeKey) {
-    lastScopeKey.current = scopeKey
-    setDraftState(readNativeChatDraftCache(scopeKey))
-  }
-
-  // Persist every mutation through the cache. Accepts the same value/updater
-  // forms as a useState setter so call sites are drop-in.
-  const setDraft = useCallback(
-    (next: string | ((previous: string) => string)) => {
-      setDraftState((previous) => {
-        const resolved = typeof next === 'function' ? next(previous) : next
-        writeNativeChatDraftCache(scopeKey, resolved)
-        return resolved
-      })
-    },
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeToNativeChatComposerDraft(scopeKey, listener),
     [scopeKey]
   )
+  const stored = useSyncExternalStore(subscribe, () => readNativeChatDraftCache(scopeKey))
+  const [hold, setHold] = useState<CompositionHold | null>(null)
+  // Read by callbacks between renders; only they change it, always together with the state.
+  const holdRef = useRef<CompositionHold | null>(null)
+  const updateHold = useCallback((next: CompositionHold | null) => {
+    holdRef.current = next
+    setHold(next)
+  }, [])
+  useEffect(
+    () => () => {
+      holdRef.current = null
+    },
+    []
+  )
 
-  return { draft, setDraft }
+  useEffect(
+    () =>
+      subscribeToNativeChatComposerDraftAppend(scopeKey, (addition, previous) => {
+        if (!isComposing()) {
+          return
+        }
+        const held = holdRef.current?.scopeKey === scopeKey ? holdRef.current : null
+        updateHold({
+          scopeKey,
+          shown: held ? held.shown : previous.text,
+          base: held?.base ?? previous,
+          additions: [...(held?.additions ?? []), addition]
+        })
+      }),
+    [isComposing, scopeKey, updateHold]
+  )
+
+  const setDraft = useCallback(
+    (next: string | ((previous: string) => string), options?: { unsaved?: boolean }) => {
+      const held = holdRef.current?.scopeKey === scopeKey ? holdRef.current : null
+      const previous = held ? held.shown : readNativeChatDraftCache(scopeKey)
+      const resolved = typeof next === 'function' ? next(previous) : next
+      if (held) {
+        updateHold({ ...held, shown: resolved })
+      }
+      if (held) {
+        const current = readNativeChatComposerDraft(scopeKey)
+        const base =
+          current.text === resolved
+            ? current
+            : { ...held.base, text: resolved, document: undefined }
+        const merged = held.additions.reduce<NativeChatComposerDraft>(
+          (draft, addition) => ({
+            ...draft,
+            ...(typeof addition === 'function'
+              ? addition(draft)
+              : withNativeChatComposerDraftAddition(draft, addition))
+          }),
+          base
+        )
+        updateNativeChatComposerDraft(scopeKey, merged, 'deferred')
+      } else {
+        writeNativeChatDraftCache(scopeKey, resolved, options)
+      }
+    },
+    [scopeKey, updateHold]
+  )
+
+  const flushDraftAppends = useCallback(() => {
+    if (holdRef.current?.scopeKey === scopeKey) {
+      updateHold(null)
+    }
+  }, [scopeKey, updateHold])
+
+  const shownHold = hold?.scopeKey === scopeKey ? hold : null
+  return { draft: shownHold ? shownHold.shown : stored, setDraft, flushDraftAppends }
 }

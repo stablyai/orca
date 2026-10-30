@@ -14,3 +14,16 @@ export type WorktreeIpcContext = {
   detectedWorktreeCancellations: SenderScopedRequestCancellations
   worktreeRemovalsInFlight: Map<string, WorktreeRemovalInFlight>
 }
+
+// Removal/forget ref deletes use packed-refs locks; idle maintenance needs this process-wide registry to avoid racing them.
+let activeWorktreeRemovals: ReadonlyMap<string, WorktreeRemovalInFlight> | null = null
+
+export function createWorktreeRemovalRegistry(): Map<string, WorktreeRemovalInFlight> {
+  const registry = new Map<string, WorktreeRemovalInFlight>()
+  activeWorktreeRemovals = registry
+  return registry
+}
+
+export function hasWorktreeRemovalsInFlight(): boolean {
+  return (activeWorktreeRemovals?.size ?? 0) > 0
+}

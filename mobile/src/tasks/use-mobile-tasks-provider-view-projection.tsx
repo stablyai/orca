@@ -1,0 +1,312 @@
+import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
+import { JIRA_FILTER_LABELS } from './mobile-jira-issue-filters'
+import { jiraSiteLabel } from './jira-mobile-connection'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import {
+  type PickerOption,
+  githubProjectKey,
+  useCallback,
+  useMemo,
+  useMobileColorScheme
+} from './mobile-tasks-dependencies'
+import {
+  GITLAB_FILTER_OPTIONS,
+  ISSUE_PRESETS,
+  LINEAR_FILTER_OPTIONS,
+  LINEAR_GROUP_OPTIONS,
+  LINEAR_ORDER_OPTIONS,
+  LINEAR_VIEW_OPTIONS,
+  type LinearListEntry,
+  PR_PRESETS,
+  type TaskItem,
+  sortLinearIssues,
+  groupSortedLinearIssues
+} from './mobile-tasks-legacy-foundation'
+
+export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
+  const t = useMobileTranslation()
+  const colorScheme = useMobileColorScheme()
+  const {
+    activeGitHubProject,
+    defaultGitHubPreset,
+    githubKind,
+    githubMode,
+    githubPreset,
+    githubProjectPickerSearch,
+    githubProjectSearch,
+    githubProjectSettings,
+    githubProjectTable,
+    githubProjects,
+    gitlabFilter,
+    hostedRepos,
+    items,
+    linearDisplayProperties,
+    linearFilter,
+    jiraFilter,
+    jiraConnection,
+    linearGroupBy,
+    linearOrderBy,
+    linearTeamPropertyTouched,
+    linearTeams,
+    linearViewMode,
+    linearWorkspaces,
+    persistRepoSelection,
+    selectedLinearTeamIds,
+    selectedLinearWorkspaceId,
+    setAppliedGithubProjectSearch,
+    setSelectedRepoIds,
+    effectiveRepoIds
+  } = model
+  const githubPresetOptions = githubKind === 'prs' ? PR_PRESETS : ISSUE_PRESETS
+  const githubPresetPickerOptions = useMemo(
+    () =>
+      githubPresetOptions.map((option) =>
+        option.value === defaultGitHubPreset
+          ? {
+              ...option,
+              subtitle: option.subtitle
+                ? t('tasks.providerViewProjection.defaultSubtitle', '{{subtitle}} · Default', {
+                    subtitle: option.subtitle
+                  })
+                : t('tasks.providerViewProjection.default', 'Default')
+            }
+          : option
+      ),
+    [defaultGitHubPreset, githubPresetOptions, t]
+  )
+  const githubPresetLabel =
+    githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ??
+    t('tasks.providerViewProjection.openState', 'Open')
+  const gitlabFilterLabel =
+    GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ??
+    t('tasks.providerViewProjection.openState', 'Open')
+  const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
+  const jiraSelectedSite =
+    jiraConnection.selection && jiraConnection.selection !== 'all'
+      ? (jiraConnection.sites.find((site) => site.id === jiraConnection.selection) ?? null)
+      : null
+  const jiraSiteChipLabel = jiraSelectedSite
+    ? jiraSiteLabel(jiraSelectedSite)
+    : t('tasks.providerViewProjection.allSites', 'All sites')
+  const linearFilterLabel =
+    LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ??
+    t('tasks.providerViewProjection.all', 'All')
+  const linearViewLabel =
+    LINEAR_VIEW_OPTIONS.find((option) => option.value === linearViewMode)?.label ??
+    t('tasks.providerViewProjection.list', 'List')
+  const linearGroupLabel =
+    LINEAR_GROUP_OPTIONS.find((option) => option.value === linearGroupBy)?.label ??
+    t('tasks.providerViewProjection.noGrouping', 'No grouping')
+  const linearOrderLabel =
+    LINEAR_ORDER_OPTIONS.find((option) => option.value === linearOrderBy)?.label ??
+    t('tasks.providerViewProjection.priority', 'Priority')
+  const linearWorkspaceLabel =
+    selectedLinearWorkspaceId === 'all'
+      ? t('tasks.providerViewProjection.allWorkspaces', 'All workspaces')
+      : (linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId)
+          ?.organizationName ??
+        linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId)
+          ?.displayName ??
+        t('tasks.providerViewProjection.workspace', 'Workspace'))
+  const linearWorkspaceOptions = useMemo<PickerOption<string>[]>(
+    () => [
+      { value: 'all', label: t('tasks.providerViewProjection.allWorkspaces', 'All workspaces') },
+      ...linearWorkspaces.map((workspace) => ({
+        value: workspace.id,
+        label: workspace.organizationName ?? workspace.displayName ?? workspace.id
+      }))
+    ],
+    [linearWorkspaces, t]
+  )
+  const count = selectedLinearTeamIds.size
+  const linearTeamLabel =
+    count === 0 || count === linearTeams.length
+      ? t('tasks.providerViewProjection.allTeams', 'All teams')
+      : count === 1
+        ? (linearTeams.find((team) => selectedLinearTeamIds.has(team.id))?.name ??
+          t('tasks.providerViewProjection.teams_one', '{{count}} team', { count }))
+        : t('tasks.providerViewProjection.teams_other', '{{count}} teams', { count })
+  const effectiveLinearDisplayProperties = useMemo(() => {
+    const next = new Set(linearDisplayProperties)
+    if (linearGroupBy === 'status') {
+      next.delete('state')
+    }
+    if (linearGroupBy === 'assignee') {
+      next.delete('assignee')
+    }
+    if (linearGroupBy === 'priority') {
+      next.delete('priority')
+    }
+    if (linearGroupBy === 'team') {
+      next.delete('team')
+    }
+    if (selectedLinearTeamIds.size <= 1 && !linearTeamPropertyTouched) {
+      next.delete('team')
+    } else if (selectedLinearTeamIds.size > 1 && !linearTeamPropertyTouched) {
+      next.add('team')
+    }
+    return next
+  }, [
+    linearDisplayProperties,
+    linearGroupBy,
+    linearTeamPropertyTouched,
+    selectedLinearTeamIds.size
+  ])
+  const linearIssuesForView = useMemo(
+    () =>
+      sortLinearIssues(
+        items
+          .filter(
+            (item): item is Extract<TaskItem, { provider: 'linear' }> => item.provider === 'linear'
+          )
+          .map((item) => item.source),
+        linearOrderBy
+      ),
+    [items, linearOrderBy]
+  )
+  const linearIssueSections = useMemo(
+    () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
+    [colorScheme, linearGroupBy, linearIssuesForView, t]
+  )
+  // Preserve FlatList data identity across unrelated renders.
+  const linearListEntries = useMemo<LinearListEntry[]>(
+    () =>
+      linearIssueSections.flatMap((section) =>
+        linearGroupBy === 'none'
+          ? section.issues.map((issue) => ({ type: 'issue' as const, issue }))
+          : [
+              { type: 'section' as const, section },
+              ...section.issues.map((issue) => ({ type: 'issue' as const, issue }))
+            ]
+      ),
+    [linearGroupBy, linearIssueSections]
+  )
+  // Reuse list grouping for board sections except none, which still needs status columns.
+  const linearBoardSections = useMemo(
+    () =>
+      linearGroupBy === 'none'
+        ? groupSortedLinearIssues(linearIssuesForView, 'status')
+        : linearIssueSections,
+    [linearGroupBy, linearIssueSections, linearIssuesForView, t]
+  )
+  const githubModeLabel =
+    githubMode === 'project'
+      ? t('tasks.providerViewProjection.projects', 'Projects')
+      : githubKind === 'prs'
+        ? t('tasks.providerViewProjection.pullRequests', 'PRs')
+        : t('tasks.providerViewProjection.issues', 'Issues')
+  const activeProjectLabel = githubProjectTable
+    ? githubProjectTable.project.title
+    : activeGitHubProject
+      ? `${activeGitHubProject.owner} #${activeGitHubProject.number}`
+      : t('tasks.providerViewProjection.chooseProject', 'Choose project')
+  const selectedGitHubProjectViewUrl = githubProjectTable
+    ? `${githubProjectTable.project.url}/views/${githubProjectTable.selectedView.number}`
+    : null
+  const githubProjectsByKey = useMemo(
+    () => new Map(githubProjects.map((project) => [githubProjectKey(project), project])),
+    [githubProjects]
+  )
+  const pinnedGitHubProjects = useMemo(
+    () =>
+      githubProjectSettings.pinned.map((project) => ({
+        ...project,
+        summary: githubProjectsByKey.get(githubProjectKey(project))
+      })),
+    [githubProjectSettings.pinned, githubProjectsByKey]
+  )
+  const recentGitHubProjects = useMemo(
+    () =>
+      githubProjectSettings.recent
+        .filter(
+          (recent) =>
+            !githubProjectSettings.pinned.some(
+              (pinned) => githubProjectKey(pinned) === githubProjectKey(recent)
+            )
+        )
+        .map((project) => ({
+          ...project,
+          summary: githubProjectsByKey.get(githubProjectKey(project))
+        })),
+    [githubProjectSettings.pinned, githubProjectSettings.recent, githubProjectsByKey]
+  )
+  const browseGitHubProjects = useMemo(() => {
+    const queryText = githubProjectPickerSearch.trim().toLowerCase()
+    const pinnedOrRecentKeys = new Set([
+      ...githubProjectSettings.pinned.map(githubProjectKey),
+      ...githubProjectSettings.recent.map(githubProjectKey)
+    ])
+    return githubProjects.filter((project) => {
+      if (pinnedOrRecentKeys.has(githubProjectKey(project))) {
+        return false
+      }
+      if (!queryText) {
+        return true
+      }
+      return (
+        project.title.toLowerCase().includes(queryText) ||
+        project.owner.toLowerCase().includes(queryText) ||
+        String(project.number).includes(queryText)
+      )
+    })
+  }, [
+    githubProjectPickerSearch,
+    githubProjectSettings.pinned,
+    githubProjectSettings.recent,
+    githubProjects
+  ])
+
+  const toggleRepoSelection = useCallback(
+    (repoId: string) => {
+      // User edits rewrite selections from listed repos, matching what the picker displays.
+      const next = new Set(effectiveRepoIds)
+      if (next.has(repoId)) {
+        next.delete(repoId)
+      } else {
+        next.add(repoId)
+      }
+      const normalized =
+        next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
+      setSelectedRepoIds(normalized)
+      persistRepoSelection(normalized, hostedRepos)
+    },
+    [effectiveRepoIds, hostedRepos, persistRepoSelection]
+  )
+
+  const applyGitHubProjectSearch = useCallback(() => {
+    const viewFilter = githubProjectTable?.selectedView.filter ?? ''
+    const next = githubProjectSearch
+    setAppliedGithubProjectSearch(next === viewFilter ? undefined : next)
+  }, [githubProjectSearch, githubProjectTable?.selectedView.filter])
+  return Object.assign(model, {
+    githubPresetOptions,
+    githubPresetPickerOptions,
+    githubPresetLabel,
+    gitlabFilterLabel,
+    jiraFilterLabel,
+    jiraSiteChipLabel,
+    linearFilterLabel,
+    linearViewLabel,
+    linearGroupLabel,
+    linearOrderLabel,
+    linearWorkspaceLabel,
+    linearWorkspaceOptions,
+    linearTeamLabel,
+    effectiveLinearDisplayProperties,
+    linearIssuesForView,
+    linearIssueSections,
+    linearListEntries,
+    linearBoardSections,
+    githubModeLabel,
+    activeProjectLabel,
+    selectedGitHubProjectViewUrl,
+    githubProjectsByKey,
+    pinnedGitHubProjects,
+    recentGitHubProjects,
+    browseGitHubProjects,
+    toggleRepoSelection,
+    applyGitHubProjectSearch
+  })
+}
+
+export type ProviderViewProjectionModel = ReturnType<typeof useMobileTasksProviderViewProjection>

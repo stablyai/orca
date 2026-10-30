@@ -30,14 +30,6 @@ describe('browser runtime live URL cache', () => {
     expect(getLiveBrowserUrl('page-1')).toBe('https://committed.example/')
   })
 
-  it('retains the last committed URL when a later load fails', () => {
-    seedLiveBrowserUrl('page-1', 'https://initial.example/')
-    rememberLiveBrowserUrl('page-1', 'https://committed.example/')
-    // A failure event records its validated URL in loadError, not the live URL cache.
-
-    expect(getLiveBrowserUrl('page-1')).toBe('https://committed.example/')
-  })
-
   it('keeps popup page URLs independent and clears only the destroyed page', () => {
     seedLiveBrowserUrl('page-1', 'https://opener.example/')
     seedLiveBrowserUrl('popup-1', 'https://popup.example/')

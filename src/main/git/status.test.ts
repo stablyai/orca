@@ -15,8 +15,7 @@ const {
   readFileMock,
   statMock,
   rmMock,
-  accessMock,
-  existsSyncMock
+  accessMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncBufferMock: vi.fn(),
@@ -26,8 +25,7 @@ const {
   readFileMock: vi.fn(),
   statMock: vi.fn(),
   rmMock: vi.fn(),
-  accessMock: vi.fn(),
-  existsSyncMock: vi.fn()
+  accessMock: vi.fn()
 }))
 
 vi.mock('./runner', () =>
@@ -49,11 +47,6 @@ vi.mock('fs/promises', () =>
   })
 )
 
-// Why still here: unmerged-entry parsing probes the working tree through node:fs directly.
-vi.mock('fs', () => ({
-  existsSync: existsSyncMock
-}))
-
 vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) =>
   createBoundedFileReaderModuleMock(await importOriginal<typeof BoundedFileReader>(), {
     readFileMock,
@@ -71,19 +64,20 @@ describe('getStatus', () => {
     gitStreamOptionsMock.mockReset()
     lstatMock.mockReset()
     readFileMock.mockReset()
-    existsSyncMock.mockReset()
     accessMock.mockReset()
     accessMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
-    // Why: untracked line counting stats a file before reading it; any
-    // under-limit size routes the read to readFileMock.
     statMock.mockReset()
     statMock.mockResolvedValue({ isFile: () => true, size: 12 })
-    // Why: after the status call, getStatus may issue `git diff --numstat`
-    // calls to attach per-entry line counts. Tests that don't care about counts
-    // set only a `mockResolvedValueOnce` for the status output; this default
-    // keeps those follow-up numstat calls from returning undefined.
+    // Supply empty numstat results after tests' one-shot status responses.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
+
+  /** `access` targets outside the git dir — i.e. working-tree probes, not conflict-marker reads. */
+  function conflictFileProbes(): string[] {
+    return accessMock.mock.calls
+      .map(([target]) => String(target).replaceAll('\\', '/'))
+      .filter((target) => !target.includes('/.git/'))
+  }
 
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
@@ -112,11 +106,12 @@ describe('getStatus', () => {
     ])
   })
 
-  it('maps deleted conflicts to deleted when the working tree file is absent', async () => {
+  // The 7th field of a `u` record is the working-tree mode; `000000` is how Git reports an absent path.
+  it('maps deleted conflicts to deleted from the porcelain working-tree mode', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u UD N... 100644 100644 000000 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/deleted.ts\n'
+        'u UD N... 100644 100644 000000 000000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/deleted.ts\n'
     })
 
     const result = await getStatus('/repo')
@@ -128,13 +123,13 @@ describe('getStatus', () => {
       conflictKind: 'deleted_by_them',
       conflictStatus: 'unresolved'
     })
+    expect(conflictFileProbes()).toEqual([])
   })
 
-  it('falls back to modified when the filesystem existence check throws', async () => {
+  it('never re-probes the working tree for a conflict row, whatever the filesystem would say', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockImplementation(() => {
-      throw new Error('stat failed')
-    })
+    // Every probe fails ENOENT (beforeEach) or EIO — neither may reach the row's status.
+    accessMock.mockRejectedValue(Object.assign(new Error('EIO'), { code: 'EIO' }))
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         'u AU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/new.ts\n'
@@ -144,6 +139,55 @@ describe('getStatus', () => {
 
     expect(result.entries[0]?.status).toBe('modified')
     expect(result.entries[0]?.conflictKind).toBe('added_by_us')
+    expect(conflictFileProbes()).toEqual([])
+  })
+
+  // Normalize separators to test probe targets independently of the current host.
+  it('resolves a WSL conflict row without crossing the 9p share', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: /home/me/repo/.git/worktrees/feature\n')
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        'u DU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/new.ts\n'
+    })
+
+    try {
+      const result = await getStatus('/home/me/repo/feature', { wslDistro: 'Ubuntu' })
+
+      const probed = accessMock.mock.calls.map(([target]) => String(target).replaceAll('\\', '/'))
+      expect(probed).not.toContain('//wsl.localhost/Ubuntu/home/me/repo/feature/src/new.ts')
+      expect(conflictFileProbes()).toEqual([])
+      expect(result.entries[0]?.status).toBe('modified')
+      expect(result.entries[0]?.conflictKind).toBe('deleted_by_us')
+      expect(
+        probed.filter((target) =>
+          target.startsWith('//wsl.localhost/Ubuntu/home/me/repo/.git/worktrees/feature/')
+        )
+      ).toHaveLength(4)
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('probes shared symlinks through the distro spelling on Windows', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: /home/me/repo/.git/worktrees/feature\n')
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => true })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '? node_modules\n' })
+
+    try {
+      const result = await getStatus('/home/me/repo/feature', {
+        wslDistro: 'Ubuntu',
+        sharedLinkPaths: ['node_modules']
+      })
+
+      expect(String(lstatMock.mock.calls[0]?.[0]).replaceAll('\\', '/')).toContain(
+        '//wsl.localhost/Ubuntu/home/me/repo/feature/node_modules'
+      )
+      expect(result.entries).toEqual([])
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('passes core.quotePath=false and round-trips UTF-8 paths', async () => {
@@ -155,10 +199,7 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo')
 
-    // Why: without -c core.quotePath=false git would emit
-    // "docs/\346\227\245\346\234\254\350\252\236/sample.md" (octal-escaped,
-    // wrapped in double quotes) and the parser would store that literal
-    // string as entry.path, breaking sidebar display + downstream blob reads.
+    // Without quotePath=false, octal-escaped names would break display and subsequent blob reads.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
       '-c',
       'core.quotePath=false',
@@ -259,7 +300,7 @@ describe('getStatus', () => {
         })
       }
       if (args[0] === 'symbolic-ref') {
-        return Promise.resolve({ stdout: 'feature/prompts\n' })
+        return Promise.resolve({ stdout: 'refs/heads/feature/prompts\n' })
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         return Promise.reject(new Error('fatal: no upstream configured'))
@@ -289,7 +330,7 @@ describe('getStatus', () => {
         stdout:
           '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/main\n# branch.ab +1 -0\n'
       })
-      .mockResolvedValueOnce({ stdout: 'feature/prompts\n' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature/prompts\n' })
       .mockResolvedValueOnce({ stdout: 'origin/main\n' })
       .mockResolvedValueOnce({ stdout: 'abc123\n' })
       .mockResolvedValueOnce({ stdout: '3\t1\n' })
@@ -366,6 +407,35 @@ describe('getStatus', () => {
       { path: 'src/staged.ts', status: 'modified', area: 'staged', added: 10, removed: 0 },
       { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged', added: 3, removed: 4 }
     ])
+  })
+
+  it('omits line stats without overwriting the reusable line-stats cache', async () => {
+    readFileMock.mockResolvedValue('gitdir: /stats-repo/.git/worktrees/feature\n')
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout:
+            '# branch.oid head-stats\n' +
+            '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
+        })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '3\t4\tsrc/unstaged.ts\n' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const withStats = await getStatus('/stats-repo')
+    const withoutStats = await getStatus('/stats-repo', { includeLineStats: false })
+    const reused = await getStatus('/stats-repo', { reuseLineStats: true })
+
+    expect(withoutStats.entries).toEqual(
+      withStats.entries.map(({ added: _added, removed: _removed, ...entry }) => entry)
+    )
+    expect(reused.entries).toEqual(withStats.entries)
+    expect(
+      gitExecFileAsyncMock.mock.calls.filter(([args]) => args.includes('--numstat'))
+    ).toHaveLength(1)
   })
 
   it('reuses unchanged line stats only when the safety hint is present', async () => {
@@ -491,7 +561,16 @@ describe('getStatus', () => {
     const result = await getStatus('/repo')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M'],
+      [
+        '-c',
+        'core.quotePath=false',
+        '-c',
+        'diff.autoRefreshIndex=false',
+        'diff',
+        '-z',
+        '--numstat',
+        '-M'
+      ],
       expect.objectContaining({
         cwd: '/repo',
         env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' })
@@ -560,7 +639,6 @@ describe('getStatus', () => {
           stdout: '1 .M N... 100644 100644 100644 cccc cccc assets/logo.png\n'
         })
       }
-      // git reports binary files as '-' in both numstat columns.
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '-\t-\tassets/logo.png\n' })
       }
@@ -594,16 +672,12 @@ describe('getStatus', () => {
 
     expect(result.didHitLimit).toBe(true)
     expect(result.statusLength).toBeGreaterThan(10)
-    // First `limit` entries are kept; the rest are dropped.
     expect(result.entries.length).toBe(10)
-    // attachLineStats (numstat) must be skipped when the limit was hit — only
-    // the single streamed status read should have happened.
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('caps unmerged conflicts and keeps the visible conflict rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(true)
     const lines = [
       'u UU S... 160000 160000 160000 160000 aa bb cc vendor/submodule',
       ...Array.from(
@@ -626,7 +700,6 @@ describe('getStatus', () => {
 
   it('keeps an early conflict ahead of later ordinary rows at the cap', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(true)
     const lines = [
       '? before.ts',
       'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts',

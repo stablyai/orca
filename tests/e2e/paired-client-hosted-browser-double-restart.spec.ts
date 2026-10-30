@@ -12,31 +12,23 @@ import {
   navigateGuest,
   openClientHostedFixturePage,
   readClientBrowserRows,
-  refreshAuthorityRuntimeId,
   selectPairedWorktreeGroup,
   startClientHostedMarkerFixture,
   waitForPairedWorktreeId,
-  waitForRelaunchedRuntime,
   waitForRenderedClientWebview
 } from './helpers/client-hosted-browser-fixture'
+import {
+  refreshAuthorityRuntimeId,
+  waitForRelaunchedRuntime
+} from './helpers/client-hosted-runtime-relaunch'
 
 const CLIENT_NAME = 'STA-4150 client-hosted double restart'
 
 /** Longer than the runtime's 15s reconnect grace, so the runtime treats the host as gone for good. */
 const RECONNECT_GRACE_OVERSHOOT_MS = 20_000
 
-/**
- * Both authorities restart at once — the field case a fleet auto-update produces.
- *
- * The single-restart specs each leave one side holding the evidence: a client quit leaves the
- * runtime holding the page record, and a runtime restart leaves the client holding the live guest
- * its inventory can be rebuilt from. Restart both and neither is left, which is why this scenario
- * needs the runtime's records to be durable rather than reconstructible.
- *
- * The order here is strictly harder than simultaneous: the client is already gone when the runtime
- * comes back, so the runtime has to publish the page from disk with nothing attached at all, and
- * the returning client has to be re-authenticated into a page it can no longer prove it owned.
- */
+// Restart both authorities, leaving neither runtime memory nor a client guest to reconstruct page ownership.
+// Keep the client absent until the runtime recovers from disk, then require re-authenticated adoption.
 test('keeps a client-hosted browser tab when the client and the runtime both restart', async ({
   testRepoPath
 }, testInfo) => {
@@ -70,8 +62,7 @@ test('keeps a client-hosted browser tab when the client and the runtime both res
       'the runtime must hold the client-hosted page before either restart'
     ).toContain(opened.remotePageId)
 
-    // Why the guest moves first: on its create URL, restoring correctly and replaying the URL the
-    // tab was born on are the same answer.
+    // Navigate away from create URL so restoring the initial URL cannot count as successful recovery.
     await navigateGuest(client.page, fixture.markerUrl, fixture.movedUrl)
     expect(
       await waitForRenderedClientWebview(
@@ -104,8 +95,7 @@ test('keeps a client-hosted browser tab when the client and the runtime both res
     )
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' }).catch(() => undefined)
 
-    // The oracle for this round: with no client attached and no in-memory record left, the only
-    // thing that can still name this page is what the previous runtime wrote to disk.
+    // With client absent and runtime memory gone, only persisted records can name this page.
     await expect
       .poll(() => readHostBrowserPageIds(host.client, testRepoPath), {
         timeout: 60_000,
@@ -137,8 +127,7 @@ test('keeps a client-hosted browser tab when the client and the runtime both res
       )
       .toBe('client')
 
-    // Counted across the whole origin: a recovery that also replays the create URL leaves two rows,
-    // and matching only the moved one would call that a pass.
+    // Count the whole origin so recovery cannot adopt the moved page and duplicate its create URL.
     const survivorRows = (await readClientBrowserRows(client.page, relaunchedWorktreeId)).filter(
       (row) => row.url.startsWith(fixture.origin)
     )

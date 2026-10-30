@@ -1,35 +1,11 @@
-// Convenience wrappers around the tracer for the span boundaries listed in
-// telemetry-error-tracking.md §"Span boundaries worth capturing":
-//
-//   - IPC boundaries (renderer → main preload calls)
-//   - Agent session lifecycle (start, turn, stop, recover)
-//   - Git command execution
-//   - Worktree setup (clone / checkout / install)
-//   - PTY session lifecycle
-//   - External editor launches
-//   - Updater operations
-//
-// Each helper wraps `withSpan` from `tracer.ts` with a sensible default
-// span name and a small attribute pack. Call sites that already produce
-// detailed Result objects (git runner returning stdout/stderr; PTY layer
-// reporting exit codes) thread that detail in via `attributes` so the
-// span attribute pack stays cohesive without each call site re-inventing
-// keys.
-//
-// All helpers are no-ops when the tracer's active sink is unset (the
-// observability lane was disabled at startup by env var or CI). The span
-// itself becomes a `noopSpan` that swallows all calls — call sites do not
-// need to branch on whether tracing is on.
-
-import { withSpan, type ActiveSpan } from './tracer'
+import type { PreparedCheckoutOutcome } from '../../shared/worktree/create-types'
+import { startSpan, withSpan, type ActiveSpan } from './tracer'
 
 const GIT_FAST_SUCCESS_THRESHOLD_MS = 250
 const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
 const GIT_FAST_SUCCESS_BUDGET_PER_WINDOW = 60
 const GIT_SAMPLING_MAX_BUCKETS = 512
 
-// Why: trace captures showed `git status --short` bursts dominating payloads.
-// Keep enough fast successes for timing shape while bounding memory and volume.
 const GIT_GLOBAL_OPTIONS_WITH_OPERAND = new Set([
   '-c',
   '-C',
@@ -149,8 +125,7 @@ function shouldRecordGitSpan(
 
 function addGitAttributes(span: ActiveSpan, meta: GitSpanArgs): void {
   span.setAttribute('git.subcommand', gitSubcommandFromArgs(meta.args))
-  // Why: git args can contain commit messages, branch names, remotes, or
-  // paths. Keep cardinality without copying user-authored content.
+  // Git arguments may contain user content; record counts instead.
   span.setAttribute('git.arg_count', meta.args.length)
   if (meta.cwd) {
     span.setAttribute('cwd', meta.cwd)
@@ -170,18 +145,27 @@ export type GitSpanArgs = {
   readonly cwd?: string
 }
 
-/** Wrap a git execution in a `git.exec` span. Git accepts global options before
- *  the subcommand; promoting the parsed command to its own attribute makes it
- *  grep-friendly without copying the full args array into dashboards. */
-export async function withGitSpan<T>(meta: GitSpanArgs, fn: () => Promise<T>): Promise<T> {
+export async function withGitSpan<T>(
+  meta: GitSpanArgs,
+  fn: (span: ActiveSpan) => Promise<T>
+): Promise<T> {
   return withSpan(
     'git.exec',
     async (span) => {
       addGitAttributes(span, meta)
-      return await fn()
+      return await fn(span)
     },
     { attributes: { kind: 'git' }, shouldRecord: (record) => shouldRecordGitSpan(meta, record) }
   )
+}
+
+export function startGitSpan(meta: GitSpanArgs): ActiveSpan {
+  const span = startSpan('git.exec', {
+    attributes: { kind: 'git' },
+    shouldRecord: (record) => shouldRecordGitSpan(meta, record)
+  })
+  addGitAttributes(span, meta)
+  return span
 }
 
 export type WorktreeSpanArgs = {
@@ -189,10 +173,10 @@ export type WorktreeSpanArgs = {
   readonly path?: string
 }
 
-/** Wrap a worktree-setup phase in a `worktree.<stage>` span. */
+/** Expose the span to capture phase waits beyond git child processes. */
 export async function withWorktreeSpan<T>(
   meta: WorktreeSpanArgs,
-  fn: () => Promise<T>
+  fn: (span: ActiveSpan) => Promise<T>
 ): Promise<T> {
   return withSpan(
     `worktree.${meta.stage}`,
@@ -201,24 +185,86 @@ export async function withWorktreeSpan<T>(
       if (meta.path) {
         span.setAttribute('worktree.path', meta.path)
       }
-      return await fn()
+      return await fn(span)
     },
     { attributes: { kind: 'worktree' } }
   )
 }
 
-/** Closed set so a typo can't silently mint an orphan span name. */
+type WorktreeCreatePhaseTiming = {
+  readonly phase: string
+  readonly startedAtMs: number
+  readonly durationMs: number
+}
+
+/** Union phase intervals to avoid double-counting concurrent work. */
+function measuredWallClockMs(phases: readonly WorktreePhaseInterval[]): number {
+  const intervals = [...phases]
+    .map((phase) => [phase.startedAtMs, phase.startedAtMs + phase.durationMs] as const)
+    .sort((left, right) => left[0] - right[0])
+  let covered = 0
+  let openedAt: number | null = null
+  let closesAt = 0
+  for (const [start, end] of intervals) {
+    if (openedAt === null) {
+      openedAt = start
+      closesAt = end
+      continue
+    }
+    if (start <= closesAt) {
+      closesAt = Math.max(closesAt, end)
+      continue
+    }
+    covered += closesAt - openedAt
+    openedAt = start
+    closesAt = end
+  }
+  return openedAt === null ? 0 : covered + (closesAt - openedAt)
+}
+
+type WorktreePhaseInterval = Pick<WorktreeCreatePhaseTiming, 'startedAtMs' | 'durationMs'>
+
+/** Closed phase names exclude user paths and branch names. */
+export function addWorktreeCreatePhaseAttributes(
+  span: ActiveSpan,
+  timing: {
+    totalDurationMs: number
+    phases: readonly WorktreeCreatePhaseTiming[]
+    preparedCheckout?: PreparedCheckoutOutcome
+  }
+): void {
+  span.setAttribute('worktree.create.total_ms', Math.round(timing.totalDurationMs))
+  if (timing.preparedCheckout) {
+    span.setAttribute('worktree.create.prepared_checkout', timing.preparedCheckout.status)
+    if (timing.preparedCheckout.status === 'hit') {
+      span.setAttribute('worktree.create.prepared_checkout_reset', timing.preparedCheckout.reset)
+      span.setAttribute('worktree.create.prepared_checkout_origin', timing.preparedCheckout.origin)
+    } else {
+      span.setAttribute('worktree.create.prepared_checkout_miss', timing.preparedCheckout.reason)
+    }
+  }
+  for (const phase of timing.phases) {
+    span.setAttribute(`worktree.create.phase.${phase.phase}_ms`, Math.round(phase.durationMs))
+  }
+  span.setAttribute('worktree.create.unattributed_ms', worktreeCreateUnattributedMs(timing))
+}
+
+export function worktreeCreateUnattributedMs(timing: {
+  totalDurationMs: number
+  phases: readonly WorktreePhaseInterval[]
+}): number {
+  return Math.max(0, Math.round(timing.totalDurationMs - measuredWallClockMs(timing.phases)))
+}
+
 export type WorktreeRemoveStage =
   | 'archive_hook'
   | 'cache_invalidation'
   | 'git_remove'
   | 'metadata_purge'
   | 'pty_sweep'
-  | 'trash_rename'
   | 'watcher_gate'
 
-/** Wrap one stage of a worktree removal. Children share the parent's `kind` so `kind`-filtered
- *  views keep the whole tree, and `worktree.flow` separates the folder/remote/local removal paths. */
+/** Share kind with children to retain the tree in filtered views; flow distinguishes removal paths. */
 export async function withWorktreeRemoveStageSpan<T>(
   stage: WorktreeRemoveStage,
   flow: 'folder' | 'remote' | 'local',

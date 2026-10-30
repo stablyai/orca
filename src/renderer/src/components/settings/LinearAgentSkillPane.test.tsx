@@ -4,19 +4,15 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-  ORCA_LINEAR_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { getLinearUsageExamples } from '@/lib/linear-usage-examples'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
-
-const UPDATE_COMMAND = 'npx skills update orca-linear --global'
 
 const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[],
   runtime: 'native' as 'native' | 'wsl',
   skillInstalled: true,
+  skillUnverifiable: false,
   updateSkillName: 'orca-linear',
   linearConnected: true,
   visibleTaskProviders: ['github', 'linear'] as string[],
@@ -32,25 +28,16 @@ vi.mock('./AgentSkillSetupPanel', () => ({
         {!props.hideHeader && <h3>{String(props.title)}</h3>}
         {props.description != null && <p>{String(props.description)}</p>}
         <span>{props.installed ? 'Installed' : 'Not installed'}</span>
-        <code>{String(props.command)}</code>
-        <code>{String(props.installedCommand)}</code>
+        <code>{String(props.skillNames)}</code>
+        <code>{String(props.installedSkillNames)}</code>
         <span data-testid="freshness">{String(props.freshnessSkillName)}</span>
       </section>
     )
   }
 }))
 
-vi.mock('./CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command,
-  ensureWslCliAvailableForAgentSkillTerminal: vi.fn(),
-  getWslCliDistroRequest: () => undefined
-}))
-
-vi.mock('@/lib/linear-agent-skill-update-command', () => ({
-  getLinearAgentSkillUpdateTarget: () => ({
-    command: UPDATE_COMMAND,
-    skillName: mocks.updateSkillName
-  })
+vi.mock('@/lib/linear-agent-skill-update-target', () => ({
+  getLinearAgentSkillUpdateTarget: () => ({ skillName: mocks.updateSkillName })
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
@@ -58,8 +45,11 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkillNames: () => ({
     installed: mocks.skillInstalled,
     loading: false,
+    settled: true,
+    installedUnverifiable: mocks.skillUnverifiable,
     error: null,
     skills: [],
+    sources: [],
     refresh: vi.fn()
   })
 }))
@@ -68,9 +58,8 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     discoveryTarget: undefined,
     agentRuntime: { runtime: mocks.runtime },
-    terminalShellOverride: undefined,
     installDisabledReason: null,
-    canUseLocalSkillFreshness: mocks.runtime !== 'wsl'
+    canUseSkillFreshness: mocks.runtime !== 'wsl'
   })
 }))
 
@@ -135,6 +124,7 @@ describe('LinearAgentSkillPane', () => {
     mocks.panelProps.length = 0
     mocks.runtime = 'native'
     mocks.skillInstalled = true
+    mocks.skillUnverifiable = false
     mocks.updateSkillName = 'orca-linear'
     mocks.linearConnected = true
     mocks.visibleTaskProviders = ['github', 'linear']
@@ -199,7 +189,6 @@ describe('LinearAgentSkillPane', () => {
     expect(markup).toContain('Good to know')
     expect(markup).toContain('Start from a Linear issue')
     expect(markup).toContain('All set')
-    // Skill lives inside the checklist; notes stay after examples.
     expect(markup.indexOf('Example prompts')).toBeLessThan(markup.indexOf('Good to know'))
     const examples = getLinearUsageExamples()
     expect(examples).toHaveLength(5)
@@ -208,6 +197,15 @@ describe('LinearAgentSkillPane', () => {
       expect(example.prompt).toContain('/orca-linear')
       expect(example.prompt).not.toContain('{{value0}}')
     }
+  })
+
+  it('reports an unverifiable skill scan as unknown instead of an unfinished step', () => {
+    mocks.skillInstalled = false
+    mocks.skillUnverifiable = true
+    const markup = renderToStaticMarkup(<LinearAgentSkillPane />)
+
+    expect(markup).toContain('Cannot verify')
+    expect(markup).not.toContain('2 of 3 ready')
   })
 
   it('shows incomplete checklist when the skill is missing', () => {
@@ -220,13 +218,13 @@ describe('LinearAgentSkillPane', () => {
     )
   })
 
-  it('passes the orca-linear install/update commands and freshness on a local runtime', async () => {
+  it('passes the orca-linear install/update skills and freshness on a local runtime', async () => {
     await renderPane()
 
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        command: ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-        installedCommand: UPDATE_COMMAND,
+        skillNames: [ORCA_LINEAR_SKILL_NAME],
+        installedSkillNames: [ORCA_LINEAR_SKILL_NAME],
         freshnessSkillName: ORCA_LINEAR_SKILL_NAME
       })
     )

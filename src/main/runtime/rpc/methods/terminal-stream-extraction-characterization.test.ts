@@ -2,13 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
+  decodeTerminalStreamText,
   encodeTerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
 import { sendSnapshotFrames } from './terminal/terminal-snapshot-publication'
-import { TerminalSourceRangeRegistry } from '../terminal-source-range-registry'
+import { publishMultiplexInitialSnapshot } from './terminal/terminal-multiplex-initial-snapshot'
 import { initializeMultiplexStream } from './terminal/terminal-multiplex-stream-initialization'
 import type { TerminalMultiplexConnection } from './terminal/terminal-multiplex-connection'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { TerminalMultiplexStream } from './terminal/terminal-stream-types'
+import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../shared/terminal-reply-query-scan'
+import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../shared/terminal-multiplex-flow-control'
 
 // These assertions protect the permanent binary publication seam while its state machine
 // lives in concrete terminal domain modules.
@@ -103,16 +107,118 @@ describe('terminal stream extraction characterization', () => {
     ]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
   })
 
-  it('lets a slot-handler registration throw escape before per-stream catch ownership begins', async () => {
-    const streams = new Map()
+  it('publishes the latest nonempty initial image when startup output overflows twice', async () => {
+    const frames: { opcode: TerminalStreamOpcode; payload: Uint8Array<ArrayBufferLike> }[] = []
+    const emit = vi.fn()
+    let readCount = 0
+    const outputBatcherPush = vi.fn()
+    const stream: TerminalMultiplexStream = {
+      streamId: 7,
+      terminal: 'terminal',
+      ptyId: 'pty',
+      client: undefined,
+      isMobile: false,
+      ackOutput: false,
+      ackInFlightBytes: 0,
+      ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
+      supportsOutputPause: false,
+      supportsOutputPauseDropNotice: false,
+      pausedOutputDropNoticeSent: false,
+      supportsWriteUnavailable: false,
+      supportsEndpointLossNotice: false,
+      inputSessionId: null,
+      outputPaused: false,
+      supportsDesktopViewportClaims: false,
+      desktopClaimTail: Promise.resolve(true),
+      registeredRemoteDesktopDriver: false,
+      remoteDesktopSubscriptionKey: 'multiplex:connection:7',
+      pendingRemoteDesktopViewport: null,
+      buffering: true,
+      ackPendingOutput: [],
+      ackPendingOutputBytes: 0,
+      ackPendingOutputOverflowed: false,
+      ackRecoverySnapshotInFlight: false,
+      yieldedQueries: [],
+      yieldedQueryScan: EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
+      ackRecoveryHistoryOwed: false,
+      pendingOutput: [{ data: 'lost-live', bytes: 9 }],
+      pendingOutputBytes: 9,
+      pendingOutputOverflowed: true,
+      lastResizeCols: undefined,
+      resizeGeneration: 0,
+      outputBatcher: { push: outputBatcherPush, flush: vi.fn(), dispose: vi.fn() },
+      unsubscribeData: () => {},
+      unsubscribeResize: () => {},
+      unsubscribeFit: () => {},
+      unsubscribeDriver: () => {},
+      unregisterBinaryHandler: () => {},
+      exitWaiterAbort: new AbortController()
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the runtime reads made by initial snapshot publication.
     const runtime = {
-      attachRemoteTerminalSourceRangeConsumer: vi.fn(() => false)
+      getPtyExecutionHostMetadata: () => ({}),
+      getTerminalLaunchResult: () => undefined,
+      resolveLiveLeafForHandle: () => ({ ptyId: stream.ptyId }),
+      readTerminal: vi.fn(async () => {
+        readCount += 1
+        if (readCount === 2) {
+          stream.pendingOutputOverflowed = true
+        }
+        return { tail: ['fallback'] }
+      }),
+      serializeTerminalBuffer: vi.fn(async () => ({
+        data: 'AUTHORITATIVE_INITIAL_MARKER',
+        cols: 80,
+        rows: 24,
+        seq: 41,
+        scrollbackRows: 0,
+        truncatedByByteBudget: false
+      })),
+      getTerminalSize: vi.fn(() => ({ cols: 80, rows: 24 })),
+      getMobileDisplayMode: vi.fn(() => 'fit'),
+      getLayout: vi.fn(() => null)
     } as unknown as OrcaRuntimeService
     const state = {
       runtime,
+      streams: new Map([[stream.streamId, stream]]),
+      emit,
+      closed: false,
+      sendFrame: vi.fn((streamId, opcode, payload = new Uint8Array()) => {
+        expect(streamId).toBe(stream.streamId)
+        frames.push({ opcode, payload })
+        return true
+      })
+    } as unknown as TerminalMultiplexConnection
+
+    await publishMultiplexInitialSnapshot(
+      state,
+      { streamId: stream.streamId, terminal: stream.terminal },
+      stream
+    )
+
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'subscribed', truncated: true })
+    )
+    expect(frames.map(({ opcode }) => opcode)).toEqual([
+      TerminalStreamOpcode.SnapshotStart,
+      TerminalStreamOpcode.SnapshotChunk,
+      TerminalStreamOpcode.SnapshotEnd
+    ])
+    expect(decodeTerminalStreamJson(frames[0]!.payload)).toMatchObject({
+      seq: 41,
+      truncated: true
+    })
+    expect(decodeTerminalStreamText(frames[1]!.payload)).toBe('AUTHORITATIVE_INITIAL_MARKER')
+    expect(outputBatcherPush).not.toHaveBeenCalled()
+  })
+
+  it('lets a slot-handler registration throw escape before per-stream catch ownership begins', async () => {
+    const streams = new Map()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration throws before initialization reads any other connection member.
+    const state = {
+      runtime: {},
       connectionId: 'connection',
       streams,
-      sourceRangeRegistry: new TerminalSourceRangeRegistry(),
       registerBinaryStreamHandler: vi.fn(() => {
         throw new Error('registrar-failed')
       }),

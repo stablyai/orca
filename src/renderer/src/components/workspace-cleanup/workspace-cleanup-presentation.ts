@@ -6,7 +6,9 @@ import type { HostedReviewInfo, HostedReviewProvider } from '../../../../shared/
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type WorkspaceCleanupSortKey = 'activity' | 'name' | 'repo' | 'review' | 'git'
 export type WorkspaceCleanupSortDirection = 'asc' | 'desc'
@@ -48,7 +50,7 @@ export type WorkspaceCleanupReviewLookup = {
 
 export {
   filterWorkspaceCleanupCandidates,
-  getWorkspaceCleanupGitLabel,
+  getWorkspaceCleanupGitState,
   getWorkspaceCleanupSearchText,
   hasWorkspaceCleanupLocalContext,
   sortWorkspaceCleanupCandidates
@@ -61,7 +63,13 @@ export function getWorkspaceCleanupReviewInfo(
 ): WorkspaceCleanupReviewInfo {
   const repo = findCandidateRepo(candidate, lookup)
   const worktree = findCandidateWorktree(candidate, repo, lookup)
-  const hostedReview = getCachedHostedReview(candidate, worktree, repo, state)
+  const cachedHostedReview = getCachedHostedReview(candidate, worktree, repo, state)
+  const hostedReview =
+    cachedHostedReview?.provider === 'github' &&
+    worktree &&
+    isGitHubPRSuppressed(worktree, cachedHostedReview.number)
+      ? null
+      : cachedHostedReview
   if (hostedReview) {
     return {
       hasReview: true,
@@ -102,7 +110,7 @@ export function buildWorkspaceCleanupReviewLookup(
     reposById.set(repo.id, matches)
   }
   const worktreesByRepoAndId = new Map<string, Worktree[]>()
-  for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
+  for (const [repoId, worktrees] of Object.entries(selectWorktreesByRepo(state))) {
     for (const worktree of worktrees) {
       const key = `${repoId}\0${worktree.id}`
       const matches = worktreesByRepoAndId.get(key) ?? []

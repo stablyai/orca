@@ -1,4 +1,9 @@
 import type { App, BrowserWindow } from 'electron'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 
 type FocusTimer = (callback: () => void, ms: number) => unknown
 
@@ -8,12 +13,18 @@ export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
   getWindow: () => BrowserWindow | null
   openWindow: () => BrowserWindow
+  /** False while some other path must own the first window; the reopen is dropped, not queued. */
+  canOpenWindow?: () => boolean
   platform?: NodeJS.Platform
   setTimeout?: FocusTimer
   warn?: (message: string, error?: unknown) => void
 }
 
 function safelyFocusApp(app: Pick<App, 'focus'>): void {
+  // Real second-instance reopen may claim foreground; automated launches must never do so.
+  if (isBackgroundLaunch()) {
+    return
+  }
   try {
     app.focus({ steal: true })
   } catch {
@@ -26,14 +37,16 @@ function safelyFocusApp(app: Pick<App, 'focus'>): void {
 }
 
 export function safelyRevealWindow(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
+  if (window.isDestroyed() || isWindowlessLaunch()) {
     return
   }
   if (window.isMinimized()) {
     window.restore()
   }
-  window.show()
-  window.focus()
+  showWindowWithoutStealingFocus(window)
+  if (!isBackgroundLaunch()) {
+    window.focus()
+  }
 }
 
 function pulseAlwaysOnTop(window: BrowserWindow, setTimer: FocusTimer): void {
@@ -64,8 +77,7 @@ function retryFocus(window: BrowserWindow, app: Pick<App, 'focus'>, setTimer: Fo
   }, 100)
 }
 
-// Why: shared so the sync success path and the async retry/adopt callback can't
-// drift on win32 reinforcement (moveTop/pulseAlwaysOnTop) or the 100ms focus retry.
+// Share Windows foreground reinforcement and delayed focus retry across synchronous and retry/adoption paths.
 function activateWindow(
   window: BrowserWindow,
   app: Pick<App, 'focus'>,
@@ -74,7 +86,8 @@ function activateWindow(
 ): void {
   safelyFocusApp(app)
   safelyRevealWindow(window)
-  if (platform === 'win32') {
+  // Windows reinforcement raises windows over other work; suppress it during background launches.
+  if (platform === 'win32' && !isBackgroundLaunch()) {
     try {
       window.moveTop()
     } catch {
@@ -85,10 +98,7 @@ function activateWindow(
   }
 }
 
-// Why: a second-instance/activate reopen can race transient startup pressure
-// (e.g. GPU/process churn right after another launch attempt exits); one
-// swallowed throw would otherwise strand the app with no window until some
-// later external trigger happens to retry.
+// Transient startup/process pressure can reject window creation; bounded retries prevent a permanently windowless app.
 const REOPEN_MAX_ATTEMPTS = 3
 const REOPEN_RETRY_DELAY_MS = 300
 
@@ -106,11 +116,7 @@ function openWindowWithRetry(
       return null
     }
     setTimer(() => {
-      // Why: openWindow() (openMainWindow) is not idempotent — it constructs and
-      // registers a fresh BrowserWindow on every call. Between attempts another
-      // path (or a first attempt that threw after creating its window) may have
-      // produced a live window, so adopt it instead of opening a duplicate that
-      // would orphan the one already on screen.
+      // openWindow constructs each time; adopt windows created by concurrent/partially failed attempts to avoid orphaning duplicates.
       const existing = opts.getWindow()
       const window =
         existing && !existing.isDestroyed()
@@ -133,7 +139,7 @@ export function focusExistingMainWindow(
   let openedWindow = false
 
   if (!window || window.isDestroyed()) {
-    if (!opts.app.isReady()) {
+    if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
     window = openWindowWithRetry(opts, platform, setTimer, 1)

@@ -15,9 +15,7 @@ function createFakeSession(): {
   }
 }
 
-// Why one session per partition and a distinct default: installing the handler on the default
-// session instead of the preview session is otherwise invisible — every read would come back
-// from the same object.
+// Distinct sessions expose handlers accidentally installed on the default browsing partition.
 const previewSession = createFakeSession()
 const defaultSession = createFakeSession()
 vi.mock('electron', () => ({
@@ -155,8 +153,6 @@ describe('handleDocPreviewRequest', () => {
     expect(await response.text()).toBe('cannot send this file type')
   })
 
-  // Why: previewed documents are agent-authored, so an outbound request is an exfiltration channel
-  // for everything else the grant can read.
   it('serves documents under a self-only content security policy', async () => {
     const grant = mintGrant()
 
@@ -170,15 +166,10 @@ describe('handleDocPreviewRequest', () => {
     expect(policy).toContain("object-src 'none'")
     expect(policy).toContain("img-src 'self' data:")
     expect(policy).not.toContain('https:')
-    // Why assert an absence: `webrtc 'block'` is the obvious directive to reach for here and this
-    // Chromium does not implement it — it logs "Unrecognized Content-Security-Policy directive
-    // 'webrtc'" and gathers candidates regardless. Adding it back would document a fence that is
-    // not there; the guest's IP-handling policy is what actually refuses.
+    // Electron 43 ignores WebRTC CSP directives; the guest IP policy enforces the restriction.
     expect(policy).not.toContain('webrtc')
   })
 
-  // Why: the guest paints a 4xx body as if it were the document, so the shell only learns the
-  // reason from this push.
   it('pushes the failure reason for the requested path', async () => {
     const send = vi.fn()
     setDocPreviewFailureSink({ send })
@@ -209,8 +200,6 @@ describe('handleDocPreviewRequest', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  // Why: a grant revoked underneath a live guest 404s like a missing file, and without this push
-  // the shell leaves the handler's "Not found" body on screen as if it were the document.
   it('pushes a failure for a revoked grant so the shell can replace the 404 body', async () => {
     const send = vi.fn()
     const grant = mintGrant()
@@ -228,8 +217,6 @@ describe('handleDocPreviewRequest', () => {
 })
 
 describe('installDocPreviewProtocolHandler', () => {
-  // Why the default session is named here: it is the session every other Electron API reaches for
-  // by default, and handling the scheme there would serve preview bytes to ordinary browsing.
   it('handles the scheme on the preview session and nowhere else', () => {
     installDocPreviewProtocolHandler()
 
@@ -261,13 +248,11 @@ describe('installDocPreviewProtocolHandler', () => {
     expect(cancelled(`orca-preview://${'a'.repeat(32)}/index.html`)).toBe(false)
   })
 
-  // Why: preview guests still use the shared installer for certificate, UA, permission and
-  // download hooks, with a stricter decision than ordinary browsing partitions.
   it('applies the shared browser partition policies to the preview session', () => {
     installDocPreviewProtocolHandler()
 
     expect(mocks.installBrowserSessionPartitionPolicies).toHaveBeenCalledWith(
-      expect.objectContaining({ partition: 'orca-doc-preview', userAgentMode: 'clean' }),
+      expect.objectContaining({ partition: 'orca-doc-preview' }),
       expect.anything()
     )
   })
@@ -283,9 +268,29 @@ describe('installDocPreviewProtocolHandler', () => {
 })
 
 describe('registerDocPreviewSchemePrivileges', () => {
-  // Why the whole literal and not a subset: every privilege this scheme does not claim is one the
-  // document cannot use to escape it. `allowServiceWorkers` would outlive the tab that was granted
-  // the read, and `bypassCSP` would undo the self-only policy the handler serves with.
+  it('registers additional preview schemes in the same Electron call', () => {
+    const media = {
+      scheme: 'orca-media',
+      privileges: { standard: true, secure: true, stream: true }
+    }
+    registerDocPreviewSchemePrivileges([media])
+    expect(protocol.registerSchemesAsPrivileged).toHaveBeenCalledTimes(1)
+    expect(protocol.registerSchemesAsPrivileged).toHaveBeenCalledWith([
+      {
+        scheme: 'orca-preview',
+        privileges: {
+          standard: true,
+          secure: true,
+          supportFetchAPI: true,
+          corsEnabled: true,
+          stream: true
+        }
+      },
+      media
+    ])
+  })
+
+  // Extra privileges could bypass CSP or let service workers outlive the granted preview.
   it('claims exactly the privileges the preview document needs', () => {
     registerDocPreviewSchemePrivileges()
 
@@ -305,8 +310,6 @@ describe('registerDocPreviewSchemePrivileges', () => {
 })
 
 describe('isAllowedDocPreviewRequestUrl', () => {
-  // Why: the session refuses to carry the request at all, so a CSP bypass in one element type
-  // still reaches nothing off-machine.
   it('admits in-document schemes and refuses everything that leaves the machine', () => {
     expect(isAllowedDocPreviewRequestUrl(`orca-preview://${'a'.repeat(32)}/index.html`)).toBe(true)
     expect(isAllowedDocPreviewRequestUrl('devtools://devtools/bundled/inspector.html')).toBe(true)

@@ -58,9 +58,30 @@ describe('parseClaudeModelList', () => {
       label: 'Opus (1M context)',
       description: 'Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok',
       effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-      supportsFastMode: true
+      supportsFastMode: true,
+      isDefault: true
     })
     expect(parsed[2]).toMatchObject({ effortLevels: [], supportsFastMode: false })
+    expect(parsed.filter((model) => model.isDefault).map(({ id }) => id)).toEqual(['opus[1m]'])
+  })
+
+  // `claude` 2.1.280: the default row and the row it resolves to carry the same flag; haiku none.
+  it('keeps auto support per row and marks the row the default resolves to', () => {
+    const parsed = parseClaudeModelList(
+      `${controlResponseLine([
+        { value: 'default', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+        { value: 'opus[1m]', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+        { value: 'sonnet', resolvedModel: 'claude-sonnet-5', supportsAutoMode: true },
+        { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', supportsAutoMode: null }
+      ])}\n`
+    )
+    expect(
+      parsed.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
+    ).toEqual([
+      { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'sonnet', isDefault: undefined, supportsAutoMode: true },
+      { id: 'haiku', isDefault: undefined, supportsAutoMode: undefined }
+    ])
   })
 
   it('skips init noise, CRLF endings, and duplicate values', () => {
@@ -101,6 +122,32 @@ describe('parseClaudeModelList', () => {
     ).toEqual([])
     const hostile = `{"a":${'['.repeat(40)}${']'.repeat(40)},"type":"control_response"}`
     expect(parseClaudeModelList(hostile)).toEqual([])
+  })
+
+  it('drops the disabled placeholder row the CLI advertises for a model it cannot run', () => {
+    // Captured from `claude` 2.1.237: Fable 5.1 is announced but gated on 2.1.255+.
+    const parsed = parseClaudeModelList(
+      controlResponseLine([
+        { value: 'sonnet', displayName: 'Sonnet' },
+        {
+          value: 'cc-update-required-1',
+          resolvedModel: 'cc-update-required-1',
+          displayName: 'Fable 5.1 (disabled)',
+          description: 'Update to 2.1.255+ to use Fable 5.1',
+          supportsEffort: true,
+          supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          disabled: true
+        }
+      ])
+    )
+    expect(parsed.map(({ id }) => id)).toEqual(['sonnet'])
+  })
+
+  it('keeps a model that reports disabled as anything other than true', () => {
+    const parsed = parseClaudeModelList(
+      controlResponseLine([{ value: 'fable', displayName: 'Fable', disabled: false }])
+    )
+    expect(parsed.map(({ id }) => id)).toEqual(['fable'])
   })
 
   it('ignores effort levels when the model does not declare effort support', () => {

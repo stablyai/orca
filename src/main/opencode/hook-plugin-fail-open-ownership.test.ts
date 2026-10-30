@@ -1,7 +1,3 @@
-/**
- * Executes the generated OpenCode plugin source because fail-open ownership
- * lives inside OpenCode's process, not in Orca's TypeScript runtime.
- */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +15,9 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+type SessionClientFixture = {
+  list: (options?: { signal?: AbortSignal }) => Promise<{ data: SessionFixture[] }>
+}
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
@@ -83,7 +82,7 @@ describe('OpenCode plugin fail-open ownership', () => {
     return loadHooksWithSession({ list })
   }
 
-  async function loadHooksWithSession(session: object): Promise<PluginHooks> {
+  async function loadHooksWithSession(session: SessionClientFixture): Promise<PluginHooks> {
     return loadHooksWithContext({ client: { session } })
   }
 
@@ -220,7 +219,7 @@ describe('OpenCode plugin fail-open ownership', () => {
     })
     await partStarted
 
-    // Why: evict only root-0's ancestry cache entry while its preview is in flight.
+    // Evict root-0 ancestry while its preview remains in flight.
     for (let index = 1; index < sessions.length; index += 1) {
       await hooks.event({
         event: {

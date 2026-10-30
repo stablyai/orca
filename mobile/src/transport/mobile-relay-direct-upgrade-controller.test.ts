@@ -14,17 +14,13 @@ const directHost: HostProfile = {
 }
 
 const upgraded = {
-  host: {
-    ...directHost,
+  relay: {
+    v: 1 as const,
+    directorUrl: 'https://relay-staging.onorca.dev',
+    cellUrl: 'https://c1.relay-staging.onorca.dev',
+    assignmentEpoch: 4,
     relayHostId: 'AbCdEf0123_-xyZ9',
-    relay: {
-      v: 1 as const,
-      directorUrl: 'https://relay-staging.onorca.dev',
-      cellUrl: 'https://c1.relay-staging.onorca.dev',
-      assignmentEpoch: 4,
-      relayHostId: 'AbCdEf0123_-xyZ9',
-      e2eeFraming: 2 as const
-    }
+    e2eeFraming: 2 as const
   },
   bundle: {
     v: 1 as const,
@@ -60,7 +56,7 @@ function logicalClient(initial: ConnectionState) {
 }
 
 describe('direct pairing upgrade controller', () => {
-  it('upgrades immediately after an authenticated direct connection', async () => {
+  it('forwards a completed upgrade for an already connected client', async () => {
     const logical = logicalClient('connected')
     const upgrade = vi.fn(async () => upgraded)
     const onUpgraded = vi.fn(async () => {})
@@ -87,7 +83,9 @@ describe('direct pairing upgrade controller', () => {
     await controller.start()
     controller.setForeground(false)
     controller.setForeground(true)
-    await vi.waitFor(() => expect(onUpgraded).toHaveBeenCalledOnce())
+    await Promise.resolve()
+
+    expect(onUpgraded).toHaveBeenCalledOnce()
 
     expect(upgrade).toHaveBeenCalledTimes(2)
   })

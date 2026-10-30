@@ -1,8 +1,18 @@
 import type { BaseRefSearchResult } from '../../shared/repo-types'
 import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
+import {
+  clampRepoSearchRefsLimit,
+  clampRepoSearchRefsScanLimit,
+  REPO_SEARCH_REFS_DEFAULT_LIMIT,
+  isRepoSearchRefsRequestLimit,
+  isRepoSearchRefsScanLimit
+} from '../../shared/repo-search-limits'
+import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { isRemoteHeadRef } from '../../shared/hosted-review-refs'
 import { getLocalGitCapabilityCache } from './git-capability-state'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'
+import { isQualifiedBaseRef, resolveBaseRefSearchSelector } from './base-ref-search-selector'
 
 const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
 const REF_SEARCH_LEGACY_HEADROOM = 100
@@ -14,11 +24,27 @@ function getRefSearchTokens(normalizedQuery: string): string[] {
 }
 
 function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean): number {
-  if (!Number.isInteger(limit) || limit <= 0) {
+  if (!isRepoSearchRefsScanLimit(limit)) {
     throw new Error('invalid_limit')
   }
   const baseCount = limit * REF_SEARCH_CANDIDATE_MULTIPLIER
   return excludesRemoteHead ? baseCount : baseCount + REF_SEARCH_LEGACY_HEADROOM
+}
+
+/** Exclude direct remote HEAD slots while preserving nested branch names ending in HEAD. */
+function getRemoteHeadExcludes(remoteNames: readonly string[] | undefined): string[] {
+  if (remoteNames && remoteNames.length > 0) {
+    // Ordinary remotes share a wildcard; slash-containing remotes need exact excludes.
+    const slashRemotes = [...new Set(remoteNames)].filter(
+      (remote) => remote.includes('/') && isSafeGitRefName(`refs/remotes/${remote}/HEAD`)
+    )
+    return [
+      '--exclude=refs/remotes/*/HEAD',
+      ...slashRemotes.map((remote) => `--exclude=refs/remotes/${remote}/HEAD`)
+    ]
+  }
+  // * does not cross slashes, so unknown nested remotes remain eligible.
+  return ['--exclude=refs/remotes/*/HEAD']
 }
 
 /** Build the bounded `for-each-ref` argv shared by local and remote searches. */
@@ -32,12 +58,14 @@ export function buildSearchBaseRefsArgv(
   } = {}
 ): string[] {
   const excludeRemoteHead = options.excludeRemoteHead ?? true
-  const candidateCount = getRefSearchCandidateCount(limit, excludeRemoteHead)
+  // Bound the Git scan even when the caller asks for more retained rows.
+  const boundedScanLimit = clampRepoSearchRefsScanLimit(limit)
+  const candidateCount = getRefSearchCandidateCount(boundedScanLimit, excludeRemoteHead)
   const base = [
     'for-each-ref',
     '--format=%(refname)%00%(refname:short)',
     '--sort=-committerdate',
-    ...(excludeRemoteHead ? ['--exclude=refs/remotes/**/HEAD'] : []),
+    ...(excludeRemoteHead ? getRemoteHeadExcludes(options.remoteNames) : []),
     `--count=${candidateCount}`
   ]
   const tokens = getRefSearchTokens(normalizedQuery)
@@ -80,9 +108,14 @@ async function runSearchBaseRefsGit(
   path: string,
   normalizedQuery: string,
   limit: number,
-  options: { remoteNames: readonly string[]; patternGroup?: RefSearchPatternGroup }
+  options: {
+    remoteNames: readonly string[]
+    patternGroup?: RefSearchPatternGroup
+    git?: LocalGitExecOptions
+  }
 ): Promise<{ stdout: string }> {
-  return getLocalGitCapabilityCache({ cwd: path }).runWithFallback(
+  const execOptions = gitExecOptions(path, options.git)
+  return getLocalGitCapabilityCache(execOptions).runWithFallback(
     'for-each-ref-exclude',
     () =>
       gitExecFileAsync(
@@ -90,7 +123,7 @@ async function runSearchBaseRefsGit(
           remoteNames: options.remoteNames,
           patternGroup: options.patternGroup
         }),
-        { cwd: path }
+        execOptions
       ),
     () =>
       gitExecFileAsync(
@@ -99,7 +132,7 @@ async function runSearchBaseRefsGit(
           remoteNames: options.remoteNames,
           patternGroup: options.patternGroup
         }),
-        { cwd: path }
+        execOptions
       ),
     isForEachRefExcludeUnsupportedError
   )
@@ -128,44 +161,62 @@ export function mergeBaseRefSearchResultGroups(
   return merged
 }
 
-export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
-  return (await searchBaseRefDetails(path, query, limit)).map((entry) => entry.refName)
+export async function searchBaseRefs(
+  path: string,
+  query: string,
+  limit = REPO_SEARCH_REFS_DEFAULT_LIMIT
+): Promise<string[]> {
+  if (!isRepoSearchRefsRequestLimit(limit)) {
+    return []
+  }
+  const boundedLimit = clampRepoSearchRefsLimit(limit)
+  return (await searchBaseRefDetails(path, query, boundedLimit)).map((entry) => entry.refName)
 }
 
 export async function searchBaseRefDetails(
   path: string,
   query: string,
-  limit = 25
+  limit = REPO_SEARCH_REFS_DEFAULT_LIMIT,
+  includeQualifiedRefs = true,
+  git: LocalGitExecOptions = {}
 ): Promise<BaseRefSearchResult[]> {
-  if (!Number.isInteger(limit) || limit <= 0) {
+  if (!isRepoSearchRefsRequestLimit(limit)) {
     return []
   }
+  const boundedScanLimit = clampRepoSearchRefsScanLimit(limit)
   const normalizedQuery = normalizeRefSearchQuery(query)
 
   try {
-    const remotes = await listRemoteNames(path)
+    const remotes = await listRemoteNames(path, git)
+    const search = (patternGroup?: RefSearchPatternGroup): Promise<{ stdout: string }> =>
+      runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
+        remoteNames: remotes,
+        patternGroup,
+        git
+      })
     const tokens = getRefSearchTokens(normalizedQuery)
     if (tokens.length > 1) {
-      const results = await Promise.all([
-        runSearchBaseRefsGit(path, normalizedQuery, limit, {
-          remoteNames: remotes,
-          patternGroup: 'segmented'
-        }),
-        runSearchBaseRefsGit(path, normalizedQuery, limit, {
-          remoteNames: remotes,
-          patternGroup: 'branchRoot'
-        })
-      ])
+      const results = await Promise.all([search('segmented'), search('branchRoot')])
       return mergeBaseRefSearchResultGroups(
-        results.map((entry) => parseAndFilterSearchRefDetails(entry.stdout, limit, remotes)),
-        limit
+        results.map((entry) =>
+          parseAndFilterSearchRefDetails(
+            entry.stdout,
+            boundedScanLimit,
+            remotes,
+            includeQualifiedRefs
+          )
+        ),
+        boundedScanLimit
       )
     }
 
-    const result = await runSearchBaseRefsGit(path, normalizedQuery, limit, {
-      remoteNames: remotes
-    })
-    return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+    const result = await search()
+    return parseAndFilterSearchRefDetails(
+      result.stdout,
+      boundedScanLimit,
+      remotes,
+      includeQualifiedRefs
+    )
   } catch (err) {
     console.warn('[searchBaseRefs] for-each-ref failed', { path, err })
     return []
@@ -190,20 +241,28 @@ export async function listRemoteNames(
 export function parseAndFilterSearchRefDetails(
   stdout: string,
   limit: number,
-  remotes: string[] = []
+  remotes: string[] = [],
+  includeQualifiedRefs = true
 ): BaseRefSearchResult[] {
   const seen = new Set<string>()
   const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
+
   return stdout
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => {
       const nul = line.indexOf('\0')
-      return nul === -1 ? null : { full: line.slice(0, nul), short: line.slice(nul + 1) }
+      if (nul === -1) {
+        return null
+      }
+      const full = line.slice(0, nul)
+      const gitShort = line.slice(nul + 1)
+      return { full, short: resolveBaseRefSearchSelector(full, gitShort) }
     })
     .filter((entry): entry is { full: string; short: string } => entry !== null)
-    .filter(({ full }) => !/^refs\/remotes\/.+\/HEAD$/.test(full))
+    .filter(({ full }) => isSafeGitRefName(full) && !isRemoteHeadRef(full, sortedRemotes))
+    .filter(({ short }) => includeQualifiedRefs || !isQualifiedBaseRef(short))
     .filter(({ short }) => {
       if (seen.has(short)) {
         return false
@@ -218,20 +277,39 @@ export function parseAndFilterSearchRefDetails(
     .slice(0, Math.max(0, limit))
 }
 
+export function resolveConfiguredRemoteBranchName(
+  fullRef: string,
+  longestFirstRemoteNames: readonly string[]
+): string | null {
+  const remoteRefPrefix = 'refs/remotes/'
+  if (!fullRef.startsWith(remoteRefPrefix)) {
+    return null
+  }
+  const remoteAndBranch = fullRef.slice(remoteRefPrefix.length)
+  const remote = longestFirstRemoteNames.find((candidate) =>
+    remoteAndBranch.startsWith(`${candidate}/`)
+  )
+  return remote ? remoteAndBranch.slice(remote.length + 1) || null : null
+}
+
 export function resolveLocalBranchName(
   fullRef: string,
   shortRef: string,
   remotes: string[]
 ): string {
+  const localRefPrefix = 'refs/heads/'
+  if (fullRef.startsWith(localRefPrefix)) {
+    return fullRef.slice(localRefPrefix.length) || shortRef
+  }
   const remoteRefPrefix = 'refs/remotes/'
   if (!fullRef.startsWith(remoteRefPrefix)) {
     return shortRef
   }
-  const remoteAndBranch = fullRef.slice(remoteRefPrefix.length)
-  const remote = remotes.find((candidate) => remoteAndBranch.startsWith(`${candidate}/`))
-  if (remote) {
-    return remoteAndBranch.slice(remote.length + 1)
+  const configuredBranch = resolveConfiguredRemoteBranchName(fullRef, remotes)
+  if (configuredBranch) {
+    return configuredBranch
   }
+  const remoteAndBranch = fullRef.slice(remoteRefPrefix.length)
   return remoteAndBranch.split('/').slice(1).join('/') || shortRef
 }
 

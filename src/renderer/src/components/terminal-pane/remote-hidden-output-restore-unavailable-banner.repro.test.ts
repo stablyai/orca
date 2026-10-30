@@ -1,48 +1,16 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from './pty-connection-test-environment'
 
-// Deterministic reproduction for issue2-hidden-output-skip:
-//   "[Orca skipped hidden terminal output because main recovery was unavailable.]"
-//   printed into a live remote-runtime agent pane.
-//
-// Topology modeled (renderer contract level, per reproduce-orca-remote-server-issues):
-//   remote-runtime-owned PTY ("remote:" id) -> transport.serializeBuffer is the ONLY
-//   recovery for hidden-time output (canUseMainBufferSnapshot is structurally false;
-//   the host DROPS paused/hidden stream output, so the reveal snapshot is the sole
-//   carrier of hidden bytes). The fault is injected directly below the restore
-//   pipeline at transport.serializeBuffer — the first seam that distinguishes
-//   "host recovery is available but transiently null/slow" (flood-truncated
-//   SnapshotResponse, resync window, Tailscale RTT) from true unavailability.
-//
-// Two mechanism tests pin the exact transition (they asserted the defect on main
-// and now assert its fixed form); the invariant tests (RED on main) assert the
-// contract: a host snapshot that is one retry tick away must not be declared
-// "unavailable", hidden output must be recovered, and the added tolerance stays
-// bounded — a host that never answers still banners once and stops requesting.
-//
-// Repro command:
-//   pnpm exec vitest run --config config/vitest.config.ts \
-//     src/renderer/src/components/terminal-pane/remote-hidden-output-restore-unavailable-banner.repro.test.ts
+// Remote-only recovery must tolerate transient null/slow host snapshots, recover hidden bytes and remain bounded when the host never answers; inject faults at serializeBuffer.
 
 async function flushAsyncTicks(count = 6): Promise<void> {
   for (let i = 0; i < count; i++) {
     await Promise.resolve()
   }
-}
-
-async function drainFakeTimerWork(limit = 20): Promise<void> {
-  await flushAsyncTicks(20)
-  if (!vi.isFakeTimers()) {
-    return
-  }
-  for (let iteration = 0; iteration < limit && vi.getTimerCount() > 0; iteration += 1) {
-    await vi.runOnlyPendingTimersAsync()
-    await flushAsyncTicks(20)
-  }
-  vi.clearAllTimers()
-  await flushAsyncTicks(20)
-  vi.clearAllTimers()
 }
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
@@ -78,6 +46,7 @@ type MockTransport = {
   sendInputAccepted?: ReturnType<typeof vi.fn>
   claimViewport: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
+  isConnected?: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
@@ -197,6 +166,7 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
   } as MockTransport
+  transport.isConnected = vi.fn(() => ptyId !== null)
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
   transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
@@ -242,7 +212,7 @@ function createPane(paneId: number) {
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args
-      if (data === '' || callback?.name === 'runParsedSteps') {
+      if (data.length === 0 || callback?.name === 'runParsedSteps') {
         callback?.()
       }
     }),
@@ -346,12 +316,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
             : [...current, ptyId]
       mockStoreState.ptyIdsByTabId = { ...byTab, [tabId]: next }
     }),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    clearWorktreeUnread: vi.fn(),
-    clearTerminalTabUnread: vi.fn(),
-    clearTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
@@ -375,11 +340,8 @@ function createDeferred<T>(): {
   return { promise, resolve: resolveDeferred, reject: rejectDeferred }
 }
 
-// ── Scenario identities ─────────────────────────────────────────────────────
 const REMOTE_PTY_ID = 'remote:env-1@@terminal-agent-1'
-// Overflows the renderer's hidden background queue (2MB lossy cap), dropping the
-// backlog and latching model restore — mirrors the real remote pause semantics
-// where hidden-time bytes exist ONLY in the host's authoritative buffer.
+// Overflow the 2MB client queue so hidden-time bytes survive only in the host’s buffer.
 const HIDDEN_BYTES = 'x'.repeat(2 * 1024 * 1024 + 1)
 const LIVE_AGENT_CHUNK = 'LIVE_AGENT_CHUNK\r\n'
 const HOST_SNAPSHOT_MARKER = 'HOST_SNAPSHOT_HIDDEN_AGENT_CONTENT'
@@ -433,8 +395,7 @@ async function connectHiddenRemoteAgentPane(
   }
 }
 
-// Delivers the hidden backlog, reveals the pane, and delivers one live agent
-// chunk — the exact user flow in the screenshot (agent streaming on reveal).
+// Reveal a dropped backlog while live agent output continues.
 function driveHiddenBacklogThenReveal(drive: RemotePaneDrive): void {
   drive.deliver(HIDDEN_BYTES, HIDDEN_BYTES.length)
   ;(drive.deps.isVisibleRef as { current: boolean }).current = true
@@ -454,8 +415,7 @@ async function advanceThroughNullRetryBudget(drive: RemotePaneDrive): Promise<vo
   }
 }
 
-// Generous self-heal window: lets any corrected pipeline (extended retries,
-// restore re-arm, post-abandon repaint) run to completion under fake timers.
+// Advance enough fake time for bounded re-arms, deferred repaint and retries to finish.
 async function allowSelfHealWindow(): Promise<void> {
   for (let step = 0; step < 10; step += 1) {
     await vi.advanceTimersByTimeAsync(500)
@@ -482,13 +442,10 @@ function observeFinalPaneState(drive: RemotePaneDrive): {
 }
 
 describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)', () => {
-  const originalRequestAnimationFrame = globalThis.requestAnimationFrame
-  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
-  const originalDocument = globalThis.document
-
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
+    await installTerminalTestGlobals()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
@@ -500,6 +457,8 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
+      terminalPaneStartsByPaneKey: {},
+      terminalPaneResumeOutcomesByPaneKey: {},
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_1 },
@@ -545,13 +504,11 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
         >
         return byPaneKey[entry.paneKey]?.launchConfig
       }),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       clearSleepingAgentSession: vi.fn((paneKey: string) => {
         delete (mockStoreState.sleepingAgentSessionsByPaneKey as Record<string, unknown>)[paneKey]
       }),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
-      markWorktreeUnread: vi.fn(),
       observeTerminalGitHubPullRequestLink: vi.fn(),
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
@@ -564,9 +521,8 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
       clearPaneForegroundAgent: vi.fn((paneKey: string) => {
         delete (mockStoreState.paneForegroundAgentByPaneKey as Record<string, unknown>)[paneKey]
       }),
-      markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn(),
-      markAgentCompletionPaneUnread: vi.fn()
+      markTerminalBell: vi.fn(),
+      markAgentAttentionUnread: vi.fn()
     }
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -627,32 +583,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     globalThis.cancelAnimationFrame = vi.fn()
   })
 
-  afterEach(async () => {
-    await drainFakeTimerWork()
-    vi.useRealTimers()
-    vi.restoreAllMocks()
-    if (originalRequestAnimationFrame) {
-      globalThis.requestAnimationFrame = originalRequestAnimationFrame
-    } else {
-      delete (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame })
-        .requestAnimationFrame
-    }
-    if (originalCancelAnimationFrame) {
-      globalThis.cancelAnimationFrame = originalCancelAnimationFrame
-    } else {
-      delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
-        .cancelAnimationFrame
-    }
-    if (originalDocument) {
-      globalThis.document = originalDocument
-    } else {
-      delete (globalThis as { document?: Document }).document
-    }
-    delete (globalThis as unknown as { window?: unknown }).window
-    resetAgentStartupDelayedDeliveryForTests()
-  })
-
-  // ── Mechanism (GREEN on main): pins the defective transition exactly ──────
+  afterEach(restoreTerminalTestGlobals)
 
   it('[mechanism] 4 transient-null host snapshots end the retry budget: live drains immediately, no banner, and the restore re-arms until the host answers', async () => {
     const serializeBuffer = vi.fn(async () =>
@@ -665,24 +596,21 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
 
     // Reveal triggered exactly one remote snapshot request against the owning runtime.
     expect(serializeBuffer).toHaveBeenCalledTimes(1)
-    expect(serializeBuffer).toHaveBeenNthCalledWith(1, { scrollbackRows: 5000 })
+    expect(serializeBuffer).toHaveBeenNthCalledWith(1, { scrollbackRows: 5000, repaintsPane: true })
 
     await advanceThroughNullRetryBudget(drive)
 
     const written = drive.writtenChunks()
-    // 1 initial + 3 deferred retries (50ms each), then abandonment unblocks live
-    // output — but for a remote pane it must stay quiet, not claim loss.
+    // Initial retries may abandon the blocking restore, but remote recovery must re-arm quietly rather than claim loss.
     expect(serializeBuffer).toHaveBeenCalledTimes(4)
-    expect(serializeBuffer).toHaveBeenNthCalledWith(4, { scrollbackRows: 5000 })
+    expect(serializeBuffer).toHaveBeenNthCalledWith(4, { scrollbackRows: 5000, repaintsPane: true })
     expect(written.some((data) => data.includes('LIVE_AGENT_CHUNK'))).toBe(true)
     expect(written.some((data) => data.includes(BANNER_FRAGMENT))).toBe(false)
-    // Remote pane never consulted local main recovery — the banner's "main
-    // recovery" claim is structurally impossible for this PTY.
+    // Remote panes cannot use local main’s model; require recovery through their host.
     expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
     expect((drive.transport.getPtyId as unknown as () => string | null)()).toBe(REMOTE_PTY_ID)
 
-    // Abandonment re-arms: the host answers the next request and the hidden
-    // bytes are repainted from its authoritative buffer.
+    // The re-armed request must repaint authoritative hidden bytes.
     await allowSelfHealWindow()
     expect(serializeBuffer.mock.calls.length).toBeGreaterThan(4)
     const joined = drive.writtenChunks().join('')
@@ -718,8 +646,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     expect(written.some((data) => data.includes('LIVE_AGENT_CHUNK'))).toBe(true)
     expect(written.some((data) => data.includes(BANNER_FRAGMENT))).toBe(false)
 
-    // The host's serialization completes just after the deadline; the stale
-    // generation guard discards that snapshot, so the re-arm must refetch it.
+    // A snapshot completed after deadline is stale; bounded re-arm must fetch again.
     slowSnapshot.resolve(HOST_SNAPSHOT)
     await flushAsyncTicks(20)
     expect(serializeBuffer).toHaveBeenCalledTimes(1)
@@ -731,8 +658,6 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
     drive.disposable.dispose()
   })
-
-  // ── Invariants (RED on main): the contract a fix must satisfy ─────────────
 
   it('[invariant] must not declare recovery unavailable when the host snapshot is one retry tick away', async () => {
     const serializeBuffer = vi.fn(async () =>
@@ -784,8 +709,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     drive.disposable.dispose()
   })
 
-  // Bounds the tolerance: patience must not become an unbounded snapshot poll,
-  // and a host that truly never answers still owes the user a loss signal.
+  // Bound retries for never-answering hosts and eventually disclose loss.
   it('[invariant] a permanently silent host banners once after a bounded number of re-arms and then stops requesting', async () => {
     const serializeBuffer = vi.fn(async () => null)
     const drive = await connectHiddenRemoteAgentPane(serializeBuffer)
@@ -794,8 +718,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     await flushAsyncTicks(20)
     await advanceThroughNullRetryBudget(drive)
 
-    // Live output is never held hostage by the re-arm budget, and the first
-    // abandonment stays quiet.
+    // Release live output on initial quiet abandonment without waiting for the re-arm budget.
     expect(drive.writtenChunks().join('')).toContain('LIVE_AGENT_CHUNK')
     expect(drive.writtenChunks().join('')).not.toContain(BANNER_FRAGMENT)
 

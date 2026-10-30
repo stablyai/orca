@@ -9,12 +9,7 @@ import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-min
 
 type MutableRef<T> = { current: T }
 
-/**
- * Mints (or rotates) a pairing QR. Every caller must go through this path so
- * signed-out Anywhere is refused rather than silently degraded to a local-only
- * code under the Relay label. Anywhere mint failures surface relayFailure and
- * clear any QR.
- */
+/** Mint through one guarded path: signed-out Relay cannot degrade to a mislabeled local-only QR; Relay failures clear the code. */
 export function useMobilePairingGeneration(params: {
   connectionMode: MobilePairingConnectionMode
   signedIn: boolean
@@ -28,6 +23,8 @@ export function useMobilePairingGeneration(params: {
   setPairingQrError: (value: boolean) => void
   setPairLoading: (value: boolean) => void
   setRelayMintFailure: (value: MobileRelayMintFailure | null) => void
+  /** Re-read on a Relay mint failure: a revoked session is the likeliest cause. */
+  refreshAuthStatus: () => void
 }): {
   generatePairing: (
     rotate: boolean,
@@ -47,7 +44,8 @@ export function useMobilePairingGeneration(params: {
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
-    setRelayMintFailure
+    setRelayMintFailure,
+    refreshAuthStatus
   } = params
 
   const generatePairing = useCallback(
@@ -92,10 +90,10 @@ export function useMobilePairingGeneration(params: {
             setPairingQrError(false)
             if (result.reason === 'relay_mint_failed' && result.relayFailure) {
               setRelayMintFailure(result.relayFailure)
+              refreshAuthStatus()
             } else {
               setRelayMintFailure(null)
-              // Why: IPC now forwards reason/guidance for all unavailability paths;
-              // prefer that copy over a hard-coded WebSocket-only message.
+              // Prefer host reason/guidance across all unavailable states instead of assuming WebSocket failure.
               toast.error(
                 result.guidance ??
                   translate(
@@ -132,6 +130,7 @@ export function useMobilePairingGeneration(params: {
       hasGeneratedRef,
       mountedRef,
       pairingRequestIdRef,
+      refreshAuthStatus,
       selectedAddress,
       setPairLoading,
       setPairQrDataUrl,

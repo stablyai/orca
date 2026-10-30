@@ -1,29 +1,24 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { safeStorage } from 'electron'
-import { writeSecureFile } from '../../shared/secure-file'
+import { guardedSafeStorage as safeStorage } from '../host/safe-storage-availability'
+import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
   PLUGIN_STORAGE_TOTAL_MAX_BYTES
-} from '../../shared/plugins/plugin-host-api'
+} from '../../shared/plugins/workers/plugin-host-api'
 import { pluginDataDir } from './plugin-storage-store'
 
-/**
- * Per-plugin secret vault, following the repo's safeStorage-backed
- * credential-file pattern (versioned envelope + base64 ciphertext via the
- * atomic secure-file writer). No plaintext fallback: when OS encryption is
- * unavailable, writes fail loudly instead of silently downgrading — plugin
- * secrets are API-token grade.
- */
+// SafeStorage vault writes fail without OS encryption; never fall back to plaintext.
 
 type PersistedSecretsFile = {
   version: 1
   format: 'electron-safe-storage-v1'
-  /** key → base64 ciphertext of the secret value. */
   ciphertexts: Record<string, string>
 }
 
 export type PluginSecretsResult<T> = { ok: true; value: T } | { ok: false; error: string }
+
+const UNREADABLE_VAULT_ERROR = 'secret vault exists but could not be read; refusing to overwrite it'
 
 export class PluginSecretsStore {
   private readonly filePath: string
@@ -32,7 +27,8 @@ export class PluginSecretsStore {
     this.filePath = join(pluginDataDir(pluginsDataDir, qualifiedKey), 'secrets.json.enc')
   }
 
-  private read(): PersistedSecretsFile {
+  /** Null means unreadable, never empty. */
+  private read(): PersistedSecretsFile | null {
     const empty: PersistedSecretsFile = {
       version: 1,
       format: 'electron-safe-storage-v1',
@@ -56,7 +52,11 @@ export class PluginSecretsStore {
       ) {
         return parsed
       }
-    } catch {
+    } catch (error) {
+      // Read denial cannot prove emptiness; replacing the vault would silently drop every other secret.
+      if (isUnreadableError(error)) {
+        return null
+      }
       // Corrupt vaults read as empty; set() rewrites a valid file.
     }
     return empty
@@ -64,6 +64,9 @@ export class PluginSecretsStore {
 
   get(key: string): PluginSecretsResult<string | null> {
     const file = this.read()
+    if (!file) {
+      return { ok: false, error: UNREADABLE_VAULT_ERROR }
+    }
     const ciphertext = file.ciphertexts[key]
     if (typeof ciphertext !== 'string') {
       return { ok: true, value: null }
@@ -83,6 +86,9 @@ export class PluginSecretsStore {
       return { ok: false, error: 'OS-backed encryption is unavailable; secret not stored' }
     }
     const file = this.read()
+    if (!file) {
+      return { ok: false, error: UNREADABLE_VAULT_ERROR }
+    }
     if (
       !Object.hasOwn(file.ciphertexts, key) &&
       Object.keys(file.ciphertexts).length >= PLUGIN_STORAGE_KEY_LIMIT
@@ -100,6 +106,10 @@ export class PluginSecretsStore {
 
   delete(key: string): void {
     const file = this.read()
+    if (!file) {
+      // Rewriting what we could not read would drop every other secret in the vault.
+      return
+    }
     if (Object.hasOwn(file.ciphertexts, key)) {
       delete file.ciphertexts[key]
       writeSecureFile(this.filePath, JSON.stringify(file, null, 2))

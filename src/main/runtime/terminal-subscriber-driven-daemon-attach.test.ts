@@ -1,18 +1,6 @@
-/**
- * Subscriber-driven daemon attach (never-activated tab ingestion).
- *
- * Invariant: on a remote-server host, a daemon-backed terminal whose tab was
- * never activated in the host UI must still stream to paired clients and be
- * readable via `terminal read`. The daemon only emits data for sessions this
- * app has ATTACHED, and attach historically happened only via renderer pane
- * mount — so a never-activated tab produced blank paired panes and empty CLI
- * tails while the PTY was alive.
- *
- * Harness: real OrcaRuntimeService + real TERMINAL_METHODS multiplex handler,
- * with an injected pty controller modeling a daemon provider whose data events
- * are deliverable ONLY after attach(id). No window is ever attached — every
- * assertion also holds for headless `orca serve`.
- */
+import './rpc/unused-default-rpc-methods.test-fixture'
+/** Paired subscriptions must attach never-activated daemon sessions so headless terminal read/streams receive bytes.
+ * Exercise real runtime/multiplex with controller data gated on attach; no renderer is present. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -37,8 +25,10 @@ type RuntimeInternals = {
   ) => unknown
   issuePtyHandle: (pty: unknown) => string
   headlessTerminals: Map<string, unknown>
-  subscriberDrivenProviderAttachesByPtyId: Map<string, Promise<boolean>>
-  subscriberDrivenProviderAttachInventoryWaiters: Set<string>
+  terminalViewSubscribers: {
+    hasPendingProviderAttach: (ptyId: string) => boolean
+    attachInventoryWaiterIds: () => string[]
+  }
   refreshPtyWorktreeRecordsWithControllerInventory: (
     worktrees: [],
     targetWorktreeId: string | null
@@ -420,7 +410,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     sendSubscribe(harness, 1, handle)
     await waitForSubscribed(harness, 1)
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    expect(internals(runtime).subscriberDrivenProviderAttachesByPtyId.has(PTY_ID)).toBe(true)
+    expect(internals(runtime).terminalViewSubscribers.hasPendingProviderAttach(PTY_ID)).toBe(true)
     expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(true)
     expect(model.emitData(PTY_ID, 'before inventory\r\n')).toBe(false)
 
@@ -428,13 +418,13 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
     await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
     expect(model.attachCalls).toEqual([PTY_ID])
-    expect([...internals(runtime).subscriberDrivenProviderAttachInventoryWaiters]).toEqual([PTY_ID])
+    expect(internals(runtime).terminalViewSubscribers.attachInventoryWaiterIds()).toEqual([PTY_ID])
     refuseFirstAttach()
 
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
     await vi.waitFor(() =>
-      expect(internals(runtime).subscriberDrivenProviderAttachInventoryWaiters.has(PTY_ID)).toBe(
-        false
+      expect(internals(runtime).terminalViewSubscribers.attachInventoryWaiterIds()).not.toContain(
+        PTY_ID
       )
     )
     expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)

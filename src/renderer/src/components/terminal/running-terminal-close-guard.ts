@@ -1,9 +1,9 @@
 import { useAppStore } from '@/store'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
+import { probePtyRunningWork } from './pty-running-work-probe'
 
 export type RunningTerminalCloseGuardOptions = {
   force?: boolean
@@ -14,16 +14,10 @@ export type RunningTerminalCloseGuardOptions = {
   skipRunningProcessConfirm?: boolean
 }
 
-/** Upper bound on how long a close may wait on the probe before it asks instead. A remote
- *  inspect RPC can hang for its full 15s timeout, and an X button that looks dead for 15s
- *  is the same class of bug as one that never asks — but an unanswered probe is not
- *  evidence of an idle shell, so the timeout raises the prompt rather than killing a
- *  possibly-running remote command (#10142). */
+/** Bound remote probe waits, then prompt: silence is unknown and must not authorize killing work (#10142). */
 export const RUNNING_CLOSE_PROBE_TIMEOUT_MS = 4_000
 
-/** Whether this close is an interactive user action that should stop and ask before
- *  killing a live child process. Lifecycle echoes, bulk closes, CLI/RPC closes and the
- *  post-confirmation re-entry are all excluded. */
+/** Only interactive closes ask; lifecycle, bulk, CLI/RPC and confirmed re-entry skip this guard. */
 export function shouldConfirmRunningTerminalClose(
   options?: RunningTerminalCloseGuardOptions
 ): boolean {
@@ -38,12 +32,8 @@ export function shouldConfirmRunningTerminalClose(
   return isUserReason(options?.reason) && isUserReason(options?.hostCloseReason)
 }
 
-/** Every PTY the tab could still own. `ptyIdsByTabId` is the liveness map the rest of the
- *  app reads, but a mounting pane is bound into the layout before the map catches up, and
- *  the store's own teardown collector unions both for exactly that reason — reading only
- *  the map would let a close slip through the window with no prompt. A stale id costs
- *  nothing: its probe fails and the guard falls open. */
-function collectTabPtyIds(
+/** Union liveness and layout PTYs because layout binds first during mount; stale handles fail open. */
+export function collectTabPtyIds(
   state: Pick<AppState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
   terminalTabId: string
 ): string[] {
@@ -62,10 +52,6 @@ function collectTabPtyIds(
   return [...ptyIds]
 }
 
-/**
- * Routes an interactive terminal-tab close through the running-process confirmation.
- * Closes immediately when nothing is running, so idle tabs keep today's behavior.
- */
 export function guardRunningTerminalClose(params: {
   terminalTabId: string
   tabLabel: string
@@ -76,16 +62,13 @@ export function guardRunningTerminalClose(params: {
   const state = useAppStore.getState()
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId)
-  // Why: no PTY at all means there is nothing to probe (parked/hibernated tab, or a
-  // teardown that already cleared both maps), and the opt-out setting means the answer is
-  // already known. Both keep the close fully synchronous.
+  // Opt-out and no-PTY closes stay synchronous.
   if (ptyIds.length === 0 || settings?.skipCloseTerminalWithRunningProcessConfirm === true) {
     onClose()
     return
   }
 
-  // Why: the timeout, the probe result and the error path race to decide this close, so the
-  // first one to land owns it instead of trusting those races to stay mutually exclusive.
+  // Probe, timeout, and errors race; only the first decision may own the close.
   let decided = false
   const closeNow = (): void => {
     if (decided) {
@@ -106,49 +89,32 @@ export function guardRunningTerminalClose(params: {
       onConfirm: onClose,
       ...(onCancel ? { onCancel } : {})
     })
-    // Why: only once the prompt is actually up — if either call above throws, the close must
-    // still be free to fall through and happen.
+    // Claim ownership only once the prompt opens so thrown lookups can still fall through.
     decided = true
   }
 
-  const probeTimeout = setTimeout(() => {
-    try {
-      // Why: a probe that has not answered yet is unknown, not idle. Ask, treating every pty
-      // as a candidate, so a degraded relay costs a click instead of a killed remote command.
-      confirmClose(ptyIds)
-    } catch {
-      closeNow()
-    }
-  }, RUNNING_CLOSE_PROBE_TIMEOUT_MS)
-
-  void Promise.allSettled(ptyIds.map((ptyId) => inspectRuntimeTerminalProcess(settings, ptyId)))
-    .then((results) => {
-      clearTimeout(probeTimeout)
+  void probePtyRunningWork(ptyIds, { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
+    .then((probes) => {
       if (decided) {
         return
       }
-      // Why: fail open on an *answered* probe, matching the Cmd+W pane path — a rejection
-      // (wedged relay, legacy provider) or a stale remote handle is not evidence of a live
-      // child, and a close button that silently does nothing is worse than closing a busy tab.
-      const busyPtyIds = ptyIds.filter((_, index) => {
-        const result = results[index]
-        return (
-          result?.status === 'fulfilled' &&
-          result.value.hasChildProcesses &&
-          result.value.unavailable !== true
-        )
-      })
+      // Unanswered probes are unknown; prompt for every candidate rather than kill uninspected remote work.
+      if (probes.some((probe) => probe.timedOut)) {
+        confirmClose(ptyIds)
+        return
+      }
+      // Answered probe failures/stale handles fail open like Cmd+W; they provide no live-child evidence and must not disable closing.
+      const busyPtyIds = probes
+        .filter((probe) => probe.verdict === 'live')
+        .map((probe) => probe.ptyId)
       if (busyPtyIds.length === 0) {
         closeNow()
         return
       }
       confirmClose(busyPtyIds)
     })
-    // Why: allSettled never rejects, so this only fires when the decision above throws (a
-    // copy-kind lookup, a store subscriber). Without it the tab would silently never close
-    // and the user would get no feedback at all; the pane path it replaced had this catch.
+    // Probe never rejects, but decision callbacks can throw; retain the pane path’s feedback/fallback instead of silently blocking close.
     .catch(() => {
-      clearTimeout(probeTimeout)
       closeNow()
     })
 }

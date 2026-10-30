@@ -88,8 +88,7 @@ describe('listClaudeSubagentSessions', () => {
       'Check latest news',
       'Map the scanner internals'
     ])
-    // No task notifications in the parent and freshly written transcripts:
-    // both count as still running.
+    // Fresh transcripts without terminal notifications use the recency fallback.
     expect(result.sessions.map((session) => session.subagent)).toEqual([
       { parentSessionId: 'parent-session', agentType: 'general-purpose', status: 'running' },
       { parentSessionId: 'parent-session', agentType: 'Explore', status: 'running' }
@@ -142,7 +141,6 @@ describe('listClaudeSubagentSessions', () => {
         message: { role: 'user', content: 'Parent prompt' }
       },
       {
-        // Interim notification: superseded by the terminal one below.
         type: 'user',
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:00:30.000Z',
@@ -163,7 +161,6 @@ describe('listClaudeSubagentSessions', () => {
         }
       },
       {
-        // queue-operation records carry the notification as a plain string.
         type: 'queue-operation',
         operation: 'enqueue',
         sessionId: 'parent-session',
@@ -172,7 +169,7 @@ describe('listClaudeSubagentSessions', () => {
           '<task-notification>\n<task-id>crashed</task-id>\n<status>failed</status>\n</task-notification>'
       },
       {
-        // Synchronous Tasks finish with a toolUseResult record, no notification.
+        // Synchronous completion arrives as toolUseResult rather than a notification.
         type: 'user',
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:03:00.000Z',
@@ -191,8 +188,6 @@ describe('listClaudeSubagentSessions', () => {
         timestamp: '2026-07-05T10:00:10.000Z'
       })
     }
-    // A transcript silent for an hour with no terminal notification has no
-    // trustworthy status.
     const staleTime = new Date(Date.now() - 60 * 60_000)
     await utimes(join(subagentsDir, 'agent-stale.jsonl'), staleTime, staleTime)
 
@@ -218,10 +213,7 @@ describe('listClaudeSubagentSessions', () => {
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
 
-    // A real notification carries <tool-use-id>/<output-file> before <status>,
-    // pushing <status> well past the 96-char title cap; delivered as a user
-    // message it must still be read untruncated so the terminal status wins
-    // over the transcript-recency fallback.
+    // Put status beyond the title cap to catch accidental notification truncation.
     const notification =
       '<task-notification>\n<task-id>bigtask</task-id>\n' +
       '<tool-use-id>toolu_01HB57dwUE6hQVK6Mh8jVFHA</tool-use-id>\n' +
@@ -245,8 +237,7 @@ describe('listClaudeSubagentSessions', () => {
         message: { role: 'user', content: notification }
       }
     ])
-    // Freshly written, so a dropped status would fall back to 'running' — the
-    // assertion below only holds when the notification is parsed untruncated.
+    // Fresh mtime would mask a dropped terminal status as running.
     await writeSubagentTranscript({
       subagentsDir,
       agentId: 'bigtask',
@@ -278,8 +269,6 @@ describe('listClaudeSubagentSessions', () => {
         }
       },
       {
-        // A user prompt that merely quotes an earlier notification must not
-        // supersede the real terminal status recorded above.
         type: 'user',
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:01:00.000Z',
@@ -313,9 +302,7 @@ describe('listClaudeSubagentSessions', () => {
 
     await writeJsonlFile(parentFilePath, [
       {
-        // A sync-Task completion: the terminal status lives in toolUseResult,
-        // but the subagent's own report text quotes <task-notification>, so the
-        // raw-line prefilter must not misroute it into the notification branch.
+        // Quoted notification text must not divert this synchronous completion from toolUseResult parsing.
         type: 'user',
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:03:00.000Z',
@@ -332,7 +319,7 @@ describe('listClaudeSubagentSessions', () => {
         toolUseResult: { status: 'completed', agentId: 'reporter', agentType: 'Explore' }
       }
     ])
-    // Stale, so a dropped status would fall back to null, not 'completed'.
+    // Stale mtime exposes a dropped completion as unknown.
     const staleTime = new Date(Date.now() - 60 * 60_000)
     await writeSubagentTranscript({
       subagentsDir,
@@ -354,8 +341,7 @@ describe('listClaudeSubagentSessions', () => {
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
 
-    // A transcript with no sessionId record: the parser falls back to the
-    // subagent's own filename-derived id, so parentSessionId must not use it.
+    // Missing sessionId must not turn the subagent filename into its parent ID.
     await writeJsonlFile(join(subagentsDir, 'agent-nosession.jsonl'), [
       {
         type: 'user',

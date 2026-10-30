@@ -1,3 +1,6 @@
+import { useWorkspaceReferenceDetails } from './use-workspace-reference-details'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from './workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
@@ -32,17 +35,29 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   })
 
   const showStatus = foundation.cardProps.includes('status')
-  const showIssue = foundation.cardProps.includes('issue')
-  const showLinearIssue = foundation.cardProps.includes('linear-issue')
-  const showJiraIssue = foundation.cardProps.includes('jira-issue')
-  const showPR = foundation.cardProps.includes('pr')
-  const showAutomation = foundation.cardProps.includes('automation')
-  const showCli = foundation.cardProps.includes('cli')
-  const showComment = foundation.cardProps.includes('comment')
-  const showPorts = foundation.cardProps.includes('ports')
+  const {
+    issue: showIssue,
+    linearIssue: showLinearIssue,
+    jiraIssue: showJiraIssue,
+    pr: showPR,
+    automation: showAutomation,
+    cli: showCli,
+    comment: showComment,
+    ports: showPorts
+  } = foundation.cardDetails
   const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
+  const referenceDetails = useWorkspaceReferenceDetails(
+    worktree,
+    repo,
+    review.prDisplay,
+    hoverDetailsOpen
+  )
+  const reviewChecks = summarizeWorkspaceReviewChecks(
+    getWorkspaceAttachments(worktree),
+    referenceDetails
+  )
 
   useWorktreeCardLifecycleEffects({
     worktree,
@@ -63,6 +78,8 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     issueCacheKey: review.issueCacheKey,
     fetchIssue: foundation.fetchIssue,
     showLinearIssue,
+    linearSourceContext: review.linearSourceContext,
+    linearWorkspaceId: review.linearWorkspaceId,
     fetchLinearIssue: foundation.fetchLinearIssue
   })
 
@@ -74,10 +91,12 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     isActive: props.isActive,
     activationRowKey: props.activationRowKey,
     onActivate: props.onActivate,
+    onWorktreeCardClick: props.onWorktreeCardClick,
     onImmediateActivate: props.onImmediateActivate,
     isDeleting: linked.isDeleting,
     isSshDisconnected: foundation.isSshDisconnected,
     updateWorktreeMeta: foundation.updateWorktreeMeta,
+    setWorkspaceUnreadByUser: foundation.setWorkspaceUnreadByUser,
     openModal: foundation.openModal
   })
 
@@ -100,8 +119,6 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     onCardDragEnd: props.onCardDragEnd,
     onContextMenuSelect: props.onContextMenuSelect,
     folderWorkspaceId: review.folderWorkspaceId,
-    deleteFolderWorkspace: foundation.deleteFolderWorkspace,
-    setActiveWorktree: foundation.setActiveWorktree,
     setShowRenameErrorDialog: foundation.setShowRenameErrorDialog,
     isDeleting: linked.isDeleting,
     showDeleteQuickAction
@@ -129,9 +146,9 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     linkedBitbucketPR: review.linkedBitbucketPR,
     linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
     linkedGiteaPR: review.linkedGiteaPR,
-    cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle,
     compactCards: foundation.compactCards,
+    cardDetails: foundation.cardDetails,
     agentActivityDisplayMode: foundation.agentActivityDisplayMode,
     workspacePorts: foundation.workspacePorts,
     openTaskPage: foundation.openTaskPage,
@@ -145,6 +162,8 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     ...review,
     ...linked,
     detailsHoverControl,
+    referenceDetails,
+    reviewChecks,
     showStatus,
     showIssue,
     showLinearIssue,

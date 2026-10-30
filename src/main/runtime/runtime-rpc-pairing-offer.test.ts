@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,6 +7,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { STATUS_METHODS } from './rpc/methods/status'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -28,6 +30,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -54,6 +57,7 @@ describe('OrcaRuntimeRpcServer', () => {
 
   it('reports why pairing is unavailable before the WebSocket listener is ready', () => {
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
       enableWebSocket: true,
@@ -71,6 +75,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     mkdirSync(join(userDataPath, E2EE_KEYPAIR_FILENAME))
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
@@ -94,6 +99,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('reports a registry persistence failure without retaining a ghost credential', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
@@ -119,6 +125,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('rejects wildcard advertised addresses before minting a device credential', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
@@ -145,6 +152,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -175,6 +183,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -202,6 +211,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -245,6 +255,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -273,5 +284,43 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
+  })
+})
+
+describe('host descriptor publication', () => {
+  it('status.get and runtime offers carry the same descriptor, stable across restarts', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const start = async () => {
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({
+        methods: [],
+        runtime,
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0
+      })
+      await server.start()
+      return { runtime, server }
+    }
+    const statusOf = async (runtime: OrcaRuntimeService) =>
+      (await STATUS_METHODS[0].handler(undefined, { runtime })).hostDescriptor
+    const first = await start()
+    const descriptor = await statusOf(first.runtime)
+    expect(descriptor?.installationId).toBeTruthy()
+    const runtimeOffer = first.server.createPairingOffer({ address: '127.0.0.1' })
+    const mobileOffer = first.server.createPairingOffer({ address: '127.0.0.1', scope: 'mobile' })
+    expect(
+      runtimeOffer.available && parsePairingCode(runtimeOffer.pairingUrl)?.hostDescriptor
+    ).toEqual(descriptor)
+    expect(mobileOffer.available && parsePairingCode(mobileOffer.pairingUrl)).toBeTruthy()
+    expect(
+      mobileOffer.available && parsePairingCode(mobileOffer.pairingUrl)?.hostDescriptor
+    ).toBeUndefined()
+    await first.server.stop()
+
+    const second = await start()
+    expect(await statusOf(second.runtime)).toEqual(descriptor)
+    await second.server.stop()
+    expect(await statusOf(second.runtime)).toBeUndefined()
   })
 })

@@ -1,22 +1,7 @@
-/**
- * Real-zsh proof that a wrapped pane resolves the user's zsh config to exactly
- * what an unwrapped pane would, for every odd or hostile `.zshenv` shape.
- *
- * These cases were previously asserted one expected value at a time against
- * `ORCA_ORIG_ZDOTDIR` — the output of Orca's own shell-side ZDOTDIR discovery.
- * That discovery is gone: the wrapper hands ZDOTDIR back on its first lines and
- * zsh resolves the rest natively, so there is no Orca-computed value left to
- * assert on. The contract those tests were really protecting is the one below,
- * and stated as an equivalence it is stricter — it pins the wrapped pane to
- * whatever the host's own zsh does, including on hosts where that differs,
- * rather than to a value hardcoded here.
- *
- * Each case runs twice on a real PTY, once wrapped and once not, and the two
- * must agree on where the config came from and what it exported.
- */
+/** Compare wrapped and unwrapped PTYs against the host's own config resolution, including unusual .zshenv files. */
 import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getShellLaunchConfig } from './providers/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
@@ -25,13 +10,8 @@ import { hasZsh, makeZshHome, runZshPty, ZSH_PATH } from './zsh-startup-hook-pty
 
 const itWithZsh = hasZsh ? it : it.skip
 
-/** What both arms must agree on: where config came from, and what it exported. */
 const REPORTED = ['ZDOTDIR', 'ORCA_TEST_MARK', 'ORCA_TEST_FROM_ZSHRC', 'PATH'] as const
 
-/**
- * Every case writes `$HOME/.zshenv`. `.zshrc` is written into whichever dir the
- * case points ZDOTDIR at, so "did the right .zshrc load" is observable.
- */
 type ConfigCase = {
   name: string
   /** Builds `$HOME/.zshenv` and any extra files. Returns the dir holding .zshrc. */
@@ -209,9 +189,7 @@ const CASES: ConfigCase[] = [
   {
     name: 'a .zshenv using typeset -U path at top level',
     setup: (home) => {
-      // Why this one matters: `path` is a top-level-only construct, so it also
-      // proves the user's .zshenv is sourced in the wrapper's own scope rather
-      // than inside a function or subshell.
+      // A top-level-only path declaration proves .zshenv was not sourced inside a function or subshell.
       writeFileSync(
         join(home, '.zshenv'),
         'typeset -U path\npath=(/usr/bin /bin /usr/bin)\nexport ORCA_TEST_MARK=uniqpath\n'
@@ -249,11 +227,7 @@ function wrappedEnv(home: string): Record<string, string> {
     emitsStartupIdentity: false
   })
   const launch = getShellLaunchConfig(ZSH_PATH, features)
-  // Why ORCA_ORIG_ZDOTDIR is dropped rather than pinned to the sandbox home:
-  // these cases are about a user who has no inherited ZDOTDIR, so the pane must
-  // resolve purely from HOME — and Orca must not invent a ZDOTDIR for it. The
-  // launch config computes this one from the real process env, which would
-  // otherwise leak the developer's own ZDOTDIR into the run.
+  // Remove the real inherited config directory so these cases resolve only from the sandbox HOME.
   const { ORCA_ORIG_ZDOTDIR: _dropped, ...env } = launch.env
   return {
     PATH: '/usr/bin:/bin',
@@ -299,12 +273,6 @@ describe.skipIf(process.platform === 'win32')(
   }
 )
 
-/**
- * Regressions the four-file wrapper was built to fix, re-pinned against the one
- * that replaced it. Each names the change that introduced the behaviour, because
- * "the machinery is gone" is only a good answer if the reason it existed is gone
- * with it.
- */
 describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was built for', () => {
   let userDataPath = ''
   let previousUserDataPath: string | undefined
@@ -324,14 +292,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  /**
-   * Generates the tree, then points ZDOTDIR at it under a different root.
-   *
-   * Why the full spawn env and not a bare ZDOTDIR: "the user's .zshrc loaded" is
-   * equally true of a pane that never read the wrapper at all, so the run has to
-   * be able to show the wrapper ran. ORCA_SHELL_FEATURES coming back consumed is
-   * that proof — only the wrapper's own .zshenv unsets it.
-   */
+  /** Use full launch env so consumed feature state proves the relocated wrapper actually ran. */
   async function runFromRelocatedRoot(home: string, movedRoot: string) {
     const env = wrappedEnv(home)
     const relocated = env.ZDOTDIR.replace(userDataPath, movedRoot)
@@ -354,17 +315,12 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
   itWithZsh(
     'loads the user .zshrc when the wrapper is sourced from a relocated path (#8003)',
     async () => {
-      // Why relocation: on Windows+WSL the wrappers are generated with a Windows
-      // path but sourced via /mnt/c, so the generation-time path is absent at
-      // runtime. The old wrapper baked that path in as a ZDOTDIR fallback and had
-      // to re-derive the real one from `%x` to avoid using it; this one bakes no
-      // path, so the split cannot arise. Renaming the root reproduces it.
+      // Relocate to model Windows-generated wrappers sourced through a different WSL /mnt path.
       const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
       try {
         const { values } = await runFromRelocatedRoot(home, `${userDataPath}-wsl-view`)
 
         expect(values.ORCA_TEST_FROM_ZSHRC).toBe('1')
-        // The wrapper really was read from the relocated path.
         expect(values.ORCA_SHELL_FEATURES).toBe('UNSET')
         expect(values.HISTFILE).toBe(join(home, 'scoped_history'))
       } finally {
@@ -374,17 +330,13 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
   )
 
   itWithZsh('loads the user .zshrc from a non-ASCII wrapper path (#8003)', async () => {
-    // Why non-ASCII: a Korean Windows login puts UTF-8 bytes in zsh's 0x84-0x9D
-    // token range, and zsh corrupts environment values containing them while
-    // processing startup files. That corrupted the env-imported $ZDOTDIR, the
-    // wrapper's self-check failed, and it fell back to the unusable baked path —
-    // a bare prompt with none of the user's config. Nothing is baked now, and a
-    // value this wrapper cannot use degrades to $HOME, where zsh itself looks.
+    // Korean UTF-8 bytes overlap zsh's token range and can corrupt env-imported ZDOTDIR during startup.
     const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
     try {
+      // A unique destination avoids collisions with directories left by killed test runs.
       const { values } = await runFromRelocatedRoot(
         home,
-        join(dirname(userDataPath), '홍길동-wsl-view')
+        join(dirname(userDataPath), `홍길동-${basename(userDataPath)}`)
       )
 
       expect(values.ORCA_TEST_FROM_ZSHRC).toBe('1')
@@ -396,10 +348,6 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
   })
 
   itWithZsh('gives the user’s startup files their own ZDOTDIR while they run (#4667)', async () => {
-    // Why it mattered: user startup files resolve plugin and theme paths from
-    // $ZDOTDIR, so sourcing them with Orca's dir in place sent those lookups into
-    // the wrapper. The old wrapper swapped ZDOTDIR around each source; this one
-    // never takes it away, so each file sees what it would see unwrapped.
     const home = makeZshHome({})
     const xdg = join(home, '.config', 'zsh')
     mkdirSync(xdg, { recursive: true })
@@ -420,13 +368,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
   })
 
   itWithZsh('refuses an inherited ZDOTDIR that is an Orca wrapper dir (#15258)', async () => {
-    // Why the shell checks this and not only Node: the launch config sets
-    // ORCA_ORIG_ZDOTDIR when it resolved a usable dir, but a pane also inherits
-    // its parent's environment, so a stale value written by an older build can
-    // arrive on its own — a route the Node-side check never sees. Handing that
-    // back would point ZDOTDIR at a wrapper dir, which is the self-loop the
-    // ownership check exists to prevent. Identification stays positive: a stamped
-    // marker file, or Orca's own path shape for wrappers older builds wrote.
+    // Older parents can supply stale ORCA_ORIG_ZDOTDIR without passing through Node's ownership check.
     const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
     const foreign = join(home, 'other-terminal', 'zsh')
     mkdirSync(foreign, { recursive: true })
@@ -438,7 +380,6 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
         report: ['ZDOTDIR', 'ORCA_TEST_FROM_ZSHRC', 'ORCA_TEST_FROM_WRAPPER_DIR']
       })
 
-      // Rejected, so zsh falls back to $HOME and the user's own config loads.
       expect(values.ZDOTDIR).toBe('UNSET')
       expect(values.ORCA_TEST_FROM_ZSHRC).toBe('1')
       expect(values.ORCA_TEST_FROM_WRAPPER_DIR).toBe('UNSET')
@@ -448,10 +389,6 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
   })
 
   itWithZsh('leaves a nested Orca nothing of its own to inherit (#11044, #11146)', async () => {
-    // Why this closes #11044's plain shape rather than repairing it: that bug was
-    // a nested zsh inheriting Orca's ZDOTDIR, so /etc/zshrc derived HISTFILE
-    // inside the wrapper dir. A pane can no longer hand any child a ZDOTDIR that
-    // is Orca's, because it does not have one itself past the first few lines.
     const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
     try {
       const { values } = await runZshPty({
@@ -463,9 +400,6 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
         report: ['ORCA_CHILD_ENV', 'ORCA_CHILD_ZDOTDIR']
       })
 
-      // Neither channel survives into a child, and no ZDOTDIR of Orca's does.
-      // `UNSET` here is the probe's rendering of an empty capture, i.e. `env`
-      // printed no ZDOTDIR line at all.
       expect(values.ORCA_CHILD_ENV).toBe('0')
       expect(values.ORCA_CHILD_ZDOTDIR).toBe('UNSET')
     } finally {

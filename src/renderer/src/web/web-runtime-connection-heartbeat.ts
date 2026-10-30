@@ -69,9 +69,9 @@ export class WebRuntimeConnectionHeartbeat {
       return
     }
     if (this.heartbeatProbeSentAt === null && now - this.lastInboundFrameAt >= HEARTBEAT_IDLE_MS) {
-      if (this.options.sendProbe()) {
-        this.heartbeatProbeSentAt = now
-      }
+      // Arm before sending even if it fails; otherwise saturated/half-open sockets evade the dead-link deadline (#17817, #17823).
+      this.heartbeatProbeSentAt = now
+      this.options.sendProbe()
     }
   }
 

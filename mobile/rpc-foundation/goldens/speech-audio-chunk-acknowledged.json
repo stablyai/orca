@@ -1,0 +1,84 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "speech.audio-chunk",
+  "family": "speech.dictation-chunk",
+  "namedDeltas": [],
+  "values": {
+    "02cebe6f0062": {
+      "failures": [],
+      "pending": 0
+    },
+    "5133fafc8626": {
+      "name": "speech.dictation.chunk#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.chunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "audioBase64": "ACVKb5S53gM=",
+            "dictationId": "dictation-1",
+            "sampleRate": 16000,
+            "seq": 0
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "received": true
+          }
+        }
+      }
+    },
+    "70f6f0244686": {
+      "name": "speech.dictation.chunk#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.chunk\",\"params\":{\"dictationId\":\"dictation-1\",\"audioBase64\":\"ACVKb5S53gM=\",\"sampleRate\":16000,\"seq\":0}}"
+    },
+    "bc459c132276": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "status": "fulfilled",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ]
+    }
+  },
+  "recording": {
+    "scenario": "speech-audio-chunk-acknowledged",
+    "checkpoints": [
+      {
+        "id": "acknowledged",
+        "observation": {
+          "sender": ["5133fafc8626"],
+          "payloads": ["70f6f0244686"],
+          "settlements": {
+            "chunk": "bc459c132276"
+          },
+          "state": "02cebe6f0062",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

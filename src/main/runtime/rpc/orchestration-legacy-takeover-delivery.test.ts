@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -51,6 +52,7 @@ function createHarness(): Harness {
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
   const task = before.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
@@ -161,7 +163,7 @@ function commitLegacyCoordinatorPrincipal(harness: Harness): { id: string } {
   return principal
 }
 
-// Why: assert the takeover landed here, so a broken bind fails at cause instead of two tests later.
+// Check binding here so failure names its cause rather than surfacing in later mail assertions.
 function takeOverWithCommittedPrincipal(harness: Harness): void {
   commitLegacyCoordinatorPrincipal(harness)
   const bound = harness.db.bindRun({
@@ -183,15 +185,12 @@ describe('legacy coordinator delivery targets after takeover', () => {
     const harness = createHarness()
     takeOverWithCommittedPrincipal(harness)
 
-    // Old handle still routable (retained).
     expect(
       harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, COORDINATOR_HANDLE)
     ).toBe(true)
-    // New handle also routable (current binding).
     expect(
       harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, CURRENT_COORDINATOR_HANDLE)
     ).toBe(true)
-    // Unknown handle not routable.
     expect(harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, 'term_unknown')).toBe(
       false
     )
@@ -201,8 +200,7 @@ describe('legacy coordinator delivery targets after takeover', () => {
     const harness = createHarness()
     takeOverWithCommittedPrincipal(harness)
 
-    // The replacement coordinator is a delivery target, but must never become fence jurisdiction:
-    // fencing it would strand the Run's own owner behind unusable takeover guidance.
+    // Replacement coordinators receive mail but must not enter fence jurisdiction, which would strand the Run owner.
     expect(
       harness.db.isLegacyCoordinatorHandle(harness.adoptedRunId, CURRENT_COORDINATOR_HANDLE)
     ).toBe(false)
@@ -302,10 +300,7 @@ describe('legacy coordinator delivery targets after takeover', () => {
   })
 })
 
-// Why: bindRun only revokes a committed principal when it takes over or the legacy work is settled,
-// so a coordinator restarting inside the legacy pane rebinds the Run while the principal stays
-// committed. Delivery still routes legacy_direct to the addressed handle there, and no reader can
-// see that mailbox, so the permit must refuse rather than accept mail nobody will ever read.
+// Restart within the legacy pane can rebind while its principal stays committed; refuse legacy_direct mail that neither contract can read.
 describe('legacy coordinator delivery targets without a takeover', () => {
   function rebindLegacyPaneWithoutTakeover(harness: Harness): { principalId: string } {
     const principal = commitLegacyCoordinatorPrincipal(harness)
@@ -373,7 +368,6 @@ describe('legacy coordinator delivery targets without a takeover', () => {
     )
 
     expect(response).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
-    // Nothing was written to a mailbox that neither contract can read.
     expect(harness.db.getUnreadMessages(REBOUND_COORDINATOR_HANDLE)).toHaveLength(0)
     expect(harness.db.getLegacyMailHistory({ principalId }).messages).toHaveLength(0)
   })

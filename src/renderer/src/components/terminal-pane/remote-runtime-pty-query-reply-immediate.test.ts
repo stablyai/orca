@@ -1,10 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
 
-// Regression for #7329: terminal query replies must NOT sit behind the remote
-// input debounce (REMOTE_TERMINAL_INPUT_FLUSH_MS). transport.sendInputImmediate
-// sends without arming the 8ms timer, so a reply beats the querying program's
-// raw-mode read window; transport.sendInput stays debounced for typed input.
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+
+// Replies bypass remote debounce to meet raw-mode read windows; typed input keeps ordinary batching (#7329).
 
 describe('remote transport sendInputImmediate (#7329)', () => {
   const runtimeCall = vi.fn()
@@ -40,11 +50,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   function terminalSendCalls(): unknown[] {
@@ -71,15 +77,14 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
       // Typed input: debounced — nothing sent before the 8ms flush.
-      expect(transport.sendInput('yes')).toBe(true)
+      expect(transport.sendInput('yes', 'driving')).toBe(true)
       expect(terminalSendCalls()).toEqual([])
 
       // Query reply (OSC 11 background color): sent immediately, no timer.
       expect(transport.sendInputImmediate('\x1b]11;rgb:2828/2c2c/3434\x1b\\')).toBe(true)
       await Promise.resolve()
 
-      // The immediate send preserves byte order without hiding the reply inside
-      // ordinary input, so the host can order it behind an earlier held reply.
+      // Immediate replies retain separate frames after earlier input so host reply classification preserves ordering.
       const sends = terminalSendCalls() as { params: { text: string } }[]
       expect(sends.map((send) => send.params.text)).toEqual([
         'yes',
@@ -107,7 +112,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       })
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
-      expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true) // CPR reply
+      expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
       await Promise.resolve()
 
       const sends = terminalSendCalls() as { params: { text: string } }[]
@@ -119,9 +124,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
   })
 
   it('does not reorder a query reply ahead of a large paste still in async validation', async () => {
-    // #7736 review: a paste over the deferred-measurement threshold sits in the
-    // batcher's async validationTail (not in `pending`). sendInputImmediate must
-    // not send the reply ahead of it and reorder bytes on the wire.
+    // Large pastes may still be in async validation, outside pending; replies cannot overtake that hidden prefix (#7736).
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
@@ -136,22 +139,18 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     })
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
-    // A paste above CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS forces the async
-    // validation path, so its bytes are captured in validationTail, not pending.
+    // Force async validation above the clipboard threshold to keep the paste in validationTail.
     const paste = 'p'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
-    expect(transport.sendInput(paste)).toBe(true)
+    expect(transport.sendInput(paste, 'driving')).toBe(true)
     // Immediately (validation still pending) a TUI emits a CPR reply.
     expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
-    expect(transport.sendInput('z')).toBe(true)
+    expect(transport.sendInput('z', 'driving')).toBe(true)
 
-    // Wait until the reply is actually flushed instead of sleeping a fixed
-    // interval: the reply legitimately trails the paste's async validation plus
-    // one debounce tick, and a fixed sleep raced that chain under CI load.
+    // Wait for actual flush; fixed sleeps race async paste validation plus debounce under CI load.
     const combined = (): string =>
       (terminalSendCalls() as { params: { text: string } }[]).map((s) => s.params.text).join('')
     await expect.poll(combined, { timeout: 5000, interval: 5 }).toContain('\x1b[3;1Rz')
 
-    // The paste bytes must come before the reply — no reordering.
     expect(combined().indexOf('p')).toBeLessThan(combined().indexOf('\x1b[3;1R'))
     expect(combined()).toContain(`${paste}\x1b[3;1Rz`)
     const sends = terminalSendCalls() as { params: { text: string } }[]

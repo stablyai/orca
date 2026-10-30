@@ -33,12 +33,16 @@ describe('task creation dependency readiness', () => {
 
   it('creates a late dependent as ready when every dependency is completed', () => {
     const db = createDb()
-    const first = db.createTask({ spec: 'first' })
-    const second = db.createTask({ spec: 'second' })
+    const first = db.createTask({ runId: 'run_legacy_local', spec: 'first' })
+    const second = db.createTask({ runId: 'run_legacy_local', spec: 'second' })
     db.updateTaskStatus(first.id, 'completed')
     db.updateTaskStatus(second.id, 'completed')
 
-    const child = db.createTask({ spec: 'child', deps: [first.id, second.id] })
+    const child = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'child',
+      deps: [first.id, second.id]
+    })
 
     expect(child.status).toBe('ready')
   })
@@ -49,7 +53,7 @@ describe('task creation dependency readiness', () => {
     const path = join(directory, 'orchestration.db')
     const db = createDb(path)
     const concurrent = createDb(path)
-    const dependency = db.createTask({ spec: 'dependency' })
+    const dependency = db.createTask({ runId: 'run_legacy_local', spec: 'dependency' })
     const sqlite = (db as unknown as OrchestrationDbAccess).db
     const prepare = sqlite.prepare.bind(sqlite)
     let injected = false
@@ -61,7 +65,7 @@ describe('task creation dependency readiness', () => {
       return prepare(sql)
     })
 
-    const child = db.createTask({ spec: 'child', deps: [dependency.id] })
+    const child = db.createTask({ runId: 'run_legacy_local', spec: 'child', deps: [dependency.id] })
 
     expect(injected).toBe(true)
     expect(child.status).toBe('ready')
@@ -69,10 +73,14 @@ describe('task creation dependency readiness', () => {
 
   it('promotes only after every dependency completes', () => {
     const db = createDb()
-    const first = db.createTask({ spec: 'first' })
-    const second = db.createTask({ spec: 'second' })
+    const first = db.createTask({ runId: 'run_legacy_local', spec: 'first' })
+    const second = db.createTask({ runId: 'run_legacy_local', spec: 'second' })
     db.updateTaskStatus(first.id, 'completed')
-    const child = db.createTask({ spec: 'child', deps: [first.id, second.id] })
+    const child = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'child',
+      deps: [first.id, second.id]
+    })
 
     expect(child.status).toBe('pending')
     db.updateTaskStatus(second.id, 'completed')
@@ -83,11 +91,15 @@ describe('task creation dependency readiness', () => {
     'does not unlock a dependent whose dependency is %s',
     (status) => {
       const db = createDb()
-      const terminal = db.createTask({ spec: 'terminal dependency' })
-      const completing = db.createTask({ spec: 'completing dependency' })
+      const terminal = db.createTask({ runId: 'run_legacy_local', spec: 'terminal dependency' })
+      const completing = db.createTask({ runId: 'run_legacy_local', spec: 'completing dependency' })
       db.updateTaskStatus(terminal.id, status)
 
-      const child = db.createTask({ spec: 'child', deps: [terminal.id, completing.id] })
+      const child = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'child',
+        deps: [terminal.id, completing.id]
+      })
 
       expect(child.status).toBe('pending')
       db.updateTaskStatus(completing.id, 'completed')
@@ -98,9 +110,9 @@ describe('task creation dependency readiness', () => {
   it('rejects missing dependencies without inserting a task', () => {
     const db = createDb()
 
-    expect(() => db.createTask({ spec: 'child', deps: ['task_missing'] })).toThrow(
-      'Dependency task task_missing must belong to run'
-    )
+    expect(() =>
+      db.createTask({ runId: 'run_legacy_local', spec: 'child', deps: ['task_missing'] })
+    ).toThrow('Dependency task task_missing must belong to run')
     expect(db.listTasks()).toEqual([])
   })
 
@@ -109,7 +121,7 @@ describe('task creation dependency readiness', () => {
     const sqlite = (db as unknown as OrchestrationDbAccess).db
     sqlite.exec('BEGIN IMMEDIATE')
 
-    const task = db.createTask({ spec: 'transactional child' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'transactional child' })
     sqlite.exec('ROLLBACK')
 
     expect(db.getTask(task.id)).toBeUndefined()
@@ -120,11 +132,19 @@ describe('task creation dependency readiness', () => {
     directories.push(directory)
     const path = join(directory, 'orchestration.db')
     const before = createDb(path)
-    const completed = before.createTask({ spec: 'completed' })
-    const open = before.createTask({ spec: 'open' })
+    const completed = before.createTask({ runId: 'run_legacy_local', spec: 'completed' })
+    const open = before.createTask({ runId: 'run_legacy_local', spec: 'open' })
     before.updateTaskStatus(completed.id, 'completed')
-    const ready = before.createTask({ spec: 'ready', deps: [completed.id] })
-    const pending = before.createTask({ spec: 'pending', deps: [completed.id, open.id] })
+    const ready = before.createTask({
+      runId: 'run_legacy_local',
+      spec: 'ready',
+      deps: [completed.id]
+    })
+    const pending = before.createTask({
+      runId: 'run_legacy_local',
+      spec: 'pending',
+      deps: [completed.id, open.id]
+    })
     before.close()
     databases.splice(databases.indexOf(before), 1)
 

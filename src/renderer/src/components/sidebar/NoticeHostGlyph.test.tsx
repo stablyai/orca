@@ -1,9 +1,5 @@
 // @vitest-environment happy-dom
 
-/**
- * Notice rows reuse one host vocabulary: monitor for local, server for remote,
- * with the worktree card's "Project on …" tooltip copy.
- */
 import { act, cloneElement, type ReactElement, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,12 +10,12 @@ import es from '../../i18n/locales/es.json'
 import ja from '../../i18n/locales/ja.json'
 import ko from '../../i18n/locales/ko.json'
 import zh from '../../i18n/locales/zh.json'
+import { useAppStore } from '@/store'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 
-const runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
-
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({ runtimeStatusByEnvironmentId })
-}))
+const original = useAppStore.getState()
+let runtimeStatusByEnvironmentId = new Map<string, RuntimeEnvironmentStatus>()
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -56,12 +52,14 @@ async function render(
 describe('NoticeHostGlyph', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    runtimeStatusByEnvironmentId.clear()
+    runtimeStatusByEnvironmentId = new Map()
+    useAppStore.setState({ runtimeStatusByEnvironmentId })
   })
 
   afterEach(() => {
     roots.splice(0).forEach((root) => act(() => root.unmount()))
     document.body.replaceChildren()
+    useAppStore.setState(original, true)
   })
 
   it('names the SSH host it would act on', async () => {
@@ -74,7 +72,11 @@ describe('NoticeHostGlyph', () => {
   })
 
   it('names the paired runtime separately from the SSH host of the same name', async () => {
-    runtimeStatusByEnvironmentId.set('openclaw-env', { status: 'ready' })
+    const response = createCompatibleRuntimeStatusResponse()
+    if (!response.ok) {
+      throw new Error('expected a compatible status')
+    }
+    runtimeStatusByEnvironmentId.set('openclaw-env', { status: response.result, checkedAt: 1 })
     const container = await render('runtime:openclaw-env')
 
     expect(container.querySelector('[data-notice-host-kind="runtime"]')).not.toBeNull()
@@ -83,12 +85,23 @@ describe('NoticeHostGlyph', () => {
     )
   })
 
-  it('marks a paired runtime with no live status as disconnected', async () => {
+  it('marks a paired runtime a probe found unreachable as disconnected', async () => {
+    runtimeStatusByEnvironmentId.set('openclaw-env', { status: null, checkedAt: 1 })
     const container = await render('runtime:openclaw-env')
 
     expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(
       'openclaw disconnected'
     )
+  })
+
+  it('does not call a host disconnected before its first probe answers', async () => {
+    // An absent first probe is not evidence of disconnection; avoid destructive styling during launch.
+    const container = await render('runtime:openclaw-env')
+
+    expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(
+      'Project on openclaw'
+    )
+    expect(container.querySelector('svg')?.getAttribute('class')).not.toContain('text-destructive')
   })
 
   it('gives the local host the monitor glyph the run-target rows use', async () => {
@@ -123,18 +136,15 @@ describe('NoticeHostGlyph', () => {
 
     const glyph = (container: HTMLDivElement): string =>
       container.querySelector('svg')?.getAttribute('class') ?? ''
-    // The same vocabulary the run-target rows use: this computer vs a server.
     expect(glyph(local)).toContain('lucide-monitor')
     expect(glyph(remote)).toContain('lucide-server')
-    // Same size and tone tokens, so neither row reads as decorated.
     const tokens = (value: string): string[] =>
       value.split(' ').filter((entry) => !entry.startsWith('lucide'))
     expect(tokens(glyph(local))).toEqual(tokens(glyph(remote)))
   })
 
   it('keeps its copy in the English catalog', async () => {
-    // A key referenced only in the component silently falls back to its inline
-    // default and never reaches translators.
+    // Component-only fallback keys never reach translators.
     expect(en.auto.components.sidebar.NoticeHostGlyph).toMatchObject({
       hostDisconnected: '{{hostName}} disconnected',
       sshHostProject: 'Project on SSH host {{hostName}}',

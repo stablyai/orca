@@ -94,6 +94,22 @@ describe('enrichRepoGitUsernames', () => {
     expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(1)
   })
 
+  it('releases attempted locations after a repo is removed', async () => {
+    const repos = [makeRepo()]
+    const store = makeStore(repos)
+
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    repos.length = 0
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    repos.push(makeRepo({ id: 'replacement' }))
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+
+    expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(2)
+  })
+
   it('probes a local and a runtime repo that share a path separately', async () => {
     const store = makeStore([
       makeRepo(),
@@ -123,8 +139,6 @@ describe('enrichRepoGitUsernames', () => {
   })
 
   it('clears stale persisted usernames on an authoritative empty resolution', async () => {
-    // Why: the user removed github.user / logged out of gh — a completed
-    // probe returning '' must clear the stale prefix instead of pinning it.
     resolveLocalGitUsernameDetailedMock.mockResolvedValue(resolved('', true))
     const store = makeStore([makeRepo()])
     const onChanged = vi.fn()
@@ -162,7 +176,6 @@ describe('enrichRepoGitUsernames', () => {
     )
 
     enrichRepoGitUsernames(store)
-    // A repo lands while the first pass is still probing r1.
     repos.push(makeRepo({ id: 'r2', path: 'C:/repos/two' }))
     enrichRepoGitUsernames(store)
     releaseFirstProbe()

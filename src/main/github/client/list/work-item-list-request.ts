@@ -2,6 +2,7 @@ import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import type { ParsedTaskQuery } from '../../../../shared/task-query'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
+import { shouldProbeGitRemote } from '../../../git/remote-name-listing'
 import type { LocalGitExecOptions, OwnerRepo } from '../../gh-utils'
 import {
   getGitHubApiRepositoryForRemote,
@@ -12,6 +13,7 @@ import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-
 export type WorkItemListRequest = {
   args: string[]
   offset: number
+  search: string
 }
 
 export function normalizeWorkItemPage(page: number | undefined): number {
@@ -28,10 +30,10 @@ export function buildWorkItemListRequest(args: {
   const { kind, ownerRepo, limit, query, page } = args
   const searchParts: string[] = []
 
+  // gh pr list adds repo: and type:pr itself; an extra is:pr empties private-repo results for ghu_ tokens.
   if (kind === 'issue') {
-    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`)
+    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`, 'is:issue')
   }
-  searchParts.push(kind === 'issue' ? 'is:issue' : 'is:pr')
 
   if (query.state === 'open') {
     searchParts.push('is:open')
@@ -79,11 +81,12 @@ export function buildWorkItemListRequest(args: {
         '--jq',
         '.items'
       ],
-      offset: 0
+      offset: 0,
+      search: searchParts.join(' ')
     }
   }
 
-  // Why: search/issues omits the PR fields the Tasks columns need; use gh's rich PR list on a stable created sort.
+  // Rich PR fields require gh pr list; align its creation sort with numbered issue searches.
   searchParts.push(WORK_ITEM_NUMBER_SORT_QUALIFIER)
   const out = [
     'pr',
@@ -97,10 +100,14 @@ export function buildWorkItemListRequest(args: {
   ]
   out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
   out.push('--search', searchParts.join(' '))
-  return { args: out, offset: (page - 1) * limit }
+  return {
+    args: out,
+    offset: (page - 1) * limit,
+    search: `( ${searchParts.join(' ')} ) repo:${ownerRepo.owner}/${ownerRepo.repo} type:pr`
+  }
 }
 
-// Why: shared shape so listWorkItems can lift per-side errors (#1076 silent wrongness) into the IPC envelope — a swallowed side reads as end-of-data to pagination (#11485).
+// Carry per-source failures through IPC so pagination cannot mistake them for end-of-data.
 export type PartialWorkItemsResult = {
   items: MainWorkItem[]
   issuesError?: ClassifiedError
@@ -115,7 +122,7 @@ export function assertSshRepoHasResolvedGitHubSource(args: {
   if (!args.connectionId || args.issueOwnerRepo || args.prOwnerRepo) {
     return
   }
-  // Why: SSH repo paths are remote-only, so without a resolved owner/repo gh would query local state.
+  // SSH-only paths cannot let gh infer a local repository.
   throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
 }
 
@@ -125,22 +132,34 @@ export type ResolvedPrWorkItemSource = {
   upstreamCandidate: OwnerRepo | null
 }
 
-// Why: only an explicit `origin` preference is origin-only; `upstream`/`auto`/
-// undefined keep the multi-candidate probe ordered upstream-first, matching
-// resolvePrWorkItemSource list semantics.
+/** Only explicit origin is origin-only; other preferences retain upstream-first candidate resolution. */
 export async function resolvePrWorkItemSource(
   repoPath: string,
   preference: IssueSourcePreference | undefined,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedPrWorkItemSource> {
+  const originCandidatePromise = getOriginGitHubApiRepository(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
+  // Skip known-absent upstreams; unknown remote discovery remains fail-open.
+  const upstreamCandidatePromise = shouldProbeGitRemote(
+    repoPath,
+    'upstream',
+    connectionId,
+    localGitOptions
+  ).then((shouldProbe) =>
+    shouldProbe
+      ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+      : null
+  )
   const [originCandidate, upstreamCandidate] = await Promise.all([
-    getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions),
-    getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+    originCandidatePromise,
+    upstreamCandidatePromise
   ])
-  // Why: fork-contribution PRs live on the upstream repo (the fork's own PR
-  // list is almost always empty), so 'auto' resolves upstream-first exactly
-  // like the issue side. Only an explicit 'origin' pick pins PRs to the fork.
+  // Fork contribution PRs live upstream; explicit origin alone selects the fork namespace.
   const source = preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate)
   return { source, originCandidate, upstreamCandidate }
 }

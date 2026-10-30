@@ -6,13 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
+import { presentGitHubPRMergeState } from '../github-pr-merge-state'
 
 const confirmationMocks = vi.hoisted(() => ({
   confirm: vi.fn()
 }))
 
 const runtimeRpcMocks = vi.hoisted(() => ({
-  callRuntimeRpc: vi.fn()
+  callRuntimeRpc: vi.fn(),
+  assertRuntimeEnvironmentCapability: vi.fn(),
+  runtimeEnvironmentSupportsCapability: vi.fn()
 }))
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
@@ -20,7 +23,9 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtimeRpcMocks.callRuntimeRpc
+  callRuntimeRpc: runtimeRpcMocks.callRuntimeRpc,
+  assertRuntimeEnvironmentCapability: runtimeRpcMocks.assertRuntimeEnvironmentCapability,
+  runtimeEnvironmentSupportsCapability: runtimeRpcMocks.runtimeEnvironmentSupportsCapability
 }))
 
 const prRepo = { host: 'github.com', owner: 'stablyai', repo: 'orca-sta1015-sandbox' }
@@ -51,16 +56,19 @@ function HookProbe(props: {
   repo: Repo
   onRefreshReview: () => Promise<void>
   pullRequest?: PRInfo
+  isGitLab?: boolean
 }): null {
   latest = useHostedReviewActions({
     review,
     githubPR: props.pullRequest ?? githubPR,
     repo: props.repo,
-    isGitLab: false,
+    isGitLab: props.isGitLab ?? false,
     shortLabel: 'PR',
     reviewLabel: 'pull request',
     defaultMergeMethod: 'squash',
-    autoMergeAction: null,
+    autoMergeAction: props.pullRequest
+      ? presentGitHubPRMergeState(props.pullRequest).autoMergeAction
+      : null,
     onRefreshReview: props.onRefreshReview
   })
   return null
@@ -69,13 +77,14 @@ function HookProbe(props: {
 async function renderHook(
   repo: Repo,
   onRefreshReview = vi.fn().mockResolvedValue(undefined),
-  pullRequest?: PRInfo
+  pullRequest?: PRInfo,
+  isGitLab = false
 ) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(HookProbe, { repo, onRefreshReview, pullRequest }))
+    root?.render(createElement(HookProbe, { repo, onRefreshReview, pullRequest, isGitLab }))
   })
   return { onRefreshReview }
 }
@@ -84,18 +93,22 @@ describe('useHostedReviewActions', () => {
   beforeEach(() => {
     confirmationMocks.confirm.mockReset().mockResolvedValue(true)
     runtimeRpcMocks.callRuntimeRpc.mockReset().mockResolvedValue({ ok: true })
+    runtimeRpcMocks.assertRuntimeEnvironmentCapability.mockReset().mockResolvedValue(undefined)
+    runtimeRpcMocks.runtimeEnvironmentSupportsCapability.mockReset().mockResolvedValue(true)
     latest = null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
     ;(window as any).api = {
       gh: {
         mergePR: vi.fn().mockResolvedValue({ ok: true }),
         setPRAutoMerge: vi.fn().mockResolvedValue({ ok: true }),
-        updatePRState: vi.fn().mockResolvedValue({ ok: true })
+        updatePRState: vi.fn().mockResolvedValue({ ok: true }),
+        markPRReadyForReview: vi.fn().mockResolvedValue({ ok: true })
       },
       gl: {
         mergeMR: vi.fn().mockResolvedValue({ ok: true }),
         closeMR: vi.fn().mockResolvedValue({ ok: true }),
-        reopenMR: vi.fn().mockResolvedValue({ ok: true })
+        reopenMR: vi.fn().mockResolvedValue({ ok: true }),
+        updateMR: vi.fn().mockResolvedValue({ ok: true })
       }
     }
   })
@@ -106,6 +119,35 @@ describe('useHostedReviewActions', () => {
       root = null
     }
     document.body.replaceChildren()
+  })
+
+  it('refreshes stale eligibility after auto-merge fails while retaining the provider error', async () => {
+    const pr: PRInfo = {
+      number: review.number,
+      title: 'PR',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/pull/1015',
+      updatedAt: '2026-10-21T16:31:00Z',
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BLOCKED',
+      checksStatus: 'pending',
+      autoMergeAllowed: true,
+      prRepo
+    }
+    const error =
+      'Failed to enable auto-merge for pull request: gh: Pull request is in unstable status'
+    vi.mocked(window.api.gh.setPRAutoMerge).mockResolvedValue({ ok: false, error })
+    const onRefreshReview = vi.fn().mockRejectedValue(new Error('refresh unavailable'))
+    await renderHook(makeRepo(), onRefreshReview, pr)
+
+    await act(async () => {
+      await latest?.handleAutoMerge()
+    })
+
+    expect(latest?.actionError).toBe(error)
+    expect(latest?.merging).toBe(false)
+    expect(onRefreshReview).toHaveBeenCalledOnce()
+    expect(window.api.gh.mergePR).not.toHaveBeenCalled()
   })
 
   it('routes runtime-owned GitHub PR merges through the runtime host', async () => {
@@ -148,6 +190,83 @@ describe('useHostedReviewActions', () => {
     })
     expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
+  })
+
+  it('gates runtime-owned ready mutations on the host capability', async () => {
+    const { onRefreshReview } = await renderHook(makeRepo({ executionHostId: 'runtime:env-1' }))
+
+    await act(async () => {
+      await latest?.handleMarkReadyForReview()
+    })
+
+    expect(runtimeRpcMocks.assertRuntimeEnvironmentCapability).toHaveBeenCalledWith(
+      'env-1',
+      'github.markPRReadyForReview',
+      expect.stringContaining('newer Orca server')
+    )
+    expect(runtimeRpcMocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'github.markPRReadyForReview',
+      { repo: 'repo-1', prNumber: 1015, prRepo },
+      { timeoutMs: 30_000 }
+    )
+    expect(window.api.gh.markPRReadyForReview).not.toHaveBeenCalled()
+    expect(onRefreshReview).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps local GitHub ready mutations on desktop IPC', async () => {
+    const githubRefresh = vi.fn().mockResolvedValue(undefined)
+    await renderHook(makeRepo(), githubRefresh)
+
+    await act(async () => {
+      await latest?.handleMarkReadyForReview()
+    })
+
+    expect(window.api.gh.markPRReadyForReview).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      prNumber: 1015,
+      prRepo
+    })
+    expect(githubRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes GitLab ready mutations through the existing update API', async () => {
+    const gitLabRefresh = vi.fn().mockResolvedValue(undefined)
+    await renderHook(makeRepo(), gitLabRefresh, undefined, true)
+    await act(async () => {
+      await latest?.handleMarkReadyForReview()
+    })
+
+    expect(window.api.gl.updateMR).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      iid: 1015,
+      updates: { readyForReview: true }
+    })
+    expect(gitLabRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('gates runtime-owned GitLab ready mutations on the host capability', async () => {
+    const gitLabRefresh = vi.fn().mockResolvedValue(undefined)
+    await renderHook(makeRepo({ executionHostId: 'runtime:env-1' }), gitLabRefresh, undefined, true)
+
+    await act(async () => {
+      await latest?.handleMarkReadyForReview()
+    })
+
+    expect(runtimeRpcMocks.runtimeEnvironmentSupportsCapability).toHaveBeenCalledWith(
+      'env-1',
+      'gitlab.updateMR.readyForReview.v1'
+    )
+    expect(runtimeRpcMocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'gitlab.updateMR',
+      expect.objectContaining({ repo: 'id:repo-1', iid: 1015, updates: { readyForReview: true } }),
+      { timeoutMs: 30_000 }
+    )
+    expect(window.api.gl.updateMR).not.toHaveBeenCalled()
+    expect(gitLabRefresh).toHaveBeenCalledTimes(1)
   })
 
   it('confirms the downstack merge scope before merging a registered stack', async () => {

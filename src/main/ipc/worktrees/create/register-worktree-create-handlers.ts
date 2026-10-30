@@ -1,10 +1,14 @@
 import { ipcMain, app } from 'electron'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
   AdoptProvisionedRootArgs
 } from '../../../../shared/worktree/create-types'
-import { withWorktreeSpan } from '../../../observability/instrumentation'
+import {
+  addWorktreeCreatePhaseAttributes,
+  withWorktreeSpan
+} from '../../../observability/instrumentation'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import type { WorkspaceSource } from '../../../../shared/telemetry-events'
 import {
@@ -13,11 +17,8 @@ import {
   finishAutomationWorkspaceProvenanceRequest
 } from '../../../automations/workspace-provenance'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import {
-  createRemoteWorktree,
-  createLocalWorktree,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
+import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
 import { classifyWorkspaceCreateError } from '../../workspace-create-error-classifier'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
@@ -26,7 +27,12 @@ import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
+import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { workspaceLifecycleKey } from '../../../runtime/workspaces/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { beginWorkspaceCreateTelemetry } from '../../../workspace-create-telemetry'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -35,15 +41,13 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     'worktrees:create',
     async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
-      // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
-      return withWorktreeSpan({ stage: 'create' }, async () => {
+      // Parent Git spans without recording user branch names or remote URLs.
+      return withWorktreeSpan({ stage: 'create' }, async (span) => {
         const repo = store.getRepo(args.repoId)
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }
-
-        const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
-        const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
+        assertWslMoveRepoWritable(store, repo)
 
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
@@ -57,33 +61,55 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         }
 
         let result: CreateWorktreeResult
+        // Keep failure telemetry in the handler so rejected creates retain their stage.
+        const telemetry = beginWorkspaceCreateTelemetry({
+          source: args.telemetrySource,
+          entryPoint: 'app',
+          repoPath: repo.path,
+          fromExistingBranch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
+          isFolder: isFolderRepo(repo)
+        })
+        const creation = runtime.workspaceLifecycle?.openCreate({
+          creationId: args.creationId,
+          repoId: repo.id,
+          keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+        })
         try {
-          // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
-          result = isFolderRepo(repo)
-            ? createFolderWorkspace(createArgs, repo, store)
-            : repo.connectionId
-              ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
-              : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+          // Track operational failures; malformed IPC rejected above is outside the creation funnel.
+          if (isFolderRepo(repo)) {
+            // Folder creation only registers metadata, so it needs no filesystem host route.
+            result = createFolderWorkspace(createArgs, repo, store)
+          } else {
+            // Resolve executionHostId-only SSH ownership before any local Git operation.
+            const createRoute = requireWorktreeCreateRoute(repo)
+            if (createRoute.kind === 'ssh') {
+              // Record ownership before refusal so failure telemetry retains its host.
+              telemetry.timing.recordExecutionHost('ssh')
+              throw new SshHostNotServedError(createRoute.connectionId)
+            }
+            result = await createLocalWorktree(
+              createArgs,
+              repo,
+              store,
+              mainWindow,
+              runtime,
+              telemetry.timing,
+              creation?.named
+            )
+          }
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
-          track('workspace_create_failed', {
-            source,
-            error_class: classifyWorkspaceCreateError(error),
-            ...getCohortAtEmit()
-          })
+          telemetry.failed(error)
           throw error
+        } finally {
+          creation?.close()
         }
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+        if (result.timing) {
+          addWorktreeCreatePhaseAttributes(span, result.timing)
+        }
 
-        // Why: reaching here means create succeeded (helpers throw); skip a separate workspace_initialized (telemetry-plan.md§Deferred); never send the branch name.
-        track('workspace_created', {
-          source,
-          from_existing_branch:
-            !isFolderRepo(repo) &&
-            typeof args.baseBranch === 'string' &&
-            args.baseBranch.length > 0,
-          ...getCohortAtEmit()
-        })
+        telemetry.succeeded(result.timing)
 
         if (isFolderRepo(repo)) {
           notifyWorktreesChanged(mainWindow, repo.id)
@@ -96,7 +122,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           branch: result.worktree.branch
         })
 
-        return result
+        // Stamp after the create notification bumps generation so the reply names its resulting catalog.
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )
@@ -110,6 +137,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         if (!repo || isFolderRepo(repo)) {
           throw new Error('Provisioned-root repository ownership is missing or ambiguous.')
         }
+        assertWslMoveRepoWritable(store, repo)
         const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
         const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
         const automationProvenance = resolveAutomationWorkspaceProvenance({
@@ -149,7 +177,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           path: result.worktree.path,
           branch: result.worktree.branch
         })
-        return result
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )

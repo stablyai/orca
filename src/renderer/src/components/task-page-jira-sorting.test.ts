@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JiraIssue, JiraPriority } from '../../../shared/jira-types'
+import type { JiraIssue, JiraPriority } from '../../../shared/jira/jira-types'
 import { getJiraPriorityWeight, sortJiraIssues } from './jira-issue-sorter'
 
 describe('TaskPage Jira sorting functionality', () => {
@@ -37,6 +37,40 @@ describe('TaskPage Jira sorting functionality', () => {
   function jiraPriority(id: string, name: string): JiraPriority {
     return { id, name }
   }
+
+  it('sorts optional planning values with missing values distinct from zero', () => {
+    const empty = jiraIssue('ALP-1', 'Empty', 'To Do')
+    const small = {
+      ...jiraIssue('ALP-2', 'Small', 'To Do'),
+      storyPoints: 0,
+      originalEstimateSeconds: 0,
+      remainingEstimateSeconds: 0,
+      sprint: 'Sprint 2',
+      parent: { key: 'ALP-9', title: 'Epic 2' }
+    }
+    const large = {
+      ...jiraIssue('ALP-3', 'Large', 'To Do'),
+      storyPoints: 5,
+      originalEstimateSeconds: 7200,
+      remainingEstimateSeconds: 3600,
+      sprint: 'Sprint 10',
+      parent: { key: 'ALP-10', title: 'Epic 10' }
+    }
+    for (const column of [
+      'storyPoints',
+      'originalEstimate',
+      'remainingEstimate',
+      'sprint',
+      'parent'
+    ] as const) {
+      expect(
+        sortJiraIssues([large, small, empty], column, 'asc').map((issue) => issue.key)
+      ).toEqual(['ALP-1', 'ALP-2', 'ALP-3'])
+      expect(
+        sortJiraIssues([small, large, empty], column, 'desc').map((issue) => issue.key)
+      ).toEqual(['ALP-3', 'ALP-2', 'ALP-1'])
+    }
+  })
 
   describe('getJiraPriorityWeight', () => {
     it('returns default weight for missing priority', () => {
@@ -265,5 +299,38 @@ describe('TaskPage Jira sorting functionality', () => {
       expect(sorted[1].assignee?.displayName).toBe('Alice')
       expect(sorted[2].assignee?.displayName).toBe('Bob')
     })
+  })
+  it('computes expensive numeric sort keys once per issue', () => {
+    let priorityReads = 0
+    let dateReads = 0
+    const issues = Array.from({ length: 2000 }, (_, i) => ({
+      ...jiraIssue(`ALP-${i}`, `Issue ${i}`, 'Open'),
+      get priority() {
+        priorityReads++
+        return { id: String(i % 3), name: ['High', 'Low', 'Medium'][i % 3] }
+      },
+      get updatedAt() {
+        dateReads++
+        return new Date(1700000000000 + ((i * 173) % 1999) * 1000).toISOString()
+      }
+    }))
+    const expected = [...issues].sort(
+      (a, b) =>
+        getJiraPriorityWeight(a.priority.name, a.priority.id) -
+        getJiraPriorityWeight(b.priority.name, b.priority.id)
+    )
+    expect(priorityReads).toBeGreaterThan(20_000)
+    priorityReads = 0
+    const actual = sortJiraIssues(issues, 'priority', 'asc')
+    expect(priorityReads).toBe(4000)
+    actual.forEach((issue, i) => expect(issue).toBe(expected[i]))
+    const byDate = [...issues].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    )
+    expect(dateReads).toBeGreaterThan(20_000)
+    dateReads = 0
+    const sorted = sortJiraIssues(issues, 'updated', 'desc')
+    expect(dateReads).toBe(2000)
+    sorted.forEach((issue, i) => expect(issue).toBe(byDate[i]))
   })
 })

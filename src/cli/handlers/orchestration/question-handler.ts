@@ -1,8 +1,12 @@
 import type { CommandHandler } from '../../dispatch'
 import { getOptionalStringFlag } from '../../flags'
+import { printResult } from '../../format'
+import { renderCommand } from '../../orchestration-mutation-recovery'
 import { RuntimeClientError } from '../../runtime-client'
+import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import {
   clampOrchestrationAskTimeoutMs,
+  ORCHESTRATION_ASK_MAX_TIMEOUT_MS,
   resolveOrchestrationAskClientTimeoutMs
 } from '../../../shared/orchestration-ask-timeout'
 import type { LegacyCompatibilityResult } from '../../../shared/orchestration-check-output'
@@ -18,6 +22,12 @@ import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
   'orchestration ask': async ({ flags, client, cwd, json }) => {
     const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    if (parsedTimeoutMs !== undefined && parsedTimeoutMs > ORCHESTRATION_ASK_MAX_TIMEOUT_MS) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--timeout-ms must be at most ${ORCHESTRATION_ASK_MAX_TIMEOUT_MS} (30 minutes) per wait. For longer waits, resume the same question after a timeout.`
+      )
+    }
     const timeoutMs = clampOrchestrationAskTimeoutMs(parsedTimeoutMs)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const question = getOptionalStringFlag(flags, 'question')
@@ -59,15 +69,14 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
         compatibilityWindowsCommand: resolvePackagedWindowsCompatibilityCommand()
       },
-      // Why: extend past timeoutMs so transport does not abort before the runtime resolves its timeout.
+      // Outlive the server timeout so its result arrives before the transport aborts.
       {
         timeoutMs: resolveOrchestrationAskClientTimeoutMs(parsedTimeoutMs),
         orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
       }
     )
-    // Why: ask JSON is intentionally a bare object for `jq -r .answer`, unlike other verbs.
     if (json) {
-      console.log(JSON.stringify(result.result))
+      printResult(result, true, () => '')
     } else if (result.result.legacyCompatibility?.resumeRequired) {
       console.log(`Question ${result.result.messageId} committed.`)
       console.log(`Resume with: ${result.result.legacyCompatibility.resumeCommand}`)
@@ -89,9 +98,30 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
     }
     if (result.result.timedOut) {
       if (!json) {
-        // Why: report the server's clamped effective budget rather than overstating the wait.
+        // Report the server's effective budget, which may be clamped below the requested timeout.
         const waitedMs = result.result.timeoutMs ?? timeoutMs
-        console.error(`ask timeout after ${waitedMs}ms (thread ${result.result.threadId})`)
+        const messageId = result.result.messageId
+        const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
+        const resumeCommand =
+          messageId === null
+            ? undefined
+            : renderCommand([
+                resolveOrchestrationCliExecutable(),
+                'orchestration',
+                'ask',
+                // A session's resume is flagless: its injected id names it again.
+                ...(from ? ['--from', from] : []),
+                ...(dispatchCapability ? ['--dispatch-capability', dispatchCapability] : []),
+                '--resume',
+                messageId,
+                '--timeout-ms',
+                String(waitedMs)
+              ])
+        console.error(
+          resumeCommand
+            ? `ask timeout after ${waitedMs}ms; question is still pending (messageId: ${messageId}). Resume waiting; do not ask again:\n${resumeCommand}`
+            : `ask timeout after ${waitedMs}ms; question identity was not returned, so it cannot be resumed safely.`
+        )
       }
       process.exitCode = 1
     }

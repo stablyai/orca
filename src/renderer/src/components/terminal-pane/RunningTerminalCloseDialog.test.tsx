@@ -14,8 +14,7 @@ import RunningTerminalCloseDialog from './RunningTerminalCloseDialog'
 const initialState = useAppStore.getInitialState()
 const mountedRoots: Root[] = []
 
-// The store holds off any action for 350 ms after a queued request replaces the visible
-// one, so these tests drive a clock instead of racing it.
+// Advance a clock past the store’s 350ms queued-request guard instead of racing real time.
 let clock = 1_000
 
 function advancePastGuard(): void {
@@ -65,8 +64,7 @@ function getCheckbox(): HTMLButtonElement {
 describe('RunningTerminalCloseDialog', () => {
   beforeEach(() => {
     useAppStore.setState(initialState, true)
-    // Monotonic across tests: the store is a singleton, so winding the clock back would
-    // leave a previous test's guard deadline in the future and block every action.
+    // Keep time monotonic because the singleton store retains guard deadlines between tests.
     clock += 10_000
     vi.spyOn(Date, 'now').mockImplementation(() => clock)
   })
@@ -109,30 +107,34 @@ describe('RunningTerminalCloseDialog', () => {
     await renderDialog({ onConfirm: vi.fn(), copyKind: 'agent' }, updateSettings)
 
     expect(document.body.textContent).toContain('Stop this agent?')
+    expect(document.body.textContent).toContain(
+      'This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.'
+    )
     expect(getButton('Stop Agent')).toBeTruthy()
   })
 
-  it('persists the opt-out when "don\'t ask again" is checked', async () => {
-    const onConfirm = vi.fn()
+  it('uses truthful chat copy and the shared opt-out without terminal sleep advice', async () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
-
-    await renderDialog({ onConfirm }, updateSettings)
-
+    const onConfirm = vi.fn()
+    await renderDialog({ onConfirm, copyKind: 'chat-agent' }, updateSettings)
+    expect(document.body.textContent).toContain('Stop this agent?')
+    expect(document.body.textContent).toContain(
+      "Closing this chat will stop the agent's current work."
+    )
+    expect(document.body.textContent).not.toContain('terminal')
     await act(async () => {
       getCheckbox().click()
     })
     await act(async () => {
-      getButton('Stop and Close').click()
+      getButton('Stop Agent').click()
     })
-
     expect(updateSettings).toHaveBeenCalledWith({
       skipCloseTerminalWithRunningProcessConfirm: true
     })
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
-  // Why: this queue opens after an async probe while the pinned queue opens synchronously,
-  // so both can be pending at once. Two modal overlays + focus traps is the bug.
+  // Async process probes can overlap the synchronous pinned queue; only one modal/focus trap may open.
   it('waits for a visible pinned confirmation instead of stacking a second modal', async () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
     useAppStore.setState({

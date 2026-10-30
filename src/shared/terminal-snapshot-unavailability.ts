@@ -1,12 +1,6 @@
-/**
- * Why a host answered a requested terminal-buffer snapshot without a usable buffer image.
- *
- * Sent as the additive `unavailable` field on the SnapshotStart frame. Hosts that predate
- * this field omit it, so an absent value means "the host did not say" — never "nothing exists".
- * Both current reasons are transient: the host could not answer *now*, not that the pane has
- * no retained output. A pane that genuinely has nothing still comes back as a real snapshot
- * whose `data` is empty, because the host successfully serialized and found it empty.
- */
+/** Additive SnapshotStart reasons are transient; old hosts omit them, so absence proves nothing.
+ * Even an empty successful image is unverifiable: a parked renderer can register an unhydrated serializer before xterm mounts.
+ * Nothing on this wire proves the host retains no output. */
 export const TERMINAL_SNAPSHOT_UNAVAILABLE_REASONS = [
   // The pending-output buffer overflowed twice while serializing, so the reply was truncated to nothing.
   'pending-output-overflowed',

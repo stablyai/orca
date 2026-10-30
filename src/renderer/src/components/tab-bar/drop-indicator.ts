@@ -1,9 +1,6 @@
 export type DropIndicator = 'left' | 'right' | null
 
-// Why: the theme's accent color is too subtle for a drag-and-drop insertion
-// cue. A vivid blue matches VS Code's tab.dragAndDropBorder and is immediately
-// visible against all tab backgrounds. Pseudo-elements sit above the tab's
-// own border so the indicator does not shift layout.
+// Use a visible blue insertion cue above tab borders without changing layout.
 export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
   if (dropIndicator === 'left') {
     return "before:absolute before:inset-y-0 before:left-0 before:w-[2px] before:bg-blue-500 before:z-10 before:content-['']"
@@ -14,19 +11,9 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
   return ''
 }
 
-// Why: a 2px bar on the active tab's BOTTOM edge, bridging the tab into the
-// panel it owns. The active tab also lifts its background with a very subtle
-// color-mix wash (uniform in light and dark, unlike `accent` whose contrast
-// against `card` is lopsided across themes); this bar is the crisp selection
-// marker layered on top. Mixing `foreground` with `card` keeps the marker
-// neutral and visible without overpowering the quiet tab chrome. z-10 keeps it
-// above the bg lift and the
-// unread amber wash. Horizontal inset is 0 (not -1px): negative insets on the
-// last tab bleed into the strip's scrollWidth, so clicking between active tabs
-// flips the strip between "fits exactly" and "overflows by 1px", which jitters
-// every tab by 1px because the browser preserves scrollLeft near the end.
+// Keep the foreground marker above selection/unread layers; zero horizontal inset avoids scrollWidth jitter at the strip’s end.
 export const ACTIVE_TAB_INDICATOR_CLASSES =
-  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-[color-mix(in_srgb,var(--foreground)_60%,var(--card))] z-10'
+  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-foreground z-20'
 
 export function getTabRootStateClasses(isActive: boolean): string {
   return isActive

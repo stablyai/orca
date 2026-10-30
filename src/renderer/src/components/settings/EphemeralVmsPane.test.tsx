@@ -5,6 +5,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EphemeralVmsPane } from './EphemeralVmsPane'
 
+vi.mock('@/components/terminal-pane/TerminalPane', () => ({
+  default: () => {
+    throw new Error('This suite must not render a terminal pane')
+  }
+}))
+
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn()
 }))
@@ -136,6 +142,51 @@ describe('EphemeralVmsPane', () => {
       initialEphemeralVmRecipeId: 'cloud-sandbox',
       telemetrySource: 'settings'
     })
+  })
+
+  it('does not schedule a reset when clipboard completion arrives after unmount', async () => {
+    let finishClipboard!: () => void
+    vi.mocked(window.api.ui.writeClipboardText).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishClipboard = resolve
+      })
+    )
+    const container = await renderPane()
+    const setTimeout = vi.spyOn(window, 'setTimeout')
+    try {
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')?.click()
+      })
+      await act(async () => roots.pop()?.unmount())
+      setTimeout.mockClear()
+      await act(async () => {
+        finishClipboard()
+        await Promise.resolve()
+      })
+      expect(setTimeout.mock.calls.filter(([, delay]) => delay === 1500)).toHaveLength(0)
+    } finally {
+      setTimeout.mockRestore()
+    }
+  })
+
+  it('shows copied feedback while mounted and releases its reset on unmount', async () => {
+    const container = await renderPane()
+    const setTimeout = vi.spyOn(window, 'setTimeout')
+    const clearTimeout = vi.spyOn(window, 'clearTimeout')
+    try {
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')?.click()
+      })
+      expect(container.querySelector('button[aria-label="Copy"]')?.textContent).toBe('Copied')
+      const timerIndex = setTimeout.mock.calls.findIndex(([, delay]) => delay === 1500)
+      expect(timerIndex).toBeGreaterThanOrEqual(0)
+      const timer = setTimeout.mock.results[timerIndex].value
+      await act(async () => roots.pop()?.unmount())
+      expect(clearTimeout).toHaveBeenCalledWith(timer)
+    } finally {
+      setTimeout.mockRestore()
+      clearTimeout.mockRestore()
+    }
   })
 
   it('refreshes the catalog when plugin content changes', async () => {

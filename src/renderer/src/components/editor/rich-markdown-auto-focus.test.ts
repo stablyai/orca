@@ -14,8 +14,11 @@ function createEditor(
   } as unknown as Editor
 }
 
+/** Identity-only stand-in for `document.activeElement`: the policy compares it, never reads it. */
+type StubbedActiveElement = Record<string, never>
+
 function setupScheduledFocus(
-  activeElement: object | null,
+  activeElement: StubbedActiveElement | null,
   force = false
 ): {
   focus: ReturnType<typeof vi.fn>

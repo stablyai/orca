@@ -1,6 +1,6 @@
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
-import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
@@ -17,8 +17,9 @@ export type TabBarProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
+  /** Set only when this group is one of several splits. */
+  onCloseSplitPane?: () => void
   onNewTerminalTab: () => void
-  /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void
@@ -37,6 +38,7 @@ export type TabBarProps = {
   clientHostedBrowserRows?: readonly ClientHostedBrowserRow[]
   /** The group's own active tab at render time; a client-hosted selection dies when it moves. */
   groupActiveTabId?: string | null
+  agentSessionTabs?: (Tab & { contentType: 'agent-session' })[]
   activeFileId?: string | null
   activeBrowserTabId?: string | null
   activeSimulatorTabId?: string | null
@@ -44,8 +46,9 @@ export type TabBarProps = {
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onActivateBrowserTab?: (tabId: string) => void
+  onActivateAgentSession?: (tabId: string) => void
   onCloseBrowserTab?: (tabId: string) => void
-  onDuplicateBrowserTab?: (tabId: string) => void
+  onDuplicateBrowserTab?: (tabId: string, unifiedTabId: string) => void
   onCloseAllFiles?: () => void
   onMakePreviewFilePermanent?: (fileId: string, tabId?: string) => void
   onPinFile?: (fileId: string, tabId?: string) => void

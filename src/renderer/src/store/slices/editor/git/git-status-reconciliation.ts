@@ -4,14 +4,12 @@ import type {
   GitStatusEntry,
   GitUpstreamStatus
 } from '../../../../../../shared/git-status-types'
+import type { BranchCompareLike, CommitCompareLike, OpenFile } from '../types/open-file'
 import type {
-  BranchCompareLike,
   BranchCompareSnapshot,
-  CommitCompareLike,
   CommitCompareSnapshot,
-  OpenConflictMetadata,
-  OpenFile
-} from '../types/open-file'
+  OpenConflictMetadata
+} from '../../../../../../shared/editor-tab-view-types'
 
 export function getCompareVersion(
   compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>
@@ -132,10 +130,12 @@ export function reconcileOpenFilesForStatus(
   nextEntries: GitStatusEntry[],
   statusIsComplete: boolean
 ): OpenFile[] {
-  const entriesByPath = new Map(nextEntries.map((entry) => [entry.path, entry]))
+  let entriesByPath: Map<string, GitStatusEntry> | undefined
+  let stagedEntriesByPath: Map<string, GitStatusEntry> | undefined
   let changed = false
 
-  const nextOpenFiles = openFiles.flatMap((file) => {
+  const nextOpenFiles = openFiles.flatMap((originalFile) => {
+    let file = originalFile
     if (file.worktreeId !== worktreeId) {
       return [file]
     }
@@ -144,10 +144,32 @@ export function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    const entry = entriesByPath.get(file.relativePath)
+    if (file.mode === 'diff' && file.diffSource === 'staged') {
+      if (!stagedEntriesByPath) {
+        stagedEntriesByPath = new Map()
+        for (const entry of nextEntries) {
+          if (entry.area === 'staged') {
+            stagedEntriesByPath.set(entry.path, entry)
+          }
+        }
+      }
+      const entry = stagedEntriesByPath.get(file.relativePath)
+      if (entry) {
+        const oldPath = entry.status === 'renamed' ? entry.oldPath : undefined
+        if (file.branchOldPath !== oldPath) {
+          changed = true
+          file = { ...file, branchOldPath: oldPath }
+        }
+      }
+    }
+
     if (!file.conflict) {
       return [file]
     }
+
+    // Most refreshes have no open conflicts and need no status-path index.
+    entriesByPath ??= new Map(nextEntries.map((entry) => [entry.path, entry]))
+    const entry = entriesByPath.get(file.relativePath)
 
     // Why: a capped snapshot cannot prove that an omitted conflict was resolved.
     if (!entry && !statusIsComplete) {

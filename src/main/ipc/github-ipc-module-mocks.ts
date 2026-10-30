@@ -1,7 +1,6 @@
 import { type Mock, vi } from 'vitest'
 
-// Mocked module shapes for the GitHub IPC route tests. Built inside `vi.hoisted`
-// so each test file's own `vi.mock` factories can hand the objects back verbatim.
+// Build hoisted module shapes for each route test's vi.mock factories.
 
 const CLIENT_EXPORTS = [
   'getPRForBranch',
@@ -29,6 +28,7 @@ const CLIENT_EXPORTS = [
   'mergePR',
   'setPRAutoMerge',
   'updatePRState',
+  'markPRReadyForReview',
   'rerunPRChecks',
   'requestPRReviewers',
   'removePRReviewers',
@@ -43,7 +43,8 @@ const PR_REFRESH_EXPORTS = [
   'enqueuePRRefresh',
   'refreshPRNow',
   'reportVisiblePRRefreshCandidates',
-  'setPRRefreshOutcomeObserver'
+  'setPRRefreshOutcomeObserver',
+  'setPRRefreshRegistrationCheck'
 ] as const
 
 type MockedModule<Names extends readonly string[]> = Record<Names[number], Mock>

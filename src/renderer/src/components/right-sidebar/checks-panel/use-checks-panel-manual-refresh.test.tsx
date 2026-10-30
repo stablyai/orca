@@ -74,7 +74,8 @@ describe('useChecksPanelManualRefresh ordering', () => {
       linkedGiteaPR: null,
       linkedGitLabMR: null,
       linkedPR: null,
-      ownerSettings: null,
+      ownerCopyHostId: null,
+      ownerTarget: { kind: 'local' },
       panelContextKey: 'repo-1::worktree-1::main',
       panelContextKeyRef: { current: 'repo-1::worktree-1::main' },
       pollIntervalRef: { current: 30_000 },
@@ -112,5 +113,13 @@ describe('useChecksPanelManualRefresh ordering', () => {
       'comments-loading:false',
       'refreshing:false'
     ])
+    expect(input.fetchPRForBranch).toHaveBeenCalledWith('/workspace/repo', 'main', {
+      force: true,
+      repoId: 'repo-1',
+      worktreeId: undefined,
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      reason: 'manual'
+    })
   })
 })

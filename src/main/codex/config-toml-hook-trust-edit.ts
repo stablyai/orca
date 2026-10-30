@@ -9,16 +9,18 @@ import {
 } from './codex-trust-identity'
 import {
   ensureHooksStateParentTable,
+  findAllHookTrustBlocks,
   findHookTrustBlockRanges,
   type HookTrustBlockRange
 } from './config-toml-hook-trust-blocks'
-import { escapeTomlBasicString } from './config-toml-syntax'
+import { CODEX_HOOK_TRUST_KEY, escapeTomlBasicString } from './config-toml-syntax'
+import { repairOrcaDuplicateTrustTables } from './config-toml-project-duplicate-repair'
 
 export function upsertHookTrustContent(
   existingContent: string,
   entries: readonly CodexTrustEntry[]
 ): string {
-  const existing = stripLeadingBom(existingContent)
+  const existing = repairOrcaDuplicateTrustTables(stripLeadingBom(existingContent))
   let updated = entries.some((entry) =>
     usesWindowsCodexPathSeparators(normalizeCodexTrustSourcePath(entry.sourcePath))
   )
@@ -50,15 +52,83 @@ export function removeHookTrustContent(content: string, keys: readonly string[])
   return updated + content.slice(cursor)
 }
 
+/** Move existing approvals without rehashing; unknown stored key shapes prevent all moves. */
+export function moveHookTrustContent(
+  existingContent: string,
+  moves: readonly { oldKey: string; newKey: string }[]
+): string {
+  const content = stripLeadingBom(existingContent)
+  if (findAllHookTrustBlocks(content).some(({ key }) => !CODEX_HOOK_TRUST_KEY.test(key))) {
+    return existingContent
+  }
+  const bodies = moves.flatMap(({ oldKey, newKey }) => {
+    const [range] = findHookTrustBlockRanges(
+      content,
+      new Set([normalizeCodexHookTrustLookupKey(oldKey)])
+    )
+    return range ? [{ newKey, body: content.slice(range.contentStart, range.end).trimEnd() }] : []
+  })
+  let updated = removeHookTrustContent(content, [
+    ...moves.map(({ oldKey }) => oldKey),
+    ...moves.map(({ newKey }) => newKey)
+  ])
+  if (
+    bodies.some(({ newKey }) =>
+      usesWindowsCodexPathSeparators(parseCodexTrustKey(newKey)?.sourcePath ?? '')
+    )
+  ) {
+    updated = ensureHooksStateParentTable(updated)
+  }
+  return appendHookTrustBlocks(
+    updated,
+    bodies.flatMap(({ newKey, body }) =>
+      getTrustKeyWriteVariants(newKey).map(
+        (key) => `[hooks.state.${formatHookStateTableKey(key)}]${body ? `\n${body}` : ''}`
+      )
+    )
+  )
+}
+
+export function readHookTrustBlockTexts(content: string, key: string): string[] {
+  return findHookTrustBlockRanges(content, new Set([normalizeCodexHookTrustLookupKey(key)])).map(
+    (range) => content.slice(range.start, range.end).trimEnd()
+  )
+}
+
+export function restoreHookTrustBlockContent(
+  content: string,
+  restores: readonly { key: string; blocks: readonly string[] }[]
+): string {
+  return appendHookTrustBlocks(
+    removeHookTrustContent(
+      content,
+      restores.map(({ key }) => key)
+    ),
+    restores.flatMap(({ blocks }) => blocks)
+  )
+}
+
+function appendHookTrustBlocks(content: string, blocks: readonly string[]): string {
+  if (blocks.length === 0) {
+    return content
+  }
+  const separator =
+    content.length === 0 || content.endsWith('\n\n') ? '' : content.endsWith('\n') ? '\n' : '\n\n'
+  return `${content}${separator}${blocks.join('\n\n')}\n`
+}
+
 function upsertTrustBlocks(
   content: string,
   keys: readonly string[],
   hash: string,
   explicitEnabled?: boolean
 ): string {
-  const ranges = getUniqueTrustBlockRanges(content, keys)
+  const ranges = findHookTrustBlockRanges(
+    content,
+    new Set(keys.map(normalizeCodexHookTrustLookupKey))
+  )
   if (ranges.length === 0) {
-    return appendTrustBlocks(content, keys, hash, explicitEnabled ?? true)
+    return appendHookTrustBlocks(content, [buildTrustBlocks(keys, hash, explicitEnabled ?? true)])
   }
   const enabled = explicitEnabled ?? !ranges.some((range) => isBlockDisabled(content, range))
   const block = buildTrustBlocks(keys, hash, enabled)
@@ -74,39 +144,10 @@ function upsertTrustBlocks(
   return deduped + content.slice(cursor)
 }
 
-function getUniqueTrustBlockRanges(
-  content: string,
-  keys: readonly string[]
-): HookTrustBlockRange[] {
-  const normalizedKeys = new Set(keys.map(normalizeCodexHookTrustLookupKey))
-  return findHookTrustBlockRanges(content, normalizedKeys)
-    .filter(
-      (range, index, ranges) =>
-        ranges.findIndex(
-          (candidate) => candidate.start === range.start && candidate.end === range.end
-        ) === index
-    )
-    .sort((left, right) => left.start - right.start)
-}
-
 function isBlockDisabled(content: string, range: HookTrustBlockRange): boolean {
   const block = content.slice(range.headerLineEnd, range.end)
   const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
   return enabledMatch?.[1] === 'false'
-}
-
-function appendTrustBlocks(
-  content: string,
-  keys: readonly string[],
-  hash: string,
-  enabled: boolean
-): string {
-  const block = buildTrustBlocks(keys, hash, enabled)
-  if (content.length === 0) {
-    return `${block}\n`
-  }
-  const separator = content.endsWith('\n\n') ? '' : content.endsWith('\n') ? '\n' : '\n\n'
-  return `${content}${separator}${block}\n`
 }
 
 function buildTrustBlocks(keys: readonly string[], hash: string, enabled: boolean): string {
@@ -129,7 +170,8 @@ function formatHookStateTableKey(key: string): string {
   return `"${escapeTomlBasicString(key)}"`
 }
 
-function getTrustKeyWriteVariants(key: string): string[] {
+/** Write both separator forms for Windows trust keys. */
+export function getTrustKeyWriteVariants(key: string): string[] {
   const parsed = parseCodexTrustKey(key)
   if (!parsed || !usesWindowsCodexPathSeparators(parsed.sourcePath)) {
     return [key]

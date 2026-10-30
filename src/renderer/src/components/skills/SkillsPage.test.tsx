@@ -86,7 +86,6 @@ async function flushMicrotasks(): Promise<void> {
   })
 }
 
-/** Skill names currently rendered as rows. */
 function renderedSkillNames(): string[] {
   return [...(container?.querySelectorAll('[data-skill-name]') ?? [])].map(
     (node) => node.textContent ?? ''
@@ -196,8 +195,6 @@ describe('SkillsPage', () => {
 
     await renderPage()
     await flushMicrotasks()
-    // Why: the path lives in the detail dialog, where it must wrap inside the
-    // column instead of pushing the dialog into horizontal scroll.
     await act(async () => fireEvent.click(skillRow('long-path')))
 
     const dialog = document.querySelector('[role="dialog"]')
@@ -231,9 +228,7 @@ describe('SkillsPage', () => {
     expect(renderedSkillNames()).toContain('remote-only')
   })
 
-  // Why: a cold local scan walks every skill root, so it can land after a newer
-  // remote scan. Without a generation guard it overwrites the remote list and
-  // the page silently shows the client's skills again — #6789 all over.
+  // A slow cold local scan must not overwrite a newer remote scan after target switching.
   it('does not let a slow local scan overwrite a newer remote scan', async () => {
     const localScan = deferred<SkillDiscoveryResult>()
     const discover = vi.fn().mockReturnValue(localScan.promise)
@@ -262,6 +257,34 @@ describe('SkillsPage', () => {
 
     expect(renderedSkillNames()).toContain('remote-only')
     expect(renderedSkillNames()).not.toContain('local-only')
+  })
+
+  it("does not show one runtime's skills when the next runtime scan fails", async () => {
+    const discover = vi.fn().mockResolvedValue(discoveryResult(['local-only']))
+    const call = vi.fn(async (args: { method: string; selector?: string }) => {
+      const compatibilityResponse = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (compatibilityResponse) {
+        return compatibilityResponse
+      }
+      throw new Error('remote unavailable')
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+    expect(renderedSkillNames()).toEqual(['local-only'])
+
+    await act(async () => {
+      setRuntimeOwner('env-1')
+    })
+    await flushMicrotasks()
+
+    expect(container?.textContent).toContain('Could not scan skills')
+    expect(renderedSkillNames()).toEqual([])
   })
 
   it('keeps scanning rather than listing client skills before the owner is known', async () => {
@@ -334,8 +357,6 @@ describe('SkillsPage', () => {
     )
   })
 
-  // Why: Escape used to leave the page outright, discarding a selection that can
-  // hold dozens of skills chosen one by one.
   it('backs out of share selection on Escape before leaving the page', async () => {
     const closeSkillsPage = vi.fn()
     const discover = vi.fn().mockResolvedValue(discoveryResult(['alpha']))
@@ -362,8 +383,6 @@ describe('SkillsPage', () => {
     expect(closeSkillsPage).toHaveBeenCalledOnce()
   })
 
-  // Why: bundles run to ~30 skills; ticking each box one at a time is the flow
-  // this page exists for.
   it('extends the share selection to a shift-clicked row', async () => {
     const discover = vi.fn().mockResolvedValue(discoveryResult(['alpha', 'beta', 'gamma']))
     Object.defineProperty(window, 'api', {
@@ -404,8 +423,7 @@ describe('SkillsPage', () => {
     expect(container?.textContent).toContain('1 result')
   })
 
-  // Why: the reason is per-row state, but on a remote runtime it applies to every
-  // row at once — 114 copies of the same sentence is not an explanation.
+  // State page-wide remote sharing restrictions once rather than repeating them for every skill.
   it('explains remote-only skills once instead of on every row', async () => {
     const call = vi.fn(
       async (args: { method: string; selector?: string }) =>
@@ -450,5 +468,71 @@ describe('SkillsPage', () => {
     await flushMicrotasks()
     expect(container?.textContent).toContain('0 selected')
     expect(renderedSkillNames()).toEqual(['beta'])
+  })
+  it('distinguishes a failed scan from empty skill folders', async () => {
+    const discover = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          "Error invoking remote method 'skills:discover': Error: EACCES: permission denied\nSSH host unavailable"
+        )
+      )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+
+    expect(container?.textContent).toContain('Could not scan skills')
+    expect(container?.textContent).toContain('EACCES: permission denied')
+    expect(container?.textContent).toContain('SSH host unavailable')
+    expect(container?.textContent).not.toContain('Error invoking remote method')
+    // Why: nothing was scanned, so "the scanned skill folders are empty" would be a claim we cannot make.
+    expect(container?.textContent).not.toContain('No skills found')
+  })
+
+  it('retries the failed scan from the error band and clears it on success', async () => {
+    const discover = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('EACCES: permission denied'))
+      .mockResolvedValueOnce(discoveryResult(['alpha']))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+    await act(async () => fireEvent.click(buttonNamed('Retry')))
+    await flushMicrotasks()
+
+    expect(container?.textContent).not.toContain('Could not scan skills')
+    expect(renderedSkillNames()).toEqual(['alpha'])
+  })
+
+  it('keeps a previously confirmed empty result visible when a refresh fails', async () => {
+    const discover = vi
+      .fn()
+      .mockResolvedValueOnce(discoveryResult([]))
+      .mockRejectedValueOnce(new Error('host unavailable'))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+    expect(container?.textContent).toContain('No skills found')
+
+    await act(async () => fireEvent.click(buttonNamed('Refresh')))
+    await flushMicrotasks()
+
+    expect(container?.textContent).toContain('Could not scan skills')
+    expect(container?.textContent).toContain('No skills found')
   })
 })

@@ -45,6 +45,11 @@ function getSetupStatusLabel(status: TaskProviderSetupStatus): string {
         'auto.components.settings.TaskSourceProviderCard.statusSkillRequired',
         'Skill required'
       )
+    case 'skill-unverified':
+      return translate(
+        'auto.components.settings.TaskSourceProviderCard.statusUnverified',
+        'Cannot verify'
+      )
     case 'unavailable':
       return translate(
         'auto.components.settings.TaskSourceProviderCard.statusUnavailable',
@@ -76,8 +81,7 @@ export function TaskSourceProviderCard({
 }: TaskSourceProviderCardProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [lastDefaultExpanded, setLastDefaultExpanded] = useState(defaultExpanded)
-  // Auto-expand only ever opens: collapsing is the user's call, so a readiness
-  // change that moves the auto-expand target cannot close a card in use.
+  // Automatic readiness updates may open cards but cannot close a card the user is using.
   if (lastDefaultExpanded !== defaultExpanded) {
     setLastDefaultExpanded(defaultExpanded)
     if (defaultExpanded) {
@@ -113,7 +117,6 @@ export function TaskSourceProviderCard({
             status === 'ready' ||
             status === 'unavailable' ||
             status === 'hidden' ? null : (
-              // Only unfinished providers reach here, so the count is always partial.
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                 {`${progress.completed}/${progress.total}`}
               </span>
@@ -128,8 +131,7 @@ export function TaskSourceProviderCard({
               type="button"
               size="sm"
               variant={visible ? 'outline' : 'secondary'}
-              // aria-disabled, not disabled: the last visible provider must stay
-              // reachable by keyboard so its label can explain why it is locked.
+              // Keep the last visible provider keyboard-focusable so its lock reason remains discoverable.
               aria-disabled={visibilityLocked}
               className={cn(visibilityLocked && 'cursor-not-allowed opacity-60')}
               aria-label={getShowInTasksActionLabel(visible, canHide, name)}

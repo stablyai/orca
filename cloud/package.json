@@ -1,0 +1,27 @@
+{
+  "name": "orca-cloud",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "build:process-host": "tsc -p ../src/packages/process-host/tsconfig.json --typeRoots ./node_modules/@types",
+    "dev": "pnpm --filter @orca-cloud/relay dev",
+    "lint": "pnpm -r lint",
+    "pretest": "pnpm test:runner",
+    "test": "pnpm -r --filter \"!@orca-cloud/relay\" test && pnpm --filter @orca-cloud/relay test",
+    "typecheck": "pnpm -r typecheck",
+    "test:runner": "node --import tsx --conditions=orca-source --test dev/scripts/run-relay-tests.test.mjs \"../.github/actions/cloud-sql-rollout-lease/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@orca/process-host": "link:../src/packages/process-host",
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=24 <27",
+    "pnpm": ">=12"
+  },
+  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6"
+}

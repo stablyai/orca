@@ -3,19 +3,20 @@ import { e2eConfig } from '@/lib/e2e-config'
 export const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 export const pendingSpawnGenerationByPaneKey = new Map<string, number>()
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
-// Why: relay requests expire at 30s; leave one second for their fallback before re-arming locally.
-export const DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS = 31_000
-export const REMOTE_PTY_ID_PREFIX = 'remote:'
+const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
+
+/** Only host-proven absence permits cold resume. Exclude owner-mismatch suffixes: they describe another live pane, matching main’s isPtyAlreadyGoneError gate (docs/reference/ssh-execution-boundary.md). */
+export function isSshSessionGoneError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    message.includes(SSH_SESSION_EXPIRED_ERROR) &&
+    !message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR)
+  )
+}
 export const PTY_CONNECT_DIAG_LIMIT = 200
 export const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 export const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
-// Why a grace window instead of a plain flag: a connect that never settles
-// (SSH RPC timeout class, wedged daemon call) would otherwise suppress
-// input-triggered recovery FOREVER — and such a pane has no output flowing,
-// so no other detector can fire. Past the grace, undeliverable input may
-// recover again; the transport's destroyed-check no longer kills a
-// pre-existing session when a late reattach resolves, so a remount racing
-// a slow-but-alive connect costs a wasted view rebuild, not a shell.
+// Bound connect grace so wedged RPCs cannot suppress input recovery forever; late reattach does not authorize killing pre-existing sessions.
 export const TRANSPORT_CONNECT_SETTLE_GRACE_MS = 60_000
 
 export function recordPtyConnectDiagnostic(message: string): void {

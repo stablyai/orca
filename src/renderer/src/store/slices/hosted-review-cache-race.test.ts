@@ -9,15 +9,7 @@ const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtimeRpc.callRuntimeRpc,
-  getActiveRuntimeTarget: (
-    settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined
-  ) => {
-    const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
-  }
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeRpc.callRuntimeRpc }))
 
 const mockApi = {
   hostedReview: {
@@ -112,10 +104,14 @@ describe('hosted review cache race protection', () => {
         }
       }
     })
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
     vi.setSystemTime(300)
     resolveFetch(olderReview)
 
     await expect(request).resolves.toEqual(olderReview)
+    unsubscribe()
+    expect(subscriber).not.toHaveBeenCalled()
     expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
       data: newerReview,
       fetchedAt: 200,
@@ -159,8 +155,7 @@ describe('hosted review cache race protection', () => {
       vi.setSystemTime(300)
       rejectFetch(new Error('older lookup failed'))
 
-      // Why: a failed lookup preserves (and returns) the last known review
-      // instead of caching a definitive miss that would blank the card.
+      // Lookup failures retain last review instead of caching a definitive miss and blanking cards.
       await expect(request).resolves.toEqual(newerReview)
       expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
         data: newerReview,
@@ -206,8 +201,7 @@ describe('hosted review cache race protection', () => {
       rejectFetch(new Error('transient gh failure'))
 
       await expect(request).resolves.toEqual(cachedReview)
-      // Why: the cached review survives untouched; no fresh `data: null` miss is
-      // written, so the card keeps showing the PR and retries on the next poll.
+      // No fresh null miss: preserve review and retry next poll.
       expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
         data: cachedReview,
         fetchedAt: 100,

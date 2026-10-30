@@ -9,13 +9,13 @@ import {
   getAgentRowPrimaryText,
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
-} from './agent-row-primary-text'
+} from '../../../shared/agent-row-primary-text'
 import { formatAgentToolPreview } from './agent-row-tool-preview'
+import { agentVerdictStatusLine } from './agent-verdict-status-line'
 
-// Why: follow-up replies ("yes", "ok proceed") are valid hook prompts but are
-// terrible scan labels for a cross-worktree agent list — treat them as non-titles.
+// Terse follow-ups such as “yes” are valid prompts but poor cross-worktree task labels.
 const TERSE_FOLLOW_UP_PATTERN =
-  /^(yes|no|ok|yep|nope|sure|thanks|thank you|please|proceed|continue|go ahead|lgtm|done|looks good|ok proceed)\.?$/i
+  /^(yes|no|ok|yep|nope|sure|thanks|thank you|please|proceed|continue|go ahead|lgtm|done|looks good|ok proceed|hi|hey|hello|yo)\.?$/i
 
 export function isTerseAgentFollowUpPrompt(prompt: string): boolean {
   const trimmed = prompt.trim()
@@ -41,9 +41,7 @@ function taskTitleFromPrompt(prompt: string): string | null {
 }
 
 function bestTaskPromptFromHistory(history: readonly AgentStateHistoryEntry[]): string | null {
-  // Why: the most recent substantive turn is the current task — older prompts
-  // (even longer ones) must not shadow newer work. Compare startedAt rather
-  // than array position so out-of-order history still resolves the latest turn.
+  // Use the newest substantive startedAt, independent of array order; older lengthy prompts must not shadow new work.
   let best: string | null = null
   let bestStartedAt = Number.NEGATIVE_INFINITY
   for (const historyEntry of history) {
@@ -59,11 +57,7 @@ function bestTaskPromptFromHistory(history: readonly AgentStateHistoryEntry[]): 
   return best
 }
 
-// Why: orchestration labels are the stable identity across follow-up turns, but
-// sticky metadata can outlive the task. Trust the label only when it still
-// describes the live work: a dispatch turn must share the task id (mirrors
-// getAgentRowPrimaryText), and a substantive non-dispatch prompt means the pane
-// moved on to new work — a terse follow-up ("yes") is still the same task.
+// Keep orchestration labels only for the same dispatch task or terse follow-up; substantive new prompts retire sticky labels.
 function orchestrationLabelForEntry(
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
 ): string | null {
@@ -81,7 +75,6 @@ function orchestrationLabelForEntry(
   return label
 }
 
-/** Friendly workspace label — matches the sidebar worktree card's primary name. */
 export function getActivityThreadWorkspaceTitle(
   worktree: Pick<Worktree, 'displayName' | 'branch'>
 ): string {
@@ -93,7 +86,6 @@ export function getActivityThreadWorkspaceTitle(
   return branch || 'Workspace'
 }
 
-/** Stable task identity for Activity sidebar rows — not the latest follow-up turn. */
 export function getActivityThreadTaskTitle(args: {
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt' | 'stateHistory'>
   tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title' | 'defaultTitle'>
@@ -109,16 +101,13 @@ export function getActivityThreadTaskTitle(args: {
     return orchestrationLabel
   }
 
-  // Why: respect the user's tabAutoGenerateTitle setting — a disabled generated
-  // title must not resurface here (mirrors resolveTerminalTabTitle's gate).
+  // Respect tabAutoGenerateTitle here too so disabled generated titles cannot resurface.
   const generatedTitle = args.generatedTitlesEnabled ? args.tab.generatedTitle?.trim() : ''
   if (generatedTitle) {
     return generatedTitle
   }
 
-  // Why: a substantive live prompt is genuine new work and must win — the row
-  // title follows the active turn (see buildAgentPaneThreads). Only a terse
-  // follow-up ("yes") falls through to the prior task recorded in history.
+  // Substantive live prompts win; only terse follow-ups reuse the prior task’s history label.
   const liveTitle = taskTitleFromPrompt(args.entry.prompt)
   if (liveTitle) {
     return liveTitle
@@ -145,33 +134,71 @@ function isMislabeledUserPrompt(text: string, entry: Pick<AgentStatusEntry, 'pro
   if (isTerseAgentFollowUpPrompt(trimmed)) {
     return true
   }
-  // Why: some hooks echo the live user prompt into assistant preview fields
-  // between turns; never surface that as the agent's latest reply.
+  // Hooks can echo the user prompt into preview fields; never show it as the agent’s reply.
   if (trimmed === entry.prompt.trim()) {
     return true
   }
   return false
 }
 
-/** Latest agent activity line — tool step while working, assistant reply otherwise. */
+// Skip a leading worker_done lifecycle report so two-line previews reach the reply; tolerate varied dash/Markdown forms.
+const WORKER_DONE_SENT = /\bworker_done sent(?:\s+with outcome \w+)?/i
+const ORCHESTRATION_SUMMARY_PREFIX = /^(?:\*{0,2})summary of what happened:\s*/i
+const ORCHESTRATION_VERDICT_PREFIX = /^(?:\*{0,2})verdict:(?:\*{0,2})\s*/i
+
+function unwrapOrchestrationAssistantPreview(text: string): string {
+  let next = text.trim()
+  const workerDone = WORKER_DONE_SENT.exec(next)
+  if (workerDone && workerDone.index < 96) {
+    next = next.slice(workerDone.index + workerDone[0].length).replace(/^[.\s…*—–-]+/, '')
+  }
+  next = next.replace(ORCHESTRATION_SUMMARY_PREFIX, '').trim()
+  next = next.replace(ORCHESTRATION_VERDICT_PREFIX, '').trim()
+  return next
+}
+
+function usefulAssistantReply(text: string, entry: Pick<AgentStatusEntry, 'prompt'>): string {
+  const trimmed = text.trim()
+  if (!trimmed || isMislabeledUserPrompt(trimmed, entry)) {
+    return ''
+  }
+  const unwrapped = unwrapOrchestrationAssistantPreview(trimmed)
+  if (!unwrapped || /^[.\s…]+$/.test(unwrapped) || isMislabeledUserPrompt(unwrapped, entry)) {
+    return ''
+  }
+  return unwrapped
+}
+
 export function getActivityThreadStatusPreview(
   entry: Pick<
     AgentStatusEntry,
-    'state' | 'toolName' | 'toolInput' | 'lastAssistantMessage' | 'interrupted' | 'prompt'
+    | 'state'
+    | 'toolName'
+    | 'toolInput'
+    | 'lastAssistantMessage'
+    | 'lastCompletedAssistantMessage'
+    | 'interrupted'
+    | 'mainAgent'
+    | 'prompt'
   >,
   agentState?: AgentStatusState | null
 ): string {
-  if (entry.interrupted === true) {
-    return 'Interrupted by user'
+  const verdictLine = agentVerdictStatusLine(entry)
+  if (verdictLine) {
+    return verdictLine
   }
   const state = agentState ?? entry.state
   const toolPreview = formatAgentToolPreview(entry, state)
   if (toolPreview) {
     return toolPreview
   }
-  const assistant = entry.lastAssistantMessage?.trim() ?? ''
-  if (assistant && !isMislabeledUserPrompt(assistant, entry)) {
+  const assistant = usefulAssistantReply(entry.lastAssistantMessage ?? '', entry)
+  if (assistant) {
     return assistant
+  }
+  // Working/waiting pings clear lastAssistantMessage; the completed-turn snapshot retains the last useful reply.
+  if (state !== 'working' && state !== 'waiting') {
+    return usefulAssistantReply(entry.lastCompletedAssistantMessage ?? '', entry)
   }
   return ''
 }
@@ -180,7 +207,14 @@ export function getActivityThreadStatusPreview(
 export function resolveActivityThreadStatusPreview(
   entry: Pick<
     AgentStatusEntry,
-    'state' | 'toolName' | 'toolInput' | 'lastAssistantMessage' | 'interrupted' | 'prompt'
+    | 'state'
+    | 'toolName'
+    | 'toolInput'
+    | 'lastAssistantMessage'
+    | 'lastCompletedAssistantMessage'
+    | 'interrupted'
+    | 'mainAgent'
+    | 'prompt'
   >,
   agentState: AgentStatusState | null | undefined,
   previousPreview?: string
@@ -189,15 +223,9 @@ export function resolveActivityThreadStatusPreview(
   if (next) {
     return next
   }
-  // Why: only bridge a transient empty/mislabeled ping within the SAME turn. A
-  // substantive live prompt marks a new turn, so the prior turn's reply must not
-  // linger as the current status (a fresh working turn shows no stale preview).
+  // Bridge empty/mislabeled pings only within the same turn; a substantive new prompt must not inherit a stale reply.
   if (!isTerseAgentFollowUpPrompt(entry.prompt)) {
     return ''
   }
-  const previous = previousPreview?.trim() ?? ''
-  if (previous && !isMislabeledUserPrompt(previous, entry)) {
-    return previous
-  }
-  return ''
+  return usefulAssistantReply(previousPreview ?? '', entry)
 }

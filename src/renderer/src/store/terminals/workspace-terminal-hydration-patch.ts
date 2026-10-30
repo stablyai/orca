@@ -1,9 +1,9 @@
 import type { AppState } from '../types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveAgentPaneAuthorityKey } from '../slices/agent-pane-authority'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
+import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
 export type WorkspaceHydrationPatch = Pick<
   AppState,
@@ -20,17 +20,29 @@ export type WorkspaceHydrationPatch = Pick<
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
   | 'closedTerminalTabTombstonesByTabId'
+  | 'pairedTerminalTabCloseIntentsByEnvironment'
   | 'automaticAgentResumeClaimsByTabId'
   | 'sleepingAgentSessionsByPaneKey'
   | 'pendingReconnectWorktreeIds'
   | 'pendingReconnectTabByWorktree'
   | 'pendingReconnectPtyIdByTabId'
   | 'everActivatedWorktreeIds'
+  | 'unverifiedPtyLossTabIds'
   | 'worktreeNavHistory'
   | 'worktreeNavHistoryIndex'
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
->
+  | 'localOnlyScrollbackByTabId'
+> &
+  // Only cold reads carry contested-host shadows; scoped hydration must preserve the store’s copy.
+  Partial<
+    Pick<
+      AppState,
+      | 'contestedHostWorkspaceSessions'
+      | 'contestedPrimaryHostBySessionKey'
+      | 'hydratedRuntimeSessionHostIds'
+    >
+  >
 
 export function replaceHydratedRecordKeys<T>(
   current: Record<string, T>,
@@ -110,29 +122,16 @@ export function targetScopedWorkspaceHydrationPatch(
       .flatMap((workspaceKey) => (state.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id))
       .filter((tabId) => !retainedTargetTabIds.has(tabId))
   )
+  // Session-scoped PTY-loss reprieve must not protect a retired/replaced row in later orphan sweeps.
+  const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
+    state.unverifiedPtyLossTabIds,
+    deletedTargetTabIds
+  )
   const pendingReconnectPtyIdByTabId = replaceHydratedRecordKeys(
     state.pendingReconnectPtyIdByTabId,
     {},
     targetTabIds
   )
-  const authority = options.directSshAuthority
-  if (authority) {
-    for (const workspaceKey of hydrated.pendingReconnectWorktreeIds) {
-      if (!workspaceKeys.has(workspaceKey)) {
-        continue
-      }
-      for (const tab of session.tabsByWorktree[workspaceKey] ?? []) {
-        // Why: rows hydration dropped (invalid id, canonical duplicate) would leak reconnect keys nothing owns.
-        if (!retainedTargetTabIds.has(tab.id)) {
-          continue
-        }
-        const ptyId = session.remoteSessionIdsByTabId?.[tab.id] ?? tab.ptyId
-        if (ptyId && parseAppSshPtyId(ptyId)?.connectionId === authority.targetId) {
-          pendingReconnectPtyIdByTabId[tab.id] = ptyId
-        }
-      }
-    }
-  }
   const activeOutsideScope =
     state.activeWorktreeId != null && !workspaceKeys.has(state.activeWorktreeId)
   const sleepingAgentSessionsByPaneKey = Object.fromEntries([
@@ -172,14 +171,18 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.lastVisitedAtByWorktreeId,
       workspaceKeys
     ),
-    defaultTerminalTabsAppliedByWorktreeId: replaceHydratedRecordKeys(
-      state.defaultTerminalTabsAppliedByWorktreeId,
-      hydrated.defaultTerminalTabsAppliedByWorktreeId,
-      workspaceKeys
-    ),
-    // Why passed through whole: hydration already unioned it with live store state, and the map is
-    // keyed by tab id rather than by workspace key so replaceHydratedRecordKeys has nothing to match.
+    // Why local marks win: the applied mark is write-once.
+    defaultTerminalTabsAppliedByWorktreeId: {
+      ...replaceHydratedRecordKeys(
+        state.defaultTerminalTabsAppliedByWorktreeId,
+        hydrated.defaultTerminalTabsAppliedByWorktreeId,
+        workspaceKeys
+      ),
+      ...state.defaultTerminalTabsAppliedByWorktreeId
+    },
+    // Already fell back to live state; tab-keyed tombstones cannot use workspace-key replacement.
     closedTerminalTabTombstonesByTabId: hydrated.closedTerminalTabTombstonesByTabId,
+    pairedTerminalTabCloseIntentsByEnvironment: hydrated.pairedTerminalTabCloseIntentsByEnvironment,
     automaticAgentResumeClaimsByTabId: replaceHydratedRecordKeys(
       state.automaticAgentResumeClaimsByTabId,
       hydrated.automaticAgentResumeClaimsByTabId,
@@ -197,21 +200,9 @@ export function targetScopedWorkspaceHydrationPatch(
     ),
     pendingReconnectPtyIdByTabId,
     everActivatedWorktreeIds,
-    directSshPaneRetryByTabId: replaceHydratedRecordKeys(
-      state.directSshPaneRetryByTabId,
-      {},
-      deletedTargetTabIds
-    ),
-    directSshLivePtyBindingByTabId: replaceHydratedRecordKeys(
-      state.directSshLivePtyBindingByTabId,
-      {},
-      deletedTargetTabIds
-    ),
-    directSshPaneRetryHistoryByTabId: replaceHydratedRecordKeys(
-      state.directSshPaneRetryHistoryByTabId,
-      {},
-      deletedTargetTabIds
-    ),
+    ...(nextUnverifiedPtyLossTabIds !== state.unverifiedPtyLossTabIds
+      ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
+      : {}),
     ptyIdsByTabId: replaceHydratedRecordKeys(
       state.ptyIdsByTabId,
       hydrated.ptyIdsByTabId,
@@ -220,6 +211,11 @@ export function targetScopedWorkspaceHydrationPatch(
     terminalLayoutsByTabId: replaceHydratedRecordKeys(
       state.terminalLayoutsByTabId,
       hydrated.terminalLayoutsByTabId,
+      targetTabIds
+    ),
+    localOnlyScrollbackByTabId: replaceHydratedRecordKeys(
+      state.localOnlyScrollbackByTabId,
+      hydrated.localOnlyScrollbackByTabId,
       targetTabIds
     )
   }

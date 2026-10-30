@@ -61,7 +61,7 @@ function row(overrides: Partial<AutomationHostRow>): AutomationHostRow {
 }
 
 describe('captured owner availability', () => {
-  it('lets every action through on an owned row and repeats its precondition', () => {
+  it('permits run on an owned row and repeats its precondition', () => {
     const availability = automationActionAvailability(
       { owner: DESKTOP_SELF, selector: { kind: 'self' } },
       'run'
@@ -86,12 +86,18 @@ describe('captured owner availability', () => {
     expect(isAutomationActionEnabled(orphan, 'delete')).toBe(true)
   })
 
-  it('blocks every action on a legacy row and asks for a server update', () => {
+  it('blocks delete on a legacy row and asks for a server update', () => {
     // A qualified selector with no owner means the authority never sent a generation.
     const legacy = { owner: null, selector: { kind: 'ssh' as const, targetId: 'box' } }
     const availability = automationActionAvailability(legacy, 'delete')
     expect(availability.kind).toBe('blocked')
     expect(availability.kind === 'blocked' && availability.block.recovery).toBe('update-server')
+    expect(availability.kind === 'blocked' && availability.block.message).toContain(
+      'needs an update'
+    )
+    expect(availability.kind === 'blocked' && availability.block.message).toContain(
+      'Scheduled runs may still continue'
+    )
   })
 
   it('reports a row with no metadata as uncaptured rather than blocked', () => {

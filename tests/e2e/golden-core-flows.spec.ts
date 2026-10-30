@@ -1,3 +1,7 @@
+import {
+  openSidebarProjectDialog,
+  openSidebarWorkspaceComposer
+} from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -30,9 +34,7 @@ function escapeRegExp(value: string): string {
 }
 
 async function createGitRepo(prefix: string, name: string): Promise<string> {
-  // Why: macOS os.tmpdir() (/var/...) symlinks to /private/var/..., and the app
-  // canonicalizes repo.path via `git rev-parse --show-toplevel` on add. Resolve
-  // the symlink here so the path the test asserts on matches what the store holds.
+  // Resolve macOS /var symlinks like git does when registering repo.path.
   const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), prefix)))
   tempRoots.push(rootPath)
   const repoPath = path.join(rootPath, name)
@@ -94,7 +96,7 @@ async function continueOnboarding(page: Page): Promise<void> {
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: /^Codex\s/ })
+  const codexButton = page.getByRole('button', { name: 'Codex', exact: true })
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -211,10 +213,7 @@ async function addProjectFromSidebar(
   repoPath: string
 ): Promise<void> {
   await chooseFolderInNativeDialog(electronApp, repoPath)
-  await page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(page)
   const addDialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(addDialog).toBeVisible()
   await addDialog.getByRole('button', { name: /Browse folder/i }).click()
@@ -233,7 +232,7 @@ async function addProjectFromSidebar(
 }
 
 async function createWorkspace(page: Page, workspaceName: string): Promise<void> {
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
   const nameInput = dialog.getByPlaceholder(/Type a name/i)
@@ -297,11 +296,15 @@ async function renderedTabIds(page: Page): Promise<string[]> {
 }
 
 async function expectTerminalSurface(page: Page): Promise<void> {
-  await expect
-    .poll(() => page.locator('[data-terminal-tab-id]').count(), { timeout: 30_000 })
-    .toBeGreaterThan(0)
-  const terminalSurface = page.locator('[data-terminal-tab-id]').first()
-  await expect(terminalSurface).toHaveAttribute('data-native-file-drop-target', 'terminal')
+  const terminalSurface = page
+    .locator('[data-terminal-tab-id][data-terminal-layout-leaf-ids]:visible')
+    .first()
+  await expect(terminalSurface).toBeVisible({ timeout: 30_000 })
+  await expect(terminalSurface).not.toHaveAttribute('data-os-file-drop-owner')
+  await expect(terminalSurface.locator('.pane[data-leaf-id]').first()).toHaveAttribute(
+    'data-os-file-drop-owner',
+    ''
+  )
 }
 
 async function waitForTerminalPaneManager(page: Page): Promise<void> {
@@ -371,9 +374,7 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
 async function completeWorkspaceCreationTour(page: Page, workspaceName: string): Promise<void> {
   const pickProjectStep = page.getByRole('dialog', { name: /Pick a project/i })
   await expect(pickProjectStep).toBeVisible()
-  // Why: the project picker can leave its command popover open after the tour
-  // starts. Keyboard-activate the step button so the golden verifies the tour
-  // transition instead of pointer geometry around that popover.
+  // Keyboard-activate Next so a lingering project popover cannot obscure the tour transition.
   await pickProjectStep.getByRole('button', { name: /^Next$/ }).focus()
   await page.keyboard.press('Enter')
   const nameStep = page.getByRole('dialog', { name: /Name it, or start from existing work/i })

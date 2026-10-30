@@ -4,9 +4,11 @@ import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { isNativeChatSkillForAgent } from '../../../../shared/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { emitNativeChatSkillDiscovery } from '@/lib/native-chat-telemetry'
 import {
+  isNativeChatSkillDiscoveryAwaitingDirectory,
   resolveNativeChatSkillDiscoveryContext,
   selectNativeChatSkillStateInputs,
   type NativeChatSkillDiscoveryContext
@@ -19,10 +21,7 @@ export {
 
 // The host scan budget honored by runtime targets that respect timeoutMs.
 const DISCOVERY_TIMEOUT_MS = 10_000
-// Renderer wall-clock backstop for the local branch (which ignores timeoutMs).
-// It must exceed the host's summed worst case — a WSL scan runs a metadata read
-// (5s) then the tree walk (10s) in sequence — so the host's own precise timeout
-// wins and a WSL cold boot does not surface a healthy scan as a spurious timeout.
+// Exceed WSL’s sequential metadata (5s) and walk (10s) budgets so host timeouts win over the local backstop.
 const DISCOVERY_BACKSTOP_TIMEOUT_MS = 18_000
 
 export type NativeChatSkillDiscovery = {
@@ -43,56 +42,54 @@ const IDLE_STATE: StoredDiscoveryState = {
   error: null,
   contextKey: null
 }
-const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
-
-export function isNativeChatSkillForAgent(
-  agent: AgentType,
-  skill: DiscoveredSkill,
-  result?: Pick<SkillDiscoveryResult, 'sources'>
-): boolean {
-  const profile = getNativeChatAgentProfile(agent)
-  if (!profile) {
-    return false
-  }
-  if (!result) {
-    return (
-      agent === 'codex' &&
-      (skill.providers.includes('codex') || skill.providers.includes('agent-skills'))
-    )
-  }
-  // Why: canonical-path dedup keeps one row per file, but a symlinked skill can
-  // be reachable through several roots; any shared or agent-owned root grants
-  // visibility regardless of which root the scanner happened to list first.
-  const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
-  return rootPaths.some((rootPath) => {
-    const source = result.sources.find((entry) => entry.path === rootPath)
-    return source?.owner === null || source?.owner === profile.skillSourceOwner
-  })
+// No context yet, but one is on its way: reads as loading rather than as a failed scan.
+const AWAITING_CONTEXT_STATE: StoredDiscoveryState = {
+  status: 'loading',
+  skills: [],
+  error: null,
+  contextKey: null
 }
+const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
+  status: 'error',
+  skills: [],
+  error: new Error('Skill discovery context is unavailable.'),
+  errorKind: 'unknown',
+  contextKey: null
+}
+const selectNoSkillStateInputs = (): null => null
+const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 
 export function useNativeChatSkills(
   agent: AgentType,
   terminalTabId: string,
   enabled = false
 ): NativeChatSkillDiscovery {
-  const inputs = useAppStore(useShallow(selectNativeChatSkillStateInputs))
+  // Closed is the common state, so the tab-map subscription only runs while the picker is open.
+  const inputs = useAppStore(
+    useShallow(enabled ? selectNativeChatSkillStateInputs : selectNoSkillStateInputs)
+  )
   const context = useMemo(
-    () => resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId),
+    () => (inputs ? resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId) : null),
     [inputs, terminalTabId]
+  )
+  const awaitingContext = useMemo(
+    () =>
+      inputs !== null &&
+      !context &&
+      isNativeChatSkillDiscoveryAwaitingDirectory(inputs, terminalTabId),
+    [context, inputs, terminalTabId]
   )
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)
   const [retryGeneration, setRetryGeneration] = useState(0)
   const paneDiscoveryCache = useRef(new Map<string, SkillDiscoveryResult>())
-  // Why: retry intent belongs to the next request, not to every later render —
-  // keying off the generation counter would keep forcing after a pane switch.
+  // Consume retry intent once; a generation-wide force flag would leak across pane switches.
   const forceNextDiscovery = useRef(false)
   const profile = getNativeChatAgentProfile(agent)
 
   useEffect(() => {
     let cancelled = false
     if (!profile || !enabled || !context) {
-      // Why: there is no pane to retry into, so a pending retry intent must not
-      // survive to force an unrelated pane's first scan.
+      // Without a current pane, discard retry intent before it can force another pane’s scan.
       forceNextDiscovery.current = false
       setState(IDLE_STATE)
       return
@@ -125,9 +122,7 @@ export function useNativeChatSkills(
       return
     }
     setState({ status: 'loading', skills: [], error: null, contextKey: context.key })
-    // Why: Retry is an explicit "I changed something, look again", so it has to
-    // reach the host's disk rather than its shared scans. The first attempt for a
-    // pane rides those scans like every other passive reader.
+    // Explicit Retry bypasses shared host scans; passive discovery reuses them.
     const forced = forceNextDiscovery.current
     forceNextDiscovery.current = false
     const request = getOrStartDiscovery(context, forced)
@@ -175,12 +170,16 @@ export function useNativeChatSkills(
 
   const effectiveState = useMemo(
     () =>
-      !profile || !enabled || !context
+      !profile || !enabled
         ? IDLE_STATE
-        : state.contextKey === context.key
-          ? state
-          : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
-    [context, enabled, profile, state]
+        : !context
+          ? awaitingContext
+            ? AWAITING_CONTEXT_STATE
+            : MISSING_CONTEXT_STATE
+          : state.contextKey === context.key
+            ? state
+            : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
+    [awaitingContext, context, enabled, profile, state]
   )
   const visibleSkills = useMemo(() => {
     if (!profile || effectiveState.status !== 'ready') {
@@ -220,8 +219,7 @@ function getOrStartDiscovery(
   if (existing && !refresh) {
     return existing
   }
-  // Why: the local runtime.call branch ignores timeoutMs, so the renderer must
-  // enforce the design's scan timeout itself or a stalled local scan loads forever.
+  // Local runtime.call ignores timeoutMs; enforce a renderer deadline so stalled scans cannot load forever.
   const request = withDiscoveryTimeout(
     callRuntimeRpc<SkillDiscoveryResult>(
       context.runtimeTarget,

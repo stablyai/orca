@@ -1,6 +1,10 @@
-// Resume-command construction for Agent Session History rows: turns a scanned
-// session into the shell line that re-enters it, quoted for the target platform
-// and (when known) the live tab's shell.
+// Build history resume lines for the execution platform and actual shell.
+import { quoteCmdDoubleQuoted } from './shell-argument-quoting'
+import {
+  isAntigravityReferenceSession,
+  antigravityTranscriptReferencePrompt
+} from './antigravity-session-origin'
+import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   clearEnvCommand,
@@ -26,22 +30,22 @@ export function buildAiVaultResumeCommand(args: {
   const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
     args
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
-  // Why: OMP's and Prime Agent's `--resume` accept an absolute transcript path,
-  // which resolves regardless of which session-dir root (custom
-  // OMP_CODING_AGENT_DIR / PRIME_AGENT_CODING_AGENT_DIR / WSL home) the file was
-  // discovered under, where an id-prefix lookup scoped to the default store
-  // would miss it. Falls back to the id if no path is known.
+  // OMP/Prime --resume accepts absolute transcript paths across custom roots/WSL; default-store ID lookup would miss them. Fall back to ID without a path.
   const resumeTarget =
     (agent === 'omp' || agent === 'prime-agent') && resumeFilePath?.trim()
       ? resumeFilePath.trim()
       : sessionId
   const sessionArg =
     shell === 'cmd'
-      ? quoteWindowsCmdArg(resumeTarget)
+      ? quoteCmdDoubleQuoted(resumeTarget)
       : shell
         ? quoteStartupArg(resumeTarget, shell)
         : quoteShellArg(resumeTarget, platform)
-  const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
+  const referencePath = normalizeAiVaultResumeFilePath(resumeFilePath ?? undefined, platform)
+  const resumeCommand =
+    isAntigravityReferenceSession({ agent, filePath: referencePath }) && referencePath
+      ? `${baseCommand} --prompt-interactive ${quoteResumeArg(antigravityTranscriptReferencePrompt(referencePath), platform, shell)}`
+      : buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
   return buildAiVaultResumeShellCommand({
     resumeCommand,
@@ -58,21 +62,14 @@ export function buildAiVaultResumeShellCommand(args: {
   cwd: string | null
   platform: NodeJS.Platform
   codexHome?: string | null
-  /** Env names the agent must not inherit. Applied as a prefix on the agent
-   *  itself, never on the whole `cd … && agent` chain — `cd` is a shell builtin
-   *  that `env` cannot run, and a child `cd` would not move the agent anyway. */
+  /** Remove env on the agent itself: env cannot run builtin cd and a child cd would not move the agent. */
   clearEnvNames?: readonly string[]
-  // Why: the QUEUED resume command is typed into the live tab shell, so its
-  // cd/env prefix must match that shell. Shell-less persisted commands keep the
-  // legacy self-contained `cmd /d /s /c` wrapper.
+  // Queued lines run in the live shell; persisted shell-less commands retain the self-contained cmd /d /s /c wrapper.
   shell?: AgentStartupShell
 }): string {
   const { cwd, platform, codexHome, shell, clearEnvNames } = args
 
-  // Why: shell-aware commands are parsed by a known running shell, while
-  // shell-less persisted commands keep the legacy self-contained cmd wrapper.
-  // PowerShell routes here whatever the platform: it is the shell, not the
-  // host, that decides which grammar the line has to be written in.
+  // Choose grammar by live shell, including PowerShell on POSIX; shell-less persisted lines retain the legacy cmd wrapper.
   if (shell === 'powershell' || (platform === 'win32' && shell && shell !== 'cmd')) {
     return buildResumeShellCommandForShell({
       resumeCommand: args.resumeCommand,
@@ -84,19 +81,11 @@ export function buildAiVaultResumeShellCommand(args: {
   }
 
   const resolvedCodexHome = codexHome?.trim() || null
-  // Why filter: the prefix and the removal name the same variable, and `env -u`
-  // strips what the assignment just set, so an unfiltered list would silently
-  // resume against the real home. Keeping the assignment authoritative matches
-  // the old `clear…; CODEX_HOME=x agent` ordering.
+  // Filter assignments from env -u so the explicitly pinned home stays authoritative, matching legacy clear-then-assign ordering.
   const clearNames = resolvedCodexHome
     ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
     : clearEnvNames
-  // Why the two placements differ: `set -u` aborts on the unbound `$fish_pid`
-  // the POSIX clear statement has to test, so there it must not precede the
-  // agent — `env -u` carries the removal on the agent itself. cmd has no such
-  // hazard, and keeping its clear ahead of the `cd` preserves `cd … && agent`,
-  // so a failed `cd` still cannot run the agent in the wrong directory.
-  // Keyed on the shell, not the platform: the shell is what picks the grammar.
+  // POSIX set -u rejects the clear statement's unbound fish_pid: remove env on the agent. cmd can clear before cd, preserving cd-failure short-circuiting. Choose by shell, not host.
   const dialect = shell ?? (platform === 'win32' ? 'cmd' : 'posix')
   const clearsOnAgent = clearNames?.length && isPosixStartupShell(dialect)
   const resumeCommand = `${codexHomeEnvPrefix(resolvedCodexHome, platform, shell)}${
@@ -107,17 +96,16 @@ export function buildAiVaultResumeShellCommand(args: {
       ? `${clearEnvCommand(clearNames, dialect)}${commandSeparator(dialect)}`
       : ''
   if (platform === 'win32' && shell === 'cmd') {
-    // Why: an interactive cmd splits the doubled quotes required by a nested
-    // `cmd /s /c` wrapper, so queued commands must use direct cmd syntax.
-    return `${clearPrefix}${cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand}`
+    // Interactive cmd splits nested-wrapper doubled quotes; queued lines need direct cmd syntax.
+    return `${clearPrefix}${cwd ? `cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}` : resumeCommand}`
   }
   if (!cwd) {
     return `${clearPrefix}${resumeCommand}`
   }
 
   if (platform === 'win32') {
-    const inner = `${clearPrefix}cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}`
-    return `cmd /d /s /c ${quoteWindowsCmdArg(inner)}`
+    const inner = `${clearPrefix}cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}`
+    return `cmd /d /s /c ${quoteCmdDoubleQuoted(inner)}`
   }
 
   return `cd ${quoteResumeArg(cwd, platform, shell)} && ${resumeCommand}`
@@ -132,11 +120,9 @@ function buildResumeShellCommandForShell(args: {
 }): string {
   const { cwd, codexHome, shell, clearEnvNames } = args
   if (isPosixStartupShell(shell)) {
-    // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
-    // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
+    // Windows Git Bash needs POSIX inline env and cd quoting.
     const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
-    // Why filter: see the twin in buildAiVaultResumeShellCommand — `env -u`
-    // would strip the home the prefix just set.
+    // Do not let env -u remove the explicitly assigned home.
     const clearNames = codexHome
       ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
       : clearEnvNames
@@ -150,8 +136,7 @@ function buildResumeShellCommandForShell(args: {
 
   const separator = commandSeparator(shell)
   const segments: string[] = []
-  // Why ahead of Set-Location: PowerShell has no `set -u` expansion hazard, so
-  // the removal keeps its original leading position.
+  // PowerShell has no set -u hazard; keep removal before Set-Location.
   if (clearEnvNames?.length) {
     segments.push(clearEnvCommand(clearEnvNames, shell))
   }
@@ -165,9 +150,7 @@ function buildResumeShellCommandForShell(args: {
   return segments.join(separator)
 }
 
-// Why: a bare real-home resume carries no CODEX_HOME prefix, so every surface
-// that spawns the pane must drop account-routed or daemon-inherited Codex
-// homes from its env, not only patch a sparse env on top.
+// Real-home resumes have no CODEX_HOME prefix: every spawning surface must delete inherited account/daemon homes instead of overlaying sparse env.
 export function realHomeCodexResumeEnvDeletion(
   session: Pick<AiVaultSession, 'agent' | 'codexHome'>
 ): { envToDelete: string[] } | Record<string, never> {
@@ -184,8 +167,9 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'hermes') {
     return 'hermes'
   }
-  if (agent === 'rovo') {
-    return 'acli'
+  // Preserve launch subcommands and mode flags when resuming.
+  if (agent === 'rovo' || agent === 'opencode2' || agent === 'kiro') {
+    return TUI_AGENT_CONFIG[agent].launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
@@ -199,20 +183,26 @@ function buildAgentResumeInvocation(
     case 'codex':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
-      return `${baseCommand} rovodev run --restore ${sessionArg}`
+      // Why: the base is the full launch command, as a settings override is.
+      return `${baseCommand} --restore ${sessionArg}`
+    case 'opencode2':
     case 'opencode':
     case 'pi':
-    // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
-    // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
-    // required — resuming from another directory is rejected by the CLI.
+    // Kimi --session/-S is workspace-scoped; retain the cwd prefix or resume fails.
     // falls through
     case 'kimi':
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
+    // Muse resume is workspace-scoped; retain the cwd prefix.
+    case 'muse':
+      return `${baseCommand} resume ${sessionArg}`
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
+    case 'qoder':
+    case 'codebuddy':
     case 'claude':
+    case 'zcode':
     case 'cursor':
     case 'gemini':
     case 'grok':
@@ -220,15 +210,16 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
-    // Why: OMP and Prime Agent resume by absolute transcript path (see
-    // buildAiVaultResumeCommand), but the `--resume <arg>` invocation form is
-    // identical to the others here.
+    case 'jcode':
+    // OMP/Prime use the same --resume form with absolute transcript paths.
     // falls through
     case 'omp':
     case 'prime-agent':
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`
+    case 'kiro':
+      return `${baseCommand} --resume-id ${sessionArg}`
   }
 }
 
@@ -241,7 +232,7 @@ function codexHomeEnvPrefix(
     return ''
   }
   if (platform === 'win32') {
-    return `set ${quoteWindowsCmdArg(`CODEX_HOME=${codexHome}`)} && `
+    return `set ${quoteCmdDoubleQuoted(`CODEX_HOME=${codexHome}`)} && `
   }
   // fish accepts the `NAME=value cmd` prefix (3.1+), but not sh's quoting.
   return `CODEX_HOME=${quoteResumeArg(codexHome, platform, shell)} `
@@ -256,15 +247,7 @@ function quoteResumeArg(
   return shell ? quoteStartupArg(value, shell) : quoteShellArg(value, platform)
 }
 
-/** Why not the sh `'\''` idiom here: this is the same resume command the shell
- *  branch above builds, and fish reads that idiom differently — it would halve
- *  backslashes in a path and reject a trailing one. Deferring to
- *  `quoteStartupArg` keeps one spelling regardless of whether a caller happened
- *  to pass a shell. */
+/** Use quoteStartupArg for fish: sh quoting would halve path backslashes and reject a trailing one, with or without an explicit shell. */
 function quoteShellArg(value: string, platform: NodeJS.Platform): string {
-  return platform === 'win32' ? quoteWindowsCmdArg(value) : quoteStartupArg(value, 'posix')
-}
-
-function quoteWindowsCmdArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
+  return platform === 'win32' ? quoteCmdDoubleQuoted(value) : quoteStartupArg(value, 'posix')
 }

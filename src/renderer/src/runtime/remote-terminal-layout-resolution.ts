@@ -1,18 +1,6 @@
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
-/**
- * Single source of truth for turning a set of terminal leaves into a layout
- * tree on the client. The host's published layout is authoritative; this module
- * exists so every client ingestion path resolves the tree the same way instead
- * of independently re-deriving it (which is how "Split Right" used to render as
- * a down split — divergent fallbacks each guessed a direction).
- *
- * Invariant: NEVER invent a split direction. A split's direction is meaningful
- * user/host state, so a guessed direction is wrong by construction. When no
- * authoritative tree covers the leaves, we keep whatever covering tree we do
- * have, and only as a true last resort synthesize a degenerate chain — logged
- * so the gap is visible rather than silently masquerading as a real layout.
- */
+// All client ingestion shares host-authoritative layout resolution. Never guess directions for known leaves: resolved trees persist/push back, so guesses destroy real layout on disk. Prune known trees to surviving leaves and graft only genuinely new ones; every invented direction is reported.
 
 function collectLayoutLeafIds(
   node: TerminalPaneLayoutNode | null | undefined,
@@ -47,41 +35,57 @@ export function layoutCoversLeaves(
 }
 
 /**
- * Last-resort tree when no authoritative or prior layout covers the leaves.
- * A single leaf needs no direction; >1 leaf cannot be rendered as a split
- * without inventing one, so this path is degenerate and should not fire for a
- * real split — callers pass `onSynthesize` to surface when it does.
+ * Drop every leaf outside `keep`; a split that loses one child collapses to the
+ * other. Surviving splits keep the direction the user/host actually chose.
  */
-function synthesizeDegenerateLayout(
-  leafIds: readonly string[],
-  onSynthesize?: (leafCount: number) => void
+export function pruneLayoutToLeaves(
+  node: TerminalPaneLayoutNode | null | undefined,
+  keep: ReadonlySet<string>
 ): TerminalPaneLayoutNode | null {
-  if (leafIds.length === 0) {
+  if (!node) {
     return null
   }
-  if (leafIds.length === 1) {
-    return { type: 'leaf', leafId: leafIds[0]! }
+  if (node.type === 'leaf') {
+    return keep.has(node.leafId) ? node : null
   }
-  onSynthesize?.(leafIds.length)
-  // No known direction: stack left-to-right as a flat chain. This is a visible
-  // fallback, not a guess we want to win — see invariant above.
-  return leafIds.slice(1).reduce<TerminalPaneLayoutNode>(
-    (root, leafId) => ({
-      type: 'split',
-      direction: 'horizontal',
-      first: root,
-      second: { type: 'leaf', leafId }
-    }),
-    { type: 'leaf', leafId: leafIds[0]! }
-  )
+  const first = pruneLayoutToLeaves(node.first, keep)
+  const second = pruneLayoutToLeaves(node.second, keep)
+  if (first && second) {
+    return first === node.first && second === node.second ? node : { ...node, first, second }
+  }
+  return first ?? second
 }
 
 /**
- * Resolve the layout tree for `leafIds`, preferring authoritative/known trees
- * (which carry the real direction) over any synthesized fallback.
- *
- * Precedence: host-authoritative layout → prior client layout → degenerate.
+ * Attach leaves no known tree describes. This is the only direction we invent,
+ * so it is always reported; the retained subtree keeps its real directions.
  */
+function graftUnplacedLeaves(
+  root: TerminalPaneLayoutNode | null,
+  unplacedLeafIds: readonly string[]
+): TerminalPaneLayoutNode | null {
+  return unplacedLeafIds.reduce<TerminalPaneLayoutNode | null>(
+    (tree, leafId) =>
+      tree === null
+        ? { type: 'leaf', leafId }
+        : { type: 'split', direction: 'horizontal', first: tree, second: { type: 'leaf', leafId } },
+    root
+  )
+}
+
+/** How many of `leafIds` this tree already places — its value as a donor. */
+function countPlacedLeaves(
+  root: TerminalPaneLayoutNode | null | undefined,
+  leafIds: readonly string[]
+): number {
+  if (!root) {
+    return 0
+  }
+  const treeLeafIds = collectLayoutLeafIds(root)
+  return leafIds.filter((leafId) => treeLeafIds.has(leafId)).length
+}
+
+/** Prefer exact-cover host tree, then exact prior tree; else prune/graft the tree covering most leaves. Only absent knowledge permits a degenerate chain. */
 export function resolveTerminalLayoutRoot(args: {
   authoritativeRoot?: TerminalPaneLayoutNode | null
   existingRoot?: TerminalPaneLayoutNode | null
@@ -94,5 +98,24 @@ export function resolveTerminalLayoutRoot(args: {
   if (layoutCoversLeaves(args.existingRoot, args.leafIds)) {
     return args.existingRoot ?? null
   }
-  return synthesizeDegenerateLayout(args.leafIds, args.onSynthesize)
+  if (args.leafIds.length === 0) {
+    return null
+  }
+  const authoritativePlaced = countPlacedLeaves(args.authoritativeRoot, args.leafIds)
+  const existingPlaced = countPlacedLeaves(args.existingRoot, args.leafIds)
+  // Ties go to the host tree; it is the authority for direction.
+  const donor =
+    authoritativePlaced === 0 && existingPlaced === 0
+      ? null
+      : authoritativePlaced >= existingPlaced
+        ? args.authoritativeRoot
+        : args.existingRoot
+  const retained = pruneLayoutToLeaves(donor, new Set(args.leafIds))
+  const placed = collectLayoutLeafIds(retained)
+  const unplaced = args.leafIds.filter((leafId) => !placed.has(leafId))
+  // One leaf and nothing retained is a bare leaf, which carries no direction.
+  if (unplaced.length > (retained === null ? 1 : 0)) {
+    args.onSynthesize?.(unplaced.length)
+  }
+  return graftUnplacedLeaves(retained, unplaced)
 }

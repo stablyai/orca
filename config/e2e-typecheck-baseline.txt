@@ -1,0 +1,3 @@
+# Type errors per file under tests/ (tsc -p config/tsconfig.e2e.json).
+# This is a RATCHET: counts may only go DOWN. Fix the errors in a file you touch.
+# Prune after a fix: pnpm check:e2e-typecheck-ratchet --prune

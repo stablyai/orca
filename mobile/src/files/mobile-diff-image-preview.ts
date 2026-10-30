@@ -1,10 +1,9 @@
 import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 
-// modifiedDeleted marks a proven deletion (modified side genuinely absent); an
-// empty modifiedContent alone can't, since a relay/SSH read failure also arrives
-// empty with modifiedIsBinary false.
+// Only modifiedDeleted proves deletion; read failures can also return empty modifiedContent with modifiedIsBinary false.
+// Omit kind: the reply reader admits every non-text arm, including unknown host arms.
 export type MobileBinaryDiffResult = {
-  kind: 'binary'
+  kind?: string
   originalContent?: string
   modifiedContent?: string
   originalIsBinary?: boolean
@@ -14,9 +13,7 @@ export type MobileBinaryDiffResult = {
   mimeType?: string
 }
 
-// Falls back to the original bytes only for a proven deletion; a read failure or
-// size-capped modify — also empty on the modified side — returns null instead of
-// the stale pre-change image.
+// Use original bytes only for proven deletion; failed or size-capped reads must not show a stale image.
 export function mobileDiffImageDataUri(result: MobileBinaryDiffResult): string | null {
   if (result.isImage !== true) {
     return null

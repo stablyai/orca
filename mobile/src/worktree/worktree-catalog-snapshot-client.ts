@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
 import type { Worktree } from './workspace-list-sections'
+import { worktreeCatalogRead } from './worktree-catalog-operations'
 
 // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
 export const WORKTREE_PS_FULL_LIMIT = 10_000
@@ -16,9 +16,7 @@ export type PendingWorktreeCatalog = {
   hostId: string
 }
 
-// Why (STA-3123): a failed worktree.ps must stay distinguishable from an empty
-// catalog — collapsing both to "no rows" made unreachable remote-server catalogs
-// render as a healthy host with 0 worktrees.
+// Keep fetch failure distinct from an empty host catalog (STA-3123).
 export type WorktreeCatalogFetchResult =
   | { kind: 'response'; pending: PendingWorktreeCatalog }
   | { kind: 'request_failed'; code: string }
@@ -39,9 +37,7 @@ export function admitWorktreeCatalogResponse<T>(
     unchanged?: unknown
     worktrees?: unknown
   }
-  // Why: a full response is defined by carrying rows, so discriminate on that rather
-  // than on the presence of `unchanged` — the latter could collide with a future
-  // catalog field and silently reclassify a full response.
+  // Rows identify a full response; a future unchanged field must not reclassify one.
   if (Array.isArray(response.worktrees)) {
     return {
       kind: 'full',
@@ -71,12 +67,14 @@ export class WorktreeCatalogSnapshotClient {
       this.confirmedWorktrees = null
     }
     const requestedSnapshotId = this.snapshotId
-    const response = await client.sendRequest('worktree.ps', {
+    const reply = await worktreeCatalogRead.request(client, {
       limit: WORKTREE_PS_FULL_LIMIT,
       afterSnapshotId: requestedSnapshotId
     })
-    if (!response.ok) {
-      const code = (response as RpcFailure).error?.code
+    const catalog = worktreeCatalogRead.interpret(reply)
+    if (!catalog.accepted) {
+      // The refusal code the caller reports lives on the envelope; no acceptance policy carries it.
+      const code = reply.ok ? undefined : reply.error?.code
       return {
         kind: 'request_failed',
         code: typeof code === 'string' && code.length > 0 ? code : 'request_failed'
@@ -85,10 +83,7 @@ export class WorktreeCatalogSnapshotClient {
     return {
       kind: 'response',
       pending: {
-        admission: admitWorktreeCatalogResponse<Worktree>(
-          (response as RpcSuccess).result,
-          requestedSnapshotId
-        ),
+        admission: admitWorktreeCatalogResponse<Worktree>(catalog.value, requestedSnapshotId),
         client,
         hostId
       }
@@ -100,8 +95,7 @@ export class WorktreeCatalogSnapshotClient {
     if (!pending) {
       return null
     }
-    // Why: a response from a superseded client/host is stale, not wrong — dropping it
-    // must not invalidate the token the current client/host just established.
+    // Discard stale client/host replies without invalidating the current session’s token.
     if (pending.client !== this.client || pending.hostId !== this.hostId) {
       return null
     }
@@ -114,8 +108,7 @@ export class WorktreeCatalogSnapshotClient {
     if (pending.admission.kind === 'full') {
       this.confirmedWorktrees = pending.admission.worktrees
     }
-    // Why: unchanged responses still return the confirmed rows so every poll reasserts
-    // host truth over optimistic local edits, exactly as the full-payload path did.
+    // Reassert confirmed host rows on unchanged polls too, overriding optimistic local edits.
     return this.confirmedWorktrees
   }
 }

@@ -21,6 +21,7 @@ type BrowserPageGuestRecoveryOptions = {
 export type BrowserPageGuestRecovery = {
   confirmRegistration: () => void
   dispose: () => void
+  isDisposed: () => boolean
   finish: () => boolean
   recoverRenderer: () => void
   retryRecovery: () => void
@@ -263,6 +264,7 @@ export function createBrowserPageGuestRecovery(
       clearValidationRetry()
       clearValidationTimeout()
     },
+    isDisposed: () => disposed,
     finish,
     recoverRenderer,
     retryRecovery: () => {

@@ -12,6 +12,7 @@ const { copyFileMock, handleMock, lstatMock, realpathMock, renameMock } = vi.hoi
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
 
 vi.mock('electron', () => ({
+  app: { getPath: () => '/orca-test-user-data' },
   ipcMain: { handle: handleMock }
 }))
 
@@ -27,7 +28,7 @@ vi.mock('fs/promises', async () => {
 })
 
 import { renameLocalPathSerializedByDestination } from './destination-serialized-local-rename'
-import { registerFilesystemMutationHandlers } from './ipc/filesystem-mutations'
+import { registerFilesystemMutationHandlers } from './ipc/filesystem/filesystem-mutations'
 import { RuntimeFileCommands } from './runtime/orca-runtime-files'
 
 const REPO_PATH = path.resolve('/workspace/repo')
@@ -50,7 +51,8 @@ function createRuntimeCommands(): RuntimeFileCommands {
   return new RuntimeFileCommands({
     requireStore: () => store,
     resolveRuntimeFileTarget: async () => ({
-      worktree: { id: 'wt-1', repoId: 'repo-1', path: REPO_PATH }
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: REPO_PATH },
+      executionHostId: 'local'
     })
   } as never)
 }

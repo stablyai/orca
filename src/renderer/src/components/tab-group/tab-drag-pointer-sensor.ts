@@ -7,6 +7,7 @@ import type {
   SensorInstance,
   SensorProps
 } from '@dnd-kit/core'
+import { recordTabDragPointer } from './tab-drag-pointer'
 
 type PointerCoordinates = { x: number; y: number }
 
@@ -112,8 +113,7 @@ export function shouldActivateTabDragFromDistanceSample({
   elapsedMs: number
   overThresholdSampleCount: number
 }): boolean {
-  // Why: one immediate over-threshold sample can be stale/coalesced after
-  // window focus; a second sample or a short grace period confirms real motion.
+  // Require another sample or a short grace period because the first post-focus motion can be stale/coalesced.
   return (
     elapsedMs >= TAB_DRAG_EARLY_MOVE_CONFIRMATION_MS ||
     overThresholdSampleCount >= TAB_DRAG_CONFIRMED_DISTANCE_SAMPLE_COUNT
@@ -140,6 +140,7 @@ export class TabDragPointerSensor implements SensorInstance {
   autoScrollEnabled = true
 
   private activated = false
+  private ended = false
   private readonly document: Document
   private readonly initialCoordinates: PointerCoordinates
   private readonly pointerDownTime = performance.now()
@@ -153,7 +154,10 @@ export class TabDragPointerSensor implements SensorInstance {
   constructor(props: SensorProps<PointerSensorOptions>) {
     this.props = props
     this.document = getOwnerDocument(props.event.target)
-    this.initialCoordinates = getPointerCoordinates(props.event) ?? DEFAULT_COORDINATES
+    const pointerDownCoordinates = getPointerCoordinates(props.event)
+    this.initialCoordinates = pointerDownCoordinates ?? DEFAULT_COORDINATES
+    // Why: replaces the previous gesture's pointer, which outlives it so onDragEnd can read it.
+    recordTabDragPointer(pointerDownCoordinates)
     this.handleStart = this.handleStart.bind(this)
     this.handleMove = this.handleMove.bind(this)
     this.handleEnd = this.handleEnd.bind(this)
@@ -174,6 +178,7 @@ export class TabDragPointerSensor implements SensorInstance {
     this.windowListeners.add(win, 'dragstart', preventDefault)
     this.windowListeners.add(win, 'visibilitychange', this.handleCancel)
     this.windowListeners.add(win, 'contextmenu', preventDefault)
+    this.windowListeners.add(win, 'blur', this.handleCancel)
     this.windowListeners.add(win, 'focus', this.handleCancel)
     this.documentListeners.add(this.document, 'keydown', this.handleKeydown)
 
@@ -200,6 +205,7 @@ export class TabDragPointerSensor implements SensorInstance {
   }
 
   private detach(): void {
+    this.ended = true
     this.pointerListeners.removeAll()
     this.windowListeners.removeAll()
     window.setTimeout(this.documentListeners.removeAll, 50)
@@ -217,7 +223,7 @@ export class TabDragPointerSensor implements SensorInstance {
   }
 
   private handleStart(): void {
-    if (this.activated) {
+    if (this.activated || this.ended) {
       return
     }
     this.activated = true
@@ -228,11 +234,15 @@ export class TabDragPointerSensor implements SensorInstance {
   }
 
   private handleMove(event: PointerEvent): void {
+    if (this.ended) {
+      return
+    }
     const coordinates = getPointerCoordinates(event)
     const { activationConstraint } = this.props.options
     if (!coordinates) {
       return
     }
+    recordTabDragPointer(coordinates)
     const delta = subtractCoordinates(this.initialCoordinates, coordinates)
 
     if (!this.activated && activationConstraint) {
@@ -277,6 +287,9 @@ export class TabDragPointerSensor implements SensorInstance {
   }
 
   private handleEnd(): void {
+    if (this.ended) {
+      return
+    }
     this.detach()
     if (!this.activated) {
       this.props.onAbort(this.props.active)
@@ -285,6 +298,9 @@ export class TabDragPointerSensor implements SensorInstance {
   }
 
   private handleCancel(): void {
+    if (this.ended) {
+      return
+    }
     this.detach()
     if (!this.activated) {
       this.props.onAbort(this.props.active)

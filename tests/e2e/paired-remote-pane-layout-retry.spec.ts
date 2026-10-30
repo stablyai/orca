@@ -1,5 +1,8 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTerminalClientTab
+} from '../../src/shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
 import {
@@ -54,7 +57,7 @@ async function openClientTab(page: Page, worktreeId: string, tabId: string): Pro
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
       state?.setActiveTab(tabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', worktreeId)
     },
     { tabId, worktreeId }
   )
@@ -77,8 +80,10 @@ async function readHostLayout(
     })
   ).result
   return (
-    snapshot.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === hostTabId)
-      ?.parentLayout ?? null
+    snapshot.tabs.find(
+      (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+        tab.type === 'terminal' && tab.parentTabId === hostTabId
+    )?.parentLayout ?? null
   )
 }
 
@@ -117,7 +122,12 @@ test('retries an identical remote pane layout after reconnect', async ({
 
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
-    client = await launchPairedElectronClient(host.offer, testInfo, 'Pane layout retry client')
+    const pairedClient = await launchPairedElectronClient(
+      host.offer,
+      testInfo,
+      'Pane layout retry client'
+    )
+    client = pairedClient
     await expect
       .poll(
         () =>
@@ -173,10 +183,10 @@ test('retries an identical remote pane layout after reconnect', async ({
     await expect
       .poll(
         () =>
-          client.page.evaluate(async (selector) => {
+          pairedClient.page.evaluate(async (selector) => {
             const response = await window.api.runtimeEnvironments.connect({ selector })
             return response.ok
-          }, client.environmentId),
+          }, pairedClient.environmentId),
         { timeout: 60_000, message: 'paired client never reconnected to the host runtime' }
       )
       .toBe(true)

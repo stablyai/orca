@@ -1,6 +1,8 @@
-import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { workspaceRootGroupId } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -71,7 +73,8 @@ export function ensureGroup(
   if (existing) {
     return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
   }
-  const groupId = createBrowserUuid()
+  // Switch point: the root group id main and the Loader mint for a workspace with no group.
+  const groupId = ORCA_LAYOUT_OWNER_IS_MAIN ? workspaceRootGroupId(worktreeId) : createBrowserUuid()
   const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
   return {
     group,
@@ -95,15 +98,12 @@ export function pickNeighbor(tabOrder: string[], closingTabId: string): string |
   return null
 }
 
-/** Normalize an MRU stack: drop ids not in `tabOrder` and keep only the last
- *  occurrence of each id (tail = most recent). */
+/** Keep live MRU IDs once, preserving each last occurrence (tail is newest). */
 export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: string[]): string[] {
   if (!recent || recent.length === 0) {
     return []
   }
   const valid = new Set(tabOrder)
-  // Walk right-to-left so we keep only the latest occurrence of each id, then
-  // reverse back to oldest-→-newest order.
   const seen = new Set<string>()
   const reversed: string[] = []
   for (let i = recent.length - 1; i >= 0; i--) {
@@ -117,8 +117,7 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
   return reversed.toReversed()
 }
 
-/** Push `tabId` to the tail of the MRU stack (most-recently-active) after
- *  removing any prior occurrence. Returns a new array. */
+/** Move tabId to MRU tail, returning a new array. */
 export function pushRecentTabId(recent: string[] | undefined, tabId: string): string[] {
   const base = recent ?? []
   if (base.length > 0 && base.at(-1) === tabId) {
@@ -129,25 +128,23 @@ export function pushRecentTabId(recent: string[] | undefined, tabId: string): st
   return filtered
 }
 
-/** Choose the tab to activate when `closingTabId` closes. Prefers the most-
- *  recently-active tab before it (MRU behavior); falls back to the nearest
- *  visual neighbor when the MRU stack is empty (e.g. newly hydrated groups
- *  where only the current active tab has been recorded). */
+/** Prefer previous MRU tab on close; newly hydrated groups may know only the current tab, so fall back to visual neighbor. */
 export function pickNextActiveTab(
   tabOrder: string[],
   recentTabIds: string[] | undefined,
-  closingTabId: string
+  closingTabId: string,
+  tabs?: readonly Pick<Tab, 'id'>[]
 ): string | null {
+  if (tabs) {
+    const realIds = new Set(tabs.map((tab) => tab.id))
+    tabOrder = tabOrder.filter((id) => realIds.has(id))
+  }
   const sanitized = sanitizeRecentTabIds(recentTabIds, tabOrder)
-  // The closing tab is typically at the tail (it's the active tab). Walk back
-  // from the tail looking for the most-recent *other* tab still present.
   for (let i = sanitized.length - 1; i >= 0; i--) {
     if (sanitized[i] !== closingTabId) {
       return sanitized[i]
     }
   }
-  // No prior tab has been visited in this group — fall back to neighbor
-  // selection so the user still lands somewhere sensible.
   return pickNeighbor(tabOrder, closingTabId)
 }
 
@@ -155,11 +152,7 @@ export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
   return groups.map((g) => (g.id === updated.id ? updated : g))
 }
 
-export function isTransientEditorContentType(contentType: TabContentType): boolean {
-  return (
-    contentType === 'diff' || contentType === 'conflict-review' || contentType === 'check-details'
-  )
-}
+export { isTransientEditorContentType } from '../../../../shared/workspace-layout/saved-editor-tab-restore'
 
 export function getPersistedEditFileIdsByWorktree(
   session: WorkspaceSessionState
@@ -184,12 +177,7 @@ export function selectHydratedActiveGroupId(
   return candidates[0]?.id
 }
 
-/**
- * Persisted sessions can hold two tab records under one id (editor owner
- * migration re-stamps a tab id that another record already carries). Downstream
- * consumers key React lists by tab id, and a repeated key leaves the extra row
- * mounted forever, so the duplicate has to die at hydration.
- */
+/** Hydration must remove duplicate IDs left by editor-owner migration; repeated React keys otherwise strand ghost rows. */
 export function dedupeTabsById<T extends { id: string }>(tabs: T[]): T[] {
   const seen = new Set<string>()
   return tabs.filter((tab) => {
@@ -201,24 +189,33 @@ export function dedupeTabsById<T extends { id: string }>(tabs: T[]): T[] {
   })
 }
 
-export function dedupeTabOrder(tabIds: string[]): string[] {
-  const seen = new Set<string>()
-  const deduped: string[] = []
-  for (const tabId of tabIds) {
-    if (seen.has(tabId)) {
-      continue
+export function dedupeEditorTabsWithinGroups(tabs: Tab[]): {
+  tabs: Tab[]
+  tabIdAliasesByGroup: Map<string, Map<string, string>>
+} {
+  const tabIdAliasesByGroup = new Map<string, Map<string, string>>()
+  const editorTabIdByGroupAndEntity = new Map<string, Map<string, string>>()
+  const dedupedTabs = dedupeTabsById(tabs).filter((tab) => {
+    if (tab.contentType !== 'editor') {
+      return true
     }
-    seen.add(tabId)
-    deduped.push(tabId)
-  }
-  return deduped
+    const editorTabIdByEntity =
+      editorTabIdByGroupAndEntity.get(tab.groupId) ?? new Map<string, string>()
+    editorTabIdByGroupAndEntity.set(tab.groupId, editorTabIdByEntity)
+    const existingTabId = editorTabIdByEntity.get(tab.entityId)
+    if (existingTabId !== undefined) {
+      const tabIdAliases = tabIdAliasesByGroup.get(tab.groupId) ?? new Map<string, string>()
+      tabIdAliasesByGroup.set(tab.groupId, tabIdAliases)
+      tabIdAliases.set(tab.id, existingTabId)
+      return false
+    }
+    editorTabIdByEntity.set(tab.entityId, tab.id)
+    return true
+  })
+  return { tabs: dedupedTabs, tabIdAliasesByGroup }
 }
 
-/**
- * Apply a partial update to a single tab, returning the new `unifiedTabsByWorktree`
- * map. Returns `null` if the tab is not found (callers should return `{}` to the
- * zustand setter in that case).
- */
+/** Patch one tab; return null if absent so callers can return {} to Zustand. */
 export function patchTab(
   tabsByWorktree: Record<string, Tab[]>,
   tabId: string,

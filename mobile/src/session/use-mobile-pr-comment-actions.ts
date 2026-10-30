@@ -3,6 +3,7 @@ import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import {
   fetchAddIssueComment,
   fetchAddPRReviewCommentReply,
@@ -12,6 +13,7 @@ import {
   type GitHubPrMutationOutcome
 } from './github-pr-mutations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   buildAddRootCommentParams,
   buildDeleteCommentParams,
@@ -61,30 +63,21 @@ export type PrCommentActionsInput = {
   worktreeId: string
   prNumber: number
   prRepo?: GitHubPrRepoSlug | null
-  // Re-fetches the authoritative comment timeline after a successful mutation so
-  // the new reply/comment and toggled resolve state appear (desktop merges the
-  // returned comment; mobile keeps it simple with a full refetch).
   refetch: () => void | Promise<void>
-  // Test seam: inject fake mutations; defaults to the real github.* wrappers.
   mutations?: PrCommentMutations
 }
 
-function realMutations(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string
-): PrCommentMutations {
+function realMutations(client: RpcOperationSender, worktreeId: string): PrCommentMutations {
   return {
     reply: (args) => fetchAddPRReviewCommentReply(client, worktreeId, args),
     resolveThread: (args) => fetchResolveReviewThread(client, worktreeId, args),
     addRootComment: (args) => fetchAddIssueComment(client, worktreeId, args),
-    // Edit/delete are slug-addressed (owner/repo/commentId), so they take no worktreeId.
     editComment: (args) => fetchUpdateIssueComment(client, args),
     deleteComment: (args) => fetchDeleteIssueComment(client, args)
   }
 }
 
-// Stable busy keys: 'root' for the root composer; otherwise per-comment so one
-// reply/resolve in flight doesn't disable every other card.
+// Track busy state per comment so one write cannot disable unrelated reply/resolve controls.
 function replyKey(commentId: number): string {
   return `reply:${commentId}`
 }
@@ -99,12 +92,11 @@ function deleteKey(commentId: number): string {
 }
 const ROOT_KEY = 'root'
 
-// React adapter for the three interactive comment actions. Tracks per-action
-// in-flight keys + a single error message, fires haptics, and refetches on success.
 export function useMobilePrCommentActions(input: PrCommentActionsInput) {
+  const t = useMobileTranslation()
   const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(() => new Set())
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | { kind: 'actionFailed' } | null>(null)
   // Guard against overlapping fires of the same key (double-tap before refetch).
   const inFlightRef = useRef<Set<string>>(new Set())
 
@@ -145,10 +137,9 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
         setError(outcome.error)
         return false
       } catch (err) {
-        // Why: if a mutation (or the refetch) throws, still honor the boolean
-        // contract — error haptic + message, return false — rather than rejecting.
+        // Contain mutation/refetch throws as false with feedback; callers rely on the boolean contract.
         triggerError()
-        setError(err instanceof Error ? err.message : 'Comment action failed')
+        setError(err instanceof Error ? err.message : { kind: 'actionFailed' })
         return false
       } finally {
         inFlightRef.current.delete(key)
@@ -193,7 +184,6 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
 
   const editComment = useCallback(
     (commentId: number, body: string) => {
-      // Edit is slug-addressed, so a missing prRepo means we cannot target the comment.
       if (!mutations || !prRepo) {
         return Promise.resolve(false)
       }
@@ -216,7 +206,10 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
 
   return {
     ready,
-    error,
+    error:
+      typeof error === 'string' || error === null
+        ? error
+        : t('session.usePrCommentActions.actionFailed', 'Comment action failed'),
     clearError: useCallback(() => setError(null), []),
     isReplyBusy: useCallback((commentId: number) => busyKeys.has(replyKey(commentId)), [busyKeys]),
     isResolveBusy: useCallback(

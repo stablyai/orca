@@ -1,60 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
-import {
-  browserPageZoomLevelToPercent,
-  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
-  getExplicitBrowserPageZoomLevel,
-  normalizeBrowserPageZoomLevel
-} from './browser-page-zoom'
-import { BROWSER_PAGE_ZOOM_FEEDBACK_MS } from '../describe-page/browser-annotation-geometry'
+import { useCallback, useRef, type RefObject } from 'react'
+import { browserPageZoomLevelToPercent } from '../../../../../shared/browser-page-zoom'
+import type { BrowserPageFeedbackBadgeHandle } from '../assemble-chrome/browser-page-feedback-badge'
+import type { BrowserPageViewportSize } from './use-browser-page-viewport-size-feedback'
 
-export function useBrowserPageZoomFeedback(browserTabId: string): {
-  paneZoomLevelRef: React.MutableRefObject<number>
-  browserZoomPercent: number
-  setBrowserZoomPercent: React.Dispatch<React.SetStateAction<number>>
-  browserZoomFeedbackVisible: boolean
+export function useBrowserPageZoomFeedback(): {
+  feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
   showBrowserZoomFeedback: (level: number) => void
-  browserDefaultZoomPercent: number
-  setBrowserDefaultZoomLevel: (level: number) => void
+  showBrowserViewportSizeFeedback: (size: BrowserPageViewportSize) => void
+  hideBrowserFeedback: () => void
 } {
-  const browserDefaultZoomLevel = useAppStore(
-    (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
-  )
-  const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
-  const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
-  const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
-  // Why: the level THIS pane should hold. Seeded from the configured default ("applied to newly
-  // opened browser tabs") and moved only by zooming this pane, so a reload can't broadcast another
-  // tab's zoom through the shared setting. Why the module-level lookup: the guest webview outlives
-  // this component (worktree switch, Settings visit), so re-seeding on remount would let a later
-  // Settings change retroactively hijack a tab the user already zoomed.
-  const paneZoomLevelRef = useRef(
-    getExplicitBrowserPageZoomLevel(browserTabId) ?? normalizedBrowserDefaultZoomLevel
-  )
-  const [browserZoomPercent, setBrowserZoomPercent] = useState(browserDefaultZoomPercent)
-  const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
-  const browserZoomFeedbackTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  useEffect(() => {
-    return () => {
-      clearTimeout(browserZoomFeedbackTimerRef.current)
-    }
-  }, [])
+  // Why one badge: zoom and resize share the corner, so the latest change wins instead of stacking.
+  const feedbackBadgeRef = useRef<BrowserPageFeedbackBadgeHandle>(null)
   const showBrowserZoomFeedback = useCallback((level: number): void => {
-    setBrowserZoomPercent(browserPageZoomLevelToPercent(level))
-    setBrowserZoomFeedbackVisible(true)
-    clearTimeout(browserZoomFeedbackTimerRef.current)
-    browserZoomFeedbackTimerRef.current = setTimeout(() => {
-      setBrowserZoomFeedbackVisible(false)
-    }, BROWSER_PAGE_ZOOM_FEEDBACK_MS)
+    feedbackBadgeRef.current?.flash(`${browserPageZoomLevelToPercent(level)}%`)
+  }, [])
+  const showBrowserViewportSizeFeedback = useCallback((size: BrowserPageViewportSize): void => {
+    feedbackBadgeRef.current?.flash(`${size.width} × ${size.height}`)
+  }, [])
+  const hideBrowserFeedback = useCallback((): void => {
+    feedbackBadgeRef.current?.hide()
   }, [])
 
   return {
-    paneZoomLevelRef,
-    browserZoomPercent,
-    setBrowserZoomPercent,
-    browserZoomFeedbackVisible,
+    feedbackBadgeRef,
     showBrowserZoomFeedback,
-    browserDefaultZoomPercent,
-    setBrowserDefaultZoomLevel
+    showBrowserViewportSizeFeedback,
+    hideBrowserFeedback
   }
 }

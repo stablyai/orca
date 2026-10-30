@@ -25,6 +25,13 @@ import {
   waitForTerminalOutput as waitForTerminalOutputImpl
 } from './terminal-pane-operations'
 
+export { requestTerminalPaneClose } from './terminal-pane-operations'
+
+export {
+  expectTerminalAccessibilityText,
+  readTerminalAccessibilityText
+} from './terminal-accessibility-tree'
+
 export {
   getTerminalContent,
   readPaneIdentitySnapshot,
@@ -35,8 +42,7 @@ export {
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
-// Why: typing-latency specs must type into xterm's helper textarea, not the
-// page body — keyboard.type only reaches the PTY when that textarea has focus.
+// Focus xterm’s helper textarea so keyboard.type reaches its PTY.
 export async function focusActiveTerminalInput(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
@@ -49,11 +55,11 @@ export async function focusActiveTerminalInput(page: Page): Promise<void> {
           : null
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
+    if (!state || !tabId || !pane) {
       throw new Error('No active terminal pane to focus')
     }
-    state?.setActiveTab(tabId)
-    state?.setActiveTabType('terminal')
+    state.setActiveTab(tabId)
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     pane.terminal.focus()
     const textarea = pane.container.querySelector(
       '.xterm-helper-textarea'
@@ -99,29 +105,36 @@ export async function waitForPaneIdentitySnapshot(
   page: Page,
   paneCount: number
 ): Promise<PaneIdentitySnapshot> {
-  await expect
-    .poll(
-      async () => {
-        const snapshot = await readPaneIdentitySnapshot(page)
-        return Boolean(
-          snapshot &&
-          snapshot.panes.length === paneCount &&
-          snapshot.panes.every(
-            (pane) =>
-              UUID_RE.test(pane.leafId) &&
-              pane.stablePaneId === pane.leafId &&
-              pane.datasetLeafId === pane.leafId &&
-              pane.ptyId !== null &&
-              snapshot.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+  let latestSnapshot: PaneIdentitySnapshot | null = null
+  try {
+    await expect
+      .poll(
+        async () => {
+          latestSnapshot = await readPaneIdentitySnapshot(page)
+          return Boolean(
+            latestSnapshot &&
+            latestSnapshot.panes.length === paneCount &&
+            latestSnapshot.panes.every(
+              (pane) =>
+                UUID_RE.test(pane.leafId) &&
+                pane.stablePaneId === pane.leafId &&
+                pane.datasetLeafId === pane.leafId &&
+                pane.ptyId !== null &&
+                latestSnapshot?.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+            )
           )
-        )
-      },
-      {
-        timeout: 15_000,
-        message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
-      }
-    )
-    .toBe(true)
+        },
+        {
+          timeout: 15_000,
+          message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
+        }
+      )
+      .toBe(true)
+  } catch (error) {
+    throw new Error(`Last pane identity snapshot: ${JSON.stringify(latestSnapshot)}`, {
+      cause: error
+    })
+  }
 
   const snapshot = await readPaneIdentitySnapshot(page)
   if (!snapshot) {

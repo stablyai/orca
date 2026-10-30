@@ -1,5 +1,3 @@
-/** Shared row semantics for the list tables (automations, artifacts, …). */
-
 /** True when a portaled Radix menu click re-bubbles through a row's React tree. */
 export function isPortaledRowMenuClick(event: {
   target: EventTarget
@@ -11,11 +9,7 @@ export function isPortaledRowMenuClick(event: {
     : false
 }
 
-/**
- * True when Enter/Space landed on the row itself. Keys pressed on a nested
- * control (the actions trigger) must stay with that control — preventDefault
- * here would swallow its native activation.
- */
+/** Handle only row-level Enter/Space; nested controls need native activation and must not inherit preventDefault. */
 export function isRowActivationKey(event: {
   key: string
   target: EventTarget

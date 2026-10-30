@@ -1,33 +1,42 @@
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
+import { reportDaemonPtyCwdVerdict } from './daemon-adoption-telemetry-event'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId } from './pty-session-id'
-import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
-import { supportsPtyStartupBarrier } from './shell-ready'
+import { shellPathSupportsPtyStartupBarrier, resolvePtyShellPath } from './shell-ready'
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
-import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
+import { holdPassiveRestoreOfStoppedWslDistro } from './daemon-wsl-passive-restore-hold'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
+  // Checked again in doSpawn: retirement can close admission while spawn awaits.
+  private assertSpawnAdmission(): void {
+    if (this.idleRetirementAdmissionClosed) {
+      throw new Error('Terminal daemon is decommissioning')
+    }
+  }
+
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    this.assertSpawnAdmission()
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
-    const operation = {
-      exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
+    const operation: PendingDaemonSpawnOperation = {
+      exitsBySessionId: new Map(),
       ignoredExitIncarnationIds: new Set<string>(),
       ignoreNextExit: false
     }
@@ -103,6 +112,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
+    this.assertSpawnAdmission()
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
@@ -110,7 +120,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       throw new Error('agent_session_claim_unavailable')
     }
     const requestedSessionId = opts.sessionId!
-    // Why: v30 daemons survive upgrades; reject their accidental create result before publication.
+    // Surviving v30 daemons can accidentally create on attach; reject that result before publishing.
     const attachOnly = opts.attachOnly === true
     const emulateLegacyAttachOnly =
       attachOnly && this.protocolVersion < STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
@@ -160,20 +170,28 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       if (!restoreInfo) {
         return null
       }
+      const requestedCwd = opts.cwd ?? resolveSafePtyDefaultCwd()
+      const recoveredCwd = normalizeWslColdRestoreCwd({
+        recoveredCwd: restoreInfo.cwd,
+        requestedCwd,
+        wslDistro: recoveryWslDistro
+      })
+      // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
       return {
         ...restoreInfo,
+        // Why one probe for WSL too: a stat over \\wsl.localhost waits for a stopped distro and
+        // fails for reasons other than absence, which woke panes blank and at the root.
         cwd:
-          normalizeWslColdRestoreCwd({
-            recoveredCwd: restoreInfo.cwd,
-            requestedCwd: opts.cwd ?? resolveSafePtyDefaultCwd(),
-            wslDistro: recoveryWslDistro
-          }) ?? ''
+          recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
+            ? recoveredCwd
+            : requestedCwd
       }
     }
 
     if (this.killedSessionTombstones.has(sessionId)) {
       throw new TerminalKilledError(sessionId)
     }
+    await holdPassiveRestoreOfStoppedWslDistro(opts, wslDistro)
 
     if (opts.isNewSession) {
       await this.replaceUnhealthyMacResolverDaemonBeforeNewPty()
@@ -182,15 +200,12 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
 
     await this.ensureConnected()
-    // Why before createOrAttach: a preserved daemon may still think this session is backgrounded — from
-    // a v19 that thins without a recoverable seq, or (#9993) from a pre-v29 that a previous desktop
-    // handed 2031 scan authority to and can never retract it. Clear it before any bytes are attached.
+    // Clear stale background state before attach when the preserved daemon cannot safely thin or retract 2031 facts.
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(sessionId, false)
     }
 
-    // Why detect crash-recovery history before spawning: the revived shell should inherit the recovered cwd/dims, not the renderer's mount-time request.
-    // Why probe aliveness first: detectColdRestore replays up to ~5MB on the main process, but a live session's snapshot supersedes disk, so the replay would be wasted.
+    // Recover cwd and geometry before spawning; live snapshots supersede costly disk replay.
     let restoreInfo: ColdRestoreInfo | null = null
     let restoreSkippedForLiveSession = false
     const historyProbe = opts.attachOnly
@@ -211,22 +226,16 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     let effectiveCols = restoreInfo?.cols ?? opts.cols
     let effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
-    const isCodexStartupCommand =
-      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
-    const shouldWaitForShellReady =
-      isCodexStartupCommand &&
-      shouldUseShellReadyStartupDelivery({
-        command: opts.command,
-        startupCommandDelivery: opts.startupCommandDelivery
-      })
-    const shellReadyTimeoutMs =
-      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
-        ? CODEX_SHELL_READY_TIMEOUT_MS
-        : undefined
-
+    const effectiveShellPath =
+      process.platform !== 'win32' && opts.command
+        ? resolveUnixShellPath(opts.shellOverride || resolvePtyShellPath(opts.env ?? {}))
+        : ''
+    const shellReadySupported = shellPathSupportsPtyStartupBarrier(effectiveShellPath)
+    const immediateMarker = shellReadyMarkerComesFromLineEditor(effectiveShellPath)
     const context: DaemonPtySpawnContext = {
-      opts,
+      // Older daemons also need the existing hint to enable their ready marker.
+      opts:
+        opts.command && immediateMarker ? { ...opts, startupCommandDelivery: 'shell-ready' } : opts,
       operation,
       historyRecovery,
       requestedSessionId,
@@ -240,12 +249,21 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       effectiveCols,
       effectiveRows,
       shellReadySupported,
-      shellReadyTimeoutMs,
+      shellReadyTimeoutMs: undefined,
       historySeedSegments: restoreInfo ? getRecoveredHistorySeedSegments(restoreInfo) : null,
       detectColdRestore
     }
     activeSpawnContext = context
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
+    if (result.isNew && !attachOnly) {
+      // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.
+      void reportDaemonPtyCwdVerdict({
+        cwd: context.effectiveCwd,
+        cwdReadableByDaemon: result.cwdReadableByDaemon,
+        pidPath: this.pidPath,
+        daemonIdentity: this.client.getDaemonIdentity()
+      })
+    }
     return this.finishSpawn(context, result)
   }
 
@@ -254,17 +272,25 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     result: CreateOrAttachResult,
     operation: PendingDaemonSpawnOperation
   ): PtySpawnResult | null {
-    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).some(
+    const knownIncarnationId = this.sessionIncarnations.get(sessionId)
+    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).find(
       (exit) =>
         !(exit.incarnationId && operation.ignoredExitIncarnationIds.has(exit.incarnationId)) &&
-        (!exit.incarnationId ||
-          !result.incarnationId ||
-          exit.incarnationId === result.incarnationId)
+        ((exit.incarnationId === undefined &&
+          result.incarnationId === undefined &&
+          knownIncarnationId === undefined) ||
+          (exit.incarnationId !== undefined &&
+            result.incarnationId !== undefined &&
+            exit.incarnationId === result.incarnationId))
     )
     if (!matchingExit) {
       return null
     }
-    // Why: stream exit can beat the control reply; return proof upward without republishing dead adapter state.
+    if (result.incarnationId) {
+      this.sessionIncarnations.set(sessionId, result.incarnationId)
+    }
+    this.clearExitedSessionState(sessionId, matchingExit.code, result.incarnationId)
+    // Exit can beat control or recovery work; return its proof without republishing dead session state.
     const exitedResult: PtySpawnResult = {
       id: sessionId,
       exitedBeforeSpawnReply: true,

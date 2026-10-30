@@ -1,0 +1,15 @@
+import { z } from 'zod'
+
+// Copy relay scalars to keep standalone push images independent of the relay wire contract.
+export const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+export const Base6432ByteSchema = z.string().regex(/^(?:[A-Za-z0-9+/]{4}){10}[A-Za-z0-9+/]{3}=$/)
+export const Base64Raw24ByteSchema = z.string().regex(/^(?:[A-Za-z0-9+/]{4}){8}$/)
+export const PushHostFingerprintSchema = z.string().regex(/^[A-Za-z0-9_-]{16}$/)
+export const OpaqueIdSchema = z.string().min(1).max(128)
+export const EpochMsSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+export const SequenceSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+export const BoundedCiphertextSchema = z
+  .string()
+  .min(1)
+  .max(16 * 1024)
+  .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)

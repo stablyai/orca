@@ -29,7 +29,7 @@ function createScheduler(
     activityDebounceMs: 125,
     activityMinGapMs: 3000,
     slowTaskBackoff: {
-      idleMultiplier: 5,
+      idleMultiplier: 1,
       changeSignalMultiplier: 1,
       maxIntervalMs: 5 * 60_000
     },
@@ -110,7 +110,7 @@ describe('createGitStatusRefreshScheduler', () => {
 
     calls[0]?.resolve()
     await flushMicrotasks()
-    // Why: the trailing refresh respects the 3s activity floor from run end.
+    // Trailing refresh waits the 3s activity floor after completion.
     expect(task).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(3000)
     expect(task).toHaveBeenCalledTimes(2)
@@ -176,11 +176,11 @@ describe('createGitStatusRefreshScheduler', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(task).toHaveBeenCalledTimes(2)
 
-    // The second scan is also slow; the next safety waits max(60s, 5x) = 150s.
+    // The second scan is also slow; the next safety waits max(60s, 1x) = 60s.
     await vi.advanceTimersByTimeAsync(30_000)
     calls[1]?.resolve()
     await flushMicrotasks()
-    await vi.advanceTimersByTimeAsync(149_999)
+    await vi.advanceTimersByTimeAsync(59_999)
     expect(task).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(task).toHaveBeenCalledTimes(3)
@@ -207,7 +207,7 @@ describe('createGitStatusRefreshScheduler', () => {
     calls[0]?.resolve()
     await flushMicrotasks()
 
-    // Why: the reveal catch-up rides the paced activity lane (3s floor).
+    // Reveal catch-up uses the paced activity lane with its 3s floor.
     await vi.advanceTimersByTimeAsync(3000)
     expect(task).toHaveBeenCalledTimes(2)
     expect(signals[1]?.aborted).toBe(false)
@@ -226,9 +226,7 @@ describe('createGitStatusRefreshScheduler', () => {
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
-    // A long scan is aborted by pause (window hide). Its wall time must not
-    // become the next activity idle gap, or reveal catch-up waits tens of
-    // seconds for work that never applied.
+    // Aborted scans produced no result; their duration must not delay reveal catch-up.
     await vi.advanceTimersByTimeAsync(30_000)
     scheduler.pause()
     scheduler.resumeSafety()
@@ -273,8 +271,7 @@ describe('createGitStatusRefreshScheduler', () => {
     expect(task).toHaveBeenCalledTimes(1)
     first.dispose()
 
-    // A rebuild (execution-host/push-target change) must not grant a fresh
-    // immediate run; the floor from the previous run still applies.
+    // Scheduler rebuilds must retain the previous pacing floor rather than permit an immediate run.
     const second = createScheduler(task, pacing)
     second.resumeSafety()
     await flushMicrotasks()

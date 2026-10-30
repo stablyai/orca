@@ -5,11 +5,8 @@ const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
   runProcessSyncMock: vi.fn()
 }))
 
-// Why mock the chokepoint: the two probe shapes this module used to reconcile
-// by hand -- execFileSync's ETIMEDOUT versus execFile's SIGTERM-with-no-code --
-// are now one `timedOut` flag, so the suite states the outcome rather than the
-// spawn mechanism that produced it.
-vi.mock('../shared/child-process/run-process', () => ({
+// Process-host normalizes timeout outcomes; test availability policy independently of spawning.
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock,
   runProcessSync: runProcessSyncMock
 }))
@@ -131,8 +128,6 @@ describe('isPwshAvailable', () => {
     }
   })
 
-  // Why: the renderer's Windows capability read reaches this over IPC, and the sync probe
-  // blocks the Electron main thread for the full timeout when pwsh.exe cold-starts.
   it('answers IPC callers without blocking the main thread', async () => {
     const restorePlatform = setPlatform('win32')
     runProcessMock.mockImplementation(
@@ -143,7 +138,6 @@ describe('isPwshAvailable', () => {
       const { isPwshAvailableAsync } = await import('./pwsh')
       const results = await Promise.all([isPwshAvailableAsync(), isPwshAvailableAsync()])
       expect(results).toEqual([true, true])
-      // Concurrent readers share one spawn.
       expect(runProcessMock).toHaveBeenCalledTimes(1)
       expect(runProcessMock).toHaveBeenCalledWith({
         program: 'pwsh.exe',
@@ -231,10 +225,7 @@ describe('isPwshAvailable', () => {
     }
   })
 
-  // Why: caching a slow cold start as a failure would disable the user's
-  // PowerShell 7 preference for 30s every time .NET is slow to start. The two
-  // probe paths used to report a timeout differently and had to be reconciled
-  // by hand; `timedOut` is now the single shape.
+  // A slow .NET cold start must not disable the preferred PowerShell for the negative-cache TTL.
   it('does not cache a cold-start timeout from the async probe', async () => {
     const restorePlatform = setPlatform('win32')
     runProcessMock.mockResolvedValue(timedOut)

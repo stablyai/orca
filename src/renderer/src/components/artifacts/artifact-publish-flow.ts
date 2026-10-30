@@ -5,7 +5,9 @@ import type {
   ArtifactWriteRequest
 } from '../../../../shared/artifacts'
 import {
-  ARTIFACT_CLI_MAX_RPC_BYTES,
+  ARTIFACT_MAX_CONTENT_BYTES,
+  ARTIFACT_MAX_REQUEST_BYTES,
+  artifactContentByteLength,
   artifactWriteRequestByteLength
 } from '../../../../shared/artifacts'
 import { translate } from '@/i18n/i18n'
@@ -18,6 +20,7 @@ export type ArtifactPublishPreparationErrorCode =
   | 'empty'
   | 'too-large'
   | 'unreadable'
+  | 'visual-unreadable'
   | 'unsupported'
   | 'binary'
 
@@ -33,7 +36,10 @@ export function validateArtifactPublishRequest(
   if (!request.content) {
     throw new ArtifactPublishPreparationError('empty')
   }
-  if (artifactWriteRequestByteLength(request) > ARTIFACT_CLI_MAX_RPC_BYTES) {
+  if (
+    artifactContentByteLength(request.content) > ARTIFACT_MAX_CONTENT_BYTES ||
+    artifactWriteRequestByteLength(request) > ARTIFACT_MAX_REQUEST_BYTES
+  ) {
     throw new ArtifactPublishPreparationError('too-large')
   }
   return request
@@ -43,11 +49,12 @@ export async function publishArtifactFromSurface(
   createRequest: () => Promise<ArtifactWriteRequest>
 ): Promise<ArtifactPublishResult | null> {
   try {
+    // Why first and once: the click captures what is shared; a sign-in or retry must not re-read it.
+    const request = validateArtifactPublishRequest(await createRequest())
     if (!(await ensureArtifactAccountConnected())) {
       return null
     }
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const request = validateArtifactPublishRequest(await createRequest())
       const result = await callRuntimeRpc<ArtifactCloudOperation<ArtifactPublishResult>>(
         LOCAL_RUNTIME,
         'artifacts.publish',
@@ -123,12 +130,17 @@ function artifactPreparationErrorDescription(code: ArtifactPublishPreparationErr
     case 'too-large':
       return translate(
         'auto.components.artifacts.artifact-publish-flow.6112db5a1c',
-        'Artifacts shared from Orca must be smaller than 800 KB.'
+        'This artifact is too large to share.'
       )
     case 'unreadable':
       return translate(
         'auto.components.artifacts.artifact-publish-flow.e2ed5acd8c',
         "Orca couldn't read this file. Open it from a workspace and try again."
+      )
+    case 'visual-unreadable':
+      return translate(
+        'auto.components.artifacts.artifact-publish-flow.visualUnreadable',
+        "Couldn't read this visual to share it."
       )
     case 'unsupported':
       return translate(

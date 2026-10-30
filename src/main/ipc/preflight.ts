@@ -1,50 +1,89 @@
 import { ipcMain } from 'electron'
+import type { Store } from '../persistence'
 import {
-  detectInstalledAgentsWithShellPathHydration,
-  detectRemoteAgents,
   detectRemoteWindowsTerminalCapabilities,
-  refreshShellPathAndDetectAgents,
   runPreflightCheck
 } from '../preflight/agent-detection'
+import {
+  assertAgentDetectionHostRunning,
+  detectAgentsOnHost,
+  refreshAgentsOnHost,
+  type AgentDetectionHost
+} from '../preflight/workspace-agent-detection'
 import type {
   PreflightRuntimeContext,
   PreflightStatus,
   RemoteWindowsTerminalCapabilities
 } from '../preflight/agent-detection'
 
-// Why this file is thin: everything above the handler layer moved to
-// ../preflight/agent-detection so the runtime can call it without ipcMain.
-// Re-exported here so existing importers of `ipc/preflight` keep working.
-export * from '../preflight/agent-detection'
+import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
+import { getPreflightWslTarget } from './preflight-runtime-target'
+import { runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
+import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
 
-export function registerPreflightHandlers(): void {
+type AgentDetectionRequest = PreflightRuntimeContext & { enabledOnly?: boolean }
+/** Set by a user act (window focus, a click, opening a picker): it may start its WSL distro. */
+type PreflightWake = { wakeWslDistro?: boolean }
+
+function runPreflightAct<T>(
+  context: (PreflightRuntimeContext & PreflightWake) | undefined,
+  act: () => Promise<T>
+): Promise<T> {
+  const wslTarget = context?.wakeWslDistro ? getPreflightWslTarget(context) : null
+  return deferRefusedPreflight(() =>
+    wslTarget ? runAsWslExecUserAct(wslTarget.distro, act) : act()
+  )
+}
+
+export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): void {
+  const detectionOptions = (args?: AgentDetectionRequest) => {
+    if (!args?.enabledOnly) {
+      return undefined
+    }
+    if (!store) {
+      throw new Error('Agent detection settings unavailable')
+    }
+    return { disabledTuiAgents: store.getSettings().disabledTuiAgents }
+  }
   ipcMain.handle(
     'preflight:check',
     async (
       _event,
-      args?: PreflightRuntimeContext & { force?: boolean }
+      args?: PreflightRuntimeContext & PreflightWake & { force?: boolean }
     ): Promise<PreflightStatus> => {
-      return runPreflightCheck(args?.force, args)
+      return runPreflightAct(args, () => runPreflightCheck(args?.force, args))
     }
   )
 
-  ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) =>
-    detectInstalledAgentsWithShellPathHydration(args)
+  // Mount-time detection must not start a stopped distro; opening an agent picker wakes it.
+  ipcMain.handle(
+    'preflight:detectAgents',
+    async (_event, args?: AgentDetectionRequest & PreflightWake) =>
+      runPreflightAct(args, async () => {
+        const host: AgentDetectionHost = { kind: 'local', context: args }
+        await assertAgentDetectionHostRunning(host)
+        return detectAgentsOnHost(host, detectionOptions(args))
+      })
   )
 
-  ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
-    return refreshShellPathAndDetectAgents(args)
-  })
+  ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
+    readZCodeInteractiveCapability()
+  )
 
-  // Why: remote worktrees need agent detection on the SSH host, not the local
-  // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
-  // relay's preflight.detectAgents RPC, whose lookup command is selected on
-  // the remote host so native Windows OpenSSH does not require a POSIX shell.
+  ipcMain.handle(
+    'preflight:refreshAgents',
+    async (_event, args?: AgentDetectionRequest & PreflightWake) =>
+      runPreflightAct(args, async () => {
+        const host: AgentDetectionHost = { kind: 'local', context: args }
+        await assertAgentDetectionHostRunning(host)
+        return refreshAgentsOnHost(host, detectionOptions(args))
+      })
+  )
+
   ipcMain.handle(
     'preflight:detectRemoteAgents',
-    async (_event, args: { connectionId: string }): Promise<string[]> => {
-      return detectRemoteAgents(args)
-    }
+    async (_event, args: { connectionId: string }): Promise<string[]> =>
+      detectAgentsOnHost({ kind: 'ssh', connectionId: args.connectionId })
   )
 
   ipcMain.handle(

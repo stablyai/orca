@@ -71,7 +71,11 @@ describe('web settings preload API', () => {
     expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
-  it('mirrors the host-owned agent skill sharing capability without granting it', async () => {
+  // A headless host has no sharing service and omits the field (#33593).
+  it.each([
+    ['reports it off', { agentSkillSharingEnabled: false }],
+    ['omits it', {}]
+  ])('mirrors host skill sharing without granting it when the host %s', async (_label, host) => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -80,7 +84,7 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { agentSkillSharingEnabled: false } },
+            result: { settings: host },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -128,8 +132,7 @@ describe('web settings preload API', () => {
   })
 
   it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
-    // Why: the web store is a second, independent settings store — the constants-level
-    // default flip only reaches profiles that never persisted the old `false` (#10567).
+    // Web has an independent settings store; flipping constants cannot migrate persisted false (#10567).
     const globals = installBrowserGlobals('Linux')
     globals.storage.setItem(
       'orca.web.settings.v1',
@@ -182,11 +185,7 @@ describe('web settings preload API', () => {
   })
 
   it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
-    // Why seed after install: readLocalWebUIState must run the settings migration before it
-    // snapshots the UI blob, and only a ui.get that is itself the first settings read can
-    // show that. Reading first returns a pre-arm state every caller then writes back — and
-    // the stamp means nothing can raise the arm again. Another tab populating localStorage
-    // after this one loaded is the shape that reaches it.
+    // Seed after module load to model another tab’s storage update; first ui.get must migrate settings before snapshotting UI or it erases the one-shot notice arm.
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
@@ -597,7 +596,8 @@ describe('web settings preload API', () => {
             result: {
               settings: {
                 minimaxGroupId: 'group-42',
-                minimaxUsageModels: 'general,abab6.5'
+                minimaxUsageModels: 'general,abab6.5',
+                minimaxEndpoint: 'cn'
               }
             },
             _meta: { runtimeId: 'runtime-1' }
@@ -617,12 +617,15 @@ describe('web settings preload API', () => {
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       minimaxGroupId?: string
       minimaxUsageModels?: string
+      minimaxEndpoint?: string
     }
 
     expect(settings.minimaxGroupId).toBe('group-42')
     expect(settings.minimaxUsageModels).toBe('general,abab6.5')
+    expect(settings.minimaxEndpoint).toBe('cn')
     expect(stored.minimaxGroupId).toBe('group-42')
     expect(stored.minimaxUsageModels).toBe('general,abab6.5')
+    expect(stored.minimaxEndpoint).toBe('cn')
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   })
 
@@ -743,7 +746,8 @@ describe('web settings preload API', () => {
             result: {
               settings: {
                 minimaxGroupId: 'group-42',
-                minimaxUsageModels: 'general,abab6.5'
+                minimaxUsageModels: 'general,abab6.5',
+                minimaxEndpoint: 'cn'
               }
             },
             _meta: { runtimeId: 'runtime-1' }
@@ -761,24 +765,29 @@ describe('web settings preload API', () => {
 
     const settings = await globals.window.api.settings.set({
       minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn'
     })
 
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       minimaxGroupId?: string
       minimaxUsageModels?: string
+      minimaxEndpoint?: string
     }
 
     expect(settings.minimaxGroupId).toBe('group-42')
     expect(settings.minimaxUsageModels).toBe('general,abab6.5')
+    expect(settings.minimaxEndpoint).toBe('cn')
     expect(stored.minimaxGroupId).toBe('group-42')
     expect(stored.minimaxUsageModels).toBe('general,abab6.5')
+    expect(stored.minimaxEndpoint).toBe('cn')
     expect(runtimeCalls).toEqual([
       {
         method: 'settings.update',
         params: {
           minimaxGroupId: 'group-42',
-          minimaxUsageModels: 'general,abab6.5'
+          minimaxUsageModels: 'general,abab6.5',
+          minimaxEndpoint: 'cn'
         }
       }
     ])

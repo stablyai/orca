@@ -1,7 +1,4 @@
-/**
- * Which `closeTerminalTab` callers reach the running-process confirmation (#10142).
- * Kept out of terminal-tab-actions.test.ts, which is already at its max-lines budget.
- */
+/** Verify which closeTerminalTab callers reach running-process confirmation (#10142). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -24,17 +21,25 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: getStateMock }
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
-  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock,
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock,
+  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+}))
+vi.mock('../../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false),
   toHostSessionTabId: vi.fn((tabId: string) => tabId)
 }))
 
-vi.mock('@/runtime/web-session-tabs-sync', () => ({
-  getLatestWebSessionTabsPublicationEpoch: vi.fn(() => 'epoch-1'),
+vi.mock('@/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
+  getLatestWebSessionTabsPublicationEpoch: vi.fn(() => 'epoch-1')
+}))
+vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
@@ -44,6 +49,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import { closeTerminalTab } from './terminal-tab-actions'
+import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
 const LEAF = '33333333-3333-4333-8333-333333333333'
 
@@ -52,6 +58,7 @@ const closeTab = vi.fn()
 function busyTabState(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
+    ...terminalOwnerRows(null),
     tabsByWorktree: { 'wt-1': [{ id: 'tab-busy' }, { id: 'tab-other' }] },
     unifiedTabsByWorktree: {
       'wt-1': [
@@ -87,10 +94,11 @@ function visibleRequest() {
   return useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
 }
 
+// Flush generously across inspect, batch-join, and deadline await boundaries.
 async function settleProbe(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+  for (let tick = 0; tick < 12; tick += 1) {
+    await Promise.resolve()
+  }
 }
 
 describe('closeTerminalTab running-process confirmation', () => {
@@ -193,11 +201,11 @@ describe('closeTerminalTab running-process confirmation', () => {
     expect(closeTab).toHaveBeenCalledWith('tab-busy')
   })
 
-  // Why: the pin prompt supersedes this one only when it actually appears. With the pin
-  // confirmation off it says nothing, and the running command must still be announced.
+  // Only an actual pin prompt supersedes process confirmation; disabling pin confirmation still requires the busy-command prompt.
   it('still asks about a running command on a pinned tab when pin confirmation is off', async () => {
     const state = busyTabState({
-      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false }
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false },
+      ...terminalOwnerRows(null)
     })
     ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
       'wt-1'
@@ -218,7 +226,8 @@ describe('closeTerminalTab running-process confirmation', () => {
 
   it('rejects a pinned tab for a CLI close even when pin confirmation is off', () => {
     const state = busyTabState({
-      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false }
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false },
+      ...terminalOwnerRows(null)
     })
     ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
       'wt-1'
@@ -236,7 +245,10 @@ describe('closeTerminalTab running-process confirmation', () => {
   it('confirms before telling a paired host to close its busy tab', async () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     getStateMock.mockReturnValue(
-      busyTabState({ settings: { activeRuntimeEnvironmentId: 'web-runtime' } })
+      busyTabState({
+        settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+        ...terminalOwnerRows('web-runtime')
+      })
     )
 
     closeTerminalTab('tab-busy')

@@ -1,14 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { ensurePrivateDir, PRIVATE_FILE_MODE } from './daemon-private-file-modes'
 import { getHistorySessionDirName } from './history-paths'
 
 const QUARANTINE_DIR_NAME = '.recovery-quarantine'
@@ -35,6 +28,35 @@ export function getTerminalHistoryQuarantineOwnerDir(basePath: string, sessionId
   return join(basePath, QUARANTINE_DIR_NAME, sessionHash)
 }
 
+// Reference-count across managers so permission sweeps cannot change frozen recovery fingerprints.
+const recoveryFrozenSessionDirs = new Map<string, number>()
+
+export function markTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
+  const key = resolve(sessionDir)
+  recoveryFrozenSessionDirs.set(key, (recoveryFrozenSessionDirs.get(key) ?? 0) + 1)
+}
+
+export function unmarkTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
+  const key = resolve(sessionDir)
+  const held = recoveryFrozenSessionDirs.get(key)
+  if (held === undefined) {
+    return
+  }
+  if (held > 1) {
+    recoveryFrozenSessionDirs.set(key, held - 1)
+  } else {
+    recoveryFrozenSessionDirs.delete(key)
+  }
+}
+
+/** Protect frozen or quarantined session trees from mutations outside their recovery handshake. */
+export function isTerminalHistorySessionDirRecoveryProtected(sessionDir: string): boolean {
+  return (
+    recoveryFrozenSessionDirs.has(resolve(sessionDir)) ||
+    existsSync(join(sessionDir, RECOVERY_PROTECTION_MARKER))
+  )
+}
+
 export function hasTerminalHistoryRecoveryProtection(basePath: string, sessionId: string): boolean {
   return existsSync(join(basePath, getHistorySessionDirName(sessionId), RECOVERY_PROTECTION_MARKER))
 }
@@ -43,7 +65,7 @@ export function clearTerminalHistoryRecoveryProtection(dir: string): void {
   try {
     unlinkSync(join(dir, RECOVERY_PROTECTION_MARKER))
   } catch {
-    // Missing or locked markers remain fail-closed.
+    // Leave undeletable markers in place so recovery remains blocked.
   }
 }
 
@@ -82,9 +104,9 @@ export function quarantineTerminalHistorySession(
 
   const sessionDir = join(basePath, getHistorySessionDirName(sessionId))
   const ownerDir = getTerminalHistoryQuarantineOwnerDir(basePath, sessionId)
-  // Why: if rename is blocked, a later adapter must not attach a writer to the unreadable generation.
-  writeFileSync(join(sessionDir, RECOVERY_PROTECTION_MARKER), '')
-  mkdirSync(ownerDir, { recursive: true })
+  // Block future writers even if the quarantine rename fails.
+  writeFileSync(join(sessionDir, RECOVERY_PROTECTION_MARKER), '', { mode: PRIVATE_FILE_MODE })
+  ensurePrivateDir(ownerDir)
   const quarantineDir = join(ownerDir, randomUUID())
   renameSync(sessionDir, quarantineDir)
   return quarantineDir

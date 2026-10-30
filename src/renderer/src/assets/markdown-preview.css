@@ -1,5 +1,3 @@
-/* ── Markdown Preview ────────────────────────────────── */
-
 .markdown-preview {
   position: relative;
   padding: 24px 32px;
@@ -237,9 +235,7 @@
   }
 }
 
-/* Why: search hits are painted with the CSS Custom Highlight API (Ranges, no
-   DOM mutation) instead of injected <mark> elements — see markdown-preview-search.ts.
-   ::highlight() supports color/background only, not border-radius/padding. */
+/* CSS highlights paint search Ranges without DOM mutation; only color/background are supported (markdown-preview-search.ts). */
 ::highlight(markdown-preview-search-match) {
   background-color: color-mix(in srgb, var(--markdown-search-match) 50%, transparent);
   color: inherit;
@@ -355,8 +351,7 @@
 }
 
 .markdown-annotation-controls {
-  /* Why: note cards must share the document scroll with their source block;
-     laying the rail into each block avoids a separate right-side viewport. */
+  /* Keep note cards inside source blocks so they share document scrolling. */
   position: relative;
   grid-column: 2;
   grid-row: 1;
@@ -582,8 +577,7 @@
   margin-left: 0.15em;
 }
 
-/* Links use a proper blue instead of --primary (which is near-black/white and
-   visually indistinguishable from body text). */
+/* Use a link hue; --primary is near body black/white. */
 .markdown-body a {
   cursor: pointer !important;
   text-decoration: underline;
@@ -660,7 +654,6 @@
   border-radius: 0;
 }
 
-/* Code copy button — appears on hover over code blocks in preview mode */
 .code-block-wrapper {
   position: relative;
 }
@@ -687,7 +680,6 @@
   background: var(--accent);
   color: var(--foreground);
 }
-/* Always show on touch devices that lack hover */
 @media (hover: none) {
   .code-block-copy-btn {
     opacity: 1;
@@ -700,7 +692,6 @@
   font-family: var(--font-sans, sans-serif);
 }
 
-/* Mermaid diagram container */
 .mermaid-block svg {
   max-width: 100%;
   height: auto;
@@ -710,9 +701,7 @@
   font-size: 0.85em;
   margin-bottom: 0.5em;
 }
-/* Full-file mermaid diagram viewer — used when opening .mmd/.mermaid files
-   in diagram mode. Centers the rendered SVG and adds padding so diagrams
-   don't press against viewport edges. */
+/* Center full-file mermaid SVG with padding from the viewport edges. */
 .mermaid-viewer {
   background: var(--color-background, transparent);
 }
@@ -737,9 +726,7 @@
   padding-left: 1.5em;
 }
 
-/* Restore list markers inside markdown preview because the app-wide reset removes
-   them for navigation UI. Markdown content needs native list semantics to match
-   source documents, so this override should stay scoped to the preview surface. */
+/* Restore native markdown list markers removed by the navigation reset; scope to preview. */
 .markdown-body ul {
   list-style: disc;
 }
@@ -756,8 +743,7 @@
   list-style: square;
 }
 
-/* GFM task lists already render an explicit checkbox input, so keeping the
-   browser marker here would show both a bullet and a checkbox for one item. */
+/* GFM supplies checkbox inputs; suppress duplicate browser markers. */
 .markdown-body ul.contains-task-list,
 .markdown-body li.task-list-item {
   list-style: none;
@@ -766,11 +752,7 @@
   margin: 0.25em 0;
 }
 
-/* Why: native checkbox rendering has poor contrast against the dark
-   preview background (the default Electron/WebKit look is a faded gray on
-   gray). Render our own checkbox using theme tokens so both the unchecked
-   border and the checked fill remain legible in light and dark themes,
-   matching the rich editor's task list. */
+/* Use themed checkbox rendering for contrast in both schemes, matching the rich editor. */
 .markdown-body li > input[type='checkbox'] {
   appearance: none;
   width: 16px;
@@ -780,9 +762,7 @@
   border-radius: 4px;
   background: transparent;
   position: relative;
-  /* Why: nudge the box down so it aligns with the text baseline of the
-     adjacent list-item text (remark-gfm renders the checkbox inline, not
-     in a flex container, so we can't rely on align-items here). */
+  /* GFM checkboxes are inline rather than flex; offset to the adjacent text baseline. */
   vertical-align: -2px;
 }
 
@@ -798,8 +778,7 @@
   top: 1px;
   width: 5px;
   height: 9px;
-  /* Why: use primary-foreground so the tick contrasts against --primary in
-     both themes (white-on-dark in light mode, dark-on-light in dark mode). */
+  /* Pair primary-foreground with primary so checkbox ticks contrast in both themes. */
   border: solid var(--primary-foreground);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
@@ -822,6 +801,14 @@
   color: rgba(0, 0, 0, 0.6);
 }
 
+/* Border and title colors come from the callout component. */
+.markdown-body [data-callout] {
+  margin: 0.75em 0;
+  padding: 0.25em 1em;
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
 .markdown-body table {
   margin: 1em 0;
   border-collapse: collapse;
@@ -834,6 +821,13 @@
   padding: 8px 14px;
   border: 1px solid var(--border);
   text-align: left;
+}
+
+/* Why: --border is ~7% white in dark mode, so table grid lines are nearly invisible;
+   mix in foreground (~15% total) while keeping the border token role. */
+.dark .markdown-body th,
+.dark .markdown-body td {
+  border-color: color-mix(in srgb, var(--foreground) 8%, var(--border));
 }
 
 .markdown-body th {
@@ -851,11 +845,13 @@
   background: rgba(0, 0, 0, 0.04);
 }
 
-.markdown-dark .markdown-body tr:nth-child(even) td {
+.markdown-dark .markdown-body tr:nth-child(even):not([data-preview-table-row-even='false']) td,
+.markdown-dark .markdown-body tr[data-preview-table-row-even='true'] td {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.markdown-light .markdown-body tr:nth-child(even) td {
+.markdown-light .markdown-body tr:nth-child(even):not([data-preview-table-row-even='false']) td,
+.markdown-light .markdown-body tr[data-preview-table-row-even='true'] td {
   background: rgba(0, 0, 0, 0.015);
 }
 
@@ -869,8 +865,6 @@
   max-width: 100%;
   border-radius: 6px;
 }
-
-/* ── Syntax Highlighting (GitHub-inspired) ────────── */
 
 .markdown-light .hljs {
   color: #24292f;
@@ -1028,4 +1022,16 @@
 }
 .markdown-dark .hljs-strong {
   font-weight: 700;
+}
+
+.markdown-preview table[data-preview-table-start] {
+  overflow-wrap: anywhere;
+}
+
+.markdown-preview table[data-preview-table-start='false'] {
+  margin-top: 0;
+}
+
+.markdown-preview table[data-preview-table-end='false'] {
+  margin-bottom: 0;
 }

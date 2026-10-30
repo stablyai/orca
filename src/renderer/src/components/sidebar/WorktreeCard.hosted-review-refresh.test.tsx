@@ -17,34 +17,39 @@ let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {
-        'local::repo-1::feature/branch': {
-          data: null,
-          fetchedAt: Date.now(),
-          linkedReviewHintKey: ''
-        }
-      },
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      projectGroups: [],
-      remoteBranchConflictByWorktreeId: {},
-      settings: { experimentalNewWorktreeCardStyle: true },
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      updateWorktreeMeta,
-      workspacePortScan: null,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {
+      'local::repo-1::feature/branch': {
+        data: null,
+        fetchedAt: Date.now(),
+        linkedReviewHintKey: ''
+      }
+    },
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    projectGroups: [],
+    remoteBranchConflictByWorktreeId: {},
+    settings: { experimentalNewWorktreeCardStyle: true },
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    updateWorktreeMeta,
+    workspacePortScan: null,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: vi.fn()
@@ -67,13 +72,16 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'active'
+}))
+
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
 }))
 
 function makeRepo(): Repo {
@@ -129,30 +137,15 @@ describe('WorktreeCard hosted review refresh', () => {
     vi.useRealTimers()
   })
 
-  it('polls visible hosted review cards after a cached branch miss', async () => {
+  it('leaves repeating metadata reads to the central visible-review scheduler', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
-
     act(() => {
       root?.render(<WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />)
     })
-
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
-
-    act(() => {
-      vi.advanceTimersByTime(60_000)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15 * 60_000)
     })
-
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(2)
-    expect(fetchHostedReviewForBranch).toHaveBeenLastCalledWith('/repo', 'feature/branch', {
-      repoId: 'repo-1',
-      linkedGitHubPR: null,
-      currentHeadOid: 'abc123',
-      linkedGitLabMR: null,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null,
-      staleWhileRevalidate: true
-    })
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
   })
 
   it('does not poll hosted reviews when status and PR surfaces are hidden', async () => {
@@ -168,5 +161,36 @@ describe('WorktreeCard hosted review refresh', () => {
     })
 
     expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+  })
+
+  it('refetches the linked Linear issue only when its source changes, not on metadata writes', async () => {
+    worktreeCardProperties = ['linear-issue']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    const render = (overrides: Partial<Worktree>) =>
+      act(() => {
+        root?.render(
+          <WorktreeCard
+            worktree={makeWorktree({ linkedLinearIssue: 'ENG-1', ...overrides })}
+            repo={makeRepo()}
+            isActive={false}
+          />
+        )
+      })
+
+    render({})
+    render({ comment: 'updated', lastActivityAt: 2 })
+    expect(fetchLinearIssue).toHaveBeenCalledTimes(1)
+
+    const movedSource = {
+      kind: 'task-source',
+      provider: 'linear',
+      projectId: 'p-2',
+      hostId: 'ssh:box'
+    } as const
+    render({ linkedTaskSourceContext: movedSource })
+    expect(fetchLinearIssue).toHaveBeenCalledTimes(2)
+    expect(fetchLinearIssue).toHaveBeenLastCalledWith('ENG-1', 'all', {
+      sourceContext: movedSource
+    })
   })
 })

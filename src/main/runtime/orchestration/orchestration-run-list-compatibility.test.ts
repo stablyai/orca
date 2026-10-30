@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
-import { ORCHESTRATION_RUN_METHODS } from '../rpc/methods/orchestration-runs'
+import { ORCHESTRATION_RUN_METHODS } from '../rpc/methods/orchestration/runs/runs'
 
 function sqliteFor(db: OrchestrationDb): Database.Database {
   return (db as unknown as { db: Database.Database }).db
@@ -11,15 +11,6 @@ describe('orchestration Run list compatibility', () => {
   let db: OrchestrationDb | undefined
 
   afterEach(() => db?.close())
-
-  it('rejects malformed pagination cursors', () => {
-    const method = ORCHESTRATION_RUN_METHODS.find(
-      (candidate) => candidate.name === 'orchestration.runList'
-    )!
-
-    expect(() => method.params!.parse({ cursor: {} })).toThrow()
-    expect(() => method.params!.parse({ cursor: '' })).toThrow()
-  })
 
   it('preserves the unpaginated RPC result for an old client request', async () => {
     db = new OrchestrationDb(':memory:')

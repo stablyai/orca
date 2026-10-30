@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import {
   readLastVisitedWorktreeRecord,
   readLastVisitedWorktreeRepoId
@@ -23,7 +24,6 @@ describe('last visited worktree repo', () => {
   })
 })
 
-// Why (F7): home's Resume card navigates off this record, so anything it accepts becomes a route.
 describe('readLastVisitedWorktreeRecord', () => {
   it('reads a well-formed record', () => {
     const raw = JSON.stringify({ hostId: 'host-1', worktreeId: 'repo-2::/tmp/worktree' })

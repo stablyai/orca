@@ -2,6 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 
@@ -20,12 +21,13 @@ export async function runBrowserRouteEgressElectron(
     `--user-data-dir=${join(root, 'profile')}`,
     ...extraElectronArgs
   ]
-  const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
-  const args =
-    process.platform === 'linux'
-      ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
-      : electronArgs
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
+  const { executable, args } = resolveElectronProbeLaunch({
+    electronBinary,
+    electronArgs,
+    platform: process.platform,
+    display: env.DISPLAY
+  })
   const child = spawn(executable, args, {
     detached: true,
     env,

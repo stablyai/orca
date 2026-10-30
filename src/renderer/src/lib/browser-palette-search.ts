@@ -2,21 +2,32 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
+  isOmniboxPaletteTabFieldAllowed,
   matchPaletteTabDocument,
   preparePaletteTabQuery
-} from './palette-match/tab-match'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
+} from '../../../shared/palette-match/tab-match'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { MatchRange } from './palette-match/normalized-text'
-import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
-import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
+import type {
+  PaletteDocument,
+  PaletteDocumentRank
+} from '../../../shared/palette-match/palette-document'
+import type { PaletteResultQualityClass } from '../../../shared/palette-match/match-quality'
+import {
+  createPaletteSearchContext,
+  encodePaletteIdentity,
+  preparePaletteActivity,
+  type PaletteActivityRank,
+  type PaletteSearchContext
+} from '../../../shared/palette-match/palette-ranking'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -31,6 +42,7 @@ export type SearchableBrowserPage = {
   isCurrentWorktree: boolean
   /** Last time the owning browser workspace was focused; null when never focused. */
   lastActiveAt?: number | null
+  lastFocusedAt?: number
   /** Normalized field index, built once per entry rather than per keystroke. */
   document: PaletteDocument
 }
@@ -38,11 +50,17 @@ export type SearchableBrowserPage = {
 export type BrowserPaletteSearchResult = {
   /** Worktree ids collide across hosts; activation must not resolve by id alone. */
   executionHostId?: ExecutionHostId
+  paletteIdentity: string
   pageId: string
   workspaceId: string
   worktreeId: string
   title: string
+  faviconUrl: string | null
+  /** Raw page URL, so callers can dedupe a row against another list of destinations. */
+  url: string
   secondaryText: string
+  /** Matched formatted/raw URLs with highlight offsets into each `text`; exposes hits beyond the displayed URL. */
+  secondaryMatches: readonly { text: string; ranges: readonly MatchRange[] }[]
   workspaceLabel: string | null
   repoName: string
   worktreeName: string
@@ -59,11 +77,12 @@ export type BrowserPaletteSearchResult = {
   qualityClass: PaletteResultQualityClass | null
   rank: PaletteDocumentRank | null
   lastActiveAt?: number | null
+  activity: PaletteActivityRank
 }
 
 export const BROWSER_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 
-export function isBrowserPaletteQueryTooLarge(
+function isBrowserPaletteQueryTooLarge(
   query: string,
   maxBytes = BROWSER_PALETTE_QUERY_MAX_BYTES
 ): boolean {
@@ -133,8 +152,7 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-// Why: empty-query browser ordering is intentionally deterministic and context-first;
-// lastActiveAt only breaks ties between equally-ranked query matches.
+// Empty-query order is deterministic/context-first; use recency only to break equally ranked query hits.
 function positionScore(entry: SearchableBrowserPage): number {
   if (entry.isCurrentPage) {
     return entry.worktreeSortIndex * 100 - 4000
@@ -142,16 +160,30 @@ function positionScore(entry: SearchableBrowserPage): number {
   return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
 }
 
-function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
+function baseResult(
+  entry: SearchableBrowserPage,
+  context: PaletteSearchContext
+): BrowserPaletteSearchResult {
   const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
   const executionHostId = entry.executionHostId ?? entry.worktree.hostId
+  const activity = preparePaletteActivity(entry.lastActiveAt, context)
   return {
     ...(executionHostId ? { executionHostId } : {}),
+    paletteIdentity: encodePaletteIdentity([
+      'browser-page',
+      executionHostId ?? '',
+      entry.worktree.id,
+      entry.workspace.id,
+      entry.page.id
+    ]),
     pageId: entry.page.id,
     workspaceId: entry.workspace.id,
     worktreeId: entry.worktree.id,
     title: entry.page.title || formattedUrl,
+    faviconUrl: entry.page.faviconUrl,
+    url: entry.page.url,
     secondaryText: formattedUrl,
+    secondaryMatches: [],
     workspaceLabel: entry.workspace.label ?? null,
     repoName: entry.repoName,
     // Why resolve: a cleared display name leaves the raw field undefined at runtime.
@@ -168,38 +200,46 @@ function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
     score: positionScore(entry),
     qualityClass: null,
     rank: null,
-    lastActiveAt: entry.lastActiveAt ?? null
+    lastActiveAt: activity.timestamp || null,
+    activity
   }
 }
 
 export function searchBrowserPages(
   entries: readonly SearchableBrowserPage[],
-  query: string
+  query: string,
+  options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {}
 ): BrowserPaletteSearchResult[] {
+  const context = options.context ?? createPaletteSearchContext(Date.now())
   if (isBrowserPaletteQueryTooLarge(query)) {
     return []
   }
   const prepared = preparePaletteTabQuery(query)
   if (!prepared) {
-    // Why not [] on an over-token query: the empty branch also serves the no-query
-    // listing, so the invalid case is filtered out by the token guard below.
+    // Do not treat too many tokens as empty input: that branch lists all entries; reject below instead.
     return query.trim()
       ? []
-      : entries.map((entry) => baseResult(entry)).sort(compareEmptyQueryResults)
+      : entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)
   }
 
   const results: BrowserPaletteSearchResult[] = []
   for (const entry of entries) {
-    const base = baseResult(entry)
-    const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
-    const match = matchPaletteTabDocument(entry.document, prepared)
+    const match = matchPaletteTabDocument(entry.document, prepared, {
+      isFieldAllowed: options.fieldMode === 'omnibox' ? isOmniboxPaletteTabFieldAllowed : undefined
+    })
     if (!match) {
       continue
     }
+    const base = baseResult(entry, context)
+    const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
     results.push({
       ...base,
       secondaryText:
         match.secondary !== null ? secondaryTexts[match.secondary.index] : base.secondaryText,
+      secondaryMatches: match.secondaryMatches.map((secondary) => ({
+        text: secondaryTexts[secondary.index] ?? '',
+        ranges: secondary.ranges
+      })),
       workspaceRanges: match.workspaceRanges,
       titleRanges: match.titleRanges,
       secondaryRanges: match.secondary?.ranges ?? NO_RANGES,
@@ -217,14 +257,14 @@ export function searchBrowserPages(
           {
             rank: a.rank,
             positionScore: a.score,
-            id: a.pageId,
-            lastActiveAt: a.lastActiveAt ?? undefined
+            identity: a.paletteIdentity,
+            activity: a.activity
           },
           {
             rank: b.rank,
             positionScore: b.score,
-            id: b.pageId,
-            lastActiveAt: b.lastActiveAt ?? undefined
+            identity: b.paletteIdentity,
+            activity: b.activity
           }
         )
       : compareEmptyQueryResults(a, b)

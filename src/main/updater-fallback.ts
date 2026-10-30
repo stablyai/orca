@@ -26,9 +26,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
         left.releaseUrl === right.releaseUrl &&
-        // Why: fetchChangelog creates a fresh object each time, so reference
-        // equality is always false. Compare by presence — since update-available
-        // fires at most once per check cycle, this is sufficient.
+        // Changelog objects are recreated per check; dedupe by presence rather than reference.
         Boolean(left.changelog) === Boolean(right.changelog)
       )
     case 'downloading':
@@ -49,13 +47,13 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
       return (
         right.state === 'error' &&
         left.message === right.message &&
+        left.version === right.version &&
+        left.retryable === right.retryable &&
+        left.retryAction === right.retryAction &&
         left.userInitiated === right.userInitiated &&
         left.activeNudgeId === right.activeNudgeId &&
-        // Why: clearing recovery must reach the renderer even when the message is unchanged, or dead actions stay enabled.
-        left.recovery?.kind === right.recovery?.kind &&
-        left.recovery?.packageType === right.recovery?.packageType &&
-        left.recovery?.reason === right.recovery?.reason &&
-        left.recovery?.version === right.recovery?.version
+        // Recovery identity fences async actions, so same-valued recaptures must reach the renderer.
+        left.recovery === right.recovery
       )
   }
 }
@@ -85,9 +83,6 @@ export function isReleaseAssetsPublishingFailure(message: string): boolean {
   return message.toLowerCase().includes('latest release assets are still publishing')
 }
 
-/** Identifies update-check failures that are transient or infrastructure-related
- *  (e.g. network blips, GitHub release transitions) and should NOT be surfaced
- *  to the user as errors. */
 export function isBenignCheckFailure(message: string): boolean {
   const normalizedMessage = message.toLowerCase()
 
@@ -95,10 +90,7 @@ export function isBenignCheckFailure(message: string): boolean {
     return true
   }
 
-  // GitHub releases can briefly be in a half-published state while the
-  // release workflow is creating a draft and uploading update metadata.
-  // During that window electron-updater may fail the check even though
-  // nothing is wrong on the client side.
+  // Half-published GitHub releases can fail checks without a client-side fault.
   return (
     isReleaseAssetsPublishingFailure(message) ||
     isGitHubReleaseTransitionFailure(normalizedMessage) ||

@@ -1,13 +1,11 @@
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone,
-  PaneExternalDropHandler,
-  PaneExternalDropResolver,
-  PaneExternalDropTarget
+  DropZone
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
@@ -20,6 +18,7 @@ import {
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
+import { setInlineImagesEnabled } from './pane-inline-images'
 import { fitAllPanesInternal } from './pane-tree-ops'
 import { collectPublicPanes, toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
@@ -58,6 +57,7 @@ import {
   refreshAllPaneTerminals
 } from './pane-manager-layout-sweeps'
 import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
+import { applyPaneLayoutGeometry, type TerminalPaneLayoutNode } from './pane-layout-geometry-apply'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 export type {
@@ -68,7 +68,7 @@ export type {
   PaneExternalDropTarget,
   PaneExternalDropResolver,
   PaneExternalDropHandler
-}
+} from './pane-manager-types'
 
 export class PaneManager {
   private root: HTMLElement
@@ -83,7 +83,6 @@ export class PaneManager {
   private identities = new PaneIdentityRegistry()
   private reparentFrames = new PaneReparentFrameTracker(() => this.destroyed)
 
-  // Drag-to-reorder state
   private dragState = createDragReorderState()
 
   private host: PaneManagerHost
@@ -109,18 +108,13 @@ export class PaneManager {
       publishPaneCreated: (pane, spawnHints) =>
         publishManagedPaneCreated(this.host, pane, spawnHints),
       getDragCallbacks: () => createPaneDragCallbacks(this.host),
-      setActivePane: (paneId, opts) => {
-        this.setActivePane(paneId, opts)
-      },
+      setActivePane: (paneId, opts) => this.setActivePane(paneId, opts),
       setActivePaneId: (paneId) => {
         this.activePaneId = paneId
       },
-      requestPaneReparentFrame: (callback) => {
-        this.reparentFrames.request(callback)
-      }
+      requestPaneReparentFrame: (callback) => this.reparentFrames.request(callback)
     }
-    // Why: atlas recovery must reach every live manager — see
-    // resetAllTerminalWebglAtlases for the shared-atlas rationale.
+    // Atlas recovery must reach every manager (resetAndRefreshAllTerminalWebglAtlases explains shared generations).
     registerLivePaneManager(this)
   }
 
@@ -131,7 +125,7 @@ export class PaneManager {
   splitPane(
     paneId: number,
     direction: 'vertical' | 'horizontal',
-    opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+    opts?: Parameters<typeof splitPaneOnManager>[3]
   ): ManagedPane | null {
     return splitPaneOnManager(this.host, paneId, direction, opts)
   }
@@ -167,8 +161,7 @@ export class PaneManager {
     return collectPublicPanes(this.panes, limit)
   }
 
-  /** Why separate from getPanes: the census runs on the crash path, where
-   *  materializing every public pane view just to read `.length` is waste. */
+  /** Count without allocating public pane wrappers on the crash path. */
   getPaneCount(): number {
     return this.panes.size
   }
@@ -187,6 +180,11 @@ export class PaneManager {
 
   equalizePaneSizes(): void {
     equalizeManagedPaneSizes(this.panes, this.root, this.options.onLayoutChanged)
+  }
+
+  /** Apply host split orientation/ratios; followFrameTree also reshapes matching leaves. Never emit onLayoutChanged: host geometry must not persist or push back. */
+  applyLayoutGeometry(layout: TerminalPaneLayoutNode, followFrameTree = false): boolean {
+    return applyPaneLayoutGeometry(this.host, layout, followFrameTree)
   }
 
   getActivePane(): ManagedPane | null {
@@ -235,7 +233,7 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
     if (opts?.focus !== false) {
-      pane.terminal.focus()
+      focusPanePreservingOverlays(pane)
     }
 
     if (changed) {
@@ -250,12 +248,17 @@ export class PaneManager {
     applyRootBackground(this.root, this.styleOptions)
   }
 
-  setPaneLigaturesEnabled(paneId: number, enabled: boolean): void {
+  private withPane<T>(paneId: number, apply: (pane: ManagedPaneInternal) => T): T | undefined {
     const pane = this.panes.get(paneId)
-    if (!pane) {
-      return
-    }
-    setLigaturesEnabled(pane, enabled)
+    return pane ? apply(pane) : undefined
+  }
+
+  setPaneLigaturesEnabled(paneId: number, enabled: boolean): void {
+    this.withPane(paneId, (pane) => setLigaturesEnabled(pane, enabled))
+  }
+
+  setPaneInlineImagesEnabled(paneId: number, enabled: boolean): void {
+    this.withPane(paneId, (pane) => setInlineImagesEnabled(pane, enabled))
   }
 
   setPaneGpuRendering(paneId: number, enabled: boolean): void {
@@ -271,11 +274,7 @@ export class PaneManager {
   }
 
   rebuildPaneWebgl(paneId: number): void {
-    const pane = this.panes.get(paneId)
-    if (!pane) {
-      return
-    }
-    rebuildAttachedWebgl(pane)
+    this.withPane(paneId, rebuildAttachedWebgl)
   }
 
   resetWebglTextureAtlases(): void {
@@ -286,7 +285,7 @@ export class PaneManager {
     clearPaneWebglTextureAtlases(this.panes.values())
   }
 
-  presentForcedViewports(): void {
+  presentViewports(): void {
     presentPaneViewports(this.panes.values())
   }
 
@@ -299,23 +298,23 @@ export class PaneManager {
   }
 
   scheduleRevealRepaint(): void {
-    // Why: the settled-frame callback can fire after destroy(); repainting
-    // disposed panes could throw in attach and latch the global WebGL
-    // attach backoff, downgrading unrelated new panes to the DOM renderer.
-    schedulePaneRevealRepaint(() => (this.destroyed ? [] : this.panes.values()))
+    // Settled-frame callbacks can outlive hide/destroy; repainting then revives contexts and latches backoff that downgrades unrelated panes.
+    schedulePaneRevealRepaint(this, this.panes)
   }
 
   scheduleRevealPresent(): void {
-    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases.
-    schedulePaneRevealPresent(() => (this.destroyed ? [] : this.panes.values()))
+    // Ordinary reveal retains the canvas through DEC 2026; skip delayed presentation if hidden again.
+    schedulePaneRevealPresent(this, this.panes)
   }
 
   suspendRendering(): void {
     this.renderingSuspended = true
-    suspendPaneRendering(this.panes.values(), {
-      owner: this,
-      livePanes: () => (this.destroyed ? [] : this.panes.values())
-    })
+    suspendPaneRendering(
+      this.panes.values(),
+      this.options.retainHiddenWebgl === false
+        ? undefined
+        : { owner: this, livePanes: () => (this.destroyed ? [] : this.panes.values()) }
+    )
   }
 
   resumeRendering(): void {

@@ -46,10 +46,11 @@ function visibleRequest() {
   return useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
 }
 
+// Flush generously: inspect, batch join, and deadline racing each add await boundaries.
 async function settleProbe(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+  for (let tick = 0; tick < 12; tick += 1) {
+    await Promise.resolve()
+  }
 }
 
 describe('shouldConfirmRunningTerminalClose', () => {
@@ -100,8 +101,7 @@ describe('guardRunningTerminalClose', () => {
     expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
   })
 
-  // Why: a mounting pane is bound into the layout before ptyIdsByTabId catches up. Reading
-  // only the liveness map would let a close slip through that window with no prompt.
+  // Layout bindings precede ptyIdsByTabId during mount; probe both to avoid unprompted closes.
   it('prompts for a pane the layout has bound but the liveness map has not', async () => {
     setState({ ptyIdsByTabId: { 'tab-1': [] } })
     const onClose = vi.fn()
@@ -109,7 +109,9 @@ describe('guardRunningTerminalClose', () => {
     guard(onClose)
     await settleProbe()
 
-    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith(expect.anything(), 'pty-a')
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith('pty-a', {
+      scanChildProcesses: true
+    })
     expect(onClose).not.toHaveBeenCalled()
     expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })
@@ -192,11 +194,12 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 
-  it('fails open when a remote handle reports the inspection as unavailable', async () => {
+  it('fails open when a remote handle reports client-only unverifiable inspection', async () => {
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'transport_loss'
     })
     const onClose = vi.fn()
 
@@ -215,7 +218,7 @@ describe('guardRunningTerminalClose', () => {
       },
       agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
     })
-    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => ({
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (ptyId: string) => ({
       foregroundProcess: ptyId === 'pty-b' ? 'claude' : 'zsh',
       hasChildProcesses: ptyId === 'pty-b'
     }))
@@ -237,7 +240,7 @@ describe('guardRunningTerminalClose', () => {
       },
       agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
     })
-    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => ({
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (ptyId: string) => ({
       foregroundProcess: ptyId === 'pty-a' ? 'npm' : 'zsh',
       hasChildProcesses: ptyId === 'pty-a'
     }))
@@ -283,8 +286,7 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  // Why: makePaneKey throws on a tab id containing ':'; the dialog must never be the
-  // reason a close silently stops happening.
+  // Legacy IDs can make makePaneKey throw; confirmation must not break closing.
   it('closes rather than wedging when the copy-kind lookup throws', async () => {
     getStateMock.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: null },
@@ -316,8 +318,7 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  // Why: a remote inspect can take its full 15s RPC timeout. Closing at 4s would kill a
-  // running remote command with no prompt — the exact failure this guard exists to stop.
+  // A remote probe may take 15 seconds; the 4-second deadline must ask instead of killing uninspected work.
   it('prompts instead of closing when a wedged remote probe never settles', async () => {
     vi.useFakeTimers()
     inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
@@ -328,6 +329,7 @@ describe('guardRunningTerminalClose', () => {
 
     vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
     vi.useRealTimers()
+    await settleProbe()
 
     expect(onClose).not.toHaveBeenCalled()
     expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1', tabLabel: 'npm run dev' })
@@ -350,6 +352,7 @@ describe('guardRunningTerminalClose', () => {
     guard()
     vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
     vi.useRealTimers()
+    await settleProbe()
 
     expect(visibleRequest()?.copyKind).toBe('agent')
   })
@@ -367,6 +370,7 @@ describe('guardRunningTerminalClose', () => {
     guard(onClose)
     vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
     vi.useRealTimers()
+    await settleProbe()
     requestSpy.mockRestore()
 
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -384,6 +388,7 @@ describe('guardRunningTerminalClose', () => {
     vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
     vi.useRealTimers()
     await settleProbe()
+    await settleProbe()
 
     expect(onClose).not.toHaveBeenCalled()
     useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
@@ -391,10 +396,7 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 
-  // Why: an SSH drop zeroes ptyIdsByTabId while the layout still names the pane. The stale
-  // binding is probed, that probe fails on the dead link, and the close falls open — so a
-  // reconnecting tab stays closable instead of being blocked behind a prompt for a pty
-  // nobody can reach. Documented so the behavior is a decision, not an accident.
+  // After SSH drops liveness IDs, probe stale layout bindings and fail open on rejection so reconnecting tabs remain closable.
   it('closes a reconnecting ssh tab whose pty ids were already zeroed', async () => {
     setState({ ptyIdsByTabId: { 'tab-1': [] } })
     inspectRuntimeTerminalProcessMock.mockRejectedValue(new Error('ssh_disconnected'))

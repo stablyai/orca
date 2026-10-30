@@ -1,20 +1,43 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import { resolveCommand } from './wsl-command-resolution'
+import {
+  commandLineLength,
+  MAX_COMMAND_LINE_CHARS,
+  WindowsCommandLineBudgetError
+} from '../../../shared/windows-command-line-budget'
+import { resolveCommand, withWslPreparation } from './wsl-command-resolution'
 
-/**
- * Spawn any command with WSL awareness.
- * Used for non-git binaries like `rg` that also need WSL routing.
- */
 export function wslAwareSpawn(
   command: string,
   args: string[],
-  options: SpawnOptions & { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean }
+  options: SpawnOptions & {
+    cwd?: string
+    wslDistro?: string
+    useWslLoginShell?: boolean
+    wslShellCommand?: string
+    cwdFailureExitCode?: number
+    preparation?: { script: string; args: string[] }
+  }
 ): ChildProcess {
-  const { wslDistro, useWslLoginShell, ...spawnOptions } = options
-  const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
-    useWslLoginShell
+  const {
+    wslDistro,
+    useWslLoginShell,
+    wslShellCommand,
+    cwdFailureExitCode,
+    preparation,
+    ...spawnOptions
+  } = options
+  let resolved = resolveCommand(command, args, options.cwd, wslDistro, {
+    useWslLoginShell,
+    wslShellCommand,
+    ...(cwdFailureExitCode === undefined ? {} : { cwdFailureExitCode })
   })
+  if (preparation && resolved.wsl) {
+    resolved = withWslPreparation(resolved, preparation)
+    if (commandLineLength([resolved.binary, ...resolved.args]) > MAX_COMMAND_LINE_CHARS) {
+      throw new WindowsCommandLineBudgetError()
+    }
+  }
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,

@@ -1,8 +1,10 @@
-import { vi } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { afterAll, vi } from 'vitest'
 import type { Mock } from 'vitest'
+import { clearTrackedRealTimers, trackRealTimers } from './updater-test-timer-tracking'
 
-/** Loose spy signature for the electron/electron-updater calls the suites only assert on. */
 type UpdaterSpy = Mock<(...args: unknown[]) => unknown>
+type LinuxPackageType = 'deb' | 'rpm' | 'non-root' | 'unusable'
 
 type AutoUpdaterMock = {
   autoDownload: boolean
@@ -26,6 +28,7 @@ type AppMock = {
   isPackaged: boolean
   getVersion: Mock<() => string>
   on: Mock<(event: string, handler: (...args: unknown[]) => void) => AppMock>
+  prependListener: Mock<(event: string, handler: (...args: unknown[]) => void) => AppMock>
   emit: (event: string, ...args: unknown[]) => void
   quit: UpdaterSpy
 }
@@ -41,9 +44,12 @@ type UpdaterModuleFactories = {
   }
   electronUpdater: () => { autoUpdater: AutoUpdaterMock }
   electronUpdaterLoader: () => { loadElectronAutoUpdater: () => AutoUpdaterMock }
-  electronToolkitUtils: () => { is: { dev: boolean } }
-  ipcPty: () => { killAllPty: UpdaterSpy }
-  linuxUpdatePackageType: () => { getLinuxRootPackageType: Mock<() => 'deb' | 'rpm' | null> }
+  ptyKillAll: () => { killAllPty: UpdaterSpy }
+  linuxUpdatePackageType: () => {
+    getLinuxPackageType: Mock<() => LinuxPackageType>
+    getLinuxRootPackageType: Mock<() => 'deb' | 'rpm' | null>
+    isExternallyManagedLinuxInstall: Mock<() => boolean>
+  }
   updaterLifecycleDiagnostics: () => { recordUpdaterLifecycle: UpdaterSpy }
   updaterChangelog: () => { fetchChangelog: UpdaterSpy }
   updaterNudge: () => { fetchNudge: UpdaterSpy; shouldApplyNudge: UpdaterSpy }
@@ -53,6 +59,7 @@ type UpdaterModuleFactories = {
   }
   updaterPrereleaseFeed: () => {
     fetchNewerReleaseTagsWithReadiness: (...args: unknown[]) => Promise<unknown>
+    fetchLatestStableReleaseTag: () => Promise<string | null>
     getReleaseDownloadUrl: (tag: string) => string
   }
   localBuildSwitch: () => { chooseLocalBuild: UpdaterSpy }
@@ -64,10 +71,11 @@ export type UpdaterMocks = {
   browserWindowMock: { getAllWindows: Mock<() => unknown[]> }
   nativeUpdaterMock: { on: UpdaterSpy }
   autoUpdaterMock: AutoUpdaterMock
-  isMock: { dev: boolean }
   killAllPtyMock: UpdaterSpy
   powerMonitorOnMock: UpdaterSpy
+  getLinuxPackageTypeMock: Mock<() => LinuxPackageType>
   getLinuxRootPackageTypeMock: Mock<() => 'deb' | 'rpm' | null>
+  isExternallyManagedLinuxInstallMock: Mock<() => boolean>
   recordUpdaterLifecycleMock: UpdaterSpy
   fetchChangelogMock: UpdaterSpy
   fetchNudgeMock: UpdaterSpy
@@ -75,6 +83,7 @@ export type UpdaterMocks = {
   armExitWatchdogMock: UpdaterSpy
   disarmExitWatchdogMock: UpdaterSpy
   fetchNewerReleaseTagsMock: UpdaterSpy
+  fetchLatestStableReleaseTagMock: Mock<() => Promise<string | null>>
   chooseLocalBuildMock: UpdaterSpy
   startLocalBuildFeedMock: UpdaterSpy
   closeLocalBuildFeedMock: UpdaterSpy
@@ -82,51 +91,61 @@ export type UpdaterMocks = {
   resetUpdaterMocks: () => void
 }
 
-// Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
+// Quitting re-stages Squirrel updates on macOS, so restart advice remains useful there.
 export const PRE_COMMIT_INSTALL_FAILURE =
   process.platform === 'darwin'
     ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
     : 'Could not start the update installer. Orca remains open.'
 
-/**
- * Builds the electron/electron-updater mock graph `updater.ts` runs against, plus the module
- * factories each test file feeds to its own hoisted `vi.mock` calls. Call it from an awaited
- * `vi.hoisted` block so the mocks exist before the mock factories run.
- */
+/** Call from an awaited vi.hoisted block so module factories see initialized mocks. */
 export function createUpdaterMocks(): UpdaterMocks {
-  const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
-  const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
-
+  const appEvents = new EventEmitter()
+  const updaterEvents = new EventEmitter()
   const appOn = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    const handlers = appEventHandlers.get(event) ?? []
-    handlers.push(handler)
-    appEventHandlers.set(event, handlers)
+    appEvents.on(event, handler)
     return appMock
   })
-
-  const appEmit = (event: string, ...args: unknown[]) => {
-    for (const handler of appEventHandlers.get(event) ?? []) {
-      handler(...args)
-    }
+  const appPrependListener = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    appEvents.prependListener(event, handler)
+    return appMock
+  })
+  const appEmit = (event: string, ...args: unknown[]): void => {
+    appEvents.emit(event, ...args)
   }
-
   const on = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    const handlers = eventHandlers.get(event) ?? []
-    handlers.push(handler)
-    eventHandlers.set(event, handlers)
+    updaterEvents.on(event, handler)
     return autoUpdaterMock
   })
+  const emit = (event: string, ...args: unknown[]): void => {
+    updaterEvents.emit(event, ...args)
+  }
 
-  const emit = (event: string, ...args: unknown[]) => {
-    for (const handler of eventHandlers.get(event) ?? []) {
-      handler(...args)
-    }
+  // resetModules cannot cancel old timers; fence stale module instances from shared spies.
+  let currentGeneration = 0
+
+  const loadGenerationScopedAutoUpdater = (): AutoUpdaterMock => {
+    const loadedGeneration = currentGeneration
+    return new Proxy(autoUpdaterMock, {
+      get(target, property) {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
+        const value = Reflect.get(target, property)
+        if (loadedGeneration === currentGeneration || typeof value !== 'function') {
+          return value
+        }
+        return () => undefined
+      },
+      set(target, property, value) {
+        return loadedGeneration === currentGeneration ? Reflect.set(target, property, value) : true
+      }
+    })
   }
 
   const reset = () => {
-    appEventHandlers.clear()
+    currentGeneration += 1
+    appEvents.removeAllListeners()
     appOn.mockClear()
-    eventHandlers.clear()
+    appPrependListener.mockClear()
+    updaterEvents.removeAllListeners()
     on.mockClear()
     autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(null)
     autoUpdaterMock.downloadUpdate.mockReset()
@@ -148,7 +167,6 @@ export function createUpdaterMocks(): UpdaterMocks {
     allowPrerelease: false,
     allowDowngrade: false,
     disableDifferentialDownload: false,
-    // Why: setup installs the diagnostic logger adapter here; tests drive child stderr through it.
     logger: undefined as { error: (message: unknown) => void } | undefined,
     on,
     checkForUpdates: vi.fn(),
@@ -164,6 +182,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     isPackaged: true,
     getVersion: vi.fn(() => '1.0.51'),
     on: appOn,
+    prependListener: appPrependListener,
     emit: appEmit,
     quit: vi.fn()
   }
@@ -173,10 +192,13 @@ export function createUpdaterMocks(): UpdaterMocks {
   const nativeUpdaterMock = {
     on: vi.fn()
   }
-  const isMock = { dev: false }
   const killAllPtyMock = vi.fn()
   const powerMonitorOnMock = vi.fn()
   const getLinuxRootPackageTypeMock = vi.fn<() => 'deb' | 'rpm' | null>(() => null)
+  const getLinuxPackageTypeMock = vi.fn<() => LinuxPackageType>(() => {
+    return getLinuxRootPackageTypeMock() ?? 'non-root'
+  })
+  const isExternallyManagedLinuxInstallMock = vi.fn<() => boolean>(() => false)
   const recordUpdaterLifecycleMock = vi.fn()
   const fetchChangelogMock = vi.fn()
   const fetchNudgeMock = vi.fn()
@@ -184,11 +206,11 @@ export function createUpdaterMocks(): UpdaterMocks {
   const armExitWatchdogMock = vi.fn()
   const disarmExitWatchdogMock = vi.fn()
   const fetchNewerReleaseTagsMock = vi.fn()
+  const fetchLatestStableReleaseTagMock = vi.fn<() => Promise<string | null>>()
   const chooseLocalBuildMock = vi.fn()
   const startLocalBuildFeedMock = vi.fn()
   const closeLocalBuildFeedMock = vi.fn()
 
-  /** One factory per module `updater.ts` pulls in; test files pass these to their own `vi.mock`. */
   const moduleFactories: UpdaterModuleFactories = {
     electron: () => ({
       app: appMock,
@@ -199,11 +221,14 @@ export function createUpdaterMocks(): UpdaterMocks {
       net: { fetch: vi.fn() }
     }),
     electronUpdater: () => ({ autoUpdater: autoUpdaterMock }),
-    electronUpdaterLoader: () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }),
-    electronToolkitUtils: () => ({ is: isMock }),
-    ipcPty: () => ({ killAllPty: killAllPtyMock }),
-    // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
-    linuxUpdatePackageType: () => ({ getLinuxRootPackageType: getLinuxRootPackageTypeMock }),
+    electronUpdaterLoader: () => ({ loadElectronAutoUpdater: loadGenerationScopedAutoUpdater }),
+    ptyKillAll: () => ({ killAllPty: killAllPtyMock }),
+    // Keep real artifact capture/redaction under test; fake only package-type detection.
+    linuxUpdatePackageType: () => ({
+      getLinuxPackageType: getLinuxPackageTypeMock,
+      getLinuxRootPackageType: getLinuxRootPackageTypeMock,
+      isExternallyManagedLinuxInstall: isExternallyManagedLinuxInstallMock
+    }),
     updaterLifecycleDiagnostics: () => ({ recordUpdaterLifecycle: recordUpdaterLifecycleMock }),
     updaterChangelog: () => ({ fetchChangelog: fetchChangelogMock }),
     updaterNudge: () => ({ fetchNudge: fetchNudgeMock, shouldApplyNudge: shouldApplyNudgeMock }),
@@ -212,6 +237,7 @@ export function createUpdaterMocks(): UpdaterMocks {
       disarmUpdateInstallExitWatchdog: disarmExitWatchdogMock
     }),
     updaterPrereleaseFeed: () => ({
+      fetchLatestStableReleaseTag: fetchLatestStableReleaseTagMock,
       fetchNewerReleaseTagsWithReadiness: async (...args: unknown[]) => {
         const result = await fetchNewerReleaseTagsMock(...args)
         return Array.isArray(result)
@@ -225,8 +251,11 @@ export function createUpdaterMocks(): UpdaterMocks {
     localBuildFeedServer: () => ({ startLocalBuildFeed: startLocalBuildFeedMock })
   }
 
-  /** Shared `beforeEach` body: fresh module registry plus every mock back to its default. */
   const resetUpdaterMocks = () => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+    // The generation fence ignores stale calls but does not cancel their timers.
+    clearTrackedRealTimers()
     vi.resetModules()
     autoUpdaterMock.reset()
     nativeUpdaterMock.on.mockReset()
@@ -236,17 +265,21 @@ export function createUpdaterMocks(): UpdaterMocks {
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
     killAllPtyMock.mockReset()
     armExitWatchdogMock.mockReset()
     disarmExitWatchdogMock.mockReset()
     powerMonitorOnMock.mockReset()
     getLinuxRootPackageTypeMock.mockReset().mockReturnValue(null)
+    getLinuxPackageTypeMock.mockReset().mockImplementation(() => {
+      return getLinuxRootPackageTypeMock() ?? 'non-root'
+    })
+    isExternallyManagedLinuxInstallMock.mockReset().mockReturnValue(false)
     recordUpdaterLifecycleMock.mockReset()
     fetchNudgeMock.mockReset().mockResolvedValue(null)
     shouldApplyNudgeMock.mockReset().mockReturnValue(false)
     fetchChangelogMock.mockReset().mockResolvedValue(null)
     fetchNewerReleaseTagsMock.mockReset().mockResolvedValue([])
+    fetchLatestStableReleaseTagMock.mockReset().mockResolvedValue('v1.0.51')
     chooseLocalBuildMock.mockReset()
     closeLocalBuildFeedMock.mockReset()
     startLocalBuildFeedMock.mockReset().mockResolvedValue({
@@ -254,18 +287,25 @@ export function createUpdaterMocks(): UpdaterMocks {
       close: closeLocalBuildFeedMock
     })
     vi.unstubAllGlobals()
-    vi.useRealTimers()
+    trackRealTimers()
   }
+
+  // Drop fake timers before restoring real globals, or the wrapper's identity guard cannot restore them.
+  afterAll(() => {
+    vi.useRealTimers()
+    clearTrackedRealTimers()
+  })
 
   return {
     appMock,
     browserWindowMock,
     nativeUpdaterMock,
     autoUpdaterMock,
-    isMock,
     killAllPtyMock,
     powerMonitorOnMock,
+    getLinuxPackageTypeMock,
     getLinuxRootPackageTypeMock,
+    isExternallyManagedLinuxInstallMock,
     recordUpdaterLifecycleMock,
     fetchChangelogMock,
     fetchNudgeMock,
@@ -273,6 +313,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     armExitWatchdogMock,
     disarmExitWatchdogMock,
     fetchNewerReleaseTagsMock,
+    fetchLatestStableReleaseTagMock,
     chooseLocalBuildMock,
     startLocalBuildFeedMock,
     closeLocalBuildFeedMock,

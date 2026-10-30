@@ -1,43 +1,21 @@
 import type { RecentlyClosedTabPosition } from '../../recently-closed-tabs'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
-import type { OpenCheckRunDetailsState } from '@/components/editor/check-run-details-tab'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
 } from '../../../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type {
-  GitConflictKind,
-  GitConflictResolutionStatus,
-  GitConflictStatusSource,
-  GitStatusEntry
-} from '../../../../../../shared/git-status-types'
-
-export type DiffSource =
-  | 'unstaged'
-  | 'staged'
-  | 'branch'
-  | 'commit'
-  | 'combined-all'
-  | 'combined-uncommitted'
-  | 'combined-branch'
-  | 'combined-commit'
-
-export type BranchCompareSnapshot = Pick<
-  GitBranchCompareSummary,
-  'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
-> & {
-  compareVersion: string
-}
-
-export type CommitCompareSnapshot = Pick<
-  GitCommitCompareSummary,
-  'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
-> & {
-  compareVersion: string
-  subject?: string
-  message?: string
-}
+  BranchCompareSnapshot,
+  CombinedDiffAlternate,
+  CombinedDiffSkippedConflict,
+  CommitCompareSnapshot,
+  ConflictReviewState,
+  DiffSource,
+  OpenCheckRunDetailsState,
+  OpenConflictMetadata
+} from '../../../../../../shared/editor-tab-view-types'
 
 export type BranchCompareLike = Pick<
   GitBranchCompareSummary,
@@ -52,44 +30,13 @@ export type CommitCompareLike = Pick<
   message?: string
 }
 
-export type CombinedDiffAlternate = {
-  source: 'combined-all' | 'combined-branch'
-  branchCompare?: BranchCompareSnapshot
-}
-
-export type OpenConflictMetadata = {
-  kind: 'conflict-editable' | 'conflict-placeholder'
-  conflictKind: GitConflictKind
-  conflictStatus: GitConflictResolutionStatus
-  conflictStatusSource: GitConflictStatusSource
-  message?: string
-  guidance?: string
-}
-
-export type ConflictReviewEntry = {
-  path: string
-  conflictKind: GitConflictKind
-}
-
-export type ConflictReviewState = {
-  source: 'live-summary' | 'combined-diff-exclusion'
-  snapshotTimestamp: number
-  entries: ConflictReviewEntry[]
-  selectedFileId?: string
-}
-
-export type CombinedDiffSkippedConflict = {
-  path: string
-  conflictKind: GitConflictKind
-}
-
-// OpenFile is one type (not a `mode` union); consumers reading `filePath` must check `mode` first — conflict-review tabs use the worktree root, not a real file.
-// `skippedConflicts` lives on the tab so the combined-diff exclusion notice stays stable; live status changing between polls would make it flicker.
-// `branchEntriesSnapshot` keeps a combined-branch tab's file list known after switching away from an inactive worktree whose compare data is stale.
+// Check mode before filePath: OpenFile is not a discriminated union and conflict-review paths name roots, not files.
+// Snapshot skippedConflicts to keep combined-diff exclusion notices stable across polls.
+// Keep combined-branch entries across inactive-workspace switches when compare caches are stale.
 export type OpenFile = {
-  id: string // use filePath as unique key
-  filePath: string // absolute path
-  relativePath: string // relative to worktree root
+  id: string
+  filePath: string
+  relativePath: string
   worktreeId: string
   language: string
   isDirty: boolean
@@ -97,6 +44,8 @@ export type OpenFile = {
   runtimeEnvironmentId?: string | null
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
+  /** Host grant for a file outside every workspace on `runtimeEnvironmentId`; never persisted. */
+  terminalArtifactGrantId?: string
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance
   /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */
@@ -108,29 +57,24 @@ export type OpenFile = {
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
   combinedAlternate?: CombinedDiffAlternate
-  combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
+  combinedAreaFilter?: string
   branchEntriesSnapshot?: GitBranchChangeEntry[]
   commitEntriesSnapshot?: GitBranchChangeEntry[]
-  /** Why: snapshot uncommitted entries at tab-open so a later commit can't yank them out from under the combined diff (rebuild + lost scroll). */
+  // Snapshot uncommitted entries at open or later commits rebuild the diff and lose loaded content/scroll.
   uncommittedEntriesSnapshot?: GitStatusEntry[]
   conflict?: OpenConflictMetadata
   skippedConflicts?: CombinedDiffSkippedConflict[]
   conflictReview?: ConflictReviewState
-  isPreview?: boolean // preview tabs are replaced when another file is single-clicked
-  isUntitled?: boolean // true for files created via "New Markdown" that haven't been renamed yet
-  // Why: templated New Markdown files have real content at creation, unlike blank placeholders that can be discarded.
+  isPreview?: boolean
+  isUntitled?: boolean
   deleteUntouchedOnClose?: boolean
   // Why: external delete/rename of an open file keeps the tab (strikethrough label); 'changed' = rewritten on disk under unsaved edits → changed-on-disk banner (#7265).
   externalMutation?: 'deleted' | 'renamed' | 'changed'
   /** Signature of the disk content this tab's edits are based on; persisted so a restore detects a changed-on-disk conflict before autosave clobbers an agent write. */
   lastKnownDiskSignature?: string
-  /** Why: gates autosave for restored dirty tabs until the conflict scan compares disk vs baseline, else a slow SSH read loses the race. Not persisted. */
-  pendingDiskBaselineVerification?: boolean
-  /** Why: gates autosave during a live self-move echo's disk verification; separate flag from the restored scan's so the two can't clear each other's gate. Not persisted. */
-  pendingLiveDiskVerification?: boolean
   /** Blocks saves while a restored tab's filesystem authority is being replaced. */
   pendingOwnerMigration?: boolean
-  /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
+  // Transient Orca move echo proof; survives atomic rekey, operationId supersedes prior verifications after re-move.
   pendingSelfMoveEcho?: { operationId: string; targetPath: string }
   /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
   diffContentReloadNonce?: number
@@ -138,10 +82,12 @@ export type OpenFile = {
   fileContentReloadNonce?: number
   /** Why: CI check-details tabs are virtual editor tabs backed by fetched PR check-run metadata, not a file on disk. */
   checkRunDetails?: OpenCheckRunDetailsState
-  /** Why: web-client tab mirrored from the host snapshot; only mirrored tabs may be culled when they vanish, locally-opened tabs must survive. */
+  // Only host-mirrored tabs may be culled on omission; locally opened tabs survive.
   mirroredFromRuntimeSession?: boolean
-  /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
+  // Read-only is orthogonal to mode: logs cannot edit/autosave/rename; persist only true.
   readOnly?: boolean
+  /** Transient: paged CSV data must never become an editable buffer. */
+  csvPreviewOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
@@ -165,6 +111,12 @@ export type ClosedEditorTabSnapshot = Omit<
 }
 
 export const MAX_RECENT_CLOSED_EDITOR_TABS = 10
+
+/**
+ * How an editor open selects its tab. 'focus' (default) selects it as a user action; 'background'
+ * selects it inside its own worktree without stamping its focus time; 'none' only adds it.
+ */
+export type EditorTabSelection = 'focus' | 'background' | 'none'
 
 export type EditorOpenTargetOptions = {
   targetGroupId?: string

@@ -3,7 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanupTestRepository, linkedWorktreePaths } from './global-teardown'
+import {
+  cleanupTestRepository,
+  cleanupTestRepositoryPathFiles,
+  linkedWorktreePaths
+} from './global-teardown'
 
 const roots: string[] = []
 
@@ -18,6 +22,33 @@ afterEach(() => {
 })
 
 describe('E2E global teardown ownership', () => {
+  it('cleans orphaned worker publications while preserving another run', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-worker-teardown-'))
+    roots.push(root)
+    const runPathFile = path.join(root, 'run.txt')
+    const ownedRepositories = ['seed', 'worker-0', 'worker-3'].map((name) => {
+      const repository = path.join(root, name)
+      mkdirSync(repository)
+      git(repository, ['init'])
+      return repository
+    })
+    const publications = [runPathFile, `${runPathFile}.worker-0`, `${runPathFile}.worker-3`]
+    publications.forEach((publication, index) => {
+      writeFileSync(publication, ownedRepositories[index]!)
+    })
+    const unrelatedRepo = path.join(root, 'unrelated')
+    mkdirSync(unrelatedRepo)
+    const unrelatedPublication = path.join(root, 'another-run.txt.worker-0')
+    writeFileSync(unrelatedPublication, unrelatedRepo)
+
+    cleanupTestRepositoryPathFiles(runPathFile)
+
+    expect(ownedRepositories.every((repository) => !existsSync(repository))).toBe(true)
+    expect(publications.every((publication) => !existsSync(publication))).toBe(true)
+    expect(existsSync(unrelatedRepo)).toBe(true)
+    expect(existsSync(unrelatedPublication)).toBe(true)
+  })
+
   it('removes every linked run worktree and preserves unrelated siblings', () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-teardown-contract-'))
     roots.push(root)
@@ -39,7 +70,7 @@ describe('E2E global teardown ownership', () => {
     git(repoPath, ['worktree', 'add', '-b', 'second-owned', secondWorktreePath])
 
     expect(new Set(linkedWorktreePaths(repoPath))).toEqual(
-      new Set([realpathSync(firstWorktreePath), realpathSync(secondWorktreePath)])
+      new Set([realpathSync.native(firstWorktreePath), realpathSync.native(secondWorktreePath)])
     )
     cleanupTestRepository(repoPath)
 

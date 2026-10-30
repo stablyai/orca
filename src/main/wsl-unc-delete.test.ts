@@ -1,10 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+const { runProcessMock, wokenMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
+  wokenMock: vi.fn((_distro: string) => {})
+}))
 
-vi.mock('child_process', () => ({ execFile: execFileMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+vi.mock('./wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  noteWslDistroWoken: wokenMock
+}))
+vi.mock('./wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
+
+function exited(code: number, stderr = ''): ProcessResult {
+  return { code, signal: null, stdout: '', stderr, timedOut: false }
+}
 
 import { tryDeleteWslUncPath } from './wsl-unc-delete'
+import { isWslUserActFor } from './wsl/wsl-user-act-scope'
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -20,17 +36,15 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 
 describe('tryDeleteWslUncPath', () => {
   beforeEach(() => {
-    execFileMock.mockReset()
-    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
-      cb(null, '', '')
-    })
+    runProcessMock.mockReset()
+    runProcessMock.mockResolvedValue(exited(0))
   })
 
   it('returns false and never spawns for a normal local path', async () => {
     await withPlatform('win32', async () => {
       await expect(tryDeleteWslUncPath('C:\\Users\\me\\repo\\file.txt')).resolves.toBe(false)
     })
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
   it('returns false off Windows so non-Windows callers keep trashing', async () => {
@@ -39,7 +53,7 @@ describe('tryDeleteWslUncPath', () => {
         tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\file.txt')
       ).resolves.toBe(false)
     })
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
   it('hard-deletes a WSL UNC file via rm inside the distro', async () => {
@@ -49,9 +63,11 @@ describe('tryDeleteWslUncPath', () => {
       ).resolves.toBe(true)
     })
 
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    const [binary, spawnArgs] = execFileMock.mock.calls[0]
-    expect(binary).toBe('wsl.exe')
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
+    const [{ program, args: spawnArgs, cwd, timeoutMs }] = runProcessMock.mock.calls[0]
+    expect(program).toBe('wsl.exe')
+    expect(timeoutMs).toBe(30000)
+    expect(cwd).toEqual('C:\\Windows')
     expect(spawnArgs).toEqual([
       '-d',
       'Ubuntu',
@@ -70,7 +86,7 @@ describe('tryDeleteWslUncPath', () => {
       })
     })
 
-    const [, spawnArgs] = execFileMock.mock.calls[0]
+    const [{ args: spawnArgs }] = runProcessMock.mock.calls[0]
     expect(spawnArgs).toEqual(['-d', 'Ubuntu', '--exec', 'rm', '-rf', '--', '/home/me/repo/dir'])
   })
 
@@ -84,7 +100,7 @@ describe('tryDeleteWslUncPath', () => {
       ).resolves.toBe(true)
     })
 
-    const [, spawnArgs] = execFileMock.mock.calls[0]
+    const [{ args: spawnArgs }] = runProcessMock.mock.calls[0]
     expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'sh', '-c'])
     expect(spawnArgs.slice(-7)).toEqual([
       'directory',
@@ -98,9 +114,7 @@ describe('tryDeleteWslUncPath', () => {
   })
 
   it('rejects an inspection failure instead of falling back to direct rm', async () => {
-    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
-      cb(new Error('Command failed'), '', 'ORCA_WSL_DELETE_REJECT:inspection')
-    })
+    runProcessMock.mockResolvedValue(exited(65, 'ORCA_WSL_DELETE_REJECT:inspection'))
 
     await withPlatform('win32', async () => {
       await expect(
@@ -109,7 +123,7 @@ describe('tryDeleteWslUncPath', () => {
         })
       ).rejects.toMatchObject({ reason: 'path-outside-known-roots' })
     })
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects a target without a same-distro containing root before spawning', async () => {
@@ -120,7 +134,7 @@ describe('tryDeleteWslUncPath', () => {
         })
       ).rejects.toMatchObject({ reason: 'path-outside-known-roots' })
     })
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
   it('also handles the legacy \\\\wsl$ UNC prefix', async () => {
@@ -128,19 +142,34 @@ describe('tryDeleteWslUncPath', () => {
       await tryDeleteWslUncPath('\\\\wsl$\\Debian\\srv\\app.log')
     })
 
-    const [, spawnArgs] = execFileMock.mock.calls[0]
+    const [{ args: spawnArgs }] = runProcessMock.mock.calls[0]
     expect(spawnArgs).toEqual(['-d', 'Debian', '--exec', 'rm', '-f', '--', '/srv/app.log'])
   })
 
   it('surfaces the distro stderr when rm fails', async () => {
-    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
-      cb(new Error('Command failed'), '', 'rm: cannot remove: Permission denied')
-    })
+    runProcessMock.mockResolvedValue(exited(1, 'rm: cannot remove: Permission denied'))
 
     await withPlatform('win32', async () => {
       await expect(
         tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\file.txt')
       ).rejects.toThrow('Failed to delete WSL path: rm: cannot remove: Permission denied')
     })
+  })
+
+  // A user's delete may start a stopped distro; background readers must then stop trusting "stopped".
+  it('runs the delete as a user act on its distro and notes it woken', async () => {
+    let insideAct = false
+    runProcessMock.mockImplementation(async () => {
+      insideAct = isWslUserActFor('Ubuntu')
+      return exited(0)
+    })
+    wokenMock.mockClear()
+    await withPlatform('win32', async () => {
+      await expect(
+        tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\old.jsonl')
+      ).resolves.toBe(true)
+    })
+    expect(insideAct).toBe(true)
+    expect(wokenMock).toHaveBeenCalledWith('Ubuntu')
   })
 })

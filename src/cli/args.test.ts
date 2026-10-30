@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
+import { COMMAND_SPECS } from './specs'
 import {
   REPEATED_FLAG_SEPARATOR,
   findCommandSpec,
@@ -93,6 +94,16 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('repo')).toBe('id:abc')
   })
 
+  it('preserves a project selector before the project command', () => {
+    const parsed = parseArgs(
+      ['--project', 'github:stablyai/orca', 'project', 'setups'],
+      [['project', 'setups']]
+    )
+
+    expect(parsed.commandPath).toEqual(['project', 'setups'])
+    expect(parsed.flags.get('project')).toBe('github:stablyai/orca')
+  })
+
   it('preserves a selector value that is also a registered command', () => {
     const parsed = parseArgs(
       ['--environment', 'status', 'worktree', 'list'],
@@ -111,6 +122,16 @@ describe('parseArgs', () => {
 
     expect(parsed.commandPath).toEqual(['status'])
     expect(parsed.flags.get('environment')).toBe('worktree')
+  })
+
+  it.each([
+    ['--project', 'project', 'project', 'setups'],
+    ['--project=project', 'project', 'setups']
+  ])('preserves a command-named project selector in %j', (...args) => {
+    const parsed = parseArgs(args, [['project', 'setups']])
+
+    expect(parsed.commandPath).toEqual(['project', 'setups'])
+    expect(parsed.flags.get('project')).toBe('project')
   })
 
   it('parses emulator reinstall as a boolean flag', () => {
@@ -192,10 +213,6 @@ describe('command aliases', () => {
     expect(findCommandSpec(specs, ['worktree', 'remove'])?.path).toEqual(['worktree', 'rm'])
   })
 
-  it('resolves each declared alias to the canonical spec', () => {
-    expect(findCommandSpec(specs, ['worktree', 'delete'])?.path).toEqual(['worktree', 'rm'])
-  })
-
   it('returns undefined for a path matching neither canonical nor alias', () => {
     expect(findCommandSpec(specs, ['worktree', 'destroy'])).toBeUndefined()
   })
@@ -225,17 +242,38 @@ describe('command aliases', () => {
 })
 
 describe('supportsBrowserPageFlag', () => {
-  it('does not expose browser page targeting on orchestration commands', () => {
-    expect(supportsBrowserPageFlag(['orchestration', 'send'])).toBe(false)
+  const pageFlagFor = (path: string[]): boolean => {
+    const spec = findCommandSpec(COMMAND_SPECS, path)
+    if (!spec) {
+      throw new Error(`no spec for ${path.join(' ')}`)
+    }
+    return supportsBrowserPageFlag(spec)
+  }
+
+  it('offers --page on browser commands that act on one page', () => {
+    expect(pageFlagFor(['snapshot'])).toBe(true)
+    expect(pageFlagFor(['tab', 'switch'])).toBe(true)
+    expect(pageFlagFor(['cookie', 'get'])).toBe(true)
   })
 
-  it('does not expose browser page targeting on local agent discovery', () => {
-    expect(supportsBrowserPageFlag(['agent-context'])).toBe(false)
+  it('does not offer --page on browser commands that open, list or configure pages', () => {
+    expect(pageFlagFor(['open-url'])).toBe(false)
+    expect(pageFlagFor(['tab', 'list'])).toBe(false)
+    expect(pageFlagFor(['browser', 'identity', 'get'])).toBe(false)
   })
 
-  it('does not expose browser page targeting on host-local account commands', () => {
-    expect(supportsBrowserPageFlag(['account', 'add'])).toBe(false)
-    expect(supportsBrowserPageFlag(['account', 'list'])).toBe(false)
+  it('does not offer --page outside the browser commands, including newer groups', () => {
+    for (const path of [
+      ['orchestration', 'send'],
+      ['agent-context'],
+      ['account', 'add'],
+      ['serve'],
+      ['environment', 'list'],
+      ['profile', 'state', 'exports'],
+      ['connector', 'send']
+    ]) {
+      expect(pageFlagFor(path)).toBe(false)
+    }
   })
 })
 
@@ -303,6 +341,25 @@ describe('validateCommandAndFlags', () => {
       expect(data?.nextSteps.join('\n')).toContain('--force')
       expect(data?.nextSteps.join('\n')).toContain('Valid flags:')
     }
+  })
+
+  it('points --from at --terminal on the one verb that renamed the caller flag', () => {
+    const parsed = parseArgs(['orchestration', 'check', '--from', 'term_a'])
+
+    try {
+      validateCommandAndFlags(COMMAND_SPECS, parsed)
+      throw new Error('expected validateCommandAndFlags to throw')
+    } catch (error) {
+      const data = (error as { data?: { suggestions: string[]; nextSteps: string[] } }).data
+      expect(data?.suggestions[0]).toBe('terminal')
+      expect(data?.nextSteps[0]).toContain('--terminal')
+    }
+  })
+
+  it('leaves --from alone where the command actually accepts it', () => {
+    const parsed = parseArgs(['orchestration', 'reply', '--from', 'term_a'])
+
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).not.toThrow()
   })
 
   it('attaches did-you-mean suggestions to unknown-command errors', () => {

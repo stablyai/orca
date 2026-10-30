@@ -2,6 +2,7 @@ import { expect, type Mock } from 'vitest'
 
 import { clearGitCapabilityStateForTests } from './git-capability-state'
 import { _resetWorktreeScanCacheForTests } from './worktree'
+import { __resetSparseCheckoutStateCacheForTests } from './worktree-sparse-checkout-cache'
 
 export type MockResult = {
   error?: Error
@@ -9,10 +10,7 @@ export type MockResult = {
   stderr?: string
 }
 
-// Why: detectSparseCheckout on main also requires core.sparseCheckout=true in git
-// config (not just a non-empty pattern file). Unit tests that assert isSparse must
-// present an enabled flag; other paths never reach this read after the pattern-file
-// fast-path ENOENT.
+// Sparse detection requires core.sparseCheckout=true as well as a pattern file.
 const ENABLED_SPARSE_CHECKOUT_CONFIG = '[core]\nsparseCheckout = true\n'
 
 function enoent(): Error {
@@ -67,8 +65,7 @@ export function expectGitCallOrder(calls: string[], beforeCall: string, afterCal
 export function mockSparseCheckoutEnabledConfig(readFileMock: Mock): void {
   readFileMock.mockImplementation(async (filePath: string) => {
     const normalized = String(filePath).replaceAll('\\', '/')
-    // Why: linked worktrees may point at a common dir; treat missing commondir as
-    // "this gitdir is the common dir" so the shared config read still runs.
+    // Missing commondir makes this gitdir its own common dir, allowing the config read.
     if (normalized.endsWith('/commondir')) {
       throw enoent()
     }
@@ -79,22 +76,10 @@ export function mockSparseCheckoutEnabledConfig(readFileMock: Mock): void {
   })
 }
 
-export type WorktreeTrashMocks = {
-  moveWorktreeDirectoryToTrashMock: Mock
-  restoreWorktreeDirectoryFromTrashMock: Mock
-  scheduleWorktreeTrashDeletionMock: Mock
-}
-
-/** Per-test reset shared by every worktree suite: caches cleared, trash rename unavailable. */
-export function resetWorktreeRemovalState(trashMocks: WorktreeTrashMocks): void {
+export function resetWorktreeRemovalState(): void {
   clearGitCapabilityStateForTests()
   _resetWorktreeScanCacheForTests()
-  // Default: the checkout cannot be renamed aside, so removal deletes it in place.
-  trashMocks.moveWorktreeDirectoryToTrashMock.mockReset()
-  trashMocks.moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined)
-  trashMocks.restoreWorktreeDirectoryFromTrashMock.mockReset()
-  trashMocks.restoreWorktreeDirectoryFromTrashMock.mockResolvedValue(true)
-  trashMocks.scheduleWorktreeTrashDeletionMock.mockReset()
+  __resetSparseCheckoutStateCacheForTests()
 }
 
 export type WorktreeGitMocks = {
@@ -113,8 +98,6 @@ export function resetWorktreeGitMocks(mocks: WorktreeGitMocks): void {
   mocks.translateWslOutputPathsMock.mockReset()
   mocks.translateWslOutputPathsMock.mockImplementation((output: string) => output)
   mocks.statMock.mockReset()
-  // Default: no worktree has a sparse-checkout config file. Tests that need
-  // sparse detection override this.
   mocks.statMock.mockRejectedValue(enoent())
   if (mocks.readFileMock) {
     mocks.readFileMock.mockReset()

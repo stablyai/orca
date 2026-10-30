@@ -7,6 +7,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 describe('remote terminal renderer backpressure', () => {
   const sendBinary = vi.fn()
@@ -21,18 +22,14 @@ describe('remote terminal renderer backpressure', () => {
     sendBinary.mockReset()
     unsubscribe.mockReset()
     callbacks = null
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          subscribe: vi.fn(async (_args, nextCallbacks) => {
-            callbacks = nextCallbacks
-            queueMicrotask(() => {
-              callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
-            })
-            return { unsubscribe, sendBinary }
-          })
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      subscribe: vi.fn(async (_args, nextCallbacks) => {
+        callbacks = nextCallbacks
+        queueMicrotask(() => {
+          callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
+        })
+        return { unsubscribe, sendBinary }
+      })
     })
   })
 
@@ -425,6 +422,56 @@ describe('remote terminal renderer backpressure', () => {
 
     await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledOnce())
     expect(sentAckBytes()).toEqual([1])
+  })
+
+  it('stops rearming the ack flush after a failed ACK tears the stream down', async () => {
+    vi.useFakeTimers()
+    try {
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('./remote-runtime-terminal-multiplexer')
+      const { takeCurrentTerminalDeliveryCredit } =
+        await import('../lib/pane-manager/terminal-delivery-credit')
+      const parseCredits: (() => void)[] = []
+      const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
+        terminal: 'term-wedge',
+        client: { id: 'mac-viewer', type: 'desktop' },
+        callbacks: {
+          onData: () => {
+            const credit = takeCurrentTerminalDeliveryCredit()
+            if (credit) {
+              parseCredits.push(credit)
+            }
+          },
+          onSnapshot: vi.fn()
+        }
+      })
+      sendBinary.mockClear()
+      sendBinary.mockImplementation((bytes) => {
+        if (decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.Ack) {
+          throw new Error('socket closed')
+        }
+      })
+      callbacks?.onBinary(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Output,
+          streamId: stream.streamId,
+          seq: 1,
+          payload: encodeTerminalStreamText('x')
+        })
+      )
+      parseCredits[0]?.()
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(unsubscribe).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(70_000)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(sentAckBytes()).toEqual([1])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   function sentAckBytes(): number[] {

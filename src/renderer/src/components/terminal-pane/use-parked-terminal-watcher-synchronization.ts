@@ -24,8 +24,7 @@ type WatcherReconciliationStoreInputs = readonly (
 
 const EMPTY_WATCHER_RECONCILIATION_INPUTS: WatcherReconciliationStoreInputs = Object.freeze([])
 
-/** Length-prefixed concatenation: injective for arbitrary fragments, and unlike
- *  JSON.stringify it never rescans a fragment to escape characters it contains. */
+/** Length-prefix fragments for injective concatenation without JSON escaping rescans. */
 function joinKeyFragments(fragments: readonly string[]): string {
   let key = ''
   for (const fragment of fragments) {
@@ -82,9 +81,7 @@ function getCapturedPaneKey(terminalTabs: readonly TerminalTab[]): string {
   )
 }
 
-/** The store-derived half of the reconciliation key. Split out because it is a
- *  pure function of shallow-stable selector output, so it memoizes; the captured
- *  pane half reads a registry mutated outside React and cannot. */
+/** Memoize store-derived shallow-stable inputs; registry-derived captures mutate outside React and must be read separately. */
 function getWatcherReconciliationStoreInputsKey(
   terminalTabs: readonly TerminalTab[],
   inputs: WatcherReconciliationStoreInputs
@@ -122,11 +119,15 @@ function selectWatcherReconciliationStoreInputs(
   state: AppState,
   terminalTabs: readonly TerminalTab[]
 ): WatcherReconciliationStoreInputs {
-  return terminalTabs.flatMap((tab) => [
-    state.ptyIdsByTabId[tab.id] ?? EMPTY_PTY_IDS,
-    state.terminalLayoutsByTabId[tab.id] ?? null,
-    Object.keys(state.runtimePaneTitlesByTabId[tab.id] ?? {}).join(',')
-  ])
+  return terminalTabs.flatMap((tab) => {
+    // Missing titles already serialize empty; do not allocate a throwaway fallback object per tab/write.
+    const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
+    return [
+      state.ptyIdsByTabId[tab.id] ?? EMPTY_PTY_IDS,
+      state.terminalLayoutsByTabId[tab.id] ?? null,
+      paneTitles ? Object.keys(paneTitles).join(',') : ''
+    ]
+  })
 }
 
 export function useParkedTerminalWatcherSynchronization(args: {
@@ -153,8 +154,7 @@ export function useParkedTerminalWatcherSynchronization(args: {
         : selectWatcherReconciliationStoreInputs(state, terminalTabs)
     )
   )
-  // Why memoized: serializing the split tree per tab is the dominant cost here,
-  // and the shallow selector output only changes when the serialization would.
+  // Memoize dominant per-tab tree serialization by shallow selector identity.
   const reconciliationStoreInputsKey = useMemo(
     () => getWatcherReconciliationStoreInputsKey(terminalTabs, reconciliationStoreInputs),
     [reconciliationStoreInputs, terminalTabs]

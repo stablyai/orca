@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { subscribeViaWatcherProcess } from './parcel-watcher-process'
-import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
+import { subscribeViaWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
+import { isWatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
@@ -11,11 +11,9 @@ import type {
 import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
 import { startGitCommonPolling } from './worktree-git-common-polling'
+import { createNativeUpgradePoll } from './worktree-git-common-native-upgrade-poll'
 
-// The native stream is hosted in the crash-isolated watcher child, never the
-// Electron main process: watcher.node teardown races heap-corrupt the hosting
-// process when unsubscribe overlaps in-flight callbacks (issue #8732), and
-// root deletion via `git worktree prune` makes that overlap routine here.
+// Isolate native watchers in children: unsubscribe races can corrupt the host heap when prune deletes a root (#8732).
 
 export async function startGitCommonNarrowWatch(
   target: WorktreeBaseWatchTarget,
@@ -24,7 +22,9 @@ export async function startGitCommonNarrowWatch(
   platform: NodeJS.Platform,
   visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void,
-  onWatchError?: (error: Error) => void
+  onWatchError?: (error: Error) => void,
+  // Overflow proves lost events and must bypass the transient watcher-error cooldown.
+  onOverflow?: () => void
 ): Promise<WorktreeBaseSubscription> {
   const worktreesDir = join(target.path, 'worktrees')
   const watcherOptions = platform === 'win32' ? { backend: 'windows' as const } : {}
@@ -73,6 +73,7 @@ export async function startGitCommonNarrowWatch(
         .unsubscribe()
         .catch(() => {})
         .then(() =>
+          // While the native crash fuse is open, gated polling remains the sole change source.
           startGitCommonPolling(
             target.path,
             onEvents,
@@ -88,8 +89,41 @@ export async function startGitCommonNarrowWatch(
             return
           }
           subscription = fallback
+          upgradePoll.arm()
         })
     })
+
+  const upgradeFromPollingFallback = async (): Promise<void> => {
+    if (
+      disposed ||
+      subscribing ||
+      !usingPollingFallback ||
+      pollingFallback.pending() ||
+      !visibility.isWindowVisible()
+    ) {
+      return
+    }
+    const fallback = subscription
+    const attemptGeneration = nativeSubscriptionGeneration + 1
+    subscribing = true
+    try {
+      const installed = await trySubscribe()
+      // A torn-down attempt bumps the generation and may have swapped pollers.
+      if (!installed || disposed || nativeSubscriptionGeneration !== attemptGeneration) {
+        return
+      }
+      upgradePoll.stop()
+      usingPollingFallback = false
+      await fallback?.unsubscribe().catch(() => {})
+      await reconciliation.ensureStarted()
+      // Resync past the polling window now that native events resume.
+      onEvents([{ type: 'update', path: worktreesDir }])
+    } finally {
+      subscribing = false
+    }
+  }
+
+  const upgradePoll = createNativeUpgradePoll(upgradeFromPollingFallback)
 
   const tryUpgradeToNarrowWatch = async (): Promise<void> => {
     if (disposed || subscribing || subscription) {
@@ -154,11 +188,7 @@ export async function startGitCommonNarrowWatch(
     const generation = ++nativeSubscriptionGeneration
     let errored = false
     let active = true
-    // Why: parcel tears its native stream down when the watched root is
-    // deleted (e.g. `git worktree prune` removing an empty worktrees dir) —
-    // sometimes surfaced as an error, sometimes as a delete event for the
-    // root. Either way: notify, drop the dead stream, and let the existence
-    // poll re-arm when a future worktree add recreates the dir.
+    // Root deletion kills native streams; notify, retire, and let existence polling rearm after recreation.
     const teardown = (): void => {
       active = false
       errored = true
@@ -212,8 +242,7 @@ export async function startGitCommonNarrowWatch(
         },
         watcherOptions,
         {
-          // Why: a watcher-child crash drops events during the automatic
-          // resubscribe gap; report a structural change so worktrees re-sync.
+          // Child crashes lose events during resubscribe; force structural resync.
           onInterruption: () => {
             if (!disposed && active && generation === nativeSubscriptionGeneration) {
               if (onWatchError) {
@@ -221,6 +250,19 @@ export async function startGitCommonNarrowWatch(
               } else {
                 onEvents([{ type: 'update', path: worktreesDir }])
               }
+            }
+          },
+          // Dropped/overflowed batches identify no paths; always widen beyond the watcher-error cooldown.
+          onOverflow: () => {
+            if (disposed || !active || generation !== nativeSubscriptionGeneration) {
+              return
+            }
+            if (onOverflow) {
+              onOverflow()
+            } else if (onWatchError) {
+              onWatchError(new Error('Git common watcher overflowed'))
+            } else {
+              onEvents([{ type: 'update', path: worktreesDir }])
             }
           }
         }
@@ -241,6 +283,9 @@ export async function startGitCommonNarrowWatch(
         return false
       }
       if (shouldUsePollingFallback(error)) {
+        if (usingPollingFallback) {
+          return false
+        }
         await ensurePollingFallback()
         return subscription !== null
       }
@@ -249,8 +294,7 @@ export async function startGitCommonNarrowWatch(
   }
 
   if (!(await trySubscribe())) {
-    // Why: repos commonly start without linked worktrees; retrying the narrow
-    // subscription lets macOS upgrade to native events when the directory appears.
+    // Repos may have no linked worktree directory yet; upgrade to native events when it appears.
     armExistencePoll()
   }
   await reconciliation.ensureStarted()
@@ -259,6 +303,7 @@ export async function startGitCommonNarrowWatch(
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()
+      upgradePoll.stop()
       unsubscribeVisibility()
       await pollingFallback.pending()?.catch(() => {})
       nativeSubscriptionGeneration++

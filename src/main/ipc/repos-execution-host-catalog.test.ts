@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
 
@@ -21,23 +21,22 @@ vi.mock('./registered-worktree-roots-cache', () =>
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
-vi.mock('../providers/ssh-filesystem-dispatch', () =>
-  moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
-)
-vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
-vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
-import {
-  getSshProviderAuthority,
-  resetSshProviderAuthorities,
-  rotateSshProviderAuthority
-} from '../ssh/ssh-provider-authority'
+import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
-import { toSshExecutionHostId } from '../../shared/execution-host'
 import { createRepoHandlerHarness, resetProjectGroupMocks } from './repos-remote-test-harness'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
+import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
+import {
+  WslMoveProjectFencedError,
+  loadWslMoveFence,
+  resetWslMoveFenceForTests
+} from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 const { handleMock, mockStore } = reposMocks
 
@@ -54,7 +53,7 @@ describe('projectGroups IPC validation', () => {
     mockWindow.webContents.send.mockReset()
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('rejects malformed local project group create arguments before persistence', () => {
@@ -63,128 +62,6 @@ describe('projectGroups IPC validation', () => {
     ).toThrow('invalid_project_group_create_args')
 
     expect(mockStore.createProjectGroup).not.toHaveBeenCalled()
-  })
-
-  it('returns an immutable repo catalog for exactly one execution host', async () => {
-    const localRepo = {
-      id: 'duplicate',
-      path: '/local/repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const sshRepo = {
-      id: 'duplicate',
-      path: '/remote/repo',
-      displayName: 'remote',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1'
-    }
-    const runtimeRepo = {
-      id: 'duplicate',
-      path: '/runtime/repo',
-      displayName: 'runtime',
-      badgeColor: '#000',
-      addedAt: 0,
-      executionHostId: 'runtime:environment-a'
-    }
-    mockStore.getRepos.mockReturnValue([localRepo, sshRepo, runtimeRepo])
-
-    await expect(
-      handlers.get('repos:listForExecutionHost')!(null, {
-        executionHostId: toSshExecutionHostId('conn-1'),
-        expectedAuthority: getSshProviderAuthority('conn-1')
-      })
-    ).resolves.toMatchObject({
-      authoritative: true,
-      authority: {
-        kind: 'direct-ssh',
-        executionHostId: 'ssh:conn-1',
-        targetId: 'conn-1'
-      },
-      repos: [sshRepo]
-    })
-
-    const local = await handlers.get('repos:listForExecutionHost')!(null, {
-      executionHostId: 'local'
-    })
-    expect(local).toMatchObject({ authoritative: true, repos: [localRepo] })
-    expect((local as { repos: object[] }).repos[0]).not.toBe(localRepo)
-  })
-
-  it('rejects repo catalogs whose execution host contradicts their SSH connection', async () => {
-    const baseRepo = {
-      id: 'repo-1',
-      path: '/repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    mockStore.getRepos.mockReturnValue([
-      {
-        ...baseRepo,
-        connectionId: 'conn-1',
-        executionHostId: 'local'
-      }
-    ])
-
-    await expect(
-      handlers.get('repos:listForExecutionHost')!(null, {
-        executionHostId: 'local'
-      })
-    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
-    await expect(
-      handlers.get('repos:listForExecutionHost')!(null, {
-        executionHostId: toSshExecutionHostId('conn-1'),
-        expectedAuthority: getSshProviderAuthority('conn-1')
-      })
-    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
-
-    mockStore.getRepos.mockReturnValue([
-      {
-        ...baseRepo,
-        connectionId: 'conn-1',
-        executionHostId: toSshExecutionHostId('conn-2')
-      }
-    ])
-
-    await expect(
-      handlers.get('repos:listForExecutionHost')!(null, {
-        executionHostId: toSshExecutionHostId('conn-1'),
-        expectedAuthority: getSshProviderAuthority('conn-1')
-      })
-    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
-  })
-
-  it('rejects runtime, partial, mismatched, and stale catalog authority', async () => {
-    await expect(
-      handlers.get('repos:listForExecutionHost')!(null, {
-        executionHostId: 'runtime:environment-a'
-      })
-    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
-    await expect(
-      handlers.get('repos:listForExecutionHost')!(null, {
-        executionHostId: toSshExecutionHostId('conn-1')
-      })
-    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
-    await expect(
-      handlers.get('repos:listForExecutionHost')!(null, {
-        executionHostId: toSshExecutionHostId('conn-1'),
-        expectedAuthority: {
-          ...getSshProviderAuthority('other-target'),
-          targetId: 'other-target'
-        }
-      })
-    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
-
-    const expectedAuthority = getSshProviderAuthority('conn-1')
-    const pending = handlers.get('repos:listForExecutionHost')!(null, {
-      executionHostId: toSshExecutionHostId('conn-1'),
-      expectedAuthority
-    })
-    rotateSshProviderAuthority('conn-1')
-    await expect(pending).resolves.toMatchObject({ authoritative: false, reason: 'stale' })
   })
 
   it('rejects malformed local project group update arguments before persistence', () => {
@@ -196,5 +73,82 @@ describe('projectGroups IPC validation', () => {
     ).toThrow('invalid_project_group_update_args')
 
     expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('moves the twin on the host the renderer named, not the first row with the id', () => {
+    const localRow = { id: 'dup', path: '/laptop/dup', executionHostId: 'local' }
+    mockStore.getRepo.mockReturnValue(localRow)
+    mockStore.moveProjectToGroup.mockReturnValue({ id: 'dup', connectionId: 'ssh-1' })
+
+    handlers.get('projectGroups:moveProject')!(null, {
+      projectId: 'dup',
+      groupId: 'group-1',
+      hostId: 'ssh:ssh-1'
+    })
+
+    expect(mockStore.moveProjectToGroup).toHaveBeenCalledWith(
+      { id: 'dup', executionHostId: 'ssh:ssh-1' },
+      'group-1',
+      undefined
+    )
+  })
+
+  it('keeps moving the first row with the id for a caller that names no host', () => {
+    const localRow = { id: 'dup', path: '/laptop/dup', executionHostId: 'local' }
+    mockStore.getRepo.mockReturnValue(localRow)
+
+    handlers.get('projectGroups:moveProject')!(null, { projectId: 'dup', groupId: null })
+
+    expect(mockStore.moveProjectToGroup).toHaveBeenCalledWith(localRow, null, undefined)
+  })
+
+  it('rejects an invalid host id before persistence', () => {
+    expect(() =>
+      handlers.get('projectGroups:moveProject')!(null, {
+        projectId: 'dup',
+        groupId: null,
+        hostId: 'not a host'
+      })
+    ).toThrow('invalid_project_group_move_repo_args')
+
+    expect(mockStore.moveProjectToGroup).not.toHaveBeenCalled()
+  })
+
+  describe('while a WSL move fences the local repo-1', () => {
+    let userDataPath: string
+    beforeEach(() => {
+      userDataPath = mkdtempSync(join(tmpdir(), 'wsl-move-project-group-ipc-'))
+      loadWslMoveFence(userDataPath)
+      seedWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))
+    })
+    afterEach(() => {
+      resetWslMoveFenceForTests()
+      rmSync(userDataPath, { recursive: true, force: true })
+    })
+
+    it('still moves the SSH twin, which the move does not take', () => {
+      handlers.get('projectGroups:moveProject')!(null, {
+        projectId: 'repo-1',
+        groupId: 'group-1',
+        hostId: 'ssh:ssh-1'
+      })
+
+      expect(mockStore.moveProjectToGroup).toHaveBeenCalledWith(
+        { id: 'repo-1', executionHostId: 'ssh:ssh-1' },
+        'group-1',
+        undefined
+      )
+    })
+
+    it('refuses the local twin', () => {
+      expect(() =>
+        handlers.get('projectGroups:moveProject')!(null, {
+          projectId: 'repo-1',
+          groupId: 'group-1',
+          hostId: 'local'
+        })
+      ).toThrow(WslMoveProjectFencedError)
+      expect(mockStore.moveProjectToGroup).not.toHaveBeenCalled()
+    })
   })
 })

@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -9,6 +10,21 @@ import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
 import { sendRequest, withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
+import { STATUS_METHODS } from './rpc/methods/status'
+import { ORCHESTRATION_FEDERATION_CONTROL_METHODS } from './rpc/methods/orchestration/federation/federation-control'
+import { ORCHESTRATION_RESET_METHODS } from './rpc/methods/orchestration/runs/reset-methods'
+import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
+import { FILE_MUTATION_METHODS } from './rpc/methods/files-mutation-methods'
+import { GIT_METHODS } from './rpc/methods/git'
+
+const methods = [
+  ...STATUS_METHODS,
+  ...ORCHESTRATION_FEDERATION_CONTROL_METHODS,
+  ...ORCHESTRATION_RESET_METHODS,
+  ...SESSION_TAB_METHODS,
+  ...FILE_MUTATION_METHODS,
+  ...GIT_METHODS
+]
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -30,10 +46,16 @@ describe('OrcaRuntimeRpcServer', () => {
   it('rejects WebSocket requests whose request token differs from the authenticated channel token', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = {
+      configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' })
     } as unknown as OrcaRuntimeService
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods,
+      userDataPath,
+      enableWebSocket: false
+    })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const channelDevice = server['deviceRegistry']!.addDevice('phone', 'mobile')
     const requestDevice = server['deviceRegistry']!.addDevice('cli', 'runtime')
@@ -66,7 +88,12 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods,
+      userDataPath,
+      enableWebSocket: false
+    })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const firstDevice = server['deviceRegistry']!.addDevice('first-cli', 'runtime')
     const secondDevice = server['deviceRegistry']!.addDevice('second-cli', 'runtime')
@@ -92,9 +119,19 @@ describe('OrcaRuntimeRpcServer', () => {
     }
 
     try {
-      db.insertMessage({ from: 'worker', to: 'coordinator', subject: 'before reset' })
+      db.insertMessage({
+        runId: 'run_legacy_local',
+        from: 'worker',
+        to: 'coordinator',
+        subject: 'before reset'
+      })
       const first = await resetMessages('reset-first', firstDevice.token)
-      db.insertMessage({ from: 'worker', to: 'coordinator', subject: 'after reset' })
+      db.insertMessage({
+        runId: 'run_legacy_local',
+        from: 'worker',
+        to: 'coordinator',
+        subject: 'after reset'
+      })
       const replay = await resetMessages('reset-replay', firstDevice.token)
 
       expect(first).toMatchObject({
@@ -124,11 +161,17 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods,
+      userDataPath,
+      enableWebSocket: false
+    })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const device = server['deviceRegistry']!.addDevice('existing-cli', 'runtime')
     const existingFingerprint = createHash('sha256').update(device.token).digest('hex')
     db.createRemoteDispatchAttachment({
+      runId: 'run_home',
       dispatchId: 'ctx_existing_remote',
       taskId: 'task_existing_remote',
       homePeerFingerprint: existingFingerprint,
@@ -173,10 +216,16 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const createMobileSessionTerminal = vi.fn()
     const runtime = {
+      configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime',
       createMobileSessionTerminal
     } as unknown as OrcaRuntimeService
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods,
+      userDataPath,
+      enableWebSocket: false
+    })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const replies: Record<string, unknown>[] = []
     const send = async (id: string, deviceToken?: string): Promise<void> => {
@@ -214,10 +263,16 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
     const runtime = {
+      configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime',
       pushRuntimeGit
     } as unknown as OrcaRuntimeService
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods,
+      userDataPath,
+      enableWebSocket: false
+    })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const runtimeDevice = server['deviceRegistry']!.addDevice('cli', 'runtime')
     const replies: Record<string, unknown>[] = []
@@ -240,7 +295,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('serves status.get for authenticated callers', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    const server = new OrcaRuntimeRpcServer({ runtime, methods, userDataPath })
 
     await server.start()
 
@@ -266,7 +321,12 @@ describe('OrcaRuntimeRpcServer', () => {
   it('stamps the authenticated device scope onto status.get for WebSocket clients', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods,
+      userDataPath,
+      enableWebSocket: false
+    })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const mobile = server['deviceRegistry']!.addDevice('phone', 'mobile')
     const runtimeDevice = server['deviceRegistry']!.addDevice('browser', 'runtime')
@@ -306,7 +366,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('rejects requests with the wrong auth token', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    const server = new OrcaRuntimeRpcServer({ runtime, methods, userDataPath })
 
     await server.start()
 
@@ -331,7 +391,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('rejects malformed requests before dispatch', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    const server = new OrcaRuntimeRpcServer({ runtime, methods, userDataPath })
 
     await server.start()
 

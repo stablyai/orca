@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
 import {
@@ -22,31 +23,31 @@ import { PendingBrowserAnnotationCard } from './pending-browser-annotation-card'
 import type { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from './use-browser-page-grab-annotations'
 
-/**
- * Everything the annotate and markup tools paint over a guest: the draw surface, the pending
- * comment card, the annotation tray, the right-click grab menu and the inline confirmation toast.
- *
- * Shared because these overlays are the other half of the toolbar's tool cluster — a surface that
- * offers the tools but not these would arm a picker whose result the reader could never see.
- */
+/** Pair guest tools with all their result overlays so every surface that arms a picker can display its result. */
 export function BrowserGuestAnnotateOverlays({
   markup,
   grab,
   annotationSend,
   grabAnnotations,
   containerRef,
+  markupPortalContainer,
+  markupControlsContainer,
   webviewRef,
   browserOverlayViewport,
-  worktreeId
+  worktreeId,
+  currentUrl
 }: {
   markup: MarkupModeController
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
   containerRef: RefObject<HTMLDivElement | null>
+  markupPortalContainer?: HTMLDivElement | null
+  markupControlsContainer?: HTMLDivElement | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
+  currentUrl?: string
 }): React.JSX.Element {
   const {
     pendingAnnotationPayload,
@@ -61,57 +62,74 @@ export function BrowserGuestAnnotateOverlays({
     dismissGrabToast,
     setGrabToast
   } = grabAnnotations
+  const markupTarget = markupPortalContainer ?? containerRef.current
   const {
     browserAnnotations,
-    browserAnnotationTrayOpen,
     annotationTraySendOpen,
     handleAnnotationTraySendOpenChange,
     activeGroupId,
     browserAnnotationsPrompt,
+    includePageDetails,
+    handleIncludePageDetailsChange,
     handleBrowserAnnotationsSentToAgent,
+    handleBrowserAnnotationsHandedOff,
     handleCopyBrowserAnnotations,
     browserAnnotationsCopied,
     handleClearBrowserAnnotations,
-    handleDeleteBrowserAnnotation
+    handleDeleteBrowserAnnotation,
+    handleUpdateBrowserAnnotation
   } = annotationSend
 
   return (
     <>
-      {markup.isActive && markup.baseImage ? (
-        <MarkupOverlay
-          baseImage={markup.baseImage}
-          busy={markup.state === 'composing'}
-          onComplete={(input) => void markup.complete(input)}
-          onCancel={markup.cancel}
-        />
-      ) : null}
+      {markup.isActive && markup.baseImage && markupTarget
+        ? createPortal(
+            <MarkupOverlay
+              baseImage={markup.baseImage}
+              busy={markup.state === 'composing'}
+              onComplete={(input) => void markup.complete(input)}
+              onCancel={markup.cancel}
+              controlsContainer={markupControlsContainer}
+            />,
+            markupTarget
+          )
+        : null}
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
           payload={pendingAnnotationPayload}
-          anchor={getBrowserOverlayAnchor(
-            pendingAnnotationPayload,
-            containerRef.current,
-            webviewRef.current,
-            browserOverlayViewport
-          )}
+          worktreeId={worktreeId}
+          resolveAnchor={(cardHeight) =>
+            getBrowserOverlayAnchor(
+              pendingAnnotationPayload,
+              containerRef.current,
+              webviewRef.current,
+              browserOverlayViewport,
+              cardHeight
+            )
+          }
           portalContainer={containerRef.current}
           onAdd={handleAddBrowserAnnotation}
           onCancel={handleCancelPendingBrowserAnnotation}
         />
       ) : null}
-      {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
+      {browserAnnotations.length > 0 ? (
         <BrowserPageAnnotationTray
           browserAnnotations={browserAnnotations}
+          currentUrl={currentUrl}
           annotationTraySendOpen={annotationTraySendOpen}
           handleAnnotationTraySendOpenChange={handleAnnotationTraySendOpenChange}
           worktreeId={worktreeId}
           activeGroupId={activeGroupId}
           browserAnnotationsPrompt={browserAnnotationsPrompt}
+          includePageDetails={includePageDetails}
+          handleIncludePageDetailsChange={handleIncludePageDetailsChange}
           handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
+          handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}
           browserAnnotationsCopied={browserAnnotationsCopied}
           handleClearBrowserAnnotations={handleClearBrowserAnnotations}
           handleDeleteBrowserAnnotation={handleDeleteBrowserAnnotation}
+          handleUpdateBrowserAnnotation={handleUpdateBrowserAnnotation}
         />
       ) : null}
       {/* Right-click context dropdown, positioned at the grabbed element's center. */}

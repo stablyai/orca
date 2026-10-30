@@ -1,23 +1,20 @@
 import * as path from 'node:path'
 import { readFile, realpath, stat } from 'node:fs/promises'
+import { waitForPromiseWithSignal } from './abort-signal-reason'
+import { parseGitdirMarkerPayload } from './gitdir-marker-payload'
 import { runWithGitOperationLock } from './git-operation-lock'
+import { findGitSubcommandIndex, GIT_GLOBAL_OPTIONS_WITH_VALUE } from './git-command-classification'
+import {
+  foldWslUncPathCaseInsensitiveParts,
+  isWslUncPath,
+  toWindowsWslDrivePath
+} from './wsl-paths'
 
 function abortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
   return error
 }
-const GLOBAL_OPTIONS_WITH_VALUE = new Set([
-  '-c',
-  '-C',
-  '--git-dir',
-  '--work-tree',
-  '--namespace',
-  '--super-prefix',
-  '--config-env',
-  '--exec-path'
-])
-
 type GitFetchHeadCommand = { needsLock: boolean; cwd: string; gitDir?: string }
 
 export function resolveGitFetchHeadCommand(
@@ -26,8 +23,8 @@ export function resolveGitFetchHeadCommand(
 ): GitFetchHeadCommand {
   let cwd = initialCwd
   let gitDir: string | undefined
-  let subcommandIndex = -1
-  for (let index = 0; index < args.length; index += 1) {
+  const subcommandIndex = findGitSubcommandIndex(args)
+  for (let index = 0; index < args.length && index !== subcommandIndex; index += 1) {
     const arg = args[index]
     if (arg === '-C' && args[index + 1]) {
       cwd = path.resolve(cwd, args[index + 1])
@@ -47,15 +44,9 @@ export function resolveGitFetchHeadCommand(
       gitDir = path.resolve(cwd, arg.slice('--git-dir='.length))
       continue
     }
-    if (GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
+    if (GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
       index += 1
-      continue
     }
-    if (arg.startsWith('-')) {
-      continue
-    }
-    subcommandIndex = index
-    break
   }
   const subcommand = args[subcommandIndex]
   if (subcommand === 'pull') {
@@ -79,25 +70,64 @@ export function resolveGitFetchHeadCommand(
   return { needsLock: writesFetchHead || updatesRemoteTrackingRef, cwd, gitDir }
 }
 
+/** Choose the host’s path rules explicitly so tests can exercise Win32 behavior on POSIX. */
+function hostPath(): typeof path.posix {
+  return process.platform === 'win32' ? path.win32 : path.posix
+}
+
+/** Translate WSL-written metadata pointers under native drive bases: path.resolve would turn /mnt/c into nonexistent C:\mnt\c, splitting worktree fetch lanes.
+ * Keep UNC bases unchanged: win32 resolve preserves their distro, and main .git directories retain UNC keys without pointers.
+ * Translating only linked-worktree pointers to drive paths would split the same repo across lanes. */
+function resolveMetadataPointer(basePath: string, rawPointer: string): string {
+  if (process.platform === 'win32' && !isWslUncPath(basePath)) {
+    const drivePath = toWindowsWslDrivePath(rawPointer)
+    if (drivePath) {
+      return drivePath
+    }
+  }
+  return hostPath().resolve(basePath, rawPointer)
+}
+
+/** Fold WSL UNC aliases, distro names and drvfs tails as Windows does so one repo cannot open two fetch lanes. */
+function canonicalizeFetchHeadLockKey(key: string): string {
+  if (process.platform !== 'win32') {
+    return key
+  }
+  return foldWslUncPathCaseInsensitiveParts(key) ?? key
+}
+
+/** `realpath` takes no signal, so a hung 9P/UNC lookup outlives the cancelled fetch without this. */
+async function realpathOrResolve(target: string, signal: AbortSignal | undefined): Promise<string> {
+  try {
+    return await waitForPromiseWithSignal(realpath(target), signal)
+  } catch {
+    // Why the synthetic error rather than the signal's reason: callers classify on `name`.
+    if (signal?.aborted) {
+      throw abortError()
+    }
+    return hostPath().resolve(target)
+  }
+}
+
 async function fetchLockPath(
   worktreePath: string,
   signal: AbortSignal | undefined,
   explicitGitDir?: string
 ): Promise<string> {
-  let current = await realpath(worktreePath).catch(() => path.resolve(worktreePath))
+  let current = await realpathOrResolve(worktreePath, signal)
   let gitDir = explicitGitDir
   while (!gitDir) {
-    const dotGitPath = path.join(current, '.git')
+    const dotGitPath = hostPath().join(current, '.git')
     try {
-      const metadata = await stat(dotGitPath)
+      const metadata = await waitForPromiseWithSignal(stat(dotGitPath), signal)
       if (metadata.isDirectory()) {
         gitDir = dotGitPath
         break
       }
       const contents = await readFile(dotGitPath, { encoding: 'utf-8', signal })
-      const match = contents.match(/^gitdir:\s*(.+)\s*$/m)
-      if (match) {
-        gitDir = path.resolve(current, match[1])
+      const marker = parseGitdirMarkerPayload(contents)
+      if (marker) {
+        gitDir = resolveMetadataPointer(current, marker)
         break
       }
     } catch {
@@ -105,26 +135,29 @@ async function fetchLockPath(
         throw abortError()
       }
     }
-    const parent = path.dirname(current)
+    const parent = hostPath().dirname(current)
     if (parent === current) {
-      gitDir = path.join(current, '.git')
+      gitDir = hostPath().join(current, '.git')
       break
     }
     current = parent
   }
   let commonGitDir = gitDir
   try {
-    const contents = await readFile(path.join(gitDir, 'commondir'), { encoding: 'utf-8', signal })
+    const contents = await readFile(hostPath().join(gitDir, 'commondir'), {
+      encoding: 'utf-8',
+      signal
+    })
     if (contents.trim()) {
-      commonGitDir = path.resolve(gitDir, contents.trim())
+      commonGitDir = resolveMetadataPointer(gitDir, contents.trim())
     }
   } catch {
     if (signal?.aborted) {
       throw abortError()
     }
   }
-  const canonicalGitDir = await realpath(commonGitDir).catch(() => path.resolve(commonGitDir))
-  return path.join(canonicalGitDir, 'FETCH_HEAD')
+  const canonicalGitDir = await realpathOrResolve(commonGitDir, signal)
+  return canonicalizeFetchHeadLockKey(hostPath().join(canonicalGitDir, 'FETCH_HEAD'))
 }
 
 export async function runWithGitFetchHeadLock<T>(

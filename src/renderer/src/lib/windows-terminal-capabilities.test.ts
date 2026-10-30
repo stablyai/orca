@@ -10,12 +10,12 @@ import {
   hasCachedWindowsTerminalCapabilities,
   isWindowsTerminalCapabilityHost,
   loadWindowsTerminalCapabilities,
-  refreshWindowsTerminalCapabilities,
   resetWindowsTerminalCapabilitiesForTests,
   selectWindowsTerminalCapabilitiesForOwner,
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
+import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
 
 describe('Windows terminal capability host ownership', () => {
   it.each([
@@ -81,9 +81,9 @@ function stubTerminalCapabilityApi(args: {
   const wslListDistros = vi.fn().mockResolvedValue(args.wslDistros ?? [])
   const pwshIsAvailable = vi.fn().mockResolvedValue(args.pwshAvailable)
   const isGitBashAvailable = vi.fn().mockResolvedValue(args.gitBashAvailable ?? false)
-  const runtimeGetStatus = vi
-    .fn()
-    .mockResolvedValue({ hostPlatform: 'hostPlatform' in args ? args.hostPlatform : 'win32' })
+  const runtimeGetStatus = vi.fn().mockResolvedValue({
+    hostPlatform: 'hostPlatform' in args ? args.hostPlatform : 'win32'
+  })
 
   vi.stubGlobal('window', {
     api: {
@@ -193,7 +193,7 @@ describe('windows terminal capabilities', () => {
     await expect(loadWindowsTerminalCapabilities()).resolves.toMatchObject({
       wslAvailable: false
     })
-    await expect(refreshWindowsTerminalCapabilities()).resolves.toMatchObject({
+    await expect(loadWindowsTerminalCapabilities({ force: true })).resolves.toMatchObject({
       wslAvailable: true
     })
 
@@ -299,13 +299,7 @@ describe('windows terminal capabilities', () => {
         result: resultByMethod[args.method]
       }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeEnvironmentCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeEnvironmentCall })
 
     await expect(
       loadWindowsTerminalCapabilities({
@@ -434,7 +428,11 @@ describe('windows terminal capabilities', () => {
     })
 
     await expect(
-      refreshWindowsTerminalCapabilities(undefined, { kind: 'local' }, 'ssh-1')
+      loadWindowsTerminalCapabilities({
+        force: true,
+        target: { kind: 'local' },
+        sshConnectionId: 'ssh-1'
+      })
     ).resolves.toEqual({
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],

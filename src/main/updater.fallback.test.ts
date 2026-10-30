@@ -63,7 +63,6 @@ describe('statusesEqual', () => {
   const withoutRecovery: UpdateStatus = { state: 'error', message: 'install failed' }
 
   it('does not dedupe a recovery-carrying error against the same message without recovery', () => {
-    // Why: deduping here would leave the card's copy/show actions enabled with no usable package.
     expect(statusesEqual(withRecovery, withoutRecovery)).toBe(false)
     expect(statusesEqual(withoutRecovery, withRecovery)).toBe(false)
   })
@@ -85,6 +84,24 @@ describe('statusesEqual', () => {
       statusesEqual(withRecovery, { ...withRecovery, recovery: { ...recovery, version: '1.0.62' } })
     ).toBe(false)
     expect(statusesEqual(withRecovery, { ...withRecovery })).toBe(true)
+  })
+
+  it('delivers a same-valued recovery recaptured for a new package cycle', () => {
+    expect(statusesEqual(withRecovery, { ...withRecovery, recovery: { ...recovery } })).toBe(false)
+  })
+
+  it('separates generic errors by version and retryability', () => {
+    const error: UpdateStatus = {
+      state: 'error',
+      message: 'package unavailable',
+      version: '1.0.61',
+      retryable: false
+    }
+
+    expect(statusesEqual(error, { ...error, version: '1.0.62' })).toBe(false)
+    expect(statusesEqual(error, { ...error, retryable: true })).toBe(false)
+    expect(statusesEqual(error, { ...error, retryAction: 'install' })).toBe(false)
+    expect(statusesEqual(error, { ...error })).toBe(true)
   })
 })
 

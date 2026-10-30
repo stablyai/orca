@@ -102,7 +102,6 @@ describe('normalizeServeSimAxTree', () => {
     ]
 
     const [root] = normalizeServeSimAxTree(raw)
-    // Root consumes one slot of the 500-node budget.
     expect(root.children).toHaveLength(499)
     expect(root.truncated).toBe(true)
     expect(root.children[0]!.truncated).toBeUndefined()

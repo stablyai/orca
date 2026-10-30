@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ArtifactListItem } from '../../../../shared/artifacts'
 
@@ -16,7 +17,7 @@ import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// Why: relative to now — the labels under test are relative times, so fixed dates would rot.
+// Use relative dates because the labels under test are relative times.
 function artifact(slug: string, title: string): ArtifactListItem {
   const createdAt = new Date(Date.now() - DAY_MS).toISOString()
   return {
@@ -37,12 +38,39 @@ function artifact(slug: string, title: string): ArtifactListItem {
   }
 }
 
+/** Selection held in state, so whether a click selected is readable off the row's own wash. */
+function SelectingCollection({ items }: { items: ArtifactListItem[] }): React.JSX.Element {
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  return (
+    <ArtifactCollection
+      artifacts={items}
+      deletingId={null}
+      selectedSlug={selectedSlug}
+      selectArtifact={setSelectedSlug}
+      deleteArtifact={vi.fn()}
+      hasMore={false}
+      loadingMore={false}
+      loadMore={vi.fn()}
+      onRefresh={vi.fn()}
+      isRefreshing={false}
+    />
+  )
+}
+
+// Include aria-hidden rows behind Radix’s modal menu so assertions can inspect their selection state.
+function rowFor(title: string): HTMLElement {
+  return screen.getByRole('button', { name: new RegExp(title), hidden: true })
+}
+
 describe('ArtifactCollection', () => {
   afterEach(cleanup)
+  // Restore prototype layout spies or later tests inherit fabricated geometry.
+  afterEach(() => vi.restoreAllMocks())
 
   function renderCollection(
     items: ArtifactListItem[],
-    selectArtifact = vi.fn()
+    selectArtifact = vi.fn(),
+    hasMore = false
   ): { container: HTMLElement; selectArtifact: ReturnType<typeof vi.fn> } {
     const { container } = render(
       <TooltipProvider>
@@ -52,7 +80,7 @@ describe('ArtifactCollection', () => {
           selectedSlug={items[0]?.artifact.slug ?? null}
           selectArtifact={selectArtifact}
           deleteArtifact={vi.fn()}
-          hasMore={false}
+          hasMore={hasMore}
           loadingMore={false}
           loadMore={vi.fn()}
           onRefresh={vi.fn()}
@@ -109,6 +137,78 @@ describe('ArtifactCollection', () => {
     await userEvent.type(screen.getByPlaceholderText('Search...'), 'nothing')
     expect(screen.queryByRole('button', { name: /Second artifact/ })).not.toBeInTheDocument()
     expect(screen.getByText('No matches')).toBeInTheDocument()
+  })
+
+  /** Guard clicks from both descendant triggers and React-bubbling portaled menu items so actions cannot select the row behind them. */
+  it('runs a row menu action without selecting the artifact behind the menu', async () => {
+    const user = userEvent.setup()
+    const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
+    render(
+      <TooltipProvider>
+        <SelectingCollection items={items} />
+      </TooltipProvider>
+    )
+
+    // Positive control: a click on the row body does select, so the negatives below are not vacuous.
+    await user.click(rowFor('First artifact'))
+    expect(rowFor('First artifact')).toHaveAttribute('data-current', 'true')
+
+    const trigger = within(rowFor('Second artifact')).getByRole('button', {
+      name: 'Artifact actions'
+    })
+    await user.click(trigger)
+    // Radix mounts menu content only while the menu is open, so a match here is the menu opening.
+    expect(screen.getByRole('menuitem', { name: 'Copy link' })).toBeInTheDocument()
+    expect(rowFor('Second artifact')).not.toHaveAttribute('data-current')
+
+    await user.click(screen.getByRole('menuitem', { name: 'Copy link' }))
+    expect(rowFor('Second artifact')).not.toHaveAttribute('data-current')
+    expect(rowFor('First artifact')).toHaveAttribute('data-current', 'true')
+  })
+
+  // Exceed the windowing threshold so announced set sizes cannot be inferred from mounted rows alone.
+  const PAGED_ITEM_COUNT = 60
+
+  function pagedItems(): ArtifactListItem[] {
+    return Array.from({ length: PAGED_ITEM_COUNT }, (_, index) =>
+      artifact(`slug-${index}`, `Artifact ${index}`)
+    )
+  }
+
+  // Supply viewport height because happy-dom has no layout; otherwise the virtualizer mounts no rows and assertions are vacuous.
+  function stubScrollerViewport(): void {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.classList.contains('overflow-auto') ? 600 : 53
+    })
+  }
+
+  function announcedSetSizes(container: HTMLElement): string[] {
+    const wrappers = Array.from(container.querySelectorAll('[data-index]'))
+    expect(wrappers.length).toBeGreaterThan(0)
+    // The window is a strict subset, so a set size read off the DOM could not reach the real total.
+    expect(wrappers.length).toBeLessThan(PAGED_ITEM_COUNT)
+    return wrappers.map((wrapper) => wrapper.getAttribute('aria-setsize') ?? 'missing')
+  }
+
+  it('announces an unknown set size while a further page is loadable', () => {
+    stubScrollerViewport()
+    const { container } = renderCollection(pagedItems(), vi.fn(), true)
+
+    // The button is the contradiction: a concrete set size here would claim these are all of them.
+    expect(screen.getByRole('button', { name: /Load more/ })).toBeInTheDocument()
+    const sizes = announcedSetSizes(container)
+    expect(sizes).toEqual(sizes.map(() => '-1'))
+  })
+
+  it('announces the real row count once the cursor is exhausted', () => {
+    stubScrollerViewport()
+    const { container } = renderCollection(pagedItems())
+
+    expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument()
+    const sizes = announcedSetSizes(container)
+    expect(sizes).toEqual(sizes.map(() => String(PAGED_ITEM_COUNT)))
   })
 
   it('shows compact type, size, and expiry in the row', () => {

@@ -62,6 +62,58 @@ describe('Claude hook normalization', () => {
     expect(result?.payload.lastAssistantMessage).toBe('tests passed')
   })
 
+  it('flags a PostToolUse preview as tool output so native chat will not show it as the reply', () => {
+    const result = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'cat lifecycle.ts' },
+        tool_response: { content: [{ type: 'text', text: 'Exit code 1\nimport { Foo }' }] }
+      }),
+      'production'
+    )
+    expect(result?.payload.lastAssistantMessage).toBe('Exit code 1\nimport { Foo }')
+    expect(result?.payload.lastAssistantMessageIsToolOutput).toBe(true)
+  })
+
+  it('flags a PostToolUseFailure preview as tool output', () => {
+    const result = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PostToolUseFailure',
+        tool_name: 'Write',
+        error: 'file is read-only'
+      }),
+      'production'
+    )
+    expect(result?.payload.lastAssistantMessage).toBe('file is read-only')
+    expect(result?.payload.lastAssistantMessageIsToolOutput).toBe(true)
+  })
+
+  it('leaves real assistant prose at Stop unflagged', () => {
+    _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'ls' },
+        tool_response: { content: [{ type: 'text', text: 'a.ts b.ts' }] }
+      }),
+      'production'
+    )
+    const stopped = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'Stop',
+        last_assistant_message: 'Here are the files.'
+      }),
+      'production'
+    )
+    expect(stopped?.payload.lastAssistantMessage).toBe('Here are the files.')
+    expect(stopped?.payload.lastAssistantMessageIsToolOutput).toBeUndefined()
+  })
+
   it('PostToolUse for Grep surfaces the search pattern', () => {
     const result = _internals.normalizeHookPayload(
       'claude',
@@ -77,7 +129,7 @@ describe('Claude hook normalization', () => {
   })
 
   it('PostToolUse for an unknown tool surfaces the name without input', () => {
-    // Why: a per-tool allowlist picks the preview field; unrecognized tools render name-only to avoid guessing a misleading field (e.g. an opaque ID).
+    // Unknown tools have no safe preview-field mapping; show only the name.
     const result = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -88,21 +140,6 @@ describe('Claude hook normalization', () => {
       'production'
     )
     expect(result?.payload.toolName).toBe('BespokeTool')
-    expect(result?.payload.toolInput).toBeUndefined()
-  })
-
-  it('PostToolUse for TaskUpdate does not produce a misleading input preview', () => {
-    // Why: TaskUpdate's tool_input has no meaningful preview (rendering "3" is confusing), so the allowlist leaves toolInput undefined.
-    const result = _internals.normalizeHookPayload(
-      'claude',
-      buildBody({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'TaskUpdate',
-        tool_input: { task_id: '3', status: 'in_progress' }
-      }),
-      'production'
-    )
-    expect(result?.payload.toolName).toBe('TaskUpdate')
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
@@ -374,11 +411,10 @@ describe('Claude hook normalization', () => {
     })
 
     it('finds an assistant reply that sits past the first chunk boundary', () => {
-      // Why: large tool_result entries push the final reply past the first 64 KB chunk; the scan must keep reading backward to find it.
+      // Large tool results force the backward scan beyond its first 64-KB chunk.
       const filler = 'x'.repeat(70_000)
       const lines = [
         { role: 'assistant', message: { role: 'assistant', content: 'deeply buried reply' } },
-        // 70 KB of tool_result content straddling the first chunk boundary.
         {
           role: 'user',
           message: {
@@ -436,7 +472,6 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
-    // Stop event has no tool fields, so the merged snapshot must keep the earlier PreToolUse values.
     const stop = _internals.normalizeHookPayload(
       'claude',
       buildBody({ hook_event_name: 'Stop' }),

@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -31,10 +32,18 @@ afterAll(() => {
 function probeMain(resultPath: string, protectedGuest: boolean): string {
   return `
 const { app, BrowserWindow, session } = require('electron')
+// This data-channel probe does not need Linux GPU initialization.
+if (process.platform === 'linux') app.disableHardwareAcceleration()
 const dgram = require('node:dgram')
 const net = require('node:net')
 const os = require('node:os')
 const { writeFileSync } = require('node:fs')
+let phase = 'app-ready'
+
+function enterPhase(next) {
+  phase = next
+  console.error('[webrtc-egress] ' + phase)
+}
 
 function bind(socket, host) {
   return new Promise((resolve, reject) => {
@@ -70,19 +79,24 @@ async function probe() {
   const tcp = net.createServer((socket) => socket.destroy())
   const packets = []
   udp.on('message', (message) => packets.push(message.length))
+  enterPhase('bind-listeners')
   const [udpAddress, tcpAddress] = await Promise.all([
     bind(udp, '0.0.0.0'),
     listen(tcp, '127.0.0.1')
   ])
   const partition = 'persist:webrtc-egress-${protectedGuest}-' + Date.now()
   const routeSession = session.fromPartition(partition, { cache: false })
+  enterPhase('configure-proxy')
   await routeSession.setProxy({
     mode: 'fixed_servers',
     proxyRules: 'socks5://127.0.0.1:' + tcpAddress.port,
     proxyBypassRules: '<-loopback>'
   })
+  enterPhase('close-connections')
   await routeSession.closeAllConnections()
+  enterPhase('resolve-proxy')
   const resolvedProxy = await routeSession.resolveProxy('https://example.invalid/')
+  enterPhase('create-window')
   const window = new BrowserWindow({
     show: false,
     webPreferences: { partition, sandbox: true, nodeIntegration: false, contextIsolation: true }
@@ -91,23 +105,31 @@ async function probe() {
     window.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
   }
   const policy = window.webContents.getWebRTCIPHandlingPolicy()
+  enterPhase('load-page')
   await window.loadURL('data:text/html,<title>WebRTC egress probe</title>')
   const target = viewerAddress()
   const script = \`
     (async () => {
       const peer = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:\${target}:\${udpAddress.port}' }],
-        iceCandidatePoolSize: 1
+        iceCandidatePoolSize: 0
       })
+      globalThis.__webrtcEgressPeer = peer
       peer.createDataChannel('probe')
       const offer = await peer.createOffer()
       await peer.setLocalDescription(offer)
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      peer.close()
     })()
   \`
+  enterPhase('renderer-webrtc')
   await window.webContents.executeJavaScript(script)
+  // Hidden renderer timers may be throttled; the packet observation clock belongs to the host.
+  enterPhase('observe-packets')
+  await new Promise((resolve) => setTimeout(resolve, 3000))
+  enterPhase('close-peer')
+  await window.webContents.executeJavaScript('globalThis.__webrtcEgressPeer.close()')
+  enterPhase('drain-packets')
   await new Promise((resolve) => setTimeout(resolve, 500))
+  enterPhase('cleanup')
   window.destroy()
   udp.close()
   tcp.close()
@@ -115,16 +137,22 @@ async function probe() {
 }
 
 async function run() {
-  const timeout = setTimeout(() => app.exit(2), 20000)
+  const timeout = setTimeout(() => {
+    writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({
+      error: 'WebRTC egress probe timed out', phase, protectedGuest: ${protectedGuest}
+    }))
+    app.exit(2)
+  }, 20000)
   await app.whenReady()
   const result = await probe()
+  enterPhase('write-result')
   writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(result))
   clearTimeout(timeout)
   app.quit()
 }
 
 run().catch((error) => {
-  writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({ error: String(error?.stack || error) }))
+  writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({ error: String(error?.stack || error), phase, protectedGuest: ${protectedGuest} }))
   app.exit(1)
 })
 `
@@ -138,11 +166,12 @@ function runProbe(protectedGuest: boolean): ProbeResult {
   writeFileSync(mainPath, probeMain(resultPath, protectedGuest))
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [mainPath, `--user-data-dir=${join(root, 'profile')}`]
-  const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
-  const args =
-    process.platform === 'linux'
-      ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
-      : electronArgs
+  const { executable, args } = resolveElectronProbeLaunch({
+    electronBinary,
+    electronArgs,
+    platform: process.platform,
+    display: env.DISPLAY
+  })
   const run = spawnSync(executable, args, { encoding: 'utf8', env, timeout: 30_000 })
   const rawResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()

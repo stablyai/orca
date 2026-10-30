@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import { isStageableStatusEntry } from '../commit/discard-all-sequence'
+import { isStageableStatusEntry } from '../../../../../../shared/source-control-discard-all-sequence'
 import { resolveDropdownItems } from '../../source-control-dropdown-items'
 import { resolveCommitAreaPrimaryAction } from '../../source-control-primary-action'
 import { resolveCreatePrHeaderAction } from './primary-create-pr-intent-action'
 import { resolveVisibleCreatePrHeaderAction } from './create-pr-intent-state'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 type PrimaryInput = Parameters<typeof resolveCommitAreaPrimaryAction>[0]
 type HeaderInput = Parameters<typeof resolveCreatePrHeaderAction>[0]
@@ -35,6 +36,7 @@ export function useSourceControlActionModel({
   prGenerating,
   isCreatingPr,
   hostedReviewReviewLabel,
+  hasSuppressedGitHubPRState,
   conflictOperation,
   effectiveBaseRef
 }: {
@@ -60,9 +62,15 @@ export function useSourceControlActionModel({
   prGenerating: boolean
   isCreatingPr: boolean
   hostedReviewReviewLabel: string
+  hasSuppressedGitHubPRState: boolean
   conflictOperation: DropdownInput['conflictOperation']
   effectiveBaseRef: string | null
 }) {
+  const languageRevision = useUiLanguageRevision()
+  const createReviewEligibility = hasSuppressedGitHubPRState ? null : hostedReviewCreation
+  const createReviewHeaderEligibility = hasSuppressedGitHubPRState
+    ? null
+    : hostedReviewCreationForHeader
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
   const hasStageableChanges = useMemo(
     () =>
@@ -93,7 +101,7 @@ export function useSourceControlActionModel({
         prState: hostedReviewStateForActions,
         isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
-        hostedReviewCreation,
+        hostedReviewCreation: createReviewEligibility,
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
@@ -110,7 +118,7 @@ export function useSourceControlActionModel({
       isAbortingOperation,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
-      hostedReviewCreation,
+      createReviewEligibility,
       isHostedReviewStateLoading,
       hostedReviewStateForActions,
       canUseHostedReviewPushTarget,
@@ -124,6 +132,9 @@ export function useSourceControlActionModel({
   )
 
   const createPrHeaderAction = useMemo(() => {
+    if (hasSuppressedGitHubPRState) {
+      return null
+    }
     const action = resolveCreatePrHeaderAction({
       stagedCount: grouped.staged.length,
       hasUnstagedChanges,
@@ -137,9 +148,9 @@ export function useSourceControlActionModel({
       prState: hostedReviewState,
       isPRStateLoading: isHostedReviewStateLoading,
       inFlightRemoteOpKind,
-      hostedReviewCreation: hostedReviewCreationForHeader,
+      hostedReviewCreation: createReviewHeaderEligibility,
       isHostedReviewCreationLoading:
-        isHostedReviewCreationLoading && hostedReviewCreationForHeader !== null,
+        isHostedReviewCreationLoading && createReviewHeaderEligibility !== null,
       branchCommitsAhead:
         branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
       hasCurrentBranch: Boolean(branchName),
@@ -162,6 +173,7 @@ export function useSourceControlActionModel({
       }
     }
     return action
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     branchName,
     branchSummary?.commitsAhead,
@@ -170,9 +182,10 @@ export function useSourceControlActionModel({
     grouped.staged.length,
     hasPartiallyStagedChanges,
     hasStageableChanges,
+    hasSuppressedGitHubPRState,
     hasUnstagedChanges,
     hostedReviewState,
-    hostedReviewCreationForHeader,
+    createReviewHeaderEligibility,
     hostedReviewReviewLabel,
     inFlightRemoteOpKind,
     isAbortingOperation,
@@ -184,11 +197,12 @@ export function useSourceControlActionModel({
     isRemoteOperationActive,
     prGenerating,
     remoteStatus,
-    unresolvedConflictCount
+    unresolvedConflictCount,
+    languageRevision
   ])
   const directCreatePrAction =
     createPrHeaderAction?.kind === 'create_pr' &&
-    hostedReviewCreation?.canCreate === true &&
+    createReviewEligibility?.canCreate === true &&
     (!createPrHeaderAction.disabled || isCreatingPr || prGenerating)
       ? createPrHeaderAction
       : null
@@ -209,7 +223,7 @@ export function useSourceControlActionModel({
         prState: hostedReviewStateForActions,
         isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
-        hostedReviewCreation,
+        hostedReviewCreation: createReviewEligibility,
         isPullRequestOperationActive: prGenerating || isCreatingPr || isCreatePrIntentInFlight,
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
@@ -228,7 +242,7 @@ export function useSourceControlActionModel({
       isAbortingOperation,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
-      hostedReviewCreation,
+      createReviewEligibility,
       isCreatingPr,
       isCreatePrIntentInFlight,
       isHostedReviewStateLoading,

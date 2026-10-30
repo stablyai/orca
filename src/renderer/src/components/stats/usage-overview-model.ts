@@ -7,14 +7,17 @@ import type {
 import {
   createClaudeProvider,
   createCodexProvider,
+  createMuseProvider,
   createOpenCodeProvider
 } from './usage-provider-normalization'
+import { getIntlLocale } from '@/i18n/i18n'
 
 export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewModel {
   const providers = [
     createClaudeProvider(input.claude),
     createCodexProvider(input.codex),
-    createOpenCodeProvider(input.opencode)
+    createOpenCodeProvider(input.opencode),
+    createMuseProvider(input.muse)
   ]
   const daily = buildDailyOverview(input)
   const bestDay =
@@ -33,9 +36,13 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
   const activityCount = providers.reduce((sum, provider) => sum + provider.activityCount, 0)
   const knownCost = providers.reduce((sum, provider) => sum + (provider.estimatedCostUsd ?? 0), 0)
   const hasKnownCost = providers.some((provider) => provider.estimatedCostUsd !== null)
-  const hasPartialCost = providers.some(
-    (provider) => provider.hasData && provider.estimatedCostUsd === null
-  )
+  // Why: with no priced provider the total already reads n/a; "some prices unavailable" would mislead.
+  const hasPartialCost =
+    hasKnownCost &&
+    providers.some(
+      (provider) =>
+        provider.hasPartialCost || (provider.hasData && provider.estimatedCostUsd === null)
+    )
   const lastUpdatedAt =
     providers.reduce<number | null>(
       (latest, provider) =>
@@ -81,7 +88,7 @@ export function formatUsageTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(getIntlLocale())
 }
 
 export function formatUsageCost(value: number | null): string {

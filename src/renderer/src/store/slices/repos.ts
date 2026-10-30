@@ -16,6 +16,7 @@ import { createRepoRemovalActions } from '../repos/repo-removal'
 import { createProjectUpdateActions } from '../projects/project-update'
 import { createRepoUpdateActions } from '../repos/repo-update'
 import { createRepoOrderingActions } from '../repos/repo-ordering'
+import { fetchWslMovedProjects } from '../repos/wsl-moved-projects'
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => {
   const repoCatalogActions = createRepoCatalogActions(set, get)
@@ -39,7 +40,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     projectHostSetups: [],
     projectGroups: [],
     folderWorkspaces: [],
+    wslMovedProjects: [],
+    fetchWslMovedProjects: () => fetchWslMovedProjects(set),
     folderWorkspacePathStatuses: {},
+    floatingWorkspacePath: null,
+    setFloatingWorkspacePath: (path) =>
+      set((s) => (s.floatingWorkspacePath === path ? s : { floatingWorkspacePath: path })),
     activeRepoId: null,
     reposFetchGeneration: 0,
     pendingSshRepoReadoptions: [],

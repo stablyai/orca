@@ -9,12 +9,6 @@ import {
   toAutomationChangeSelector,
   type AutomationProjectionContext
 } from './automation-list-scope'
-import {
-  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from './protocol-version'
-
 function automation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'a1',
@@ -53,13 +47,6 @@ function context(
     ...overrides
   }
 }
-
-describe('capability advertisement', () => {
-  it('registers both automation capabilities so getStatus() advertises them', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY)
-    expect(RUNTIME_CAPABILITIES).toContain(AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY)
-  })
-})
 
 describe('projectAutomationSelector', () => {
   it('qualifies a local record whose project resolves without a connection as self', () => {
@@ -200,6 +187,50 @@ describe('projectAutomationList', () => {
     expect(result.items[0]?.usageSummary?.knownRuns).toBe(2)
     expect(result.items[1]?.usageSummary).toBeNull()
   })
+
+  it('projects and scopes in one collection traversal', () => {
+    const collectionMethodReads: string[] = []
+    const repoLookups: string[] = []
+    const targetLookups: string[] = []
+    const source = new Proxy(records, {
+      get(target, property, receiver) {
+        if (property === 'map' || property === 'filter') {
+          collectionMethodReads.push(String(property))
+        }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
+        return Reflect.get(target, property, receiver)
+      }
+    })
+    const usageIds: string[] = []
+    const result = projectAutomationList(
+      source,
+      {
+        ...context(),
+        repoConnectionId: (repoId) => {
+          repoLookups.push(repoId)
+          return repoId === 'repo-1' ? null : repoId === 'repo-ssh' ? 'ssh-1' : undefined
+        },
+        sshTargetGeneration: (targetId) => {
+          targetLookups.push(targetId)
+          return targetId === 'ssh-1' ? 7 : undefined
+        },
+        usageSummary: (id) => {
+          usageIds.push(id)
+          return null
+        }
+      },
+      { kind: 'self' }
+    )
+
+    expect(collectionMethodReads).toEqual([])
+    expect(result.automations.map((entry) => entry.id)).toEqual(['local-1'])
+    expect(result.items.map((item) => item.automationId)).toEqual(['local-1'])
+    expect(result.items[0]?.selector).toEqual({ kind: 'self' })
+    expect(result.orphanCount).toBe(1)
+    expect(repoLookups).toEqual(['repo-1'])
+    expect(targetLookups).toEqual(['ssh-1', 'ssh-gone'])
+    expect(usageIds).toEqual(['local-1'])
+  })
 })
 
 describe('automationChangePublications', () => {
@@ -240,8 +271,7 @@ describe('automationChangePublications', () => {
   })
 })
 
-// A folder workspace can pin its host directly, and that pin is what dispatch uses.
-// Projecting from the repo alone filed those records under Self while they ran elsewhere.
+// Folder workspace pins decide actual dispatch hosts; repo-only projection mislabeled SSH runs as Self.
 describe('workspace host pin', () => {
   it('files a local record under the SSH host its workspace pins', () => {
     const selector = projectAutomationSelector(

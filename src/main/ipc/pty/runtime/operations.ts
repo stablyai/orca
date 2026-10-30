@@ -1,28 +1,81 @@
-import type { IPtyProvider } from '../../../providers/types'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
 import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
-import {
-  getProvider,
-  getProviderForPty,
-  localProvider,
-  registeredPtyProviders
-} from '../provider/registry'
+import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import {
+  writeRefused,
+  writeUnverifiable,
+  isSettledWrite,
+  type WriteSettlement
+} from '../../../../shared/pty-write-settlement'
+import { isDrivingInputKind, type TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
-export function writePtyFromRuntimeController(ptyId: string, data: string): boolean {
+type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
+
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind
+): boolean
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
+  options: { waitForSettlement: true }
+): WriteSettlement | Promise<WriteSettlement>
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
+  options?: { waitForSettlement: true }
+): boolean | WriteSettlement | Promise<WriteSettlement> {
+  const observeAcceptedInput = (): void => {
+    if (isDrivingInputKind(inputKind) && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
+      deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
+    }
+  }
+  let provider: IPtyProvider
   try {
-    getProviderForPty(ptyId).write(ptyId, data)
-    return true
+    provider = getProviderForPty(ptyId)
+  } catch {
+    return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
+  }
+  if (options?.waitForSettlement) {
+    // Refuse unsupported settlement before effects; fire-and-forget acceptance cannot clear durable mailbox reservations.
+    if (!provider.writeWithSettlement) {
+      return writeRefused('provider_cannot_settle')
+    }
+    deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
+    try {
+      const result = provider.writeWithSettlement(ptyId, data)
+      const observe = (settlement: WriteSettlement): WriteSettlement => {
+        if (settlement.outcome === 'accepted') {
+          observeAcceptedInput()
+        }
+        return settlement
+      }
+      return isSettledWrite(result) ? observe(result) : result.then(observe)
+    } catch {
+      // A synchronous throw cannot prove the transport took nothing.
+      return writeUnverifiable('provider_threw_after_handoff', true)
+    }
+  }
+  deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
+  try {
+    const accepted = provider.write(ptyId, data) !== false
+    if (accepted) {
+      observeAcceptedInput()
+    }
+    return accepted
   } catch {
     return false
   }
@@ -33,15 +86,12 @@ export async function probePtyLivenessFromRuntimeController(
   ptyId: string
 ): Promise<boolean | null> {
   try {
-    // Why: no locally routed provider can authoritatively answer for a
-    // remote host's PTY, so remote-scoped ids stay unknown, never absent.
-    if (ptyId.startsWith('remote:')) {
+    // A local provider cannot prove remote-host absence.
+    if (isRemoteRuntimePtyId(ptyId)) {
       return null
     }
-    const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
-    // Why: during cold start the daemon swap is in flight; the pre-swap
-    // fallback would answer absent for every daemon-owned id.
-    const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
+    // Pre-swap fallback cannot authoritatively answer for restored daemon PTYs.
+    const startupPromise = deps.getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
     if (startupPromise) {
       await startupPromise
     }
@@ -49,8 +99,7 @@ export async function probePtyLivenessFromRuntimeController(
     if (provider.probePtyLiveness) {
       return await provider.probePtyLiveness(ptyId)
     }
-    // Why: the in-process provider is its own sole owner (#12393), so its
-    // refusal is authoritative; every other probe-less provider is doubt.
+    // Only in-process providers prove sole ownership without a liveness probe (#12393).
     if (provider instanceof LocalPtyProvider) {
       return provider.hasPty(ptyId)
     }
@@ -64,7 +113,7 @@ export async function attachPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
 ): Promise<boolean> {
-  if (ptyOwnership.get(ptyId) != null || parseAppSshPtyId(ptyId)) {
+  if (resolvePtyExecutionHost(ptyId) !== LOCAL_EXECUTION_HOST_ID) {
     return false
   }
   let provider: IPtyProvider
@@ -86,6 +135,9 @@ export async function attachPtyFromRuntimeController(
         sequenceBeforeProviderAttach
       )
     }
+    if (attachResult?.lastTitle) {
+      deps.runtime?.seedTerminalRestoreTail?.(ptyId, { lastTitle: attachResult.lastTitle })
+    }
     return true
   } catch {
     return false
@@ -100,14 +152,17 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
   }
 }
 
-export async function inspectProcessFromRuntimeController(ptyId: string) {
-  return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId)
+export async function inspectProcessFromRuntimeController(
+  ptyId: string,
+  options?: { expectedIncarnationId?: string }
+) {
+  return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }
 
 export async function confirmForegroundProcessFromRuntimeController(ptyId: string) {
   try {
     const provider = getProviderForPty(ptyId)
-    // Why: cached foreground evidence cannot resolve a fresh shell conflict.
+    // Cached foreground identity cannot resolve a fresh shell conflict.
     return (await provider.confirmForegroundProcess?.(ptyId)) ?? null
   } catch {
     return null
@@ -143,8 +198,10 @@ export async function clearBufferFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
 ): Promise<void> {
-  // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
-  deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  // Clear renderer and provider histories so mobile resubscribe cannot restore stale output.
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  }
   try {
     await getProviderForPty(ptyId).clearBuffer(ptyId)
   } catch {
@@ -152,74 +209,65 @@ export async function clearBufferFromRuntimeController(
   }
 }
 
-export function hasPtyFromRuntimeController(ptyId: string): boolean | null {
+export async function resetInputModesFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): Promise<void> {
+  // Remote reset must also ground this host window's pane.
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:resetInputModes:request', { ptyId })
+  }
   try {
-    return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
+    await getProviderForPty(ptyId).resetInputModes(ptyId)
+  } catch {
+    /* best effort: an older daemon or relay rejects the request */
+  }
+}
+
+const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
+const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
+
+function readReadyPtyProvider(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  read: (provider: IPtyProvider) => boolean | null
+): boolean | null {
+  try {
+    // A local provider cannot prove remote-host absence.
+    if (isRemoteRuntimePtyId(ptyId)) {
+      return null
+    }
+    const startupPromise = deps.getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
+    if (startupPromise && !settledLocalPtyProviderStartups.has(startupPromise)) {
+      // Sync probes cannot await daemon handoff; report unknown until it settles (docs/reference/ssh-execution-boundary.md).
+      if (!watchedLocalPtyProviderStartups.has(startupPromise)) {
+        watchedLocalPtyProviderStartups.add(startupPromise)
+        const markSettled = (): void => {
+          settledLocalPtyProviderStartups.add(startupPromise)
+        }
+        startupPromise.then(markSettled, markSettled)
+      }
+      return null
+    }
+    return read(getProviderForPty(ptyId))
   } catch {
     return null
   }
 }
 
-function markSshInventoryUnverifiable(
-  runtime: PtyRuntimeControllerDeps['runtime'],
-  connectionId: string,
-  error: unknown
-): void {
-  const reason = error instanceof Error ? error.message : String(error)
-  for (const [ptyId, ownerConnectionId] of ptyOwnership) {
-    if (ownerConnectionId === connectionId) {
-      runtime?.markPtyLivenessUnverifiable?.(ptyId, reason)
-    }
-  }
+export function hasPtyFromRuntimeController(deps: PtyRuntimeControllerDeps, ptyId: string) {
+  return readReadyPtyProvider(deps, ptyId, (provider) => provider.hasPty?.(ptyId) ?? null)
 }
 
-export async function listProcessesWithHostScopeFromRuntimeController(
+export function getPtyAvailabilityFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
-  opts?: { deadlineMs?: number }
-): Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }> {
-  const providerSessions = await Promise.all(
-    registeredPtyProviders().map(async ({ provider, connectionId }) => {
-      const hostId: ExecutionHostId = connectionId
-        ? toSshExecutionHostId(connectionId)
-        : LOCAL_EXECUTION_HOST_ID
-      try {
-        return {
-          processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),
-          hostId
-        }
-      } catch (error) {
-        if (!connectionId) {
-          throw error
-        }
-        markSshInventoryUnverifiable(deps.runtime, connectionId, error)
-        return null
-      }
-    })
+  ptyId: string
+): boolean | null {
+  return readReadyPtyProvider(
+    deps,
+    ptyId,
+    (provider) => provider.getPtyAvailability?.(ptyId) ?? null
   )
-  const respondingSessions = providerSessions.filter((session) => session !== null)
-  return {
-    processes: respondingSessions.flatMap((session) => session.processes),
-    hostIds: respondingSessions.map((session) => session.hostId)
-  }
-}
-
-export async function listProcessesFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  connectionId?: string | null,
-  opts?: { deadlineMs?: number }
-) {
-  if (connectionId === null) {
-    return localProvider.listProcesses()
-  }
-  if (connectionId !== undefined) {
-    try {
-      return await getProvider(connectionId).listProcesses(opts)
-    } catch (error) {
-      markSshInventoryUnverifiable(deps.runtime, connectionId, error)
-      throw error
-    }
-  }
-  return (await listProcessesWithHostScopeFromRuntimeController(deps, opts)).processes
 }
 
 export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows: number): boolean {
@@ -233,7 +281,7 @@ export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows
 }
 
 export function hasRendererSerializerFromRuntimeController(ptyId: string): boolean {
-  // Why: a synchronous probe lets the runtime decide whether to skip the daemon-snapshot seed (renderer will hydrate) or run it (no renderer authoritative).
+  // Renderer readiness decides whether its restore or the daemon snapshot seeds history.
   return rendererSerializerReadiness.has(ptyId)
 }
 
@@ -256,10 +304,10 @@ export function getSizeFromRuntimeController(ptyId: string) {
 
 export async function serializeProviderBufferFromRuntimeController(
   ptyId: string,
-  opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+  opts?: { scrollbackRows?: number }
 ) {
   try {
-    // Why: restored daemon PTYs can be live while their desktop pane is unmounted; query the provider model so phone-local navigation works.
+    // Unmounted restored daemon PTYs still need provider snapshots for phone navigation.
     return (await getProviderForPty(ptyId).getBufferSnapshot?.(ptyId, opts)) ?? null
   } catch {
     return null

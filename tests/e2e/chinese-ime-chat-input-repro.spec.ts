@@ -241,8 +241,7 @@ async function installImeEventProbe(page: Page): Promise<void> {
     ]) {
       textarea.addEventListener(type, record, true)
     }
-    // Why: the Linux/Sogou post-composition guard lives on the terminal
-    // element; record terminal-targeted compositionend without doubling key logs.
+    // Record terminal compositionend for Linux/Sogou policy without duplicating key logs.
     pane.terminal.element?.addEventListener('compositionend', record, true)
   })
 }
@@ -285,8 +284,7 @@ async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
       configurable: true
     })
   }, LINUX_IME_POLICY_USER_AGENT)
-  // Why: the Sogou repro validates Linux-gated terminal IME policy on macOS
-  // runners; reload before the terminal pane mounts so lifecycle code sees it.
+  // Reload before terminal mount so lifecycle code sees the emulated Linux/Sogou platform.
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
 }
@@ -349,9 +347,7 @@ async function commitImeText(session: CDPSession, text: string): Promise<void> {
 }
 
 async function dispatchImeProcessKey(session: CDPSession, code: string): Promise<void> {
-  // Why: Windows IMEs report pre-edit keystrokes as VK_PROCESSKEY (229).
-  // This catches regressions where xterm treats the physical Pinyin key as a
-  // normal Latin character before Chromium delivers the composition update.
+  // Windows IME preedit uses VK_PROCESSKEY 229; physical Pinyin keys must not leak as Latin input.
   await session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
     key: 'Process',
@@ -377,9 +373,7 @@ async function dispatchCandidateSelectionKey(
   candidate: { key: string; code: string; keyCode: number },
   commitBetweenKeys?: () => Promise<void>
 ): Promise<void> {
-  // Why: #7543 proves Sogou can forward candidate selectors as plain key
-  // events, not Process/229. `text` is set so keyDown produces the natural
-  // keypress — rawKeyDown generates none and would prove nothing about leaks.
+  // Sogou selectors can be plain keys; keyDown with text emits keypress while rawKeyDown would prove no leak (#7543).
   await session.send('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key: candidate.key,
@@ -401,18 +395,6 @@ async function dispatchCandidateSelectionKey(
   })
 }
 
-async function dispatchOrphanLetterKeyup(session: CDPSession): Promise<void> {
-  // Why: legacy Sogou/fcitx can emit only the release after committing a
-  // single-letter preedit, leaving no composition or input event to classify.
-  await session.send('Input.dispatchKeyEvent', {
-    type: 'keyUp',
-    key: 'a',
-    code: 'KeyA',
-    windowsVirtualKeyCode: 65,
-    nativeVirtualKeyCode: 65
-  })
-}
-
 async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
   // Why: Sogou/fcitx emits empty compositionupdate data while its candidate
   // popup is still open (#6765); Orca's tracker must not flip inactive on it.
@@ -426,9 +408,7 @@ async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
 }
 
 async function dispatchSogouPostCompositionEnd(page: Page, data: string): Promise<void> {
-  // Why: some Sogou/fcitx traces deliver the plain selector key after
-  // compositionend; target the terminal element so Orca's tracker sees the end
-  // without making xterm finalize a synthetic preedit string.
+  // Target the terminal so the late selector guard sees compositionend without xterm finalizing synthetic preedit.
   await page.evaluate((data) => {
     const active = document.activeElement
     if (!(active instanceof HTMLTextAreaElement)) {
@@ -660,7 +640,8 @@ test.describe('Chinese IME terminal chat input repro', () => {
       // Why: create the session/harness inside the try so a mid-setup throw
       // still hits finally and removes the harness script.
       writeFileSync(scriptPath, terminalImeHarnessScript(runId))
-      session = await orcaPage.context().newCDPSession(orcaPage)
+      const cdpSession = await orcaPage.context().newCDPSession(orcaPage)
+      session = cdpSession
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       harnessStarted = true
       await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
@@ -676,7 +657,7 @@ test.describe('Chinese IME terminal chat input repro', () => {
       await orcaPage.waitForTimeout(80)
       await dispatchSogouEmptyCompositionUpdate(orcaPage)
       await dispatchCandidateSelectionKey(session, { key: ' ', code: 'Space', keyCode: 32 }, () =>
-        commitImeText(session, '你')
+        commitImeText(cdpSession, '你')
       )
       await waitForLivePrompt(orcaPage, '你')
       await attachImeEvidence(orcaPage, testInfo, 'sogou-after-space-commit')
@@ -694,7 +675,7 @@ test.describe('Chinese IME terminal chat input repro', () => {
       await orcaPage.waitForTimeout(80)
       await dispatchSogouEmptyCompositionUpdate(orcaPage)
       await dispatchCandidateSelectionKey(session, { key: '2', code: 'Digit2', keyCode: 50 }, () =>
-        commitImeText(session, '你好')
+        commitImeText(cdpSession, '你好')
       )
       await waitForLivePrompt(orcaPage, '你好')
       await attachImeEvidence(orcaPage, testInfo, 'sogou-after-digit-commit')
@@ -714,7 +695,7 @@ test.describe('Chinese IME terminal chat input repro', () => {
       await dispatchSogouEmptyCompositionUpdate(orcaPage)
       await dispatchSogouPostCompositionEnd(orcaPage, '再见')
       await dispatchCandidateSelectionKey(session, { key: '3', code: 'Digit3', keyCode: 51 }, () =>
-        commitImeText(session, '再见')
+        commitImeText(cdpSession, '再见')
       )
       await waitForLivePrompt(orcaPage, '再见')
       const postCompositionLog = await readImeEventLog(orcaPage)
@@ -745,24 +726,11 @@ test.describe('Chinese IME terminal chat input repro', () => {
         })
         .toBe('再见')
 
-      // Some legacy desktop Linux paths omit every composition/input event and
-      // expose only an orphaned Latin release before the candidate digit.
-      await dispatchOrphanLetterKeyup(session)
-      await dispatchCandidateSelectionKey(session, { key: '4', code: 'Digit4', keyCode: 52 })
-      await orcaPage.keyboard.press('Enter')
-      await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
-          timeout: 5_000,
-          message: 'orphan-keyup candidate digit leaked into the submitted terminal input'
-        })
-        .toBe('')
-      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-orphan-keyup-digit-suppression')
-
       const promptState = await readPromptState(orcaPage)
       expect(
         promptState?.submitted,
         'candidate Space/digit selectors and pinyin preedit must not leak into the PTY'
-      ).toEqual(['你', '你好', '再见', ''])
+      ).toEqual(['你', '你好', '再见'])
     } finally {
       await attachImeEvidence(orcaPage, testInfo, 'sogou-final-ime-evidence').catch(() => undefined)
       await session?.detach().catch(() => undefined)

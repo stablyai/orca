@@ -10,16 +10,20 @@ import {
   TerminalSquare
 } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
+import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 import { cn } from '@/lib/utils'
-import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
+import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
+import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
+import { BrowserFavicon } from '@/components/browser-favicon'
+import { AgentLaunchSetupButton } from '../agent/AgentLaunchSetupButton'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
 
-// Index-based (not the option id, which may contain spaces/slashes from file
-// paths) so it is always a valid aria-activedescendant IDREF.
+// Use index-based DOM IDs because option paths can contain spaces invalid in aria-activedescendant references.
 export function resultOptionDomId(index: number): string {
   return `tab-create-entry-result-${index}`
 }
@@ -42,82 +46,82 @@ export function EntryStatusRow({
 export function EntryActionRow({
   disabled = false,
   id,
+  labelOverride,
   loading = false,
   onClick,
+  onUseAgent,
   option,
   selected
 }: {
   disabled?: boolean
   id: string
+  labelOverride?: string
   loading?: boolean
+  onUseAgent?: (draft: AgentPickerDraft) => void
   onClick: () => void
   option: ActiveOption
   selected: boolean
 }): React.JSX.Element {
-  const presentation = getActionPresentation(option)
+  const presentation = getActionPresentation(option, labelOverride)
 
   const row = (
-    <button
-      type="button"
-      id={id}
-      role="option"
-      aria-selected={selected}
-      disabled={disabled}
-      className={cn(
-        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
-        selected
-          ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
-          : // Why: CSS :hover still matches a disabled button, so a pending row would
-            // light up under the pointer despite being unactivatable.
-            'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:hover:bg-white/14 dark:disabled:hover:bg-transparent'
-      )}
-      onClick={onClick}
-    >
-      {loading ? (
-        <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
-      ) : (
-        presentation.icon
-      )}
-      <span className={cn('min-w-0 truncate font-medium', presentation.showDetail && 'shrink-0')}>
-        {presentation.label}
-      </span>
-      {presentation.showDetail ? (
-        <>
-          <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
-            ·
-          </span>
-          {presentation.prioritizeFilename ? (
-            <FilenameFirstPath path={presentation.detail} />
-          ) : (
-            <span className="min-w-0 flex-1 truncate">{presentation.detail}</span>
-          )}
-        </>
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        id={id}
+        role="option"
+        aria-selected={selected}
+        disabled={disabled}
+        className={cn(
+          // Why min-w-0: a long agent setup must truncate so the row's › stays inside the menu.
+          'flex h-6 w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          selected
+            ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
+            : // Why: CSS :hover still matches a disabled button, so a pending row would
+              // light up under the pointer despite being unactivatable.
+              'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:hover:bg-white/14 dark:disabled:hover:bg-transparent'
+        )}
+        onClick={onClick}
+      >
+        {loading ? (
+          <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+        ) : (
+          presentation.icon
+        )}
+        <span className={cn('min-w-0 truncate font-medium', presentation.showDetail && 'shrink-0')}>
+          {presentation.label}
+        </span>
+        {presentation.showDetail ? (
+          <>
+            <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
+              ·
+            </span>
+            {presentation.prioritizeFilename ? (
+              <FilenameFirstPath path={presentation.detail} />
+            ) : (
+              <span className="min-w-0 flex-1 truncate">{presentation.detail}</span>
+            )}
+          </>
+        ) : null}
+      </button>
+      {onUseAgent && option.kind === 'agent' && option.option.pickerEntry ? (
+        <AgentLaunchSetupButton
+          entry={option.option.pickerEntry}
+          initial={option.option.setup}
+          disabled={disabled}
+          onUse={onUseAgent}
+        />
       ) : null}
-    </button>
+    </div>
   )
 
   // Only the filename-first rows hide information. Every other row already shows
-  // its detail in full, and STYLEGUIDE.md:162 rules out labelling those.
+  // its detail in full, and the STYLEGUIDE tooltip rule rules out labelling those.
   if (!presentation.prioritizeFilename) {
     return row
   }
 
   return <FilePathCursorTooltip path={presentation.detail}>{row}</FilePathCursorTooltip>
-}
-
-function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
-  const { directory, filename } = splitTrailingSegment(path)
-
-  return (
-    <span className="flex min-w-0 flex-1 items-center gap-1">
-      {/* shrink-0 + max-w-full: the directory gives up all of its width before
-          the filename loses a character. */}
-      <span className="min-w-0 max-w-full shrink-0 truncate">{filename}</span>
-      {directory ? (
-        <span className="min-w-0 truncate text-muted-foreground/70">{directory}</span>
-      ) : null}
-    </span>
-  )
 }
 
 function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']): React.ReactNode {
@@ -137,7 +141,7 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
     return <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
   if (contentType === 'browser') {
-    return <Globe className="size-3.5 shrink-0" aria-hidden="true" />
+    return <BrowserFavicon faviconUrl={option.faviconUrl} className="size-3.5" />
   }
   if (contentType === 'simulator') {
     return <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
@@ -148,7 +152,10 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
   return <GitCompare className="size-3.5 shrink-0" aria-hidden="true" />
 }
 
-function getActionPresentation(option: ActiveOption): {
+function getActionPresentation(
+  option: ActiveOption,
+  labelOverride?: string
+): {
   detail: string
   icon: React.ReactNode
   label: string
@@ -161,6 +168,12 @@ function getActionPresentation(option: ActiveOption): {
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-plugin-file' ? (
+        <PluginContributionIcon
+          url={option.option.pluginNewFile?.iconUrl}
+          fallback={FilePlus}
+          className="size-3.5 shrink-0"
+        />
       ) : option.option.kind === 'open-markdown' ? (
         <FileText className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-simulator' || option.option.kind === 'go-to-simulator' ? (
@@ -177,17 +190,32 @@ function getActionPresentation(option: ActiveOption): {
   }
   if (option.kind === 'tab') {
     return {
-      detail: option.option.matchedText ?? option.option.title,
+      detail: option.option.matchedTexts?.length
+        ? option.option.matchedTexts.join(' · ')
+        : (option.option.matchedText ?? option.option.title),
       icon: getOpenTabIcon(option.option),
       label: translate('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
       showDetail: true
     }
   }
+  if (option.kind === 'history') {
+    const { entry } = option.option
+    const url = formatBrowserHistoryUrl(entry.url)
+    return {
+      // Put variable titles in the truncating detail slot; labels with detail cannot shrink.
+      detail: entry.title ? `${entry.title} · ${url}` : url,
+      icon: <BrowserFavicon faviconUrl={entry.faviconUrl} className="size-3.5" />,
+      label: translate('auto.components.tab.bar.TabBarCreateEntry.openPage', 'Open page'),
+      showDetail: true
+    }
+  }
   if (option.kind === 'agent') {
     return {
-      detail: option.option.label,
+      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
+      label:
+        labelOverride ??
+        translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
       showDetail: true
     }
   }
@@ -213,12 +241,16 @@ function getActionPresentation(option: ActiveOption): {
       showDetail: true
     }
   }
-  if (classification.kind === 'existing-file' || classification.kind === 'absolute-file') {
+  if (
+    classification.kind === 'existing-file' ||
+    classification.kind === 'absolute-file' ||
+    classification.kind === 'html-file-url'
+  ) {
     return {
       detail:
-        classification.kind === 'absolute-file'
-          ? classification.filePath
-          : classification.relativePath,
+        classification.kind === 'existing-file'
+          ? classification.relativePath
+          : classification.filePath,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
       prioritizeFilename: true,

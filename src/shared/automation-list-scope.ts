@@ -1,19 +1,8 @@
-/**
- * The `automation.list` request/response contract.
- *
- * The request is host-scoped inside one authority: the authority itself is the
- * IPC endpoint or the paired RPC connection and is never a caller-chosen field.
- * An omitted selector is the legacy request and still answers with the
- * authority's complete list, so an old client reading a new host is unaffected.
- *
- * The response keeps `automations` for those old clients and adds `items`,
- * which qualifies each row with the selector that actually produced it. Rows are
- * paired by ID rather than nested so the legacy field is not duplicated on the
- * wire.
- */
+/** Scope hosts inside the answering IPC/RPC authority, never a caller-selected authority. Omitted selectors retain the full legacy list. Keep automations for old readers and qualify rows by ID in items without duplicating payloads. */
 
 import type { Automation } from './automations-types'
 import type { AutomationUsageSummary } from './automation-usage-summary'
+import type { FolderWorkspaceHost } from './folder-workspace-execution-host'
 import { getAutomationRunRepoId } from './automation-run-identity'
 import { parseExecutionHostId } from './execution-host'
 import { sanitizeSshTargetGeneration } from './ssh-target-generation'
@@ -43,11 +32,7 @@ export type AutomationListItem = {
 export type AutomationListResult = {
   automations: Automation[]
   items: AutomationListItem[]
-  /**
-   * Orphans across the whole authority, so any scoped answer can reveal the
-   * orphan bucket. Optional on the wire, and absent must stay absent: a zero
-   * here settles a bucket nobody counted.
-   */
+  /** Optional authority-wide orphan count; preserve absence because zero would settle an uncounted bucket. */
   orphanCount?: number
 }
 
@@ -67,9 +52,7 @@ export const AUTOMATION_ORPHAN_ISSUES = {
 /** Where a record's workspace executes; `unpinned` leaves the repo to decide. */
 export type AutomationWorkspaceHost =
   | { kind: 'unpinned' }
-  | { kind: 'local' }
-  | { kind: 'ssh'; targetId: string }
-  | { kind: 'ambiguous' }
+  | Exclude<FolderWorkspaceHost, { kind: 'missing' }>
 
 export type AutomationProjectionContext = {
   /** The process that owns this store; runtime scheduling markers are local only on a runtime. */
@@ -116,12 +99,7 @@ function sshTargetSelector(
   return { kind: 'ssh', targetId, targetGeneration: captured ?? current }
 }
 
-/**
- * The pin decides the host; the capture only decides whether this incarnation of
- * it is the one the record was attached to. A capture a different live
- * registration carries came from the pin the workspace has since moved off, so
- * it says nothing about this one and is dropped rather than read as a mismatch.
- */
+/** Pins decide hosts; captures prove registration incarnation. A different live carrier proves an older pin, so discard that capture instead of treating it as a mismatch. */
 function workspacePinSelector(
   automation: Automation,
   targetId: string,
@@ -139,10 +117,7 @@ function workspacePinSelector(
   )
 }
 
-/**
- * Runtime scheduling markers are owned only in runtime storage. A bare `local`
- * still needs a resolvable local project before it is evidence of Self.
- */
+/** Runtime-only scheduling markers belong to runtime storage; local proves Self only with a resolved local project. */
 export function projectAutomationSelector(
   automation: Automation,
   context: AutomationProjectionContext
@@ -164,6 +139,9 @@ export function projectAutomationSelector(
   if (workspaceHost.kind === 'ambiguous') {
     return orphan(AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous)
   }
+  if (workspaceHost.kind === 'runtime') {
+    return orphan(AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere)
+  }
   // A pinned workspace is where the run actually goes, so the row belongs to that host, not Self.
   if (workspaceHost.kind === 'ssh') {
     return workspacePinSelector(automation, workspaceHost.targetId, context)
@@ -182,9 +160,7 @@ export type AutomationCapturedHostIssue =
   | typeof AUTOMATION_ORPHAN_ISSUES.targetReplaced
   | typeof AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous
 
-// Keyed by the union, not a list of it: a list stays valid when the union grows, so a
-// fourth diagnosis would compile while never reaching dispatch. This makes omitting it here
-// the compile error, not just omitting its message.
+// Key by the diagnosis union so every new host issue must also reach dispatch at compile time.
 const CAPTURED_HOST_ISSUES: Record<AutomationCapturedHostIssue, true> = {
   [AUTOMATION_ORPHAN_ISSUES.targetMissing]: true,
   [AUTOMATION_ORPHAN_ISSUES.targetReplaced]: true,
@@ -196,17 +172,7 @@ function isCapturedHostIssue(issue: string): issue is AutomationCapturedHostIssu
   return Object.hasOwn(CAPTURED_HOST_ISSUES, issue)
 }
 
-/**
- * Which host-identity diagnosis stands against the record, if any.
- *
- * Dispatch reads the list's verdict instead of re-deriving one, so the two can
- * never disagree about the host a record belongs to. The diagnosis is returned
- * rather than a yes/no because callers must keep the two apart: a gone host and
- * a replaced one need different answers for the user, and run coalescing folds
- * only on identical text. The other orphan reasons are different questions and
- * stay with whoever already answers them — notably `scheduledElsewhere`, which
- * is what a remote server's own scheduler is there to run.
- */
+/** Dispatch shares list owner diagnoses, preserving gone versus replaced hosts and refusal coalescing text. Other orphan reasons remain separate; scheduledElsewhere is work for the remote scheduler. */
 export function automationCapturedHostIssue(
   automation: Automation,
   context: AutomationProjectionContext
@@ -238,21 +204,32 @@ export function projectAutomationList(
   context: AutomationProjectionContext,
   scope?: AutomationListScopeSelector
 ): AutomationListResult {
-  const projected = automations.map((automation) => ({
-    automation,
-    selector: projectAutomationSelector(automation, context)
-  }))
-  const orphanCount = projected.filter((entry) => entry.selector.kind === 'orphan').length
-  const scoped = scope
-    ? projected.filter((entry) => automationSelectorMatchesScope(entry.selector, scope))
-    : projected
+  const scopedAutomations: Automation[] = []
+  const items: AutomationListItem[] = []
+  let orphanCount = 0
+  for (const automation of automations) {
+    const selector = projectAutomationSelector(automation, context)
+    if (selector.kind === 'orphan') {
+      orphanCount += 1
+    }
+    if (scope && !automationSelectorMatchesScope(selector, scope)) {
+      continue
+    }
+    scopedAutomations.push(automation)
+    items.push({
+      automationId: automation.id,
+      selector
+    })
+  }
+  // Keep usage lookups after projection, matching the previous staged pipeline's ordering.
+  if (context.usageSummary) {
+    for (const item of items) {
+      item.usageSummary = context.usageSummary(item.automationId)
+    }
+  }
   return {
-    automations: scoped.map((entry) => entry.automation),
-    items: scoped.map((entry) => ({
-      automationId: entry.automation.id,
-      selector: entry.selector,
-      ...(context.usageSummary ? { usageSummary: context.usageSummary(entry.automation.id) } : {})
-    })),
+    automations: scopedAutomations,
+    items,
     orphanCount
   }
 }
@@ -271,12 +248,7 @@ export function toAutomationChangeSelector(
     : { kind: selector.kind }
 }
 
-/**
- * The selectors a mutation must publish. A move publishes both source and
- * destination; an unrecoverable side degrades the whole publication to one
- * unscoped authority event, because a subscriber that never hears about the
- * entry it is showing would keep rendering a row that no longer exists.
- */
+/** Publish both moved-from/to selectors. If either cannot be recovered, publish one unscoped authority event so no subscriber retains a vanished row. */
 export function automationChangePublications(
   before: AutomationChangeSelector | null,
   after: AutomationChangeSelector | null

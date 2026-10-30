@@ -28,8 +28,7 @@ export function countRecordKeysByReference(record: Record<string, unknown>): num
   return count
 }
 
-// Re-measures only rows whose DOM node still matches its virtual key, and publishes the
-// sticky-header slots the render pass reads out of refs.
+// Measure only nodes matching their virtual keys and publish sticky-header slots for rendering.
 export function useVirtualRowMeasurementSync(args: {
   renderRows: RenderRow[]
   virtualization: WorktreeListVirtualizer
@@ -51,10 +50,6 @@ export function useVirtualRowMeasurementSync(args: {
   const { virtualizer, isCurrentVirtualRowElement } = virtualization
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
-  const renderRowKeySignature = useMemo(
-    () => renderRows.map(getRenderRowKey).join('\n'),
-    [renderRows]
-  )
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
   const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
@@ -100,14 +95,7 @@ export function useVirtualRowMeasurementSync(args: {
     measureMountedRows()
     const frameId = window.requestAnimationFrame(measureMountedRows)
     return () => window.cancelAnimationFrame(frameId)
-  }, [
-    activeRenderRowKeys,
-    prCacheLen,
-    issueCacheLen,
-    measureMountedRows,
-    renderRowKeySignature,
-    virtualizer
-  ])
+  }, [activeRenderRowKeys, prCacheLen, issueCacheLen, measureMountedRows, virtualizer])
 
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,

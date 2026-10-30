@@ -1,15 +1,16 @@
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from './runner'
+import { isShowRefNoMatchError } from './exact-ref-probe'
+import { hasCommitObjectViaGitExec } from './commit-object-ref'
+import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
 type GitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
-/**
- * Returns the probed commit oid, or null when the ref does not resolve.
- *
- * Why expose the oid: the probe already prints it, and callers that then need the
- * same ref's oid were re-spawning `rev-parse` for a value this call threw away.
- */
+/** Return the probe's commit OID so callers need not resolve it again. */
 export async function resolveWorktreeBaseCommitOid(
   repoPath: string,
   qualifiedRef: string,
@@ -38,31 +39,52 @@ export async function hasWorktreeBaseCommitRef(
   return (await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)) !== null
 }
 
+/** Compare resolved qualified refs so aliases such as main and refs/heads/main share one base. */
+export function resolveLocalWorktreeBaseRef(
+  repoPath: string,
+  baseRef: string,
+  options: GitExecOptions = {}
+): Promise<string> {
+  return resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
+    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+  )
+}
+
+/** Creation and prefetch share this presence check so they agree on reusable local bases. */
+export async function hasLocalWorktreeBaseRef(
+  repoPath: string,
+  baseRef: string,
+  options: GitExecOptions = {}
+): Promise<boolean> {
+  const refExists = (qualifiedRef: string) =>
+    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+  if (resolvedBaseRef !== baseRef) {
+    return true
+  }
+  if (baseRef.startsWith('refs/')) {
+    return refExists(baseRef)
+  }
+  return hasCommitObjectViaGitExec(
+    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
+    baseRef
+  )
+}
+
 export type WorktreeBaseRefPresence = 'present' | 'absent' | 'unknown'
 
-/**
- * Distinguish "the ref does not exist" from "the probe itself failed".
- *
- * Why for-each-ref: it exits 0 whether or not the pattern matches, so an empty result
- * proves absence while a rejection still means the probe never ran (broken repo, dead
- * SSH transport). `rev-parse --verify --quiet` exits 1 for both, and reading that as
- * "absent" would silently drop warnings the caller must still surface.
- *
- * Executor-injected so the SSH path can route the same argv through the relay.
- */
+/** Exact ref probes preserve unknown on execution failure; inject the runner to support relay hosts too. */
 export async function probeWorktreeBaseRefPresence(
   runGit: (args: string[]) => Promise<{ stdout: string }>,
   qualifiedRef: string
 ): Promise<WorktreeBaseRefPresence> {
-  try {
-    const { stdout } = await runGit([
-      'for-each-ref',
-      '--count=1',
-      '--format=%(refname)',
-      qualifiedRef
-    ])
-    return stdout.trim() === qualifiedRef ? 'present' : 'absent'
-  } catch {
+  if (!isSafeGitRefName(qualifiedRef)) {
     return 'unknown'
+  }
+  try {
+    await runGit(['show-ref', '--verify', '--quiet', '--', qualifiedRef])
+    return 'present'
+  } catch (error) {
+    return isShowRefNoMatchError(error) ? 'absent' : 'unknown'
   }
 }

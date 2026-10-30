@@ -12,7 +12,7 @@ export type UsageScannerMocks = {
 }
 
 export type TabsSliceMockApi = {
-  worktrees: { list: Mock; create: Mock; remove: Mock; updateMeta: Mock }
+  worktrees: { create: Mock; remove: Mock; updateMeta: Mock }
   repos: { list: Mock; add: Mock; remove: Mock; update: Mock; pickFolder: Mock }
   pty: { kill: Mock; spawn: Mock }
   gh: { prForBranch: Mock; issue: Mock }
@@ -28,7 +28,6 @@ export type TabsSliceMockApi = {
 export function createTabsSliceMockApi(): TabsSliceMockApi {
   const mockApi: TabsSliceMockApi = {
     worktrees: {
-      list: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
       remove: vi.fn().mockResolvedValue(undefined),
       updateMeta: vi.fn().mockResolvedValue({})

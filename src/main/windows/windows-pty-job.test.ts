@@ -1,5 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IPty } from 'node-pty'
+
+const { recordSelfInitiatedTreeKillMock } = vi.hoisted(() => ({
+  recordSelfInitiatedTreeKillMock: vi.fn()
+}))
+vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
+  recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
+}))
+
 import {
   __setConptyJobNativeForTests,
   assignHostProcessToKillOnCloseJob,
@@ -9,6 +17,10 @@ import {
 } from './windows-pty-job'
 
 const ptyWithHandle = (id: unknown, pid = 4242): IPty => ({ _pty: id, pid }) as unknown as IPty
+
+beforeEach(() => {
+  recordSelfInitiatedTreeKillMock.mockReset()
+})
 
 afterEach(() => {
   __setConptyJobNativeForTests()
@@ -31,9 +43,7 @@ describe('terminatePtyJob', () => {
     ['no job assigned', false],
     ['native refusal', false]
   ])('reports unavailable rather than success on %s', (_case, nativeResult) => {
-    // Why this matters: "we could not tell" is precisely the state the old
-    // parent-pid probe returned, and treating it as success is how a live
-    // agent tree was declared dead and left holding the worktree open.
+    // Unverifiable ownership must not become successful termination of a live tree.
     __setConptyJobNativeForTests(() => ({
       terminateJob: vi.fn().mockReturnValue(nativeResult),
       listJobProcessIds: vi.fn(),
@@ -55,9 +65,7 @@ describe('terminatePtyJob', () => {
   })
 
   it('passes the shell pid so an id from another backend cannot match', () => {
-    // winpty mints `pty` ids from its own counter and the JS layer stores both
-    // in the same field, so an id alone can name a live ConPTY pane. The native
-    // side refuses on a pid mismatch; this pins that we always send the pid.
+    // winpty/ConPTY IDs can collide; always send shell PID so native code can refuse mismatches.
     const terminateJob = vi.fn().mockReturnValue(true)
     __setConptyJobNativeForTests(() => ({
       terminateJob,
@@ -99,9 +107,7 @@ describe('terminatePtyJob', () => {
 
 describe('listPtyJobProcessIds', () => {
   it('returns the live pids, including a detached grandchild', () => {
-    // Measured on Windows 11: a grandchild spawned detached leaves the console
-    // and reparents, so neither GetConsoleProcessList nor a parent-pid walk
-    // sees it. Job membership does.
+    // Detached/reparented grandchildren escape console and parent-PID walks but remain job members.
     __setConptyJobNativeForTests(() => ({
       terminateJob: vi.fn(),
       listJobProcessIds: vi.fn().mockReturnValue([107184, 91480]),
@@ -111,10 +117,7 @@ describe('listPtyJobProcessIds', () => {
   })
 
   it('reports null when there is no answer to give', () => {
-    // Null is 'unverifiable', never 'they died'. A dead tree also reads null,
-    // because node-pty drops its handle record on exit -- so a caller that
-    // treats null as proof of death would be right by accident here and wrong
-    // on a host that refused the job assignment.
+    // Null is unverifiable, including after shell exit closes the job; it never proves death.
     __setConptyJobNativeForTests(() => null)
     expect(listPtyJobProcessIds(ptyWithHandle(1))).toBeNull()
 
@@ -150,5 +153,43 @@ describe('assignHostProcessToKillOnCloseJob', () => {
 
     __setConptyJobNativeForTests(() => null)
     expect(assignHostProcessToKillOnCloseJob()).toBe(false)
+  })
+})
+
+describe('PTY Job Object teardown breadcrumbs', () => {
+  function withNative(terminateJob: () => boolean): void {
+    __setConptyJobNativeForTests(() => ({
+      terminateJob,
+      listJobProcessIds: vi.fn(),
+      assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
+    }))
+  }
+
+  it('records the shell pid whose job it terminated', () => {
+    withNative(() => true)
+
+    expect(terminatePtyJob(ptyWithHandle(7, 4242))).toBe('terminated')
+    expect(recordSelfInitiatedTreeKillMock).toHaveBeenCalledWith({
+      pid: 4242,
+      site: 'windows-pty-job-teardown',
+      scope: 'win-pty-job'
+    })
+  })
+
+  it('records nothing when the native side refused', () => {
+    withNative(() => false)
+
+    expect(terminatePtyJob(ptyWithHandle(7))).toBe('unavailable')
+    expect(recordSelfInitiatedTreeKillMock).not.toHaveBeenCalled()
+  })
+
+  it('never downgrades a real termination to unavailable because diagnostics failed', () => {
+    // Breadcrumb failure must not downgrade termination to unavailable and escalate taskkill.
+    withNative(() => true)
+    recordSelfInitiatedTreeKillMock.mockImplementation(() => {
+      throw new Error('breadcrumb store exploded')
+    })
+
+    expect(() => terminatePtyJob(ptyWithHandle(7))).toThrow('breadcrumb store exploded')
   })
 })

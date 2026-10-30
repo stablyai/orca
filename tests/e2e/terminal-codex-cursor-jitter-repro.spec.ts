@@ -5,6 +5,7 @@ import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActiveTerminalManager } from './helpers/terminal'
 import { analyzeRasterCursorCells, type RasterCursorCell } from './terminal-cursor-raster-probe'
+import { quotePowerShellLiteral } from '../../src/shared/powershell-native-argument'
 
 type ShellCase = {
   label: string
@@ -93,7 +94,7 @@ type RasterFrameInput = {
 }
 
 type CursorReproWindow = Window & {
-  __cursorReproOriginalPtyWrite?: (ptyId: string, data: string) => void
+  __cursorReproOriginalPtyWrite?: Window['api']['pty']['write']
   __cursorReproConptyDa1ReplyCount?: number
   __cursorReproRawChunks?: { id: string; data: string; at: number }[]
   __cursorReproRawUnsubscribe?: () => void
@@ -166,10 +167,6 @@ function isUnexpectedVisibleCursorFrame(frame: ScreenSnapshot): boolean {
     return false
   }
   return !isInputCursorRow(frame, frame.marker.cellY)
-}
-
-function quotePowerShellSingleQuoted(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
 }
 
 async function createShellTab(
@@ -251,7 +248,7 @@ async function prepareCodexTerminal(
 
   const launchCommand =
     shellCase.shellOverride === 'powershell.exe'
-      ? `Set-Location -LiteralPath ${quotePowerShellSingleQuoted(process.cwd())}; ${shellCase.codexCommand}`
+      ? `Set-Location -LiteralPath ${quotePowerShellLiteral(process.cwd())}; ${shellCase.codexCommand}`
       : shellCase.codexCommand
   await page.keyboard.insertText(launchCommand)
   await page.keyboard.press('Enter')
@@ -298,12 +295,12 @@ async function installPtyWriteDiagnostics(page: Page): Promise<void> {
     const reproWindow = window as CursorReproWindow
     if (!reproWindow.__cursorReproOriginalPtyWrite) {
       reproWindow.__cursorReproOriginalPtyWrite = window.api.pty.write.bind(window.api.pty)
-      window.api.pty.write = (ptyId, data) => {
+      window.api.pty.write = (ptyId, data, inputKind) => {
         if (data === da1Response) {
           reproWindow.__cursorReproConptyDa1ReplyCount =
             (reproWindow.__cursorReproConptyDa1ReplyCount ?? 0) + 1
         }
-        reproWindow.__cursorReproOriginalPtyWrite!(ptyId, data)
+        reproWindow.__cursorReproOriginalPtyWrite!(ptyId, data, inputKind)
       }
     }
     reproWindow.__cursorReproConptyDa1ReplyCount = 0

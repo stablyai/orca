@@ -1,0 +1,571 @@
+/**
+ * @vitest-environment happy-dom
+ */
+import React, { createRef, type ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import type * as I18n from '@/i18n/i18n'
+import type * as ImageBlobPng from '@/lib/image-blob-png'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../shared/clipboard-image'
+import {
+  emptyNativeChatContextMenuActions,
+  useNativeChatContextMenu,
+  type NativeChatContextMenuActions
+} from './use-native-chat-context-menu'
+
+type ItemProps = { onSelect?: () => void; children?: ReactNode }
+
+const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
+const imageCopy = vi.hoisted(() => ({
+  convertImageBlobToPng: vi.fn()
+}))
+
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuContent: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuItem: (props: ItemProps) => {
+    items.list.push(props)
+    return props.children
+  },
+  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuSeparator: () => null,
+  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuSub: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuTrigger: ({ children }: { children?: ReactNode }) => children
+}))
+
+vi.mock('lucide-react', async (importOriginal) => {
+  const Icon = () => null
+  const icons = await importOriginal<Record<string, unknown>>()
+  return Object.fromEntries(Object.keys(icons).map((name) => [name, Icon]))
+})
+
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
+  translate: (_key: string, fallback: string) => fallback
+}))
+
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
+vi.mock('sonner', () => ({ toast: toasts }))
+
+const tooltips = vi.hoisted((): { list: ReactNode[] } => ({ list: [] }))
+vi.mock('@/components/ui/tooltip', () => {
+  const Pass = ({ children }: { children?: ReactNode }) => children
+  return {
+    Tooltip: Pass,
+    TooltipTrigger: Pass,
+    TooltipContent: ({ children }: { children?: ReactNode }) => {
+      tooltips.list.push(children)
+      return null
+    }
+  }
+})
+vi.mock('@/lib/image-blob-png', async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageBlobPng>()),
+  convertImageBlobToPng: imageCopy.convertImageBlobToPng
+}))
+
+vi.mock('./NativeChatSelectionQuote', () => ({ NativeChatSelectionQuote: () => null }))
+
+function childrenText(children: ReactNode): string {
+  return React.Children.toArray(children)
+    .map((child) => {
+      if (typeof child === 'string') {
+        return child
+      }
+      return React.isValidElement<{ children?: ReactNode }>(child)
+        ? childrenText(child.props.children)
+        : ''
+    })
+    .join('')
+}
+
+function Harness({
+  onSwitchToTerminal,
+  structured = false,
+  orcaSessionId
+}: {
+  onSwitchToTerminal?: () => void
+  structured?: boolean
+  orcaSessionId?: string
+}) {
+  const rootRef = createRef<HTMLDivElement>()
+  const { menu } = useNativeChatContextMenu({
+    rootRef,
+    composerRef: createRef(),
+    onSwitchToTerminal,
+    showTerminalPaneActions: !structured,
+    resolveOrcaSessionId: orcaSessionId === undefined ? undefined : async () => orcaSessionId,
+    actions: {
+      ...emptyNativeChatContextMenuActions,
+      onPaste: vi.fn()
+    } satisfies NativeChatContextMenuActions
+  })
+  return menu
+}
+
+function ImageHarness({
+  enabled = true,
+  src = 'blob:full-size',
+  source
+}: {
+  enabled?: boolean
+  src?: string
+  source?: string
+}) {
+  const rootRef = createRef<HTMLDivElement>()
+  const { menu, onContextMenuCapture, onPointerDownCapture } = useNativeChatContextMenu({
+    rootRef,
+    composerRef: createRef(),
+    enabled,
+    actions: { ...emptyNativeChatContextMenuActions, onPaste: vi.fn() }
+  })
+  return (
+    <div
+      ref={rootRef}
+      onContextMenuCapture={onContextMenuCapture}
+      onPointerDownCapture={onPointerDownCapture}
+    >
+      <button type="button" data-native-chat-copy-image-src={src}>
+        <img alt="shot" src="data:thumbnail" />
+      </button>
+      <div data-native-chat-scroll>
+        {source ? (
+          <div data-selection-prose>
+            <NativeChatMarkdown content={source} />
+          </div>
+        ) : (
+          <p>text</p>
+        )}
+      </div>
+      <textarea aria-label="composer" />
+      <input aria-label="answer" disabled defaultValue="read only" />
+      <div role="textbox" aria-label="prompt" contentEditable suppressContentEditableWarning>
+        typo
+        <span contentEditable={false}>pill</span>
+      </div>
+      {menu}
+    </div>
+  )
+}
+
+function copyImageItem(): ItemProps | undefined {
+  return items.list.findLast((candidate) => childrenText(candidate.children) === 'Copy image')
+}
+
+function copyTextItem(): ItemProps | undefined {
+  return items.list.findLast((candidate) =>
+    /^Copy(⌘C|Ctrl\+C)$/.test(childrenText(candidate.children))
+  )
+}
+
+function pasteItem(): ItemProps | undefined {
+  return items.list.findLast((candidate) => childrenText(candidate.children) === 'Paste')
+}
+
+function stubClipboardImageWrite(): ReturnType<typeof vi.fn> {
+  const writeClipboardImage = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('api', { ui: { writeClipboardImage } })
+  return writeClipboardImage
+}
+
+async function rightClickImageAndCopy({
+  blobFor = (src: string) => new Blob([src]),
+  revokeBeforeSelect = false
+}: { blobFor?: (src: string) => Blob; revokeBeforeSelect?: boolean } = {}): Promise<{
+  writeClipboardImage: ReturnType<typeof vi.fn>
+}> {
+  const writeClipboardImage = stubClipboardImageWrite()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (src: string) => ({ ok: true, blob: async () => blobFor(src) }))
+  )
+  render(<ImageHarness />)
+  fireEvent.contextMenu(screen.getByRole('img', { name: 'shot' }))
+  if (revokeBeforeSelect) {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+  }
+  await act(async () => copyImageItem()?.onSelect?.())
+  return { writeClipboardImage }
+}
+
+function pngOfText(): void {
+  imageCopy.convertImageBlobToPng.mockImplementation(
+    async (blob: Blob) => new Blob([`png:${await blob.text()}`], { type: 'image/png' })
+  )
+}
+
+it('updates nominal toggle labels, including an unassigned binding', () => {
+  const initial = useAppStore.getState()
+  vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
+  useAppStore.setState({ keybindings: {} })
+  const view = render(<Harness onSwitchToTerminal={() => {}} />)
+  expect(view.container.textContent).toContain('Ctrl+⇧+J')
+  act(() =>
+    useAppStore.setState({
+      keybindings: { 'terminal.toggleNativeChat': ['Mod+Alt+Y', 'Mod+Alt+K'] }
+    })
+  )
+  expect(view.container.textContent).toContain('Ctrl+Alt+Y')
+  act(() => useAppStore.setState({ keybindings: { 'terminal.toggleNativeChat': [] } }))
+  expect(view.container.textContent).not.toContain('Ctrl+Alt+Y')
+  expect(view.container.textContent).not.toContain('Unassigned')
+  view.unmount()
+  useAppStore.setState(initial, true)
+  vi.unstubAllGlobals()
+})
+
+describe('useNativeChatContextMenu', () => {
+  beforeEach(() => {
+    items.list = []
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    imageCopy.convertImageBlobToPng.mockReset()
+    toasts.error.mockReset()
+    toasts.success.mockReset()
+  })
+
+  it.each(['Before $x^2$ after.', 'Ordinary words.', '```math\nx^2\n```'])(
+    'copies authored selection through the actual menu action: %s',
+    async (source) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('api', { ui: { writeClipboardText } })
+      const view = render(<ImageHarness source={source} />)
+      const prose = view.container.querySelector('[data-selection-prose]')
+      if (!prose) {
+        throw new Error('Missing rendered source')
+      }
+      const range = document.createRange()
+      range.selectNodeContents(prose)
+      const selection = document.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      fireEvent.contextMenu(prose)
+      selection?.removeAllRanges()
+      expect(copyTextItem()).toBeDefined()
+      await act(async () => copyTextItem()?.onSelect?.())
+      expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(source)
+    }
+  )
+
+  it('copies the right-clicked image as a PNG of its full-size source', async () => {
+    pngOfText()
+
+    const { writeClipboardImage } = await rightClickImageAndCopy()
+
+    await waitFor(() =>
+      expect(writeClipboardImage).toHaveBeenCalledWith(
+        `data:image/png;base64,${Buffer.from('png:blob:full-size').toString('base64')}`
+      )
+    )
+    expect(toasts.success).toHaveBeenCalledWith('Image copied')
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
+  it('offers no Copy when no chat text is selected', () => {
+    render(<ImageHarness />)
+    fireEvent.contextMenu(screen.getByText('text'))
+
+    expect(copyTextItem()).toBeUndefined()
+  })
+
+  it.each(['composer', 'prompt'])(
+    'leaves a right-click in the %s field to the native menu with spelling suggestions',
+    (name) => {
+      const markPlainTextContextMenuTarget = vi.fn()
+      vi.stubGlobal('api', { ui: { markPlainTextContextMenuTarget } })
+      render(<ImageHarness />)
+      const field = screen.getByRole('textbox', { name })
+
+      expect(fireEvent.pointerDown(field, { button: 2 })).toBe(true)
+      expect(fireEvent.contextMenu(field)).toBe(true)
+      expect(markPlainTextContextMenuTarget).toHaveBeenCalledOnce()
+      expect(pasteItem()).toBeUndefined()
+    }
+  )
+
+  it('keeps the chat menu on the transcript and on a pill inside the prompt', () => {
+    render(<ImageHarness />)
+    expect(fireEvent.contextMenu(screen.getByText('text'))).toBe(false)
+    expect(pasteItem()).toBeUndefined()
+
+    expect(fireEvent.contextMenu(screen.getByText('pill'))).toBe(false)
+    expect(pasteItem()).toBeDefined()
+  })
+
+  it('copies the selected chat text', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { writeClipboardText } })
+    render(<ImageHarness />)
+    window.getSelection()?.selectAllChildren(screen.getByText('text'))
+    fireEvent.contextMenu(screen.getByText('text'))
+
+    copyTextItem()?.onSelect?.()
+
+    expect(writeClipboardText).toHaveBeenCalledWith('text')
+  })
+
+  it.each([
+    ['a right press', 'Macintosh', { button: 2 }, false],
+    ['a Mac ctrl-click', 'Macintosh', { button: 0, ctrlKey: true }, false],
+    ['a left press', 'Macintosh', { button: 0 }, true],
+    ['a ctrl-click off Mac', 'Windows', { button: 0, ctrlKey: true }, true]
+  ])(
+    'keeps the selection through %s only when it opens the menu',
+    (_press, userAgent, init, defaultRuns) => {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
+      render(<ImageHarness />)
+
+      expect(fireEvent.pointerDown(screen.getByText('text'), init)).toBe(defaultRuns)
+    }
+  )
+
+  it.each([
+    ['on a reply selection offers it', 'text', () => screen.getByText('text'), 'text', true],
+    [
+      'away from a reply selection drops it',
+      'text',
+      () => screen.getByRole('button'),
+      undefined,
+      false
+    ],
+    [
+      'a disabled field still offers the reply selection',
+      'text',
+      () => screen.getByRole('textbox', { name: 'answer' }),
+      'text',
+      true
+    ],
+    [
+      'away from a composer selection keeps it unoffered',
+      'typo',
+      () => screen.getByText('text'),
+      undefined,
+      true
+    ]
+  ])('right-clicking %s', (_case, selected, pressed, copied, kept) => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { writeClipboardText } })
+    render(<ImageHarness />)
+    const selection = window.getSelection()
+    selection?.selectAllChildren(screen.getByText(selected))
+    // happy-dom lays out no text, so map the press to the pressed element as Chromium does.
+    const node = pressed()
+    Object.defineProperty(document, 'caretPositionFromPoint', {
+      configurable: true,
+      value: () => ({ offsetNode: node, offset: node instanceof HTMLInputElement ? 5 : 0 })
+    })
+    fireEvent.contextMenu(node)
+    Reflect.deleteProperty(document, 'caretPositionFromPoint')
+
+    copyTextItem()?.onSelect?.()
+
+    expect(writeClipboardText.mock.calls[0]?.[0]).toBe(copied)
+    expect(selection?.isCollapsed).toBe(!kept)
+  })
+
+  it('offers no image copy when the right-click is not on an image', () => {
+    render(<ImageHarness />)
+    fireEvent.contextMenu(screen.getByText('text'))
+
+    expect(copyImageItem()).toBeUndefined()
+  })
+
+  it('copies an image whose blob URL was revoked after the menu opened', async () => {
+    pngOfText()
+
+    const { writeClipboardImage } = await rightClickImageAndCopy({ revokeBeforeSelect: true })
+
+    await waitFor(() => expect(writeClipboardImage).toHaveBeenCalledOnce())
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
+  it('releases the read image when the pane hides with the menu open', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, blob: async () => new Blob(['image']) }))
+    )
+    const { rerender } = render(<ImageHarness />)
+    fireEvent.contextMenu(screen.getByRole('img', { name: 'shot' }))
+    expect(copyImageItem()).toBeDefined()
+
+    rerender(<ImageHarness enabled={false} />)
+    // Inspect a render after the hide effect has settled.
+    items.list = []
+    rerender(<ImageHarness enabled={false} />)
+
+    expect(copyImageItem()).toBeUndefined()
+  })
+
+  it.each(['http://example.test/original.png', 'https://example.test/original.svg'])(
+    'reads %s only after Copy image is selected',
+    async (src) => {
+      pngOfText()
+      const writeClipboardImage = stubClipboardImageWrite()
+      const fetchImage = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob([src]) })
+      vi.stubGlobal('fetch', fetchImage)
+      render(<ImageHarness src={src} />)
+      fireEvent.contextMenu(screen.getByRole('img', { name: 'shot' }))
+      expect(copyImageItem()).toBeDefined()
+      expect(fetchImage).not.toHaveBeenCalled()
+
+      await act(async () => copyImageItem()?.onSelect?.())
+
+      await waitFor(() => expect(writeClipboardImage).toHaveBeenCalledOnce())
+      expect(fetchImage).toHaveBeenCalledOnce()
+      expect(fetchImage).toHaveBeenCalledWith(src)
+      expect(writeClipboardImage).toHaveBeenCalledOnce()
+      expect(toasts.success).toHaveBeenCalledWith('Image copied')
+    }
+  )
+
+  it.each([
+    ['HTTP failure', () => Promise.resolve({ ok: false, status: 404, blob: vi.fn() })],
+    ['network failure', () => Promise.reject(new TypeError('Failed to fetch'))],
+    [
+      'HTML response',
+      () =>
+        Promise.resolve({ ok: true, blob: async () => new Blob(['page'], { type: 'text/html' }) })
+    ]
+  ])(
+    'reports one error for %s with no clipboard write or file fallback',
+    async (_label, response) => {
+      const writeClipboardImage = stubClipboardImageWrite()
+      const fetchImage = vi.fn(response)
+      vi.stubGlobal('fetch', fetchImage)
+      render(<ImageHarness src="https://example.test/original.png" />)
+      fireEvent.contextMenu(screen.getByRole('img', { name: 'shot' }))
+
+      await act(async () => copyImageItem()?.onSelect?.())
+
+      await waitFor(() => expect(toasts.error).toHaveBeenCalledOnce())
+      expect(fetchImage).toHaveBeenCalledOnce()
+      expect(imageCopy.convertImageBlobToPng).not.toHaveBeenCalled()
+      expect(writeClipboardImage).not.toHaveBeenCalled()
+      expect(toasts.error).toHaveBeenCalledOnce()
+      expect(toasts.success).not.toHaveBeenCalled()
+    }
+  )
+
+  it('captures a data image before selection and keeps it when the source disappears', async () => {
+    pngOfText()
+    const writeClipboardImage = stubClipboardImageWrite()
+    const fetchImage = vi
+      .fn()
+      .mockResolvedValue({ ok: true, blob: async () => new Blob(['inline']) })
+    vi.stubGlobal('fetch', fetchImage)
+    render(<ImageHarness src="data:image/png;base64,aW5saW5l" />)
+    fireEvent.contextMenu(screen.getByRole('img', { name: 'shot' }))
+    expect(fetchImage).toHaveBeenCalledOnce()
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Source gone')))
+
+    await act(async () => copyImageItem()?.onSelect?.())
+
+    await waitFor(() => expect(writeClipboardImage).toHaveBeenCalledOnce())
+    expect(toasts.success).toHaveBeenCalledOnce()
+  })
+
+  it('reports an image too large to copy instead of copying nothing silently', async () => {
+    const actual = await vi.importActual<typeof ImageBlobPng>('@/lib/image-blob-png')
+    imageCopy.convertImageBlobToPng.mockImplementation(actual.convertImageBlobToPng)
+
+    const { writeClipboardImage } = await rightClickImageAndCopy({
+      blobFor: () => new Blob([new Uint8Array(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)])
+    })
+
+    await waitFor(() => expect(toasts.error).toHaveBeenCalled())
+    expect(writeClipboardImage).not.toHaveBeenCalled()
+    expect(toasts.success).not.toHaveBeenCalled()
+    expect(toasts.error).toHaveBeenCalledWith("Couldn't copy image", {
+      description: 'The image is too large to copy.'
+    })
+  })
+
+  it('restores the bridge switch-to-terminal action when supplied', () => {
+    const onSwitchToTerminal = vi.fn()
+
+    renderToStaticMarkup(<Harness onSwitchToTerminal={onSwitchToTerminal} />)
+
+    const labels = items.list.map((candidate) => childrenText(candidate.children))
+
+    expect(labels.some((label) => label.startsWith('Continue with Terminal Agent'))).toBe(true)
+    const item = items.list.find((candidate) =>
+      childrenText(candidate.children).startsWith('Continue with Terminal Agent')
+    )
+    expect(item).toBeDefined()
+    item?.onSelect?.()
+    expect(onSwitchToTerminal).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render a terminal switch action without a bridge callback', () => {
+    renderToStaticMarkup(<Harness />)
+
+    expect(
+      items.list.some(
+        (candidate) => childrenText(candidate.children) === 'Continue with Terminal Agent'
+      )
+    ).toBe(false)
+  })
+
+  describe('Copy Orca Session ID', () => {
+    const orcaSessionId = 'orca_session_id:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+    const writeClipboardText = vi.fn()
+
+    beforeEach(() => {
+      writeClipboardText.mockReset().mockResolvedValue(undefined)
+      toasts.success.mockReset()
+      toasts.error.mockReset()
+      tooltips.list = []
+      Object.assign(window, { api: { ui: { writeClipboardText } } })
+    })
+
+    function labels(): string[] {
+      return items.list.map((candidate) => childrenText(candidate.children))
+    }
+
+    function copyItem(): ItemProps | undefined {
+      return items.list.find(
+        (candidate) => childrenText(candidate.children) === 'Copy Orca Session ID'
+      )
+    }
+
+    it('copies the Orca session ID in a chat tab, explaining what it is', async () => {
+      renderToStaticMarkup(<Harness structured orcaSessionId={orcaSessionId} />)
+
+      copyItem()?.onSelect?.()
+
+      await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith('Orca session ID copied'))
+      expect(writeClipboardText).toHaveBeenCalledWith(orcaSessionId)
+      expect(tooltips.list.map(childrenText)).toContain(
+        "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
+      )
+    })
+
+    it('is absent for a chat with no Orca session ID', () => {
+      renderToStaticMarkup(<Harness structured />)
+
+      expect(labels()).not.toContain('Copy Orca Session ID')
+    })
+
+    it('reports a failed copy instead of claiming success', async () => {
+      writeClipboardText.mockRejectedValue(new Error('denied'))
+      renderToStaticMarkup(<Harness structured orcaSessionId={orcaSessionId} />)
+
+      copyItem()?.onSelect?.()
+
+      await vi.waitFor(() =>
+        expect(toasts.error).toHaveBeenCalledWith('Unable to copy Orca session ID')
+      )
+      expect(toasts.success).not.toHaveBeenCalled()
+    })
+  })
+})

@@ -1,4 +1,3 @@
-// Actions that ship unbound until a user assigns them.
 import { describe, expect, it } from 'vitest'
 import {
   getKeybindingDefinition,
@@ -212,6 +211,36 @@ describe('keybindings', () => {
     expect(definition?.title).toBe('Toggle Sleeping Workspaces')
     expect(definition?.searchKeywords).toEqual(
       expect.arrayContaining(['sleeping', 'workspaces', 'filter'])
+    )
+  })
+
+  it('keeps the child-workspaces toggle unassigned until users customize it', () => {
+    const binding = {
+      key: 'h',
+      code: 'KeyH',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('sidebar.childWorkspaces.toggle', platform)).toEqual(
+        []
+      )
+    }
+    expect(keybindingMatchesAction('sidebar.childWorkspaces.toggle', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('sidebar.childWorkspaces.toggle', binding, 'linux', {
+        'sidebar.childWorkspaces.toggle': ['Mod+Alt+H']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.childWorkspaces.toggle')
+    expect(definition?.title).toBe('Toggle Child Workspaces')
+    expect(definition?.scope).toBe('global')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['child', 'children', 'collapse', 'expand'])
     )
   })
 

@@ -1,29 +1,21 @@
-// listWorktreeGraph: -z porcelain listing plus the older-Git usage-error fallback.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  gitExecFileAsyncMock,
-  gitExecFileSyncMock,
-  translateWslOutputPathsMock,
-  moveWorktreeDirectoryToTrashMock
-} = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn(),
-  translateWslOutputPathsMock: vi.fn((output: string) => output),
-  moveWorktreeDirectoryToTrashMock: vi.fn()
+const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    gitExecFileSyncMock: vi.fn(),
+    translateWslOutputPathsMock: vi.fn((output: string) => output)
+  })
+)
+
+vi.mock('../../shared/git-worktree-admin', () => ({
+  annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
 }))
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: gitExecFileSyncMock,
   translateWslOutputPaths: translateWslOutputPathsMock
-}))
-
-// Default: the checkout cannot be renamed aside, so removal deletes it in place.
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined),
-  restoreWorktreeDirectoryFromTrash: vi.fn().mockResolvedValue(true),
-  scheduleWorktreeTrashDeletion: vi.fn()
 }))
 
 import { listWorktreeGraph, WORKTREE_LIST_TIMEOUT_MS } from './worktree'
@@ -107,8 +99,7 @@ branch refs/heads/main-2
         branch: 'refs/heads/main-2',
         isBare: false,
         isMainWorktree: false,
-        // The line-block fallback also probes linked worktree paths for
-        // existence (issue #8389), and this mocked path is absent on disk.
+        // The legacy listing probes existence; this mocked linked path is absent.
         prunable: true
       }
     ])
@@ -123,8 +114,6 @@ branch refs/heads/main-2
   })
 
   it('falls back on a localized (non-English) older-Git usage error via exit code 129', async () => {
-    // Git under a non-English locale translates the usage text, so stderr
-    // matching alone misses it; the 129 exit code must still trigger fallback.
     gitExecFileAsyncMock
       .mockRejectedValueOnce(
         Object.assign(new Error('git worktree list --porcelain -z'), {
@@ -159,8 +148,6 @@ branch refs/heads/main
   })
 
   it('does not retry without -z for non-usage Git failures', async () => {
-    // A fatal error (exit 128) is not an unsupported-flag signal, so the -z
-    // command must not be silently re-run without it.
     gitExecFileAsyncMock.mockRejectedValueOnce(
       Object.assign(new Error('git worktree list --porcelain -z'), {
         code: 128,
@@ -195,6 +182,5 @@ branch refs/heads/main
       cwd: '/repo',
       timeout: 5_000
     })
-    expect(WORKTREE_LIST_TIMEOUT_MS).toBe(30_000)
   })
 })

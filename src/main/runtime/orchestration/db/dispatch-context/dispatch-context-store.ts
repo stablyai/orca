@@ -5,15 +5,18 @@ import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import { paneKeyMatchSuffix } from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
-import type { DispatchCreator } from '../dispatch-depth'
+import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
+import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
 export function createDispatchContext(
   this: OrchestrationDb,
   params: {
     taskId: string
     assigneeHandle: string
-    // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
+    // Pane identity survives handle reissue, preserving worker_done authority.
     assigneePaneKey?: string
     launchTokenHash?: string
     processIncarnation?: string
@@ -26,13 +29,17 @@ export function createDispatchContext(
   const depth = this.resolveChildDispatchDepth(params.creator, params.maxDepth)
   const task = this.getTask(taskId)
   if (!task) {
-    throw new Error(`Task not found: ${taskId}`)
+    throw taskNotFoundError(`Task not found: ${taskId}`, { taskId })
   }
   if (task.status !== 'ready') {
-    throw new Error(`Task ${taskId} is ${task.status}; only ready tasks can be dispatched`)
+    throw taskNotStartableError(
+      this,
+      `Task ${taskId} is ${task.status}; only ready tasks can be dispatched`,
+      task
+    )
   }
 
-  // Why: lock on pane identity too, so a reminted handle can't open a second concurrent dispatch on the same pane.
+  // Lock the pane too so handle remint cannot admit a second dispatch.
   const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
 
   if (existing) {
@@ -41,7 +48,7 @@ export function createDispatchContext(
     )
   }
 
-  // Carry forward failure_count so the circuit breaker accumulates across retries for the same task.
+  // Accumulate failure_count across task retries.
   const prior = this.db
     .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
     .get(taskId) as { max_failures: number | null } | undefined
@@ -50,6 +57,7 @@ export function createDispatchContext(
   const paneSuffix =
     assigneePaneKey && parsePaneKey(assigneePaneKey) ? paneKeyMatchSuffix(assigneePaneKey) : null
   const id = generateId('ctx')
+  const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
   this.db.exec('SAVEPOINT create_dispatch_context')
   try {
     const inserted = claimDispatchContextRow(this.db, {
@@ -58,7 +66,13 @@ export function createDispatchContext(
       launchTokenHash: launchTokenHash ?? null,
       assigneeHandle,
       assigneePaneKey: assigneePaneKey ?? null,
+      assigneeOrcaSessionId: dispatchAssigneeOrcaSessionId({
+        handle: assigneeHandle,
+        processIncarnation
+      }),
       processIncarnation: processIncarnation ?? null,
+      creatorDispatchId,
+      ...recordedCreatorIdentity(params.creator),
       priorFailures,
       depth,
       taskId,
@@ -72,11 +86,18 @@ export function createDispatchContext(
           `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
         )
       }
-      throw new Error(
-        `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
-      )
+      // Return the same typed rejection for a lost atomic claim as for a failed precheck.
+      const message = `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
+      throw current
+        ? taskNotStartableError(this, message, current)
+        : taskNotFoundError(message, { taskId })
     }
-    this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'task',
+      id: taskId,
+      from: 'ready',
+      to: 'dispatched'
+    })
     const dispatch = this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow

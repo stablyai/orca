@@ -17,25 +17,13 @@ function carryUserState(projected: Project, previous: Project): Project {
     : projected
 }
 
-function countSharedRepoIds(sourceRepoIds: readonly string[], other: ReadonlySet<string>): number {
-  return sourceRepoIds.reduce((count, repoId) => (other.has(repoId) ? count + 1 : count), 0)
-}
-
 function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-/**
- * Carries persisted per-project user state (and the rows that point at it) across a
- * project id change. Project ids are derived from repo identity, so `repo:` -> `git:` ->
- * `github:` promotion and remote re-probes rewrite them mid-session; matching only on id
- * would drop the user's runtime preference and leave a ghost row behind.
- *
- * Predecessor rule when several prior rows overlap a surviving project: most shared
- * `sourceRepoIds` wins, then newest `updatedAt`, then lowest prior id (then lowest new id).
- * Each prior row is claimed by at most one surviving project, so two distinct user
- * preferences are never merged into one — the unclaimed row keeps its own identity.
- */
+/** Carry user state/references through repo→git→github identity promotion and re-probes, preserving preferences without ghost rows.
+ * Choose predecessors by shared source repos, newest updatedAt, then lowest prior/new IDs. Claim each prior once:
+ * never merge distinct preferences; unmatched rows retain their own identity. */
 export function carryProjectStateThroughIdentityChange(
   projectedProjects: readonly Project[],
   previousProjects: readonly Project[]
@@ -45,15 +33,34 @@ export function carryProjectStateThroughIdentityChange(
   // Why: a prior row that still exists under its own id is live, not a predecessor.
   const orphanedPrevious = previousProjects.filter((project) => !projectedIds.has(project.id))
   const unmatched = projectedProjects.filter((project) => !previousById.has(project.id))
+  const previousIndicesByRepo = new Map<string, number[]>()
+  if (unmatched.length > 0) {
+    orphanedPrevious.forEach((previous, index) => {
+      for (const repoId of previous.sourceRepoIds) {
+        const indices = previousIndicesByRepo.get(repoId)
+        if (indices) {
+          indices.push(index)
+        } else {
+          previousIndicesByRepo.set(repoId, [index])
+        }
+      }
+    })
+  }
   const candidates = unmatched.flatMap((project) => {
-    const repoIds = new Set(project.sourceRepoIds)
-    return orphanedPrevious
-      .map((previous) => ({
+    const overlaps = new Map<number, number>()
+    for (const repoId of new Set(project.sourceRepoIds)) {
+      for (const index of previousIndicesByRepo.get(repoId) ?? []) {
+        overlaps.set(index, (overlaps.get(index) ?? 0) + 1)
+      }
+    }
+    // Preserve input order when the candidate comparator ties on legacy duplicate IDs.
+    return [...overlaps]
+      .sort(([left], [right]) => left - right)
+      .map(([index, shared]) => ({
         project,
-        previous,
-        shared: countSharedRepoIds(previous.sourceRepoIds, repoIds)
+        previous: orphanedPrevious[index],
+        shared
       }))
-      .filter((candidate) => candidate.shared > 0)
   })
   candidates.sort(
     (left, right) =>

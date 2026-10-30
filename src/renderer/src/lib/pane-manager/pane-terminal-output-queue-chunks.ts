@@ -1,10 +1,11 @@
 import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
+import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
 import type {
   QueueEntry,
   QueuedWrite,
   TerminalOutputBeforeWrite,
   TerminalOutputParsedCallback
-} from './pane-terminal-output-scheduler'
+} from './pane-terminal-output-queue-registry'
 import { recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure } from './pane-terminal-output-scheduler-debug'
 
 type ForegroundRefreshSyncResolver = () => boolean
@@ -13,6 +14,9 @@ const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let remaining = limit
   let data = ''
+  // Join source chunks once; repeated `data += chunk` can flatten tiny-chunk floods.
+  let dataParts: string[] | null = null
+  let dataLength = 0
   let foreground: boolean | null = null
   let forceForegroundRefresh = false
   let followupForegroundRefresh = false
@@ -56,7 +60,15 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       additionalBeforeWriteCallbacks.push(chunk.beforeWrite)
     }
     if (chunk.data.length <= remaining) {
-      data += chunk.data
+      if (dataParts) {
+        dataParts.push(chunk.data)
+      } else if (dataLength === 0) {
+        data = chunk.data
+      } else {
+        dataParts = [data, chunk.data]
+        data = ''
+      }
+      dataLength += chunk.data.length
       remaining -= chunk.data.length
       entry.queuedChars -= chunk.data.length
       // Clear drained slots before the 64-chunk compaction can release them.
@@ -79,8 +91,19 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       continue
     }
 
-    data += chunk.data.slice(0, remaining)
-    const residual = chunk.data.slice(remaining)
+    // Never split inside DEC 2026 or its residual close marker leaves painting frozen until drain/1000ms timeout. remaining > 0 guarantees a positive cut, so the loop cannot stall.
+    const splitAt = resolveSynchronizedOutputSafeSplit(chunk.data, remaining)
+    const prefix = chunk.data.slice(0, splitAt)
+    if (dataParts) {
+      dataParts.push(prefix)
+    } else if (dataLength === 0) {
+      data = prefix
+    } else {
+      dataParts = [data, prefix]
+      data = ''
+    }
+    dataLength += prefix.length
+    const residual = chunk.data.slice(splitAt)
     // Geometric flattening bounds retained parents while keeping total copy work linear.
     const flatten = residual.length * 2 <= chunk.retainedChars
     entry.chunks[entry.chunkIndex] = {
@@ -88,7 +111,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       data: flatten ? flattenRetainedSlice(residual) : residual,
       retainedChars: flatten ? residual.length : chunk.retainedChars
     }
-    entry.queuedChars -= remaining
+    entry.queuedChars -= prefix.length
     remaining = 0
   }
 
@@ -97,9 +120,10 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
     entry.queuedChars = 0
   }
   recordQueueDebugPressure()
-  return data
+  const assembledData = dataParts ? dataParts.join('') : data
+  return assembledData
     ? {
-        data,
+        data: assembledData,
         foreground: foreground === true,
         forceForegroundRefresh,
         followupForegroundRefresh,

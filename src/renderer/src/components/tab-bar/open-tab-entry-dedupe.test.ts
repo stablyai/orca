@@ -77,8 +77,7 @@ describe('dropFileEntriesCoveredByTabResults', () => {
 
   it('never lets a terminal, browser or simulator result suppress a file entry', () => {
     const results: OpenTabSearchResult[] = [
-      // Non-null path on purpose: the fold must turn on contentType, not on a
-      // path the engine happens to leave empty for non-editor tabs.
+      // Supply a path on a terminal row to prove destination deduplication depends on content type.
       { ...editorTab('src/zebra.ts'), contentType: 'terminal' },
       {
         executionHostId: 'local',
@@ -89,7 +88,9 @@ describe('dropFileEntriesCoveredByTabResults', () => {
         worktreeId: 'wt-1',
         contentType: 'browser',
         pageId: 'page-1',
-        workspaceId: 'ws-1'
+        url: 'https://example.com/zebra',
+        workspaceId: 'ws-1',
+        faviconUrl: null
       },
       {
         executionHostId: 'local',
@@ -131,8 +132,7 @@ describe('dropFileEntriesCoveredByTabResults', () => {
     }
   })
 
-  // A Windows client can drive a case-sensitive SSH worktree, so the client
-  // platform must never decide the fold.
+  // Unknown workspace paths cannot inherit the client’s case-folding rules for remote filesystems.
   it('keeps case-only differences when the worktree path is unknown', () => {
     expect(
       dropFileEntriesCoveredByTabResults(

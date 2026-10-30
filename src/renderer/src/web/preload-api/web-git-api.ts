@@ -3,6 +3,8 @@ import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
+import { mutateGitPath, mutateGitPaths, resolveGitConflict } from './web-git-mutations'
+import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git-stage-worktree-scope'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
   resolveRuntimeFilePath,
@@ -44,6 +46,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     status: async ({
       worktreePath,
       includeIgnored,
+      includeLineStats,
       bypassEffectiveUpstreamNegativeCache,
       reuseLineStats,
       branchLineTotalMergeBase,
@@ -53,6 +56,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const params = {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         includeIgnored,
+        includeLineStats,
         bypassEffectiveUpstreamNegativeCache,
         reuseLineStats,
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
@@ -93,6 +97,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         baseRef
       })
     },
+    mutationInFlight: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.mutationInFlight', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.conflictOperation', {
@@ -111,20 +121,22 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id)
       })
     },
-    diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
+    diff: async ({ worktreePath, filePath, staged, compareAgainstHead, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         staged,
-        compareAgainstHead
+        compareAgainstHead,
+        ...(oldPath ? { oldPath } : {})
       })
     },
-    branchCompare: async ({ worktreePath, baseRef }) => {
+    branchCompare: async ({ worktreePath, baseRef, admissionTier }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.branchCompare', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
-        baseRef
+        baseRef,
+        ...(admissionTier ? { admissionTier } : {})
       })
     },
     commitCompare: async ({ worktreePath, commitId }) => {
@@ -214,6 +226,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         message
       })
     },
+    completeMerge: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.completeMerge', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
     generateCommitMessage: async () => ({
       success: false,
       error: translate(
@@ -238,8 +256,21 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     }),
     cancelGeneratePullRequestFields: () => Promise.resolve(),
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
-    bulkStage: async ({ worktreePath, filePaths }) =>
-      mutateGitPaths('git.bulkStage', worktreePath, filePaths),
+    resolveConflict: async ({ worktreePath, filePath, resolution }) =>
+      resolveGitConflict(worktreePath, filePath, resolution),
+    bulkStage: async ({ worktreePath, filePaths, scope }) => {
+      if (!scope) {
+        return mutateGitPaths('git.bulkStage', worktreePath, filePaths)
+      }
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      // Why no paths: an older host strips `scope` and stages `filePaths`, so an empty list makes that a no-op.
+      const reply = await callRuntimeResult<unknown>('git.bulkStage', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        filePaths: [],
+        scope
+      })
+      requireGitStageWorktreeScopeReceipt(reply, scope)
+    },
     unstage: async ({ worktreePath, filePath }) =>
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>
@@ -251,12 +282,13 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         await mutateGitPath('git.discard', worktreePath, filePath)
       }
     },
-    remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
+    remoteFileUrl: async ({ worktreePath, relativePath, line, endLine }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
-        line
+        line,
+        endLine
       })
     },
     remoteCommitUrl: async ({ worktreePath, sha }) => {
@@ -267,25 +299,4 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     }
   }
-}
-
-export async function mutateGitPath(
-  method: string,
-  worktreePath: string,
-  filePath: string
-): Promise<void> {
-  const file = await resolveRuntimeFilePath(filePath, worktreePath)
-  await callRuntimeResult(method, {
-    worktree: toRuntimeWorktreeSelector(file.worktree.id),
-    filePath: file.relativePath
-  })
-}
-
-export async function mutateGitPaths(
-  method: string,
-  worktreePath: string,
-  filePaths: string[]
-): Promise<void> {
-  const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-  await callRuntimeResult(method, { worktree: toRuntimeWorktreeSelector(worktree.id), filePaths })
 }

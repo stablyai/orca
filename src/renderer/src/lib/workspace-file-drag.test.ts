@@ -5,7 +5,9 @@ import {
   WORKSPACE_FILE_PATHS_MIME,
   WORKSPACE_FILE_PATH_MIME,
   encodeWorkspaceFilePaths,
-  readWorkspaceFileDragPaths
+  readWorkspaceFileDragPaths,
+  readWorkspaceFileDragSource,
+  writeWorkspaceFileDragSource
 } from './workspace-file-drag'
 
 vi.mock('../../../shared/cross-platform-path', async (importOriginal) => {
@@ -29,6 +31,38 @@ class FakeDataTransfer {
 }
 
 describe('workspace file drag payloads', () => {
+  it('rejects missing and malformed workspace ownership', () => {
+    const transfer = new FakeDataTransfer()
+    expect(readWorkspaceFileDragSource(transfer)).toBeNull()
+    transfer.setData('application/x-orca-workspace-file-source', '{"workspaceId":"worktree-1"}')
+    expect(readWorkspaceFileDragSource(transfer)).toBeNull()
+  })
+
+  it('round-trips the server namespace of a nested SSH target', () => {
+    const transfer = new FakeDataTransfer()
+    const source = {
+      executionHostId: 'ssh:remote-1',
+      workspaceId: 'folder:docs',
+      runtimeEnvironmentId: 'env-1'
+    } as const
+    writeWorkspaceFileDragSource(transfer, source)
+    expect(readWorkspaceFileDragSource(transfer)).toEqual(source)
+  })
+
+  it.each([null, 123, '', ' '])('rejects a malformed server namespace %s', (value) => {
+    const transfer = new FakeDataTransfer()
+    transfer.setData(
+      'application/x-orca-workspace-file-source',
+      JSON.stringify({
+        version: 1,
+        executionHostId: 'ssh:remote-1',
+        workspaceId: 'folder:docs',
+        runtimeEnvironmentId: value
+      })
+    )
+    expect(readWorkspaceFileDragSource(transfer)).toBeNull()
+  })
+
   it('round-trips bounded multi-path payloads and removes nested duplicates', () => {
     const transfer = new FakeDataTransfer()
     transfer.setData(
@@ -42,6 +76,11 @@ describe('workspace file drag payloads', () => {
       paths: ['/repo/src', '/repo/README.md'],
       status: 'accepted'
     })
+    const selected = readWorkspaceFileDragPaths(transfer, { collapseDescendantsForMove: false })
+    if (selected.status !== 'accepted') {
+      throw new Error('Expected selected resources to be accepted')
+    }
+    expect(selected.paths).toEqual(['/repo/src', '/repo/src/index.ts', '/repo/README.md'])
   })
 
   it('keeps sibling paths whose names only share a prefix', () => {

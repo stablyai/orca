@@ -1,23 +1,6 @@
-// win-crash-survival-e2e — packaged crash-survival proof harness.
-//
-// GitHub #7742: on Windows, when Orca's main/renderer process crashed, open
-// terminal PTYs were orphaned and PowerShell hard-crashed with a 0xE9 "No
-// process is on the other end of the pipe" FailFast, because the terminal daemon
-// (hosting the ConPTYs) died together with the main process and severed the
-// console pipe. The fix relocates the daemon into a standalone, detached
-// orca-terminal-daemon.exe that survives main death (src/main/daemon/
-// daemon-host-relocation.ts). win-update-e2e proves the daemon survives a
-// Windows UPDATE; this harness proves it survives a CRASH of the main process.
-//
-// Flow: launch the installed app (isolated userData) → open a plain terminal and,
-// typing DIRECTLY into the interactive shell, stamp a per-shell env sentinel plus
-// that shell's own $PID (leaving it idle at a live PSReadLine prompt, the faithful
-// #7742 crash condition) → force-kill ONLY the real app main (no tree-kill, no
-// graceful close) → prove the main actually died, then that the daemon + that same
-// shell PID stay alive with no pwsh FailFast → relaunch, adopt the surviving
-// daemon, and prove the reattached UI is bound to the SAME survivor shell by
-// reading back its env sentinel (a re-spawned shell would not have it).
-// Windows-only. See README.md.
+// #7742 packaged Windows crash proof: launch isolated profile, stamp interactive shell canary/PID, leave idle PSReadLine, force-kill only real main.
+// Require main death, daemon/same-shell survival and no FailFast; relaunch must adopt that daemon and read the same shell canary.
+// See README; win-update-e2e covers installer survival separately.
 
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -52,8 +35,7 @@ import { selectScopedDaemon } from './daemon-identity.mjs'
 import { reattachSentinelMatches, selectCreatedTabId } from './reattach-proof.mjs'
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
-// The per-shell env var stamped into the interactive shell; reading it back after
-// relaunch proves keystrokes reach the SAME survivor shell (a fresh re-spawn lacks it).
+// Canary readback rejects a fresh shell after relaunch.
 const SENTINEL_ENV = 'ORCA_CRASH_SENTINEL'
 
 function log(step, msg) {
@@ -66,9 +48,7 @@ async function main() {
     console.log(opts.usage)
     return 0
   }
-  // Assert win32 BEFORE surfacing arg errors so an off-win32 invocation gets the
-  // clear platform message, not a confusing "no Orca.exe found" default-resolution
-  // failure.
+  // Refuse non-Windows before default exe resolution can produce misleading argument errors.
   assertWin32('win-crash-survival-e2e')
   if (opts.errors?.length) {
     console.error(`Argument errors:\n  - ${opts.errors.join('\n  - ')}\n${opts.usage}`)
@@ -106,28 +86,19 @@ async function main() {
   return passed ? 0 : 1
 }
 
-/**
- * Run the launch → crash → survive → relaunch → assert proof. `ctx.session` is
- * assigned as each app launches so a caller's finally can tear down a partial
- * session. Returns whether every assertion passed.
- */
+// Run crash/relaunch proof, assigning ctx.session early for partial-launch cleanup; return aggregate assertion success.
 async function runProof(ctx, args) {
   const { opts, canary, runDir, userDataDir, shellPidFile, reattachFile } = args
 
-  // Seed a fresh profile (onboarding dismissed + one throwaway repo) ONLY before
-  // the first launch. The relaunch must use the app's own persisted state so the
-  // reattach/adoption assertions are meaningful.
+  // Seed only the first launch; relaunch must exercise app-persisted restore/adoption.
   const seededRepo = createSeededRepo(path.join(runDir, 'fixture-repo'))
   const seedProfile = buildFreshProfile({ repo: seededRepo })
 
-  // --- First launch: open a plain terminal and stamp the interactive shell ---
   let session = await launchInstalledApp({ exePath: opts.exePath, userDataDir, seedProfile })
   ctx.session = session
   await ensureTerminal(session.page, { allowCreate: true })
   await dismissOverlays(session.page)
-  // Opening the seeded workspace lands on its default tab (an agent, not a bare
-  // shell). Add an explicit plain-terminal tab so the sentinel commands run in a
-  // real pwsh prompt — typing shell commands into an agent TUI would never run.
+  // Create explicit plain terminal because the seeded workspace’s default agent cannot execute shell sentinels.
   const initialTabIds = await listTabIds(session.page)
   await createTerminalTab(session.page)
   await dismissOverlays(session.page)
@@ -136,11 +107,8 @@ async function runProof(ctx, args) {
   await waitForTerminalReady(session.page, 60_000, terminalTabId)
   log('sessions', `terminal ready; created=${terminalTabId}; tab ids: ${tabIds.join(', ')}`)
 
-  // Type DIRECTLY into the interactive shell (not a nested powershell) so $env and
-  // $PID belong to THIS shell: stamp the env sentinel and record the shell's own
-  // PID. The command completes fast, leaving the shell idle at a live PSReadLine
-  // prompt — the exact state that FailFasts with 0xE9 on a broken build. The pid
-  // file appearing also proves keystrokes reached and ran in the shell.
+  // Stamp canary/$PID directly in the interactive shell, leaving live PSReadLine idle for faithful 0xE9 reproduction.
+  // PID file creation also proves input execution.
   await typeLine(
     session.page,
     `$env:${SENTINEL_ENV}='${canary}'; Set-Content -LiteralPath ${quotePowerShellLiteral(shellPidFile)} -Value $PID`,
@@ -152,26 +120,19 @@ async function runProof(ctx, args) {
   const preDaemon = resolveScopedDaemon(userDataDir)
   log('daemon', `pre-crash daemon pid=${preDaemon.pid} appVersion=${preDaemon.appVersion}`)
 
-  // Resolve the REAL Electron main pid from INSIDE the main process. On this
-  // packaged build app.process().pid is a launcher stub that immediately re-execs
-  // the actual browser process; killing the stub would leave the real main (and
-  // its single-instance lock) alive and make survival vacuously true. app.evaluate
-  // runs in the main process, so process.pid there is the exact main of the
-  // instance this harness launched — authoritative, not a machine-wide scan.
+  // Use app.evaluate process.pid: packaged app.process may be a re-exec launcher stub, whose death falsely proves crash while main/lock remain alive.
   const mainPid = await resolveElectronMainPid(session.app, { allowLauncherFallback: false })
   if (!Number.isInteger(mainPid) || mainPid <= 0) {
     throw new Error(`could not resolve app main pid (got ${mainPid})`)
   }
 
-  // --- CRASH: force-kill ONLY the real main (no /T tree-kill, no graceful close) ---
   const crashStartMs = Date.now()
   log('crash', `taskkill /F /PID ${mainPid} (real main, no /T) — abrupt main-process death`)
   crashMainProcess(mainPid)
   // The crashed app's driver is dead; drop it so teardown never re-closes it.
   ctx.session = null
 
-  // Prove the crash actually LANDED before trusting any survival signal — an
-  // assertion that never fires would make the whole proof vacuous.
+  // Require main death before trusting survival.
   const mainDied = await waitForPidDead(mainPid, 15_000)
   log('crash', `main pid ${mainPid} dead: ${mainDied}`)
 
@@ -184,8 +145,6 @@ async function runProof(ctx, args) {
     `after crash: daemonAlive=${daemonAliveAfterCrash} shellAlive=${shellAliveAfterCrash}`
   )
 
-  // --- Relaunch: adopt the surviving daemon and prove the reattached UI is the
-  //     same survivor shell (env sentinel reads back) ---
   clearSingletonLocks(userDataDir)
   session = await launchInstalledApp({ exePath: opts.exePath, userDataDir })
   ctx.session = session
@@ -209,8 +168,7 @@ async function runProof(ctx, args) {
   const postDaemonAlive = postDaemon.pid != null && isPidAlive(postDaemon.pid)
   log('daemon', `post-relaunch daemon pid=${postDaemon.pid} alive=${postDaemonAlive}`)
 
-  // Why: PowerShell can stay alive on a severed ConPTY until the next console
-  // read. Scan after the reattach keystroke so the user-visible 0xE9 is covered.
+  // Scan after reattach input: severed-ConPTY PowerShell may stay alive until its next console read.
   const { events: failFastEvents } = scanPwshFailFast(crashStartMs)
   log('event-log', `pwsh FailFast/0xE9 events since crash: ${failFastEvents.length}`)
   for (const e of failFastEvents.slice(0, 3)) {
@@ -235,14 +193,8 @@ async function runProof(ctx, args) {
   return passed
 }
 
-/**
- * Prove the reattached UI is bound to the SAME survivor shell: type a command that
- * writes the shell's own $PID plus the persisted env sentinel to a file, then
- * confirm the sentinel (and PID) match. A freshly re-spawned shell would not carry
- * the env var. Targets the exact pre-crash tab id so the probe cannot type shell
- * commands into an unrelated agent tab. Repeats the idempotent command while the
- * restored pane transport converges; a filesystem match, not elapsed time, wins.
- */
+// Type idempotent canary/$PID readback into the exact pre-crash tab and require both matches from a file.
+// Retry while transport converges; never substitute another restored/agent tab or elapsed-time success.
 async function proveReattachedShell(
   page,
   { file, expectedCanary, expectedShellPid, terminalTabId }
@@ -259,8 +211,7 @@ async function proveReattachedShell(
     const readinessBudgetMs = Math.max(deadline - Date.now(), 1)
     await targetTab.click({ force: true, timeout: readinessBudgetMs })
     await waitForTerminalReady(page, readinessBudgetMs, terminalTabId)
-    // Why: a partially forwarded earlier attempt can leave text at PSReadLine;
-    // clear it before replaying the complete idempotent proof command.
+    // Clear partial PSReadLine input before retrying the complete idempotent command.
     await sendCtrlC(page, terminalTabId)
     await typeLine(
       page,
@@ -300,23 +251,14 @@ async function waitForSentinel(file, expectedCanary, expectedShellPid, timeoutMs
   return false
 }
 
-/**
- * Resolve THIS run's daemon, scoped to its isolated userData dir so unrelated
- * daemons on the machine (including the developer's live Orca) are ignored.
- * The scoped live process scan is authoritative; PID files only contribute
- * metadata after their PID matches that process.
- */
+// Resolve the userData-scoped live daemon first; accept PID-file metadata only after identity matches.
 function resolveScopedDaemon(userDataDir) {
   const pidFiles = readDaemonPidFiles(userDataDir)
   const scan = findDaemonProcesses(userDataDir)
   return selectScopedDaemon(pidFiles, scan)
 }
 
-/**
- * Remove Electron/Chromium single-instance lock files a crashed main can leave
- * behind in the isolated profile, so the relaunch is not refused/redirected by a
- * stale lock. Best-effort — absent files are normal.
- */
+// Best-effort remove stale isolated-profile single-instance locks left by main crash before relaunch.
 function clearSingletonLocks(userDataDir) {
   let entries = []
   try {
@@ -335,17 +277,8 @@ function clearSingletonLocks(userDataDir) {
   }
 }
 
-/**
- * Tear down only what THIS harness created. Kills are re-scoped at teardown time
- * via a FRESH findDaemonProcesses(userDataDir): the interactive shell is a
- * descendant of this run's daemon, so a /T tree-kill of the freshly-discovered
- * daemon removes the daemon + OpenConsole + shell together. We deliberately do NOT
- * kill any pid captured earlier in the run — a captured pid can be recycled by the
- * OS onto an innocent process, so only pids re-verified as this run's daemon (by
- * scoped command-line match) are ever killed. Never installs/uninstalls and never
- * touches any other Orca on the box (a live user instance uses a different
- * userData and is out of scope by construction).
- */
+// Teardown re-discovers daemon by scoped command line, then tree-kills its shell/console descendants.
+// Never kill captured old PIDs, which may have been recycled, or unrelated profiles; never install/uninstall.
 async function teardown({ app, userDataDir, keepProfile, runDir }) {
   try {
     await closeApp(app)
@@ -359,8 +292,7 @@ async function teardown({ app, userDataDir, keepProfile, runDir }) {
     log('teardown', `--keep-profile set; leaving ${runDir}`)
     return
   }
-  // Best-effort: a just-killed daemon/child can briefly hold file handles under
-  // the profile, so a locked rmSync must not turn cleanup into a FATAL.
+  // Allow briefly locked post-kill files without masking proof results as cleanup FATAL.
   try {
     rmSync(runDir, { recursive: true, force: true })
   } catch (err) {
@@ -421,8 +353,7 @@ function delay(ms) {
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   main()
     .then((code) => {
-      // Force-exit: a launched Electron app can keep libuv handles open, which
-      // would otherwise pin Node alive until the CI job timeout.
+      // Force exit after proof/teardown because leftover app handles can otherwise linger until CI timeout.
       process.exit(code)
     })
     .catch((err) => {

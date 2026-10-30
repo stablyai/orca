@@ -1,8 +1,13 @@
 import { getPreparedQuickOpenFiles, isQuickOpenQueryTooLarge } from '../quick-open-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
+import { getTabEntryOmniboxPlaceholder } from './tab-create-entry-copy'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
-import { findExistingFileMatches, isLikelyNewFileIntent } from './tab-create-entry-file-matches'
+import {
+  findExistingFileMatches,
+  isLikelyNewFileIntent,
+  type ExistingFileMatch
+} from './tab-create-entry-file-matches'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import {
   isTabEntryAbsolutePathLike,
@@ -11,6 +16,7 @@ import {
   validateNewTabEntryRelativePath
 } from './tab-create-entry-path-validation'
 import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
+import { htmlFilePathFromUrl } from '../../../../shared/html-file-url'
 
 export {
   isTabEntryAbsolutePathLike,
@@ -24,21 +30,22 @@ export type TabEntryOptionsContext = {
   searchEngine?: SearchEngine
 }
 
-export const TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE =
-  'Absolute paths require a local workspace.'
+export function getTabEntryAbsolutePathRemoteBlockedMessage(): string {
+  return translate(
+    'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
+    'Absolute paths require a local workspace.'
+  )
+}
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
   | { kind: 'explicit-url'; url: string }
-  | {
-      kind: 'existing-file'
-      matchKind: 'exact-path' | 'exact-basename' | 'fuzzy'
-      relativePath: string
-    }
+  | ExistingFileMatch
   | { kind: 'host-url'; url: string }
   | { kind: 'search'; engine: SearchEngine; query: string }
   | { kind: 'new-file'; relativePath: string }
   | { kind: 'absolute-file'; filePath: string }
+  | { kind: 'html-file-url'; filePath: string }
   | { kind: 'blocked'; message: string }
 
 export type TabEntryActionClassification = Exclude<
@@ -57,6 +64,7 @@ function tabEntryActionOptionId(classification: TabEntryActionClassification): s
     case 'new-file':
       return `${classification.kind}:${classification.relativePath}`
     case 'absolute-file':
+    case 'html-file-url':
       return `${classification.kind}:${classification.filePath}`
     case 'explicit-url':
     case 'host-url':
@@ -69,13 +77,8 @@ function tabEntryActionOptionId(classification: TabEntryActionClassification): s
 function emptyOption(): TabEntryOption {
   return {
     id: 'empty',
-    classification: {
-      kind: 'empty',
-      message: translate(
-        'auto.components.tab.bar.tab.create.entry.classifier.c41f8d20b7',
-        'Search open tabs, files, URLs, agents…'
-      )
-    }
+    // Share placeholder guidance so the empty row and input describe the same search.
+    classification: { kind: 'empty', message: getTabEntryOmniboxPlaceholder() }
   }
 }
 
@@ -165,17 +168,14 @@ export function getTabEntryOptions(
     return [emptyOption()]
   }
 
+  const htmlFilePath = htmlFilePathFromUrl(trimmed)
+  if (htmlFilePath) {
+    return toOptions([{ kind: 'html-file-url', filePath: htmlFilePath }], limit)
+  }
+
   if (isTabEntryAbsolutePathLike(trimmed)) {
     if (!context.allowAbsolutePaths) {
-      return [
-        blockedOption(
-          'absolute-path-blocked',
-          translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
-            'Absolute paths require a local workspace.'
-          )
-        )
-      ]
+      return [blockedOption('absolute-path-blocked', getTabEntryAbsolutePathRemoteBlockedMessage())]
     }
     try {
       const filePath = validateNewTabEntryAbsolutePath(trimmed, context.localPlatform)
@@ -209,8 +209,7 @@ export function getTabEntryOptions(
     if (hostUrl?.kind === 'host-url') {
       return toOptions([hostUrl], limit, fileStatus)
     }
-    // Why: path-shaped text waits on the scan whether or not it is creatable, so
-    // "src/" reports the scan instead of flashing a path error it will not keep.
+    // Wait for path-shaped scans before reporting errors that a completed listing may replace.
     if (isLikelyNewFileIntent(trimmed)) {
       return [fileStatus]
     }
@@ -226,8 +225,9 @@ export function getTabEntryOptions(
     getPreparedQuickOpenFiles(fileList.files),
     Math.max(actionLimit, 1)
   )
-  const exactExistingFiles = existingFiles.filter((file) => file.matchKind !== 'fuzzy')
-  const fuzzyExistingFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
+  const exactExistingFiles = existingFiles.filter(
+    (file) => file.matchKind === 'exact-path' || file.matchKind === 'exact-basename'
+  )
 
   if (exactExistingFiles.length > 0) {
     const options: TabEntryActionClassification[] = [...exactExistingFiles]
@@ -236,34 +236,37 @@ export function getTabEntryOptions(
     } else if (!hostUrl && newFile) {
       options.push(search)
     }
+    options.push(...existingFiles.filter((file) => file.matchKind === 'literal-basename'))
     return toOptions(options, actionLimit)
   }
   if (hostUrl?.kind === 'blocked') {
     return [blockedOption('invalid-url', hostUrl.message)]
   }
   if (hostUrl?.kind === 'host-url') {
-    return toOptions([hostUrl, ...fuzzyExistingFiles], actionLimit)
+    return toOptions([hostUrl, ...existingFiles], actionLimit)
   }
   if (pathError || !newFile) {
-    // Why: an unusable path is still a live quick-open prefix — "src/" cannot be
-    // created, but it matches real files, and dropping them turns every typed
-    // separator into an error row mid-keystroke.
-    return fuzzyExistingFiles.length > 0
-      ? toOptions(fuzzyExistingFiles, actionLimit)
+    // Incomplete paths such as src/ still match files; preserve those rows through validation errors.
+    return existingFiles.length > 0
+      ? toOptions(existingFiles, actionLimit)
       : [invalidPathOption(pathError)]
   }
   if (isLikelyNewFileIntent(trimmed)) {
-    return toOptions([newFile, search, ...fuzzyExistingFiles], actionLimit)
+    return toOptions([newFile, search, ...existingFiles], actionLimit)
   }
+  // Treat extensionless phrases as search so accidental creation cannot leave an empty file that permanently outranks it.
   if (/\s/.test(trimmed)) {
-    return toOptions([search, ...fuzzyExistingFiles, newFile], actionLimit)
+    return toOptions([search, ...existingFiles], actionLimit)
   }
-  // Why: a single token is still a quick-open attempt ("btn" → Button.tsx), so
-  // only phrases promote web search over fuzzy matches. Fuzzy matching is a
-  // subsequence scan that fills every slot in a real repo, so hold one back —
-  // otherwise search silently disappears from the list it should always offer.
+  // Short Latin tokens match too many filenames to imply file intent; CJK words can be short.
+  if (/^[\p{Script=Latin}\p{Nd}]{1,2}$/u.test(trimmed.normalize('NFC'))) {
+    return toOptions([search, ...existingFiles, newFile], actionLimit)
+  }
+  const literalFiles = existingFiles.filter((file) => file.matchKind === 'literal-basename')
+  const fuzzyFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
+  // Reserve a search slot even when literal filename matches fill the list.
   return toOptions(
-    [...fuzzyExistingFiles.slice(0, Math.max(actionLimit - 1, 1)), search, newFile],
+    [...literalFiles.slice(0, Math.max(actionLimit - 1, 1)), search, ...fuzzyFiles, newFile],
     actionLimit
   )
 }

@@ -7,6 +7,9 @@ import type {
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
 import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-types'
+import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
+import { formatWorktreePsTerminalFields } from './worktree-ps-terminal-verdict'
+import { formatWorktreePsProgramStatus } from './worktree-ps-program-status'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
@@ -60,8 +63,7 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
   ].join('  ')
 }
 
-// Why omitted rather than zeroed: a host that predates the field, or cannot read
-// commit at all, must not be printed as agents committing nothing.
+// Missing commit fields mean unknown usage, not zero.
 function formatCommitLines(snapshot: MemorySnapshot): string[] {
   if (typeof snapshot.totalPrivateMemory !== 'number') {
     return []
@@ -83,6 +85,9 @@ function formatCpu(cpu: number): string {
 }
 
 function formatProcessMemoryMetric(metric: MemorySnapshot['processMemoryMetric']): string {
+  if (metric === 'footprint') {
+    return 'summed memory footprint (Activity Monitor); includes graphics memory'
+  }
   return metric === 'working-set'
     ? 'summed working set; shared pages may repeat'
     : 'summed RSS; shared or aliased pages may repeat'
@@ -130,19 +135,21 @@ export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): s
   ].join('\n')
 }
 
-export function formatWorktreePs(result: RuntimeWorktreePsResult): string {
+export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreePsResult>): string {
+  const scope = formatListingHostScope(result.hostScope)
   if (result.worktrees.length === 0) {
-    return 'No worktrees found.'
+    return `No worktrees found.\n${scope}`
   }
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
+  const bodyWithScope = `${body}\n\n${scope}`
   return result.truncated
-    ? `${body}\n\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
-    : body
+    ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
+    : bodyWithScope
 }
 
 export function formatRepoList(result: RuntimeRepoList): string {
@@ -168,19 +175,23 @@ export function formatRepoRefs(result: RuntimeRepoSearchRefs): string {
   return result.truncated ? `${result.refs.join('\n')}\n\ntruncated: yes` : result.refs.join('\n')
 }
 
-export function formatWorktreeList(result: RuntimeWorktreeListResult): string {
+export function formatWorktreeList(
+  result: WithAnnotatedHostScope<RuntimeWorktreeListResult>
+): string {
+  const scope = formatListingHostScope(result.hostScope)
   if (result.worktrees.length === 0) {
-    return 'No worktrees found.'
+    return `No worktrees found.\n${scope}`
   }
   const body = result.worktrees
     .map((worktree) => {
       const childCount = worktree.childWorktreeIds?.length ?? 0
-      return `${String(worktree.id)}  ${String(worktree.branch)}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
+      return `${String(worktree.id)}  ${String(worktree.branch)}  host=${String(worktree.hostId ?? 'unverifiable')}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
     })
     .join('\n\n')
+  const bodyWithScope = `${body}\n\n${scope}`
   return result.truncated
-    ? `${body}\n\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
-    : body
+    ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
+    : bodyWithScope
 }
 
 export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }): string {

@@ -1,5 +1,5 @@
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
-import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
+import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
 import {
   finalizeFromAgentOutput,
@@ -16,7 +16,6 @@ import type {
 export async function runRemoteSourceControlPlan(input: {
   plan: CommitMessagePlan
   target: RemoteGenerationTarget
-  emptyResultName: string
   operation: TextGenerationOperation
 }): Promise<InternalTextGenerationResult> {
   const { plan, target, operation } = input
@@ -25,7 +24,7 @@ export async function runRemoteSourceControlPlan(input: {
     result = await target.execute(plan, target.cwd, SOURCE_CONTROL_GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
-    if (isSshMuxRequestTimeoutError(error)) {
+    if (isSshRequestOutcomeUnverifiable(error)) {
       return {
         success: false,
         error: `${plan.label} took longer than ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s to respond and may still be running on the remote host.`
@@ -38,7 +37,10 @@ export async function runRemoteSourceControlPlan(input: {
   }
   if (result.spawnError) {
     if (result.spawnError === WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR) {
-      return { success: false, error: userFacingUnsafeWindowsBatchArgs(plan.label) }
+      return {
+        success: false,
+        ...userFacingUnsafeWindowsBatchArgs(plan.label)
+      }
     }
     if (/ENOENT/i.test(result.spawnError)) {
       return {
@@ -66,8 +68,9 @@ export async function runRemoteSourceControlPlan(input: {
     stdout: result.stdout,
     stderr: result.stderr,
     label: plan.label,
-    emptyResultName: input.emptyResultName,
+    outputFormat: plan.outputFormat,
+    operation,
     includeLocalMacDnsHint: false,
-    includeStdoutDetail: operation !== 'branch-name'
+    includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
   })
 }

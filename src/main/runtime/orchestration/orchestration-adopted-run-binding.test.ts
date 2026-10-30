@@ -47,11 +47,13 @@ function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture 
 
   const before = new OrchestrationDb(dbPath)
   const task = before.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: LEGACY_COORDINATOR_HANDLE
   })
   const dispatch = createRootDispatch(before, task.id, LEGACY_WORKER_HANDLE, LEGACY_WORKER_PANE)
   const recovery = before.insertMessage({
+    runId: 'run_legacy_local',
     from: LEGACY_WORKER_HANDLE,
     to: LEGACY_COORDINATOR_HANDLE,
     subject: 'recovered worker outcome',
@@ -95,9 +97,7 @@ function commitLegacyCoordinator(db: OrchestrationDb, runId: string): string {
   }).principal.id
 }
 
-// Why: --takeover-legacy guards LIVE legacy work only. Settled work has no competing authority to
-// seize, and requiring the flag there would strand the recovered graph behind an attestation the
-// caller may not hold (runUse rejects the flag unless caller authority matches the binding pane).
+// Only live legacy work needs takeover attestation; settled work has no authority left to seize.
 describe('adopted Run binding without --takeover-legacy', () => {
   it('fences a bind while legacy work is still live, and names the recovery command', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: false })
@@ -124,6 +124,62 @@ describe('adopted Run binding without --takeover-legacy', () => {
     })
   })
 
+  it('withholds legacy takeover advice and refuses explicit worker takeovers without effects', () => {
+    const { db, adoptedRunId, recoveryMessageId } = createAdoptedFixture({ settleWork: false })
+    const home = db.createRun({
+      objective: 'worker home',
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+    })
+    const worker = createRootDispatch(
+      db,
+      db.createTask({ runId: home.id, spec: 'worker' }).id,
+      'term_foreign_worker',
+      'tab_foreign:22222222-2222-4222-8222-222222222222'
+    )
+    const before = {
+      adoptedRun: db.getRun(adoptedRunId),
+      homeRun: db.getRun(home.id),
+      dispatch: db.getDispatchContextById(worker.id),
+      mail: db.getMessageById(recoveryMessageId)
+    }
+    try {
+      db.bindRun({
+        runId: adoptedRunId,
+        coordinatorHandle: 'term_foreign_worker',
+        coordinatorPaneKey: 'tab_foreign:22222222-2222-4222-8222-222222222222'
+      })
+      throw new Error('Expected the legacy bind to be fenced')
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'consumer_fenced', data: { effectsApplied: false } })
+      expect(JSON.stringify(error)).not.toContain('run-use')
+    }
+    for (const [runId, code] of [
+      [adoptedRunId, 'worker_cannot_take_over_run'],
+      [home.id, 'worker_cannot_coordinate_own_run']
+    ] as const) {
+      expect(() =>
+        db.bindRun({
+          runId,
+          coordinatorHandle: 'term_foreign_worker',
+          coordinatorPaneKey: 'tab_foreign:22222222-2222-4222-8222-222222222222',
+          takeoverLegacy: true
+        })
+      ).toThrowError(
+        expect.objectContaining({
+          code,
+          data: { effectsApplied: false, dispatchId: worker.id }
+        })
+      )
+      expect({
+        adoptedRun: db.getRun(adoptedRunId),
+        homeRun: db.getRun(home.id),
+        dispatch: db.getDispatchContextById(worker.id),
+        mail: db.getMessageById(recoveryMessageId)
+      }).toEqual(before)
+    }
+  })
+
   it('claims the settled adopted Run and inherits its recovered task graph', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: true })
 
@@ -142,7 +198,7 @@ describe('adopted Run binding without --takeover-legacy', () => {
     expect(db.getCurrentRunForPane(CURRENT_COORDINATOR_PANE)?.id).toBe(adoptedRunId)
   })
 
-  // Why: this is what makes the unflagged claim safe — the recovered coordinator's mail is not orphaned.
+  // An unflagged claim must preserve the recovered coordinator's mail.
   it('promotes the retained coordinator mail onto the claiming Run', () => {
     const { db, adoptedRunId, recoveryMessageId } = createAdoptedFixture({ settleWork: true })
     expect(db.getMessageById(recoveryMessageId)).toMatchObject({
@@ -184,7 +240,7 @@ describe('adopted Run binding without --takeover-legacy', () => {
     expect(db.getLegacyCompatibilityPrincipal(principalId)?.status).toBe('revoked')
   })
 
-  // Why: the acknowledgement is per claimant, not one-shot — a prior takeover does not license the next.
+  // Each new claimant needs its own takeover acknowledgment.
   it('keeps fencing new claimants while legacy work stays live', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: false })
     db.bindRun({
@@ -221,8 +277,7 @@ describe('adopted Run binding without --takeover-legacy', () => {
   })
 })
 
-// Why: the SQL narrows on the text after the first ':' — a superset of leaf-equivalence — so the
-// JS isEquivalentPaneKey filter stays authoritative. These pin both halves of that contract.
+// SQL suffix matches are candidates; isEquivalentPaneKey remains authoritative.
 describe('pane-bound Run lookup', () => {
   function explain(db: OrchestrationDb, paneKey: string): string {
     const sqlite = (db as unknown as { db: Database.Database }).db
@@ -297,7 +352,6 @@ describe('pane-bound Run lookup', () => {
       coordinatorPaneKey: 'tab_reminted:99999999-9999-4999-8999-999999999999'
     })
 
-    // createRun binds at generation 1; the unbind fences it to 2.
     expect(db.getRun(shared.id)).toMatchObject({
       coordinator_pane_key: null,
       consumer_generation: 2
@@ -340,7 +394,7 @@ describe('pane-bound Run lookup', () => {
     bind(61, 2001)
     const large = measure()
 
-    // The pre-index scan grew ~28x across this range; the index keeps it flat.
+    // The old scan grew ~28x; require the index to keep scaling near flat.
     expect(large).toBeLessThan(small * 6)
     expect(explain(db, 'x')).toContain('USING INDEX idx_runs_coordinator_pane_leaf')
   })

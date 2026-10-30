@@ -1,7 +1,4 @@
-// Watches PTY output for HTTP(S) URLs dev servers print on startup, caching the
-// advertised origin per {worktreeId, port} for the ports panel (vs the kernel bind).
-// Why a separate stateful buffer per PTY: ANSI sequences and URLs can straddle PTY
-// write boundaries, so we accumulate raw bytes and strip-and-scan only at newlines.
+// Per-PTY buffers preserve split ANSI/URLs; cache printed dev-server origins rather than kernel bind addresses.
 import {
   MAX_CACHE_ENTRIES,
   MAX_PENDING_ENTRIES,
@@ -20,6 +17,9 @@ import {
   lookupBestAdvertisedUrl,
   shouldEvictAdvertisedUrlAfterScan
 } from './advertised-url-reconciliation'
+import { ownRetainedString } from '../../shared/own-retained-string'
+
+export const MAX_ADVERTISED_URL_SCAN_SNAPSHOTS = 512
 export type HostKind = 'custom' | 'loopback' | 'private-ip' | 'public-ip'
 
 export type AdvertisedUrl = {
@@ -93,7 +93,7 @@ export class AdvertisedUrlWatcher {
       if (entry.ptyId !== ptyId) {
         continue
       }
-      // Why: SSH forward enrichment has no listener PID, so PTY teardown is the only reliable expiry signal.
+      // SSH forwards lack listener PIDs; PTY teardown supplies expiry evidence.
       this.cache.delete(key)
       this.validationBaselines.delete(key)
       this.startupAbsentAllowances.delete(key)
@@ -106,7 +106,7 @@ export class AdvertisedUrlWatcher {
   }
 
   forgetWorktree(worktreeId: string): void {
-    // Why: worktree IDs are reused, so a removed worktree must not leave scan baselines for a future one.
+    // Reused worktree IDs must not inherit removed-worktree scan baselines.
     for (const [ptyId, boundWorktreeId] of this.ptyToWorktree) {
       if (boundWorktreeId !== worktreeId) {
         continue
@@ -138,10 +138,14 @@ export class AdvertisedUrlWatcher {
     }
     const worktreeId = this.ptyToWorktree.get(ptyId)
     if (!worktreeId) {
-      // Why: daemon PTY data can arrive before the spawn handler resolves the worktreeId (src/main/ipc/pty.ts:1318-1323); buffer until bindPty replays.
+      // Daemon data can precede spawn-handler workspace binding; replay on bindPty.
       const prior = this.pending.get(ptyId) ?? ''
-      const merged = (prior + chunk).slice(-PENDING_PRE_BIND_LIMIT)
-      // Why: drop+reinsert refreshes Map insertion order (LRU) so the eviction below drops the oldest unbound PTY.
+      const combined = prior + chunk
+      const merged =
+        combined.length > PENDING_PRE_BIND_LIMIT
+          ? ownRetainedString(combined.slice(-PENDING_PRE_BIND_LIMIT))
+          : combined
+      // Reinsert to refresh LRU order before evicting old unbound PTYs.
       this.pending.delete(ptyId)
       this.pending.set(ptyId, merged)
       while (this.pending.size > MAX_PENDING_ENTRIES) {
@@ -204,7 +208,7 @@ export class AdvertisedUrlWatcher {
       if (entry.validatedListenerPid === undefined) {
         entry.validatedListenerPid = currentListenerPid
       } else if (entry.validatedListenerPid !== currentListenerPid) {
-        // Why: a different process now listens on this port, so the captured banner may be unrelated — drop it.
+        // A changed listener PID invalidates the old banner.
         this.cache.delete(key)
         this.validationBaselines.delete(key)
         this.startupAbsentAllowances.delete(key)
@@ -215,7 +219,6 @@ export class AdvertisedUrlWatcher {
     return entry
   }
 
-  /** Drop a single cached entry. */
   invalidate(worktreeId: string, port: number): void {
     const key = cacheKey(worktreeId, port)
     this.validationBaselines.delete(key)
@@ -225,8 +228,7 @@ export class AdvertisedUrlWatcher {
     }
   }
 
-  /** Reconcile the URL cache with a scanner snapshot. Unvalidated URLs stay tied to the
-   *  listener state seen at capture, so a later absent port or changed PID can't lazily bless them. */
+  /** Bind unvalidated URLs to capture-time listener state; later absent/changed listeners cannot bless them. */
   reconcileScan(
     worktreeIds: readonly string[],
     observations: readonly AdvertisedUrlListenerObservation[]
@@ -263,17 +265,22 @@ export class AdvertisedUrlWatcher {
     }
 
     for (const worktreeId of worktreeSet) {
+      this.scanSnapshots.delete(worktreeId)
       this.scanSnapshots.set(worktreeId, new Map(observedByPort))
+      while (this.scanSnapshots.size > MAX_ADVERTISED_URL_SCAN_SNAPSHOTS) {
+        const oldest = this.scanSnapshots.keys().next()
+        if (oldest.done || oldest.value === worktreeId) {
+          break
+        }
+        this.scanSnapshots.delete(oldest.value)
+      }
     }
     for (const event of removedEvents) {
       this.emitChange(event)
     }
   }
 
-  /** Find the best advertised URL for `port` across worktrees, scored via `shouldReplace`.
-   *  Scans all worktrees on the connection because an SSH port scanner reports ports for the
-   *  whole connection, not per-worktree. With `currentListenerPid`, mismatched pinned entries
-   *  are evicted and only the winner is pinned. */
+  /** SSH scans span workspaces; evict mismatched listener PIDs and pin only the winning URL. */
   lookupBest(
     worktreeIds: readonly string[],
     port: number,

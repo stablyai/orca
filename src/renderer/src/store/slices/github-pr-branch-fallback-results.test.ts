@@ -360,9 +360,13 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPRNumber: testCase.linkedPRNumber
       })
     ).resolves.toBeNull()
+    const fetchedHeadOid = Object.values(testCase.worktreesByRepo)
+      .flat()
+      .find((worktree) => worktree.id === testCase.worktreeId)?.head
     expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
       data: null,
-      fetchedAt: 2
+      fetchedAt: 2,
+      ...(fetchedHeadOid ? { fetchedHeadOid } : {})
     })
   })
 
@@ -409,6 +413,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       pr
     )
     expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      reason: 'manual',
       candidate: expect.objectContaining({
         repoId,
         repoPath,

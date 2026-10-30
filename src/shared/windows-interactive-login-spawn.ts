@@ -78,11 +78,10 @@ export function buildWindowsHostInteractiveLoginSpawn(
     'powershell.exe'
   )
   const script = buildPidRelayScript(spawnCmd, spawnArgs, pidFilePath)
+  // EncodedCommand needs no execution-policy override, so omit noisy no-op Bypass. Keep base64: start reparses via cmd, whose guard rejects the raw script’s metacharacters.
   const wrapped = wrapWindowsStartWait(powershell, [
     '-NoLogo',
     '-NoProfile',
-    '-ExecutionPolicy',
-    'Bypass',
     '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')
   ])

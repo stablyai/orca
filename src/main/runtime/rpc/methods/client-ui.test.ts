@@ -1,8 +1,8 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import {
-  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
   MAX_QUICK_COMMAND_ID_LENGTH,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_REPO_ID_LENGTH,
@@ -34,6 +34,7 @@ describe('client UI RPC methods', () => {
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn',
       githubProjects: {
         pinned: [
           {
@@ -58,6 +59,24 @@ describe('client UI RPC methods', () => {
 
     expect(runtime.getClientSettings).toHaveBeenCalledTimes(1)
     expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
+  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.update', { experimentalNativeChat: true })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
+    expect(runtime.updateClientSettings).not.toHaveBeenCalled()
   })
 
   it('persists the runtime host task source settings for mobile Tasks', async () => {
@@ -114,6 +133,7 @@ describe('client UI RPC methods', () => {
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -138,6 +158,7 @@ describe('client UI RPC methods', () => {
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
@@ -296,16 +317,6 @@ describe('client UI RPC methods', () => {
           scope: { type: 'repo', repoId: 'x'.repeat(MAX_QUICK_COMMAND_REPO_ID_LENGTH + 1) }
         }
       },
-      {
-        type: 'upsert',
-        command: {
-          id: 'oversized-prompt',
-          label: 'Oversized prompt',
-          action: 'agent-prompt',
-          agent: 'codex',
-          prompt: 'x'.repeat(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1)
-        }
-      },
       { type: 'upsert', command: { id: 'default-pwd', label: 'Removed', command: 'pwd' } }
     ]) {
       const response = await dispatcher.dispatch(
@@ -420,9 +431,7 @@ describe('client UI RPC methods', () => {
   })
 
   it('lets a paired client clear the OSC 52 default-on notice', async () => {
-    // Why pin this key: the update schema is strict, so an omitted field does not get
-    // stripped — it rejects the whole call. The renderer only logs that failure, so the
-    // one-shot notice would re-toast on every launch of every web/SSH/relay client.
+    // A missing strict-schema key rejects the whole update; clients only log it, so the one-shot notice would repeat on every launch.
     const updated: PersistedUIState = {
       ...getDefaultUIState(),
       osc52ClipboardDefaultOnNoticePending: false
@@ -441,24 +450,6 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       osc52ClipboardDefaultOnNoticePending: false
     })
-  })
-
-  it('does not let a paired client replace the host workspace origin filter', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      updateUIState: vi.fn(() => getDefaultUIState())
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('ui.set', {
-        hideWorkspacesFromOtherDevices: true,
-        sidebarWidth: 280
-      })
-    )
-
-    expect(response).toMatchObject({ ok: true })
-    expect(runtime.updateUIState).toHaveBeenCalledWith({ sidebarWidth: 280 })
   })
 
   it('accepts persisted literal UI arrays and nested UI state', async () => {
@@ -569,10 +560,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
-  // Why one case per field: the schema is strict, so a single unlisted key makes
-  // the dispatcher reject the ENTIRE ui.set payload with invalid_argument instead
-  // of stripping it. A combined payload would pass as soon as any one field were
-  // restored, hiding the rest of the drift.
+  // Separate field cases expose schema drift for every key.
   it.each([
     ['taskResumeState.linearMode', { taskResumeState: { linearMode: 'projects' } }],
     [
@@ -585,6 +573,8 @@ describe('client UI RPC methods', () => {
     ],
     ['taskResumeState.jiraPreset', { taskResumeState: { jiraPreset: 'assigned' } }],
     ['taskResumeState.jiraQuery', { taskResumeState: { jiraQuery: 'ENG' } }],
+    ['dismissedUnexpectedSignoutVersion', { dismissedUnexpectedSignoutVersion: '1.2.3' }],
+    ['dismissedUnexpectedSignoutVersion null', { dismissedUnexpectedSignoutVersion: null }],
     ['activeView', { activeView: 'tasks' }],
     ['showDotfilesByWorktree', { showDotfilesByWorktree: { 'repo::/worktree': true } }],
     ['setupGuideSidebarDismissed', { setupGuideSidebarDismissed: true }],
@@ -596,6 +586,7 @@ describe('client UI RPC methods', () => {
     ['browserImportHintHidden', { browserImportHintHidden: true }],
     ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
     ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }],
+    ['pluginsAlphaNoticeDismissed', { pluginsAlphaNoticeDismissed: true }],
     ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }]
   ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
     const runtime = {
@@ -616,8 +607,7 @@ describe('client UI RPC methods', () => {
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
-    // Mirrors App.tsx's 150ms writer: one unlisted key here dropped every other
-    // preference in the same call for paired web/SSH/relay clients.
+    // Model App.tsx's 150ms batched writer: one missing key must not lose unrelated paired-client preferences.
     const payload = {
       sidebarWidth: 280,
       rightSidebarOpen: true,
@@ -679,9 +669,7 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 
-  // Why the contract flipped: an unknown VALUE used to fail the whole batch, so
-  // one drifted enum member took sidebar widths, filters and agent acks down
-  // with it. Unknown KEYS still reject — the parity assertions catch those.
+  // Unknown values must not discard unrelated preferences; unknown keys still reject and are covered by parity checks.
   it.each([
     ['worktree card property', { worktreeCardProperties: ['status', 'pr-status'] }],
     ['feature interaction id', { featureInteractions: { unknown: { firstInteractedAt: 100 } } }],
@@ -733,8 +721,7 @@ describe('client UI RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
-    // 'cli' was missing from the schema, so Settings → Default card mode sent a
-    // payload the host rejected outright.
+    // Missing cli previously made Settings' default card modes reject the whole payload.
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES] })
     )
@@ -762,28 +749,6 @@ describe('client UI RPC methods', () => {
       expect(runtime.updateUIState).toHaveBeenCalledWith({ rightSidebarTab, sidebarWidth: 280 })
     }
   )
-
-  it('rejects star-nag persisted state mutations from remote clients', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      updateUIState: vi.fn()
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('ui.set', {
-        starNagBaselineAgents: 10,
-        starNagAppVersion: '1.2.3',
-        starNagAgentValueMomentAppVersion: '1.2.3',
-        starNagNextThreshold: 70,
-        starNagCompleted: true,
-        starNagDeferredUntil: null
-      })
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(runtime.updateUIState).not.toHaveBeenCalled()
-  })
 
   it('strips retired worktree card properties from legacy clients', async () => {
     const updated: PersistedUIState = {

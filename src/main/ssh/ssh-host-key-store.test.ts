@@ -3,9 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why a module mock and not chmod: an unreadable file has to be EACCES/EMFILE-shaped for every
-// runner, and chmod 000 is simply readable when the suite runs as root. Why not vi.spyOn: node's
-// ESM namespace is not configurable, so spying on readFile throws.
+// Mock read failures for consistent EACCES/EMFILE even as root; ESM namespaces cannot be spied on with readFile.
 const { readFailure } = vi.hoisted(() => ({ readFailure: { error: null as Error | null } }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -26,7 +24,6 @@ import {
   trustHostKey
 } from './ssh-host-key-store'
 
-/** A blob shaped like a real host key: length-prefixed algorithm name, then payload. */
 function hostKey(keyType: string, seed: string): Buffer {
   const name = Buffer.from(keyType, 'utf8')
   const length = Buffer.alloc(4)
@@ -111,7 +108,6 @@ describe('ssh host key store', () => {
   it('scopes trust to the endpoint, so a second target naming the same host is already trusted', async () => {
     await trustHostKey(query({ host: 'build-01' }), storeFile)
 
-    // A different Orca target, same machine — no target id is recorded anywhere.
     expect(await isTrusted(query({ host: 'BUILD-01' }), storeFile)).toBe('match')
     const [record] = await loadTrustedHostKeys(storeFile)
     expect(Object.keys(record ?? {})).toEqual([
@@ -180,7 +176,7 @@ describe('ssh host key store', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     await trustHostKey(query(), storeFile)
     const whole = await readFile(storeFile, 'utf-8')
-    // A crash mid-write, had it landed on the final path: valid JSON prefix, truncated.
+    // Model a crash-truncated final file with a valid JSON prefix.
     await writeFile(storeFile, whole.slice(0, Math.floor(whole.length / 2)), 'utf-8')
 
     await expect(isTrusted(query(), storeFile)).resolves.toBe('unknown')
@@ -202,8 +198,7 @@ describe('ssh host key store', () => {
 
     await trustHostKey(query({ keyType: 'ssh-rsa', key: RSA_A }), storeFile)
 
-    // A temp-file + rename swaps the inode; an in-place write truncates and keeps it, which is the
-    // shape that can leave a half-written trust list readable after a crash.
+    // Atomic rename changes inode; in-place truncation risks a readable partial trust file after crash.
     const after = await stat(storeFile)
     if (before.ino !== 0 && after.ino !== 0) {
       expect(after.ino).not.toBe(before.ino)
@@ -225,9 +220,7 @@ describe('ssh host key store', () => {
     await expect(isTrusted(query())).rejects.toThrow(/initSshHostKeyStoreFile/)
   })
 
-  // The connect path cannot await the file — ssh2's verifier decides synchronously — so it matches
-  // against preloaded records with this. It must reach the same verdict as isTrusted, because a
-  // second copy of the comparison is exactly how the type downgrade got in.
+  // Synchronous ssh2 verification uses preloaded matching; require parity with async isTrusted to prevent downgrade drift.
   describe('matching preloaded records', () => {
     it('agrees with isTrusted on every outcome', async () => {
       await trustHostKey(query(), storeFile)
@@ -246,9 +239,7 @@ describe('ssh host key store', () => {
       }
     })
 
-    // trustHostKey normalises the host it writes, so the read has to normalise identically or it
-    // never finds its own record: every connection is first contact and the store grows a row each
-    // time while protecting nothing.
+    // Read/write normalization must agree or every connection becomes first contact and adds another row.
     it('normalises the query host the same way the write did', async () => {
       await trustHostKey(query({ host: '  Build-01  ' }), storeFile)
       const records = await loadTrustedHostKeys(storeFile)
@@ -259,8 +250,7 @@ describe('ssh host key store', () => {
     })
   })
 
-  // Feeds the algorithm ordering: without the types we hold, a host known only to us is proposed
-  // ed25519-first and an attacker can present another type to turn a hard failure into first contact.
+  // Known key types guide algorithm order so alternate-type offers cannot bypass stored host trust.
   describe('the key types held for one endpoint', () => {
     it('reports every type recorded for that host and port', async () => {
       await trustHostKey(query(), storeFile)
@@ -290,20 +280,14 @@ describe('ssh host key store', () => {
   })
 })
 
-/**
- * Rollback safety for a brand-new on-disk format.
- *
- * `version` was written and never read, so a store from a future Orca would have every record
- * dropped by validation and then be rewritten as v1 — the file silently losing whatever that version
- * knew. v1 is the only place this can be made safe, because v2 cannot retrofit it.
- */
+/** Reject and preserve unknown future store versions; treating them as empty then rewriting v1 would destroy newer trust records. */
 describe('a host key store written by a newer version', () => {
   it('is not trusted and not overwritten', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-host-key-store-'))
     const storeFile = join(dir, 'ssh-host-keys.json')
     const future = JSON.stringify({
       version: 99,
-      hostKeys: [{ shape: 'we do not understand' }]
+      hostKeys: [{ unrecognized: 'we do not understand' }]
     })
     await writeFile(storeFile, future, 'utf-8')
 
@@ -324,10 +308,7 @@ describe('a host key store written by a newer version', () => {
 
 describe('a host key store that exists but cannot be read', () => {
   it('does not let the next accepted key wipe every other host on file', async () => {
-    // The shape that made this a data-loss bug rather than a lost prompt: one transient read failure
-    // reported "nothing trusted", and the very next first-contact accept rewrote the file with ONLY
-    // that record. Every other host then re-TOFUs, and one whose key genuinely changed in between is
-    // accepted as first contact instead of refused — the exact outcome host key pinning prevents.
+    // A transient read failure must never rewrite the store with one new record and silently re-TOFU every other host.
     await trustHostKey(query({ host: 'build-01' }), storeFile)
     await trustHostKey(query({ host: 'build-02', key: ED25519_B }), storeFile)
     const before = await readFile(storeFile, 'utf-8')
@@ -342,8 +323,7 @@ describe('a host key store that exists but cannot be read', () => {
   })
 
   it('still answers "nothing trusted" on the read path, so nothing fails open', async () => {
-    // The two paths differ on purpose: a verifier that cannot read the store must fall back to a
-    // first-contact prompt, never to trusting the key. Only the WRITE has to hold back.
+    // Unreadable store may fall back to first contact, but writes must preserve its unknown records.
     await trustHostKey(query(), storeFile)
     readFailure.error = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
 

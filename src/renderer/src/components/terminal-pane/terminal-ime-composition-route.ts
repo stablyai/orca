@@ -1,10 +1,10 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 
 export const XTERM_COMPOSITION_SESSION_START_EVENT = 'xterm-composition-session-start'
 export const XTERM_COMPOSITION_SESSION_END_EVENT = 'xterm-composition-session-end'
 
-type CompositionSessionDetail = {
+export type TerminalImeCompositionSessionDetail = {
   id: number
   data?: string
   dataPendingReconciliation?: boolean
@@ -16,9 +16,7 @@ type CapturedCompositionSession = {
 
 export type TerminalImeCompositionSessionSnapshot = ReadonlySet<number>
 
-// Reference-counted per session id, not a bare per-element count: a caller waiting on a
-// composition must be able to tell its own sessions from ones that started after it, and two
-// overlapping routes can own the same session without clearing each other's pending state.
+// Count owners per session: overlapping routes must release independently, and waits must distinguish captured sessions from later ones.
 const pendingCompositionSessionCountsByElement = new WeakMap<HTMLElement, Map<number, number>>()
 
 function addPendingCompositionSession(terminalElement: HTMLElement, sessionId: number): void {
@@ -75,16 +73,22 @@ export function hasPendingTerminalImeComposition(
   return false
 }
 
-function getCompositionDetail(event: Event): CompositionSessionDetail | null {
+export function readTerminalImeCompositionSessionDetail(
+  event: Event
+): TerminalImeCompositionSessionDetail | null {
   if (!(event instanceof CustomEvent)) {
     return null
   }
-  const detail = event.detail as Partial<CompositionSessionDetail> | null
-  if (!detail || !Number.isSafeInteger(detail.id) || detail.id! <= 0) {
+  const detail = event.detail as Partial<TerminalImeCompositionSessionDetail> | null
+  if (!detail) {
+    return null
+  }
+  const id = detail.id
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
     return null
   }
   return {
-    id: detail.id!,
+    id,
     data: typeof detail.data === 'string' ? detail.data : undefined,
     dataPendingReconciliation: detail.dataPendingReconciliation === true
   }
@@ -93,8 +97,8 @@ function getCompositionDetail(event: Event): CompositionSessionDetail | null {
 export function installTerminalImeCompositionRoute(args: {
   terminalElement: HTMLElement | null | undefined
   terminal: Pick<Terminal, 'input'>
-  capturedTransport: PtyTransport
-  getCurrentTransport: () => PtyTransport | undefined
+  capturedTransport: Pick<PtyTransport, 'getPtyId'>
+  getCurrentTransport: () => Pick<PtyTransport, 'getPtyId'> | undefined
 }): IDisposable {
   const terminalElement = args.terminalElement
   const sessions = new Map<number, CapturedCompositionSession>()
@@ -109,7 +113,7 @@ export function installTerminalImeCompositionRoute(args: {
   }
 
   const onSessionStart = (event: Event): void => {
-    const detail = getCompositionDetail(event)
+    const detail = readTerminalImeCompositionSessionDetail(event)
     if (!detail || disposed) {
       return
     }
@@ -122,14 +126,13 @@ export function installTerminalImeCompositionRoute(args: {
   }
 
   const onSessionEnd = (event: Event): void => {
-    const detail = getCompositionDetail(event)
+    const detail = readTerminalImeCompositionSessionDetail(event)
     if (!detail) {
       return
     }
     const captured = sessions.get(detail.id)
     if (!captured) {
-      // Not our session — the route was installed mid-composition, so no start was seen.
-      // Cancelling here would suppress xterm's own insertion with nothing to replace it.
+      // Installed mid-composition: xterm still owns this commit because the route never saw its start.
       return
     }
     // Owned, so xterm stands down even on the drop paths below: that drop is this route's call.

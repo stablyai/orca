@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
 
 const { statSyncMock } = vi.hoisted(() => ({ statSyncMock: vi.fn() }))
 
 vi.mock('node:fs', () => ({ statSync: statSyncMock }))
 
-// Executables the fake filesystem exposes, keyed by absolute path.
 let executables: Map<string, { file: boolean; mode: number }>
 
 function install(absolutePath: string, options?: { file?: boolean; mode?: number }): void {
@@ -34,38 +34,36 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('quoteForPosixShell', () => {
-  it('wraps plain values in single quotes', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('/tmp/orca.deb')).toBe("'/tmp/orca.deb'")
+describe('quotePosixShellDoubleQuotedApostrophe', () => {
+  it('wraps plain values in single quotes', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/orca.deb')).toBe("'/tmp/orca.deb'")
   })
 
-  it('quotes spaces', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('/tmp/Orca Setup.deb')).toBe("'/tmp/Orca Setup.deb'")
+  it('quotes spaces', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/Orca Setup.deb')).toBe(
+      "'/tmp/Orca Setup.deb'"
+    )
   })
 
-  it('neutralizes expansion, command substitution, separators, and double quotes', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('/tmp/$HOME.deb')).toBe("'/tmp/$HOME.deb'")
-    expect(quoteForPosixShell('/tmp/`id`.deb')).toBe("'/tmp/`id`.deb'")
-    expect(quoteForPosixShell('/tmp/a;rm -rf ~.deb')).toBe("'/tmp/a;rm -rf ~.deb'")
-    expect(quoteForPosixShell('/tmp/"quoted".deb')).toBe('\'/tmp/"quoted".deb\'')
+  it('neutralizes expansion, command substitution, separators, and double quotes', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/$HOME.deb')).toBe("'/tmp/$HOME.deb'")
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/`id`.deb')).toBe("'/tmp/`id`.deb'")
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/a;rm -rf ~.deb')).toBe(
+      "'/tmp/a;rm -rf ~.deb'"
+    )
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/"quoted".deb')).toBe('\'/tmp/"quoted".deb\'')
   })
 
-  it('closes and reopens the quote around a literal single quote', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell("/tmp/it's.deb")).toBe(`'/tmp/it'"'"'s.deb'`)
+  it('closes and reopens the quote around a literal single quote', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe("/tmp/it's.deb")).toBe(`'/tmp/it'"'"'s.deb'`)
   })
 
-  it('escapes every single quote in a value', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell("'; rm -rf /; '")).toBe(`''"'"'; rm -rf /; '"'"''`)
+  it('escapes every single quote in a value', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe("'; rm -rf /; '")).toBe(`''"'"'; rm -rf /; '"'"''`)
   })
 
-  it('quotes an empty value', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('')).toBe("''")
+  it('quotes an empty value', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('')).toBe("''")
   })
 })
 
@@ -123,7 +121,7 @@ describe('resolveTrustedExecutable', () => {
 
 describe('buildLinuxPackageInstallCommand', () => {
   it('refuses a non-absolute package path before looking for anything', async () => {
-    // Why: zypper/dnf/yum/rpm take no `--`, so a relative or dash-leading path would become an option.
+    // Managers without -- support require absolute paths to prevent option injection.
     install('/usr/bin/sudo')
     install('/usr/bin/apt')
     const { buildLinuxPackageInstallCommand } = await loadCommandModule()
@@ -250,5 +248,56 @@ describe('buildLinuxPackageInstallCommand', () => {
       ok: true,
       command: `/usr/bin/sudo /usr/bin/apt install -- '/tmp/a b'"'"'; id #.deb'`
     })
+  })
+})
+
+describe('hasTrustedPackageManagerFor', () => {
+  it('accepts a deb host that has dpkg', async () => {
+    install('/usr/bin/dpkg')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(true)
+  })
+
+  it('accepts a deb host that has only apt', async () => {
+    install('/usr/bin/apt')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(true)
+  })
+
+  // Repackagers can inherit deb/rpm markers without the corresponding tooling (#17702).
+  it('rejects a deb marker on a host with only pacman', async () => {
+    install('/usr/bin/pacman')
+    install('/usr/bin/sudo')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
+  })
+
+  it('rejects an rpm marker on a host with only deb tooling', async () => {
+    install('/usr/bin/dpkg')
+    install('/usr/bin/apt')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('rpm')).toBe(false)
+  })
+
+  it('accepts each rpm-family manager on its own', async () => {
+    for (const name of ['zypper', 'dnf', 'yum', 'rpm']) {
+      vi.resetModules()
+      executables = new Map()
+      install(`/usr/bin/${name}`)
+      const { hasTrustedPackageManagerFor } = await loadCommandModule()
+      expect(hasTrustedPackageManagerFor('rpm')).toBe(true)
+    }
+  })
+
+  it('ignores a package manager outside the trusted directories', async () => {
+    install('/home/user/.local/bin/dpkg')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
+  })
+
+  it('ignores a non-executable file at a trusted path', async () => {
+    install('/usr/bin/dpkg', { mode: 0o644 })
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
   })
 })

@@ -1,15 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
+import { getWorktreeVisitTimestamp } from './worktree-visit-recency'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
-import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
+import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedAlreadyActiveWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent-test-state'
+} from '@/lib/worktree-activation-created-agent.test-fixture'
+import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -45,28 +55,49 @@ afterEach(() => {
 describe('activateAndRevealWorktree', () => {
   it('does not restamp focus recency when reselecting the already-active terminal worktree', () => {
     const worktree = makeWorktree()
-    const { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar } =
-      seedAlreadyActiveWorktree(worktree)
+    const { revealWorktreeInSidebar } = seedAlreadyActiveWorktree(worktree)
+    const before = useAppStore.getState()
 
     const result = activateAndRevealWorktree(worktree.id)
 
     expect(result).toEqual({ primaryTabId: null })
-    expect(markWorktreeVisited).not.toHaveBeenCalled()
-    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(useAppStore.getState().lastVisitedAtByWorktreeId).toBe(before.lastVisitedAtByWorktreeId)
+    expect(useAppStore.getState().worktreeNavHistory).toBe(before.worktreeNavHistory)
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
   it('records a visit when activating the same worktree changes the current view', () => {
     const worktree = makeWorktree()
-    const { markWorktreeVisited, recordWorktreeVisit } = seedAlreadyActiveWorktree(worktree, {
-      activeView: 'tasks'
-    })
+    seedAlreadyActiveWorktree(worktree, { activeView: 'tasks' })
 
     const result = activateAndRevealWorktree(worktree.id)
 
     expect(result).toEqual({ primaryTabId: null })
-    expect(markWorktreeVisited).toHaveBeenCalledWith(worktree.id)
-    expect(recordWorktreeVisit).toHaveBeenCalledWith(worktree.id)
+    const state = useAppStore.getState()
+    expect(getWorktreeVisitTimestamp(state.lastVisitedAtByWorktreeId, worktree)).toBeDefined()
+    expect(state.worktreeNavHistory.at(-1)).toBe(worktree.id)
+  })
+
+  it('keeps the fresh visit stamp when the history entry is de-duplicated', () => {
+    const worktree = makeWorktree()
+    seedAlreadyActiveWorktree(worktree, { activeView: 'tasks' })
+    useAppStore.setState({ worktreeNavHistory: [worktree.id], worktreeNavHistoryIndex: 0 })
+
+    activateAndRevealWorktree(worktree.id)
+
+    const state = useAppStore.getState()
+    expect(getWorktreeVisitTimestamp(state.lastVisitedAtByWorktreeId, worktree)).toBeDefined()
+    expect(state.worktreeNavHistory).toEqual([worktree.id])
+  })
+
+  it('adds the activated project to an active project filter', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    useAppStore.setState({ filterRepoIds: ['repo-2'] })
+
+    activateAndRevealWorktree(worktree.id)
+
+    expect(useAppStore.getState().filterRepoIds).toEqual(['repo-2', worktree.repoId])
   })
 
   it('does not relaunch the creation-time agent when reopening an empty worktree', () => {
@@ -91,9 +122,7 @@ describe('activateAndRevealWorktree', () => {
     for (let cycle = 0; cycle < 3; cycle += 1) {
       activateAndExpectNoRelaunch(worktree.id)
 
-      // Return to zero tabs, the state that used to re-arm the relaunch. Sets state
-      // directly rather than via closeTab — the sleeping-record purge is covered in
-      // worktree-reactivation-tab-forkbomb.test.ts.
+      // Return directly to zero tabs; closeTab’s sleeping purge is covered by worktree-reactivation-tab-forkbomb.test.ts.
       useAppStore.setState({ tabsByWorktree: {}, activeTabIdByWorktree: {} })
     }
   })
@@ -103,18 +132,15 @@ describe('activateAndRevealWorktree', () => {
     const target = { ...makeWorktree(), id: 'wt-handoff', displayName: 'handoff' }
     seedEmptyActivatableWorktree(target, { extraWorktrees: [sibling] })
 
-    // The shape post-delete focus handoff produces. That caller passes no opts at all —
-    // asserted directly in active-worktree-focus-after-delete.test.ts.
-    activateAndExpectNoRelaunch(target.id)
+    // The shape the removal successor produces: no startup payload.
+    activateAndExpectNoRelaunch(target.id, { revealInSidebar: false })
   })
 
   it('does not relaunch when activation opts carry no startup payload', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
 
-    // The opts shape CLI/relay navigation and notification clicks arrive with; those
-    // callers are asserted in useIpcEvents.test.ts. The host's `didSpawnStartup` leg is
-    // a main-process concern and is not reachable from here.
+    // Match CLI/relay/notification option shapes pinned in useIpcEvents; backend didSpawnStartup is main-only.
     activateAndExpectNoRelaunch(worktree.id, { notifyHostRuntime: false })
   })
 
@@ -193,9 +219,9 @@ describe('activateAndRevealWorktree', () => {
         }
       },
       settings: {
-        agentCmdOverrides: {},
-        setupScriptLaunchMode: 'new-tab'
-      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+        ...getDefaultSettings(''),
+        agentCmdOverrides: {}
+      },
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
       refreshGitHubForWorktreeIfStale: vi.fn(),
@@ -247,9 +273,9 @@ describe('activateAndRevealWorktree', () => {
       tabBarOrderByWorktree: {},
       pendingStartupByTabId: {},
       settings: {
-        agentCmdOverrides: {},
-        setupScriptLaunchMode: 'new-tab'
-      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+        ...getDefaultSettings(''),
+        agentCmdOverrides: {}
+      },
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
       refreshGitHubForWorktreeIfStale: vi.fn(),
@@ -269,13 +295,7 @@ describe('activateAndRevealWorktree', () => {
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
     })
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: callRuntimeEnvironment
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: callRuntimeEnvironment })
 
     useAppStore.setState({
       repos: [
@@ -303,10 +323,10 @@ describe('activateAndRevealWorktree', () => {
       activeTabIdByWorktree: {},
       tabBarOrderByWorktree: {},
       settings: {
+        ...getDefaultSettings(''),
         agentCmdOverrides: {},
-        activeRuntimeEnvironmentId: 'web-runtime-1',
-        setupScriptLaunchMode: 'new-tab'
-      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+        activeRuntimeEnvironmentId: 'web-runtime-1'
+      },
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
       refreshGitHubForWorktreeIfStale: vi.fn(),
@@ -337,13 +357,7 @@ describe('activateAndRevealWorktree', () => {
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
     })
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: callRuntimeEnvironment
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: callRuntimeEnvironment })
 
     useAppStore.setState({
       repos: [
@@ -372,10 +386,10 @@ describe('activateAndRevealWorktree', () => {
       activeTabIdByWorktree: {},
       tabBarOrderByWorktree: {},
       settings: {
+        ...getDefaultSettings(''),
         agentCmdOverrides: {},
-        activeRuntimeEnvironmentId: 'focused-runtime',
-        setupScriptLaunchMode: 'new-tab'
-      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+        activeRuntimeEnvironmentId: 'focused-runtime'
+      },
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
       refreshGitHubForWorktreeIfStale: vi.fn(),
@@ -407,13 +421,7 @@ describe('activateAndRevealWorktree', () => {
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
     })
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: callRuntimeEnvironment
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: callRuntimeEnvironment })
 
     useAppStore.setState({
       repos: [
@@ -443,8 +451,7 @@ describe('activateAndRevealWorktree', () => {
       settings: {
         ...getDefaultSettings('/workspace/.orca-workspaces'),
         agentCmdOverrides: {},
-        activeRuntimeEnvironmentId: 'web-runtime-1',
-        setupScriptLaunchMode: 'new-tab'
+        activeRuntimeEnvironmentId: 'web-runtime-1'
       },
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
@@ -501,7 +508,8 @@ describe('activateAndRevealWorktree', () => {
       }))
     })
 
-    const { shouldApplyWebSessionTabsSnapshot } = await import('@/runtime/web-session-tabs-sync')
+    const { shouldApplyWebSessionTabsSnapshot } =
+      await import('@/runtime/web-session-tabs-sync/tracking-decisions')
     shouldApplyWebSessionTabsSnapshot(
       {
         worktree: worktree.id,
@@ -545,13 +553,9 @@ describe('activateAndRevealWorktree', () => {
         result: { tabId: 'host-tab-1', terminal: 'term_host' }
       })
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: callRuntimeEnvironment,
-          subscribe: vi.fn()
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      call: callRuntimeEnvironment,
+      subscribe: vi.fn()
     })
 
     useAppStore.setState({
@@ -596,8 +600,7 @@ describe('activateAndRevealWorktree', () => {
       settings: {
         ...getDefaultSettings('/workspace/.orca-workspaces'),
         agentCmdOverrides: {},
-        activeRuntimeEnvironmentId: 'web-runtime-1',
-        setupScriptLaunchMode: 'new-tab'
+        activeRuntimeEnvironmentId: 'web-runtime-1'
       },
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
@@ -609,6 +612,7 @@ describe('activateAndRevealWorktree', () => {
       }))
     })
 
+    rememberEmptyHostAnswerForTests('web-runtime-1', worktree.id)
     ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -627,13 +631,9 @@ describe('activateAndRevealWorktree', () => {
       result: { tabId: 'host-tab-1', terminal: 'term_host' }
     })
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: callRuntimeEnvironment,
-          subscribe: vi.fn()
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      call: callRuntimeEnvironment,
+      subscribe: vi.fn()
     })
 
     useAppStore.setState({
@@ -673,6 +673,7 @@ describe('activateAndRevealWorktree', () => {
       }))
     })
 
+    rememberEmptyHostAnswerForTests('owner-runtime', worktree.id)
     ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
     await new Promise((resolve) => setTimeout(resolve, 0))
 

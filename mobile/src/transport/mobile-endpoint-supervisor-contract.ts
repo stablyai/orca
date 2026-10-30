@@ -1,24 +1,29 @@
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import type { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import type { RpcClient } from './rpc-client'
-import type { ConnectionLogSink, HostProfile } from './types'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
+import type { ConnectionLogSink } from './types'
 
 export type MobileEndpointSupervisorDependencies = {
-  openDirect: (endpoint: string) => RpcClient
+  openDirect: () => RpcClient
+  directPath: Exclude<MobileConnectionPath, 'relay'>
   openRelay: (
     relay: MobileRelayEndpoint,
     credential: { token: string; version: number },
-    confirmReqId: string
+    confirmReqId: string,
+    onHostCloseReason?: (reason: RelayHostCloseReason) => void
   ) => MobileRelayRpcSession
   resolveRelay: typeof resolveMobileRelayEndpoint
   readBundle: (hostId: string) => Promise<MobileRelayCredentialBundle | null>
   writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
-  saveHost: (host: HostProfile) => Promise<void>
+  setRelayRouting: (hostId: string, relay: MobileRelayEndpoint) => Promise<void>
   now: () => number
   randomBytes: (length: number) => Uint8Array
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
   onLog?: ConnectionLogSink
 }

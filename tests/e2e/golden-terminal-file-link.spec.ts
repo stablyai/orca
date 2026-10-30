@@ -122,8 +122,7 @@ test('opens a terminal file link and observes an external edit @golden', async (
   const original = readFileSync(filePath, 'utf8')
   const resolvedDestination =
     process.platform === 'win32' ? filePath.replaceAll('\\', '/') : filePath
-  // Why: Mac/Windows tmp paths soft-wrap across xterm rows; locateLink only
-  // indexOf's each physical row, so print a cwd-relative path that stays on one.
+  // Print a short relative path: locateLink searches physical rows, while macOS/Windows temp paths can soft-wrap.
   const printedPath = './package.json'
   const changedMarker = `golden-external-edit-${Date.now()}`
 
@@ -246,11 +245,16 @@ test('reuses a terminal file link already open in a sibling workspace @golden', 
 
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
-  await orcaPage.evaluate(() => {
+  await orcaPage.evaluate((sourceWorktreeId) => {
     const state = window.__store?.getState()
     state?.setSidebarOpen(false)
     state?.setRightSidebarOpen(false)
-  })
+    // Restore worktree activation after sidebar close or Landing may remount with terminal.cols at zero.
+    if (state && state.activeWorktreeId !== sourceWorktreeId) {
+      state.setActiveWorktree(sourceWorktreeId)
+    }
+  }, sourceWorktreeId)
+  await ensureTerminalVisible(orcaPage)
   await expect
     .poll(
       () =>

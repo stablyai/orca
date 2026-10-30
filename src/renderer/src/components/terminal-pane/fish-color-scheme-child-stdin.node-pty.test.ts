@@ -1,35 +1,16 @@
-/**
- * Real-fish regression for #9993: Orca must never write `CSI ?997;Nn` into a PTY
- * because fish armed DECSET 2031 around a prompt.
- *
- * fish toggles `?2031h ... ?2031l` in tty_handoff.rs every time it paints a prompt and
- * withdraws before handing the tty to a child, so the arm window is ~1ms — shorter than
- * a renderer IPC hop. Any reply lands after the withdrawal and is read by whatever owns
- * the tty next: it paints as literal `?997;1n` at the prompt, or is swallowed by a child
- * that reads stdin (npx / brew confirm prompts).
- *
- * The assertion is therefore about what a CHILD PROCESS READS, not what renders: a
- * screen-level check passes while the child's stdin is still corrupted.
- *
- * Real production code under test: connectPanePty's live mode-2031 chunk observer. The
- * mock transport writes whatever the renderer sends straight into the real fish PTY, so a
- * reply-on-subscribe reaches the child exactly as it does in the app. DA1/CPR/OSC-10/11
- * probes are answered by the harness because no real xterm is attached here — without
- * them fish stalls ~10s on its DA1 wait and every timing claim becomes meaningless.
- */
+/** Verify real fish child stdin stays free of unsolicited CSI ?997 replies after DECSET 2031 withdrawal; rendered output alone misses consumed bytes. */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type * as React from 'react'
+import type { registerAgentStatusStartupSnapshot } from '@/hooks/ipc-events/agent-status-startup-snapshot'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   fishRequirementViolation,
   resolveFishBinary
 } from '../../../../shared/fish-binary-requirement'
 
-// Why a version floor and not just presence: DECSET 2031 arming lives in the Rust
-// tty_handoff introduced by the fish 4.0 rewrite. An older fish cannot produce the
-// subscribe at all, so the test would pass vacuously instead of guarding anything.
+// Require fish 4’s Rust tty_handoff so absent DECSET 2031 cannot make the test pass vacuously.
 const FISH = resolveFishBinary(4)
 const FISH_BIN = FISH.path
 const itWithFish = FISH.available ? it : it.skip
@@ -186,12 +167,7 @@ function createDeps(): Record<string, unknown> {
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn(),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    clearWorktreeUnread: vi.fn(),
-    clearTerminalTabUnread: vi.fn(),
-    clearTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
@@ -340,21 +316,29 @@ describe('terminal query responder', () => {
 
 describe('fish never receives a color-scheme report it did not query (#9993)', () => {
   let configHome: string | null = null
+  let statusSnapshot: ReturnType<typeof registerAgentStatusStartupSnapshot> | undefined
 
   // Always runs, so the CI lane cannot report green with the regression below skipped.
   it('has the fish this suite needs when CI requires one', () => {
     expect(fishRequirementViolation(FISH)).toBeNull()
   })
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
+    const { registerAgentStatusStartupSnapshot: registerSnapshot } =
+      await import('@/hooks/ipc-events/agent-status-startup-snapshot')
+    // A restored pane waits for the initial status replay before connecting.
+    statusSnapshot = registerSnapshot()
+    statusSnapshot.settle()
     transportFactoryQueue = []
     storeSubscribers = []
     mockStoreState = {
       activeWorktreeId: 'wt-1',
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'fish-pty' }] },
       ptyIdsByTabId: { 'tab-1': ['fish-pty'] },
+      terminalPaneStartsByPaneKey: {},
+      terminalPaneResumeOutcomesByPaneKey: {},
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_1 },
@@ -393,11 +377,9 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       suppressedPtyExitIds: {},
       agentLaunchConfigByPaneKey: {},
       getAgentLaunchConfigForStatusEntry: vi.fn(),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(),
       clearSleepingAgentSession: vi.fn(),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
-      markWorktreeUnread: vi.fn(),
       observeTerminalGitHubPullRequestLink: vi.fn(),
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
@@ -406,9 +388,8 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn(),
       clearPaneForegroundAgent: vi.fn(),
-      markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn(),
-      markAgentCompletionPaneUnread: vi.fn()
+      markTerminalBell: vi.fn(),
+      markAgentAttentionUnread: vi.fn()
     }
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -430,6 +411,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           setPtyDeliveryInterest: vi.fn(),
           ackColdRestore: vi.fn(),
           onClearBufferRequest: vi.fn(() => vi.fn()),
+          onResetInputModesRequest: vi.fn(() => vi.fn()),
           onSerializeBufferRequest: vi.fn(() => vi.fn()),
           sendSerializedBuffer: vi.fn(),
           declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),
@@ -457,6 +439,8 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
   })
 
   afterEach(() => {
+    statusSnapshot?.dispose()
+    statusSnapshot = undefined
     delete (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame
     delete (globalThis as { cancelAnimationFrame?: unknown }).cancelAnimationFrame
     delete (globalThis as { window?: unknown }).window
@@ -484,10 +468,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           ''
         ].join('\n')
       )
-      // Echoes the first stdin LINE back escaped, so leaked control bytes are visible on
-      // screen. Why a line and not the first chunk: leaked replies carry no newline, so a
-      // once('data') child reports them alone whenever they arrive in their own read —
-      // which is what the issue's own `sys.stdin.readline()` repro measures.
+      // Read a whole stdin line because leaked replies lack newline and may arrive in separate chunks.
       const childScript = path.join(configHome, 'read-stdin.mjs')
       writeFileSync(
         childScript,
@@ -524,8 +505,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       const answerTerminalQueries = createTerminalQueryResponder((reply) => term.write(reply))
       transportFactoryQueue.push(transport)
 
-      // Why answered here: no real xterm is attached, and fish blocks its first prompt ~10s
-      // on DA1 and re-probes every prompt. These are harness bytes, never renderer output.
+      // Answer harness DA1/CPR/color probes without xterm so fish’s prompt cannot stall; these are not renderer writes.
       term.onData((chunk) => {
         rendered += chunk
         // Maximal fragmentation keeps query handling independent of node-pty chunk boundaries.
@@ -555,10 +535,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           .paneMode2031Ref.current
         expect(await waitUntil(() => paneMode2031.get(1) === true, 5_000)).toBe(true)
 
-        // Type-ahead is the deterministic leak shape: queue the child command while an
-        // external command still owns the tty, so fish repaints the prompt (`?2031h`) and
-        // consumes the buffered line in the same breath — handoff lands sub-millisecond
-        // after the subscribe, inside any reply's flight time.
+        // Type ahead while sleep owns the tty to make fish’s prompt re-arm and child handoff occur inside reply flight time.
         term.write('sleep 0.4\r')
         // Withdrawal #1: `sleep` owns the tty now, so the next line is typed ahead.
         expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 1, 5_000)).toBe(true)
@@ -581,15 +558,10 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
 
         const childRead =
           rendered.slice(renderedBeforeChildInput).match(/CHILD-READ:[^\r\n]*/)?.[0] ?? ''
-        // The merge-blocking assertion: the child's STDIN, not the screen. A rendered-output
-        // check passes while npx/brew confirm prompts still eat the bytes.
-        // Scope note: the harness' own DA1/CPR/OSC-11 answers can still land here — that is
-        // the separate probe-reply family (fish asks for those; nobody asked for 997).
+        // Inspect child stdin: screen checks miss consumed reports; harness-requested DA1/CPR/color replies are separate from unsolicited 997.
         expect(childRead).not.toContain('997')
         expect(childRead).toContain('hello')
-        // Nothing the renderer sent was a color-scheme report, on any path.
         expect(sent.filter((data) => data.includes(COLOR_SCHEME_REPORT_PREFIX))).toEqual([])
-        // And fish never echoed one back as literal prompt text.
         expect(rendered).not.toContain('997;1n')
 
         binding.dispose()
@@ -598,9 +570,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
         await waitUntil(() => exited, 3_000)
         try {
           term.kill()
-        } catch {
-          // already gone
-        }
+        } catch {}
       }
     },
     30_000

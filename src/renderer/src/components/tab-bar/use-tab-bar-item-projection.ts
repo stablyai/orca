@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useMemo, useState } from 'react'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
@@ -10,6 +11,7 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from './drop-indicator'
+import { sameStringArray } from '@/runtime/web-session-tabs-sync/state-equality-core'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
@@ -38,6 +40,7 @@ export function useTabBarItemProjection({
     tabs,
     editorFiles,
     browserTabs,
+    agentSessionTabs,
     tabBarOrder,
     hoveredTabInsertion,
     activeTabId,
@@ -56,6 +59,10 @@ export function useTabBarItemProjection({
     () => new Map((browserTabs ?? []).map((tab) => [tab.id, tab])),
     [browserTabs]
   )
+  const agentSessionMap = useMemo(
+    () => new Map((agentSessionTabs ?? []).map((tab) => [tab.id, tab])),
+    [agentSessionTabs]
+  )
   const terminalIds = useMemo(() => tabs.map((tab) => tab.id), [tabs])
   const editorFileIds = useMemo(
     () => editorFiles?.map((file) => file.tabId ?? file.id) ?? [],
@@ -69,6 +76,10 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const agentSessionTabIds = useMemo(
+    () => agentSessionTabs?.map((tab) => tab.id) ?? [],
+    [agentSessionTabs]
+  )
   const orderedItems = useMemo(
     () =>
       buildOrderedTabItems({
@@ -77,9 +88,11 @@ export function useTabBarItemProjection({
         editorFileIds,
         browserTabIds,
         simulatorTabIds,
+        agentSessionTabIds,
         terminalMap,
         editorMap,
         browserMap,
+        agentSessionMap,
         unifiedTabByVisibleId
       }),
     [
@@ -88,13 +101,20 @@ export function useTabBarItemProjection({
       editorFileIds,
       browserTabIds,
       simulatorTabIds,
+      agentSessionTabIds,
       terminalMap,
       editorMap,
       browserMap,
+      agentSessionMap,
       unifiedTabByVisibleId
     ]
   )
-  const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const orderedIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  // Why: dnd-kit re-renders every tab when this array's identity changes, and the items rebuild on any tab write.
+  const [sortableIds, setSortableIds] = useState(orderedIds)
+  if (!sameStringArray(sortableIds, orderedIds)) {
+    setSortableIds(orderedIds)
+  }
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(
@@ -119,15 +139,17 @@ export function useTabBarItemProjection({
       orderedItems
     ]
   )
+  const chatNames = useStructuredChatTabNames()
   const tabStripLayoutKey = useMemo(
     () =>
       buildTabStripLayoutKey(
         orderedItems,
         generatedTabTitlesEnabled,
         expandedPaneByTabId,
-        statusByRelativePath
+        statusByRelativePath,
+        chatNames
       ),
-    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath, chatNames]
   )
 
   return {

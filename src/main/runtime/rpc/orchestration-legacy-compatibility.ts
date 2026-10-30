@@ -22,6 +22,7 @@ const COORDINATOR_PREFLIGHT_METHODS = new Set([
   'orchestration.gateCreate',
   'orchestration.gateResolve',
   'orchestration.runUse',
+  'orchestration.requestShow',
   'orchestration.send',
   'orchestration.check',
   'orchestration.reply'
@@ -82,8 +83,7 @@ export class OrchestrationLegacyCompatibility {
       return { handled: false }
     }
     if (request.method === 'orchestration.runUse' && values.takeoverLegacy === true) {
-      // Why: takeover is a current-contract recovery action. An exact fresh runtime launch
-      // already proves its live PTY, process, pane, host, handle, and launch secret.
+      // Takeover recovers current contracts; exact fresh runtime launch already proves PTY, process, pane, host, handle and launch secret.
       const callerAuthority = this.runtime.verifyOrchestrationCompatibilityCaller(
         request.orchestrationCompatibilityEvidence,
         { currentRuntimeLaunchSufficient: true }

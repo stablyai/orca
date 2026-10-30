@@ -100,20 +100,16 @@ function spawnOnConnect(transport: MockTransport, ptyId: string): void {
   })
 }
 
-// Why this suite exists: the queued startup command is spent through onQueuedStartupSpawned, and
-// both *when* it fires and *how often* are load-bearing. Spending it before the pty is bound
-// unmounts the pane mid-spawn (the entry is what holds its worktree out of the retention-budget
-// force-park); spending it on a later respawn drops a command queued after the first launch
-// (STA-4876).
+// Consume queued startup only after first fresh PTY binding: earlier consumption can force-park mid-spawn; later respawn consumption could erase a new command (STA-4876).
 describe('connectPanePty queued startup consume', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -170,9 +166,7 @@ describe('connectPanePty queued startup consume', () => {
   it('keeps a throwing consume from escaping into the spawn', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
-    // Mirror the transport contract: onPtySpawn is invoked from inside the connect promise, so
-    // anything it throws rejects that promise, strands the pane with no pty, and is far worse
-    // than the stale queued entry the callback exists to clear.
+    // onPtySpawn runs inside connect; callback throws would reject spawn and strand the pane, so cleanup must not throw.
     let escapedIntoSpawn = false
     transport.connect.mockImplementation(async () => {
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as

@@ -1,16 +1,21 @@
 import { isShellProcess } from '../../shared/agent-detection'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
-import { parsePtySessionId } from './pty-session-id'
+import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import {
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   type ListSessionsResult,
   type SessionInfo
 } from './types'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type {
+  PtyProcessInspection,
+  PtyProcessInspectionOptions
+} from '../providers/pty-process-inspection'
+import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
+import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
-  // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
+  // Detached daemon PTYs can host agents; cleanup must not treat every foreground process as an idle shell.
   protected hasChildProcessesFromForeground(foregroundProcess: string | null): boolean {
     return foregroundProcess !== null && !isShellProcess(foregroundProcess)
   }
@@ -22,15 +27,15 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
   }
 
-  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+  async inspectProcess(
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ): Promise<PtyProcessInspection> {
     if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
-      return { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+      return clientOnlyUnverifiableInspection('old_host')
     }
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
-      // Why: pre-v27 daemons survive an in-place app update; compose the inspection client-side from the
-      // one call they do support instead of throwing, or completion detection stays dead until recreate.
-      // Requests directly (not via getForegroundProcess) so a dead socket still rejects rather than
-      // reading as an idle foreground and dispatching a false completion.
+      // Pre-v27 daemons need client-side inspection; preserve transport errors to avoid false idle completion.
       const { foregroundProcess } = await this.client.request<{
         foregroundProcess: string | null
       }>('getForegroundProcess', { sessionId: id })
@@ -39,10 +44,15 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
       }
     }
-    return this.client.request<{
-      foregroundProcess: string | null
-      hasChildProcesses: boolean
-    }>('inspectProcess', { sessionId: id })
+    return this.client.request<PtyProcessInspection>('inspectProcess', {
+      sessionId: id,
+      ...(options?.expectedIncarnationId
+        ? { expectedIncarnationId: options.expectedIncarnationId }
+        : {}),
+      // Additive: an older daemon ignores it and pays for the full capture.
+      ...(options?.steadyState === true ? { steadyState: true } : {}),
+      ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
+    })
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {
@@ -91,17 +101,9 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     return JSON.stringify(sessions)
   }
 
-  async revive(_state: string): Promise<void> {
-    // Sessions already live in the daemon — no revival needed
-  }
+  async revive(_state: string): Promise<void> {}
 
-  /** Called on app launch. Lists daemon sessions, kills orphans whose workspaceId
-   *  no longer exists, and caches alive session IDs.
-   *
-   *  IMPORTANT: a session id embeds the worktree's path at spawn time, so a renamed
-   *  worktree keeps its old id. Callers MUST seed `validWorktreeIds` with each live
-   *  worktree's `WorktreeMeta.priorWorktreeIds` or those sessions get reaped as false
-   *  orphans. No production caller yet; wire the alias in when it gains one. */
+  /** Include priorWorktreeIds in validWorktreeIds: renamed worktrees retain session IDs containing their old paths. */
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]
     killed: string[]
@@ -116,27 +118,78 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       if (!session.isAlive) {
         continue
       }
-      // Why: an unminted session id (worktreeId === null) can't be tied to a live worktree, so it's treated as an orphan.
+      // Unminted IDs cannot establish workspace membership and are treated as orphans.
       const { worktreeId } = parsePtySessionId(session.sessionId)
 
       if (worktreeId === null || !validWorktreeIds.has(worktreeId)) {
         try {
           await this.client.request('kill', { sessionId: session.sessionId })
         } catch {
-          /* already dead */
+          /* Orphan cleanup is best-effort. */
         }
         killed.push(session.sessionId)
       } else {
         alive.push(session.sessionId)
-        // Why: track background sessions in the checkpoint set so disconnectOnly's final checkpoint doesn't leave stale recovery data.
-        this.activeSessionIds.add(session.sessionId)
-        await this.reconcileLiveSessionHistory(session).catch((err) =>
-          console.warn('[history] live-session reconciliation failed:', session.sessionId, err)
-        )
+        await this.adoptLiveSession(session)
       }
     }
 
     return { alive, killed }
+  }
+
+  /** Recover daemon-only ownership and WSL pane keys before Sleep checkpoints a reopened session. */
+  protected async adoptListedSessionForSleep(
+    sessionId: string,
+    deadlineMs?: number
+  ): Promise<void> {
+    // Keep seed-failed sessions suspended so a fresh screen cannot overwrite their restore history.
+    const needsAdoption =
+      !!this.historyManager &&
+      !this.historyManager.hasWriter(sessionId) &&
+      !this.activeSessionIds.has(sessionId)
+    const needsPaneKey =
+      process.platform === 'win32' &&
+      !needsAdoption &&
+      !this.wslPaneKeysBySessionId.has(sessionId) &&
+      this.wslDistrosBySessionId.get(sessionId) !== undefined
+    if (!needsAdoption && !needsPaneKey) {
+      return
+    }
+    const result = await this.client.request<ListSessionsResult>(
+      'listSessions',
+      undefined,
+      remainingDaemonRequestTimeoutMs(deadlineMs)
+    )
+    const session = result.sessions.find((entry) => entry.sessionId === sessionId && entry.isAlive)
+    if (session && needsAdoption) {
+      await this.adoptLiveSession(session, { activeOnlyIfReconciled: true })
+    } else if (session?.wslDistro && session.paneKey) {
+      this.wslPaneKeysBySessionId.set(sessionId, session.paneKey)
+    }
+  }
+
+  private async adoptLiveSession(
+    session: SessionInfo,
+    opts: { activeOnlyIfReconciled?: boolean } = {}
+  ): Promise<void> {
+    // Include background sessions in the final disconnect checkpoint.
+    if (!opts.activeOnlyIfReconciled) {
+      this.activeSessionIds.add(session.sessionId)
+    }
+    // Sleep reads a WSL shell's folder by what only the daemon still knows about the pane.
+    if (session.wslDistro) {
+      this.wslDistrosBySessionId.set(session.sessionId, session.wslDistro)
+      if (session.paneKey) {
+        this.wslPaneKeysBySessionId.set(session.sessionId, session.paneKey)
+      }
+    }
+    await this.reconcileLiveSessionHistory(session).catch((err) =>
+      console.warn('[history] live-session reconciliation failed:', session.sessionId, err)
+    )
+    // Why after: an exit seen during the reconcile closed the writer; that session is not live.
+    if (opts.activeOnlyIfReconciled && this.historyManager?.hasWriter(session.sessionId)) {
+      this.activeSessionIds.add(session.sessionId)
+    }
   }
 
   protected async reconcileLiveSessionHistory(session: SessionInfo): Promise<void> {

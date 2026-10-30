@@ -20,7 +20,6 @@ vi.mock('./gh-utils', () => ({
   gitExecFileAsync: vi.fn(),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
-  // Why: origin repository resolution calls getOwnerRepoForRemote, not getOwnerRepo.
   getOwnerRepoForRemote: (
     repoPath: string,
     remoteName: string,
@@ -53,12 +52,10 @@ vi.mock('./github-enterprise-repository', () => ({
   isGitHubHostAuthenticated: vi.fn().mockResolvedValue(true)
 }))
 
-import { setPRFileViewed } from './client'
+import { setPRFileViewed } from './client/update/pr-file-viewed'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -156,8 +153,7 @@ describe('setPRFileViewed', () => {
       })
     ).resolves.toBe(true)
 
-    // The runner injects --hostname at spawn time from options.host, so the
-    // mocked call sees unqualified argv plus the Enterprise host in options.
+    // Hostname injection happens inside the real runner, after this mocked boundary.
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       expect.arrayContaining(['api', 'graphql', 'pullRequestId=PR_enterprise']),
       { host: 'github.acme-corp.com' }

@@ -1,11 +1,7 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
-/**
- * Drop a removed row from the local persisted cleanup snapshots.
- *
- * Only a remote delete needs this: local main prunes its own snapshots inline.
- * Without it a remotely removed row resurrects from cache on the next scan.
- */
+/** Prune remote removals from local cached cleanup snapshots or they reappear on next scan; local main already prunes inline. */
 export async function recordRemovedWorktreeSnapshotPrune(args: {
   worktreeId: string
   hostId: ExecutionHostId | undefined
@@ -13,10 +9,8 @@ export async function recordRemovedWorktreeSnapshotPrune(args: {
 }): Promise<void> {
   try {
     await window.api.workspaceCleanup?.recordRemovalSnapshotPrune?.({
-      // Why: an unknown batch id degrades to an immediate one-off prune. The id
-      // must stay bounded — main rejects batch ids over 128 chars, so it cannot
-      // embed the unbounded worktreeId.
-      batchId: args.snapshotPruneBatchId ?? `single-removal:${crypto.randomUUID()}`,
+      // Unknown batch IDs prune immediately; use bounded UUID key because main caps length at 128 and worktree IDs are unbounded.
+      batchId: args.snapshotPruneBatchId ?? `single-removal:${createBrowserUuid()}`,
       worktreeId: args.worktreeId,
       ...(args.hostId ? { executionHostId: args.hostId } : {})
     })

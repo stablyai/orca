@@ -1,8 +1,8 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
 export function canCommandCodeOutputOwnPane(args: {
-  foregroundAgent?: TuiAgent | null
+  foregroundAgent?: TerminalAgent | null
   shellForeground?: boolean
   paneOwnerAgent?: AgentType | null
   retainedPaneOwnerAgent?: AgentType | null

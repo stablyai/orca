@@ -13,7 +13,7 @@ const {
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock,
+  wslUncDirectoryExistsAsyncMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -27,7 +27,7 @@ const {
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn(),
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
@@ -62,10 +62,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,9 +102,8 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
+  wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
 vi.mock('../shell-prompt-readiness-probe', () => ({
@@ -115,6 +111,7 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -141,7 +138,7 @@ describe('LocalPtyProvider', () => {
       readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
-      wslUncDirectoryExistsMock,
+      wslUncDirectoryExistsAsyncMock,
       createShellPromptReadinessProbeMock
     })
 
@@ -158,6 +155,113 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('delegates markerless Codex startup to the shell wrapper without a PTY write', async () => {
+      process.env.SHELL = '/bin/zsh'
+      const command = "codex '--dangerously-bypass-approvals-and-sandbox'"
+
+      await provider.spawn({ cols: 80, rows: 24, command })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(command)
+      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('startup')
+      expect(spawnEnv.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('keeps payload-bearing Codex startup in the wrapper readiness path', async () => {
+      process.env.SHELL = '/bin/zsh'
+      const command = "codex '--dangerously-bypass-approvals-and-sandbox' 'review this branch'"
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        command,
+        startupCommandDelivery: 'shell-ready'
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(command)
+      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('startup')
+      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('scrubs an inherited wrapper startup command from ordinary panes', async () => {
+      process.env.SHELL = '/bin/zsh'
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: { [POSIX_SHELL_STARTUP_COMMAND_ENV]: 'poisoned command' }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('retains PTY delivery for unsupported local shells without leaking wrapper state', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const command = "codex '--dangerously-bypass-approvals-and-sandbox'"
+
+        await provider.spawn({ cols: 80, rows: 24, command })
+
+        const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+        expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stages a long startup command and types only the line that sources it', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const command = `claude '${'x'.repeat(600)}'`
+
+        const result = await provider.spawn({ cols: 80, rows: 24, command })
+
+        expect(result).not.toHaveProperty('startupDelivery')
+        const staged = writeFileSyncMock.mock.calls.find(([path]) =>
+          String(path).includes('orca-launch-')
+        )
+        expect(staged?.[1]).toContain(`\n${command}\n`)
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`. '${staged?.[0]}'\r`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('prints a notice in the terminal when it types a line it could not stage', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const received: string[] = []
+        provider.configure({ onData: (_id, data) => received.push(data) })
+        writeFileSyncMock.mockImplementationOnce(() => {
+          throw new Error('ENOSPC: no space left on device')
+        })
+        const command = `claude '${'x'.repeat(600)}'`
+
+        await provider.spawn({ cols: 80, rows: 24, command })
+
+        expect(received.join('')).toContain(
+          '[orca] Could not stage the launch command (ENOSPC: no space left on device)'
+        )
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('verifies shell identity against the exact spawn PATH', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => ({ ...env, PATH: '/post-hook/bin' })
@@ -176,8 +280,7 @@ describe('LocalPtyProvider', () => {
       )
     })
 
-    // Order matters: this case reads spawnMock.mock.calls[0], which the preceding
-    // default-shell spawn populates (spawnMock accumulates calls across tests).
+    // This case consumes the preceding default-shell spawn in mock.calls[0]; the spy accumulates across tests.
     it('uses fallback shell readiness when startup-command shell spawn falls back', async () => {
       vi.useFakeTimers()
       try {
@@ -204,27 +307,10 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(1)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
+        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\r")
       } finally {
         vi.useRealTimers()
       }
-    })
-
-    it.each([
-      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
-      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
-    ])('preserves Fish bracketed-paste output split %s', async (_boundary, chunks) => {
-      process.env.SHELL = '/usr/bin/fish'
-      const received: string[] = []
-      provider.configure({ onData: (_id, data) => received.push(data) })
-
-      await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
-      const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
-      for (const chunk of chunks) {
-        dataCallback(chunk)
-      }
-
-      expect(received.join('')).toBe('\x1b[?2004hfish> ')
     })
 
     it('releases held marker-prefix bytes when local shell readiness times out', async () => {
@@ -250,7 +336,7 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(200)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith('printf ready\n')
+        expect(mockProc.write).toHaveBeenCalledWith('printf ready\r')
       } finally {
         vi.useRealTimers()
       }

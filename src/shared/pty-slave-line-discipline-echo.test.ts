@@ -48,8 +48,7 @@ describe('createPtySlaveLineEditorProbe', () => {
     answerStty('lflags: -echo\ncchars: lnext = <undef>;\n')
     await expect(probe?.()).resolves.toBe('unknown')
   })
-  // These cover createSttyProbe, which the line-editor probe shares. The ECHO probe that
-  // used to exercise them is gone, but the subprocess machinery under it is still live.
+  // Keep shared createSttyProbe coverage after removal of the old ECHO probe.
   it('shares one in-flight stty process per PTY', async () => {
     const probe = createPtySlaveLineEditorProbe('/dev/ttys048', 'darwin')
     const pending: { finish?: () => void } = {}
@@ -76,9 +75,7 @@ describe('createPtySlaveLineEditorProbe', () => {
 
   it('keeps probing after a transient failure and only latches a permanent one', async () => {
     const probe = createPtySlaveLineEditorProbe('/dev/ttys048', 'darwin')
-    // Why: a multi-pane restore forks these in a burst, so EAGAIN and the timeout kill
-    // are contention — condemning the pty to guessing for its whole life on one of
-    // those is the failure mode, not the protection.
+    // Burst restore causes transient EAGAIN/timeouts; those must not disable readiness inspection for the PTY’s lifetime.
     for (const transient of [
       Object.assign(new Error('spawn EAGAIN'), { code: 'EAGAIN' }),
       Object.assign(new Error('killed'), { killed: true }),
@@ -95,8 +92,8 @@ describe('createPtySlaveLineEditorProbe', () => {
     execFileMock.mockImplementationOnce((_c, _a, _o, cb) =>
       cb(Object.assign(new Error('not a tty'), { code: 1 }), '', '')
     )
-    await expect(probe?.()).resolves.toBe('unknown')
-    await expect(probe?.()).resolves.toBe('unknown')
+    await expect(probe?.()).resolves.toBe('unavailable')
+    await expect(probe?.()).resolves.toBe('unavailable')
     expect(execFileMock).toHaveBeenCalledTimes(5)
   })
 })

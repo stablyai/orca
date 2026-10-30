@@ -1,4 +1,5 @@
 import type {
+  OrcaCloudSignInProgress,
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
   CreateCloudLinkedOrcaProfileResult,
@@ -28,6 +29,8 @@ import type {
 export type OrcaProfileApi = {
   list: () => Promise<OrcaProfileListResult>
   authStatus: () => Promise<OrcaProfileAuthStatus>
+  /** Fires when main changed the stored auth status on its own (e.g. a revoked session). */
+  onAuthStatusChanged: (callback: () => void) => () => void
   createLocal: (args?: CreateLocalOrcaProfileArgs) => Promise<CreateLocalOrcaProfileResult>
   createCloudLinked: (
     args?: CreateCloudLinkedOrcaProfileArgs
@@ -40,6 +43,11 @@ export type OrcaProfileApi = {
     args: FindOrcaProfileProjectsByPathArgs
   ) => Promise<FindOrcaProfileProjectsByPathResult>
   connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
+  signInProgress: () => Promise<OrcaCloudSignInProgress | null>
+  onSignInProgressChanged: (
+    callback: (progress: OrcaCloudSignInProgress | null) => void
+  ) => () => void
+  cancelSignIn: () => Promise<void>
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>

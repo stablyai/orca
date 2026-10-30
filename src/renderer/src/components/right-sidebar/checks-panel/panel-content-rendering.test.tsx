@@ -4,7 +4,6 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
-import { ChecksPanelReviewHeader } from '../ChecksPanel'
 
 vi.mock('../HostedReviewActions', () => ({ default: () => null }))
 vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDialog: () => null }))
@@ -37,6 +36,65 @@ describe('checks panel concrete content', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('renders a durable unlinked state that can relink before PR data refetches', () => {
+    const handleLinkSuppressedPullRequest = vi.fn<() => void>()
+    const model = {
+      activeReview: null,
+      activeWorktree: { id: 'worktree-1' },
+      isFolder: false,
+      linkedPR: null,
+      linkedReviewNumber: null,
+      prNumber: 42,
+      suppressedGitHubPR: 42 as number | null,
+      handleLinkSuppressedPullRequest: handleLinkSuppressedPullRequest as () => void
+    } as ChecksPanelEmptyContentModel
+
+    render(<ChecksPanelEmptyContent model={model} />)
+
+    expect(screen.getByText('Pull request unlinked')).toBeTruthy()
+    expect(screen.getByText(/PR #42 is hidden/)).toBeTruthy()
+    screen.getByRole('button', { name: 'Link PR #42' }).click()
+    expect(handleLinkSuppressedPullRequest).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Create PR/)).toBeNull()
+  })
+
+  it('does not apply stale suppression to a branch with no matching pull request', () => {
+    const model = {
+      activeReview: null,
+      activeWorktree: { id: 'worktree-1' },
+      branch: 'without-pr',
+      checksPanelHasHardRefreshError: false,
+      checksPanelReviewLookup: 'not_found',
+      checksPanelReviewLookupResult: { openReviewUrl: null },
+      confirmedReadiness: { confirmed: false, needsPush: false },
+      conflictOperation: 'unknown',
+      createComposerOpen: false,
+      detachedHeadDisplay: null,
+      gitStatusInputs: { hasUncommittedChanges: false },
+      gitStatusProbeErrorContextKey: null,
+      hardRefreshError: null,
+      hostedReviewCreateCopy: { providerName: 'GitHub' },
+      hostedReviewCreateProvider: 'github',
+      hostedReviewCreation: null,
+      isFolder: false,
+      isGitHubReviewContext: true,
+      isPublishingBranch: false,
+      linkedGitLabMR: null,
+      linkedPR: null,
+      linkedReviewNumber: null,
+      panelContextKey: 'worktree-1::without-pr',
+      prNumber: null,
+      publishActionHasUncommittedChanges: false,
+      sourceControlAiActionsVisible: false,
+      suppressedGitHubPR: 42
+    } as ChecksPanelEmptyContentModel
+
+    render(<ChecksPanelEmptyContent model={model} />)
+
+    expect(screen.getByText('No pull request found')).toBeTruthy()
+    expect(screen.queryByText('Pull request unlinked')).toBeNull()
+  })
+
   it('renders the active review header and empty check/comment sections with accessible actions', () => {
     const model = {
       activeConnectionId: null,
@@ -57,17 +115,19 @@ describe('checks panel concrete content', () => {
       activeWorktreeId: 'worktree-1',
       agentComposerState: null,
       aiActionDisabledReason: undefined,
+      fixChecksDisabledReason: undefined,
       canTargetPRComments: false,
       checks: [],
+      checksError: null,
       checksLoading: false,
       claimedCommentResolutionRef: { current: null },
       commentResolutionLaunchAcceptedRef: { current: false },
       comments: [],
       commentsDisabledReason: undefined,
+      commentsError: null,
       commentsLoading: false,
       commentsSelectionClearRequest: null,
       conflictDetailsRefreshing: false,
-      consumeClaimedCommentResolutionAfterDeliveryRef: { current: vi.fn() },
       detachedHeadDisplay: null,
       editingTitle: false,
       getGitLabProjectRef: vi.fn(() => null),
@@ -76,9 +136,7 @@ describe('checks panel concrete content', () => {
       handleDeleteComment: vi.fn(),
       handleEditComment: vi.fn(),
       handleFixChecksWithAI: vi.fn(),
-      handleLaunchAborted: vi.fn(),
-      handleLaunchAccepted: vi.fn(),
-      handleLinkAnotherPullRequest: vi.fn(),
+      handleLinkAnotherReview: vi.fn(),
       handleLoadCheckDetails: vi.fn(),
       handleOpenPR: vi.fn(),
       handleRefresh: vi.fn(),
@@ -91,11 +149,11 @@ describe('checks panel concrete content', () => {
       handleSetReaction: vi.fn(),
       handleStartEdit: vi.fn(),
       handleTitleKeyDown: vi.fn(),
-      handleUnlinkPullRequest: vi.fn(),
+      handleUnlinkReview: vi.fn(),
       isFixingChecksWithAI: false,
       isRefreshing: false,
       isResolvingConflictsWithAI: false,
-      linkedPR: null,
+      linkedGitLabMR: null,
       pendingCommentResolutionRef: { current: null },
       pr: null,
       prRefreshState: undefined,
@@ -114,9 +172,7 @@ describe('checks panel concrete content', () => {
       titleSaving: false
     } satisfies ChecksPanelActiveContentModel
 
-    render(
-      <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
-    )
+    render(<ChecksPanelActiveContent model={model} />)
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.getByText('No checks configured')).toBeTruthy()

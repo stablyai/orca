@@ -3,6 +3,7 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { requestSleepingAgentWakeOnMount } from '@/lib/sleeping-agent-wake-requests'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()
 const requestListeners = new Set<() => void>()
@@ -27,16 +28,16 @@ function mergePendingMount(detail: BackgroundMountTerminalWorktreeDetail): void 
   })
 }
 
-/**
- * Records the request before emitting the compatibility event. Why: Terminal
- * is lazy and absent on the landing screen, so a window-only event can fire
- * before its listener exists and permanently lose a navigation-free wake.
- */
+// Record before emitting: lazy Terminal may not have a listener yet, otherwise losing navigation-free wakes.
 export function requestBackgroundTerminalWorktreeMount(
   detail: BackgroundMountTerminalWorktreeDetail
 ): void {
   if (!detail.worktreeId) {
     return
+  }
+  // Only targeted wakes mark sleeping agents; whole-worktree mounts must not authorize every hidden remount.
+  if (detail.tabIds) {
+    requestSleepingAgentWakeOnMount(detail.worktreeId, detail.tabIds)
   }
   mergePendingMount(detail)
   if (!hasRequestedMount) {
@@ -94,12 +95,7 @@ export function addBackgroundMountedTerminalWorktree(
   return true
 }
 
-/**
- * Records which terminal tabs a background mount may instantiate. Why: a
- * whole-worktree background mount creates a TerminalPane (xterm + PTY connect)
- * for every saved tab, so wake/resume flows pass the exact tabs they need.
- * Must run before the worktree is added to `mountedWorktreeIds`.
- */
+/** Install exact allowed tabs before mounting the worktree; unrestricted background mounts create an xterm/PTY connection for every saved tab. */
 export function applyBackgroundMountTabRestriction(
   restrictions: Map<string, ReadonlySet<string>>,
   mountedWorktreeIds: ReadonlySet<string>,
@@ -110,9 +106,7 @@ export function applyBackgroundMountTabRestriction(
     return
   }
   const existing = restrictions.get(worktreeId)
-  // Why: a worktree mounted without a restriction is fully mounted (the user
-  // visited it, or a legacy whole-worktree mount ran); narrowing it
-  // retroactively would unmount live panes.
+  // Never narrow an unrestricted mount retroactively; it would unmount live panes.
   if (mountedWorktreeIds.has(worktreeId) && !existing) {
     return
   }
@@ -133,16 +127,12 @@ export function shouldMountBackgroundWorktreeTab(
   return restrictedTabIds === null || restrictedTabIds.has(tabId)
 }
 
-// Why deferral exists: activating a worktree used to mount a TerminalPane for
-// every saved tab in one render pass. Each mount replays scrollback through
-// xterm, attaches a WebGL renderer, and issues a sync-IPC snapshot read, so a
-// worktree with many agent-session tabs froze the renderer for tens of
-// seconds (field trace: 200+ replay-guard stall releases in one activation
-// window). Deferred tabs behave like cold-parked tabs from birth: no view
-// until first reveal, parked byte watchers own their side effects meanwhile.
-export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 4
+// Defer hidden panes to avoid synchronous scrollback/WebGL/IPC fan-out; parked watchers own side effects until reveal.
+// Mount only visible panes on the switch path; idle admission later restores the capped warm set.
+export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 0
 
-export function canMountTerminalWorkspaceForStartup(args: {
+/** Gate PTY-binding panes until provider/SSH/ownership restoration settles, or mount can duplicate shells; hydrated tab/chat/browser/editor surfaces may render earlier. */
+export function canAdmitTerminalTabsForStartup(args: {
   workspaceSessionReady: boolean
   hydrationSucceeded: boolean
   startupWorktreeRefreshCompleted: boolean
@@ -160,8 +150,7 @@ export function canDeferColdActivationTabsForHost(args: {
   if (host?.kind === 'local') {
     return true
   }
-  // Why: remote ownership must match the exact host advertising bounded
-  // snapshots; stale runtime identities stay eager instead of losing output.
+  // Remote snapshot capability must belong to the exact host; stale runtime identities stay eager to preserve output.
   return (
     host?.kind === 'runtime' &&
     args.pairedRuntimeParkingEnvironmentIds?.has(host.environmentId) === true
@@ -186,20 +175,14 @@ function replaceActivationDeferredMountTabs(
   deferredMountTabIdsByWorktree.set(worktreeId, next)
 }
 
-/**
- * Decides whether activating `worktreeId` should defer mounting its hidden
- * terminal tabs until each is first revealed. Installs the restriction (tabs
- * that mount now) and returns true when deferring; otherwise removes any
- * restriction so the worktree mounts all tabs, the pre-deferral behavior.
- */
+/** Restrict activation to visible/non-deferrable panes; remove the restriction when deferral is unsafe. */
 export function planColdActivationTabDeferral(opts: {
   restrictions: Map<string, ReadonlySet<string>>
   deferredMountTabIdsByWorktree: Map<string, ReadonlySet<string>>
   worktreeId: string
   allTabIds: readonly string[]
-  isTabLive: (tabId: string) => boolean
-  /** Safe to leave unmounted: parked byte watchers can cover it and no spawn
-   *  is pending. Non-deferrable tabs mount immediately. */
+  /** Worktree is passed so duplicate legacy tab ids fail closed by owner. */
+  isTabLive: (tabId: string, worktreeId?: string) => boolean
   isTabDeferrable: (tabId: string) => boolean
   immediateTabIds: ReadonlySet<string>
 }): boolean {
@@ -215,10 +198,9 @@ export function planColdActivationTabDeferral(opts: {
   const previouslyAllowed = restrictions.get(worktreeId)
   const initial = new Set<string>()
   for (const tabId of allTabIds) {
-    // Why live/previously-allowed tabs stay in: narrowing would unmount
-    // panes that are already up (or background mounts still registering).
+    // Retain live/already-allowed tabs so activation cannot unmount panes or race registering background mounts.
     if (
-      isTabLive(tabId) ||
+      isTabLive(tabId, worktreeId) ||
       immediateTabIds.has(tabId) ||
       previouslyAllowed?.has(tabId) ||
       !isTabDeferrable(tabId)
@@ -237,12 +219,7 @@ export function planColdActivationTabDeferral(opts: {
   return true
 }
 
-/**
- * Render-pass reveal: tabs the user can currently see (active tab, split
- * groups' active tabs, activity-portal tabs, pending spawns) mount this pass.
- * Once every tab has been revealed the restriction is removed, returning the
- * worktree to normal fully-mounted semantics.
- */
+/** Admit visible tabs during render; release the restriction once every deferred tab has been revealed. */
 export function revealActivationDeferredTabs(opts: {
   restrictions: Map<string, ReadonlySet<string>>
   deferredMountTabIdsByWorktree: Map<string, ReadonlySet<string>>
@@ -252,8 +229,7 @@ export function revealActivationDeferredTabs(opts: {
 }): void {
   const { restrictions, deferredMountTabIdsByWorktree, worktreeId, allTabIds, immediateTabIds } =
     opts
-  // Why: targeted background mounts share the allowed-tab restriction map,
-  // but only activation deferral may eagerly fan out parked watcher coverage.
+  // Only activation deferral may expand eager watcher coverage; targeted mounts share restrictions but stay bounded.
   if (!deferredMountTabIdsByWorktree.has(worktreeId)) {
     return
   }
@@ -281,8 +257,7 @@ export function revealActivationDeferredTabs(opts: {
   replaceActivationDeferredMountTabs(deferredMountTabIdsByWorktree, worktreeId, next, allTabIds)
 }
 
-/** Tabs a restriction currently keeps unmounted — the set that needs parked
- *  byte-watcher coverage while deferred. */
+/** Unadmitted tabs need parked byte watchers. */
 export function collectDeferredMountTabIds(
   restrictedTabIds: ReadonlySet<string> | null,
   tabIds: readonly string[]
@@ -299,10 +274,7 @@ export function collectDeferredMountTabIds(
   return deferred
 }
 
-/**
- * Releases closed tabs from targeted and activation restrictions. Whole-worktree
- * and fully user-visited mounts have no restriction entry and are retained.
- */
+/** Prune closed tabs without dropping whole-worktree or unrestricted mounts. */
 export function pruneClosedBackgroundMountTabs(
   restrictions: Map<string, ReadonlySet<string>>,
   mountedWorktreeIds: Set<string>,
@@ -324,8 +296,7 @@ export function pruneClosedBackgroundMountTabs(
         deferredMountTabIdsByWorktree?.set(worktreeId, retainedDeferred)
       } else {
         deferredMountTabIdsByWorktree?.delete(worktreeId)
-        // Why: once every deferred tab is gone, the remaining live tabs are
-        // already allowed; release the now-redundant activation restriction.
+        // No deferred tabs remain, so release the redundant activation restriction.
         restrictions.delete(worktreeId)
         continue
       }
@@ -335,8 +306,7 @@ export function pruneClosedBackgroundMountTabs(
     }
     changed = true
     if (retained.size === 0) {
-      // Why: an activation restriction may legitimately have no allowed tabs
-      // while live deferred tabs remain; keep the active surface mounted.
+      // Keep an empty-allowed activation mounted while deferred tabs still exist.
       if (retainedDeferred && retainedDeferred.size > 0) {
         restrictions.set(worktreeId, retained)
       } else {

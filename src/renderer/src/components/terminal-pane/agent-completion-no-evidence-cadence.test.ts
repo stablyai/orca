@@ -1,17 +1,13 @@
-// Regression guard: bound the volume of cadence process inspections a visible,
-// idle terminal with NO agent evidence drives on hosts where each inspection is
-// a whole-process-table scan (local Windows forks powershell.exe/CIM — the
-// scan-cost analogue of #6288). Pre-fix a single visible idle shell inspected
-// every 2s forever (~30 scans/min); with the no-evidence tier it inspects every
-// 15s, and pane activity (output/title/hook) or agent evidence re-arms the hot
-// cadence so agent-start detection stays event-driven and agent-finish
-// detection is unchanged.
+// Bound costly-host idle scans without relaxing active-agent completion detection; pane activity re-arms hot cadence.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createAgentCompletionCoordinator,
   resetAgentCompletionCoordinatorIdentitiesForTest
 } from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
+import { isAgentProcessInspectionCostly } from './agent-process-inspection-cost'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 
@@ -30,7 +26,6 @@ function createCoordinator(
   const coordinator = createAgentCompletionCoordinator({
     paneKey: 'tab-1:leaf-1',
     getPtyId: () => 'pty-1',
-    getSettings: () => null,
     inspectProcess,
     dispatchCompletion,
     isLive: () => true,
@@ -44,8 +39,7 @@ function createCoordinator(
 describe('agent completion no-evidence inspection cadence', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    // Math.random = 0.5 makes the ±10% jitter factor exactly 1.0, so tick
-    // counts below are exact.
+    // Pin jitter to 1.0 so poll counts are exact.
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
   })
 
@@ -63,7 +57,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(60_000)
 
-    // 60s / 15s = 4. Pre-fix (2s idle cadence) this was 30.
     expect(inspectProcess).toHaveBeenCalledTimes(4)
   })
 
@@ -76,20 +69,46 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(60_000)
 
-    // 60s / 2s = 30: POSIX/SSH/remote panes must not be relaxed.
     expect(inspectProcess).toHaveBeenCalledTimes(30)
   })
 
-  it('keeps the full cadence when the coordinator has no cost source', async () => {
+  it('starts a bounded hot cadence after output on an evidence-publishing host', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess, {
-      isProcessInspectionCostly: undefined
+      shouldPollNoEvidenceProcessCadence: () => false
     })
 
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(60_000)
+    expect(inspectProcess).not.toHaveBeenCalled()
 
-    expect(inspectProcess).toHaveBeenCalledTimes(30)
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    // Output arms 2s polls only for the 10s activity window; silence then
+    // disarms the host reads again instead of falling back to a slow timer.
+    expect(inspectProcess).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(inspectProcess).toHaveBeenCalledTimes(4)
+  })
+
+  it('leaves a hidden noisy pane fully unpolled in the shipped option shape', async () => {
+    // Why: production sets no `shouldPollNoEvidenceProcessCadence`, so the
+    // activity re-arm has to stay under the visibility/tracking gate — a
+    // background `npm run dev` pane must not resume 3s host scans (#6288).
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      shouldPollProcessCadence: () => false,
+      shouldPollNoEvidenceProcessCadence: undefined
+    })
+
+    coordinator.startProcessTracking()
+    for (let tick = 0; tick < 12; tick += 1) {
+      coordinator.observeOutputActivity()
+      await vi.advanceTimersByTimeAsync(5_000)
+    }
+
+    expect(inspectProcess).not.toHaveBeenCalled()
   })
 
   it('escalates to the hot cadence when PTY output appears mid-interval', async () => {
@@ -167,7 +186,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     // The error backoff ceiling (10s) must not undercut the 15s tier: erroring
-    // scans would otherwise poll MORE often than healthy ones (15s → 10s).
+    // Error backoff must not undercut the slower no-evidence tier and increase failing scan frequency.
     expect(inspectProcess).toHaveBeenCalledTimes(4)
   })
 
@@ -179,7 +198,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.observeTitle('Codex working')
     await vi.advanceTimersByTimeAsync(60_000)
 
-    // ~60s / 750ms ≈ 78: agent-finish detection must not be relaxed.
     expect(inspectProcess.mock.calls.length).toBeGreaterThanOrEqual(70)
   })
 
@@ -196,8 +214,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect(inspectProcess).toHaveBeenCalled()
 
-    // Agent exits with no completion title/hook — only the poll can notice.
-    // Two consecutive idle samples at the 750ms active cadence confirm it.
+    // With no title/hook end signal, sustained process absence must still confirm completion at active cadence.
     foregroundProcess = null
     const callsAtExit = inspectProcess.mock.calls.length
     await vi.advanceTimersByTimeAsync(3_000)
@@ -208,5 +225,14 @@ describe('agent completion no-evidence inspection cadence', () => {
       quietedHookDone: false,
       terminalIdleConfirmed: true
     })
+  })
+})
+
+describe('isAgentProcessInspectionCostly', () => {
+  it('relaxes every live pane, local or remote, on every client platform', () => {
+    expect(isAgentProcessInspectionCostly('worktree-1|pane-1')).toBe(true)
+    expect(isAgentProcessInspectionCostly(toAppSshPtyId('target-1', 'pty-1'))).toBe(true)
+    expect(isAgentProcessInspectionCostly(toRemoteRuntimePtyId('term_1', 'env-a'))).toBe(true)
+    expect(isAgentProcessInspectionCostly(null)).toBe(false)
   })
 })

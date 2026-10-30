@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { AppState } from '@/store/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import {
+  createNativeChatFileLinkContextSelector,
+  findNativeChatTabOwnerWorktreeId,
   resolveNativeChatFileLink,
   resolveNativeChatFileLinkContext,
-  type NativeChatFileLinkContext
+  type NativeChatFileLinkContext,
+  type NativeChatFileLinkState
 } from './native-chat-file-link'
+import { detectedListingFixture, worktreeFixture } from './native-chat-workspace-test-fixtures'
 
 function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -21,22 +28,23 @@ function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-function state(overrides: Partial<AppState> = {}): AppState {
+function state(overrides: Partial<NativeChatFileLinkState> = {}): NativeChatFileLinkState {
   return {
+    detectedWorktreesByRepo: {},
     folderWorkspaces: [],
-    getKnownWorktreeById: (worktreeId: string) =>
-      worktreeId === 'wt-1' ? ({ id: 'wt-1', path: '/repo/worktree' } as never) : undefined,
+    floatingWorkspacePath: null,
     projectGroups: [],
     repos: [],
-    settings: { activeRuntimeEnvironmentId: null },
+    settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: null },
     tabsByWorktree: {
       'wt-1': [terminalTab()]
     },
+    unifiedTabsByWorktree: {},
     worktreesByRepo: {
-      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo/worktree' } as never]
+      repo: [worktreeFixture('wt-1', '/repo/worktree')]
     },
     ...overrides
-  } as AppState
+  }
 }
 
 const context: NativeChatFileLinkContext = {
@@ -50,14 +58,18 @@ describe('resolveNativeChatFileLinkContext', () => {
     expect(
       resolveNativeChatFileLinkContext(
         state({
-          settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+          // The client stamps a server's rows on arrival; focus alone never names the owner.
+          worktreesByRepo: {
+            repo: [{ ...worktreeFixture('wt-1', '/repo/worktree'), hostId: 'runtime:env-1' }]
+          }
         }),
         'tab-1'
       )
     ).toEqual({
       worktreeId: 'wt-1',
       worktreePath: '/repo/worktree',
-      runtimeEnvironmentId: 'env-1'
+      runtimeEnvironmentId: 'env-1',
+      sourceTabId: 'tab-1'
     })
   })
 
@@ -65,26 +77,186 @@ describe('resolveNativeChatFileLinkContext', () => {
     expect(resolveNativeChatFileLinkContext(state({ tabsByWorktree: {} }), 'tab-1')).toBeNull()
   })
 
-  it('falls back to repo-scoped worktrees when a known worktree has no path', () => {
+  it('resolves the worktree context for a structured session tab', () => {
+    const structuredTab = {
+      id: 'structured-tab-1',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      contentType: 'agent-session',
+      entityId: 'session-1',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      isPinned: false,
+      agentSessionAgent: 'codex'
+    } satisfies Tab
+
     expect(
       resolveNativeChatFileLinkContext(
         state({
-          getKnownWorktreeById: () => ({ id: 'wt-1' }) as never,
-          worktreesByRepo: {
-            repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo/fallback' } as never]
+          tabsByWorktree: {},
+          unifiedTabsByWorktree: { 'wt-1': [structuredTab] }
+        }),
+        structuredTab.id
+      )
+    ).toEqual({ ...context, sourceTabId: structuredTab.id })
+  })
+
+  it('resolves a detected-only workspace from the supplied snapshot catalog', () => {
+    expect(
+      resolveNativeChatFileLinkContext(
+        state({
+          worktreesByRepo: {},
+          detectedWorktreesByRepo: {
+            repo: detectedListingFixture([worktreeFixture('wt-1', '/repo/detected')])
           }
         }),
         'tab-1'
       )
     ).toEqual({
       worktreeId: 'wt-1',
-      worktreePath: '/repo/fallback',
-      runtimeEnvironmentId: null
+      worktreePath: '/repo/detected',
+      runtimeEnvironmentId: null,
+      sourceTabId: 'tab-1'
+    })
+  })
+
+  it('resolves a folder workspace tab from its folder path when no projected worktree path exists', () => {
+    const folderId = 'folder-1'
+    const folderKey = folderWorkspaceKey(folderId)
+    const folderTab = terminalTab({ worktreeId: folderKey })
+    expect(
+      resolveNativeChatFileLinkContext(
+        state({
+          tabsByWorktree: { [folderKey]: [folderTab] },
+          folderWorkspaces: [{ id: folderId, folderPath: '/workspace/platform' } as never],
+          worktreesByRepo: {}
+        }),
+        folderTab.id
+      )
+    ).toEqual({
+      worktreeId: folderKey,
+      worktreePath: '/workspace/platform',
+      runtimeEnvironmentId: null,
+      sourceTabId: folderTab.id
     })
   })
 })
 
+describe('createNativeChatFileLinkContextSelector', () => {
+  it('reuses the context across unrelated writes and re-resolves when a route input changes', () => {
+    const select = createNativeChatFileLinkContextSelector('tab-1')
+    const base = state()
+    const first = select(base)
+    expect(select({ ...base })).toBe(first)
+
+    const moved = select({
+      ...base,
+      worktreesByRepo: { repo: [worktreeFixture('wt-1', '/repo/moved')] }
+    })
+    expect(moved?.worktreePath).toBe('/repo/moved')
+  })
+})
+
+describe('floating workspace native chat', () => {
+  const floatingTab = {
+    id: 'floating-chat-1',
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    groupId: 'floating-group',
+    contentType: 'agent-session',
+    entityId: 'session-1',
+    label: 'Codex Chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0,
+    isPinned: false,
+    agentSessionAgent: 'codex'
+  } satisfies Tab
+
+  function floatingState(floatingWorkspacePath: string | null): NativeChatFileLinkState {
+    return state({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+      worktreesByRepo: {},
+      // Why a focused runtime: floating must stay local even when one is selected.
+      settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'env-1' },
+      floatingWorkspacePath
+    })
+  }
+
+  it('finds the owning floating workspace before its directory is known', () => {
+    const pending = floatingState(null)
+    expect(findNativeChatTabOwnerWorktreeId(pending, floatingTab.id)).toBe(
+      FLOATING_TERMINAL_WORKTREE_ID
+    )
+    expect(resolveNativeChatFileLinkContext(pending, floatingTab.id)).toBeNull()
+  })
+
+  it('resolves file links against the pinned folder after the floating setting moved', () => {
+    const pinned = {
+      ...floatingState('/home/me/changed-setting'),
+      structuredSessionLaunchDirectoryByTabId: {
+        [floatingTab.id]: { sessionId: floatingTab.entityId, launchDirectory: '/home/me/pinned' }
+      }
+    }
+    expect(resolveNativeChatFileLinkContext(pinned, floatingTab.id)).toEqual({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreePath: '/home/me/pinned',
+      runtimeEnvironmentId: null,
+      sourceTabId: floatingTab.id
+    })
+  })
+
+  it('resolves no file links until the pin arrives, instead of trusting the current setting', () => {
+    expect(
+      resolveNativeChatFileLinkContext(floatingState('/home/me/changed-setting'), floatingTab.id)
+    ).toBeNull()
+  })
+})
+
 describe('resolveNativeChatFileLink', () => {
+  it.each([
+    ['/repo/report:12', '/repo/report:12'],
+    ['/repo/report:0', '/repo/report:0'],
+    ['/repo/report:12:4', '/repo/report:12:4'],
+    ['/repo/ leading ', '/repo/ leading '],
+    [' leading ', '/repo/worktree/ leading '],
+    ['notes%23?#.md', '/repo/worktree/notes%23?#.md'],
+    ['https:notes.md', '/repo/worktree/https:notes.md'],
+    ['file:notes.md', '/repo/worktree/file:notes.md'],
+    ['../sibling/readme.md', '/repo/sibling/readme.md']
+  ])('resolves literal tool path %j without parsing a reply location', (path, absolutePath) => {
+    expect(resolveNativeChatFileLink(createNativeChatFileHref(path, 'literal'), context)).toEqual({
+      absolutePath,
+      line: null,
+      column: null
+    })
+  })
+
+  it('keeps wrapped reply locations distinct from literal tool paths', () => {
+    expect(
+      resolveNativeChatFileLink(createNativeChatFileHref('/repo/report:12:4'), context)
+    ).toEqual({
+      absolutePath: '/repo/report',
+      line: 12,
+      column: 4
+    })
+    expect(
+      resolveNativeChatFileLink(createNativeChatFileHref('/repo/report:0'), context)
+    ).toBeNull()
+  })
+
+  it('resolves parent-relative reply locations against the same base', () => {
+    expect(resolveNativeChatFileLink('../sibling/readme.md:12:4', context)).toEqual({
+      absolutePath: '/repo/sibling/readme.md',
+      line: 12,
+      column: 4
+    })
+  })
+
   it('resolves repo-relative file links against the chat worktree', () => {
     expect(resolveNativeChatFileLink('docs/guide.md', context)).toEqual({
       absolutePath: '/repo/worktree/docs/guide.md',
@@ -142,5 +314,26 @@ describe('resolveNativeChatFileLink', () => {
 
   it('ignores http links so normal markdown navigation can handle them', () => {
     expect(resolveNativeChatFileLink('https://example.com/docs/guide.md', context)).toBeNull()
+  })
+
+  it('reads URL-style /D:/ targets as the drive only in a Windows workspace', () => {
+    const windowsContext = { ...context, worktreePath: 'D:/repo' }
+    for (const href of ['/D:/Temp/report.txt', createNativeChatFileHref('/D:/Temp/report.txt')]) {
+      expect(resolveNativeChatFileLink(href, windowsContext)?.absolutePath).toBe(
+        'D:/Temp/report.txt'
+      )
+    }
+    expect(
+      resolveNativeChatFileLink(
+        createNativeChatFileHref('/D:/Temp/report.txt', 'literal'),
+        windowsContext
+      )?.absolutePath
+    ).toBe('D:/Temp/report.txt')
+    expect(
+      resolveNativeChatFileLink('//server/share/report.txt', windowsContext)?.absolutePath
+    ).toBe('//server/share/report.txt')
+    expect(resolveNativeChatFileLink('/D:/Temp/report.txt', context)?.absolutePath).toBe(
+      '/D:/Temp/report.txt'
+    )
   })
 })

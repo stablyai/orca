@@ -1,5 +1,10 @@
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../store'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import {
   getLandingPreflightIssues,
   hasGitHubBackedProject,
@@ -17,10 +22,11 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
       return 'local'
     }
     const runtimeStatus = s.runtimeStatusByEnvironmentId.get(environmentId)
+    // Use transport reachability: an unverifiable probe nulls status without disconnecting the host.
     const reachability = runtimeStatus
-      ? runtimeStatus.status === null
-        ? 'unreachable'
-        : 'reachable'
+      ? isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatus))
+        ? 'reachable'
+        : 'unreachable'
       : 'unknown'
     return `${environmentId}:${runtimeStatus?.connectionGeneration ?? 0}:${reachability}`
   })
@@ -45,7 +51,8 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
     void refreshPreflightStatus()
     const handleWindowActive = (): void => {
       if (document.visibilityState === 'visible') {
-        void refreshPreflightStatus({ force: true })
+        // Focus is a user act on the focused workspace, the only one preflight checks.
+        void refreshPreflightStatus({ force: true, wakeWslDistro: true })
       }
     }
     document.addEventListener('visibilitychange', handleWindowActive)
@@ -60,10 +67,14 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
     if (preflightIssues.length === 0) {
       return
     }
-    const intervalId = window.setInterval(() => {
-      void refreshPreflightStatus({ force: true })
-    }, 30000)
-    return () => window.clearInterval(intervalId)
+    // Suspend hidden-window polling; visibility/focus handlers already force-refresh on reveal.
+    return installWindowVisibilityInterval({
+      run: () => {
+        void refreshPreflightStatus({ force: true })
+      },
+      runOnVisible: () => {},
+      intervalMs: 30000
+    })
   }, [preflightIssues.length, refreshPreflightStatus])
 
   return { preflightIssues }

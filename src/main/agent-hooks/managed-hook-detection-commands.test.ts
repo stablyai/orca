@@ -21,4 +21,15 @@ describe('managed hook detection commands', () => {
   it('maps detected TUI ids back to managed hook targets', () => {
     expect(detectedManagedHookAgents(['codex', 'opencode', 'droid'])).toEqual(['codex', 'droid'])
   })
+
+  it('requests a version only for Claude capability detection', () => {
+    const commands = buildManagedHookDetectionCommands(null, 'linux')
+
+    expect(commands.find((command) => command.id === 'claude')).toMatchObject({
+      reportVersion: true
+    })
+    const codex = commands.find((command) => command.id === 'codex')
+    expect(codex).toBeDefined()
+    expect(codex).not.toHaveProperty('reportVersion')
+  })
 })

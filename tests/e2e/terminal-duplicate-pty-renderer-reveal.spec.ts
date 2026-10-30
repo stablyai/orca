@@ -1,10 +1,18 @@
+import {
+  mutateStoppedProfileState,
+  readPersistedProfileState
+} from './helpers/persisted-profile-state'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import { test, expect } from './helpers/orca-app'
+import {
+  findMarkerFrame,
+  readActiveScreen,
+  readRenderedAltScreenFrame,
+  type ActiveScreen
+} from './helpers/alt-screen-frame'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { stageNodeScriptForTerminal } from './helpers/run-node-script-in-terminal'
 import {
@@ -53,39 +61,36 @@ setInterval(() => {
 `.trim()
 }
 
-function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
 function seedDuplicatePtyOwnership(userDataDir: string): void {
-  const dataPath = persistedDataPath(userDataDir)
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as PersistedData
-  const session = data.workspaceSession
-  const tabId = session?.activeTabId
-  const layout = tabId ? session?.terminalLayoutsByTabId?.[tabId] : undefined
-  const retainedLeafId = layout?.activeLeafId
-  const ptyId = retainedLeafId ? layout?.ptyIdsByLeafId?.[retainedLeafId] : undefined
-  if (!session?.terminalLayoutsByTabId || !tabId || !layout || !retainedLeafId || !ptyId) {
-    throw new Error('Persisted terminal ownership was unavailable for duplicate-layout seeding')
-  }
-
-  const duplicateLeafId = randomUUID()
-  session.terminalLayoutsByTabId[tabId] = {
-    ...layout,
-    root: {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: retainedLeafId },
-      second: { type: 'leaf', leafId: duplicateLeafId }
-    },
-    activeLeafId: retainedLeafId,
-    expandedLeafId: null,
-    ptyIdsByLeafId: {
-      [retainedLeafId]: ptyId,
-      [duplicateLeafId]: ptyId
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as PersistedData
+    const session = data.workspaceSession
+    const tabId = session?.activeTabId
+    const layout = tabId ? session?.terminalLayoutsByTabId?.[tabId] : undefined
+    const retainedLeafId = layout?.activeLeafId
+    const ptyId = retainedLeafId ? layout?.ptyIdsByLeafId?.[retainedLeafId] : undefined
+    if (!session?.terminalLayoutsByTabId || !tabId || !layout || !retainedLeafId || !ptyId) {
+      throw new Error('Persisted terminal ownership was unavailable for duplicate-layout seeding')
     }
-  }
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`)
+
+    const duplicateLeafId = randomUUID()
+    session.terminalLayoutsByTabId[tabId] = {
+      ...layout,
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: retainedLeafId },
+        second: { type: 'leaf', leafId: duplicateLeafId }
+      },
+      activeLeafId: retainedLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [retainedLeafId]: ptyId,
+        [duplicateLeafId]: ptyId
+      }
+    }
+  })
 }
 
 async function waitForRestoredTerminal(page: Page, worktreeId: string): Promise<string> {
@@ -124,18 +129,7 @@ async function readRendererOwnership(
   }, tabId)
 }
 
-async function readStreamingFrame(
-  page: Page,
-  tabId: string,
-  marker: string
-): Promise<number | null> {
-  const content = await page.evaluate((tabId) => {
-    const pane = window.__paneManagers?.get(tabId)?.getPanes?.()[0]
-    return pane?.serializeAddon?.serialize?.() ?? null
-  }, tabId)
-  return parseStreamingFrame(content, marker)
-}
-
+// Viewport-only, so it is the same projection the revealed pane is read with.
 async function readMainStreamingFrame(
   page: Page,
   ptyId: string,
@@ -145,17 +139,45 @@ async function readMainStreamingFrame(
     const snapshot = await window.api.pty.getMainBufferSnapshot(ptyId, { scrollbackRows: 0 })
     return snapshot?.data ?? null
   }, ptyId)
-  return parseStreamingFrame(content, marker)
+  return findMarkerFrame(content ?? '', marker)
 }
 
-function parseStreamingFrame(content: string | null, marker: string): number | null {
+type RevealFrameDiagnostics = {
+  bufferType: ActiveScreen['bufferType'] | null
+  screenFrame: number | null
+  serializedFrame: number | null
+  serializedLength: number
+  markerOffsets: number[]
+  screenRows: string[]
+}
+
+// STA-5208: distinguish live viewport markers from normal-buffer residue to diagnose stalled render versus stale restore.
+async function readRevealFrameDiagnostics(
+  page: Page,
+  tabId: string,
+  marker: string
+): Promise<RevealFrameDiagnostics> {
+  const screen = await readActiveScreen(page, tabId)
+  const serialized =
+    (await page.evaluate((tabId) => {
+      // Same pane resolution as readActiveScreen, so both halves describe one pane.
+      const manager = window.__paneManagers?.get(tabId)
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+      return pane?.serializeAddon?.serialize?.() ?? null
+    }, tabId)) ?? ''
   const prefix = `${marker} frame `
-  const start = content?.lastIndexOf(prefix) ?? -1
-  if (!content || start < 0) {
-    return null
+  const markerOffsets: number[] = []
+  for (let at = serialized.indexOf(prefix); at >= 0; at = serialized.indexOf(prefix, at + 1)) {
+    markerOffsets.push(at)
   }
-  const digits = content.slice(start + prefix.length).match(/^\d+/)?.[0]
-  return digits ? Number(digits) : null
+  return {
+    bufferType: screen?.bufferType ?? null,
+    screenFrame: screen ? findMarkerFrame(screen.rows.join('\n'), marker) : null,
+    serializedFrame: findMarkerFrame(serialized, marker),
+    serializedLength: serialized.length,
+    markerOffsets,
+    screenRows: screen?.rows ?? []
+  }
 }
 
 test('repairs duplicate persisted PTY renderers before streaming tab reveal', async (// oxlint-disable-next-line no-empty-pattern -- this restart test owns its Electron launches.
@@ -231,13 +253,7 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     await expect
       .poll(() => getActiveTabId(secondLaunch.page), { timeout: 10_000 })
       .toBe(restoredTabId)
-    await expect
-      .poll(() => readStreamingFrame(secondLaunch.page, restoredTabId, marker), {
-        timeout: 20_000,
-        message: 'Revealed renderer did not catch up to hidden authoritative output'
-      })
-      .toBeGreaterThanOrEqual(hiddenFrame)
-
+    // Wait for duplicate ownership repair before reading the surviving pane’s frame.
     await expect
       .poll(() => readRendererOwnership(secondLaunch.page, restoredTabId), { timeout: 10_000 })
       .toEqual({
@@ -247,10 +263,61 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
         ptyBindingCount: 1,
         uniquePtyCount: 1
       })
-    await testInfo.attach('duplicate-pty-renderer-after-reveal.png', {
-      body: await secondLaunch.page.screenshot(),
-      contentType: 'image/png'
-    })
+    let revealFailure: unknown = null
+    try {
+      await expect
+        .poll(() => readRenderedAltScreenFrame(secondLaunch.page, restoredTabId, marker), {
+          timeout: 20_000,
+          message: 'Revealed renderer did not catch up to hidden authoritative output'
+        })
+        .toBeGreaterThanOrEqual(hiddenFrame)
+      // The TUI enters alt once; a normal-buffer reveal would paint its output into scrollback.
+      const revealedScreen = await readActiveScreen(secondLaunch.page, restoredTabId)
+      expect(
+        revealedScreen?.bufferType,
+        'revealed pane was missing or painting outside the alternate buffer'
+      ).toBe('alternate')
+    } catch (error) {
+      // Degrade dead-page diagnostics to attachment notes so they cannot replace the assertion failure.
+      revealFailure = error
+      const diagnostics = await readRevealFrameDiagnostics(
+        secondLaunch.page,
+        restoredTabId,
+        marker
+      ).catch((diagnosticsError: unknown) => ({ diagnosticsError: String(diagnosticsError) }))
+      await testInfo.attach('duplicate-pty-reveal-frame-diagnostics.json', {
+        body: JSON.stringify(diagnostics, null, 2),
+        contentType: 'application/json'
+      })
+    }
+    // Evidence for both outcomes; a capture that fails must not become the verdict.
+    const screenshot = await secondLaunch.page.screenshot().catch(() => null)
+    if (screenshot) {
+      await testInfo.attach('duplicate-pty-renderer-after-reveal.png', {
+        body: screenshot,
+        contentType: 'image/png'
+      })
+    }
+    if (revealFailure) {
+      throw revealFailure
+    }
+
+    // Require persisted terminal bindings on every repaired pane or later restores become empty without another duplicate to repair.
+    await session.close(secondApp)
+    secondApp = null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const persisted = readPersistedProfileState(session.userDataDir) as PersistedData
+    const storedLayout = persisted.workspaceSession?.terminalLayoutsByTabId?.[restoredTabId]
+    const storedLeafIds = (node: TerminalLayoutSnapshot['root']): string[] =>
+      !node
+        ? []
+        : node.type === 'leaf'
+          ? [node.leafId]
+          : [...storedLeafIds(node.first), ...storedLeafIds(node.second)]
+    const unboundLeafIds = storedLeafIds(storedLayout?.root ?? null).filter(
+      (leafId) => !storedLayout?.ptyIdsByLeafId?.[leafId]
+    )
+    expect(unboundLeafIds).toEqual([])
   } finally {
     tui.cleanup()
     if (secondApp) {

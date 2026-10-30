@@ -1,15 +1,8 @@
-/**
- * Fetches only the selected automation's history, through its captured owner.
- *
- * The refetch policy is a string key rather than the objects the fetch reads:
- * the dispatch context is rebuilt on every cache reprojection, and keying an
- * effect on it re-asks the same host for the same history in a loop. What
- * actually decides the request is the row, the owner it was listed under, and
- * the host a navigation named — so those, and only those, are the key.
- */
+/** Reads selected history through its captured owner, with a fresh answer for each run navigation. */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
@@ -18,6 +11,8 @@ import {
   dispatchAutomationRunHistory
 } from './automation-row-action-dispatch'
 import {
+  getAutomationAuthorityTarget,
+  getAutomationHostTargetKey,
   getAutomationTargetFromHostId,
   listAutomationRunsForTarget,
   type AutomationHostTarget
@@ -25,6 +20,7 @@ import {
 
 export type SelectedAutomationRunNavigation = {
   automationId: string
+  runId: string | null
   hostId?: string | null
 } | null
 
@@ -34,11 +30,11 @@ export type SelectedAutomationRunHistoryOutcome = {
   rowKey: string | null
   /** Which incarnation answered; a re-pairing makes the same row's answer stale. */
   ownerKey: string | null
+  /** The exact navigation this read answered, including repeated clicks on the same run. */
+  navigation: SelectedAutomationRunNavigation
+  reloadToken: number
   runs: AutomationRun[]
-  /**
-   * Non-null when the host refused or failed the read. The runs are then unknown
-   * rather than absent, and the caller must say so instead of showing zero runs.
-   */
+  /** A failed/refused read leaves history unknown; never present it as zero runs. */
   notice: AutomationActionNotice | null
 }
 
@@ -61,51 +57,99 @@ function navigationHostId(
 }
 
 export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHistoryInput): void {
-  const inputRef = useRef(input)
-  inputRef.current = input
+  const settledRequestRef = useRef<{
+    fetchKey: string
+    reloadToken: number
+    authority: AutomationAuthorityRef
+  } | null>(null)
 
   const automationId = input.selected?.automation.id ?? null
   const rowKey = input.selected?.key ?? null
   const reloadToken = input.reloadToken
+  const navigation =
+    input.navigation?.runId && input.navigation.automationId === automationId
+      ? input.navigation
+      : null
+  const captured = input.selected
+    ? capturedAutomationOwner(input.context.capturedOwners, input.selected.key).owner
+    : null
+  const authority = captured?.authority ?? input.context.authority
+  const rowAuthority = useMemo<AutomationAuthorityRef>(
+    () => (authority?.kind === 'runtime' ? authority : { kind: 'desktop' }),
+    [authority]
+  )
+  const navigationHost = automationId ? navigationHostId(input.navigation, automationId) : null
+  const target = captured
+    ? getAutomationAuthorityTarget(captured.authority)
+    : navigationHost
+      ? getAutomationTargetFromHostId(navigationHost)
+      : input.selected
+        ? (input.legacyTarget(input.selected) ?? { kind: 'local' as const })
+        : { kind: 'local' as const }
   const fetchKey =
     automationId && rowKey
       ? [
           rowKey,
           capturedAutomationOwnerKey(capturedAutomationOwner(input.context.capturedOwners, rowKey)),
-          navigationHostId(input.navigation, automationId) ?? ''
+          getAutomationHostTargetKey(target)
         ].join('|')
       : ''
+  const inputRef = useRef({ ...input, target })
+  useLayoutEffect(() => {
+    inputRef.current = { ...input, target }
+  })
 
   useEffect(() => {
-    const { selected, context, legacyTarget, navigation, onSettled } = inputRef.current
+    const { selected, context, onSettled, target: requestTarget } = inputRef.current
     if (!selected || !automationId || !rowKey) {
-      onSettled({ automationId: null, rowKey: null, ownerKey: null, runs: [], notice: null })
+      settledRequestRef.current = null
+      onSettled({
+        automationId: null,
+        rowKey: null,
+        ownerKey: null,
+        navigation: null,
+        reloadToken,
+        runs: [],
+        notice: null
+      })
       return
     }
+    const settled = settledRequestRef.current
+    if (
+      !navigation &&
+      settled?.fetchKey === fetchKey &&
+      settled.reloadToken === reloadToken &&
+      settled.authority === rowAuthority
+    ) {
+      return
+    }
+    settledRequestRef.current = null
     let cancelled = false
     const owner = capturedAutomationOwnerKey(
       capturedAutomationOwner(context.capturedOwners, rowKey)
     )
-    const navigationHost = navigationHostId(navigation, automationId)
-    const target = navigationHost
-      ? getAutomationTargetFromHostId(navigationHost)
-      : (legacyTarget(selected) ?? { kind: 'local' })
-    void dispatchAutomationRunHistory(context, { rowKey, automationId }, () =>
-      listAutomationRunsForTarget(target, automationId)
+    void dispatchAutomationRunHistory(
+      context,
+      { rowKey, automationId },
+      () => listAutomationRunsForTarget(requestTarget, automationId),
+      rowAuthority
     ).then((result) => {
       if (cancelled) {
         return
       }
-      // A refused or failed read still settles: leaving the previous automation's
-      // ID in place strands anything waiting on this one and shows its runs as zero.
-      onSettled(
-        result.ok
-          ? { automationId, rowKey, ownerKey: owner, runs: result.value, notice: null }
-          : { automationId, rowKey, ownerKey: owner, runs: [], notice: result.notice }
-      )
+      settledRequestRef.current = { fetchKey, reloadToken, authority: rowAuthority }
+      onSettled({
+        automationId,
+        rowKey,
+        ownerKey: owner,
+        navigation,
+        reloadToken,
+        runs: result.ok ? result.value : [],
+        notice: result.ok ? null : result.notice
+      })
     })
     return () => {
       cancelled = true
     }
-  }, [automationId, rowKey, fetchKey, reloadToken])
+  }, [automationId, rowAuthority, rowKey, fetchKey, reloadToken, navigation])
 }

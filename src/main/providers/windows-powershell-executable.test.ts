@@ -16,8 +16,7 @@ const WIN_ENV: NodeJS.ProcessEnv = {
 const PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const PATH_PWSH7 = 'D:\\Tools\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
-// The Microsoft Store App Execution Alias stub for pwsh — a zero-byte reparse
-// point under WindowsApps that ConPTY's CreateProcessW rejects with error 5.
+// Store alias reparse points fail ConPTY CreateProcessW with access-denied (5).
 const PWSH_STORE_ALIAS = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
 const PWSH_STORE_EXE =
   'C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.3.0_x64__8wekyb3d8bbwe\\pwsh.exe'
@@ -71,8 +70,7 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
   })
 
   it('repro: never resolves pwsh.exe to the Store App Execution Alias stub', () => {
-    // Only the WindowsApps alias "exists"; a naive resolver would return it and
-    // ConPTY would fail with error code 5. The resolver must reject it.
+    // Alias existence cannot prove a ConPTY-launchable executable.
     const resolved = resolveWindowsPowerShellExecutablePath('pwsh.exe', {
       platform: 'win32',
       env: WIN_ENV,
@@ -136,7 +134,6 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
     const chain = resolveWindowsPowerShellSpawnChain('pwsh.exe', {
       platform: 'win32',
       env: WIN_ENV,
-      // pwsh exists only as the alias stub (rejected); Windows PowerShell is real.
       isRealExecutable: (p) => p === PWSH_STORE_ALIAS || p === WINDOWS_POWERSHELL
     })
     expect(chain).toEqual([WINDOWS_POWERSHELL, WIN_ENV.ComSpec])

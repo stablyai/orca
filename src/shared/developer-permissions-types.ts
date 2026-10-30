@@ -4,6 +4,8 @@ export type DeveloperPermissionId =
   | 'screen'
   | 'accessibility'
   | 'full-disk-access'
+  // macOS exposes no grant-reading API, so exclude this from DEVELOPER_PERMISSION_IDS and offer pane opening only (STA-7948).
+  | 'files-and-folders'
   | 'automation'
   | 'local-network'
   | 'usb'
@@ -21,6 +23,7 @@ export type DeveloperPermissionStatus =
 export type DeveloperPermissionState = {
   id: DeveloperPermissionId
   status: DeveloperPermissionStatus
+  terminalHostStatus?: DeveloperPermissionStatus
 }
 
 export type DeveloperPermissionRequestResult = {

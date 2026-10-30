@@ -18,17 +18,11 @@ export const RELEASE_CHANNEL_LABELS: Readonly<Record<ReleaseChannel, string>> = 
   adhoc: 'Adhoc'
 }
 
-/** Dev builds live in their own repos so their tags never enter the main
- *  releases atom feed, which only exposes the 10 newest entries — 24 hourly
- *  tags a day would evict every stable/RC entry and strand real users. */
+/** Keep dev tags out of the 10-entry main releases feed, where hourlies would evict stable/RC updates. */
 export const HOURLY_RELEASE_REPO = 'stablyai/orca-hourly'
 export const DAILY_RELEASE_REPO = 'stablyai/orca-daily'
 export const ADHOC_RELEASE_REPO = 'stablyai/orca-adhoc'
 export const MAIN_RELEASE_REPO = 'stablyai/orca'
-
-export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
-export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
-export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'
 
 /** The dev channels, each published to its own repo rather than the main one. */
 const DEDICATED_REPO_CHANNELS = ['hourly', 'daily', 'adhoc'] as const
@@ -53,26 +47,17 @@ export function hasDedicatedReleaseRepo(channel: ReleaseChannel): channel is Ded
   return (DEDICATED_REPO_CHANNELS as readonly ReleaseChannel[]).includes(channel)
 }
 
-/**
- * The platforms each dev channel actually builds for. Split from
- * `hasDedicatedReleaseRepo` because "published to its own repo" and "built for
- * this OS" stopped coinciding once the dev workflows gained a Windows job —
- * Linux has no dev-channel artifact yet, so it still falls back to stable/RC.
- */
+/** Repository separation does not imply platform availability; dev workflows publish macOS/Windows, while Linux retains stable/RC. */
 const DEV_CHANNEL_PLATFORMS: Readonly<Record<DedicatedRepoChannel, readonly NodeJS.Platform[]>> = {
   hourly: ['darwin', 'win32'],
   daily: ['darwin', 'win32'],
   adhoc: ['darwin', 'win32']
 }
 
-/** Human-readable list of where dev builds exist, for picker copy that would
- *  otherwise have to restate the table above and drift from it. */
+/** Shared availability copy must stay aligned with the platform table. */
 export const DEV_CHANNEL_PLATFORM_LABEL = 'macOS and Windows'
 
-/**
- * Shared so the picker, the main-process check, and any future surface cannot
- * drift on where a channel is available.
- */
+/** Share platform gating across picker and update checks. */
 export function isChannelSupportedOnPlatform(
   channel: ReleaseChannel,
   platform: NodeJS.Platform
@@ -83,25 +68,9 @@ export function isChannelSupportedOnPlatform(
   return DEV_CHANNEL_PLATFORMS[channel].includes(platform)
 }
 
-/**
- * True when the running build cannot reach `targetChannel` through the in-app
- * updater and the installer has to be run by hand instead.
- *
- * Windows dev builds ship unsigned, because SignPath's approval waits are
- * budgeted in hours and cannot fit an hourly cadence. electron-updater
- * Authenticode-verifies every installer it downloads against the publisherName
- * baked into the *installed* app's app-update.yml, so a signed stable or RC
- * rejects an unsigned dev installer outright with ERR_UPDATER_INVALID_SIGNATURE
- * — and no change to a future build can fix the copies already installed.
- *
- * Dev builds omit that name, so verification is skipped there and every route
- * *out* of a dev channel, including back to stable, still works in-app. Only
- * the way in is blocked, and only on Windows.
- *
- * A null `runningChannel` (an unparseable version) is treated as signed: the
- * conservative answer sends someone to a working download rather than to an
- * update that fails with a signature error.
- */
+/** Windows signed apps reject unsigned dev installers using installed publisherName; future builds cannot fix that baked-in policy.
+ * Dev apps omit the name and can switch out freely; only entry from signed builds needs manual install. Unknown running versions
+ * conservatively assume signed. Signing approval takes hours and cannot fit dev cadence. */
 export function requiresManualDevChannelInstall(options: {
   platform: NodeJS.Platform
   runningChannel: ReleaseChannel | null
@@ -122,30 +91,16 @@ export function normalizeTagToVersion(tag: string): string {
   return tag.replace(/^v/i, '')
 }
 
-/** `1.4.160-hourly.202607281400` — a timestamp identifier keeps every build
- *  uniquely versioned so electron-updater never reads one as "same version". */
+/** Timestamp versions prevent electron-updater treating successive builds as identical (1.4.160-hourly.202607281400). */
 const HOURLY_VERSION = /^\d+\.\d+\.\d+-hourly\.(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/
 
-/** `1.4.160-daily.202607281415` — same minute stamp as hourly. Daily cuts once
- *  per day, so collisions are not a concern; the stamp still carries the hour so
- *  a forced re-cut the same calendar day remains unique. */
+/** Minute-stamped daily versions also permit unique forced recuts later the same day. */
 const DAILY_VERSION = /^\d+\.\d+\.\d+-daily\.(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/
 
-/**
- * `1.4.160-adhoc.20260728140533` — same idea, but stamped to the second.
- *
- * Why seconds here and not for hourly/daily: those run under a concurrency
- * group, so two of them can never be cut in the same minute. Adhoc builds are
- * dispatched on demand by whoever wants one, so two people cutting from
- * different branches at once is ordinary — and a minute-resolution stamp would
- * collide on the tag and fail the second build eight minutes in.
- */
+/** Use second-resolution adhoc stamps: concurrent branch dispatches lack hourly/daily serialization and can collide within a minute. */
 const ADHOC_VERSION = /^\d+\.\d+\.\d+-adhoc\.(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/
 
-/**
- * Both patterns are anchored on the whole version: an unanchored tail match also
- * accepts garbage prefixes, so `not-a-version-hourly.202601010000` would parse.
- */
+/** Anchor the whole version so garbage prefixes cannot parse as valid build stamps. */
 function parseStampedVersion(version: string, pattern: RegExp): Date | null {
   const match = normalizeTagToVersion(version).match(pattern)
   if (!match) {
@@ -153,8 +108,7 @@ function parseStampedVersion(version: string, pattern: RegExp): Date | null {
   }
   const [year, month, day, hour, minute, second = 0] = match.slice(1).map(Number)
   const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
-  // Why the round-trip: Date.UTC silently rolls impossible dates forward, so a
-  // corrupt `...hourly.202602300000` would render as March 2 rather than fail.
+  // Round-trip components because Date.UTC normalizes impossible dates (February 30→March 2).
   if (
     parsed.getUTCFullYear() !== year ||
     parsed.getUTCMonth() !== month - 1 ||
@@ -180,35 +134,19 @@ export function isAdhocVersion(version: string): boolean {
   return ADHOC_VERSION.test(normalizeTagToVersion(version))
 }
 
-export function formatHourlyVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${HOURLY_PRERELEASE_IDENTIFIER}.${stamp}`
-}
-
-export function formatDailyVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${DAILY_PRERELEASE_IDENTIFIER}.${stamp}`
-}
-
-export function formatAdhocVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${ADHOC_PRERELEASE_IDENTIFIER}.${stamp}`
-}
-
-/** Returns the build's UTC timestamp, or null when the version isn't hourly. */
 export function parseHourlyVersionStamp(version: string): Date | null {
   return parseStampedVersion(version, HOURLY_VERSION)
 }
 
-/** Returns the build's UTC timestamp, or null when the version isn't daily. */
 export function parseDailyVersionStamp(version: string): Date | null {
   return parseStampedVersion(version, DAILY_VERSION)
 }
 
-/** Returns the build's UTC timestamp, or null when the version isn't adhoc. */
 export function parseAdhocVersionStamp(version: string): Date | null {
   return parseStampedVersion(version, ADHOC_VERSION)
 }
 
-/** The build's UTC timestamp for any dev channel, so a picker row can render a
- *  date without first working out which channel produced the version. */
+/** Read any dev build timestamp so picker rows need no per-channel branching. */
 export function parseDevBuildStamp(version: string): Date | null {
   return (
     parseHourlyVersionStamp(version) ??
@@ -236,12 +174,7 @@ export function getVersionChannel(version: string): ReleaseChannel | null {
   return normalized.includes('-') ? 'rc' : 'stable'
 }
 
-/**
- * Release-notes page for a version, in whichever repo published it. Dev-channel
- * tags exist only in their own repo, so a main-repo tag URL for one 404s.
- * A null version falls back to the plain releases listing (not /releases/latest
- * — /latest also breaks when GitHub's API is degraded).
- */
+/** Dev tags need their publishing repo or links 404. Missing versions use the releases list; latest can fail during GitHub API degradation. */
 export function getReleaseNotesUrlForVersion(version: string | null): string {
   const channel = version ? getVersionChannel(version) : null
   const repo = channel ? getReleaseRepoForChannel(channel) : MAIN_RELEASE_REPO
@@ -250,13 +183,7 @@ export function getReleaseNotesUrlForVersion(version: string | null): string {
     : `https://github.com/${repo}/releases`
 }
 
-/**
- * The electron-updater manifest each platform's updater fetches before it can
- * install anything. A release without one has nothing that platform can use,
- * which is how a build whose Windows leg failed — or one whose Windows leg is
- * still running — stays out of that platform's picker instead of becoming a row
- * that 404s on download.
- */
+/** Require each platform’s updater manifest: missing/in-progress platform legs must not offer picker entries whose downloads 404. */
 const PLATFORM_UPDATE_MANIFESTS: Partial<Record<NodeJS.Platform, readonly string[]>> = {
   darwin: ['latest-mac.yml'],
   win32: ['latest.yml'],
@@ -274,17 +201,14 @@ export function hasInstallableArtifactForPlatform(
   assetNames: readonly string[]
 ): boolean {
   const manifests = getUpdateManifestNamesForPlatform(platform)
-  // Why permissive on an unknown platform: a filter that hides every build is a
-  // worse failure than one that offers a build the download step will report on.
+  // Unknown platforms should fail with a download explanation rather than an empty picker.
   if (manifests.length === 0) {
     return true
   }
   return manifests.some((manifest) => assetNames.includes(manifest))
 }
 
-/** Matches the electron-builder `artifactName` for each platform's directly
- *  runnable installer — the file someone downloads when the in-app updater
- *  cannot make the jump. */
+/** Match electron-builder’s runnable installer names for manual bootstrap when in-app switching cannot work. */
 const PLATFORM_INSTALLER_PATTERNS: Partial<Record<NodeJS.Platform, RegExp>> = {
   darwin: /\.dmg$/i,
   win32: /windows-setup\.exe$/i,
@@ -306,18 +230,36 @@ export type ReleaseBuild = {
   tag: string
   version: string
   channel: ReleaseChannel
-  /** The release's GitHub title. Null when it is absent or just repeats the tag,
-   *  so the picker can tell "the workflow named this" from "nobody did". */
+  /** Null for missing/tag-repeated titles so the picker distinguishes workflow names from unnamed builds. */
   name: string | null
   publishedAt: string | null
   releaseUrl: string
-  /** Direct download for this platform's installer, or null when the release
-   *  published none. Drives the Windows bootstrap path, where a signed build
-   *  cannot reach a dev channel through the updater. */
+  /** Platform installer, null when unpublished; signed Windows builds use this to bootstrap unsigned dev channels. */
   installerUrl: string | null
 }
 
 /** Newest first, so the picker's first row is always the channel's current tip. */
 export function sortReleaseBuildsNewestFirst(builds: ReleaseBuild[]): ReleaseBuild[] {
-  return [...builds].sort((left, right) => compareAppVersions(right.version, left.version))
+  return [...builds].sort((left, right) => {
+    // Branches can predate current main’s base version; use dev build time rather than semver for picker recency.
+    const leftStamp = parseDevBuildStamp(left.version)?.getTime() ?? null
+    const rightStamp = parseDevBuildStamp(right.version)?.getTime() ?? null
+    if (leftStamp !== null && rightStamp !== null && leftStamp !== rightStamp) {
+      return rightStamp - leftStamp
+    }
+
+    if (hasDedicatedReleaseRepo(left.channel) && hasDedicatedReleaseRepo(right.channel)) {
+      const leftPublished = left.publishedAt ? Date.parse(left.publishedAt) : Number.NaN
+      const rightPublished = right.publishedAt ? Date.parse(right.publishedAt) : Number.NaN
+      if (
+        Number.isFinite(leftPublished) &&
+        Number.isFinite(rightPublished) &&
+        leftPublished !== rightPublished
+      ) {
+        return rightPublished - leftPublished
+      }
+    }
+
+    return compareAppVersions(right.version, left.version)
+  })
 }

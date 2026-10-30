@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { Badge } from '../ui/badge'
-import { Button } from '../ui/button'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
+import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/utils'
-import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
+import type {
+  MobileRelayStatus,
+  MobileRelayStatusDetail
+} from '../../../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
+import { MobileRelaySignInPanel } from './MobileRelaySignInPanel'
+import { relayClockSkewMessage } from '../mobile/relay-clock-skew-message'
 
 function relayStatusLabel(status: MobileRelayStatus): string {
   if (status === 'registered') {
@@ -37,6 +41,15 @@ function relayStatusLabel(status: MobileRelayStatus): string {
   )
 }
 
+// Show the landed Relay cell for support; the scheme offers no actionable detail.
+function relayCellLabel(cellUrl: string): string | null {
+  try {
+    return new URL(cellUrl).host || null
+  } catch {
+    return null
+  }
+}
+
 export function MobilePairingConnectionOptions({
   value,
   onChange,
@@ -52,15 +65,10 @@ export function MobilePairingConnectionOptions({
   relayMintRetrying?: boolean
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
-  const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
+  const [relayStatus, setRelayStatus] = useState<MobileRelayStatusDetail>({ status: 'offline' })
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
-  // Why: an unconfigured build has no Relay endpoint to sign into, so a Sign in
-  // CTA would be dead. Treat that case as unavailable (matching the prior UI)
-  // and only offer Sign in when the build can actually reach Relay.
+  // Unconfigured builds have no Relay sign-in endpoint; mark unavailable instead of offering a dead CTA.
   const configured = authStatus?.configured !== false
   const needsSignIn = value === 'automatic' && !signedIn && configured
   // Availability is a property of the build, not of the current selection.
@@ -71,10 +79,7 @@ export function MobilePairingConnectionOptions({
     'local-only': null
   })
 
-  // Why: ARIA radiogroups move selection with the arrow keys; wrap between the
-  // two options and move focus so keyboard users get standard behavior.
-  // Ignore arrows that originate on nested controls (Sign in) so they do not
-  // steal keys from the button or flip the path while focus is outside a radio.
+  // Wrap/focus radio arrow navigation, but leave nested Sign in controls’ arrows untouched.
   const handleArrowKeys = (event: React.KeyboardEvent): void => {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
       return
@@ -93,26 +98,27 @@ export function MobilePairingConnectionOptions({
     optionRefs.current[next]?.focus()
   }
 
-  useEffect(() => {
-    if (!authStatus) {
-      void fetchAuthStatus()
-    }
-  }, [authStatus, fetchAuthStatus])
+  const relayCell = relayStatus.cellUrl ? relayCellLabel(relayStatus.cellUrl) : null
+
+  useOrcaProfileAuthStatusRefresh()
 
   useEffect(() => {
     let receivedEvent = false
     let active = true
-    const unsubscribe = window.api.mobile.onRelayStatusChanged((status) => {
+    const apply = (detail: MobileRelayStatusDetail): void => {
+      setRelayStatus(detail)
+    }
+    const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
       receivedEvent = true
       if (active) {
-        setRelayStatus(status)
+        apply(detail)
       }
     })
     void window.api.mobile
       .getRelayStatus()
-      .then(({ status }) => {
+      .then((detail) => {
         if (active && !receivedEvent) {
-          setRelayStatus(status)
+          apply(detail)
         }
       })
       .catch(() => {})
@@ -178,57 +184,31 @@ export function MobilePairingConnectionOptions({
                         'auto.components.settings.MobilePairingConnectionOptions.unavailable',
                         'Unavailable'
                       )
-                    : relayStatusLabel(relayStatus)}
+                    : relayStatusLabel(relayStatus.status)}
               </Badge>
             ) : null
           }
         />
-        {needsSignIn ? (
-          <div
-            // Why: indent under the Relay radio so Sign in reads as a Relay
-            // sub-step, not a requirement for the whole connection section/LAN.
-            // Deliberately role-less: a `group` here would be an invalid owned
-            // element of the radiogroup, and its label would double-announce the
-            // button it wraps. The plain div contributes nothing to the a11y
-            // tree, leaving the CTA reachable by Tab as an ordinary button.
-            onKeyDown={(event) => {
-              // Why: nested controls live inside the radiogroup for layout; do not
-              // let arrow keys bubble and flip the selected path.
-              if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
-                event.stopPropagation()
-              }
-            }}
-            className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-accent/40 py-2.5 pl-10 pr-3"
-            data-testid="anywhere-sign-in-panel"
+        {needsSignIn ? <MobileRelaySignInPanel reconnectRequired={reconnectRequired} /> : null}
+        {signedIn &&
+        value === 'automatic' &&
+        !relayMintFailed &&
+        relayStatus.clockOffsetMs !== undefined ? (
+          <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive" role="alert">
+            {relayClockSkewMessage(relayStatus.clockOffsetMs)}
+          </p>
+        ) : null}
+        {value === 'automatic' && relayCell ? (
+          <p
+            className="border-t border-border/60 py-2 pl-10 pr-3 text-xs text-muted-foreground"
+            data-testid="relay-cell-line"
           >
-            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
-                'Relay only — LAN does not need an account.'
-              )}
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              className="shrink-0"
-              disabled={connecting}
-              onClick={() => {
-                onChange('automatic')
-                void connect()
-              }}
-            >
-              {connecting ? <Loader2 className="animate-spin" /> : null}
-              {reconnectRequired
-                ? translate(
-                    'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
-                    'Sign in again for Relay'
-                  )
-                : translate(
-                    'auto.components.settings.MobilePairingConnectionOptions.signIn',
-                    'Sign in for Relay'
-                  )}
-            </Button>
-          </div>
+            {translate(
+              'auto.components.settings.MobilePairingConnectionOptions.relayCell',
+              'Relay cell'
+            )}
+            {`: ${relayCell}`}
+          </p>
         ) : null}
         <div className="border-t border-border" />
         <MobilePairingPathOption

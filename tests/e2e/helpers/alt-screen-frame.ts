@@ -1,7 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
 
-// Boxed alt-screen TUI frame: enters the alternate buffer, clears it, and paints
-// a marker line carrying a zero-padded frame number.
 export function buildAltScreenFrame(marker: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
   return [
@@ -17,34 +15,52 @@ export function buildAltScreenFrame(marker: string, frame: number): string {
   ].join('\r\n')
 }
 
-// Why: the live-write and the reveal restore paint the same layout, so the frame
-// number is the only thing on screen that says which of the two landed last.
+export type ActiveScreen = {
+  bufferType: 'normal' | 'alternate'
+  rows: string[]
+}
+
+// Read only the active viewport: serialize() includes stale normal-buffer markers before the live alt frame (STA-5208).
+// Return null during remount because expect.poll aborts on generator throws.
+export async function readActiveScreen(page: Page, tabId: string): Promise<ActiveScreen | null> {
+  return page.evaluate(
+    ({ tabId }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      if (!pane) {
+        return null
+      }
+      const buffer = pane.terminal.buffer.active
+      const rows: string[] = []
+      for (let row = 0; row < pane.terminal.rows; row += 1) {
+        rows.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '')
+      }
+      return { bufferType: buffer.type, rows }
+    },
+    { tabId }
+  )
+}
+
+// Use the highest frame because a repaint may leave an older marker beside the live one.
+export function findMarkerFrame(text: string, marker: string): number | null {
+  // marker is a literal, so escape it rather than letting `[`/`.`/`+` act as regex syntax.
+  const pattern = new RegExp(`${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} frame (\\d+)`, 'g')
+  let latest: number | null = null
+  for (const match of text.matchAll(pattern)) {
+    const frame = Number(match[1])
+    latest = latest === null ? frame : Math.max(latest, frame)
+  }
+  return latest
+}
+
+// Live output and restore paint the same layout; frame number identifies which won.
 export async function readRenderedAltScreenFrame(
   page: Page,
   tabId: string,
   marker: string
 ): Promise<number | null> {
-  return page.evaluate(
-    ({ tabId, marker }) => {
-      const manager = window.__paneManagers?.get(tabId)
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-      if (!pane) {
-        throw new Error(`No terminal pane for tab ${tabId}`)
-      }
-      // marker is a literal, so escape it rather than letting `[`/`.`/`+` act as regex syntax.
-      const pattern = new RegExp(`${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} frame (\\d{3})`)
-      const buffer = pane.terminal.buffer.active
-      for (let row = 0; row < pane.terminal.rows; row += 1) {
-        const line = buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
-        const match = pattern.exec(line)
-        if (match) {
-          return Number(match[1])
-        }
-      }
-      return null
-    },
-    { tabId, marker }
-  )
+  const screen = await readActiveScreen(page, tabId)
+  return screen ? findMarkerFrame(screen.rows.join('\n'), marker) : null
 }
 
 export function describeAltScreenRenderPath(

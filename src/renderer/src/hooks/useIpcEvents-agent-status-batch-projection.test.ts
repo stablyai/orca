@@ -5,7 +5,10 @@ import {
   makeWorktree,
   TEST_REPO
 } from '../store/slices/store-test-helpers'
-import type { AgentStatusBatchUpdate, AgentStatusUpdate } from '../store/slices/agent-status'
+import type {
+  AgentStatusBatchUpdate,
+  AgentStatusUpdate
+} from '../store/slices/agent-status/agent-status-contract'
 import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -107,18 +110,16 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expandedLeafId: null
       }
     }
-    const snapshot = cases.map(
-      (entry, index): AgentStatusSetData => ({
-        paneKey: makePaneKey(entry.tabId, entry.leafId),
-        worktreeId: entry.payloadWorktreeId,
-        ...(entry.connectionId ? { connectionId: entry.connectionId } : {}),
-        state: 'working',
-        prompt: `routing case ${index}`,
-        agentType: 'claude',
-        receivedAt: 1_700_000_001_000 + index,
-        stateStartedAt: 1_700_000_001_000 + index
-      })
-    )
+    const snapshot = cases.map((entry, index): AgentStatusSetData => ({
+      paneKey: makePaneKey(entry.tabId, entry.leafId),
+      worktreeId: entry.payloadWorktreeId,
+      ...(entry.connectionId ? { connectionId: entry.connectionId } : {}),
+      state: 'working',
+      prompt: `routing case ${index}`,
+      agentType: 'claude',
+      receivedAt: 1_700_000_001_000 + index,
+      stateStartedAt: 1_700_000_001_000 + index
+    }))
     const localRepo = { ...TEST_REPO, id: 'repo-routing-local', connectionId: null }
     const sshRepo = { ...TEST_REPO, id: 'repo-routing-ssh', connectionId: 'ssh-live' }
     const store = createTestStore()
@@ -261,10 +262,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
   })
 
   it('applies a burst leading-edge first, then coalesces the rest into one deferred batch', async () => {
-    // Why: each live status event is its own IPC task, so N events used to pay
-    // N full render passes (STA-3328 mechanism 2). The leading event must stay
-    // synchronous (zero added latency); followers within the burst window must
-    // apply together on one later task, in arrival order.
+    // Apply leading status synchronously, then coalesce burst followers in arrival order to avoid a render per IPC event (STA-3328).
     vi.useFakeTimers()
     let storeState: StoreLike
     let publicationCount = 0
@@ -284,7 +282,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
           delete next[update.paneKey]
           storeState.agentStatusByPaneKey = next
-        } else {
+        } else if (update.kind !== 'programStatus') {
           applyStatus(update.paneKey, update.payload)
         }
       }

@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type PickerOption<T extends string = string> = {
@@ -15,6 +17,7 @@ export type PickerOption<T extends string = string> = {
 type Props<T extends string = string> = {
   visible: boolean
   title: string
+  subtitle?: string
   options: PickerOption<T>[]
   selected: T
   onSelect: (value: T) => void
@@ -32,6 +35,7 @@ type PickerModalContentProps<T extends string = string> = Pick<
 export function PickerModal<T extends string = string>({
   visible,
   title,
+  subtitle,
   options,
   selected,
   onSelect,
@@ -40,10 +44,12 @@ export function PickerModal<T extends string = string>({
   onAfterClose,
   zIndex
 }: Props<T>) {
+  useMobileColorScheme()
   return (
     <BottomDrawer visible={visible} onClose={onClose} onAfterClose={onAfterClose} zIndex={zIndex}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
 
       <PickerModalContent
@@ -64,8 +70,8 @@ function PickerModalContent<T extends string = string>({
   onLongSelect,
   onClose
 }: PickerModalContentProps<T>) {
-  // Why: closed BottomDrawer instances return null, so keeping option rows in
-  // this child avoids rebuilding hidden picker contents on every parent render.
+  useMobileColorScheme()
+  // Put option rows in shown child; closed BottomDrawer returns null, avoiding hidden-content rebuilds on parent renders.
   return (
     <View style={styles.group}>
       {options.map((opt, i) => {
@@ -120,7 +126,7 @@ function PickerModalContent<T extends string = string>({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -129,6 +135,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: colors.textMuted
+  },
+  subtitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2
   },
   group: {
     backgroundColor: colors.bgPanel,
@@ -173,4 +184,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 1
   }
-})
+}))

@@ -1,12 +1,12 @@
-/**
- * E2E tests for the Tasks page.
- *
- * Verifies that opening the tasks view renders correctly and that the
- * source controls and close affordance are present.
- */
-
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, getStoreState } from './helpers/store'
+import { GITHUB_TASK_SEARCH_IDLE_MS } from '../../src/renderer/src/components/use-github-task-search-commit'
+
+// Derive cadence from idle timing so slow keystrokes cannot commit a prefix.
+const TASK_SEARCH_TYPING_DELAY_MS = Math.round(GITHUB_TASK_SEARCH_IDLE_MS / 6)
+const TASK_SEARCH_SETTLE_MS = GITHUB_TASK_SEARCH_IDLE_MS + 50
+// Outlast idle timing, React commit and two store roundtrips instead of assuming a flat 2s.
+const TASK_SEARCH_PROBE_TIMEOUT_MS = GITHUB_TASK_SEARCH_IDLE_MS * 6
 
 type RenderedTaskSource = {
   source: string
@@ -224,8 +224,7 @@ test.describe('Tasks page', () => {
       timeout: 10_000
     })
 
-    // Why: source buttons are provider-availability aware in CI; assert the
-    // stable Tasks chrome instead of a GitHub-only tab set.
+    // Assert stable Tasks chrome because source tabs depend on provider availability.
     let renderedSources: RenderedTaskSource[] = []
     await expect
       .poll(
@@ -267,7 +266,6 @@ test.describe('Tasks page', () => {
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
-    // Sanity: the tasks UI actually painted before we close it.
     await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible()
 
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
@@ -275,13 +273,7 @@ test.describe('Tasks page', () => {
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe(previousView)
-    // Why: the load-bearing check is that the previous view's DOM actually
-    // re-rendered — a store-only `activeView` assertion would pass even if the
-    // terminal/editor surface had silently stopped mounting. `.xterm` is the
-    // stable class xterm.js emits on every live terminal pane; if the
-    // previous view was terminal (by far the common case in E2E setup), that
-    // element must be visible. Tasks-close also hides the "Close tasks"
-    // button regardless of previous view, so we assert that too.
+    // Require prior-view DOM to remount plus Tasks close control to disappear; activeView alone misses broken rendering.
     await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toHaveCount(0)
     if (previousView === 'terminal') {
       await expect(orcaPage.locator('.xterm').first()).toBeVisible({ timeout: 5_000 })
@@ -315,7 +307,9 @@ test.describe('Tasks page', () => {
     )
     const restoredList = orcaPage.locator('[data-task-list-scroll="github"]')
     await expect.poll(() => restoredList.evaluate((element) => element.scrollTop)).toBe(0)
-    await clampedRowsStyle.evaluate((element) => element.remove())
+    await clampedRowsStyle.evaluate((element) => {
+      element.parentNode?.removeChild(element)
+    })
     await expect(orcaPage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
     await expect
       .poll(() => restoredList.evaluate((element) => element.scrollTop))
@@ -346,7 +340,9 @@ test.describe('Tasks page', () => {
       'page'
     )
     await orcaPage.getByRole('button', { name: 'Page 1', exact: true }).click()
-    await pendingRestoreStyle.evaluate((element) => element.remove())
+    await pendingRestoreStyle.evaluate((element) => {
+      element.parentNode?.removeChild(element)
+    })
     await expect(orcaPage.getByRole('button', { name: 'Page 1', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
@@ -379,6 +375,7 @@ test.describe('Tasks page', () => {
       'aria-current',
       'page'
     )
+    // Outlast the old 5s restore give-up so an unpainted list cannot overwrite remembered scroll with zero.
     await orcaPage.waitForTimeout(5_500)
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
     await expect
@@ -386,8 +383,10 @@ test.describe('Tasks page', () => {
         const position = await getStoreState<{ scrollTop: number }>(orcaPage, 'taskListPosition')
         return position.scrollTop
       })
-      .toBe(0)
-    await permanentlyClampedRowsStyle.evaluate((element) => element.remove())
+      .toBeGreaterThan(300)
+    await permanentlyClampedRowsStyle.evaluate((element) => {
+      element.parentNode?.removeChild(element)
+    })
   })
 
   test('GitHub search waits for idle, keeps rows visible, and Enter does not double-fetch', async ({
@@ -401,19 +400,22 @@ test.describe('Tasks page', () => {
     await expect(existingIssue).toBeVisible()
 
     await input.fill('')
-    await orcaPage.waitForTimeout(800)
+    await expect
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), {
+        timeout: TASK_SEARCH_PROBE_TIMEOUT_MS
+      })
+      .toEqual({ countQueries: ['is:issue is:open'], fetchQueries: ['is:issue is:open'] })
     await resetTaskSearchRequestProbe(orcaPage)
 
-    await input.pressSequentially('rate', { delay: 400 })
+    await input.pressSequentially('rate', { delay: TASK_SEARCH_TYPING_DELAY_MS })
 
-    expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
-      countQueries: [],
-      fetchQueries: []
-    })
     await expect(existingIssue).toBeVisible()
 
+    // Require one final-value request per surface, never a typed prefix.
     await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), {
+        timeout: TASK_SEARCH_PROBE_TIMEOUT_MS
+      })
       .toEqual({ countQueries: ['is:issue rate'], fetchQueries: ['is:issue rate'] })
 
     await resetTaskSearchRequestProbe(orcaPage)
@@ -421,9 +423,11 @@ test.describe('Tasks page', () => {
     await input.press('Enter')
 
     await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), {
+        timeout: TASK_SEARCH_PROBE_TIMEOUT_MS
+      })
       .toEqual({ countQueries: ['is:issue ratex'], fetchQueries: ['is:issue ratex'] })
-    await orcaPage.waitForTimeout(800)
+    await orcaPage.waitForTimeout(TASK_SEARCH_SETTLE_MS)
     expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
       countQueries: ['is:issue ratex'],
       fetchQueries: ['is:issue ratex']

@@ -3,37 +3,13 @@ import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-se
 import {
   createMockStore,
   registerWorktreeActivationReset,
-  setSetupScriptLaunchMode
-} from './worktree-activation-test-harness'
+  setLegacySetupScriptLaunchMode,
+  createdTabStartups
+} from './worktree-activation.test-fixture'
 
 registerWorktreeActivationReset()
 
 describe('ensureWorktreeHasInitialTerminal', () => {
-  it('queues an issue command split when issueCommand is provided', () => {
-    const store = createMockStore()
-
-    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, {
-      runnerScriptPath: '/tmp/repo/.git/orca/issue-command-runner.sh',
-      envVars: {
-        ORCA_ROOT_PATH: '/tmp/repo',
-        ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
-      }
-    })
-
-    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      pendingActivationSpawn: true
-    })
-    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
-    expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
-    expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'bash /tmp/repo/.git/orca/issue-command-runner.sh',
-      env: {
-        ORCA_ROOT_PATH: '/tmp/repo',
-        ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
-      }
-    })
-  })
-
   it('queues an issue command split through returned WSL shell metadata', () => {
     const store = createMockStore()
 
@@ -49,8 +25,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
-  it('queues both setup split and issue command split when both are provided', () => {
-    setSetupScriptLaunchMode('split-vertical')
+  it('creates a Setup tab and queues issue automation on the primary terminal', () => {
+    setLegacySetupScriptLaunchMode('split-vertical')
     const store = createMockStore()
 
     ensureWorktreeHasInitialTerminal(
@@ -67,24 +43,13 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       }
     )
 
-    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
-    expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-2']).toEqual({
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
-      env: { ORCA_ROOT_PATH: '/tmp/repo' },
-      direction: 'vertical'
+      env: { ORCA_ROOT_PATH: '/tmp/repo' }
     })
     expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
       command: 'bash /tmp/repo/.git/orca/issue-command-runner.sh',
       env: { ORCA_ROOT_PATH: '/tmp/repo' }
     })
-  })
-
-  it('does not queue issue command split when issueCommand is not provided', () => {
-    const store = createMockStore()
-
-    ensureWorktreeHasInitialTerminal(store, 'wt-1')
-
-    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
-    expect(store.queueTabIssueCommandSplit).not.toHaveBeenCalled()
   })
 })

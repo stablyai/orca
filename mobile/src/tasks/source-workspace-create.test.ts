@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import type { AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
 import { createWorkspaceFromComposerSource } from './source-workspace-create'
 import type { MobileComposerCreateSelection } from './mobile-composer-source-types'
 import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'
+import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
 
 type Call = { method: string; params: Record<string, unknown> }
 
 function fakeClient(handle: (method: string, call: number) => unknown, calls: Call[]): RpcClient {
   return {
+    ...createFakeRpcClient(),
     sendRequest: async (method: string, params?: unknown) => {
-      calls.push({ method, params: (params ?? {}) as Record<string, unknown> })
+      if (
+        params !== undefined &&
+        (typeof params !== 'object' || params === null || Array.isArray(params))
+      ) {
+        throw new Error('Expected object request params')
+      }
+      calls.push({ method, params: Object.fromEntries(Object.entries(params ?? {})) })
       const result = handle(method, calls.length)
       if (result instanceof Error) {
         return {
@@ -21,7 +31,7 @@ function fakeClient(handle: (method: string, call: number) => unknown, calls: Ca
       }
       return { id: '1', ok: true, result, _meta: { runtimeId: 'r' } }
     }
-  } as unknown as RpcClient
+  }
 }
 
 const agent = { choice: 'blank' as const }
@@ -35,10 +45,95 @@ const baseArgs = {
   agent,
   workspaceName: undefined,
   note: undefined,
-  worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+  worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+  branchIntentSupported: true,
+  agentLaunchSupported: false as const
 }
 
 describe('createWorkspaceFromComposerSource', () => {
+  it.each([
+    { capabilities: [] },
+    { capabilities: ['worktree.open-existing-branch.v1'] },
+    { capabilities: ['worktree.open-existing-branch.v2'] }
+  ])('refuses remote reuse on an older host before any write (%j)', async ({ capabilities }) => {
+    const methods: string[] = []
+    const client = {
+      ...createFakeRpcClient(),
+      sendRequest: async (method: string) => {
+        methods.push(method)
+        return {
+          id: 'status',
+          ok: true as const,
+          result: { capabilities },
+          _meta: { runtimeId: 'r' }
+        }
+      }
+    }
+    const result = await createWorkspaceFromComposerSource({
+      ...baseArgs,
+      client,
+      branchIntentSupported: readNewWorktreeRuntimeCapabilities(client).then(
+        (support) => support?.branchIntentV2Request === true
+      ),
+      selection: {
+        kind: 'branch',
+        baseBranch: 'origin/topic',
+        refName: 'origin/topic',
+        localBranchName: 'topic',
+        reuse: true
+      }
+    })
+    expect(result).toEqual({
+      error: expect.stringContaining('Update Orca on the workspace host')
+    })
+    expect(methods).toEqual(['status.get'])
+  })
+
+  it('sends explicit remote reuse and a separate edited workspace label', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'remote-feature' } }), calls)
+    await createWorkspaceFromComposerSource({
+      ...baseArgs,
+      client,
+      workspaceName: 'Review workspace',
+      nameIsAutoManaged: false,
+      selection: {
+        kind: 'branch',
+        baseBranch: 'refs/remotes/origin/feature/test',
+        refName: 'refs/remotes/origin/feature/test',
+        localBranchName: 'feature/test',
+        reuse: true
+      }
+    })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.params).toMatchObject({
+      branchIntent: 'open-existing-v2',
+      branchNameOverride: 'feature/test',
+      baseBranch: 'refs/remotes/origin/feature/test',
+      displayName: 'Review workspace',
+      displayNameKind: 'user'
+    })
+  })
+
+  it('retains an upstream warning returned by the workspace host', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(
+      () => ({ worktree: { id: 'remote-feature' }, warning: 'Check the push destination.' }),
+      calls
+    )
+    const result = await createWorkspaceFromComposerSource({
+      ...baseArgs,
+      client,
+      selection: {
+        kind: 'branch',
+        baseBranch: 'origin/topic',
+        refName: 'origin/topic',
+        localBranchName: 'topic',
+        reuse: true
+      }
+    })
+    expect(result).toMatchObject({ warning: 'Check the push destination.' })
+  })
   it('creates a GitHub issue workspace linking the issue to its own repo', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-1' } }), calls)
@@ -53,8 +148,6 @@ describe('createWorkspaceFromComposerSource', () => {
         repoId: 'repo-9'
       }
     }
-    // The composer supplies the title-derived name as workspaceName; with none,
-    // buildTaskWorkspaceCreateParams falls back to the "<type>-<number>" slug.
     const result = await createWorkspaceFromComposerSource({ client, selection, ...baseArgs })
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'issue-7' })
     expect(calls).toHaveLength(1)
@@ -174,7 +267,62 @@ describe('createWorkspaceFromComposerSource', () => {
     })
   })
 
-  it('suppresses displayName when the name is user-edited (not auto-managed)', async () => {
+  it('does not pin an automatically managed branch selection without a custom label', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-auto-branch' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'branch',
+      baseBranch: 'main',
+      refName: 'main',
+      localBranchName: 'topic',
+      reuse: false,
+      branchNameOverride: 'topic'
+    }
+    await createWorkspaceFromComposerSource({ client, selection, ...baseArgs })
+    expect(calls[0]!.params).not.toHaveProperty('displayName')
+    expect(calls[0]!.params).not.toHaveProperty('displayNameKind')
+  })
+
+  it('does not pin an auto-derived branch label even when the draft is populated', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-auto-branch-draft' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'new-branch',
+      branchName: 'topic'
+    }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      workspaceName: 'topic',
+      nameIsAutoManaged: true
+    })
+
+    expect(calls[0]!.params).not.toHaveProperty('displayName')
+    expect(calls[0]!.params).not.toHaveProperty('displayNameKind')
+  })
+
+  it('pins a custom label for a new branch selection', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-labeled-branch' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'new-branch',
+      branchName: 'feature/login'
+    }
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      workspaceName: '  Login work  '
+    })
+    expect(calls[0]!.params).toMatchObject({
+      displayName: 'Login work',
+      displayNameKind: 'user'
+    })
+  })
+
+  it('pins displayName when the name is user-edited (not auto-managed)', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-dn' } }), calls)
     const selection: MobileComposerCreateSelection = {
@@ -195,8 +343,12 @@ describe('createWorkspaceFromComposerSource', () => {
       workspaceName: 'my-name',
       nameIsAutoManaged: false
     })
-    expect(calls[0]!.params.displayName).toBeUndefined()
-    expect(calls[0]!.params).toMatchObject({ name: 'my-name', linkedIssue: 7 })
+    expect(calls[0]!.params).toMatchObject({
+      name: 'my-name',
+      displayName: 'my-name',
+      displayNameKind: 'user',
+      linkedIssue: 7
+    })
   })
 
   it('creates a new branch off a ref, bumping the branch on collision', async () => {
@@ -224,8 +376,7 @@ describe('createWorkspaceFromComposerSource', () => {
   })
 
   it('sends startupAgent (not a pre-built command) for a non-blank agent', async () => {
-    // Why: regression — a bare startupCommand skipped the host's default
-    // `--dangerously-skip-permissions`; the host must resolve the launch args.
+    // Host launch resolution must retain configured permission flags; bare startup commands bypass them.
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-agent' } }), calls)
     const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
@@ -240,5 +391,164 @@ describe('createWorkspaceFromComposerSource', () => {
       createdWithAgent: 'claude'
     })
     expect('startupCommand' in calls[0]!.params).toBe(false)
+  })
+  it('routes a branch selection with an agent through agent.launch', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(
+      () =>
+        ({
+          worktreeId: 'wt-branch-launch',
+          outcome: { kind: 'structured', sessionId: 'session-1', handle: 'structured-1' },
+          receipt: {
+            mode: 'structured',
+            preferred: 'structured',
+            reason: 'user_default',
+            detail: 'Structured default'
+          }
+        }) satisfies AgentLaunchResult,
+      calls
+    )
+    const selection: MobileComposerCreateSelection = {
+      kind: 'branch',
+      baseBranch: 'main',
+      refName: 'main',
+      localBranchName: 'topic',
+      reuse: false,
+      branchNameOverride: 'topic'
+    }
+
+    const result = await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: { replay: false }
+    })
+
+    expect(result).toEqual({ worktreeId: 'wt-branch-launch', name: 'topic' })
+    expect(calls[0]!.method).toBe('agent.launch')
+    expect(calls[0]?.params).toMatchObject({
+      agent: 'claude',
+      target: { create: { baseBranch: 'main', name: 'topic' } }
+    })
+    expect(calls[0]?.params).not.toHaveProperty(['target', 'create', 'startupAgent'])
+  })
+
+  it('routes a reused branch through agent.launch without spending the retry budget', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => new Error('Branch "topic" already exists locally.'), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'branch',
+      baseBranch: 'main',
+      refName: 'origin/topic',
+      localBranchName: 'topic',
+      reuse: true
+    }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'codex' },
+      agentLaunchSupported: { replay: false }
+    })
+
+    expect(calls.map((call) => call.method)).toEqual(['agent.launch'])
+  })
+
+  it('routes a new-branch selection with an agent through agent.launch', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(
+      () =>
+        ({
+          worktreeId: 'wt-new-branch-launch',
+          outcome: { kind: 'terminal', handle: 't' },
+          receipt: {
+            mode: 'terminal',
+            preferred: 'terminal',
+            reason: 'user_default',
+            detail: 'Terminal default'
+          }
+        }) satisfies AgentLaunchResult,
+      calls
+    )
+    const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: { replay: false }
+    })
+
+    expect(calls[0]!.method).toBe('agent.launch')
+    expect(calls[0]?.params).toMatchObject({
+      target: { create: { name: 'topic', branchNameOverride: 'topic' } }
+    })
+    expect(calls[0]?.params).not.toHaveProperty(['target', 'create', 'startupAgent'])
+  })
+
+  it('sends the work-item URL as startupDraft through worktree.create', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-draft' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'work-item',
+      item: {
+        provider: 'github',
+        type: 'issue',
+        number: 7,
+        title: 'Bug',
+        url: 'https://github.test/acme/app/issues/7',
+        repoId: 'repo-9'
+      }
+    }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: { replay: false }
+    })
+
+    expect(calls.map((call) => call.method)).toEqual(['worktree.create'])
+    expect(calls[0]!.params).toMatchObject({
+      createdWithAgent: 'claude',
+      startupDraft: 'https://github.test/acme/app/issues/7'
+    })
+  })
+
+  it('keeps the agent-first create for a branch selection on an old host', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-old-host' } }), calls)
+    const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: false
+    })
+
+    expect(calls[0]!.method).toBe('worktree.create')
+    expect(calls[0]!.params).toMatchObject({ startupAgent: 'claude', createdWithAgent: 'claude' })
+  })
+
+  it('never launches for a blank choice on a capable host', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-blank-choice' } }), calls)
+    const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agentLaunchSupported: { replay: false }
+    })
+
+    expect(calls[0]!.method).toBe('worktree.create')
+    expect('startupAgent' in calls[0]!.params).toBe(false)
   })
 })

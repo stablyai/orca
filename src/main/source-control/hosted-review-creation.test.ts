@@ -17,7 +17,6 @@ const {
   glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
-  getSshGitProviderMock,
   getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
@@ -36,7 +35,6 @@ const {
   glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
-  getSshGitProviderMock: vi.fn(),
   getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
@@ -107,10 +105,6 @@ vi.mock('../git/upstream', () => ({
   getUpstreamStatus: getUpstreamStatusMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
@@ -119,8 +113,7 @@ import { createHostedReview } from './hosted-review-creation'
 
 import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
+// Isolate module-level repository identities between tests.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -143,7 +136,6 @@ function resetMocks(): void {
     glabExecFileAsyncMock,
     gitExecFileAsyncMock,
     getUpstreamStatusMock,
-    getSshGitProviderMock,
     getEnterpriseGitHubRepoSlugMock
   ]) {
     mock.mockReset()
@@ -159,12 +151,9 @@ function mockGitHubProvider(): void {
   getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
 }
 
-// GHES: github.com-only slug parsing misses the custom host, so the enterprise
-// resolver claims the repo and reports the host for the gh auth probe (#8312).
+// #8312: authenticated GHES detection supplies its custom host.
 function mockGitHubEnterpriseProvider(): void {
   getProjectSlugMock.mockResolvedValue(null)
-  // Why: getRepoSlug resolves hosted identities itself now — a GHES remote
-  // comes back host-qualified instead of null + separate enterprise fallback.
   getRepoSlugMock.mockResolvedValue({
     owner: 'acme',
     repo: 'orca',
@@ -173,7 +162,6 @@ function mockGitHubEnterpriseProvider(): void {
   getBitbucketRepoSlugMock.mockResolvedValue(null)
   getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
   getGiteaRepoSlugMock.mockResolvedValue(null)
-  // The auth gate still keys off the enterprise resolver (authed-GHES signal).
   getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
     owner: 'acme',
     repo: 'orca',
@@ -238,10 +226,11 @@ describe('createHostedReview', () => {
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
-      // Why: base-on-remote probe (Change 2 enforcement) — the default base
-      // resolves to a remote-tracking branch so create-time validation passes.
-      if (args[0] === 'for-each-ref') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'show-ref') {
+        return { stdout: 'abc refs/remotes/origin/main\n', stderr: '' }
       }
       if (args[0] === 'log' && args.includes('--pretty=%s')) {
         return { stdout: 'Feature title\n', stderr: '' }
@@ -284,16 +273,21 @@ describe('createHostedReview', () => {
     })
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: push this branch before creating a pull request.'
+      error: 'Create PR failed: push this branch before creating a pull request.',
+      reason: 'needs_push'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
@@ -307,54 +301,70 @@ describe('createHostedReview', () => {
     })
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: switch back to the selected branch before creating a pull request.'
+      error: 'Create PR failed: switch back to the selected branch before creating a pull request.',
+      reason: 'branch_changed'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
 
   it('blocks creation with actionable copy when the submitted base is local-only', async () => {
-    // for-each-ref falls through to '' → the submitted stacked parent is not on
-    // the remote, so create-time enforcement blocks with actionable copy.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'feature\n', stderr: '' }
+      }
+      if (args[0] === 'show-ref') {
+        throw Object.assign(new Error('missing ref'), { code: 1 })
       }
       return { stdout: '', stderr: '' }
     })
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'github',
-        base: 'stacked-parent',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'stacked-parent',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: the base branch "stacked-parent" hasn\'t been pushed to the remote. Choose a pushed base or push it first.'
+        'Create PR failed: the base branch "stacked-parent" hasn\'t been pushed to the remote. Choose a pushed base or push it first.',
+      reason: 'base_not_on_remote',
+      base: 'stacked-parent'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
 
   it('creates the pull request after fresh main-process validation passes', async () => {
     await expect(
-      createHostedReview('/repo', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 12,
@@ -373,7 +383,7 @@ describe('createHostedReview', () => {
           head: 'feature',
           title: 'Feature'
         },
-        null,
+        'local',
         { localGitExecOptions: { wslDistro: 'Ubuntu' } }
       )
     ).resolves.toEqual({
@@ -404,8 +414,7 @@ describe('createHostedReview', () => {
         repoPath: '/repo',
         branch: 'feature',
         localGitExecOptions: { wslDistro: 'Ubuntu' },
-        // Why: a stale no-review answer here would leave Create enabled after a
-        // review was opened outside Orca, so eligibility takes the fast tier.
+        // Use active pacing so reviews opened outside Orca promptly disable Create.
         active: true
       })
     )
@@ -416,7 +425,7 @@ describe('createHostedReview', () => {
     expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
       '/repo',
       expect.objectContaining({ provider: 'github', head: 'feature' }),
-      null,
+      'local',
       { localGitExecOptions: { wslDistro: 'Ubuntu' } }
     )
   })
@@ -425,20 +434,22 @@ describe('createHostedReview', () => {
     mockGitHubEnterpriseProvider()
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 12,
       url: 'https://github.com/acme/orca/pull/12'
     })
 
-    // Detection already confirmed gh is authed to the GHES host, so the auth
-    // gate must not fire a second (rate-limited) gh probe.
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
     expect(createGitHubPullRequestMock).toHaveBeenCalled()
     expect(createGiteaPullRequestMock).not.toHaveBeenCalled()
@@ -448,12 +459,16 @@ describe('createHostedReview', () => {
     mockGitLabProvider()
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'gitlab',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'gitlab',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 44,
@@ -472,7 +487,7 @@ describe('createHostedReview', () => {
         head: 'feature',
         title: 'Feature'
       },
-      undefined
+      'local'
     )
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
@@ -481,12 +496,16 @@ describe('createHostedReview', () => {
     mockAzureDevOpsProvider()
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'azure-devops',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 88,
@@ -501,7 +520,7 @@ describe('createHostedReview', () => {
         head: 'feature',
         title: 'Feature'
       },
-      undefined
+      'local'
     )
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
     expect(createGitLabMergeRequestMock).not.toHaveBeenCalled()
@@ -511,12 +530,16 @@ describe('createHostedReview', () => {
     mockGiteaProvider()
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'gitea',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'gitea',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 19,
@@ -531,83 +554,10 @@ describe('createHostedReview', () => {
         head: 'feature',
         title: 'Feature'
       },
-      undefined
+      'local'
     )
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
     expect(createGitLabMergeRequestMock).not.toHaveBeenCalled()
-  })
-
-  it('uses the SSH git provider for remote hosted-review preflight', async () => {
-    const remoteGit = {
-      getStatus: vi.fn(async () => ({ entries: [], conflictOperation: 'unknown' })),
-      getUpstreamStatus: vi.fn(async () => ({
-        hasUpstream: true,
-        upstreamName: 'origin/feature',
-        ahead: 0,
-        behind: 0
-      })),
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
-          return { stdout: 'feature\n', stderr: '' }
-        }
-        if (args[0] === 'for-each-ref') {
-          // Base-on-remote probe (Change 2) runs on the SSH host; base is pushed.
-          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
-        }
-        if (args[0] === 'log' && args.includes('--pretty=%s')) {
-          return { stdout: 'Feature title\n', stderr: '' }
-        }
-        if (args[0] === 'log') {
-          return { stdout: '- Feature title\n', stderr: '' }
-        }
-        return { stdout: '', stderr: '' }
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
-
-    await expect(
-      createHostedReview(
-        '/remote/repo',
-        {
-          provider: 'github',
-          base: 'main',
-          head: 'feature',
-          title: 'Feature'
-        },
-        'ssh-1'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 12,
-      url: 'https://github.com/acme/orca/pull/12'
-    })
-
-    expect(remoteGit.exec).toHaveBeenCalledWith(
-      ['rev-parse', '--abbrev-ref', 'HEAD'],
-      '/remote/repo'
-    )
-    expect(remoteGit.getStatus).toHaveBeenCalledWith('/remote/repo')
-    expect(remoteGit.exec).not.toHaveBeenCalledWith(['status', '--porcelain'], '/remote/repo')
-    expect(remoteGit.getUpstreamStatus).toHaveBeenCalledWith('/remote/repo')
-    expect(remoteGit.exec).not.toHaveBeenCalledWith(
-      ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
-      '/remote/repo'
-    )
-    expect(getUpstreamStatusMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['auth', 'status', '--hostname', 'github.com'],
-      { host: 'github.com' }
-    )
-    expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      {
-        provider: 'github',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      },
-      'ssh-1'
-    )
   })
 
   it('returns the existing review instead of creating a duplicate', async () => {
@@ -623,16 +573,21 @@ describe('createHostedReview', () => {
     })
 
     await expect(
-      createHostedReview('/repo', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'already_exists',
       error: 'A pull request already exists for this branch.',
+      reason: 'existing_review',
       existingReview: {
         number: 31,
         url: 'https://github.com/acme/orca/pull/31'

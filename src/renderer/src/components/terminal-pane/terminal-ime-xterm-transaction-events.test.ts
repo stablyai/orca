@@ -15,7 +15,9 @@ const { Terminal: CjsTerminal } = requireFromHere('@xterm/xterm') as {
   Terminal: typeof EsmTerminal
 }
 const xtermPackageRoot = dirname(requireFromHere.resolve('@xterm/xterm/package.json'))
-const EXPECTED_XTERM_VERSION = '6.1.0-beta.287'
+// Read installed version so bundle/sourcemap agreement is checked without a stale bump-sensitive literal.
+const EXPECTED_XTERM_VERSION = (requireFromHere('@xterm/xterm/package.json') as { version: string })
+  .version
 
 function nextEventLoop(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, 0))
@@ -173,6 +175,36 @@ describe.each([
 
     expect(events).toEqual(['accepted', 'settled'])
     expect(output).toEqual(['한'])
+    terminal.dispose()
+  })
+
+  it('cancels an empty composition end so later input is not swallowed', async () => {
+    const terminal = new TerminalType()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    terminal.open(container)
+    if (!terminal.element || !terminal.textarea) {
+      throw new Error('xterm input elements were not created')
+    }
+    const output: string[] = []
+    terminal.onData((data) => output.push(data))
+    const textarea = terminal.textarea
+
+    textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '', bubbles: true }))
+    await nextEventLoop()
+
+    expect(terminal.element.querySelector('.composition-view')?.classList.contains('active')).toBe(
+      false
+    )
+
+    textarea.value = 'a'
+    textarea.setSelectionRange(1, 1)
+    textarea.dispatchEvent(
+      new InputEvent('input', { data: 'a', inputType: 'insertText', bubbles: true })
+    )
+
+    expect(output).toEqual(['a'])
     terminal.dispose()
   })
 

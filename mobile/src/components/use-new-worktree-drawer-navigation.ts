@@ -11,8 +11,7 @@ export type NewWorktreeDrawerView =
   | 'agent'
   | 'trust'
 
-// Why: iOS cannot reliably present a second native modal until the first drawer's
-// exit commits; one extra frame keeps transitions sequential on slower devices.
+// iOS needs the first modal’s exit committed before presenting another; wait an extra frame on slower devices.
 const NEW_WORKTREE_DRAWER_TRANSITION_MS = BOTTOM_DRAWER_HIDE_DURATION_MS + 16
 
 export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
@@ -23,11 +22,9 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
   openSourceDrawer: () => void
 } {
   const [drawerView, setDrawerView] = useState<NewWorktreeDrawerView>('form')
-  const formPinnedUnderSourceRef = useRef(false)
   const drawerTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Why: cancel any queued transition and reset when the modal closes, so a
-  // timer can't land after close and leave a stale drawer/pin for the next open.
+  // Cancel queued transitions on close so the next open cannot inherit a stale drawer.
   useEffect(() => {
     if (modalVisible) {
       return
@@ -36,7 +33,6 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
       clearTimeout(drawerTransitionTimerRef.current)
       drawerTransitionTimerRef.current = null
     }
-    formPinnedUnderSourceRef.current = false
     setDrawerView('form')
   }, [modalVisible])
 
@@ -55,31 +51,22 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
     setDrawerView('transition')
     drawerTransitionTimerRef.current = setTimeout(() => {
       drawerTransitionTimerRef.current = null
-      if (nextView === 'form') {
-        formPinnedUnderSourceRef.current = false
-      }
       setDrawerView(nextView)
     }, NEW_WORKTREE_DRAWER_TRANSITION_MS)
   }
 
   function openSourceDrawer(): void {
-    // Why: same-beat open; pin form under fill picker so outer content height
-    // is preserved when the name dialog dismisses.
+    // Keep the form mounted under the picker to preserve the outer content height.
     if (drawerTransitionTimerRef.current) {
       clearTimeout(drawerTransitionTimerRef.current)
     }
     drawerTransitionTimerRef.current = null
-    formPinnedUnderSourceRef.current = true
     setDrawerView('source')
   }
 
   return {
     drawerView,
-    formSheetVisible: resolveNewWorktreeFormSheetVisible({
-      modalVisible,
-      drawerView,
-      formPinnedUnderSource: formPinnedUnderSourceRef.current
-    }),
+    formSheetVisible: resolveNewWorktreeFormSheetVisible({ modalVisible, drawerView }),
     formSheetInteractive: drawerView === 'form',
     transitionDrawer,
     openSourceDrawer

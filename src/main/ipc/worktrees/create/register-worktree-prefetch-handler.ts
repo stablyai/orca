@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import { prefetchWorktreeCreateBase } from '../../../worktree-create-base-prefetch'
+import { prepareWorktreeCreateForRepo } from '../../../worktree-create-preparation'
+import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { blockedWslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
 
 export function registerWorktreePrefetchHandler(context: WorktreeIpcContext): void {
   const { store, runtime } = context
@@ -13,9 +16,21 @@ export function registerWorktreePrefetchHandler(context: WorktreeIpcContext): vo
         return
       }
       try {
-        await prefetchWorktreeCreateBase({ repo, baseBranch: args.baseBranch, runtime })
+        const gitOptions = getWorktreeCreatePrefetchGitOptions(store, repo)
+        // Speculative: a composer opening is no act on the repo's WSL distro (E9).
+        if (await blockedWslDistroForPath(repo.path, gitOptions.wslDistro)) {
+          return
+        }
+        await prefetchWorktreeCreateBase({
+          repo,
+          baseBranch: args.baseBranch,
+          runtime,
+          gitOptions,
+          prepareCheckout: (base, beforeMaterialization) =>
+            prepareWorktreeCreateForRepo(store, repo, base, beforeMaterialization)
+        })
       } catch {
-        // Why: optimistic warm-up; the real create path awaits the same refresh and reports failures there.
+        // Speculative failure is reported by the real create path when it retries this refresh.
       }
     }
   )

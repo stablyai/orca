@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runTerminalCopy, runCopyPaneId } from './terminal-copy-rejection-guards'
+import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
 
-// Why this file exists: web-preload-api's writeClipboardText used to resolve
-// unconditionally, so the terminal copy surfaces call it without a rejection
-// handler. Now that an insecure-context copy with no live user gesture rejects,
-// an unguarded call becomes an unhandled rejection recorded as a renderer crash
-// breadcrumb, and Copy Pane ID would still show a success toast for a copy that
-// never happened. These tests pin both behaviors.
+// Insecure-context clipboard rejection must neither escape as a crash breadcrumb nor show a false copy-success toast.
 
 const REJECTION = new Error('Clipboard write is unavailable in this browser context')
 
@@ -42,15 +37,15 @@ describe('runTerminalCopy', () => {
   })
 })
 
-describe('runCopyPaneId', () => {
+describe('runTerminalIdentityCopy', () => {
   it('reports failure instead of claiming success when the write rejects', async () => {
     const onSuccess = vi.fn()
     const onError = vi.fn()
     const focus = vi.fn()
 
     await expect(
-      runCopyPaneId({
-        paneKey: 'tab:leaf',
+      runTerminalIdentityCopy({
+        text: 'tab:leaf',
         writeClipboardText: vi.fn().mockRejectedValue(REJECTION),
         onSuccess,
         onError,
@@ -68,8 +63,8 @@ describe('runCopyPaneId', () => {
     const onError = vi.fn()
     const focus = vi.fn()
 
-    await runCopyPaneId({
-      paneKey: 'tab:leaf',
+    await runTerminalIdentityCopy({
+      text: 'tab:leaf',
       writeClipboardText: vi.fn().mockResolvedValue(undefined),
       onSuccess,
       onError,

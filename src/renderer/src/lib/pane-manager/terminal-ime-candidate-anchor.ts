@@ -10,30 +10,7 @@ type ImeAnchorCellMetrics = {
 
 type ImeAnchorStyleProperty = 'top' | 'left' | 'height' | 'lineHeight'
 
-/**
- * Keep the OS IME candidate window anchored to the cell the user is typing in.
- *
- * Why: the OS reads the focused textarea's screen rect at compositionstart to
- * decide where to display the candidate window. xterm positions that textarea
- * from its own cursor, which can be stale or intentionally hidden by TUIs. We
- * force-sync after xterm's own composition handlers so the OS sees the corrected
- * location before it opens the candidate window.
- *
- * xterm rewrites the textarea's position from its own `compositionupdate`
- * handler, so the update listener has to stay — CJK IMEs compose long sequences
- * (romaji→kana→kanji, pinyin phrases) during which xterm's uncorrected position
- * would otherwise win. Instead the update path is made free of forced layout:
- * cell metrics are measured once per composition and reused, and a style write is
- * skipped when the inline value already matches (a CSSOM read, not a layout one).
- *
- * Cell dimensions are derived from the public .xterm-screen element's bounds
- * (xterm sizes that element to cols*cellWidth × rows*cellHeight) rather than
- * poking `_core._renderService.dimensions` — keeps us on the public API surface
- * so upgrades don't silently regress the fix.
- *
- * Returns the installed handler so the caller can remove it on dispose, or null
- * when the terminal has not opened its DOM yet.
- */
+/** OS candidate placement reads the focused textarea at compositionstart; correct xterm’s stale/hidden TUI cursor after its handlers. Keep compositionupdate correction for long CJK sequences, measuring public .xterm-screen bounds once per composition and skipping unchanged inline styles to avoid layout. Return the installed handler for disposal, or null before DOM open. */
 export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => void) | null {
   if (!terminal.element || !terminal.textarea) {
     return null
@@ -58,9 +35,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     return { cellWidth, cellHeight, cols: terminal.cols, rows: terminal.rows }
   }
 
-  // Why: xterm rewrites these between our events, so compare against the live
-  // inline value — a CSSOM read, unlike getBoundingClientRect — and skip the
-  // write when it already matches instead of re-invalidating layout.
+  // xterm rewrites these between events; compare live inline styles (CSSOM only) to avoid needless layout invalidation.
   const writeStyle = (
     element: HTMLElement,
     property: ImeAnchorStyleProperty,
@@ -69,6 +44,16 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (element.style[property] !== value) {
       element.style[property] = value
     }
+  }
+
+  // Match xterm’s patched preedit-width clamp or this later listener would undo its onRender/composition correction until another render. Use xterm’s live inline width to avoid layout.
+  const anchorLeft = (column: number, cells: ImeAnchorCellMetrics): number => {
+    const cursorLeft = column * cells.cellWidth
+    const width = Number.parseFloat(textarea.style.width)
+    if (!Number.isFinite(width)) {
+      return cursorLeft
+    }
+    return Math.max(0, Math.min(cursorLeft, cells.cols * cells.cellWidth - width))
   }
 
   const applyAnchor = (
@@ -80,7 +65,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     const top = `${row * cells.cellHeight}px`
     const left = `${column * cells.cellWidth}px`
     writeStyle(textarea, 'top', top)
-    writeStyle(textarea, 'left', left)
+    writeStyle(textarea, 'left', `${anchorLeft(column, cells)}px`)
     if (isCursorAgent && compositionView) {
       const height = `${cells.cellHeight}px`
       writeStyle(compositionView, 'top', top)
@@ -92,8 +77,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
 
   const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
     const buf = terminal.buffer.active
-    // Why: Cursor Agent draws its prompt UI while leaving xterm's public cursor
-    // on a blank row, so the OS IME anchor needs the rendered prompt row instead.
+    // Cursor Agent leaves the public cursor on a blank row; anchor IME to its rendered prompt instead.
     const cursorAgentAnchor = resolveCursorAgentImeAnchor({
       buffer: buf,
       rows: terminal.rows,
@@ -116,8 +100,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (!screenElement) {
       return
     }
-    // Re-measure per composition (font size or zoom may have changed since the
-    // last one); every compositionupdate then reuses it and forces no layout.
+    // Measure once per composition to pick up zoom/font changes without layout on every update.
     const staleMetrics =
       !metrics || metrics.cols !== terminal.cols || metrics.rows !== terminal.rows
     if (event?.type !== 'compositionupdate' || staleMetrics) {
@@ -129,9 +112,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
     const { anchor, isCursorAgent } = resolveAnchor()
     applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
-    // Why: xterm re-positions the textarea from a setTimeout(0) of its own after
-    // each compositionupdate, so the correction has to land after that timer —
-    // one pending timer per burst, re-reading the anchor when it fires.
+    // xterm repositions in setTimeout(0); correct after its timer, coalescing bursts and rereading the anchor.
     if (!isCursorAgent) {
       if (deferredApply !== null) {
         window.clearTimeout(deferredApply)

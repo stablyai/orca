@@ -1,4 +1,5 @@
 import { ORCHESTRATION_LEGACY_RUN_ID } from './orchestration-rpc-contract'
+import { escapeTerminalControlCharacters } from './terminal-control-character-escape'
 
 export type OrchestrationMessageSummary = {
   id: string
@@ -81,7 +82,7 @@ export function formatOrchestrationCheckText(
     : ''
   const deliveryNotice = formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery)
   if (prepared.formatted) {
-    return `${legacyHeader}${prepared.formatted}${deliveryNotice}`
+    return `${legacyHeader}${prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n` : ''}${prepared.formatted}${deliveryNotice}`
   }
   if (prepared.count === 0) {
     if (prepared.timedOut) {
@@ -130,18 +131,6 @@ export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutp
 
 function formatMessagePriorityTag(message: OrchestrationMessageSummary): string {
   return message.priority === 'urgent' ? ' [URGENT]' : message.priority === 'high' ? ' [HIGH]' : ''
-}
-
-function escapeTerminalControlCharacters(value: string): string {
-  return [...value]
-    .map((character) => {
-      const code = character.charCodeAt(0)
-      if (character === '\n' || (code >= 0x20 && code < 0x7f) || code > 0x9f) {
-        return character
-      }
-      return `\\x${code.toString(16).padStart(2, '0')}`
-    })
-    .join('')
 }
 
 function formatQuotedMessageField(label: string, value?: string): string {

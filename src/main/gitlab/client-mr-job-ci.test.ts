@@ -76,13 +76,11 @@ describe('gitlab client — MR operations', () => {
 
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', '--hostname', 'git.internal', 'projects/g%2Fp/jobs/99/trace'],
-        // Why: a trace outlives the runner's 30s default, so the fetch raises it.
         { timeout: 60_000 }
       )
     })
 
-    // #7732: a job canceled before it started 404s; the Checks panel must show its
-    // benign empty state, not the issue-edit copy classifyGlabError would produce.
+    // Canceled-before-start jobs have no trace; show an empty log rather than issue-edit error copy.
     it('reports a 404 trace as an empty log rather than an error', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404 Not Found'))
 
@@ -94,7 +92,7 @@ describe('gitlab client — MR operations', () => {
 
     it('keeps a missing project and a scope failure as errors, in job-log wording', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Project Not Found'))
-      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toEqual({
+      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toMatchObject({
         ok: false,
         error: "Could not find this job's GitLab project."
       })
@@ -103,7 +101,8 @@ describe('gitlab client — MR operations', () => {
       const forbidden = await getJobTrace('/repo', 99, 'upstream', 'conn-1')
       expect(forbidden).toEqual({
         ok: false,
-        error: "You don't have permission to read this job's log. Check your GitLab token scopes."
+        error: "You don't have permission to read this job's log. Check your GitLab token scopes.",
+        errorCode: 'gitlab.jobLogPermissionDenied'
       })
     })
 

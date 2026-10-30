@@ -106,6 +106,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -152,6 +154,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -219,6 +223,8 @@ describe('orca cli worktree awareness', () => {
       expect(callMock).toHaveBeenCalledWith('worktree.create', {
         repo: 'id:repo-1',
         name: 'child',
+        displayName: 'child',
+        displayNameKind: 'user',
         baseBranch: undefined,
         linkedIssue: undefined,
         comment: undefined,
@@ -263,6 +269,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -308,6 +316,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -369,6 +379,8 @@ describe('orca cli worktree awareness', () => {
       expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
         repo: 'id:repo-1',
         name: 'child',
+        displayName: 'child',
+        displayNameKind: 'user',
         baseBranch: undefined,
         linkedIssue: undefined,
         comment: undefined,
@@ -517,6 +529,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -559,6 +573,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,

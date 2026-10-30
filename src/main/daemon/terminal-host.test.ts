@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync, rmSync } from 'node:fs'
 import { Session } from './session'
-import {
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
-  SESSION_FORCE_KILL_RETRY_MS
-} from './session-termination-controller'
+import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -40,7 +38,6 @@ function createMockSubprocess(
       onExitCb = cb
     },
     dispose: vi.fn(),
-    // Test helpers
     get _onDataCb() {
       return onDataCb
     },
@@ -70,8 +67,7 @@ describe('TerminalHost', () => {
   let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
-    // Pin POSIX so plain-shell teardown is deterministic across host OSes (matches linux CI);
-    // the Windows taskkill /T /F tree-kill path is covered in terminal-session-teardown.test.ts.
+    // Pin POSIX for deterministic teardown; Windows tree termination has separate coverage.
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
@@ -83,10 +79,11 @@ describe('TerminalHost', () => {
       lastSubprocess = sub
       return sub
     })
-    host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+    host = new TerminalHost({ spawnSubprocess: spawnFn })
   })
 
   afterEach(async () => {
+    killWithDescendantSweepMock.mockReset()
     await host.dispose()
     if (platformDescriptor) {
       Object.defineProperty(process, 'platform', platformDescriptor)
@@ -126,7 +123,6 @@ describe('TerminalHost', () => {
       })
 
       expect(result.isNew).toBe(false)
-      // Should not spawn a second subprocess
       expect(spawnFn).toHaveBeenCalledOnce()
     })
 
@@ -182,18 +178,13 @@ describe('TerminalHost', () => {
 
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
-      // Why: the marker alone no longer flushes — the kernel can still have
-      // ECHO enabled when it arrives. The flush waits for the prompt draw
-      // plus a short delay so readline has switched the PTY into raw mode
-      // first. Otherwise the command would be visibly double-echoed.
+      // Delay post-marker input until prompt output and raw-mode setup prevent cooked echo.
       lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07')
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
     it('uses the short daemon settle path when marker and prompt arrive together', async () => {
@@ -213,9 +204,7 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.write).not.toHaveBeenCalled()
 
         vi.advanceTimersByTime(1)
-        expect(lastSubprocess.write).toHaveBeenCalledWith(
-          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-        )
+        expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
       } finally {
         vi.useRealTimers()
       }
@@ -233,7 +222,7 @@ describe('TerminalHost', () => {
         return sub
       })
       await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+      host = new TerminalHost({ spawnSubprocess: spawnFn })
 
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -244,12 +233,10 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
-    it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {
+    it('stages multiline commands for a fallback shell without paste mode', async () => {
       spawnFn = vi.fn(() => {
         const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
           typeof createMockSubprocess
@@ -261,7 +248,7 @@ describe('TerminalHost', () => {
         return sub
       })
       await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+      host = new TerminalHost({ spawnSubprocess: spawnFn })
 
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -273,8 +260,11 @@ describe('TerminalHost', () => {
       })
 
       const written = (lastSubprocess.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
-      expect(written).not.toContain('\x1b[200~')
-      expect(written).toContain('line one\nline two')
+      // Multiline launch commands are staged in a sourced script and submitted with Enter CR.
+      const scriptPath = /^\. '(.*orca-launch-[0-9a-f]+\.sh)'\r$/.exec(written)?.[1]
+      expect(scriptPath).toBeDefined()
+      expect(readFileSync(scriptPath!, 'utf8')).toContain('claude "line one\nline two"\n')
+      rmSync(scriptPath!, { force: true })
     })
 
     it('keeps the shell-ready barrier when the spawned shell supports the marker', async () => {
@@ -289,7 +279,7 @@ describe('TerminalHost', () => {
         return sub
       })
       await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+      host = new TerminalHost({ spawnSubprocess: spawnFn })
 
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -315,7 +305,7 @@ describe('TerminalHost', () => {
         return sub
       })
       await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+      host = new TerminalHost({ spawnSubprocess: spawnFn })
 
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -388,7 +378,14 @@ describe('TerminalHost', () => {
   })
 
   describe('kill', () => {
+    function sweepThenSignalRoot(): void {
+      killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+        killRoot()
+      })
+    }
+
     it('kills the session and tombstones it', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -396,12 +393,13 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      host.kill('session-1')
+      await host.kill('session-1')
       expect(lastSubprocess.kill).toHaveBeenCalled()
       expect(host.isKilled('session-1')).toBe(true)
     })
 
-    it('does not tombstone a session when graceful kill admission fails', async () => {
+    it('keeps a session attachable when its graceful kill signal is rejected', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -412,8 +410,7 @@ describe('TerminalHost', () => {
         throw new Error('signal rejected')
       })
 
-      expect(() => host.kill('session-1')).toThrow('signal rejected')
-      expect(host.isKilled('session-1')).toBe(false)
+      await expect(host.kill('session-1')).rejects.toThrow('signal rejected')
       await expect(
         host.createOrAttach({
           sessionId: 'session-1',
@@ -424,10 +421,8 @@ describe('TerminalHost', () => {
       ).resolves.toMatchObject({ isNew: false })
     })
 
-    // Plain-shell immediate force-kill (POSIX no-sweep + Windows taskkill tree) is covered in
-    // terminal-host-session-reaping-leak.test.ts and terminal-session-teardown.test.ts.
-
     it('escalates an already-graceful termination and joins its physical exit', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -473,14 +468,16 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.forceKill).toHaveBeenCalledTimes(1)
         expect(lastSubprocess.dispose).not.toHaveBeenCalled()
         expect(host.listSessions()).toHaveLength(1)
-        await expect(
-          host.createOrAttach({
-            sessionId: 'session-1',
-            cols: 80,
-            rows: 24,
-            streamClient: { onData: vi.fn(), onExit: vi.fn() }
-          })
-        ).rejects.toThrow('Session not found')
+        // An unkillable child keeps its ID reserved across recreation attempts.
+        const recreate = host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+        const refused = expect(recreate).rejects.toThrow('Session not found')
+        await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS)
+        await refused
 
         lastSubprocess._onExitCb?.(137)
         expect(host.listSessions()).toHaveLength(0)
@@ -505,8 +502,7 @@ describe('TerminalHost', () => {
 
       const killing = host.kill('agent-1', { immediate: true })
 
-      // Why order matters: force-killing first would let orphans reparent to
-      // pid 1 and escape the sweep's ppid walk entirely.
+      // Capture descendants before root exit can reparent them beyond the ppid walk.
       expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
         99999,
         expect.any(Function),
@@ -525,7 +521,7 @@ describe('TerminalHost', () => {
       expect(lastSubprocess.dispose).toHaveBeenCalled()
     })
 
-    it('rejects reattach while an agent immediate-kill snapshot is pending', async () => {
+    it('defers a respawn until the agent immediate-kill snapshot completes', async () => {
       let finishSweep!: () => void
       killWithDescendantSweepMock.mockImplementation(
         (_pid: number, finish: () => void) =>
@@ -544,26 +540,41 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
+      const retiredSubprocess = lastSubprocess
       const killing = host.kill('agent-reattach', { immediate: true })
-      await expect(
-        host.createOrAttach({
+      let respawned = false
+      const respawn = host
+        .createOrAttach({
           sessionId: 'agent-reattach',
           cols: 80,
           rows: 24,
           launchAgent: 'claude',
           streamClient: { onData: vi.fn(), onExit: vi.fn() }
         })
-      ).rejects.toThrow('Session not found')
-      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+        .then((result) => {
+          respawned = true
+          return result
+        })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // Publishing before capture ends would attach to a session teardown still owns.
+      expect(respawned).toBe(false)
+      expect(spawnFn).toHaveBeenCalledTimes(1)
+      expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
 
       finishSweep()
-      lastSubprocess._onExitCb?.(137)
+      retiredSubprocess._onExitCb?.(137)
       await killing
-      expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
+      await expect(respawn).resolves.toMatchObject({ isNew: true })
+      expect(retiredSubprocess.forceKill).toHaveBeenCalledOnce()
     })
 
     it('coalesces duplicate immediate kill while descendant capture is pending', async () => {
-      const sweep = new Promise<void>(() => {})
+      let finishSweep = (): void => {}
+      const sweep = new Promise<void>((resolve) => {
+        finishSweep = resolve
+      })
       killWithDescendantSweepMock.mockReturnValue(sweep)
       await host.createOrAttach({
         sessionId: 'agent-duplicate-kill',
@@ -574,14 +585,15 @@ describe('TerminalHost', () => {
       })
 
       const first = host.kill('agent-duplicate-kill', { immediate: true })
-      // The root can exit while the descendant scan is pending. Duplicate RPCs
-      // still own the original completion even after the session was reaped.
+      // Duplicate kills must join the original completion even if exit reaps the root during capture.
       lastSubprocess._onExitCb?.(0)
       const second = host.kill('agent-duplicate-kill', { immediate: true })
 
       expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
-      expect(second).toBe(first)
+      expect(second).not.toBe(first)
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+      finishSweep()
+      await Promise.all([first, second])
     })
 
     it('keeps a naturally-exited id reserved until teardown finishes without re-killing its pid', async () => {
@@ -606,29 +618,30 @@ describe('TerminalHost', () => {
 
       const killing = host.kill('agent-natural-exit', { immediate: true })
       retiredSubprocess._onExitCb?.(0)
-      await expect(
-        host.createOrAttach({
+      let respawned = false
+      const respawn = host
+        .createOrAttach({
           sessionId: 'agent-natural-exit',
           cols: 80,
           rows: 24,
           launchAgent: 'claude',
           streamClient: { onData: vi.fn(), onExit: vi.fn() }
         })
-      ).rejects.toThrow('Session not found')
+        .then((result) => {
+          respawned = true
+          return result
+        })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(respawned).toBe(false)
+      expect(spawnFn).toHaveBeenCalledTimes(1)
 
       completeSweep()
       await killing
       expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
 
-      await expect(
-        host.createOrAttach({
-          sessionId: 'agent-natural-exit',
-          cols: 80,
-          rows: 24,
-          launchAgent: 'claude',
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-      ).resolves.toEqual(expect.objectContaining({ isNew: true }))
+      await expect(respawn).resolves.toEqual(expect.objectContaining({ isNew: true }))
       expect(spawnFn).toHaveBeenCalledTimes(2)
     })
 
@@ -653,7 +666,7 @@ describe('TerminalHost', () => {
 
       const graceful = host.kill('agent-upgrade-kill')
       const immediate = host.kill('agent-upgrade-kill', { immediate: true })
-      expect(immediate).toBe(graceful)
+      expect(immediate).not.toBe(graceful)
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
 
@@ -763,166 +776,31 @@ describe('TerminalHost', () => {
 
       host.detach('session-1', result.attachToken)
 
-      // Data after detach should not be received
       lastSubprocess._onDataCb?.('after detach')
       expect(onData).not.toHaveBeenCalled()
     })
   })
 
-  describe('tombstones', () => {
-    it('caps tombstones at limit', async () => {
-      await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn, maxTombstones: 3 })
-
-      for (let i = 0; i < 5; i++) {
-        await host.createOrAttach({
-          sessionId: `session-${i}`,
-          cols: 80,
-          rows: 24,
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        host.kill(`session-${i}`)
-      }
-
-      // Oldest tombstones should be evicted
-      expect(host.isKilled('session-0')).toBe(false)
-      expect(host.isKilled('session-4')).toBe(true)
-    })
-  })
-
-  describe('dispose', () => {
-    it('force-kills live subprocesses and releases PTY fds on dispose', async () => {
-      await host.createOrAttach({
+  // The activation gate claims sleeping records by this key, so reattaching must not rewrite it.
+  it('lists the pane key a session was spawned for, not the pane that reattaches it', async () => {
+    const spawn = (paneKey: string) =>
+      host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
         rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
+    const launchedFor = 'client-tab:11111111-1111-4111-8111-111111111111'
+    const respawnedFor = 'desktop-tab:22222222-2222-4222-8222-222222222222'
 
-      await host.dispose()
-      // Why: live sessions retain the native owner until force-kill is accepted
-      // and physical exit proves the child can no longer hold the ptmx fd.
-      // Exited sessions take the disposeSubprocess() path instead (see the test
-      // below). See docs/fix-pty-fd-leak.md.
-      expect(lastSubprocess.forceKill).toHaveBeenCalled()
-      expect(lastSubprocess.dispose).toHaveBeenCalled()
-    })
+    await spawn(launchedFor)
+    await spawn(respawnedFor)
+    expect(host.listSessions().map((session) => session.paneKey)).toEqual([launchedFor])
 
-    it('releases held shell-ready marker prefixes before final checkpoint', async () => {
-      await host.dispose()
-      const onFinalCheckpoint = vi.fn()
-      host = new TerminalHost({
-        spawnSubprocess: spawnFn as MockSpawnFn,
-        onFinalCheckpoint
-      })
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        shellReadySupported: true,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready')
-      await host.dispose()
-
-      expect(onFinalCheckpoint).toHaveBeenCalledWith('session-1', expect.any(Object), [
-        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
-      ])
-    })
-
-    it('fences creation and retries a rejected force kill before dropping ownership', async () => {
-      vi.useFakeTimers()
-      try {
-        await host.createOrAttach({
-          sessionId: 'session-1',
-          cols: 80,
-          rows: 24,
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        let attempts = 0
-        const forceKill = vi.fn(() => {
-          attempts++
-          if (attempts === 1) {
-            throw new Error('transient daemon dispose kill failure')
-          }
-          lastSubprocess._onExitCb?.(137)
-        })
-        lastSubprocess.forceKill = forceKill
-
-        const dispose = host.dispose()
-        expect(forceKill).toHaveBeenCalledTimes(1)
-        expect(host.dispose()).toBe(dispose)
-        await expect(
-          host.createOrAttach({
-            sessionId: 'late-session',
-            cols: 80,
-            rows: 24,
-            streamClient: { onData: vi.fn(), onExit: vi.fn() }
-          })
-        ).rejects.toThrow('Terminal host is shutting down')
-
-        await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
-        await dispose
-        expect(forceKill).toHaveBeenCalledTimes(2)
-        expect(lastSubprocess.dispose).toHaveBeenCalled()
-        expect(host.listSessions()).toEqual([])
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
-    it('does not list exited sessions', async () => {
-      const onSessionReaped = vi.fn()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn, onSessionReaped })
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      lastSubprocess._onExitCb?.(0)
-      expect(host.listSessions()).toEqual([])
-      expect(onSessionReaped).toHaveBeenCalledWith('session-1')
-    })
-
-    it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {
-      // Why: after a session's subprocess has exited (onExit fired), proc.pid
-      // refers to a reaped child whose pid may have been recycled. Force-killing
-      // it would process.kill(recycled_pid, 'SIGKILL') — killing a stranger.
-      // The exit now reaps the session via session.dispose(), which skips
-      // forceKill once _state==='exited' (only the fd is released). host.dispose
-      // then only ever sees live sessions.
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      // Natural exit reaps session-1 synchronously: its subprocess fd is
-      // released (dispose) but it is never force-killed, and it is dropped from
-      // the map (so it is not listed and not touched by host.dispose below).
-      const exitedSub = lastSubprocess
-      lastSubprocess._onExitCb?.(0)
-      expect(host.listSessions()).toEqual([])
-
-      // A second, live session remains in the map for host.dispose to reap.
-      await host.createOrAttach({
-        sessionId: 'session-2',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      const liveSub = lastSubprocess
-
-      await host.dispose()
-
-      expect(exitedSub.forceKill).not.toHaveBeenCalled()
-      expect(exitedSub.dispose).toHaveBeenCalled()
-      expect(liveSub.forceKill).toHaveBeenCalled()
-      expect(liveSub.dispose).toHaveBeenCalled()
-    })
+    lastSubprocess._onExitCb?.(0)
+    await vi.waitFor(() => expect(host.listSessions()).toHaveLength(0))
+    await spawn(respawnedFor)
+    expect(host.listSessions().map((session) => session.paneKey)).toEqual([respawnedFor])
   })
 })

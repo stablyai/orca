@@ -1,3 +1,4 @@
+import { getRepoDialableSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { ipcMain } from 'electron'
 import type {
   ListKnownWorktreesForExecutionHostArgs,
@@ -5,11 +6,11 @@ import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult
 } from '../../../../shared/detected-worktree-provider-contract'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { agentHookServer } from '../../../agent-hooks/server'
 import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspace-space-analysis-snapshot'
 import { findExactRepoOwner, hasConflictingStoredWorktreeOwner } from './worktree-host-ownership'
@@ -24,6 +25,7 @@ import {
 } from './ssh-worktree-fallback'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
 export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
   const { store } = context
@@ -31,8 +33,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
   ipcMain.handle(
     'worktrees:listKnownForExecutionHost',
     (_event, args: ListKnownWorktreesForExecutionHostArgs): HostQualifiedKnownWorktreeResult => {
-      // Why: a malformed invoke must fail closed as `rejected`, not throw out of the handler. `ssh:` is inert —
-      // it owns no repo, so every guard below still rejects it.
+      // Malformed requests return rejected; the inert ssh: fallback resolves no owner.
       const requestedRepoId = args?.repoId ?? ''
       const requestedExecutionHostId = args?.executionHostId ?? 'ssh:'
       const rejected = (): HostQualifiedKnownWorktreeResult => ({
@@ -44,10 +45,9 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       if (parsedHost?.kind !== 'ssh') {
         return rejected()
       }
-      // Why: findExactRepoOwner repeats this same all-candidates-owned check, and getRepos() re-hydrates the
-      // whole catalog, so a separate pass here is pure cost.
+      // Exact-owner lookup already checks every candidate; avoid rehydrating the catalog twice.
       const repo = findExactRepoOwner(store, requestedRepoId, requestedExecutionHostId)
-      if (!repo || repo.connectionId !== parsedHost.targetId) {
+      if (!repo || getRepoDialableSshTargetId(repo) !== parsedHost.targetId) {
         return rejected()
       }
       const complete = (worktrees: DetectedWorktree[]): HostQualifiedKnownWorktreeResult => ({
@@ -61,7 +61,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
           worktrees
         }
       })
-      // Why: folder workspace ids carry an instance suffix the git-worktree synthesizer would read as a directory; build them the way every other listing does.
+      // Folder instance suffixes require the folder builder rather than Git path synthesis.
       if (isFolderRepo(repo)) {
         const folderWorkspaceIds = Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) =>
           isFolderWorkspaceIdForRepo(repo, worktreeId)
@@ -69,23 +69,21 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
         return hasConflictingStoredWorktreeOwner(store, repo, folderWorkspaceIds)
           ? rejected()
           : complete(
-              // Why: match the authoritative folder listing; without lineage these rows render flat and then
-              // reshuffle once the real scan lands.
-              projectResolvedWorktreeLineage(
-                buildFolderDetectedWorktrees(store, repo),
-                store.getAllWorktreeLineage?.() ?? {}
+              projectWorktreeLineageWithHostPeers(
+                store,
+                repo,
+                buildFolderDetectedWorktrees(store, repo)
               )
             )
       }
-      const metaIndex = createSshWorktreeMetaIndexForRepo(
-        readAllWorktreeMetaForHost(store, requestedExecutionHostId),
-        repo.id
-      )
+      const hostMeta = readAllWorktreeMetaForHost(store, requestedExecutionHostId)
+      const metaIndex = createSshWorktreeMetaIndexForRepo(hostMeta, repo.id)
       return complete(
         buildDisconnectedDetectedWorktrees(
           store,
           repo,
-          listDisconnectedSshWorktrees(store, repo, metaIndex)
+          listDisconnectedSshWorktrees(store, repo, metaIndex),
+          { hostMeta }
         )
       )
     }
@@ -103,15 +101,19 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       const requestedExecutionHostId = args?.executionHostId ?? 'ssh:'
       const worktreeIds = Array.isArray(args?.worktreeIds) ? args.worktreeIds : []
       const parsedHost = parseExecutionHostId(requestedExecutionHostId)
-      if (parsedHost?.kind !== 'ssh' || worktreeIds.length === 0) {
+      // SSH/runtime rows bypass local stale GC; authoritative host scans must retire them.
+      if (
+        (parsedHost?.kind !== 'ssh' && parsedHost?.kind !== 'runtime') ||
+        worktreeIds.length === 0
+      ) {
         return nothingForgotten
       }
+      // Exact-owner lookup rejects contradictory runtime/connection ownership before destructive work.
       const repo = findExactRepoOwner(store, args?.repoId ?? '', requestedExecutionHostId)
-      if (!repo || repo.connectionId !== parsedHost.targetId) {
+      if (!repo || (parsedHost.kind === 'ssh' && repo.connectionId !== parsedHost.targetId)) {
         return nothingForgotten
       }
-      // Why: a folder workspace's meta IS the workspace record, not a checkout row — gcStaleWorktreeMeta skips
-      // those keys for the same reason, and no remote scan can retire one.
+      // Folder metadata is the workspace itself; a remote filesystem scan cannot prove it removed.
       if (isFolderRepo(repo)) {
         return nothingForgotten
       }
@@ -122,11 +124,15 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
         if (!meta || getRepoIdFromWorktreeId(worktreeId) !== repo.id) {
           continue
         }
-        // An unhosted meta belongs to this repo's only owner; a foreign hostId needs that host's own scan.
+        // Legacy unhosted rows belong to the sole owner; foreign rows require their own host's scan.
         if (meta.hostId && meta.hostId !== requestedExecutionHostId) {
           continue
         }
-        store.removeWorktreeMeta(worktreeId, requestedExecutionHostId)
+        store.removeWorktreeMeta(
+          hostWorktreeTarget({ id: worktreeId, hostId: requestedExecutionHostId })
+        )
+        // Off-host rows bypass local GC, so this removal must also retire persisted agent status.
+        agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, parsedHost.id)
         forgottenWorktreeIds.push(worktreeId)
       }
       if (forgottenWorktreeIds.length > 0) {

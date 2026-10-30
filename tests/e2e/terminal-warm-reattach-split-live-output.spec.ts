@@ -92,7 +92,7 @@ async function createActiveDecoyTab(page: Page, worktreeId: string): Promise<voi
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, worktreeId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneCount(page, 1, 30_000)
@@ -116,7 +116,7 @@ async function activateTabWithoutFocus(page: Page, tabId: string): Promise<void>
     if (!store) {
       throw new Error('Store unavailable')
     }
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     store.getState().setActiveTab(tabId)
   }, tabId)
 }
@@ -181,21 +181,20 @@ test('restored hidden split drains live alternate-screen output without a click 
     await waitForPaneCount(first.page, 2, 30_000)
     const split = await waitForPaneIdentitySnapshot(first.page, 2)
     const streamingPane = split.panes.find((pane) => pane.leafId === split.activeLeafId)
-    if (!streamingPane?.ptyId) {
+    const streamingPtyId = streamingPane?.ptyId
+    if (!streamingPtyId) {
       throw new Error('Split did not expose its active PTY')
     }
-    expect(streamingPane.ptyId).toContain(PTY_SESSION_ID_SEPARATOR)
+    expect(streamingPtyId).toContain(PTY_SESSION_ID_SEPARATOR)
     await execInTerminal(
       first.page,
-      streamingPane.ptyId,
+      streamingPtyId,
       `node ${JSON.stringify(scriptPath)} ${JSON.stringify(heartbeatPath)}`
     )
     await expect
       .poll(
         async () =>
-          frameNumber(
-            (await probePane(first.page, split.tabId, streamingPane.ptyId))?.content ?? ''
-          ),
+          frameNumber((await probePane(first.page, split.tabId, streamingPtyId))?.content ?? ''),
         {
           timeout: 20_000,
           message: 'Streaming TUI did not start in the split pane'
@@ -222,7 +221,7 @@ test('restored hidden split drains live alternate-screen output without a click 
     await expect
       .poll(
         async () => {
-          restoredTabId = await findRestoredTabForPty(second.page, streamingPane.ptyId!)
+          restoredTabId = await findRestoredTabForPty(second.page, streamingPtyId)
           return restoredTabId
         },
         { timeout: 20_000, message: 'Persisted split PTY was not restored into a tab layout' }
@@ -232,12 +231,12 @@ test('restored hidden split drains live alternate-screen output without a click 
     await waitForActiveTerminalManager(second.page, 30_000)
     await waitForPaneCount(second.page, 2, 30_000)
 
-    const initial = await probePane(second.page, restoredTabId!, streamingPane.ptyId)
+    const initial = await probePane(second.page, restoredTabId!, streamingPtyId)
     expect(initial, 'Streaming pane did not remount after tab activation').not.toBeNull()
     const initialFrame = frameNumber(initial!.content)
     const initialHeartbeat = heartbeatNumber(heartbeatPath)
     await second.page.waitForTimeout(2_000)
-    const later = await probePane(second.page, restoredTabId!, streamingPane.ptyId)
+    const later = await probePane(second.page, restoredTabId!, streamingPtyId)
     const laterHeartbeat = heartbeatNumber(heartbeatPath)
 
     expect(

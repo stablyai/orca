@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -16,7 +17,7 @@ const {
   listRegisteredRemovedSshTargetLabelsMock: vi.fn()
 }))
 
-vi.mock('../../../ssh/ssh-target-registry', () => ({
+vi.mock('../../../ssh/targets/ssh-target-registry', () => ({
   connectRegisteredSshTarget: connectRegisteredSshTargetMock,
   getRegisteredSshState: getRegisteredSshStateMock,
   listRegisteredSshTargets: listRegisteredSshTargetsMock,
@@ -58,8 +59,18 @@ describe('ssh RPC methods', () => {
 
     const response = await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1' }))
 
-    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1')
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', { automatic: false })
     expect(response).toMatchObject({ ok: true, result: { state } })
+  })
+
+  it("keeps a paired client's automatic connect from lifting a cancelled sign-in", async () => {
+    connectRegisteredSshTargetMock.mockResolvedValueOnce(null)
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1', automatic: true }))
+
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', { automatic: true })
   })
 
   it('returns null when the target has no registered state yet', async () => {
@@ -116,6 +127,34 @@ describe('ssh RPC methods', () => {
       }
     ]
     listRegisteredSshTargetsMock.mockReturnValueOnce(targets)
+    getRegisteredSshStateMock.mockReturnValueOnce({ status: 'connected', remotePlatform: 'win32' })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ssh.listTargetSummaries'))
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        targets: [
+          {
+            id: 'ssh-1',
+            label: 'Dev box',
+            connected: true,
+            connectionStatus: 'connected',
+            remotePlatform: 'win32'
+          }
+        ]
+      }
+    })
+    expect(JSON.stringify(response)).not.toContain('dev.internal')
+    expect(JSON.stringify(response)).not.toContain('/secret/key')
+    expect(JSON.stringify(response)).not.toContain('bastion')
+  })
+
+  it('does not invent a platform before the SSH host has been detected', async () => {
+    listRegisteredSshTargetsMock.mockReturnValueOnce([{ id: 'ssh-1', label: 'Dev box' }])
+    getRegisteredSshStateMock.mockReturnValueOnce(undefined)
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
 
@@ -125,9 +164,23 @@ describe('ssh RPC methods', () => {
       ok: true,
       result: { targets: [{ id: 'ssh-1', label: 'Dev box' }] }
     })
-    expect(JSON.stringify(response)).not.toContain('dev.internal')
-    expect(JSON.stringify(response)).not.toContain('/secret/key')
-    expect(JSON.stringify(response)).not.toContain('bastion')
+    expect(JSON.stringify(response)).not.toContain('remotePlatform')
+  })
+
+  it('reports disconnected lifecycle states without calling them connected', async () => {
+    listRegisteredSshTargetsMock.mockReturnValueOnce([{ id: 'ssh-1', label: 'Dev box' }])
+    getRegisteredSshStateMock.mockReturnValueOnce({ status: 'reconnecting' })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ssh.listTargetSummaries'))
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        targets: [{ id: 'ssh-1', connected: false, connectionStatus: 'reconnecting' }]
+      }
+    })
   })
 
   it('redacts the legacy target response for older clients', async () => {

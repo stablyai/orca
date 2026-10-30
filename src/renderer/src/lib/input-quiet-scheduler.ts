@@ -15,6 +15,7 @@ const INPUT_QUIET_EVENTS: readonly (keyof WindowEventMap)[] = [
 ]
 
 let listenersInstalled = false
+let listenersWindow: Window | null = null
 let lastInputAt = Number.NEGATIVE_INFINITY
 
 function now(): number {
@@ -49,6 +50,24 @@ function ensureInputQuietListeners(targetWindow: Window): void {
   for (const eventName of INPUT_QUIET_EVENTS) {
     targetWindow.addEventListener(eventName, recordInput, options)
   }
+  listenersWindow = targetWindow
+}
+
+function disposeInputQuietListeners(): void {
+  if (!listenersWindow) {
+    return
+  }
+  const options: AddEventListenerOptions = { capture: true }
+  for (const eventName of INPUT_QUIET_EVENTS) {
+    listenersWindow.removeEventListener(eventName, recordInput, options)
+  }
+  listenersWindow = null
+  listenersInstalled = false
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Remove global hooks on Vite replacement so HMR cannot retain stale scheduler closures.
+  import.meta.hot.dispose(disposeInputQuietListeners)
 }
 
 function scheduleIdleCallback(targetWindow: Window, callback: () => void, timeout: number): number {
@@ -132,9 +151,7 @@ export function scheduleAfterInputQuiet(
     idleId = scheduleIdleCallback(targetWindow, run, idleTimeoutMs)
   }
 
-  // Why: terminal wake remounts xterm panes. Wait for both the initial delay
-  // and a quiet input window so a follow-up click/keystroke cannot collide
-  // with the heavy remount.
+  // Wait for both startup delay and quiet input before heavy terminal-wake remounts so follow-up gestures do not collide.
   delayTimer = targetWindow.setTimeout(() => {
     delayTimer = null
     checkQuietWindow()

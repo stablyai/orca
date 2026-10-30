@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
-import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../shared/palette-match/palette-query'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
@@ -12,7 +12,6 @@ import {
   SIMULATOR_PALETTE_QUERY_MAX_BYTES,
   SIMULATOR_TYPE_SEARCH_ALIASES,
   buildSearchableSimulatorTabs,
-  isSimulatorPaletteQueryTooLarge,
   searchSimulatorTabs,
   simulatorPaletteTabTitle,
   type SearchableSimulatorTab
@@ -232,8 +231,7 @@ describe('simulator-palette-search', () => {
   })
 
   it('stamps each row with its own execution host when worktree ids collide', () => {
-    // Two hosts can serve the same worktree id, so activation needs the host
-    // that owns the row rather than the first id match in the store.
+    // Same workspace IDs can exist on different hosts; activation must follow the row’s owner.
     const entries = [
       makeEntry({
         tab: makeTab({ id: 'sim-local' }),
@@ -309,7 +307,10 @@ describe('simulator-palette-search', () => {
     ]
 
     const hit = searchSimulatorTabs(entries, 'emulator checkout')[0]
-    expect(hit?.typeAliasMatch).toEqual({ text: 'emulator', ranges: [{ start: 0, end: 8 }] })
+    expect(hit?.typeAliasMatch).toEqual({
+      text: 'mobile emulator tab',
+      ranges: [{ start: 7, end: 15 }]
+    })
     expect(hit?.worktreeRanges).toEqual([{ start: 0, end: 8 }])
   })
 
@@ -406,7 +407,6 @@ describe('simulator-palette-search', () => {
       })
     } as SearchableSimulatorTab
 
-    expect(isSimulatorPaletteQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchSimulatorTabs([entry], oversizedQuery)).toEqual([])
   })
 
@@ -415,8 +415,7 @@ describe('simulator-palette-search', () => {
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J sees the same potentially corrupt store display names as workspace search.
     const entries = [
       makeEntry({
         tab: makeTab(),

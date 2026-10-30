@@ -104,9 +104,7 @@ describe('parseWorkspaceSession', () => {
   })
 
   it('preserves an isolated browser tab session partition across hydration', () => {
-    // Regression for #6923: the resolved partition must survive persist→load,
-    // otherwise a restored isolated tab falls back to the shared default
-    // partition when the renderer profile mirror is stale at startup.
+    // Preserve isolated storage despite a stale renderer profile mirror after restart (#6923).
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -166,6 +164,47 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].launchAgent).toBe('codex')
+    }
+  })
+
+  it('drops a launch pane an older build saved: after a restart its pane is an ordinary pane', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            launchAgent: 'claude',
+            agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'not-started', code: 'boom' } }
+          },
+          {
+            id: 'tab2',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1,
+            agentLaunchPane: { leafId: 'leaf-2', outcome: { kind: 'exploded' } }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0]).not.toHaveProperty('agentLaunchPane')
+      expect(result.value.tabsByWorktree.wt[1]).not.toHaveProperty('agentLaunchPane')
     }
   })
 
@@ -395,7 +434,6 @@ describe('parseWorkspaceSession', () => {
   it('rejects a session with missing required top-level fields', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null
-      // missing activeWorktreeId, tabsByWorktree, etc.
     })
     expect(result.ok).toBe(false)
   })
@@ -504,6 +542,7 @@ describe('parseWorkspaceSession', () => {
         url: `https://example.com/${index}`,
         normalizedUrl: `https://example.com/${index}`,
         title: `Example ${index}`,
+        faviconUrl: index === 0 ? 'https://example.com/favicon.ico' : null,
         lastVisitedAt: 1_700_000_000_000 - index,
         visitCount: 1
       }))
@@ -512,6 +551,9 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+      expect(result.value.browserUrlHistory?.[0]?.faviconUrl).toBe(
+        'https://example.com/favicon.ico'
+      )
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
     }
   })
@@ -544,6 +586,103 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('chat')
+    }
+  })
+
+  it('preserves a structured agent session tab and drops the retired adoption key', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'session-1',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'session-1',
+            entityId: 'session-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex',
+            label: 'Codex Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          },
+          {
+            id: 'terminal-1',
+            entityId: 'terminal-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            viewMode: 'chat',
+            // Why: older builds could save this key on a chat-mode terminal; it must keep loading.
+            structuredSessionId: 'codex-session-1',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 0
+          }
+        ]
+      },
+      activeTabTypeByWorktree: { wt: 'agent-session' }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex'
+      })
+      expect(result.value.unifiedTabs?.wt[1]).toMatchObject({
+        contentType: 'terminal',
+        viewMode: 'chat'
+      })
+      expect(result.value.unifiedTabs?.wt[1]).not.toHaveProperty('structuredSessionId')
+      expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+    }
+  })
+
+  it('keeps a chat tab of any agent id, and drops only a malformed id', () => {
+    const chatTab = (id: string, agentSessionAgent: unknown) => ({
+      id,
+      entityId: id,
+      groupId: 'group1',
+      worktreeId: 'wt',
+      contentType: 'agent-session',
+      agentSessionAgent,
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          chatTab('a', 'grok'),
+          chatTab('b', 'not an agent!'),
+          chatTab('c', 42),
+          chatTab('d', 'claude')
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt.map((tab) => [tab.id, tab.agentSessionAgent])).toEqual([
+        ['a', 'grok'],
+        ['b', undefined],
+        ['c', undefined],
+        ['d', 'claude']
+      ])
     }
   })
 
@@ -580,9 +719,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  // Why: z.object strips unlisted keys, so a page row that reaches disk with the remote page
-  // identity comes back without it — and hydration can only reconstruct the handle it needs to
-  // reclaim a client-hosted page if both halves of that identity survive the round trip.
+  // Reclaiming client-hosted pages after relaunch requires both persisted identity fields; z.object drops unlisted fields.
   it('preserves the remote page identity of a client-hosted browser page', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

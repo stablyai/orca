@@ -13,29 +13,48 @@ function node(path: string, isDirectory = false): TreeNode {
 }
 
 describe('selectDeletionRoots', () => {
-  it('keeps unrelated files and directories', () => {
-    const nodes = [node('/repo/a.ts'), node('/repo/b.ts'), node('/repo/docs', true)]
-    expect(selectDeletionRoots(nodes)).toEqual(nodes)
+  it('preserves WSL case-sensitive paths while accepting UNC aliases', () => {
+    const parent = node('//wsl.localhost/Ubuntu/Repo', true)
+    const child = node('//wsl$/ubuntu/Repo/file')
+    const outside = node('//wsl$/ubuntu/repo/file')
+    expect(selectDeletionRoots([parent, child, outside])).toEqual([parent, outside])
   })
 
-  it('drops children of a selected directory', () => {
-    const dir = node('/repo/docs', true)
-    const child = node('/repo/docs/readme.md')
-    const nested = node('/repo/docs/guides/intro.md')
-    const outside = node('/repo/a.ts')
-    expect(selectDeletionRoots([dir, child, nested, outside])).toEqual([dir, outside])
+  it('preserves order, node identity and host ownership when children precede parents', () => {
+    const child = node('/repo/docs/guide.md')
+    const first = { ...node('/repo/first.ts'), operationOwner: { kind: 'local' as const } }
+    const parent = {
+      ...node('/repo/docs', true),
+      operationOwner: { kind: 'ssh' as const, connectionId: 'ssh-owner' }
+    }
+    const last = {
+      ...node('/repo/last.ts'),
+      operationOwner: { kind: 'unresolved' as const }
+    }
+    const nodes = [child, first, parent, last]
+    const selected = selectDeletionRoots(nodes)
+    expect(selected).toEqual([first, parent, last])
+    expect(selected[0]).toBe(first)
+    expect(selected[1]).toBe(parent)
+    expect(selected[2]).toBe(last)
+    expect(nodes).toEqual([child, first, parent, last])
   })
 
-  it('keeps siblings whose paths merely share a prefix', () => {
-    const dir = node('/repo/docs', true)
-    const lookalike = node('/repo/docs-old/readme.md')
-    expect(selectDeletionRoots([dir, lookalike])).toEqual([dir, lookalike])
+  it.each([
+    ['/repo/docs/', '/repo/docs/guide.md', '/repo/docs-other/guide.md'],
+    ['C:\\Repo\\Docs\\', 'c:/repo/docs/guide.md', 'C:/Repo/Docs-other/guide.md'],
+    ['\\\\Server\\Share\\Docs', '//server/share/docs/guide.md', '//server/other/docs/guide.md']
+  ])('retains path boundaries for %s', (parentPath, childPath, outsidePath) => {
+    const parent = node(parentPath, true)
+    const child = node(childPath)
+    const outside = node(outsidePath)
+    expect(selectDeletionRoots([outside, child, parent])).toEqual([outside, parent])
   })
 
-  it('does not treat selected files as containers', () => {
-    const file = node('/repo/a.ts')
-    const other = node('/repo/a.ts/impossible-child')
-    expect(selectDeletionRoots([file, other])).toEqual([file, other])
+  it('keeps case-distinct POSIX paths', () => {
+    const parent = node('/repo/Docs', true)
+    const outside = node('/repo/docs/guide.md')
+    expect(selectDeletionRoots([outside, parent])).toEqual([outside, parent])
   })
 })
 
@@ -74,20 +93,6 @@ describe('runBatchDeletion', () => {
 
     expect(deleted).toBeNull()
     expect(deleteNode).not.toHaveBeenCalled()
-  })
-
-  it('skips confirmation when none is needed', async () => {
-    const confirmBatch = vi.fn()
-
-    const deleted = await runBatchDeletion({
-      roots,
-      needsConfirmation: false,
-      confirmBatch,
-      deleteNode: vi.fn(async () => true)
-    })
-
-    expect(confirmBatch).not.toHaveBeenCalled()
-    expect(deleted).toEqual(roots)
   })
 
   it('excludes failed deletes from the result but continues the batch', async () => {

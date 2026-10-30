@@ -1,21 +1,10 @@
-/**
- * Typed queries used to render every match as a DOM row — a one-character query
- * against a few hundred workspaces built hundreds of `CommandItem`s (each with
- * status dots, badges and highlight spans) on every keystroke. Capping the
- * rendered slice bounds worst-case DOM without changing ranking: the top matches
- * are already the ones the user wants, and the overflow hint points at the two
- * ways to reach the rest.
- */
+/** Bound per-keystroke DOM work while preserving ranking; expansion and query refinement expose the remaining matches. */
 export const PALETTE_SECTION_RENDER_CAP = 50
 
 /** Number of additional entries to reveal per section on each "See more" click. */
 export const PALETTE_SECTION_EXPAND_STEP = 20
 
-/**
- * First-screen soft split for typed queries when open tabs and worktrees both
- * match. Leading section shows this many rows, then a non-selectable hint, then
- * the trailing section floor so worktrees (or tabs) stay above the fold.
- */
+/** Preview the leading primary section, then show a trailing-section floor so both stay above the fold. */
 export const TYPED_QUERY_LEADING_PREVIEW = 6
 
 /** Min rows for the non-leading primary section (tabs ↔ worktrees) in the first screen. */
@@ -28,31 +17,43 @@ export type CappedPaletteSection<T> = {
 
 export function capPaletteSection<T>(
   items: readonly T[],
-  cap: number = PALETTE_SECTION_RENDER_CAP
+  cap: number = PALETTE_SECTION_RENDER_CAP,
+  retain?: (item: T) => boolean
 ): CappedPaletteSection<T> {
   if (!Number.isFinite(cap) || cap < 0 || items.length <= cap) {
     return { visible: items, overflowCount: 0 }
   }
-  return { visible: items.slice(0, cap), overflowCount: items.length - cap }
+  const visible = items.slice(0, cap)
+  // Keep the selected match visible after reranking without increasing the DOM row cap.
+  let retained: T | undefined
+  if (retain) {
+    for (let index = cap; index < items.length; index += 1) {
+      if (retain(items[index])) {
+        retained = items[index]
+        break
+      }
+    }
+  }
+  if (retained !== undefined && cap > 0) {
+    visible.splice(cap - 1, 1, retained)
+  }
+  return { visible, overflowCount: items.length - visible.length }
 }
 
-/**
- * Soft-split a hard-capped section into first-screen preview + remainder.
- * `moreCount` is everything after the preview (including rows past the hard cap)
- * so one overflow hint covers both scrollable rest and “keep typing” remainder.
- */
-export type SoftSplitSection<T> = {
+/** moreCount includes both scrollable remainder and hard-cap overflow, served by one preview hint. */
+type SoftSplitSection<T> = {
   preview: readonly T[]
   rest: readonly T[]
   moreCount: number
 }
 
-export function softSplitPaletteSection<T>(
+function softSplitPaletteSection<T>(
   items: readonly T[],
   previewCount: number,
-  hardCap: number = PALETTE_SECTION_RENDER_CAP
+  hardCap: number = PALETTE_SECTION_RENDER_CAP,
+  retain?: (item: T) => boolean
 ): SoftSplitSection<T> {
-  const capped = capPaletteSection(items, hardCap)
+  const capped = capPaletteSection(items, hardCap, retain)
   const previewSize = Math.max(0, Math.min(previewCount, capped.visible.length))
   return {
     preview: capped.visible.slice(0, previewSize),
@@ -61,22 +62,7 @@ export function softSplitPaletteSection<T>(
   }
 }
 
-/**
- * Layout when a typed query hits both open tabs and worktrees.
- * Leading section gets a soft preview; trailing primary gets an early floor so
- * it is not buried under ~50 leading rows. Remaining rows of both sections
- * follow (still under the hard cap). Projects/middle stay after both primaries.
- *
- * Callers must re-emit the section header before each remainder — the interleave
- * puts `leadingRest` after the trailing header, so unlabelled rows read as the
- * wrong section.
- *
- * `leadingMoreCount` is the mid-list soft hint (rest resuming below + hard-cap
- * overflow).
- * `leadingHardOverflowCount` is only rows past the hard cap for the leading remainder.
- * `trailingHardOverflowCount` is only rows past the hard cap — trailing rest is
- * already rendered, so a soft “more” would double-count scrollable rows.
- */
+/** Interleave primary previews before their capped remainders; repeat headers on re-entry. Soft counts include rest plus overflow; final hints count only hard overflow. */
 export type MultiPrimarySectionLayout<T> = {
   leadingPreview: readonly T[]
   leadingRest: readonly T[]
@@ -95,7 +81,9 @@ export function layoutMultiPrimaryPaletteSections<T>({
   trailingFloorCount = TYPED_QUERY_TRAILING_FLOOR,
   hardCap,
   leadingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP,
-  trailingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP
+  trailingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP,
+  leadingRetain,
+  trailingRetain
 }: {
   leadingItems: readonly T[]
   trailingItems: readonly T[]
@@ -104,9 +92,21 @@ export function layoutMultiPrimaryPaletteSections<T>({
   hardCap?: number
   leadingHardCap?: number
   trailingHardCap?: number
+  leadingRetain?: (item: T) => boolean
+  trailingRetain?: (item: T) => boolean
 }): MultiPrimarySectionLayout<T> {
-  const leading = softSplitPaletteSection(leadingItems, leadingPreviewCount, leadingHardCap)
-  const trailing = softSplitPaletteSection(trailingItems, trailingFloorCount, trailingHardCap)
+  const leading = softSplitPaletteSection(
+    leadingItems,
+    leadingPreviewCount,
+    leadingHardCap,
+    leadingRetain
+  )
+  const trailing = softSplitPaletteSection(
+    trailingItems,
+    trailingFloorCount,
+    trailingHardCap,
+    trailingRetain
+  )
   return {
     leadingPreview: leading.preview,
     leadingRest: leading.rest,
@@ -115,8 +115,7 @@ export function layoutMultiPrimaryPaletteSections<T>({
     trailingFloor: trailing.preview,
     trailingRest: trailing.rest,
     trailingMoreCount: trailing.moreCount,
-    // Why: floor + rest already cover every rendered trailing row; only the
-    // hard-capped tail needs a “keep typing” hint after the section.
+    // Rendered trailing rows are already visible; the final hint counts only hard-cap overflow.
     trailingHardOverflowCount: Math.max(0, trailing.moreCount - trailing.rest.length)
   }
 }

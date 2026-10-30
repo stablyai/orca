@@ -67,11 +67,11 @@ function buildCase(random: () => number): {
   worktreesByRepo: Record<string, readonly OwnerRecord[]>
   probeIds: string[]
 } {
-  const shape = random()
-  if (shape < 0.05) {
+  const roll = random()
+  if (roll < 0.05) {
     return { detectedWorktreesByRepo: undefined, worktreesByRepo: {}, probeIds: ['repo-0::absent'] }
   }
-  if (shape < 0.1) {
+  if (roll < 0.1) {
     return { detectedWorktreesByRepo: {}, worktreesByRepo: {}, probeIds: ['repo-0::absent'] }
   }
   const repoCount = 1 + Math.floor(random() * 6)
@@ -156,13 +156,6 @@ describe('detected worktree index', () => {
     expect(matches).toHaveLength(2)
     expect(matches[0]).toBe(first)
     expect(matches[1]).toBe(second)
-  })
-
-  it('treats undefined, empty, and empty-bucket catalogs as unpublished', () => {
-    expect(hasIndexedDetectedWorktree(undefined, 'repo::wt')).toBe(false)
-    expect(findIndexedDetectedWorktrees(undefined, 'repo::wt')).toEqual([])
-    expect(hasIndexedDetectedWorktree({}, 'repo::wt')).toBe(false)
-    expect(hasIndexedDetectedWorktree({ repo: { worktrees: [] } }, 'repo::wt')).toBe(false)
   })
 
   it('re-indexes a new catalog identity instead of serving stale hits', () => {

@@ -1,18 +1,11 @@
-import { randomUUID } from 'node:crypto'
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import type { ConfigParseResult, HermesConfig } from './hermes-config-yaml'
-import { parseHermesConfig, serializeHermesConfig } from './hermes-config-yaml'
+import { parseHermesConfig } from './hermes-config-yaml'
+import { getHermesHome } from './hermes-default-home'
+import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
+import { writeHooksJson } from '../agent-hooks/installer-utils'
 import {
   HERMES_PLUGIN_MARKER,
   HERMES_PLUGIN_NAME,
@@ -20,17 +13,26 @@ import {
   getPluginManifest
 } from './hermes-managed-plugin-source'
 
-export function getHermesHome(env: NodeJS.ProcessEnv = process.env): string {
-  const explicit = env.HERMES_HOME?.trim()
-  return explicit ? explicit : join(homedir(), '.hermes')
+export function getConfigPath(home = getHermesHome()): string {
+  return join(home, 'config.yaml')
 }
 
-export function getConfigPath(): string {
-  return join(getHermesHome(), 'config.yaml')
+export function getPluginDir(home = getHermesHome()): string {
+  return join(home, 'plugins', HERMES_PLUGIN_NAME)
 }
 
-export function getPluginDir(): string {
-  return join(getHermesHome(), 'plugins', HERMES_PLUGIN_NAME)
+/** Named profiles (`hermes -p <name>`) that carry an Orca-managed copy of the plugin. */
+export function listManagedProfileHomes(): string[] {
+  const profilesDir = join(getHermesHome(), 'profiles')
+  let names: string[]
+  try {
+    names = readdirSync(profilesDir)
+  } catch {
+    return []
+  }
+  return names
+    .map((name) => join(profilesDir, name))
+    .filter((home) => getPluginFilesState(getPluginDir(home)).managed)
 }
 
 function getManifestPath(pluginDir = getPluginDir()): string {
@@ -41,43 +43,19 @@ function getInitPath(pluginDir = getPluginDir()): string {
   return join(pluginDir, '__init__.py')
 }
 
-export function readConfigFile(configPath: string): ConfigParseResult {
-  if (!existsSync(configPath)) {
-    return { ok: true, config: {} }
-  }
-  return parseHermesConfig(readFileSync(configPath, 'utf-8'))
+type ConfigFileReadResult =
+  | { ok: true; config: HermesConfig; content: string }
+  | Extract<ConfigParseResult, { ok: false }>
+
+export function readConfigFile(configPath: string): ConfigFileReadResult {
+  const readPath = resolveHooksJsonWritePath(configPath)
+  const content = existsSync(readPath) ? readFileSync(readPath, 'utf-8') : ''
+  const parsed = parseHermesConfig(content)
+  return parsed.ok ? { ...parsed, content } : parsed
 }
 
-export function writeConfigFile(configPath: string, config: HermesConfig): void {
-  const dir = dirname(configPath)
-  mkdirSync(dir, { recursive: true })
-  const serialized = serializeHermesConfig(config)
-  if (existsSync(configPath)) {
-    try {
-      if (readFileSync(configPath, 'utf-8') === serialized) {
-        return
-      }
-    } catch {
-      // Fall through to the atomic write path.
-    }
-  }
-
-  const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  try {
-    writeFileSync(tmpPath, serialized, 'utf-8')
-    if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
-    }
-    renameSync(tmpPath, configPath)
-  } finally {
-    if (existsSync(tmpPath)) {
-      try {
-        unlinkSync(tmpPath)
-      } catch {
-        // best effort
-      }
-    }
-  }
+export function writeConfigFile(configPath: string, content: string): void {
+  writeHooksJson(configPath, {}, { serialized: content, preserveMode: true, defaultMode: 0o600 })
 }
 
 export function getPluginFilesState(pluginDir = getPluginDir()): {
