@@ -304,7 +304,8 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     expect(summaries.worktrees[0]?.agents).toHaveLength(100)
-    expect(getRepo).toHaveBeenCalledTimes(1)
+    // Once for the summary and once for the session that names its rows; never once per row.
+    expect(getRepo).toHaveBeenCalledTimes(2)
   })
 
   it.each([

@@ -11,7 +11,7 @@ import {
   View
 } from 'react-native'
 import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { formatPreviewByteLength } from '../../../files/mobile-file-preview-response'
@@ -19,6 +19,8 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 
 const THUMB_SIZE = 58
+// Items sit 12pt in from the composer box's edge (box padding plus strip padding).
+const ITEM_RADIUS = concentricRadius(radii.floating, 12)
 
 function composerFileMeta(
   file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>,
@@ -148,13 +150,13 @@ const styles = themedStyleSheet(() => ({
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     backgroundColor: colors.composerControl
   },
   thumbImage: {
     width: '100%',
     height: '100%',
-    borderRadius: radii.composerItem
+    borderRadius: ITEM_RADIUS
   },
   fileCard: {
     height: THUMB_SIZE,
@@ -165,13 +167,13 @@ const styles = themedStyleSheet(() => ({
     gap: 9,
     paddingLeft: 10,
     paddingRight: spacing.md,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     backgroundColor: colors.composerControl
   },
   fileIcon: {
     width: 32,
     height: 36,
-    borderRadius: 7,
+    borderRadius: concentricRadius(ITEM_RADIUS, 10),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised
@@ -192,7 +194,7 @@ const styles = themedStyleSheet(() => ({
   },
   uploading: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
@@ -204,7 +206,7 @@ const styles = themedStyleSheet(() => ({
     right: -5,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,

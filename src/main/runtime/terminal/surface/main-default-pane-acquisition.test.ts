@@ -54,10 +54,11 @@ class DefaultPaneRuntime extends OrcaRuntimeService {
     if (!pty) {
       throw new Error('Expected seeded PTY')
     }
+    const summary = this.buildPtyTerminalSummary(pty, new Map())
     return {
-      summary: this.buildPtyTerminalSummary(pty, new Map()),
-      target: this.getPtyLaneMailboxTargetForPty(pty),
-      mailbox: this.getOrchestrationMailboxLeafForHandle(this.handleByPtyId.get(id)!),
+      summary,
+      target: this.orchestrationMailboxDeliveryTarget.resolveTerminal(summary.handle),
+      mailbox: this.getOrchestrationMailboxTerminalForHandle(summary.handle),
       close: this.getPtyIdsForExplicitTabClose(FIXTURE_GIT_WORKTREE_ID, 'tab-main-0')
     }
   }
@@ -247,11 +248,11 @@ it('keeps loaded default title, headless target/refusal, exported hooks and orde
       leafId: leaf(0),
       orphaned: false
     })
-    expect(initial.target).toBeNull()
+    expect(initial.target).toEqual(initial.mailbox)
     expect(initial.mailbox).toMatchObject({
-      tabId: 'tab-main-0',
-      leafId: leaf(0),
-      ptyId: 'pty-main-0'
+      ptyId: 'pty-main-0',
+      handle: initial.summary.handle,
+      paneKeys: [pane]
     })
     expect(initial.close).toEqual(['pty-main-0'])
     expect(transfer.mock.calls.map(([from, to, id]) => [from, to, id])).toEqual([
@@ -302,7 +303,11 @@ it('keeps loaded default title, headless target/refusal, exported hooks and orde
       ]
     })
     const shown = f.runtime.defaultConsumers('pty-main-0')
-    expect(shown.target).toBeNull()
+    expect(shown.target).toMatchObject({
+      ptyId: 'pty-main-0',
+      handle: shown.summary.handle,
+      paneKeys: [pane]
+    })
     expect(shown.close).toEqual(['pty-main-0', 'leaf-only'])
     expect(shown.summary.title).toBe('Saved manual name')
   } finally {

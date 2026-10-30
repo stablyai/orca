@@ -12649,6 +12649,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "此语言包过于不完整，无法切换。"
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} 来自不同的仓库",
+          "accessTitle": "{{value0}} {{value1}} 请求更多访问权限",
+          "manyTitle": "{{value0}} 个插件更新等待你审核",
+          "oneDescription": "发布者：{{value0}}。在你审核之前不会更新。",
+          "manyDescription": "在你审核之前不会更新。",
+          "review": "审核",
+          "dismiss": "关闭"
         }
       },
       "right": {

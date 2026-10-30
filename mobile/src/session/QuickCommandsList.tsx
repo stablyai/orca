@@ -1,6 +1,6 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
 import { Check, Plus, Search } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -219,13 +219,13 @@ const styles = themedStyleSheet(() => ({
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs
   },
-  group: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
+  group: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
   rowIcon: {
     width: 26,
     height: 26,
-    borderRadius: 6,
+    borderRadius: radii.tile,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -236,7 +236,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.borderSubtle,

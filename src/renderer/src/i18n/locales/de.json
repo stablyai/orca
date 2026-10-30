@@ -13127,6 +13127,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Dieses Sprachpaket ist zu unvollständig, um dorthin zu wechseln."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} stammt aus einem anderen Repository",
+          "accessTitle": "{{value0}} {{value1}} möchte mehr Zugriff",
+          "manyTitle": "{{value0}} Plugin-Updates warten auf deine Prüfung",
+          "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
+          "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
+          "review": "Prüfen",
+          "dismiss": "Schließen"
         }
       },
       "right": {

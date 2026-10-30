@@ -139,7 +139,7 @@ export function registerPluginHandlers(
   handleContentPacks('plugins:loadSyntax', (id) =>
     typeof id === 'string' ? contentPacks.syntaxes.load(id) : null
   )
-  ipcMain.handle('plugins:consent', async (event, args: unknown) => {
+  ipcMain.handle('plugins:consent', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)
     await applyPluginConsent({
@@ -147,21 +147,19 @@ export function registerPluginHandlers(
       pluginService,
       pluginKey: parsed.pluginKey,
       reviewedFingerprint: parsed.reviewedFingerprint,
-      decision: parsed.decision,
-      originWebContentsId: event.sender.id
+      decision: parsed.decision
     })
     return listPluginsForClients(pluginService)
   })
 
-  ipcMain.handle('plugins:setEnabled', async (event, args: unknown) => {
+  ipcMain.handle('plugins:setEnabled', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = setEnabledArgsSchema.parse(args)
     await applyPluginEnablement({
       store,
       pluginService,
       pluginKey: parsed.pluginKey,
-      enabled: parsed.enabled,
-      originWebContentsId: event.sender.id
+      enabled: parsed.enabled
     })
     return listPluginsForClients(pluginService)
   })
@@ -243,7 +241,7 @@ export function registerPluginHandlers(
     return result
   })
 
-  ipcMain.handle('plugins:remove', async (event, args: unknown) => {
+  ipcMain.handle('plugins:remove', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = removeArgsSchema.parse(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
@@ -270,7 +268,8 @@ export function registerPluginHandlers(
         disabledPlugins,
         ...pluginThemeSettingsAfterRemoval(settings, parsed.pluginKey)
       },
-      { notifyListeners: true, originWebContentsId: event.sender.id }
+      // Why no origin: the uninstalling window must also drop the plugin's theme choices.
+      { notifyListeners: true }
     )
     await pluginService.refresh()
     return listPluginsForClients(pluginService)
@@ -290,14 +289,13 @@ export function registerPluginHandlers(
       pluginService,
       marketplaceServices,
       () => store.getSettings(),
-      (pluginKey, reviewedFingerprint, originWebContentsId) =>
+      (pluginKey, reviewedFingerprint) =>
         applyPluginConsent({
           store,
           pluginService,
           pluginKey,
           reviewedFingerprint,
-          decision: 'approve',
-          originWebContentsId
+          decision: 'approve'
         })
     )
   }

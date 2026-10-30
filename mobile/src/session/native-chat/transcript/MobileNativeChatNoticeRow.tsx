@@ -194,7 +194,7 @@ const styles = themedStyleSheet(() => ({
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     padding: spacing.md,
     gap: spacing.sm

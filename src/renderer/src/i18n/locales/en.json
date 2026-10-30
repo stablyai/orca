@@ -1,5 +1,7 @@
 {
   "agentLaunch": {
+    "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
+    "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.",
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
@@ -850,7 +852,8 @@
       "installCliForTerminal": "Install the {{value0}} CLI to open it in a terminal.",
       "chatRuntime": "Chat runtime",
       "chatChoiceTitle": "Open as chat or CLI",
-      "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI."
+      "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI.",
+      "sameAsChoice": "Same as {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -13381,6 +13384,15 @@
           "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
           "label": "Not an official plugin:",
           "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} comes from a different repository",
+          "accessTitle": "{{value0}} {{value1}} wants more access",
+          "manyTitle": "{{value0}} plugin updates need your review",
+          "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
+          "manyDescription": "They won’t update until you review them.",
+          "review": "Review",
+          "dismiss": "Dismiss"
         }
       },
       "right": {

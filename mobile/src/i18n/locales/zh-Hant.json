@@ -2113,6 +2113,7 @@
       "requestFailed": "請求失敗：{{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "顯示工作區的完整名稱及其所在位置",
       "backToWorktrees": "返回工作樹",
       "moreActions": "更多工作階段操作",
       "openFileExplorer": "開啟檔案總管",
