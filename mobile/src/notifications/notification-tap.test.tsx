@@ -23,6 +23,7 @@ const ports = vi.hoisted(() => {
   const tokenListeners = new Set<unknown>()
   const linkListeners = new Set<unknown>()
   const networkListeners = new Set<unknown>()
+  const keyboardListeners = new Set<unknown>()
   const input: {
     initial: NativeResponse | null
     response: ((response: NativeResponse) => void) | undefined
@@ -41,6 +42,7 @@ const ports = vi.hoisted(() => {
     tokenListeners,
     linkListeners,
     networkListeners,
+    keyboardListeners,
     subscription,
     input,
     router: { push: vi.fn(), replace: vi.fn() },
@@ -65,6 +67,11 @@ const ports = vi.hoisted(() => {
 
 vi.mock('react-native', () => ({
   View: 'View',
+  useWindowDimensions: () => ({ width: 390, height: 844, scale: 1, fontScale: 1 }),
+  Keyboard: {
+    addListener: (_event: string, listener: unknown) =>
+      ports.subscription(ports.keyboardListeners, listener)
+  },
   Platform: {
     OS: 'ios',
     select: (values: { ios?: unknown; default?: unknown }) => values.ios ?? values.default
@@ -275,6 +282,8 @@ afterEach(async () => {
     expect(ports.linkListeners.size).toBe(0)
     expect(ports.networkListeners.size).toBe(0)
     expect(ports.appListeners.size).toBe(appLifetimeListeners)
+    // Main's keyboard observation lives for the JS process, including root recovery.
+    expect(ports.keyboardListeners.size).toBe(3)
     expect(ports.fetch).not.toHaveBeenCalled()
     expect(ports.socket).not.toHaveBeenCalled()
   } finally {
@@ -283,9 +292,20 @@ afterEach(async () => {
 })
 
 it('keeps the current cold/warm coarse destination after a parked stack wakes or an older response settles', async () => {
-  await mount(response('cold-B', { hostFingerprint: origin, worktreeId: 'WB' }, true))
-  await vi.waitFor(() => expect(ports.stateListeners.size).toBe(1))
-  expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/h/B')
+  // Only this first root owns the process's initial native response.
+  await mount(
+    response(
+      'cold-removed-A',
+      { worktreeId: 'WA', paneKey: 'paneA', executionHost: 'runtime:A' },
+      true
+    )
+  )
+  await vi.waitFor(() => expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/h/B'))
+  expect(ports.stateListeners.size).toBe(0)
+  expect(ports.dispatch).not.toHaveBeenCalled()
+
+  await warm(response('warm-B-parked', { hostFingerprint: origin, worktreeId: 'WB' }), '/h/B')
+  expect(ports.stateListeners.size).toBe(1)
   expect(ports.dispatch).not.toHaveBeenCalled()
 
   await warm(
@@ -300,7 +320,7 @@ it('keeps the current cold/warm coarse destination after a parked stack wakes or
   committedHost()
   expect(ports.dispatch).not.toHaveBeenCalled()
   expect(ports.router.replace).not.toHaveBeenCalled()
-  expect(ports.router.push.mock.calls).toEqual([['/h/B'], ['/h/B']])
+  expect(ports.router.push.mock.calls).toEqual([['/h/B'], ['/h/B'], ['/h/B']])
 
   // Neither retained host: App Home must also retire a pending session owner.
   ports.input.state = undefined
@@ -345,23 +365,29 @@ it('keeps the current cold/warm coarse destination after a parked stack wakes or
     old.resolve('fixture-token-B')
   }
 
-  // Cold admitted APNs uses the same real path, without the earlier session.
+  // Recovery in the same process ignores initial native input; new taps use its warm listener.
   await unmount()
   ports.router.push.mockClear()
   await mount(
+    response('recovery-initial-B', { hostFingerprint: origin, worktreeId: 'WB-recovery' }, true)
+  )
+  expect(ports.router.push).not.toHaveBeenCalled()
+  await warm(
     response(
-      'cold-removed-A',
+      'recovery-removed-A',
       { worktreeId: 'WA', paneKey: 'paneA', executionHost: 'runtime:A' },
       true
-    )
+    ),
+    '/h/B'
   )
-  await vi.waitFor(() => expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/h/B'))
+  expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/h/B')
   expect(ports.dispatch).not.toHaveBeenCalled()
   await unmount()
   ports.router.push.mockClear()
-  await mount(
+  await mount(null)
+  await warm(
     response(
-      'cold-neither',
+      'recovery-neither',
       {
         origin: unknownOrigin,
         worktreeId: 'WA',
@@ -369,18 +395,21 @@ it('keeps the current cold/warm coarse destination after a parked stack wakes or
         executionHost: 'runtime:A'
       },
       true
-    )
+    ),
+    '/'
   )
-  await vi.waitFor(() => expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/'))
+  expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/')
   expect(ports.dispatch).not.toHaveBeenCalled()
 })
 
 it('rederives membership after the real native catalog await, preserves credential recovery, and ignores late unmounted taps', async () => {
   const pending = holdCredential()
   try {
-    await mount(
+    await mount(null)
+    if (!ports.input.response) throw new Error('root response listener absent')
+    ports.input.response(
       response(
-        'cold-removal',
+        'warm-removal',
         { worktreeId: 'WA', paneKey: 'paneA', executionHost: 'runtime:A' },
         true
       )
@@ -431,7 +460,11 @@ it('rederives membership after the real native catalog await, preserves credenti
   }
 })
 
-it.each([10, 100])('bounds actual cold/warm tap membership work for %i hosts', async (n) => {
+it.each([10, 100])('bounds actual warm tap membership work for %i hosts', async (n) => {
+  // Settle inherited UI/root setup before measuring the actual notification trigger.
+  await mount(null)
+  expect(ports.readHosts).not.toHaveBeenCalled()
+  expect(ports.readSecret).not.toHaveBeenCalled()
   const profiles = [
     ...Array.from({ length: n - 1 }, (_, i) => ({
       ...host,
@@ -506,12 +539,13 @@ it.each([10, 100])('bounds actual cold/warm tap membership work for %i hosts', a
     })
   let pending: ReturnType<typeof holdCredential> | undefined
   try {
-    await mount(
+    await warm(
       response(
-        'scaled-cold',
+        `scaled-${n}-retained`,
         { worktreeId: 'WA', paneKey: 'paneA', executionHost: 'runtime:A' },
         true
-      )
+      ),
+      '/h/B'
     )
     await vi.waitFor(() => expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/h/B'))
     expect({ currentReads, records, entries, filters, kept }).toEqual({
@@ -532,7 +566,7 @@ it.each([10, 100])('bounds actual cold/warm tap membership work for %i hosts', a
     pending = holdCredential()
     if (!ports.input.response) throw new Error('root response listener absent')
     ports.input.response(
-      response('scaled-warm-removal', {
+      response(`scaled-${n}-removed`, {
         worktreeId: 'WA',
         paneKey: 'paneA',
         executionHost: 'runtime:A'
