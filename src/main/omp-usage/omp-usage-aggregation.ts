@@ -61,27 +61,26 @@ export function mergeDailyAggregates(
   return [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
 }
 
-/** Extend a cached projection with only the lines appended since its checkpoint. */
+/**
+ * Extend a cached projection with only the lines appended since its checkpoint. Appended
+ * deltas resolve against the full cached session list so a resumed session boundary keeps
+ * the earlier totals of every session in the file.
+ */
 export function mergeAppendedFile(
   previous: OmpUsagePersistedFile,
   appended: OmpUsagePersistedFile
 ): OmpUsagePersistedFile {
-  const previousSession = previous.sessions[0]
-  const appendedSession = appended.sessions[0]
-  let sessions: OmpUsageSession[]
-  if (!appendedSession) {
-    sessions = previous.sessions
-  } else if (!previousSession) {
-    sessions = [appendedSession]
-  } else if (previousSession.sessionId === appendedSession.sessionId) {
-    sessions = [combineOmpSessions(previousSession, appendedSession)]
-  } else {
-    // A session boundary inside one file must not fold a new session into the cached one.
-    sessions = [previousSession, appendedSession]
+  const sessionById = new Map(previous.sessions.map((session) => [session.sessionId, session]))
+  for (const session of appended.sessions) {
+    const cached = sessionById.get(session.sessionId)
+    sessionById.set(
+      session.sessionId,
+      cached ? combineOmpSessions(cached, session) : { ...session }
+    )
   }
   return {
     ...appended,
-    sessions,
+    sessions: [...sessionById.values()],
     dailyAggregates: mergeDailyAggregates(previous.dailyAggregates, appended.dailyAggregates)
   }
 }

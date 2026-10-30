@@ -447,6 +447,82 @@ describe('scanOmpUsageFiles', () => {
     expect(second.sessions[0]?.repoId).toBeUndefined()
     expect(second.dailyAggregates.map((aggregate) => aggregate.day)).toEqual([localDay(10, 8)])
   })
+
+  it('accumulates cross-boundary sessions across repeated resumes', async () => {
+    const padding = Array.from({ length: 60 }, (_, index) => ({
+      type: 'title',
+      title: `padding-${index}-${'x'.repeat(200)}`
+    }))
+    const file = await writeSession('slug-accumulate', [
+      sessionRecord('session-a', worktreePath, localTimestamp(10, 12, 9, 0)),
+      ...padding,
+      usageMessage({
+        timestamp: localTimestamp(10, 12, 9, 5),
+        model: 'glm-5.4',
+        provider: 'giga-osa',
+        input: 100,
+        output: 10,
+        costTotal: 0.001
+      })
+    ])
+    await scanOmpUsageFiles(worktrees(), sourceCache)
+
+    await appendFile(
+      file,
+      toJsonl([
+        sessionRecord('session-b', worktreePath, localTimestamp(10, 13, 9, 0)),
+        usageMessage({
+          timestamp: localTimestamp(10, 13, 9, 5),
+          model: 'glm-5.4',
+          provider: 'giga-osa',
+          input: 200,
+          output: 20,
+          costTotal: 0.002
+        })
+      ])
+    )
+    const second = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(second.sessions.map((session) => session.sessionId).sort()).toEqual([
+      'session-a',
+      'session-b'
+    ])
+
+    await appendFile(
+      file,
+      toJsonl([
+        usageMessage({
+          timestamp: localTimestamp(10, 14, 9, 5),
+          model: 'glm-5.4',
+          provider: 'giga-osa',
+          input: 50,
+          output: 5,
+          costTotal: 0.0005
+        })
+      ])
+    )
+    const third = await scanOmpUsageFiles(worktrees(), sourceCache)
+    const byId = new Map(third.sessions.map((session) => [session.sessionId, session]))
+    expect(byId.get('session-a')).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 10,
+      totalTokens: 110
+    })
+    expect(byId.get('session-b')).toMatchObject({
+      inputTokens: 250,
+      outputTokens: 25,
+      totalTokens: 275
+    })
+    const cumulativeSessionTokens = third.sessions.reduce(
+      (sum, session) => sum + session.totalTokens,
+      0
+    )
+    const cumulativeDailyTokens = third.dailyAggregates.reduce(
+      (sum, aggregate) => sum + aggregate.totalTokens,
+      0
+    )
+    expect(cumulativeSessionTokens).toBe(cumulativeDailyTokens)
+    expect(cumulativeSessionTokens).toBe(385)
+  })
 })
 
 describe('mergeAppendedFile', () => {
@@ -523,5 +599,46 @@ describe('mergeAppendedFile', () => {
       reasoningTokens: 3,
       totalTokens: 22
     })
+  })
+
+  it('merges an appended delta into a matching cached session anywhere in the list', () => {
+    const merged = mergeAppendedFile(
+      {
+        path: '/repo/session.jsonl',
+        mtimeMs: 1,
+        size: 10,
+        sessions: [
+          session({ sessionId: 'session-a' }),
+          session({
+            sessionId: 'session-b',
+            inputTokens: 20,
+            outputTokens: 2,
+            totalTokens: 22,
+            costUsd: 0.002
+          })
+        ],
+        dailyAggregates: []
+      },
+      persistedFile(
+        { mtimeMs: 2, size: 20 },
+        {
+          sessionId: 'session-b',
+          startedAt: localTimestamp(10, 13, 9, 0),
+          endedAt: localTimestamp(10, 13, 9, 5),
+          inputTokens: 5,
+          outputTokens: 1,
+          totalTokens: 6,
+          costUsd: 0.0005
+        }
+      )
+    )
+
+    expect(merged.sessions.map((entry) => entry.sessionId)).toEqual(['session-a', 'session-b'])
+    expect(merged.sessions[1]).toMatchObject({
+      inputTokens: 25,
+      outputTokens: 3,
+      totalTokens: 28
+    })
+    expect(merged.sessions[1]?.costUsd).toBeCloseTo(0.0025, 10)
   })
 })
