@@ -752,14 +752,41 @@ describe('git RPC methods', () => {
       1,
       'id:wt-1',
       'origin/main',
-      'background'
+      'background',
+      undefined
     )
     expect(future.ok).toBe(true)
     expect(runtime.getRuntimeGitBranchCompare).toHaveBeenNthCalledWith(
       2,
       'id:wt-1',
       'origin/main',
+      undefined,
       undefined
+    )
+  })
+
+  it('forwards caller abort signal into branch compare', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitBranchCompare: vi.fn().mockResolvedValue({ summary: {}, entries: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const controller = new AbortController()
+
+    const accepted = await dispatcher.dispatch(
+      makeRequest('git.branchCompare', {
+        worktree: 'id:wt-1',
+        baseRef: 'origin/main'
+      }),
+      { signal: controller.signal }
+    )
+
+    expect(accepted.ok).toBe(true)
+    expect(runtime.getRuntimeGitBranchCompare).toHaveBeenCalledWith(
+      'id:wt-1',
+      'origin/main',
+      undefined,
+      controller.signal
     )
   })
 

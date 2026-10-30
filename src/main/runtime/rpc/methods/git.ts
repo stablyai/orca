@@ -132,8 +132,13 @@ export const GIT_METHODS = [
     name: 'git.branchCompare',
     permission: 'workspace',
     params: GitBranchCompare,
-    handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitBranchCompare(params.worktree, params.baseRef, params.admissionTier)
+    handler: async (params, { runtime, signal }) =>
+      runtime.getRuntimeGitBranchCompare(
+        params.worktree,
+        params.baseRef,
+        params.admissionTier,
+        signal
+      )
   }),
   defineMethod({
     name: 'git.commitCompare',

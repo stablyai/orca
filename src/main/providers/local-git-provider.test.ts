@@ -59,6 +59,7 @@ import { createLocalGitProvider, type LocalGitProvider } from './local-git-provi
 const WT = '/repo/wt'
 const pushTarget = { remoteName: 'origin', branchName: 'feature' }
 const interactive = { admissionTier: 'interactive' }
+const dummySignal = new AbortController().signal
 
 // [provider call, free function, expected free-function args] — mirrors the runtime local arms.
 type ParityCase = [string, (p: LocalGitProvider) => unknown, keyof typeof git, unknown[]]
@@ -150,6 +151,12 @@ const cases: ParityCase[] = [
     (p) => p.getBranchCompare(WT, 'main', { admissionTier: 'background' }),
     'getBranchCompare',
     [WT, 'main', { admissionTier: 'background' }]
+  ],
+  [
+    'getBranchCompare with signal',
+    (p) => p.getBranchCompare(WT, 'main', { admissionTier: 'background', signal: dummySignal }),
+    'getBranchCompare',
+    [WT, 'main', { admissionTier: 'background', signal: dummySignal }]
   ],
   [
     'getCommitCompare',
