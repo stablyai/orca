@@ -29,7 +29,7 @@ import type {
 } from '../../src/shared/agent-session-host-authority'
 import type { PtyRuntimeControllerDeps } from '../../src/main/ipc/pty/runtime/controller-deps'
 import type { ShellSpawnParams } from '../../src/main/providers/local-pty-utils'
-import { SHELL_READY_MARKER_PREFIX } from '../../src/main/providers/local-pty-shell-ready-marker'
+import { SHELL_READY_MARKER_PREFIX } from '../../src/main/shell-ready-marker-scanner'
 import * as startupStaging from '../../src/shared/startup-command-staging'
 import { buildStartupCommandSubmission } from '../../src/shared/startup-command-submission'
 import type * as PosixProcessTable from '../../src/main/pty/posix-pty-process-table'
