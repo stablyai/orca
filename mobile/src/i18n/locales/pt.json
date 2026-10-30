@@ -190,7 +190,9 @@
       "cancelEditing": "Cancelar edição",
       "placeholder": "Pergunte o que quiser, @ para mencionar arquivos, / para comandos",
       "saveEditedMessage": "Salvar mensagem editada",
-      "sendMessage": "Enviar mensagem"
+      "sendMessage": "Enviar mensagem",
+      "sendQueue": "Colocar na fila",
+      "sendSteer": "Orientar"
     },
     "composerAttachments": {
       "attachedImage": "Imagem anexada",

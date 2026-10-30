@@ -186,7 +186,9 @@
       "cancelEditing": "Düzenlemeyi iptal et",
       "placeholder": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
       "saveEditedMessage": "Düzenlenen mesajı kaydet",
-      "sendMessage": "Mesaj gönder"
+      "sendMessage": "Mesaj gönder",
+      "sendQueue": "Sıraya al",
+      "sendSteer": "Yönlendir"
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",

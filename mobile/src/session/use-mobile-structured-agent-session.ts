@@ -289,6 +289,7 @@ export function useMobileStructuredAgentSession(
     },
     isWorking: isWorking || queueSendsNext,
     canStop,
+    sendMenu: turnIndicator.sendMenu ?? null,
     turnId,
     turnIndicator,
     ...turnTiming,

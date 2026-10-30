@@ -43,6 +43,10 @@ const asyncStorage = vi.hoisted(() => ({
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
 function normalReply(method: string): RpcResponse {
+  // The host chose Queue; Steer, the default, is pinned on its own below.
+  if (method === 'settings.get') {
+    return ok({ settings: { nativeChatFollowUpBehavior: 'queue' } })
+  }
   if (method === 'agentSession.options') {
     return ok({ models: [], current: {} })
   }
@@ -249,10 +253,10 @@ describe('mobile structured queued messages', () => {
       expect(asyncStorage.setItem).not.toHaveBeenCalled()
     })
 
-    it("sends straight into the turn when the host's Queue follow-ups is off, as the desktop does", async () => {
+    it("sends straight into the turn when the host's setting is Steer, as the desktop does", async () => {
       sendRequest.mockImplementation(async (method) => {
         if (method === 'settings.get') {
-          return ok({ settings: { nativeChatQueueFollowUps: false } })
+          return ok({ settings: {} })
         }
         if (method === 'agentSession.send') {
           return mutationOk({
@@ -271,6 +275,37 @@ describe('mobile structured queued messages', () => {
         await hook!.sendWithOutcome('steer me')
       })
       expect('delivery' in requestOf('agentSession.send').params).toBe(false)
+    })
+
+    it('a hold-menu choice other than Steer queues only while the agent works', async () => {
+      sendRequest.mockImplementation(async (method) => {
+        if (method === 'settings.get') {
+          return ok({ settings: {} })
+        }
+        if (method === 'agentSession.send') {
+          return mutationOk({
+            clientMessageId: 'client-1',
+            submission: acceptedSubmission('client-1')
+          })
+        }
+        return normalReply(method)
+      })
+      await mountSession(CAPABLE)
+      await act(async () => {})
+      await act(async () => {
+        await hook!.sendWithOutcome('idle', undefined, undefined, undefined, [], {
+          alternate: true
+        })
+      })
+      expect('delivery' in requestOf('agentSession.send', 0).params).toBe(false)
+      act(() => listener?.(snapshotEvent({ runningTurn: true })))
+      expect(hook!.sendMenu).toBe('steer')
+      await act(async () => {
+        await hook!.sendWithOutcome('busy', undefined, undefined, undefined, [], {
+          alternate: true
+        })
+      })
+      expect(requestOf('agentSession.send', 1).params.delivery).toBe('queue-if-active')
     })
 
     it('keeps today’s request exactly against an incapable host', async () => {
