@@ -2223,7 +2223,11 @@
       "discard": "Descartar",
       "dismissKeyboard": "Ocultar teclado",
       "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierto el editor de Markdown.",
-      "readOnly": "Solo lectura"
+      "readOnly": "Solo lectura",
+      "editLabel": "Editar Markdown",
+      "previewLabel": "Vista previa de Markdown",
+      "preview": "Vista previa",
+      "fileUnavailable": "Este archivo está fuera del espacio de trabajo actual o no está disponible."
     },
     "nativeChatAttachActions": {
       "availableSkills": "Disponibles: {{count}}",

@@ -51,6 +51,30 @@ describe('Markdown preview file links', () => {
     (path) => expect(mobileMarkdownFileLink(params, path)).toBeNull()
   )
 
+  it.each([
+    ['/remote/project/docs/notes.md', '/remote/project/images/photo.png', 'images/photo.png'],
+    ['/docs/notes.md', '/images/photo.png', 'images/photo.png'],
+    ['C:\\Project\\docs\\notes.md', 'c:\\project\\images\\photo.png', 'images/photo.png'],
+    ['C:\\docs\\notes.md', 'C:\\images\\photo.png', 'images/photo.png'],
+    ['\\\\host\\share\\docs\\notes.md', '\\\\host\\share\\images\\photo.png', 'images/photo.png'],
+    ['/remote/project/docs/notes.md', '../images/photo.png', 'images/photo.png']
+  ])('resolves host paths using the document location %s', (absolute, path, relativePath) => {
+    expect(mobileMarkdownFileLink(params, path, absolute)?.params.relativePath).toBe(relativePath)
+  })
+
+  it.each([
+    '/remote/project-sibling/private.md',
+    '../../private.md',
+    '/etc/private.md',
+    'D:\\private.md'
+  ])('rejects a host path outside the known workspace: %s', (path) => {
+    expect(mobileMarkdownFileLink(params, path, '/remote/project/docs/notes.md')).toBeNull()
+  })
+
+  it('refuses an inconsistent document location', () => {
+    expect(mobileMarkdownFileLink(params, 'photo.png', '/different/notes.md')).toBeNull()
+  })
+
   it('does not reuse terminal artifact grants for another file', () => {
     expect(mobileMarkdownFileLink({ ...params, source: 'terminalArtifact' }, 'other.md')).toBeNull()
   })

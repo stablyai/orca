@@ -2149,7 +2149,11 @@
       "discard": "Vazgeç",
       "dismissKeyboard": "Klavyeyi gizle",
       "dismissKeyboardHint": "Ekran klavyesini gizler ve Markdown düzenleyicisini açık tutar.",
-      "readOnly": "Salt okunur"
+      "readOnly": "Salt okunur",
+      "editLabel": "Markdown'ı düzenle",
+      "previewLabel": "Markdown önizlemesi",
+      "preview": "Önizleme",
+      "fileUnavailable": "Bu dosya geçerli çalışma alanının dışında veya kullanılamıyor."
     },
     "nativeChatAttachActions": {
       "availableSkills": "{{count}} beceri mevcut",

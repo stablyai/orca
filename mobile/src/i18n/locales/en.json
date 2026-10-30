@@ -1712,7 +1712,11 @@
       "copySource": "Copy Markdown source",
       "copyLoaded": "Copy loaded",
       "copyPathLabel": "Copy Markdown path",
-      "copyPath": "Copy path"
+      "copyPath": "Copy path",
+      "editLabel": "Edit Markdown",
+      "previewLabel": "Preview Markdown",
+      "preview": "Preview",
+      "fileUnavailable": "This file is outside the current workspace or is unavailable."
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Collapse"

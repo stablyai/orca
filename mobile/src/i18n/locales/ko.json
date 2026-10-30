@@ -2145,7 +2145,11 @@
       "discard": "버리기",
       "dismissKeyboard": "키보드 닫기",
       "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 Markdown 편집기를 열린 상태로 유지합니다.",
-      "readOnly": "읽기 전용"
+      "readOnly": "읽기 전용",
+      "editLabel": "Markdown 편집",
+      "previewLabel": "Markdown 미리보기",
+      "preview": "미리보기",
+      "fileUnavailable": "이 파일은 현재 워크스페이스 밖에 있거나 사용할 수 없습니다."
     },
     "nativeChatAttachActions": {
       "availableSkills": "{{count}}개 사용 가능",

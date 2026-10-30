@@ -140,6 +140,12 @@ export function MobileSessionActiveContent({
     <View style={styles.markdownFrame}>
       <MarkdownReader
         documentId={activeMarkdownTab.id}
+        hostId={hostId}
+        worktreeId={worktreeId}
+        relativePath={activeMarkdownTab.relativePath}
+        filePath={activeMarkdownTab.filePath}
+        client={client}
+        onLinkError={showToast}
         doc={markdownDocs.get(activeMarkdownTab.id)}
         onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
         onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}

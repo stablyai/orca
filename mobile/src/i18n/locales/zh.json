@@ -2145,7 +2145,11 @@
       "discard": "放弃",
       "dismissKeyboard": "关闭键盘",
       "dismissKeyboardHint": "隐藏软键盘，并保持 Markdown 编辑器打开。",
-      "readOnly": "只读"
+      "readOnly": "只读",
+      "editLabel": "编辑 Markdown",
+      "previewLabel": "预览 Markdown",
+      "preview": "预览",
+      "fileUnavailable": "此文件位于当前工作区之外或不可用。"
     },
     "nativeChatAttachActions": {
       "availableSkills": "{{count}} 个可用",

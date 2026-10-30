@@ -9,20 +9,47 @@ import {
   type MobileFilePreviewRouteParams
 } from './mobile-file-preview-route'
 
-export function mobileMarkdownFileLink(params: MobileFilePreviewRouteParams, pathText: string) {
+export function resolveMarkdownFilePath(
+  documentPath: string,
+  path: string,
+  documentAbsolutePath?: string
+): string | null {
+  if (!path || path.includes('\0')) {
+    return null
+  }
+  const source = documentPath.replaceAll('\\', '/')
+  if (
+    !source ||
+    source.startsWith('/') ||
+    isWindowsAbsolutePathLike(source) ||
+    source.split('/').includes('..')
+  ) {
+    return null
+  }
+  let root = '/workspace'
+  if (documentAbsolutePath) {
+    const absolute = documentAbsolutePath.replaceAll('\\', '/')
+    if (!absolute.endsWith(`/${source}`)) {
+      return null
+    }
+    root = absolute.slice(0, -source.length)
+  } else if (/^[\\/]/.test(path) || isWindowsAbsolutePathLike(path)) {
+    return null
+  }
+  const directory = source.slice(0, source.lastIndexOf('/') + 1)
+  return relativePathInsideRoot(root, resolveRuntimePath(resolveRuntimePath(root, directory), path))
+}
+
+export function mobileMarkdownFileLink(
+  params: MobileFilePreviewRouteParams,
+  pathText: string,
+  documentAbsolutePath?: string
+) {
   if (params.source === 'terminalArtifact' || !params.relativePath) {
     return null
   }
   const { path, line, column } = splitFilePathLineSuffix(pathText)
-  if (!path || /^[\\/]/.test(path) || isWindowsAbsolutePathLike(path) || path.includes('\0')) {
-    return null
-  }
-  // Resolve under a virtual root; the host still authorizes the actual workspace read.
-  const root = '/workspace'
-  const source = params.relativePath.replaceAll('\\', '/')
-  const directory = source.slice(0, source.lastIndexOf('/') + 1)
-  const target = resolveRuntimePath(`${root}/${directory}`, path)
-  const relativePath = relativePathInsideRoot(root, target)
+  const relativePath = resolveMarkdownFilePath(params.relativePath, path, documentAbsolutePath)
   if (!relativePath) {
     return null
   }

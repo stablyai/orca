@@ -14,11 +14,19 @@ type Props = {
   client: MobileFilePreviewRpcSender | null
   worktreeId: string
   documentPath: string
+  documentAbsolutePath?: string
   href: string
   alt: string
 }
 
-export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, href, alt }: Props) {
+export function MobileMarkdownPreviewImage({
+  client,
+  worktreeId,
+  documentPath,
+  documentAbsolutePath,
+  href,
+  alt
+}: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
@@ -27,7 +35,13 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
   const [expanded, setExpanded] = useState(false)
   useEffect(() => {
     let cancelled = false
-    void loadMarkdownPreviewImage(client, worktreeId, documentPath, href).then(
+    void loadMarkdownPreviewImage(
+      client,
+      worktreeId,
+      documentPath,
+      href,
+      documentAbsolutePath
+    ).then(
       (uri) => {
         if (!cancelled) {
           setLoad({ uri })
@@ -56,7 +70,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
     return () => {
       cancelled = true
     }
-  }, [client, worktreeId, documentPath, href, attempt])
+  }, [client, worktreeId, documentPath, documentAbsolutePath, href, attempt])
 
   return (
     <View style={styles.frame}>

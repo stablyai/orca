@@ -28,6 +28,14 @@ vi.mock('../components/MobileRichMarkdownEditor', () => ({
   MobileRichMarkdownEditor: 'MobileRichMarkdownEditor'
 }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))
+vi.mock('../files/MobileFileMarkdownPreview', () => ({
+  MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
+}))
+const { pushFile } = vi.hoisted(() => ({ pushFile: vi.fn() }))
+vi.mock('../navigation/workspace-route-handoff', () => ({
+  useWorkspaceRouteHandoff: () => ({ push: pushFile })
+}))
+vi.mock('../platform/external-link', () => ({ openExternalLink: vi.fn() }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 vi.mock('../platform/haptics', () => ({ triggerSuccess: success, triggerError: error }))
