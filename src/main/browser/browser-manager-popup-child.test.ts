@@ -300,7 +300,7 @@ describe('browserManager popup child policies', () => {
     expect(browserManager.getPopupPages()).toEqual([])
   })
 
-  it("saves a download an agent claimed on a popup page to the agent's path", async () => {
+  it("saves a popup page's agent download to its path and refuses a second claim on the tab", async () => {
     let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
     const opener = {
       id: 406,
