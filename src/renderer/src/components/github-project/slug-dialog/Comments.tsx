@@ -67,7 +67,7 @@ export function CommentsList({
                     args,
                     { timeoutMs: 30_000 }
                   )
-                : await window.api.gh.deleteIssueCommentBySlug(args)
+                : await window.api.gh.deleteIssueCommentBySlug({ ...args, wakeWslDistro: true })
               if (!res.ok) {
                 toast.error(projectViewErrorMessage(res.error))
                 return
@@ -90,7 +90,7 @@ export function CommentsList({
                     args,
                     { timeoutMs: 30_000 }
                   )
-                : await window.api.gh.updateIssueCommentBySlug(args)
+                : await window.api.gh.updateIssueCommentBySlug({ ...args, wakeWslDistro: true })
               if (!res.ok) {
                 toast.error(projectViewErrorMessage(res.error))
                 return
@@ -234,7 +234,7 @@ export function NewCommentForm({
                     args,
                     { timeoutMs: 30_000 }
                   )
-                : await window.api.gh.addIssueCommentBySlug(args)
+                : await window.api.gh.addIssueCommentBySlug({ ...args, wakeWslDistro: true })
               if (!res.ok) {
                 toast.error(projectViewErrorMessage(res.error))
                 return

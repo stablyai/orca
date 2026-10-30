@@ -26,6 +26,17 @@ export function literalPathspec(
   return `:(literal)${runtimePath}`
 }
 
+/** The path as Git prints it in status output: '/' wherever Windows or WSL treats '\\' as a separator. */
+export function gitReportedPath(
+  filePath: string,
+  worktreePath: string,
+  options: GitRuntimeOptions
+): string {
+  const backslashIsSeparator =
+    process.platform === 'win32' || Boolean(options.wslDistro || wslDistroForCommand(worktreePath))
+  return backslashIsSeparator ? filePath.replace(/\\/g, '/') : filePath
+}
+
 /** Measure the resolved line: WSL login wrappers quote and repeat pathspecs, multiplying raw argv length. */
 function finishedCommandLineLength(
   args: readonly string[],

@@ -457,6 +457,11 @@ describe('NewWorktreeModal project targets', () => {
     await flushUpdates()
     // The Run on field shows the picked server's glyph, as its row does.
     expect(findAllByHostType(renderer.root, 'Server')).toHaveLength(1)
+    expect(
+      findAllByHostType(renderer.root, 'Text').some(
+        (node) => node.props.children === 'Codex · Project default'
+      )
+    ).toBe(true)
     expect(pickerItems(renderer, 'Run on')[0]?.label).toBe(LOCAL_HOST_LABEL)
     act(() => sourceInputs(renderer)[0]!.props.onChangeText('srv-wt'))
     const form = renderer.root.find((node) => typeof node.props.onCreate === 'function')

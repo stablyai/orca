@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import wslMoveAgentModelUI from '../../../shared/__fixtures__/wsl-move-agent-model-ui.json'
+import { projectWslMoveUi } from './wsl-move-session-projection'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceCleanupDismissal } from '../../../shared/workspace-cleanup'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -86,6 +88,22 @@ function dismissal(
 }
 
 describe('WSL move UI routing rewrite', () => {
+  it('preserves global model visibility in the desktop snapshot consumed by the renderer', () => {
+    const desktop = wslMoveAgentModelUI.desktopBeforeMove
+    const projected = projectWslMoveUi(
+      desktop,
+      {},
+      (owner) => !!owner && scope.inScope(owner),
+      () => true
+    )
+    expect(projected).not.toHaveProperty('showAgentModels')
+    expect(projected).toEqual(wslMoveAgentModelUI.projectedProjectUI)
+    const updates = rewriteWslMoveUiRouting(desktop, scope)
+    expect(updates).not.toHaveProperty('showAgentModels')
+    // The renderer consumes this exact snapshot; changes to production output must update the contract.
+    expect({ ...desktop, ...updates }).toEqual(wslMoveAgentModelUI.desktopAfterMove)
+  })
+
   it("copies only the moved project's rows to the host's form, keeping the local ones", () => {
     const ui = profileUi()
     const updates = rewriteWslMoveUiRouting(ui, scope)

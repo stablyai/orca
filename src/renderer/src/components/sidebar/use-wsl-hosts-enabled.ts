@@ -22,6 +22,12 @@ export function useWslHostsAcceptNewWork(): boolean {
   return useWslHostsEnabled() && accepts
 }
 
+/** Serve-only: saved hosts work, but adding hosts and moving projects is paused. */
+export function useWslHostsPaused(): boolean {
+  const paused = useAppStore((s) => s.wslHostsNewWorkPaused)
+  return paused && wslHostsAvailable()
+}
+
 export function openWslHostsExperimentalSetting(): void {
   const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
   openSettingsPage()

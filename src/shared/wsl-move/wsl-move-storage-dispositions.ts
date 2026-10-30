@@ -34,6 +34,10 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     62,
     "The mover's own record of which renderer rewrites landed; keyed by move id."
   ),
+  'src/renderer/src/lib/wsl-drive-unc-renderer-store-rewrites.ts': notApplicableDisposition(
+    62,
+    "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
+  ),
   'src/renderer/src/lib/desktop-created-server-tabs.ts': notApplicableDisposition(
     60,
     'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
@@ -80,6 +84,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/terminal-pane/terminal-render-desync-trigger.ts',
       'src/renderer/src/components/terminal-pane/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
+      'src/renderer/src/lib/document-theme.ts',
       'src/renderer/src/lib/feature-education-telemetry.ts',
       'src/renderer/src/lib/orchestration-setup-state.ts',
       'src/renderer/src/lib/terminal-shortcut-capture-notification.tsx',

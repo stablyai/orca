@@ -90,17 +90,21 @@ export function prepareLoadedTerminalSettings(
     markNeedsSave()
   }
   const legacyCommitMessageAi = parsed.settings?.commitMessageAi
-  let migratedSourceControlAi = rawSourceControlAiMissing
+  const sourceBeforeNormalization = rawSourceControlAiMissing
     ? sourceControlAiSettingsFromLegacy(legacyCommitMessageAi ?? defaults.settings.commitMessageAi)
-    : mergeLegacyCommitMessageAiIntoSourceControlAi(
-        parsed.settings?.sourceControlAi,
-        legacyCommitMessageAi
-      )
-  const actions = migrateActionPermissionArgs(migratedSourceControlAi.actions)
-  if (actions !== migratedSourceControlAi.actions) {
-    migratedSourceControlAi = { ...migratedSourceControlAi, actions }
+    : rawSourceControlAi
+  const sourceActions = {
+    ...sourceBeforeNormalization.launchActionDefaults,
+    ...sourceBeforeNormalization.actions
+  }
+  const actions = migrateActionPermissionArgs(sourceActions)
+  if (actions !== sourceActions) {
     markNeedsSave()
   }
+  const sourceWithActions = { ...sourceBeforeNormalization, actions }
+  const migratedSourceControlAi = rawSourceControlAiMissing
+    ? sourceWithActions
+    : mergeLegacyCommitMessageAiIntoSourceControlAi(sourceWithActions, legacyCommitMessageAi)
   migratedExternalVisibility.repos = migratedExternalVisibility.repos.map((repo) => {
     const actionOverrides = migrateActionPermissionArgs(repo.sourceControlAi?.actionOverrides)
     if (actionOverrides === repo.sourceControlAi?.actionOverrides) {

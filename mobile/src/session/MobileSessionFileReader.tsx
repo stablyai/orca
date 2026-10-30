@@ -23,6 +23,7 @@ import {
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type {
@@ -61,6 +62,7 @@ function FileReaderDocument({
   diffCommentActions
 }: FileReaderProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]
@@ -197,7 +199,7 @@ function FileReaderDocument({
   if (doc.kind === 'diff') {
     const activeDiffSyntax =
       diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
-    const commentCount = diffCommentActions?.comments.length ?? 0
+    const count = diffCommentActions?.comments.length ?? 0
     const unsentCommentCount = diffCommentActions
       ? sendableMobileDiffComments(
           diffCommentActions.comments,
@@ -205,7 +207,7 @@ function FileReaderDocument({
         ).length
       : 0
     const commentsBusy = diffCommentActions?.busy === true
-    const canCopyNotes = commentCount > 0 && !commentsBusy
+    const canCopyNotes = count > 0 && !commentsBusy
     const canSendNotes = unsentCommentCount > 0 && !commentsBusy
     return (
       <View style={styles.markdownEditor}>
@@ -214,9 +216,13 @@ function FileReaderDocument({
             <View style={styles.diffNotesTitleRow}>
               <MessageSquare size={14} color={colors.textSecondary} strokeWidth={2.2} />
               <Text style={styles.diffNotesTitle}>
-                {commentCount === 0
-                  ? 'No review notes'
-                  : `${commentCount} review ${commentCount === 1 ? 'note' : 'notes'}`}
+                {count === 0
+                  ? t('session.fileReader.noReviewNotes', 'No review notes')
+                  : count === 1
+                    ? t('session.fileReader.reviewNotes_one', '{{count}} review note', { count })
+                    : t('session.fileReader.reviewNotes_other', '{{count}} review notes', {
+                        count
+                      })}
               </Text>
             </View>
             <View style={styles.diffNotesActions}>
@@ -227,10 +233,10 @@ function FileReaderDocument({
                 ]}
                 disabled={!canCopyNotes}
                 onPress={() => void diffCommentActions.onCopyAll()}
-                accessibilityLabel="Copy review notes"
+                accessibilityLabel={t('session.fileReader.copyReviewNotes', 'Copy review notes')}
               >
                 <Copy size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Copy</Text>
+                <Text style={styles.diffNotesActionText}>{t('common.copy', 'Copy')}</Text>
               </Pressable>
               <Pressable
                 style={[
@@ -239,10 +245,15 @@ function FileReaderDocument({
                 ]}
                 disabled={!canSendNotes}
                 onPress={diffCommentActions.onSendAll}
-                accessibilityLabel="Send review notes to AI"
+                accessibilityLabel={t(
+                  'session.fileReader.sendReviewNotes',
+                  'Send review notes to AI'
+                )}
               >
                 <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Send</Text>
+                <Text style={styles.diffNotesActionText}>
+                  {t('session.fileReader.send', 'Send')}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -282,7 +293,7 @@ function FileReaderDocument({
             source={{ uri: doc.dataUri }}
             style={styles.imagePreview}
             resizeMode="contain"
-            accessibilityLabel={`${title} image`}
+            accessibilityLabel={t('session.fileReader.imageLabel', '{{title}} image', { title })}
           />
         </ScrollView>
       </View>
@@ -295,7 +306,11 @@ function FileReaderDocument({
         style={styles.filePreviewScroll}
         contentContainerStyle={styles.filePreviewContent}
       >
-        <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
+        <Text
+          selectable
+          style={styles.filePreviewText}
+          accessibilityLabel={t('session.fileReader.previewLabel', '{{title}} preview', { title })}
+        >
           <MobileSyntaxSegments
             segments={
               fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage

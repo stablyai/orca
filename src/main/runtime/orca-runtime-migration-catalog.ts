@@ -187,7 +187,7 @@ export abstract class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithRes
     }
     return readHostTerminalScrollback(
       {
-        resolveWorktreeId: async (selector) => (await this.resolveWorktreeSelector(selector)).id,
+        resolveWorktreeId: async (selector) => (await this.resolveWorkspaceSelector(selector)).id,
         getWorkspaceSession: (worktreeId) => this.workspaceSessions.get(worktreeId),
         statSnapshotSize: (ref) => statSnapshotSize.call(store, ref),
         readSnapshot: (ref) => readSnapshot.call(store, ref)

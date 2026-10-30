@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { worktreeRemovedPayloadSchema } from '../../shared/plugins/plugin-events'
+import { workspaceRemovedPayloadSchema } from '../../shared/plugins/events/plugin-events'
 import type { PluginService } from '../plugins/plugin-service'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
 import { mainProcessState } from './main-process-state'
@@ -16,10 +16,11 @@ describe('emitPluginWorktreeLifecycle', () => {
     emitPluginWorktreeLifecycle({ kind: 'removed', worktreeId: 'folder:ws-1', path: '/tmp/ws' })
     expect(emitEvent).not.toHaveBeenCalled()
     emitPluginWorktreeLifecycle({ kind: 'removed', worktreeId: 'repo::/tmp/ws', path: '/tmp/ws' })
-    expect(emitEvent).toHaveBeenCalledWith('worktree.removed', {
-      worktreeId: 'repo::/tmp/ws',
+    expect(emitEvent).toHaveBeenCalledWith('workspace.removed', {
+      workspaceId: 'repo::/tmp/ws',
+      kind: 'worktree',
       path: '/tmp/ws'
     })
-    expect(worktreeRemovedPayloadSchema.safeParse(emitEvent.mock.calls[0]?.[1]).success).toBe(true)
+    expect(workspaceRemovedPayloadSchema.safeParse(emitEvent.mock.calls[0]?.[1]).success).toBe(true)
   })
 })

@@ -6,7 +6,10 @@ import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import type { WslScriptedProviderInstall } from './wsl-orcad-chat-provider-fixture'
+import {
+  waitForProviderReport,
+  type WslScriptedProviderInstall
+} from './wsl-orcad-chat-provider-fixture'
 import { assistantText } from './wsl-orcad-chat-assistant-text'
 import { envelope } from './wsl-orcad-chat-envelope'
 import type { ChatLane } from './wsl-orcad-structured-chat-contract'
@@ -40,10 +43,21 @@ const PROVIDERS = {
     stopMethod: 'session/cancel',
     answered: (report: z.infer<typeof ScriptedProviderReport>) => report.permissionResponses,
     answer: { outcome: { outcome: 'selected', optionId: 'allow' } }
+  },
+  // OpenCode 1.x dialect: once/always/reject options, message-id chunks, `acp` with its own env.
+  opencode: {
+    reply: 'Guest opencode reply.',
+    optionId: 'once',
+    accountVar: 'XDG_DATA_HOME',
+    argv: ['acp'],
+    stopMethod: 'session/cancel',
+    answered: (report: z.infer<typeof ScriptedProviderReport>) => report.permissionResponses,
+    answer: { outcome: { outcome: 'selected', optionId: 'once' } },
+    env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' }
   }
 } as const
 
-/** Streaming, approval and Stop through orcad for a scripted guest Codex or ACP agent. */
+/** Streaming, approval and Stop through orcad for a scripted guest Codex or ACP agent (Grok, OpenCode). */
 export async function exerciseScriptedProviderChat(
   lane: ChatLane,
   install: WslScriptedProviderInstall,
@@ -167,14 +181,20 @@ export async function exerciseScriptedProviderChat(
       },
       { timeout: 30_000 }
     )
-    const report = await readReport()
-    expect(report.methods).toContain(provider.stopMethod)
+    const report = await waitForProviderReport(
+      lane,
+      install.reportPath,
+      ScriptedProviderReport,
+      (written) => written.methods.includes(provider.stopMethod),
+      provider.stopMethod
+    )
     expect(report.cwd).toBe(cwd)
     // The guest's own runtime ran the guest install found on its login PATH: never a /mnt/ copy.
     expect(report.execPath).toMatch(/^\/(?!mnt\/)/u)
     expect(report.argv[0]).toBe(install.script)
     expect(report.argv).toEqual(expect.arrayContaining([...provider.argv]))
     expect(report.env).toMatchObject({
+      ...('env' in provider ? provider.env : {}),
       ORCA_LANE_CLI_WRAPPER: install.cli,
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1',
@@ -185,4 +205,19 @@ export async function exerciseScriptedProviderChat(
     subscription.close()
     await lane.rpc('agentSession.close', { sessionId })
   }
+}
+
+type LaneWorkspace = { worktree: string; cwd: string }
+
+/** Each scripted provider once; one workspace kind each keeps the lane short (Claude covers both). */
+export async function exerciseScriptedProviderChats(
+  lane: ChatLane,
+  install: Record<WslScriptedProviderInstall['agent'], WslScriptedProviderInstall>,
+  git: LaneWorkspace,
+  folder: LaneWorkspace
+) {
+  const codex = await exerciseScriptedProviderChat(lane, install.codex, git.worktree, git.cwd)
+  const grok = await exerciseScriptedProviderChat(lane, install.grok, folder.worktree, folder.cwd)
+  const opencode = await exerciseScriptedProviderChat(lane, install.opencode, git.worktree, git.cwd)
+  return { codex, grok, opencode }
 }

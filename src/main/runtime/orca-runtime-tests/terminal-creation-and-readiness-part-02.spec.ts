@@ -1,3 +1,7 @@
+import {
+  makeRuntimeOrchestrationDb,
+  dispatchContextRow
+} from '../runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -9,7 +13,6 @@ import {
   setTerminalViewAttributes,
   tmpdir
 } from '../orca-runtime-test-mocks.spec'
-import type { OrchestrationDb } from '../orchestration/db'
 import { getTerminalViewerColors } from '../terminal-view-attribute-store'
 import type {
   TerminalViewAttributes,
@@ -112,14 +115,15 @@ describe('OrcaRuntimeService', () => {
         retireAgentHookCompatibilityAuthority: retireAuthority
       }
     )
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: (handle: string) =>
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(
+      (handle: string) =>
         handle === 'term_ssh_retained'
-          ? { id: 'dispatch-ssh', task_id: 'task-ssh', status: 'dispatched' }
-          : undefined,
-      failDispatch,
-      getActiveCoordinatorRun: () => undefined
-    } as unknown as OrchestrationDb)
+          ? dispatchContextRow({ id: 'dispatch-ssh', task_id: 'task-ssh', status: 'dispatched' })
+          : undefined
+    )
+    vi.spyOn(orchestrationDb, 'failDispatch').mockImplementation(failDispatch)
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
@@ -218,9 +222,11 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+    // No client launched it, so it follows the host-wide theme.
+    expect(spawn.mock.calls[0][0]).not.toHaveProperty('launcherColorQueryReplies')
   })
 
-  it("keeps a desktop host's own colours when a paired client creates a terminal", async () => {
+  it("pins a paired client's colours to the terminal it creates on a desktop host", async () => {
     setTerminalViewAttributes(viewAttributes([0xff, 0xff, 0xff], [0x28, 0x2c, 0x34]))
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-colors' })
     const runtime = new OrcaRuntimeService(store)
@@ -231,15 +237,22 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
 
+    const clientAppearance = viewAttributes([0x2e, 0x34, 0x34], [0xff, 0xff, 0xff])
     await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
-      terminalColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' }
+      terminalColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' },
+      terminalViewAttributes: clientAppearance
     })
 
+    // The host window still themes everything else; only this terminal answers with the client's.
     const hostColors = { foreground: '#ffffff', background: '#282c34' }
     expect(getTerminalViewerColors()).toEqual(hostColors)
     expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({ terminalColorQueryReplies: hostColors })
+      expect.objectContaining({
+        terminalColorQueryReplies: hostColors,
+        launcherColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' },
+        launcherViewAttributes: clientAppearance
+      })
     )
   })
 
@@ -265,6 +278,8 @@ describe('OrcaRuntimeService', () => {
         terminalColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' }
       })
     )
+    // The host-wide theme already is this client's and follows its later pushes, so nothing is pinned.
+    expect(spawn.mock.calls[0][0]).not.toHaveProperty('launcherColorQueryReplies')
   })
 
   it('does not register or publish a PTY incarnation that exited before spawn resolved', async () => {
@@ -496,15 +511,14 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
 
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'codex',
-      title: 'worker'
-    })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'codex' })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; launchAgent?: string; env?: Record<string, string> }
       | undefined
-    expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
+    expect(spawnCall?.command).toBe(
+      "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
+    )
     expect(spawnedPtyEnv(spawnCall)).toMatchObject({
       CODEX_PROFILE: 'captured',
       ORCA_WORKTREE_ID: TEST_WORKTREE_ID

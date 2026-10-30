@@ -17,14 +17,19 @@ export function automationRunOccurrenceLabel(run: AutomationRunOccurrences): str
     return null
   }
   const count = run.occurrenceCount ?? 1
-  // Avoid i18next’s reserved count parameter, which would require _one/_other catalog keys.
-  const times = String(count)
   // Older hosts may supply count without the jointly stamped timestamp; still show the count.
   return run.lastOccurrenceAt
     ? translate(
-        'auto.components.automations.runHistory.occurrencesWithLatest',
-        '{{times}} times, most recently {{date}}',
-        { times, date: formatAutomationDateTime(run.lastOccurrenceAt) }
+        'auto.components.automations.runHistory.occurrencesWithLatestCount',
+        '{{count}} times, most recently {{date}}',
+        {
+          count,
+          date: formatAutomationDateTime(run.lastOccurrenceAt),
+          defaultValue_one: '{{count}} time, most recently {{date}}'
+        }
       )
-    : translate('auto.components.automations.runHistory.occurrences', '{{times}} times', { times })
+    : translate('auto.components.automations.runHistory.occurrencesCount', '{{count}} times', {
+        count,
+        defaultValue_one: '{{count}} time'
+      })
 }

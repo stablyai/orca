@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { AddRepoHostSelector } from './AddRepoHostSelector'
 import type { useAddRepoHostSelection } from './use-add-repo-host-selection'
 import { AddRemoteHostDialog, type AddRemoteHostMode } from './AddRemoteHostDialog'
-import { openWslHostsExperimentalSetting, useWslHostsAcceptNewWork } from './use-wsl-hosts-enabled'
+import {
+  openWslHostsExperimentalSetting,
+  useWslHostsAcceptNewWork,
+  useWslHostsPaused
+} from './use-wsl-hosts-enabled'
+import { getWslHostsPausedShortLabel } from './wsl-host-row-status'
 
 export function AddRepoHostSelectorSlot({
   hostSelection
@@ -11,6 +16,7 @@ export function AddRepoHostSelectorSlot({
 }) {
   const [addRemoteHostMode, setAddRemoteHostMode] = useState<AddRemoteHostMode | null>(null)
   const wslHostsAcceptNewWork = useWslHostsAcceptNewWork()
+  const wslHostsPaused = useWslHostsPaused()
 
   return (
     <>
@@ -24,6 +30,7 @@ export function AddRepoHostSelectorSlot({
         onAddSshHost={() => setAddRemoteHostMode('ssh')}
         onAddRemoteServer={() => setAddRemoteHostMode('server')}
         onAddWslHost={wslHostsAcceptNewWork ? () => setAddRemoteHostMode('wsl') : undefined}
+        wslHostsPausedNote={wslHostsPaused ? getWslHostsPausedShortLabel() : undefined}
         onOpenWslHostsSetting={openWslHostsExperimentalSetting}
       />
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />

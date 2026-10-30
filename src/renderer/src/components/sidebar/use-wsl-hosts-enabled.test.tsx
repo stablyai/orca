@@ -3,7 +3,11 @@ import { act } from 'react'
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { useWslHostsAcceptNewWork, useWslHostsEnabled } from './use-wsl-hosts-enabled'
+import {
+  useWslHostsAcceptNewWork,
+  useWslHostsEnabled,
+  useWslHostsPaused
+} from './use-wsl-hosts-enabled'
 
 describe('WSL host entry points in serve-only', () => {
   beforeEach(() => {
@@ -39,5 +43,23 @@ describe('WSL host entry points in serve-only', () => {
 
     expect(accepts.result.current).toBe(false)
     expect(enabled.result.current).toBe(true)
+  })
+
+  it('shows the paused notice only once main answers serve-only, never before or when open', () => {
+    act(() => useAppStore.setState({ wslHostsNewWorkPaused: false }))
+    const paused = renderHook(() => useWslHostsPaused())
+    expect(paused.result.current).toBe(false)
+
+    act(() => useAppStore.getState().setWslHostsAcceptNewWork(true))
+    expect(paused.result.current).toBe(false)
+
+    act(() => useAppStore.getState().setWslHostsAcceptNewWork(false))
+    expect(paused.result.current).toBe(true)
+  })
+
+  it('shows no paused notice where WSL hosts are not exposed at all (closed)', () => {
+    vi.stubGlobal('api', { runtimeEnvironments: {} })
+    act(() => useAppStore.getState().setWslHostsAcceptNewWork(false))
+    expect(renderHook(() => useWslHostsPaused()).result.current).toBe(false)
   })
 })

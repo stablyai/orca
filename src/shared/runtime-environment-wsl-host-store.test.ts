@@ -7,6 +7,7 @@ import { listEnvironments } from './runtime-environment-store'
 import {
   addWslHostEnvironment,
   findWslHostDeployment,
+  reconcileWslHostBridgePorts,
   refreshWslHostPairing,
   removeWslHostEnvironment
 } from './runtime-environment-wsl-host-store'
@@ -170,6 +171,64 @@ describe('WSL host environment store', () => {
       previousPairingPublicKeyB64: publicKeyB64
     })
     expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toMatchObject({ kind: 'wsl' })
+  })
+
+  it('heals a crash between saving a moved bridge and its pairing, keeping the saved pairing', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    const saved = findWslHostDeployment(userDataPath, 'wsl:ubuntu')
+    if (!saved) {
+      throw new Error('record missing')
+    }
+    // refreshWslHostPairing's record write landed; its pairing write never did.
+    writeWslHostDeployment(userDataPath, 'wsl:ubuntu', { ...saved, localPort: 42001 })
+    const [crashed] = listEnvironments(userDataPath)
+    expect(crashed?.orcadDeployment).toBeUndefined()
+
+    expect(reconcileWslHostBridgePorts(userDataPath)).toEqual(['wsl:ubuntu'])
+    const [healed] = listEnvironments(userDataPath)
+    expect(healed?.orcadDeployment).toMatchObject({ kind: 'wsl', localPort: 42000 })
+    expect(healed && getPreferredPairingOffer(healed)).toEqual(
+      crashed && getPreferredPairingOffer(crashed)
+    )
+    expect(reconcileWslHostBridgePorts(userDataPath)).toEqual([])
+
+    // The next connect saves both.
+    refreshWslHostPairing(userDataPath, 'wsl:ubuntu', {
+      pairingCode: code(42002, 'token-2'),
+      localPort: 42002,
+      remotePort: 6768
+    })
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toMatchObject({ localPort: 42002 })
+  })
+
+  it('leaves a record written for a different pairing, or with no server, alone', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    const saved = findWslHostDeployment(userDataPath, 'wsl:ubuntu')
+    if (!saved) {
+      throw new Error('record missing')
+    }
+    const otherKey = Buffer.alloc(32, 3).toString('base64')
+    writeWslHostDeployment(userDataPath, 'wsl:ubuntu', {
+      ...saved,
+      localPort: 42001,
+      pairingPublicKeyB64: otherKey,
+      previousPairingPublicKeyB64: otherKey
+    })
+    writeWslHostDeployment(userDataPath, 'wsl:orphan', { ...saved, environmentId: 'wsl:orphan' })
+    expect(reconcileWslHostBridgePorts(userDataPath)).toEqual([])
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.localPort).toBe(42001)
   })
 
   it('removes the environment and its record', () => {

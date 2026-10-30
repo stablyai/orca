@@ -59,6 +59,7 @@ export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStr
   return async () => ({
     spec,
     command: '/fake/grok',
+    prefixArgs: [],
     args: [],
     cwd: '/workspace',
     env: {},

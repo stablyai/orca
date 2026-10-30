@@ -25,6 +25,7 @@ import {
 } from './federated-attach-receipt'
 import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration-timing-budgets'
 import {
+  federatedFailureReceipt,
   federatedUnknownReceipt,
   isKnownRemoteStartFailure
 } from './federated-worker-start-receipts'
@@ -35,6 +36,7 @@ import {
   resolveFederatedWorkerAgent
 } from './federated-worker-default-agent'
 import { retriedWorkerDefaultAgent } from '../worker/retried-worker-default-agent'
+import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -52,6 +54,7 @@ export async function startFederatedWorker(args: {
   callerSession?: OrchestrationSessionCaller
 }): Promise<unknown> {
   const { params, runtime, db, task, runId, orchestrationMutation } = args
+  const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -162,6 +165,7 @@ export async function startFederatedWorker(args: {
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
+  let readyResult: unknown
   try {
     const remote = parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
@@ -229,7 +233,7 @@ export async function startFederatedWorker(args: {
       })
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
-      return {
+      readyResult = {
         runId,
         taskId: taskForRemote.id,
         dispatchId: started.dispatch.id,
@@ -243,53 +247,41 @@ export async function startFederatedWorker(args: {
         effects: remote.effects ?? [],
         residualResources: remote.residualResources ?? []
       }
-    }
-    if (remote.state === 'outcome_unknown') {
+    } else if (remote.state === 'outcome_unknown') {
       const worker = db.markWorkerStartUnknown(
         started.dispatch.id,
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? 'The worker server reported an unknown start outcome.'
       )
       return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch, agentSelection)
-    }
-    const worker = db.failWorkerStart(
-      started.dispatch.id,
-      remote.failedStage ?? 'remote_attach',
-      remote.lastError ?? `The worker server returned ${remote.state}.`
-    )
-    return {
-      runId,
-      taskId: taskForRemote.id,
-      dispatchId: started.dispatch.id,
-      state: worker.state,
-      stage: worker.stage,
-      server: { environmentId: server.environmentId, name: server.name },
-      failedStage: worker.stage,
-      lastError: worker.last_error,
-      setup: remote.setup,
-      launch,
-      ...(agentSelection ? { agentSelection } : {}),
-      effects: remote.effects ?? [],
-      residualResources: remote.residualResources ?? []
+    } else {
+      const worker = db.failWorkerStart(
+        started.dispatch.id,
+        remote.failedStage ?? 'remote_attach',
+        remote.lastError ?? `The worker server returned ${remote.state}.`
+      )
+      return federatedFailureReceipt({
+        worker,
+        runId,
+        taskId: taskForRemote.id,
+        server,
+        launch,
+        agentSelection,
+        remote
+      })
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
-      return {
+      return federatedFailureReceipt({
+        worker,
         runId,
         taskId: taskForRemote.id,
-        dispatchId: started.dispatch.id,
-        state: worker.state,
-        stage: worker.stage,
-        server: { environmentId: server.environmentId, name: server.name },
-        failedStage: worker.stage,
-        lastError: worker.last_error,
+        server,
         launch: requestedLaunch,
-        ...(agentSelection ? { agentSelection } : {}),
-        effects: [],
-        residualResources: []
-      }
+        agentSelection
+      })
     }
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
     return federatedUnknownReceipt(
@@ -300,4 +292,12 @@ export async function startFederatedWorker(args: {
       agentSelection
     )
   }
+  if (!params.terminal) {
+    recordStart({
+      dispatchId: started.dispatch.id,
+      workerAddress: `dispatch:${started.dispatch.id}`,
+      task: taskForRemote.spec
+    })
+  }
+  return readyResult
 }

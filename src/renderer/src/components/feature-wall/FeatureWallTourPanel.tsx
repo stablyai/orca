@@ -14,6 +14,7 @@ import type { FeatureWallCompletionState } from './use-feature-wall-completion'
 import { FeatureWallBody } from './FeatureWallBody'
 import { FeatureWallRail } from './FeatureWallRail'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureWallWorkflowCopy } from './feature-wall-tour-localized-copy'
 
 export type FeatureWallActiveStepCopy = {
   title: string
@@ -29,7 +30,6 @@ export function FeatureWallTourPanel(props: {
   previewPanelId: string
   previewTitleId: string
   selected: FeatureWallWorkflow
-  description: string
   activeStepCopy: FeatureWallActiveStepCopy | null
   completion: FeatureWallCompletionState
   railRefs: MutableRefObject<(HTMLButtonElement | null)[]>
@@ -59,7 +59,8 @@ export function FeatureWallTourPanel(props: {
 }): JSX.Element {
   // Keep the page anchor fixed while individual visuals change size.
   const contentStageClassName = 'mx-auto w-full max-w-[940px]'
-  const previewTitle = props.activeStepCopy?.title ?? props.selected.title
+  const workflowCopy = getLocalizedFeatureWallWorkflowCopy(props.selected.id)
+  const previewTitle = props.activeStepCopy?.title ?? workflowCopy.title
   const panel = (
     <div
       className={cn(
@@ -123,7 +124,7 @@ export function FeatureWallTourPanel(props: {
               ) : null}
             </div>
             <p className="mx-auto mt-3 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
-              {props.description}
+              {props.activeStepCopy?.description ?? workflowCopy.lede}
             </p>
           </div>
 

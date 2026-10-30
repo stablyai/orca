@@ -1,7 +1,7 @@
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../shared/native-chat-href-routing'
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import {
   formatFileLinkLocation,
   parseFileLinkLocation

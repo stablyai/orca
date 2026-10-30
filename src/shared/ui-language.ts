@@ -10,6 +10,7 @@ export const UI_LANGUAGE_FRENCH = 'fr'
 export const UI_LANGUAGE_PORTUGUESE = 'pt'
 export const UI_LANGUAGE_RUSSIAN = 'ru'
 export const UI_LANGUAGE_TURKISH = 'tr'
+export const UI_LANGUAGE_GERMAN = 'de'
 
 export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_SYSTEM
@@ -23,9 +24,26 @@ export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_PORTUGUESE
   | typeof UI_LANGUAGE_RUSSIAN
   | typeof UI_LANGUAGE_TURKISH
+  | typeof UI_LANGUAGE_GERMAN
 
 export type PluginUiLanguage = `plugin:${string}`
 export type UiLanguage = BuiltInUiLanguage | PluginUiLanguage
+
+// Each language in its own script, so someone stuck in a language they cannot read can find theirs.
+export const UI_LANGUAGE_NATIVE_NAMES: Record<BuiltInUiLanguage, string> = {
+  [UI_LANGUAGE_SYSTEM]: 'System',
+  [UI_LANGUAGE_ENGLISH]: 'English',
+  [UI_LANGUAGE_CHINESE]: '中文（简体）',
+  [UI_LANGUAGE_CHINESE_TRADITIONAL]: '繁體中文（台灣）',
+  [UI_LANGUAGE_KOREAN]: '한국어',
+  [UI_LANGUAGE_JAPANESE]: '日本語',
+  [UI_LANGUAGE_SPANISH]: 'Español',
+  [UI_LANGUAGE_FRENCH]: 'Français',
+  [UI_LANGUAGE_PORTUGUESE]: 'Português (Brasil)',
+  [UI_LANGUAGE_RUSSIAN]: 'Русский',
+  [UI_LANGUAGE_TURKISH]: 'Türkçe',
+  [UI_LANGUAGE_GERMAN]: 'Deutsch'
+}
 
 const UI_LANGUAGE_VALUES = new Set<BuiltInUiLanguage>([
   UI_LANGUAGE_SYSTEM,
@@ -38,7 +56,8 @@ const UI_LANGUAGE_VALUES = new Set<BuiltInUiLanguage>([
   UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_PORTUGUESE,
   UI_LANGUAGE_RUSSIAN,
-  UI_LANGUAGE_TURKISH
+  UI_LANGUAGE_TURKISH,
+  UI_LANGUAGE_GERMAN
 ])
 
 const PLUGIN_UI_LANGUAGE_RE =

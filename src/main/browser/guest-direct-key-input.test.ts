@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import {
   dispatchPageKeyEvent,
+  dispatchPageKeyEvents,
   routePageTextInsertion,
   type GuestCdpSender
 } from './guest-direct-key-input'
@@ -225,6 +226,23 @@ describe('dispatchPageKeyEvent', () => {
     expect(page.selectAll).toHaveBeenCalledTimes(1)
   })
 
+  it('settles a run of widget keys with one focus probe and one page round trip', async () => {
+    const { page, webContents } = fakePage('webview')
+    const send = fakeSender()
+    const keys = ['a', 'b', 'c'].flatMap((key) => [
+      { type: 'keyDown', key, text: key },
+      { type: 'keyUp', key }
+    ])
+
+    await dispatchPageKeyEvents(webContents, keys, send)
+
+    expect(page.sendInputEvent).toHaveBeenCalledTimes(9)
+    expect(send.mock.calls.map(([method]) => method)).toEqual([
+      'Runtime.evaluate',
+      'Runtime.evaluate'
+    ])
+  })
+
   it('types into a focused cross-site frame on its own session, without focusing the guest', async () => {
     const { page, webContents } = fakePage('webview')
     const send = crossSiteFrameSender({ attachable: true })
@@ -236,6 +254,31 @@ describe('dispatchPageKeyEvent', () => {
     expect(page.sendInputEvent).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith('Emulation.setFocusEmulationEnabled', { enabled: true }, 'S1')
     expect(send).toHaveBeenLastCalledWith('Input.dispatchKeyEvent', params, 'S1')
+  })
+
+  it('follows focus that a frame key handler moves into the parent page mid-run', async () => {
+    const { page, webContents } = fakePage('webview')
+    const inFrame = crossSiteFrameSender({ attachable: true })
+    let focusInFrame = true
+    const send = vi.fn<GuestCdpSender>(async (method, params, sessionId) => {
+      if (method === 'Input.dispatchKeyEvent' && params.type === 'keyUp') {
+        // The frame's handler sends focus to the parent after the first key.
+        focusInFrame = false
+      }
+      return focusInFrame || sessionId
+        ? inFrame(method, params, sessionId)
+        : fakeSender()(method, params, sessionId)
+    })
+    const keys = ['a', 'b'].flatMap((key) => [
+      { type: 'keyDown', key, text: key },
+      { type: 'keyUp', key }
+    ])
+
+    await dispatchPageKeyEvents(webContents, keys, send)
+
+    const frameKeys = send.mock.calls.filter(([method]) => method === 'Input.dispatchKeyEvent')
+    expect(frameKeys.map(([, params]) => params.key)).toEqual(['a', 'a'])
+    expect(page.sendInputEvent).toHaveBeenCalledWith(expect.objectContaining({ keyCode: 'b' }))
   })
 
   it('borrows focus for CDP when the focused frame cannot be reached, then gives it back', async () => {

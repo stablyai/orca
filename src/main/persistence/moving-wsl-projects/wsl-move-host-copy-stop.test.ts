@@ -11,13 +11,15 @@ function port(overrides: Partial<WslMoveHostCopyPort> = {}): WslMoveHostCopyPort
   }
 }
 
+const SLEPT = { outcome: 'stopped', slept: true }
+
 describe("undo's stop of the host's copies", () => {
   // The host's agent kept running beside the one undo resumed here.
-  it('sleeps every host workspace and reports stopped once none of their terminals runs', async () => {
+  it('sleeps every host workspace and reports them asleep once none of their terminals runs', async () => {
     let checks = 0
     const host = port({ liveTerminals: vi.fn(async () => (checks++ < 4 ? 1 : 0)) })
 
-    expect(await stopWslMoveHostCopies(['wt-a', 'wt-b'], host)).toBe('stopped')
+    expect(await stopWslMoveHostCopies(['wt-a', 'wt-b'], host)).toEqual(SLEPT)
     expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-a')
     expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-b')
     expect(host.wait).toHaveBeenCalled()
@@ -25,7 +27,9 @@ describe("undo's stop of the host's copies", () => {
 
   it('reports still running when a terminal outlives the wait, never assuming it exited', async () => {
     const host = port({ liveTerminals: vi.fn(async () => 1) })
-    expect(await stopWslMoveHostCopies(['wt-a'], host, 1_000)).toBe('still-running')
+    expect(await stopWslMoveHostCopies(['wt-a'], host, 1_000)).toMatchObject({
+      outcome: 'still-running'
+    })
   })
 
   it('reports unreachable when the host does not answer the sleep or the check', async () => {
@@ -46,7 +50,31 @@ describe("undo's stop of the host's copies", () => {
 
   it('checks exit even when the host refused the sleep itself', async () => {
     const host = port({ sleepWorkspace: async () => false })
+    // Nothing went to sleep there, so nothing waits to be resumed.
     expect(await stopWslMoveHostCopies(['wt-a'], host)).toBe('stopped')
+  })
+
+  it('reports stopped, not asleep, when the host has no workspace to sleep', async () => {
+    expect(await stopWslMoveHostCopies([], port())).toBe('stopped')
+  })
+
+  it('counts a workspace as asleep only when it ran a terminal', async () => {
+    expect(await stopWslMoveHostCopies(['wt-idle'], port())).toBe('stopped')
+  })
+
+  // The sleep already reached a running workspace, so its terminals wait in Sleep either way.
+  it('says the host was put to sleep when it then stops answering or a terminal outlives the wait', async () => {
+    let checks = 0
+    const silent = port({ liveTerminals: vi.fn(async () => (checks++ < 1 ? 1 : null)) })
+    expect(await stopWslMoveHostCopies(['wt-a'], silent)).toEqual({
+      outcome: 'unreachable',
+      slept: true
+    })
+    const busy = port({ liveTerminals: vi.fn(async () => 1) })
+    expect(await stopWslMoveHostCopies(['wt-a'], busy, 1_000)).toEqual({
+      outcome: 'still-running',
+      slept: true
+    })
   })
 
   // verify-15c: with the host's orcad stopped, undo of a project this computer kept no tabs for
@@ -63,7 +91,7 @@ describe("undo's stop of the host's copies", () => {
       workspacesWithTerminals: vi.fn(async () => ['wt-host-only']),
       liveTerminals: vi.fn(async () => (checks++ < 2 ? 1 : 0))
     })
-    expect(await stopWslMoveHostCopies([], host)).toBe('stopped')
+    expect(await stopWslMoveHostCopies([], host)).toEqual(SLEPT)
     expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-host-only')
   })
 
@@ -92,7 +120,7 @@ describe("undo's stop of the host's copies", () => {
           vi.advanceTimersByTime(ms)
         })
       })
-      expect(await stopWslMoveHostCopies([], host, 30_000)).toBe('stopped')
+      expect(await stopWslMoveHostCopies([], host, 30_000)).toEqual(SLEPT)
     })
 
     // Polls counted, not timed: a host taking 10 s per answer stretched the wait 40-fold.
@@ -109,7 +137,9 @@ describe("undo's stop of the host's copies", () => {
           vi.advanceTimersByTime(ms)
         })
       })
-      expect(await stopWslMoveHostCopies([], host, 30_000)).toBe('still-running')
+      expect(await stopWslMoveHostCopies([], host, 30_000)).toMatchObject({
+        outcome: 'still-running'
+      })
       // The preflight and one exit check, two workspaces each: well short of 40 polls.
       expect(vi.mocked(host.liveTerminals).mock.calls.length).toBeLessThanOrEqual(4)
       expect(Date.now() - started).toBeLessThan(60_000)

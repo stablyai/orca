@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 import { BrowserError } from '../browser/browser-error'
+import { assertUploadFilesExist } from '../browser/browser-upload-files'
 import {
   ExternalChromiumBrowserSession,
   type ExternalChromiumLaunch
@@ -179,6 +180,10 @@ export class ExternalChromiumBrowserProcess {
       return { url: tab.url, title: tab.title }
     }
 
+    if (method === 'browserUpload') {
+      const files: unknown[] = Array.isArray(params.files) ? params.files : []
+      await assertUploadFilesExist(files.map(String))
+    }
     const command = externalChromiumCommandArguments(method, params)
     if (!command) {
       throw new BrowserError(

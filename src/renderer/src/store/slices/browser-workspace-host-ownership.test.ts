@@ -83,13 +83,18 @@ describe('createBrowserSlice runtime guard', () => {
             lastActivityAt: 1
           }
         ]
-      },
-      defaultBrowserSessionProfileId: 'local-default',
-      defaultBrowserSessionProfileIdByHostId: {
-        local: 'local-default',
-        'runtime:env-1': 'remote-default'
       }
     })
+
+    store.setState((s) => ({
+      settings: s.settings && {
+        ...s.settings,
+        browserDefaultProfileIdByHostId: {
+          local: 'local-default',
+          'runtime:env-1': 'remote-default'
+        }
+      }
+    }))
 
     const tab = store.getState().createBrowserTab('wt-remote', 'https://example.com')
 

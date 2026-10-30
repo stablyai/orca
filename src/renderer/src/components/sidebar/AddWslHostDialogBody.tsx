@@ -5,6 +5,8 @@ import { useAppStore } from '@/store'
 import { AddWslHostFormPanel, canAddWslDistro } from './AddWslHostFormPanel'
 import { useWslDistroList } from './use-wsl-distro-list'
 import { useWslHostServerFilesMissing } from './use-wsl-hosts-enabled'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { wslHostAddRefusalMessage } from './wsl-host-failure-text'
 
 export function AddWslHostDialogBody({
   adding,
@@ -48,7 +50,7 @@ export function AddWslHostDialogBody({
         startIfStopped: selected.state === 'stopped'
       })
       if (!result.ok) {
-        setError(result.message)
+        setError(wslHostAddRefusalMessage(result))
         if (result.kind === 'distro-stopped') {
           // It stopped after the list was read; the fresh state turns the button into Start and add.
           list.refresh()
@@ -64,7 +66,7 @@ export function AddWslHostDialogBody({
       )
       onAdded()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(readIpcErrorDetail(cause) ?? String(cause))
     } finally {
       onAddingChange(false)
     }

@@ -19,6 +19,7 @@ import { useSerializedStoredState } from '../storage/use-serialized-stored-state
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -82,6 +83,7 @@ export function TerminalShortcutSettings({
   onDragActiveChange
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     value: customKeys,
     setValue: setCustomKeys,
@@ -189,10 +191,14 @@ export function TerminalShortcutSettings({
 
   return (
     <>
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
+      </Text>
       <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
+        {t(
+          'components.terminalShortcutSettings.moreKeysDescription',
+          'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
+        )}
       </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
@@ -217,20 +223,29 @@ export function TerminalShortcutSettings({
           onPress={resetBuiltInKeys}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.resetDefaults', 'Reset Defaults')}
+            </Text>
             <Text style={styles.rowSublabel}>
-              Show every built-in shortcut key in the original order
+              {t(
+                'components.terminalShortcutSettings.resetDescription',
+                'Show every built-in shortcut key in the original order'
+              )}
             </Text>
           </View>
         </Pressable>
       </View>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.customShortcuts', 'CUSTOM SHORTCUTS')}
+      </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         {customKeys.length === 0 ? (
           <>
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
+              <Text style={styles.emptyText}>
+                {t('components.terminalShortcutSettings.empty', 'No custom shortcuts defined yet.')}
+              </Text>
             </View>
             <View style={styles.separator} />
           </>
@@ -263,7 +278,11 @@ export function TerminalShortcutSettings({
                   onPress={() => handleDeleteCustomKey(key)}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${key.label}`}
+                  accessibilityLabel={t(
+                    'components.terminalShortcutSettings.removeShortcut',
+                    'Remove {{label}}',
+                    { label: key.label }
+                  )}
                 >
                   <X size={16} color={colors.statusRed} />
                 </Pressable>
@@ -276,8 +295,15 @@ export function TerminalShortcutSettings({
           onPress={() => setShowCustomKeyModal(true)}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-            <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.addShortcut', 'Add Custom Shortcut…')}
+            </Text>
+            <Text style={styles.rowSublabel}>
+              {t(
+                'components.terminalShortcutSettings.addDescription',
+                'Create key combo or text macro'
+              )}
+            </Text>
           </View>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>

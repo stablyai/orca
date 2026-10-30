@@ -23,7 +23,7 @@ export function createLegacyIdentityTracker(input: {
       provider: 'legacy',
       agent: input.agent,
       sessionId: input.sessionId,
-      recordId: legacyRecordId(line, index)
+      recordId: legacyRecordId(line, index, input.transcriptAgent === 'codex')
     })
   }
 }
@@ -44,10 +44,16 @@ function claudeIdentity(
 }
 
 /** Line position is stable only within a given import; prefer stored IDs when available. */
-function legacyRecordId(line: string, lineIndex: number): string {
+function legacyRecordId(line: string, lineIndex: number, nestedItem: boolean): string {
   const record = parseRecord(line)
   const payload = record?.payload
-  const id = stringField(payload, 'id') ?? stringField(record, 'id') ?? stringField(record, 'uuid')
+  const item =
+    nestedItem && payload && typeof payload === 'object' && 'item' in payload ? payload.item : null
+  const id =
+    stringField(item, 'id') ??
+    stringField(payload, 'id') ??
+    stringField(record, 'id') ??
+    stringField(record, 'uuid')
   return id ?? `#${lineIndex}`
 }
 

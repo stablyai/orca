@@ -9,7 +9,12 @@ import {
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import {
+  getIssueDetailsViaGraphQL,
+  type CollapsedIssueDetails
+} from '../../issue-work-item-details'
+import {
   fetchIssueWorkItem,
+  fetchWorkItemPreview,
   fetchPullRequestWorkItem,
   fetchPullRequestWorkItemFromCandidates
 } from './work-item-fetch'
@@ -35,6 +40,7 @@ export async function getWorkItem(
 export type WorkItemRepositoryLookup = {
   item: MainWorkItem | null
   repository: GitHubApiRepository | null
+  issueDetails?: CollapsedIssueDetails | null
 }
 
 export async function getWorkItemWithRepository(
@@ -43,7 +49,8 @@ export async function getWorkItemWithRepository(
   type?: 'issue' | 'pr',
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  includeIssueDetails = false
 ): Promise<WorkItemRepositoryLookup> {
   await acquire()
   try {
@@ -59,9 +66,23 @@ export async function getWorkItemWithRepository(
       if (!source && preference === 'origin') {
         return { item: null, repository: null }
       }
+      const issueDetails =
+        includeIssueDetails && source
+          ? await getIssueDetailsViaGraphQL(
+              repoPath,
+              number,
+              source,
+              connectionId,
+              localGitOptions,
+              true
+            )
+          : undefined
       return {
-        item: await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions),
-        repository: source
+        item:
+          issueDetails?.item ??
+          (await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions)),
+        repository: source,
+        ...(includeIssueDetails ? { issueDetails } : {})
       }
     }
     if (type === 'pr') {
@@ -126,7 +147,8 @@ export async function getWorkItemByOwnerRepo(
   number: number,
   type: 'issue' | 'pr',
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  options: { preview?: boolean } = {}
 ): Promise<MainWorkItem | null> {
   const requestedHost = ownerRepo.host?.trim().toLowerCase()
   const requestedRepository = requestedHost
@@ -150,6 +172,16 @@ export async function getWorkItemByOwnerRepo(
   }
   await acquire()
   try {
+    if (options.preview) {
+      return await fetchWorkItemPreview(
+        repoPath,
+        matchedRepository,
+        number,
+        type,
+        connectionId,
+        localGitOptions
+      )
+    }
     if (type === 'issue') {
       return await fetchIssueWorkItem(
         repoPath,

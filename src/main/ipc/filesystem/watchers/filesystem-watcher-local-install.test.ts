@@ -26,6 +26,11 @@ vi.mock('./filesystem-watcher-local-events', () => ({
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: createWslWatcherMock }))
 
 import { installLocalWatcher } from './filesystem-watcher-local-install'
+import {
+  clearWslRootStatRetry,
+  WSL_ROOT_STAT_RETRY_DELAYS_MS
+} from './filesystem-watcher-wsl-root-stat-retry'
+import { createDebouncedBatch } from './filesystem-watcher-batch-control'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
   _resetWslBackgroundDistroGateForTests,
@@ -123,7 +128,7 @@ describe('installLocalWatcher on a stopped WSL distro', () => {
     blockedWslDistroForPathMock.mockResolvedValue(null)
     const root = {
       listeners: new Map(),
-      batch: { cancelled: false },
+      batch: createDebouncedBatch(),
       subscription: { unsubscribe: async () => {} }
     }
     createWslWatcherMock.mockImplementation(async (_key, _path, deps) => {
@@ -146,5 +151,61 @@ describe('installLocalWatcher on a stopped WSL distro', () => {
     expect(scheduleRetry).toHaveBeenCalledWith(root.listeners, expect.any(Function))
     noteWslDistrosRunning(['Ubuntu'])
     expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  // Device pass20: a re-watch drained as the distro booted met a stat failure and stayed unwatched.
+  describe('when the root cannot be stat-ed just after the distro starts', () => {
+    function installRetrying(scheduleRetry: Parameters<typeof installLocalWatcher>[4]) {
+      return installLocalWatcher(
+        UNC_ROOT,
+        UNC_ROOT,
+        UNC_ROOT,
+        { cancelled: false, listeners: new Map(), abortController: new AbortController() },
+        scheduleRetry
+      )
+    }
+
+    beforeEach(() => {
+      blockedWslDistroForPathMock.mockResolvedValue(null)
+      clearWslRootStatRetry(UNC_ROOT)
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('retries instead of remembering the root unwatchable, and installs once the share answers', async () => {
+      statMock.mockRejectedValueOnce(new Error('ENOENT')).mockRejectedValueOnce(new Error('ENOENT'))
+      const root = { listeners: new Map(), batch: createDebouncedBatch(), subscription: {} }
+      createWslWatcherMock.mockResolvedValue(root)
+      const retries: (() => Promise<void>)[] = []
+      const scheduleRetry = vi.fn(
+        (_listeners: unknown, wait?: (run: () => Promise<void>) => unknown) =>
+          wait?.(async () => {
+            retries.push(async () => {})
+          })
+      )
+
+      await expect(installRetrying(scheduleRetry)).resolves.toBe('capacity')
+      expect(watcherLifecycleState.unwatchableRoots.has(UNC_ROOT)).toBe(false)
+      await vi.advanceTimersByTimeAsync(WSL_ROOT_STAT_RETRY_DELAYS_MS[0])
+      expect(retries).toHaveLength(1)
+
+      await expect(installRetrying(scheduleRetry)).resolves.toBe('capacity')
+      await expect(installRetrying(scheduleRetry)).resolves.toBe('cancelled')
+      expect(createWslWatcherMock).toHaveBeenCalledOnce()
+      expect(watcherLifecycleState.unwatchableRoots.has(UNC_ROOT)).toBe(false)
+    })
+
+    it('gives up and remembers the root after its bounded retries', async () => {
+      statMock.mockRejectedValue(new Error('ENOENT'))
+      const scheduleRetry = vi.fn<Parameters<typeof installLocalWatcher>[4]>()
+      for (const _delay of WSL_ROOT_STAT_RETRY_DELAYS_MS) {
+        await expect(installRetrying(scheduleRetry)).resolves.toBe('capacity')
+      }
+      await expect(installRetrying(scheduleRetry)).resolves.toBe('unavailable')
+      expect(scheduleRetry).toHaveBeenCalledTimes(WSL_ROOT_STAT_RETRY_DELAYS_MS.length)
+      expect(watcherLifecycleState.unwatchableRoots.has(UNC_ROOT)).toBe(true)
+    })
   })
 })

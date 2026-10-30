@@ -166,9 +166,13 @@ export function createCodexStructuredItemStreams(
     return state
   }
 
-  const flush = (): boolean => {
+  const flush = (threadId?: string): boolean => {
     let flushed = coalescer.flushAll()
     for (const key of pendingCheckpoints) {
+      // flushAll already placed every stream's first row; re-saving other threads would bypass their cadence.
+      if (threadId !== undefined && producers.get(key)?.threadId !== threadId) {
+        continue
+      }
       const snapshot = coalescer.snapshot(key)
       if (snapshot && checkpointLengths.get(key) !== snapshot.text.length) {
         flushed = persist(key, snapshot.text, true) && flushed

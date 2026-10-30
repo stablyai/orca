@@ -166,13 +166,11 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
   }
   fallbackTimer = setTimeout(dropRetainedFromDiskCache, CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
   toast(
-    plan.clearedThreadCount === 1
-      ? translate('auto.components.activity.clearCompleted.clearedOne', 'Cleared 1 completed agent')
-      : translate(
-          'auto.components.activity.clearCompleted.clearedMany',
-          'Cleared {{count}} completed agents',
-          { count: plan.clearedThreadCount }
-        ),
+    translate(
+      'auto.components.activity.clearCompleted.cleared',
+      'Cleared {{count}} completed agents',
+      { count: plan.clearedThreadCount, defaultValue_one: 'Cleared {{count}} completed agent' }
+    ),
     {
       action: {
         label: translate('auto.components.activity.clearCompleted.undo', 'Undo'),

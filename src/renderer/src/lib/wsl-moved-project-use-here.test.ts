@@ -158,4 +158,22 @@ describe('bringWslMovedProjectBack', () => {
       'The Ubuntu host is still being removed, so Orca leaves it alone. Finish removing it in Settings, then try again.'
     )
   })
+
+  it("adds that the host's terminals are asleep when the refusal came after their stop", async () => {
+    stubApi({ released: false, reason: 'failed', detail: 'journal', hostTerminalsAsleep: true })
+    expect(await refusalShown()).toBe(
+      'Could not bring this project back to this computer. Its terminals on the Ubuntu host were put to sleep. Open the project to resume them.'
+    )
+    stubApi({ released: false, reason: 'host-still-running', hostTerminalsAsleep: true })
+    expect(await refusalShown()).toBe(
+      "The Ubuntu host's copy of this project is still running terminals, so its agents could run twice. Wait a moment, then try again. Its terminals on the Ubuntu host were put to sleep. Open the project to resume them."
+    )
+  })
+
+  it('says a host removed here but kept for another Orca needs re-adding', async () => {
+    stubApi({ released: false, reason: 'host-unreachable', detail: 'host-kept-for-peers' })
+    expect(await refusalShown()).toBe(
+      'Repo 1 moved to the Ubuntu host, which is still running for another Orca. Re-add the host to use it here again.'
+    )
+  })
 })

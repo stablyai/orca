@@ -377,6 +377,28 @@ describe('deployOrcad', () => {
     }
   )
 
+  it('skips only the pre-upload record and fence reads a WSL connect already made', async () => {
+    const reads = async (preRead?: OrcadDeployOptions['preRead']) => {
+      vi.clearAllMocks()
+      scriptHost({ activationRecord: '', readiness: { [NEW_VERSION]: readyLine({}) }, log: [] })
+      await deployOrcad(options(preRead ? { preRead } : {}))
+      const commands = mockExec.mock.calls.map(([, command]) => String(command))
+      const count = (needle: string) => commands.filter((c) => c.includes(needle)).length
+      return {
+        record: count("[ ! -e '/home/u/.orca-remote/orcad-active.json'"),
+        fence: count('LOCKED')
+      }
+    }
+    const plain = await reads()
+    const record = emptyOrcadActivationRecord()
+    expect(await reads({ record, fenceOpen: true })).toEqual({
+      record: plain.record - 1,
+      fence: plain.fence - 1
+    })
+    // A fence the connect saw held is probed again.
+    expect((await reads({ record, fenceOpen: false })).fence).toBe(plain.fence)
+  })
+
   it('does not run chmod on a Windows remote', async () => {
     scriptHost({ activationRecord: '', readiness: {}, log: [] })
     await installOrcadBundle(

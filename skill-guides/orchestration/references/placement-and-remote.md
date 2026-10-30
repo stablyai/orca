@@ -15,13 +15,16 @@ sharing unsafe.
 ORCA orchestration worker-start --task <task_id> --worktree current --agent default --json
 
 # Stacked child worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent default --setup run --json
+ORCA orchestration worker-start --task <task_id> --worktree new-child --agent default --setup run --json
 
 # Independent top-level worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-top-level --repo <target_repo_selector> --name <name> --agent default --setup run --json
+ORCA orchestration worker-start --task <task_id> --worktree new-top-level --repo <target_repo_selector> --agent default --setup run --json
 ```
 
 `--agent default` uses the project that owns the selected workspace or target repository, not the coordinator's project. Select an exact `--repo` for cross-project new work; pass an explicit agent ID when the user names one.
+
+`--name` is optional: without it Orca picks a name as it does for an unnamed
+workspace, and the start output names the workspace it created.
 
 Current and exact existing workspaces create a fresh terminal unless
 `--terminal` is explicit. Folder workspaces are first-class; do not invoke Git

@@ -26,6 +26,8 @@ export type PinnedRuntimeMaterializeOptions = {
   signal?: AbortSignal
   /** Empty disables retries. */
   retryDelaysMs?: readonly number[]
+  /** Give up, without retrying, when no response arrives in time (a firewall that drops packets). */
+  connectTimeoutMs?: number
 }
 
 export type PinnedRuntimeArchive = {
@@ -73,7 +75,9 @@ export async function materializeVerifiedRuntimeArchive(
       downloaded,
       options.fetcher ?? getMainHttpClient().fetch,
       options.signal,
-      options.retryDelaysMs
+      options.retryDelaysMs,
+      undefined,
+      options.connectTimeoutMs
     ).catch((error: unknown) => {
       throw unreachableArchiveError(archive, cached.path, error, options.signal)
     })

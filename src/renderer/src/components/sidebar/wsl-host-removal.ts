@@ -5,12 +5,18 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
+import { wslHostStopReasonMessage } from './wsl-host-failure-text'
 
 /** Stop terminals/server, remove records and refresh hosts; report anything still running that keeps the distro alive. */
 async function removeWslHostImpl(environmentId: string): Promise<void> {
   const api = window.api.runtimeEnvironments?.wslHosts
   if (!api) {
-    throw new Error('WSL hosts are not available on this computer.')
+    throw new Error(
+      translate(
+        'auto.components.sidebar.wslHostRemoval.unavailable',
+        'WSL hosts are not available on this computer.'
+      )
+    )
   }
   const serverStop = await api.remove({ environmentId })
   const state = useAppStore.getState()
@@ -27,6 +33,19 @@ async function removeWslHostImpl(environmentId: string): Promise<void> {
 
 /** Says what a WSL host's Remove left behind; true when it warned. Shared by every Remove entry. */
 export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined): boolean {
+  if (serverStop?.stopped === true && serverStop.keptForOtherDesktops?.length) {
+    // R39: another Orca on this computer shares the server, so only this Orca let go of it.
+    // Several unnamed peers all read "another Orca"; say it once.
+    const names = [...new Set(serverStop.keptForOtherDesktops)].join(', ')
+    toast.info(
+      translate(
+        'auto.components.sidebar.wslHostRemoval.keptForOthers',
+        'Removed from this Orca. The host keeps running for {{value0}}.',
+        { value0: names }
+      )
+    )
+    return true
+  }
   if (serverStop?.stopped !== false) {
     return false
   }
@@ -36,7 +55,7 @@ export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined)
       translate(
         'auto.components.sidebar.wslHostRemoval.pending',
         'Orca didn’t remove the host yet: {{value0}} Remove it again to retry, or connect it to keep it.',
-        { value0: serverStop.reason }
+        { value0: wslHostStopReasonMessage(serverStop) }
       ),
       { duration: Infinity }
     )
@@ -47,7 +66,7 @@ export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined)
     translate(
       'auto.components.sidebar.wslHostRemoval.partial',
       'The host was removed, but something in the distro is still running: {{value0}}',
-      { value0: serverStop.reason }
+      { value0: wslHostStopReasonMessage(serverStop) }
     ),
     { duration: Infinity }
   )

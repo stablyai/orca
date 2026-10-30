@@ -3,6 +3,11 @@ import {
   getFullDropIndexForWorktreeDragUnit,
   getWorktreeDragUnitGroups
 } from './worktree-drag-units'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+
+// Unit members are host identities; these rows carry no host.
+const k = (id: string): string => composeWorktreeHostIdentity(undefined, id)
 
 function header(key: string): { type: 'header'; key: string } {
   return { type: 'header', key }
@@ -33,10 +38,10 @@ describe('getWorktreeDragUnitGroups', () => {
     expect(groups).toEqual([
       {
         key: 'all',
-        worktreeIds: ['parent', 'sibling'],
+        worktreeIds: [k('parent'), k('sibling')],
         units: [
-          { worktreeId: 'parent', worktreeIds: ['parent', 'child', 'grandchild'] },
-          { worktreeId: 'sibling', worktreeIds: ['sibling'] }
+          { worktreeId: k('parent'), worktreeIds: [k('parent'), k('child'), k('grandchild')] },
+          { worktreeId: k('sibling'), worktreeIds: [k('sibling')] }
         ]
       }
     ])
@@ -56,16 +61,16 @@ describe('getWorktreeDragUnitGroups', () => {
     expect(groups).toEqual([
       {
         key: 'repo:one',
-        worktreeIds: ['main', 'feature'],
+        worktreeIds: [k('main'), k('feature')],
         units: [
-          { worktreeId: 'main', worktreeIds: ['main'] },
-          { worktreeId: 'feature', worktreeIds: ['feature'] }
+          { worktreeId: k('main'), worktreeIds: [k('main')] },
+          { worktreeId: k('feature'), worktreeIds: [k('feature')] }
         ]
       },
       {
         key: 'repo:two',
-        worktreeIds: ['other'],
-        units: [{ worktreeId: 'other', worktreeIds: ['other'] }]
+        worktreeIds: [k('other')],
+        units: [{ worktreeId: k('other'), worktreeIds: [k('other')] }]
       }
     ])
   })
@@ -80,10 +85,10 @@ describe('getWorktreeDragUnitGroups', () => {
     expect(groups).toEqual([
       {
         key: 'pinned',
-        worktreeIds: ['pinned-copy', 'other-pinned'],
+        worktreeIds: [k('pinned-copy'), k('other-pinned')],
         units: [
-          { worktreeId: 'pinned-copy', worktreeIds: ['pinned-copy'] },
-          { worktreeId: 'other-pinned', worktreeIds: ['other-pinned'] }
+          { worktreeId: k('pinned-copy'), worktreeIds: [k('pinned-copy')] },
+          { worktreeId: k('other-pinned'), worktreeIds: [k('other-pinned')] }
         ]
       }
     ])
@@ -101,12 +106,34 @@ describe('getWorktreeDragUnitGroups', () => {
     expect(groups).toEqual([
       {
         key: 'all',
-        worktreeIds: ['pinned-copy', 'other'],
+        worktreeIds: [k('pinned-copy'), k('other')],
         units: [
-          { worktreeId: 'pinned-copy', worktreeIds: ['pinned-copy'] },
-          { worktreeId: 'other', worktreeIds: ['other'] }
+          { worktreeId: k('pinned-copy'), worktreeIds: [k('pinned-copy')] },
+          { worktreeId: k('other'), worktreeIds: [k('other')] }
         ]
       }
+    ])
+  })
+
+  it('keeps same-id copies on two hosts as separate units', () => {
+    const onHost = (hostId: ExecutionHostId, sectionKey = 'all') => ({
+      type: 'item' as const,
+      worktree: { id: 'repo::/w/same', hostId },
+      depth: 0,
+      sectionKey
+    })
+    const groups = getWorktreeDragUnitGroups([
+      header('pinned'),
+      onHost('ssh:vm-a', 'pinned'),
+      header('all'),
+      onHost('ssh:vm-b'),
+      onHost('ssh:vm-c')
+    ])
+
+    expect(groups.map((group) => group.worktreeIds)).toEqual([
+      // The pinned copy is the only one on vm-a, so it keeps its own pinned slot.
+      ['ssh:vm-a|repo::/w/same'],
+      ['ssh:vm-b|repo::/w/same', 'ssh:vm-c|repo::/w/same']
     ])
   })
 })

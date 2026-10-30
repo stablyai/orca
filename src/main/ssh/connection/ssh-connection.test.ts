@@ -7,12 +7,12 @@ import {
   VALID_ED25519_HOST_KEY,
   ssh2Mock
 } from '../__tests__/ssh-connection-test-client'
-import { resetSshConnectionMocks } from './ssh-connection-test-harness'
+import { nextSshClientCreation, resetSshConnectionMocks } from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -64,12 +64,21 @@ describe('SshConnection', () => {
     )
   })
 
-  it('enables TCP_NODELAY on the ssh2 client after ready', async () => {
+  it('enables TCP_NODELAY before SSH authentication completes', async () => {
+    ssh2Mock.connectSequence = ['silent']
     const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
+    const clientCreated = nextSshClientCreation()
+    const connected = conn.connect()
+    await clientCreated
 
-    expect(clientInstances).toHaveLength(1)
-    expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+    try {
+      expect(conn.getState().status).toBe('connecting')
+      expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+    } finally {
+      emitSshEvent('ready')
+      await connected
+      conn.disconnect()
+    }
   })
 
   it('captures the negotiated SSH server key fingerprint', async () => {

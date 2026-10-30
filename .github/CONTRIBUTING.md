@@ -53,6 +53,15 @@ pnpm install
 pnpm dev
 ```
 
+`mobile/` is a separate pnpm project with its own lockfile, so the root `pnpm install` leaves its
+dependencies uninstalled. `pnpm build` (`build:mobile-web` fails without them) and the lint
+passes that cover `mobile/` need them. Install them before building or linting, and again
+when `mobile/pnpm-lock.yaml` changes:
+
+```bash
+pnpm -C mobile install --frozen-lockfile
+```
+
 ### Dev Profiles and Parallel Instances
 
 `pnpm dev` in a linked Git worktree uses its own userData profile, renderer port, and remote
@@ -170,7 +179,7 @@ Avoid vague names like `test`, `misc`, or `changes`.
 
 ## Before Opening a PR
 
-Run the same checks that CI runs:
+Run the same checks that CI runs, after the `mobile/` install from [Local Setup](#local-setup):
 
 ```bash
 pnpm lint

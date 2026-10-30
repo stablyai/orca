@@ -40,6 +40,8 @@ import { adoptWslMoveProgress } from './wsl-move-run-adoption'
 import { closeWslMoveDialog, reloadAfterWslMove } from './wsl-move-dialog-close'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import { useWslHostsEnabled } from '../sidebar/use-wsl-hosts-enabled'
+import { useConfirmationDialog } from '../confirmation-dialog-context'
+import { useWslMoveQuitGuard } from './use-wsl-move-quit-guard'
 import { WslMovePreviewBody, wslMoveNotMovingLines } from './WslMovePreviewBody'
 import { WslMoveProgressBody } from './WslMoveProgressBody'
 import { WslMoveResultBody, wslMoveResultTitle } from './WslMoveResultBody'
@@ -77,6 +79,8 @@ function blockerViews(
 /** Root-hosted: entry points in Settings, the sidebar and project settings all open it. */
 export function WslMoveDialogHost(): React.JSX.Element | null {
   const enabled = useWslHostsEnabled()
+  const confirm = useConfirmationDialog()
+  useWslMoveQuitGuard(enabled, confirm)
   const open = useWslMoveDialogStore(
     (s) => s.dialog.stage !== 'closed' && !('hidden' in s.dialog && s.dialog.hidden)
   )

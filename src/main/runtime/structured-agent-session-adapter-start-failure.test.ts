@@ -88,9 +88,9 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
   if (!sent.ok) {
     throw new Error(JSON.stringify(sent.refusal))
   }
-  await vi.waitFor(() => expect(script.spawns()).toBe(1))
   for (let attempt = 1; attempt <= 5; attempt++) {
-    await vi.waitFor(() => expect(script.spawns()).toBe(attempt))
+    // Retries back off 100·2^n ms (800 ms before the fifth spawn); the 1 s default leaves no room under load.
+    await vi.waitFor(() => expect(script.spawns()).toBe(attempt), { timeout: 5_000 })
     script.failHandshake('provider config is invalid: bad key')
   }
   const submission = async () => {

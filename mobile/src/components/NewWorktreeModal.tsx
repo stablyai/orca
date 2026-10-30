@@ -4,6 +4,7 @@ import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-br
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
@@ -58,6 +59,7 @@ export function NewWorktreeModal(props: NewWorktreeModalProps) {
 }
 
 function NewWorktreeModalContent(props: NewWorktreeModalProps) {
+  const t = useMobileTranslation()
   const {
     visible,
     client: desktopClient,
@@ -82,9 +84,14 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const navigation = useNewWorktreeDrawerNavigation(visible)
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
-  const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId)
+  const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId, repoServer)
   const repoRuntime = useNewWorktreeRuntimeCapabilities(client, visible)
-  const { tasksSupported, getWorktreeCreateCutoverSupport, getAgentLaunchSupport } = repoRuntime
+  const {
+    tasksSupported,
+    getWorktreeCreateCutoverSupport,
+    getAgentLaunchSupport,
+    getBranchIntentSupport
+  } = repoRuntime
   // The desktop's own run target is named for the desktop, whichever host the picked repo is on.
   const desktopPlatform = useHostDescriptor(hostId)?.platform ?? null
   const hostPlatform = repoServer ? desktopPlatform : repoRuntime.hostPlatform
@@ -153,6 +160,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     trustedOrcaHooks: runtime.trustedOrcaHooks,
     setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
     getWorktreeCreateCutoverSupport,
+    getBranchIntentSupport,
     getAgentLaunchSupport,
     transitionDrawer: navigation.transitionDrawer,
     setError,
@@ -183,13 +191,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [hostRepos]
   )
-  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos])
+  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos, t])
   const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
     () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, hostLabelById),
-    [hostLabelById, hostPlatform, repos, selectedProjectId]
+    [hostLabelById, hostPlatform, repos, selectedProjectId, t]
   )
   const selectedRunTarget = selectedRepo
     ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, hostLabelById)
@@ -241,7 +249,10 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}
         selectedRepoIsGit={selectedRepoIsGit}
         selectedRepoConnectionId={selectedRepoConnectionId}
-        selectedRepoName={selectedRepo?.displayName ?? 'Remote repository'}
+        selectedRepoName={
+          selectedRepo?.displayName ??
+          t('components.newWorktreeModal.remoteRepository', 'Remote repository')
+        }
         sshGate={executionTarget.sshGate}
         composer={composer}
         selectedAgent={agentSelection.selectedAgent}

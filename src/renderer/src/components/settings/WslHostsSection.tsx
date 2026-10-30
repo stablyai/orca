@@ -19,6 +19,7 @@ import { HostRemoveDialog } from '../sidebar/HostRemoveDialog'
 import {
   openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
+  useWslHostsPaused,
   useWslHostsEnabled,
   useWslHostServerFilesMissing,
   wslHostsAvailable
@@ -27,8 +28,10 @@ import {
   getWslHostRowDetail,
   getWslHostStatusLabel,
   getWslHostServerFilesMissingLabel,
+  getWslHostsPausedLabel,
   getWslHostsTurnedOffLabel
 } from '../sidebar/wsl-host-row-status'
+import { wslHostStatusDetailMessage } from '../sidebar/wsl-host-failure-text'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
@@ -42,6 +45,7 @@ import {
 } from '../wsl-move/wsl-move-orchestrator-status'
 import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
 import { WslMoveUnfinishedNotice } from '../wsl-move/WslMoveUnfinishedNotice'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,
@@ -86,6 +90,7 @@ export function WslHostsSection({
   const environments = useAppStore((s) => s.runtimeEnvironments)
   const enabled = useWslHostsEnabled()
   const acceptsNewWork = useWslHostsAcceptNewWork()
+  const paused = useWslHostsPaused()
   const serverFilesMissing = useWslHostServerFilesMissing()
   // Share unavailable reasons across every listing of the host.
   const unavailableLabel = serverFilesMissing
@@ -115,7 +120,8 @@ export function WslHostsSection({
       await api.connect({ environmentId, ...(intent ? { intent } : {}) })
       onChanged()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
+      // The main process's message is for the user; Electron's wrapper and the class name aren't.
+      toast.error(readIpcErrorDetail(error) ?? String(error))
     } finally {
       setConnectingId(null)
     }
@@ -133,10 +139,12 @@ export function WslHostsSection({
           </div>
           <p className="text-xs text-muted-foreground">
             {unavailableLabel ??
-              translate(
-                'auto.components.settings.wslHosts.description',
-                'Orca runs a server inside each distro. A stopped distro starts only when you open one of its projects or connect it here.'
-              )}
+              (paused
+                ? getWslHostsPausedLabel()
+                : translate(
+                    'auto.components.settings.wslHosts.description',
+                    'Orca runs a server inside each distro. A stopped distro starts only when you open one of its projects or connect it here.'
+                  ))}
           </p>
         </div>
         {enabled && !acceptsNewWork ? null : enabled ? (
@@ -193,7 +201,9 @@ export function WslHostsSection({
                           { version: deferred.candidateVersion }
                         )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code })}`
                       : `${unavailableLabel ?? getWslHostRowDetail(status)}${
-                          !unavailableLabel && status?.detail ? ` — ${status.detail}` : ''
+                          !unavailableLabel && status?.detail
+                            ? ` — ${wslHostStatusDetailMessage(status)}`
+                            : ''
                         }`}
                   </span>
                 }

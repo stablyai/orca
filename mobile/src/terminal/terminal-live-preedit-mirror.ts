@@ -11,7 +11,33 @@ export type TerminalLiveMirrorStep = {
   readonly heldText: string
 }
 
-// Reported marked-text ranges define preedit, including ASCII; never infer reported composition from script.
+function isTerminalLiveConjoiningJamo(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+    (codePoint >= 0xa960 && codePoint <= 0xa97c) ||
+    (codePoint >= 0xd7b0 && codePoint <= 0xd7c6) ||
+    (codePoint >= 0xd7cb && codePoint <= 0xd7fb)
+  )
+}
+
+function heldTrailingConjoiningJamoLength(
+  fieldCodePoints: readonly string[],
+  stableLength: number
+): number {
+  let held = 0
+  while (
+    held < fieldCodePoints.length - stableLength &&
+    isTerminalLiveConjoiningJamo(
+      fieldCodePoints[fieldCodePoints.length - 1 - held]?.codePointAt(0) ?? 0
+    )
+  ) {
+    held += 1
+  }
+  return held
+}
+
+// Reported marked-text ranges define preedit, including ASCII; the one script rule is trailing conjoining jamo,
+// which iOS 10-Key rewrites without marked text.
 // Platforms without ranges hold trailing non-ASCII runs, preserving immediate ASCII echo but unable to detect ASCII preedit.
 function heldPreeditLength(
   fieldCodePoints: readonly string[],
@@ -19,7 +45,9 @@ function heldPreeditLength(
   composing: boolean | undefined
 ): number {
   if (composing !== undefined) {
-    return composing ? fieldCodePoints.length - stableLength : 0
+    return composing
+      ? fieldCodePoints.length - stableLength
+      : heldTrailingConjoiningJamoLength(fieldCodePoints, stableLength)
   }
   let held = 0
   while (

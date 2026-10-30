@@ -47,6 +47,7 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'cliMissing'
   | 'runtimeNotInstalled'
   | 'conversationOpenInTerminal'
+  | 'launchPreparationFailed'
 >
 
 /** First-hand proof that acquisition spawned no process. */
@@ -66,4 +67,11 @@ export class AgentSessionPreSpawnError extends Error {
 
 export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessionPreSpawnError {
   return error instanceof Error && error.name === 'AgentSessionPreSpawnError'
+}
+
+/** Orca's own launch preparation on the host failed; a refusal it already named keeps its reason. */
+export function launchPreparationFailure(error: unknown): AgentSessionPreSpawnError {
+  return isAgentSessionPreSpawnError(error) && error.reason
+    ? error
+    : new AgentSessionPreSpawnError(error, { reason: 'launchPreparationFailed' })
 }

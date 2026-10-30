@@ -7,7 +7,7 @@ import type {
   LinearDisplayProperty
 } from '../../../../../shared/linear/issue-view-resume-state'
 import { translate } from '@/i18n/i18n'
-import type { TaskPageJiraLoadError } from '@/components/task-page-jira-load-state'
+import type { TaskPageJiraLoadError } from '@/components/task-page/jira/task-page-jira-load-state'
 import React from 'react'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
@@ -52,7 +52,9 @@ export function getLinearIssueGroup(
   if (groupBy === 'assignee') {
     return {
       key: `assignee:${issue.assignee?.id ?? 'unassigned'}`,
-      label: issue.assignee?.displayName ?? 'Unassigned'
+      label:
+        issue.assignee?.displayName ??
+        translate('auto.components.TaskPage.groupUnassigned', 'Unassigned')
     }
   }
   if (groupBy === 'priority') {

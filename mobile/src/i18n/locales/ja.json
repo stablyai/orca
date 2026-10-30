@@ -1,0 +1,3910 @@
+{
+  "accounts": {
+    "screen": {
+      "agentLogin": "Agent 自体のログイン情報を使用",
+      "connecting": "ホストに接続中…",
+      "connectingTo": "「{{name}}」に接続中…",
+      "default": "システムのデフォルト",
+      "hostNotFound": "ホストが見つかりません",
+      "invalidSnapshot": "ホストからのアカウントスナップショットが無効です",
+      "loadingAccounts": "アカウントを読み込み中…",
+      "manageAccountsHint": "デスクトップの「設定」→「アカウント」から、アカウントの追加や再認証を行ってください。",
+      "refreshAccounts": "アカウントを更新",
+      "sessionWindow": "5時間",
+      "switchFailed": "アカウントを切り替えられませんでした",
+      "title": "アカウント",
+      "useReset": "リセット枠を使用",
+      "weeklyWindow": "7日"
+    }
+  },
+  "agentHistory": {
+    "panel": {
+      "all": "全て",
+      "emptyScope": "この範囲には過去の Agent セッションがありません。",
+      "loadFailed": "読み込めません",
+      "missingResumeId": "このセッションには再開用の ID がありません。",
+      "noSearchResults": "検索に一致するセッションはありません。",
+      "noSessions": "Agent セッションはありません",
+      "placeholder": "セッションを検索、repo:、path:",
+      "project": "プロジェクト",
+      "refreshSessions": "Agent セッションを更新",
+      "resumeFailed": "セッションの再開に失敗しました。",
+      "sessionQueued": "Agent セッションをキューに追加しました。",
+      "skipped_one": "{{count}} 件のトランスクリプトをスキップしました",
+      "skipped_other": "{{count}} 件のトランスクリプトをスキップしました",
+      "title": "Agent セッション履歴",
+      "unavailable": "Agent セッション履歴を利用できません",
+      "unknownHostPlatform": "ホストのプラットフォームを判別できません。",
+      "updateHost": "Agent セッション履歴を表示するには、このホストの Orca を更新してください。",
+      "waitingForHost": "ホストの接続待ち…",
+      "workspace": "ワークスペース"
+    },
+    "resumeTarget": {
+      "differentHost": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
+      "openWorkspace": "セッションを再開する前に、ワークスペースを開いてください。",
+      "runtimeUnavailable": "ランタイムで実行されるワークスペースでは、履歴からセッションを再開できません。"
+    },
+    "sessionCard": {
+      "untitledSession": "無題のセッション"
+    },
+    "sessionHistoryList": {
+      "assistantRole": "アシスタント",
+      "currentWorktree": "現在のワークツリー",
+      "messages_one": "{{count}} 件のメッセージ",
+      "messages_other": "{{count}} 件のメッセージ",
+      "resumeSession": "Agent セッションを再開",
+      "userRole": "ユーザー"
+    },
+    "useAgentHistoryState": {
+      "hostUnreachable": "ホストに接続できません",
+      "loadFailed": "Agent セッションを読み込めません",
+      "waitingForHost": "ホストの接続待ち…"
+    },
+    "worktreeNavigationActions": {
+      "agentSessionHistory": "Agent セッション履歴",
+      "sourceControl": "ソース管理"
+    }
+  },
+  "app": {
+    "mobileOnboarding": {
+      "notificationSettingsFailed": "通知設定を更新できませんでした。もう一度お試しください。",
+      "progress": "オンボーディングの進行状況",
+      "saveChoiceFailed": "選択内容を保存できませんでした。もう一度お試しください。",
+      "stepProgress": "{{total}} ステップ中 {{step}} ステップ目"
+    },
+    "notifications": {
+      "description": "アプリを閉じていても Agent の通知を受け取れます。Orca のプッシュ通知サービスと Apple または Google を通じて配信されます。"
+    },
+    "pair": {
+      "backToHome": "ホームに戻る",
+      "missingCode": "ペアリングコードがありません"
+    },
+    "pairConfirm": {
+      "backToHome": "ホームに戻る",
+      "connectTimedOut": "{{seconds}} 秒以内に接続できませんでした。どこで処理が止まったか、下のログで確認してください。",
+      "connecting": "接続中…",
+      "description": "デスクトップのペアリングリンクを開きました。確認すると、このデスクトップがホスト一覧に追加されます。",
+      "pairButton": "ペアリング",
+      "pairingFailed": "ペアリングに失敗しました：{{error}}",
+      "pairingLog": "ペアリングログ",
+      "title": "このデスクトップとペアリングしますか？"
+    },
+    "pairScan": {
+      "cameraDisabledDescription": "設定でカメラへのアクセスを有効にするか、ペアリングコードを貼り付けてください。",
+      "cameraDisabledTitle": "カメラへのアクセスが無効",
+      "cameraPermissionDescription": "デスクトップの Orca に表示された QR コードをスキャンするか、ペアリングコードを貼り付けてください。",
+      "connectTimedOut": "{{seconds}} 秒以内に接続できませんでした。どこで処理が止まったか、下のログで確認してください。",
+      "connecting": "接続中…",
+      "invalidPairingCode": "ペアリングコードが無効です。コンピュータからコピーして、もう一度貼り付けてください。",
+      "invalidQrCode": "Orca の有効な QR コードではありません",
+      "downloadQrCode": "これはダウンロード用のコードです。デスクトップのステップ2にあるペアリングコードをスキャンしてください。",
+      "openDesktopStep": "コンピュータで Orca を開く",
+      "openMobileSettingsStep": "「設定」→「モバイル」を開く",
+      "openSettings": "設定を開く",
+      "pairingFailed": "ペアリングに失敗しました：{{error}}",
+      "pairingLog": "ペアリングログ",
+      "pasteCodeMessage": "コンピュータの QR コードの下に表示されているコードをコピーしてください。",
+      "pasteCodePlaceholder": "orca://pair?code=... またはコードを貼り付け",
+      "pasteCodeTitle": "ペアリングコードを貼り付け",
+      "pasteInstead": "代わりにコードを貼り付け",
+      "pastePairingCode": "またはペアリングコードを貼り付け",
+      "scanCodeStep": "QR コードをスキャン",
+      "title": "デスクトップのペアリング",
+      "tryAgain": "再試行"
+    },
+    "terminalSettings": {
+      "autocomplete": "自動補完と自動修正",
+      "autocompleteOff": "オフ",
+      "autocompleteOn": "オン",
+      "defaultText": "標準（100%）",
+      "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
+      "keyboardInputDescription": "自動補完、自動修正、スペル候補は、バッファー方式のコマンド入力にのみ適用されます。キーボード上部の二重矢印ボタンでリアルタイム入力から切り替えると、「送信」をタップする前にコマンドを編集できます。コマンド、フラグ、パスが書き換わるのを防ぐため、デフォルトではオフです。",
+      "keyboardInputHeading": "キーボード入力",
+      "largeText": "大（125%）",
+      "largerText": "特大（150%）",
+      "largestText": "最大 (200%)",
+      "leaveAppDescription": "スマートフォンでターミナルを使用している間、Orca は画面に合わせてターミナルを縮小します。アプリを閉じたり別のアプリに切り替えたりしたときに、スマートフォンサイズを維持して対話型 CLI ツールのレイアウトを保つか、デスクトップのサイズに戻すかを設定します。デスクトップのバナーにある「復元する」で、いつでも手動でサイズを戻せます。",
+      "leaveAppHeading": "アプリを離れたとき",
+      "noPairedDesktops": "ペアリング済みのデスクトップはまだありません。ペアリングすると、ターミナルの動作を設定できます。",
+      "restoreAfterMinutes_one": "{{count}} 分後",
+      "restoreAfterMinutes_other": "{{count}} 分後",
+      "restoreAfterSeconds_one": "{{count}} 秒後",
+      "restoreAfterSeconds_other": "{{count}} 秒後",
+      "restoreHost": "「{{name}}」のサイズ復元",
+      "smallerText": "小（75%）",
+      "smallestText": "最小（50%）",
+      "textSize": "テキストサイズ",
+      "textSizeDescription": "ターミナルのテキストサイズを調整します。小さくすると左右に余白を残しながら多くの列を表示でき、大きくすると表示できる列が減ります。横にドラッグして表示範囲を移動できます。ターミナル上でピンチ操作をして拡大・縮小すると、この設定も更新されます。このデバイスの表示にのみ適用され、デスクトップのターミナルは変わりません。",
+      "textSizeHeading": "テキストサイズ",
+      "textSizePickerTitle": "ターミナルのテキストサイズ",
+      "title": "ターミナル"
+    }
+  },
+  "browser": {
+    "addressField": {
+      "urlPlaceholder": "URL"
+    },
+    "pane": {
+      "invalidUrl": "有効な URL を入力してください。"
+    },
+    "paneView": {
+      "dialogTitle": "ブラウザのダイアログ",
+      "forward": "進む",
+      "keyboardPlaceholder": "ページに入力…",
+      "reload": "リロード",
+      "sendText": "ブラウザにテキストを送信"
+    },
+    "pointerModifiers": {
+      "clickModifier": "クリック時の修飾キー {{key}}"
+    },
+    "useBrowserCommands": {
+      "deliveryUnconfirmed": "送信を確認できません。再試行する前にページを確認してください。",
+      "dialogAnswerFailed": "回答をページに送信できませんでした。",
+      "sent": "送信済み"
+    },
+    "viewModeSwitch": {
+      "mobileView": "ウェブサイトのモバイル表示に切り替え",
+      "webView": "ウェブサイトのデスクトップ表示に切り替え"
+    }
+  },
+  "chat": {
+    "ask": {
+      "answerPlaceholder": "答えを入力してください",
+      "next": "次へ",
+      "other": "その他…",
+      "skip": "スキップ",
+      "step": "ステップ {{step}}",
+      "submit": "送信"
+    },
+    "askRow": {
+      "asked": "質問:",
+      "awaiting": "ユーザー入力を待っています:",
+      "awaitingUnnamed": "ユーザー入力を待っています",
+      "questionCount": "{{value0}} 件の質問"
+    },
+    "composer": {
+      "addToMessage": "メッセージに追加",
+      "attachImage": "画像を添付",
+      "cancelEditing": "編集をキャンセル",
+      "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
+      "saveEditedMessage": "編集したメッセージを保存",
+      "sendMessage": "メッセージを送信"
+    },
+    "composerAttachments": {
+      "attachedImage": "添付画像",
+      "file": "ファイル",
+      "fileMeta": "{{type}} · {{size}}",
+      "removeFile": "「{{name}}」を削除",
+      "removeImage": "画像を削除",
+      "uploadingFile": "「{{name}}」をアップロード中"
+    },
+    "composerPlaceholder": {
+      "prompt": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
+      "reconnecting": "再接続中…",
+      "waitingForTerminal": "ターミナルを待っています…"
+    },
+    "diffCard": {
+      "copyDiff": "差分をコピー",
+      "diffGap": "行を省略",
+      "diffTruncated": "差分切り捨て"
+    },
+    "hostStatus": {
+      "continuedOutside": "このチャットの外で続けられました。",
+      "continuedOutsideRewound": "このチャットの外で続けられました。上の以前の返信は、この会話の履歴にはもうありません。",
+      "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。",
+      "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。"
+    },
+    "message": {
+      "copyMessage": "メッセージをコピーする"
+    },
+    "messageActionsSheet": {
+      "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
+      "copyFailed": "コピーに失敗しました",
+      "copyMessage": "メッセージをコピーする",
+      "selectText": "テキストを選択"
+    },
+    "nativeChatImageViewer": {
+      "closeImage": "画像を閉じる"
+    },
+    "nativeChatProse": {
+      "attachedImage": "添付画像",
+      "image": "画像",
+      "openImageHint": "画像をフルサイズで開きます。"
+    },
+    "nativeChatToolLine": {
+      "added": "追加",
+      "copyCommand": "コマンドをコピー",
+      "deleted": "削除",
+      "durationHours": "{{hours}}時間 {{minutes}}分 {{seconds}}秒",
+      "durationMilliseconds": "{{milliseconds}}ミリ秒",
+      "durationMinutes": "{{minutes}}分 {{seconds}}秒",
+      "durationSeconds": "{{seconds}}秒",
+      "edited": "編集",
+      "editing": "編集中",
+      "exitCode": "終了コード {{exitCode}}",
+      "fetched": "取得",
+      "fetching": "取得中",
+      "listed": "一覧表示",
+      "listing": "一覧表示中",
+      "ran": "実行",
+      "read": "読み取り",
+      "reading": "読み取り中",
+      "renamed": "名前変更",
+      "result": "結果",
+      "running": "実行中",
+      "searched": "検索",
+      "searchedWeb": "ウェブ検索",
+      "searching": "検索中",
+      "searchingWeb": "ウェブ検索中",
+      "subagent": "サブ Agent",
+      "triedEdit": "編集を試行",
+      "triedFetch": "取得を試行",
+      "triedList": "一覧表示を試行",
+      "triedRead": "読み取りを試行",
+      "triedSearch": "検索を試行",
+      "triedSearchWeb": "ウェブ検索を試行"
+    },
+    "nativeChatUserMessageFold": {
+      "loadFailed": "メッセージ全体を表示（読み込み失敗、タップして再試行）",
+      "showFullMessage": "メッセージ全体を表示",
+      "showLess": "折りたたむ"
+    },
+    "nativeChatVisual": {
+      "defaultTitle": "ビジュアライゼーション",
+      "openFullscreen": "「{{title}}」を全画面で開く",
+      "retryHint": "もう一度読み込みます。",
+      "unavailable": "ビジュアライゼーションを利用できません"
+    },
+    "notice": {
+      "compaction": "コンテキストを圧縮しました",
+      "contextCleared": "コンテキストをクリアしました",
+      "plan": "プラン",
+      "stoppedManually": "手動で停止しました"
+    },
+    "orcaStop": {
+      "canContinue": "この会話で続行できます。",
+      "crash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
+      "quit": "この応答の途中で、{{machine}} の Orca が終了しました。",
+      "remote": "この応答の途中で、{{machine}} の Orca が停止しました。",
+      "unnamedServer": "リモートサーバー",
+      "update": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。"
+    },
+    "permission": {
+      "needsAccessTo": "アクセスが必要なパス: ",
+      "newerVersionRequired": "このリクエストには新しいバージョンの Orca が必要です。",
+      "planFile": "計画ファイル: {{filePath}}",
+      "reason": "理由: "
+    },
+    "promptCard": {
+      "answerInTerminal": "ターミナルで回答する",
+      "terminalExplanation": "ターミナルでこの OMP の質問に答えてください。"
+    },
+    "promptStrip": {
+      "expand": "展開"
+    },
+    "question": {
+      "otherReplyPlaceholder": "または返信を入力…",
+      "replyPlaceholder": "返信を入力…",
+      "sendReply": "返信を送信",
+      "submit": "送信",
+      "submitCount": "送信（{{count}}）",
+      "submitSelectedOptions": "選択した項目を送信"
+    },
+    "queuedMessages": {
+      "clearAll": "すべてクリア",
+      "deleteAll": "キュー内のすべてのメッセージを削除",
+      "editMessage": "メッセージを編集",
+      "pausedState": "一時停止中",
+      "queuedState": "キュー待ち",
+      "resume": "再開",
+      "resumeSending": "キュー内のメッセージの送信を再開",
+      "title": "キュー内のメッセージ"
+    },
+    "receipt": {
+      "cancelled": "キャンセル",
+      "cancelledBy": "{{device}} でキャンセルされました",
+      "emptyAnswer": "空の回答",
+      "resolved": "解決済み",
+      "resolver": "{{device}} で回答しました",
+      "unavailable": "選択した回答は利用できません"
+    },
+    "sessionOptionCopy": {
+      "availableAfterSessionStarts": "セッション開始後に利用できます。",
+      "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
+      "effort": "推論レベル",
+      "fast": "高速",
+      "fastMode": "高速モード",
+      "high": "高",
+      "low": "低",
+      "max": "最大",
+      "medium": "中",
+      "mediumShort": "中",
+      "minimal": "最小",
+      "minimalShort": "最小",
+      "model": "モデル",
+      "notSet": "未設定",
+      "off": "オフ",
+      "on": "オン",
+      "permissions": "権限",
+      "sessionOptions": "セッションオプション",
+      "setWhenSessionStarts": "セッション開始時にのみ設定できます。",
+      "speed": "速度",
+      "standard": "標準",
+      "thinking": "思考",
+      "toggleOption": "{{value0}}を切り替える",
+      "ultra": "ウルトラ",
+      "xhigh": "最高",
+      "xhighShort": "最高"
+    },
+    "sessionOptionPickers": {
+      "agentWorking": "Agent が作業中",
+      "backToModels": "モデル一覧に戻る",
+      "closePicker": "選択画面を閉じる",
+      "dispatchUnconfirmed": "Agent に送信済み — 未確認",
+      "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
+      "modelLabel": "モデル、{{value}}",
+      "permissions": "権限",
+      "permissionsLabel": "権限、{{value}}",
+      "settingsLocked": "このターンが完了すると、モデル設定を変更できます。",
+      "workingAnnouncement": "Agent が作業中です。このターンが完了すると、モデル設定を変更できます。"
+    },
+    "sessionOptionRows": {
+      "defaultMarker": "既定",
+      "notReportedMarker": "未報告"
+    },
+    "sessionOptionSegments": {
+      "dispatchUnconfirmed": "Agent に送信済み — 未確認"
+    },
+    "stopButton": {
+      "stopAgent": "Agent を停止",
+      "stoppingState": "停止中…"
+    },
+    "streamFrame": {
+      "streamEnded": "チャット履歴の受信が終了しました",
+      "streamFailed": "チャット履歴の受信に失敗しました"
+    },
+    "subagentGroup": {
+      "ran_one": "{{count}} 個のサブ Agent を実行しました",
+      "ran_other": "{{count}} 個のサブ Agent を実行しました",
+      "started_one": "{{count}} 個のサブ Agent を起動しました",
+      "started_other": "{{count}} 個のサブ Agent を起動しました",
+      "stateCompleted": "完了",
+      "stateFailed": "失敗",
+      "stateFailedCount_one": "{{count}} 件が失敗",
+      "stateFailedCount_other": "{{count}} 件が失敗",
+      "stateIdle": "アイドル",
+      "stateIdleCount_one": "アイドル状態 {{count}} 件",
+      "stateIdleCount_other": "アイドル状態 {{count}} 件",
+      "stateStopped": "停止",
+      "stateStoppedCount_one": "停止 {{count}} 件",
+      "stateStoppedCount_other": "停止 {{count}} 件",
+      "stateUnverifiable": "状態を取得できません",
+      "stateUnverifiableCount_one": "状態取得不可 {{count}} 件",
+      "stateUnverifiableCount_other": "状態取得不可 {{count}} 件",
+      "stateWorking": "作業中",
+      "stateWorkingCount_one": "実行中 {{count}} 件",
+      "stateWorkingCount_other": "実行中 {{count}} 件",
+      "tokens": "{{value0}} トークン"
+    },
+    "taskList": {
+      "added": "{{task}} を追加しました",
+      "completed": "完了",
+      "empty": "タスクがありません",
+      "finished": "{{task}} を完了しました",
+      "inProgress": "進行中",
+      "pending": "保留中",
+      "progress": "{{total}} 件中 {{completed}} 件のタスクが完了しました",
+      "removed": "{{task}} を削除しました",
+      "reset": "保留中としてマーク: {{task}}",
+      "showAll": "完全なタスクリスト",
+      "started": "{{task}} を開始しました",
+      "taskStatus": "{{status}}：{{task}}",
+      "title": "タスク",
+      "unchanged": "タスクは変更されていない",
+      "updated": "{{task}} を更新しました"
+    },
+    "toolActivity": {
+      "count_one": "{{count}} 件のツール呼び出し",
+      "count_other": "{{count}} 件のツール呼び出し",
+      "failedCallsLabel": "失敗したツール呼び出し: {{value0}}",
+      "failedCount": "{{value0}} 件失敗",
+      "interruptedCallsLabel": "中断されたツール呼び出し: {{value0}}",
+      "interruptedCount": "{{value0}} 件中断",
+      "moreCalls": "他 +{{value0}} 件",
+      "result": "結果",
+      "runningCommand": "コマンドを実行中",
+      "runningNamed": "{{toolName}} を実行中",
+      "runningNamedPreview": "{{toolName}} {{preview}} を実行中",
+      "runningPreview": "{{preview}} を実行中"
+    },
+    "toolRun": {
+      "list": "{{value0}}、{{value1}}",
+      "liveBrowserOnce": "ブラウザを使用しています",
+      "liveBrowserTimes_other": "ブラウザを {{count}} 回使用中",
+      "liveFileChange_one": "{{count}} 件のファイルを編集中",
+      "liveFileChange_other": "{{count}} 件のファイルを編集中",
+      "liveListFiles_one": "{{count}} 件のディレクトリを一覧表示中",
+      "liveListFiles_other": "{{count}} 件のディレクトリを一覧表示中",
+      "liveMcpToolCall_one": "{{count}} 件の連携を使用中",
+      "liveMcpToolCall_other": "{{count}} 件の連携を使用中",
+      "liveOther_one": "{{count}} 個のツールを使用中",
+      "liveOther_other": "{{count}} 個のツールを使用中",
+      "liveRead_one": "{{count}} 件のファイルを読み込み中",
+      "liveRead_other": "{{count}} 件のファイルを読み込み中",
+      "liveSearch_one": "{{count}} 回検索中",
+      "liveSearch_other": "{{count}} 回検索中",
+      "liveSubAgentActivity_one": "{{count}} 個の Agent を実行中",
+      "liveSubAgentActivity_other": "{{count}} 個の Agent を実行中",
+      "liveTodoListOnce": "計画を更新する",
+      "liveTodoListTimes_other": "計画を {{count}} 回更新中",
+      "liveUnknown_one": "{{count}} 件のコマンドを実行中",
+      "liveUnknown_other": "{{count}} 件のコマンドを実行中",
+      "liveWebSearch_one": "ウェブを {{count}} 回検索中",
+      "liveWebSearch_other": "ウェブを {{count}} 回検索中",
+      "pair": "{{value0}} および {{value1}}",
+      "separator": "、 ",
+      "settledBrowserOnce": "ブラウザを使用しました",
+      "settledBrowserTimes_other": "ブラウザを {{count}} 回使用しました",
+      "settledFileChange_one": "{{count}} 件のファイルを編集しました",
+      "settledFileChange_other": "{{count}} 件のファイルを編集しました",
+      "settledListFiles_one": "{{count}} 件のディレクトリを一覧表示しました",
+      "settledListFiles_other": "{{count}} 件のディレクトリを一覧表示しました",
+      "settledMcpToolCall_one": "{{count}} 件の連携を使用しました",
+      "settledMcpToolCall_other": "{{count}} 件の連携を使用しました",
+      "settledOther_one": "{{count}} 個のツールを使用しました",
+      "settledOther_other": "{{count}} 個のツールを使用しました",
+      "settledRead_one": "{{count}} 件のファイルを読み込みました",
+      "settledRead_other": "{{count}} 件のファイルを読み込みました",
+      "settledSearch_one": "{{count}} 回検索しました",
+      "settledSearch_other": "{{count}} 回検索しました",
+      "settledSubAgentActivity_one": "{{count}} 個の Agent を実行しました",
+      "settledSubAgentActivity_other": "{{count}} 個の Agent を実行しました",
+      "settledTodoListOnce": "計画を更新しました",
+      "settledTodoListTimes_other": "計画を {{count}} 回更新しました",
+      "settledUnknown_one": "{{count}} 件のコマンドを実行しました",
+      "settledUnknown_other": "{{count}} 件のコマンドを実行しました",
+      "settledWebSearch_one": "ウェブを {{count}} 回検索しました",
+      "settledWebSearch_other": "ウェブを {{count}} 回検索しました"
+    },
+    "turnStatus": {
+      "failedAfter": "{{value0}} 後に失敗",
+      "hoursMinutesSeconds": "{{hours}}時間 {{minutes}}分 {{seconds}}秒",
+      "interruptedAfter": "{{value0}} 後に中断",
+      "minutesSeconds": "{{minutes}}分 {{seconds}}秒",
+      "queueAfterStop": "停止後に実行するメッセージをキューに追加",
+      "responding": "Agent が応答中です",
+      "seconds_one": "{{count}}秒",
+      "seconds_other": "{{count}}秒",
+      "sendAfterStop": "停止後に実行するメッセージを送信",
+      "stopping": "停止中…",
+      "thinking": "思考中",
+      "toggleDetails": "ターンの詳細を切り替えます",
+      "workedFor": "{{value0}} で完了",
+      "working": "処理中…",
+      "workingFor": "{{value0}} 処理中"
+    },
+    "usageLimit": {
+      "reached": "{{agent}} が使用量の上限に達しました。",
+      "reachedNamed": "{{agent}} が{{window}}の上限に達しました。",
+      "resetsAt": "{{when}} にリセットされます。",
+      "theAgent": "Agent",
+      "windowCredits": "追加使用量",
+      "windowSession": "セッション",
+      "windowWeekly": "週間",
+      "windowWeeklyModel": "モデル別の週間"
+    },
+    "useImageUpload": {
+      "attachFailed": "添付に失敗しました。",
+      "disconnected": "添付に失敗しました（接続切断）。",
+      "imageTooLarge": "画像が大きすぎて添付できません。",
+      "permissionDenied": "写真へのアクセスが拒否されました。"
+    }
+  },
+  "common": {
+    "back": "戻る",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "confirm": "確認する",
+    "continue": "続行",
+    "copied": "コピーしました",
+    "copy": "コピー",
+    "delete": "削除",
+    "done": "完了",
+    "edit": "編集",
+    "ok": "OK",
+    "open": "開く",
+    "refresh": "更新",
+    "remove": "削除",
+    "retry": "再試行",
+    "save": "保存",
+    "settings": "設定",
+    "unknown": "不明"
+  },
+  "components": {
+    "accountsSnapshot": {
+      "invalidSnapshot": "ホストからのアカウントスナップショットが無効です。"
+    },
+    "agentLaunchNotice": {
+      "copyFailed": "コピーできませんでした",
+      "copyPrompt": "プロンプトをコピー",
+      "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
+      "updateRequired": "スマートフォンから Agent を起動するには、コンピュータの Orca を更新してください。"
+    },
+    "agentSpinner": {
+      "monitoring": "バックグラウンドタスクを監視中",
+      "unconfirmed": "確認できませんでした"
+    },
+    "agentStateDot": {
+      "monitoring": "バックグラウンドタスクを監視中",
+      "unverifiable": "最近の更新なし"
+    },
+    "authFailedBanner": {
+      "message": "認証に失敗しました。まず再接続してください。失敗が続く場合は、デスクトップから再ペアリングしてください。"
+    },
+    "authFailedBannerActions": {
+      "repair": "再ペアリング",
+      "webNote": "Orca アプリで、このホストに再接続するか、削除してください。"
+    },
+    "codexResetCredit": {
+      "alreadyAppliedTitle": "リセット適用済み",
+      "available_one": "リセットが {{count}} 回利用可能",
+      "available_other": "リセットが {{count}} 回利用可能",
+      "expiryDaysHoursMultiple": "次は {{days}} 日 {{hours}} 時間後に期限切れ",
+      "expiryDaysHoursSingle": "{{days}} 日 {{hours}} 時間後に期限切れ",
+      "expiryDaysMultiple": "次は {{days}} 日後に期限切れ",
+      "expiryDaysSingle": "{{days}} 日後に期限切れ",
+      "expiryHoursMinutesMultiple": "次は {{hours}} 時間 {{minutes}} 分後に期限切れ",
+      "expiryHoursMinutesSingle": "{{hours}} 時間 {{minutes}} 分後に期限切れ",
+      "expiryHoursMultiple": "次は {{hours}} 時間後に期限切れ",
+      "expiryHoursSingle": "{{hours}} 時間後に期限切れ",
+      "expiryMinutesMultiple": "次は {{minutes}} 分後に期限切れ",
+      "expiryMinutesSingle": "{{minutes}} 分後に期限切れ",
+      "expiryNowMultiple": "次は今期限切れ",
+      "expiryNowSingle": "今期限切れ",
+      "invalidResponse": "ホストからのリセット応答が無効です",
+      "noResetMessage": "このアカウントには、利用できる獲得済みのリセット枠がありません。",
+      "noResetTitle": "利用可能なリセットなし",
+      "nothingToResetMessage": "対象となる Codex の使用量ウィンドウは、いずれもレート制限に達していません。",
+      "nothingToResetTitle": "リセット対象なし",
+      "refresh": "Codex の使用量を更新しました。",
+      "resetTitle": "レート制限をリセットしました"
+    },
+    "codexResetCreditAction": {
+      "activeAccountHint": "アクティブな Codex アカウントに対し、獲得したリセット枠を 1 回使用します",
+      "earnedReset": "獲得済みの Codex レート制限リセット枠",
+      "resetting": "リセット中…",
+      "resettingLabel": "Codex のレート制限をリセット中",
+      "scopedHint": "{{scopeLabel}} に対し、獲得したリセット枠を 1 回使用します",
+      "useReset": "リセット枠を使用",
+      "useResetLabel": "Codex レート制限リセット枠を使用"
+    },
+    "customKeyModal": {
+      "add": "追加",
+      "addShortcut": "ショートカットを追加",
+      "command": "コマンド",
+      "commandPlaceholder": "例：pnpm build",
+      "editing": "編集",
+      "function": "ファンクションキー",
+      "key": "キー",
+      "label": "ラベル",
+      "labelPlaceholder": "例：ビルド",
+      "manageShortcuts": "ショートカットを管理",
+      "manageShortcutsHint": "ショートカットキーの表示・非表示・並べ替え",
+      "modifiers": "修飾キー",
+      "moreKeys": "その他のキー：Tab、矢印キー、F1–F12…",
+      "navigation": "ナビゲーション",
+      "pickKey": "キーを選択",
+      "pressEnter": "Enter を押す",
+      "shortcutCombo": "キーの組み合わせ",
+      "shortcutComboHint": "Ctrl、Alt、Shift を使ったキーの組み合わせを作成",
+      "textMacro": "テキストマクロ",
+      "textMacroHint": "カスタムのテキストコマンドを送信"
+    },
+    "dictationSetupSheet": {
+      "description": "ここからモデルをダウンロードまたは選択し、ペアリング済みのコンピュータでディクテーションを有効にできます。",
+      "download": "ダウンロード",
+      "downloadFailed": "ダウンロードに失敗しました",
+      "downloadModel": "{{model}} をダウンロード",
+      "enabled": "ディクテーションを有効にする",
+      "inUse": "使用中",
+      "loadFailed": "読み込みに失敗しました",
+      "modelExtracting": "{{details}} · 展開中…",
+      "modelProgress": "{{details}} · {{progress}}%",
+      "modelSize": "{{size}} MB",
+      "recommended": "推奨",
+      "selectFailed": "モデルを選択できませんでした",
+      "title": "音声ディクテーションを設定",
+      "updateFailed": "更新できませんでした",
+      "use": "使用",
+      "useModel": "{{model}} を使用"
+    },
+    "diffReviewBody": {
+      "binaryDiff": "バイナリ差分",
+      "binaryMessage": "モバイルではこのファイルをテキストで表示できません。",
+      "deletedFile": "削除済みファイル",
+      "deletedMessage": "このファイルは削除されました。ファイルにメモを追加するか、レビュー済みにしてください。",
+      "diffTooLarge": "差分が大きすぎます",
+      "diffTruncated": "モバイルプレビュー用に差分の一部を省略しています。",
+      "diffUnavailable": "差分を表示できません",
+      "loadFailed": "レビューを読み込めません",
+      "loadingDiff": "差分を読み込み中…",
+      "loadingReview": "レビューを読み込み中…",
+      "noReviewableChanges": "レビュー可能な変更がありません",
+      "retryLabel": "レビューの読み込みを再試行",
+      "reviewUnavailable": "レビューを利用できません",
+      "selectFile": "レビューするファイルを選択してください。",
+      "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。",
+      "tryDifferentFilter": "別のレビューフィルターを試してください。"
+    },
+    "diffReviewDrawers": {
+      "actionsTitle": "レビュー操作",
+      "addNote": "メモを追加",
+      "cancelNote": "メモの入力をキャンセル",
+      "clearSentNotes": "送信済みのメモをクリア",
+      "completeTitle": "レビュー完了",
+      "copyNotes": "メモをコピー",
+      "deleteNote": "メモの削除",
+      "discard": "破棄",
+      "discardMessage": "「{{filePath}}」の変更を破棄しますか？この操作は元に戻せません。",
+      "discardTitle": "ファイルの変更を破棄",
+      "editNote": "メモを編集",
+      "fileNote": "ファイルのメモ",
+      "fileSummary_one": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
+      "fileSummary_other": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
+      "filesSummary_one": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
+      "filesSummary_other": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
+      "lineNumber": "{{lineNumber}} 行目",
+      "loadingSessions": "Agent セッションを読み込み中…",
+      "markUnreviewed": "未レビューにする",
+      "newAgentSession": "新規 Agent セッション",
+      "openInSession": "セッションで開く",
+      "reviewNote": "レビューメモ",
+      "saveLineNote": "{{lineNumber}} 行目のメモを保存",
+      "sendNotes": "メモを送信",
+      "sendNotesLabel": "Agent にメモを送信",
+      "sendUnsentNotes": "未送信のメモを送信",
+      "stageReviewed": "レビュー済みをステージ",
+      "stageReviewedFiles": "レビュー済みファイルをステージ",
+      "stageReviewedLabel": "レビュー済みファイルをステージ",
+      "stageableFiles_one": "レビュー済みの未ステージファイル {{count}} 件をステージできます。",
+      "stageableFiles_other": "レビュー済みの未ステージファイル {{count}} 件をステージできます。",
+      "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
+      "terminal": "ターミナル",
+      "terminalLabel": "{{title}} ({{id}})",
+      "unsentNotes_one": "未送信のメモ {{count}} 件",
+      "unsentNotes_other": "未送信のメモ {{count}} 件",
+      "updateRequired": "コンピュータの Orca を更新してください。"
+    },
+    "diffReviewFileSummary": {
+      "branch": "ブランチ",
+      "branchFrom": "ブランチ（変更元: {{oldPath}}）",
+      "changed": "変更あり",
+      "editFileNote": "ファイルのメモを編集",
+      "hunk": "ハンク",
+      "nextHunk": "次のハンク",
+      "notes_one": "メモ {{count}} 件",
+      "notes_other": "メモ {{count}} 件",
+      "previousHunk": "前のハンク",
+      "reviewed": "レビュー済み",
+      "staged": "ステージ済み",
+      "stagedFrom": "ステージ済み（変更元: {{oldPath}}）",
+      "stale": "古いメモ",
+      "staleCount": "古いメモ {{count}} 件",
+      "unstaged": "未ステージ",
+      "unstagedFrom": "未ステージ（変更元: {{oldPath}}）"
+    },
+    "diffReviewFooter": {
+      "addFileNote": "ファイルにメモを追加",
+      "discard": "破棄",
+      "discardFile": "ファイルの変更を破棄",
+      "markFileReviewed": "ファイルをレビュー済みにする",
+      "markReviewed": "レビュー済みにする",
+      "nextFile": "次のファイル",
+      "note": "メモ",
+      "previousFile": "前のファイル",
+      "reviewed": "レビュー済み",
+      "stage": "ステージ",
+      "stageFile": "ファイルをステージ",
+      "unstage": "アンステージ",
+      "unstageFile": "ファイルをアンステージ"
+    },
+    "diffReviewHeader": {
+      "filterAll": "全て",
+      "filterBranch": "ブランチ",
+      "filterNotes": "メモ",
+      "filterStaged": "ステージ済み",
+      "filterUnreviewed": "未レビュー",
+      "filterUnstaged": "未ステージ",
+      "openPullRequestSidebar": "PR サイドバーを開く",
+      "openReviewActions": "レビュー操作を開く",
+      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} レビュー済み",
+      "showAllFiles": "レビュー対象の全ファイルを表示",
+      "showBranchFiles": "ブランチのレビュー対象ファイルを表示",
+      "showNotesFiles": "メモのあるレビュー対象ファイルを表示",
+      "showStagedFiles": "ステージ済みのレビュー対象ファイルを表示",
+      "showUnreviewedFiles": "未レビューのファイルを表示",
+      "showUnstagedFiles": "未ステージのレビュー対象ファイルを表示",
+      "title": "変更点",
+      "unsentNotes_one": "未送信のメモ {{count}} 件",
+      "unsentNotes_other": "未送信のメモ {{count}} 件"
+    },
+    "diffReviewLine": {
+      "addNoteOnLine": "{{number}} 行目にメモを追加",
+      "addedLine": "追加された行",
+      "addedLineNumber": "追加された行（{{number}} 行目）",
+      "contextLine": "変更のない行",
+      "contextLineNumber": "変更のない行（{{number}} 行目）",
+      "deletedLine": "削除された行",
+      "deletedLineNumber": "削除された行（{{number}} 行目）",
+      "editNoteOnLine": "{{number}} 行目のメモを編集"
+    },
+    "dragReorderRow": {
+      "dragToReorder": "ドラッグして並べ替え",
+      "moveDown": "下に移動",
+      "moveUp": "上に移動",
+      "reorderHint": "「上に移動」「下に移動」の操作で、ドラッグせずに並べ替えられます。"
+    },
+    "homeQuickActions": {
+      "newWorkspace": "新規ワークスペース",
+      "pairDesktop": "デスクトップのペアリング",
+      "title": "クイック操作"
+    },
+    "hostCard": {
+      "hostActions": "「{{title}}」の操作",
+      "openHost": "「{{title}}」を開く",
+      "pairingInvalid": "ペアリングが無効",
+      "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
+      "repairHint": "タップしてデスクトップと再ペアリングしてください。",
+      "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
+      "updateDesktopHint": "デスクトップの Orca を更新してサインインすると、どこからでも接続できます。",
+      "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ"
+    },
+    "hostDiagnosticsLink": {
+      "viewDiagnostics": "ネットワーク診断を表示"
+    },
+    "hostProtocolGate": {
+      "checkingCompatibility": "ホストの互換性を確認中"
+    },
+    "hostRouteNoticeBanner": {
+      "dismissNotice": "通知を閉じる"
+    },
+    "htmlPreview": {
+      "preview": "プレビュー",
+      "previewRenderedHtml": "レンダリングした HTML をプレビュー",
+      "source": "ソース",
+      "title": "HTMLプレビュー",
+      "viewHtmlSource": "HTML ソースを表示"
+    },
+    "jiraConnectPrompt": {
+      "checkAgain": "再確認",
+      "connectHint": "デスクトップの Orca で「設定 → 連携」から Jira サイトを追加し、再確認してください。",
+      "connectOnDesktop": "デスクトップで Jira に接続",
+      "credentialUnreadable": "Jira の認証情報は保存されていますが、読み取れません：{{credentialError}}",
+      "updateDesktop": "デスクトップの Orca を更新"
+    },
+    "markdownBlocks": {
+      "copyCode": "コードをコピーする",
+      "openImage": "画像を開く"
+    },
+    "mountedBottomDrawer": {
+      "dismissDrawer": "ドロワーを閉じる"
+    },
+    "newWorkspaceFab": {
+      "newWorkspace": "新規ワークスペース"
+    },
+    "newWorkspaceSetupScriptField": {
+      "hooks": "フック",
+      "label": "セットアップスクリプト",
+      "run": "実行",
+      "runSetupCommand": "セットアップコマンドを実行",
+      "skip": "スキップ"
+    },
+    "newWorkspaceSshConnectionField": {
+      "connect": "接続",
+      "connecting": "接続中…",
+      "label": "SSH 接続",
+      "serverRecovery": "このサーバーはデスクトップでの復旧が必要です。「設定」→「SSH ホスト」→「サーバーを復旧」を選択してください。"
+    },
+    "newWorktreeAgentSelection": {
+      "blankTerminal": "ブランクターミナル"
+    },
+    "newWorktreeFormSheet": {
+      "advanced": "詳細設定",
+      "agent": "Agent",
+      "connectTarget": "接続先に接続",
+      "connectTargetFirst": "先に接続先へ接続",
+      "createWorktree": "ワークツリーを作成する",
+      "nameOrCreateFrom": "名前または「作成元」",
+      "noProjectsFound": "プロジェクトが見つかりません",
+      "note": "注記",
+      "notePlaceholder": "メモを書く",
+      "workspaceName": "ワークスペース名"
+    },
+    "newWorktreeModal": {
+      "remoteRepository": "リモートリポジトリ"
+    },
+    "newWorktreeModalDrawers": {
+      "agent": "Agent",
+      "project": "プロジェクト",
+      "runOn": "実行先"
+    },
+    "newWorktreeProjectTargetFields": {
+      "project": "プロジェクト",
+      "runOn": "実行先",
+      "selectProject": "プロジェクトを選択",
+      "selectRunTarget": "実行先を選択"
+    },
+    "prSidebar": {
+      "loadFailed": "問題が発生しました。",
+      "loading": "PR を読み込み中…",
+      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。",
+      "retryLoading": "PR の読み込みを再試行"
+    },
+    "protocolBlockScreen": {
+      "backToHosts": "ホストに戻る",
+      "desktopTooOldBody": "ペアリング済みのデスクトップアプリは、現在の Orca Mobile に対応していない古いバージョンです。コンピュータの Orca を更新して、このホストへの接続を再試行してください。",
+      "getVersion": "Orca {{version}} を入手",
+      "mobileTooOldAppStore": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "mobileTooOldGitHubReleases": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "openAppStore": "App Store を開く",
+      "openGitHubReleases": "GitHub Releases を開く",
+      "refreshRecoveryNote": "このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
+      "refreshWorkspaceBody": "このホスト用にキャッシュされたワークスペースは、デスクトップが必要とするバージョンより古くなっています。このホストに再接続して、最新のワークスペースをダウンロードしてください。",
+      "refreshWorkspaceTitle": "モバイルワークスペースを更新",
+      "updateDesktopTitle": "コンピュータの Orca を更新",
+      "updateMobileTitle": "Orca Mobile を更新",
+      "updateRecoveryNote": "すでに更新済みですか？「ホスト」に戻り、接続を更新してください。このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
+      "workspaceNeedsUpdateAppStore": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "workspaceNeedsUpdateGitHubReleases": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。"
+    },
+    "richMarkdownEditor": {
+      "imageUrl": "画像 URL",
+      "insert": "入れる",
+      "linkUrl": "リンクURL"
+    },
+    "richMarkdownToolbar": {
+      "body": "本文",
+      "bold": "太字",
+      "bulletList": "箇条書きリスト",
+      "checklist": "チェックリスト",
+      "codeBlock": "コードブロック",
+      "heading1": "見出し 1",
+      "heading2": "見出し 2",
+      "heading3": "見出し 3",
+      "image": "画像",
+      "inlineCode": "インラインコード",
+      "italic": "イタリック",
+      "link": "リンク",
+      "numberedList": "番号付きリスト",
+      "quote": "引用",
+      "strike": "取り消し線"
+    },
+    "searchField": {
+      "clearSearch": "検索をクリア"
+    },
+    "setupHookTrustDrawer": {
+      "alwaysTrustAndRun": "常に信頼して実行",
+      "description": "このリポジトリの orca.yaml は、ワークスペースの起動前に実行されます。このリポジトリを信頼できる場合にのみ実行してください。",
+      "dontRun": "実行しない",
+      "newScriptLabel": "新しいセットアップスクリプト",
+      "runHooks": "フックを実行する",
+      "runSetupTitle": "{{repoName}} のセットアップを実行しますか？",
+      "scriptChangedTitle": "{{repoName}} のセットアップスクリプトが変更されました",
+      "scriptLabel": "セットアップスクリプト"
+    },
+    "smartWorkspaceAdvancedFields": {
+      "branchName": "ブランチ名",
+      "derivedFromName": "名前から生成",
+      "name": "名前",
+      "workspaceName": "ワークスペース名"
+    },
+    "smartWorkspaceSourceDrawer": {
+      "connectRepository": "作成元を検索するには、リポジトリを接続してください。",
+      "crossRepoMessage": "この項目は {{owner}}/{{repo}} にあります。",
+      "gitHubRemoteRequired": "この SSH リポジトリで Issue と PR を一覧表示するには、GitHub リモートが必要です。",
+      "noResults": "検索結果が見つかりませんでした。",
+      "searchPlaceholder": "名前を入力、または作成元を検索",
+      "switchRepo": "{{repoName}} に切り替え",
+      "title": "名前または「作成元」",
+      "typeWorkspaceName": "下のフィールドにワークスペース名を入力してください。"
+    },
+    "smartWorkspaceSourceField": {
+      "openSelectedSource": "選択した作成元を開く",
+      "optional": "[オプション]",
+      "searchPlaceholder": "名前を入力、または作成元を検索"
+    },
+    "smartWorkspaceSourceRow": {
+      "createBranch": "ブランチ「{{name}}」を作成",
+      "issue": "Issue #{{number}}",
+      "mergeRequest": "MR !{{number}}",
+      "nameWorkspace": "このワークスペースに名前を付ける",
+      "newBranch": "新しいブランチ",
+      "pullRequest": "PR #{{number}}",
+      "useName": "「{{name}}」を使用"
+    },
+    "sourceCopyButton": {
+      "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
+      "copiedLoaded": "読み込み分をコピーしました",
+      "copyFailed": "コピーに失敗しました",
+      "copyLoaded": "読み込み分をコピー",
+      "couldNotCopy": "コピーできませんでした",
+      "failed": "失敗"
+    },
+    "terminalShortcutSettings": {
+      "addDescription": "キーの組み合わせやテキストマクロを作成",
+      "addShortcut": "カスタムショートカットを追加…",
+      "customShortcuts": "カスタムショートカット",
+      "empty": "カスタムショートカットはまだ設定されていません。",
+      "removeShortcut": "{{label}} を削除",
+      "resetDefaults": "初期設定に戻す",
+      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示"
+    },
+    "useCodexResetCreditAction": {
+      "confirmTitle": "レート制限のリセット枠を使用しますか？",
+      "detailsChanged": "リセット内容が変更されました",
+      "detailsChangedMessage": "ホストが Codex に接続する前に、アカウントまたはリセットの提供条件が変更されました。更新された内容を確認してから、もう一度確定してください。",
+      "hostAccount": "ホスト上の {{identity}}",
+      "hostAccountConfirmMessage": "ホスト上の {{identity}} の獲得済みリセット枠を 1 回分使用し、対象の使用量ウィンドウを直ちにリセットします。",
+      "hostSelectedAccount": "ホスト上で選択されている管理アカウント",
+      "hostSelectedAccountConfirmMessage": "ホスト上で選択されている管理アカウントの獲得済みリセット枠を 1 回分使用し、対象の使用量ウィンドウを直ちにリセットします。",
+      "resetFailed": "レート制限をリセットできませんでした",
+      "wslAccount": "WSL {{distro}} 上の {{identity}}",
+      "wslAccountConfirmMessage": "WSL {{distro}} 上の {{identity}} の獲得済みリセット枠を 1 回分使用し、対象の使用量ウィンドウを直ちにリセットします。",
+      "wslSelectedAccount": "WSL {{distro}} 上で選択されている管理アカウント",
+      "wslSelectedAccountConfirmMessage": "WSL {{distro}} 上で選択されている管理アカウントの獲得済みリセット枠を 1 回分使用し、対象の使用量ウィンドウを直ちにリセットします。"
+    },
+    "voiceModelList": {
+      "deleteModel": "{{label}} を削除",
+      "downloadModel": "{{label}} をダウンロード",
+      "inUse": "使用中",
+      "modelExtracting": "{{size}} · 展開中…",
+      "modelProgress": "{{size}} · {{progress}}%",
+      "modelSize": "{{size}} MB",
+      "recommended": "推奨",
+      "use": "使用",
+      "useModel": "{{label}} を使用"
+    },
+    "workspaceDetailPlaceholder": {
+      "description": "サイドバーからワークスペースを選択すると、そのターミナルがここに開きます。",
+      "title": "開いているワークスペースはありません"
+    },
+    "workspaceNameInput": {
+      "placeholder": "ワークスペース名"
+    },
+    "worktreeListRow": {
+      "child": "子ワークスペース",
+      "children_one": "{{count}} 件の子ワークスペース",
+      "children_other": "{{count}} 件の子ワークスペース",
+      "folder": "フォルダー",
+      "project": "プロジェクト {{repo}}",
+      "remoteHost": "リモートホスト"
+    },
+    "nativeScreenRecovery": {
+      "title": "問題が発生しました",
+      "tryAgain": "再試行",
+      "home": "ホーム"
+    }
+  },
+  "connection": {
+    "connectionHealth": {
+      "checkConnection": "接続を確認してください。",
+      "connectFailed": "接続できません",
+      "connected": "接続済み",
+      "connecting": "接続中…",
+      "connectingViaRelay": "リレー経由で接続中…",
+      "desktopUnreachable": "デスクトップに接続できません",
+      "disconnected": "切断済み",
+      "hostFallback": "ホスト",
+      "hostOffline": "{{host}} はオフラインです",
+      "hostOfflineDetail": "コンピュータがスリープしていないこと、Orca が起動していること、サインイン済みであることを確認してください。",
+      "labelWithHint": "{{label}}（{{hint}}）",
+      "pairingInvalid": "ペアリングが無効です。デスクトップと再度ペアリングしてください。",
+      "rePairDetail": "デスクトップと再度ペアリングしてください。",
+      "reconnecting": "再接続中…",
+      "relayAccessExpired": "{{host}} のリレーアクセスの有効期限が切れています",
+      "relayConnectFailed": "リレー経由で接続できません",
+      "relayUnreachable": "リレーに接続できません",
+      "signInDetail": "再接続するには、デスクトップで Orca にサインインしてください。",
+      "signInRequired": "{{host}} でサインインが必要です",
+      "tailscaleHint": "Tailscale を確認"
+    },
+    "connectionPathLabel": {
+      "directLan": "直接接続 · LAN",
+      "directTailscale": "直接接続 · Tailscale",
+      "directViaLan": "LAN 経由で直接接続",
+      "directViaTailscale": "Tailscale 経由で直接接続"
+    },
+    "hostEndpoint": {
+      "addressRequired": "ホストのアドレスを入力してください。",
+      "hostnameRequired": "ホスト名がありません。",
+      "invalidAddress": "無効なアドレスです。",
+      "invalidHostname": "無効なホスト名です。",
+      "invalidPort": "ポート番号は1〜65535で指定してください。",
+      "invalidScheme": "ws://、wss://、または host:port を使用してください。",
+      "pathOrQueryNotAllowed": "ホストのアドレスにパスやクエリを含めないでください。"
+    },
+    "pairConfirmState": {
+      "invalidCode": "無効なペアリングコードです。",
+      "missingCode": "ペアリングコードがありません。"
+    },
+    "rpcClientStreamRegistry": {
+      "endedBeforeReady": "準備が整う前にストリーミングリクエストが終了しました。",
+      "interrupted": "接続が中断されました"
+    },
+    "rpcClientTerminalBinaryFrame": {
+      "unsupportedFrame": "未対応のターミナルストリームフレームです（opcode {{opcode}}）。"
+    }
+  },
+  "diagnostics": {
+    "connectionDiagnosticsView": {
+      "authFailed": "認証失敗",
+      "connected": "接続されています",
+      "connecting": "接続中",
+      "copyReport": "レポートをコピー",
+      "diagnosisHeading": "考えられる原因",
+      "disconnected": "未接続",
+      "handshaking": "ハンドシェイク中",
+      "noEvents": "接続イベントはまだありません。アプリがこのホストへの接続を試みると、イベントが表示されます。",
+      "noHosts": "ペアリング済みのホストがありません。",
+      "privacyHint": "ホスト名、エンドポイント、バージョン、接続状態、イベントを含む、機密情報を伏せてサイズを制限したレポートを送信します。ターミナルの内容や認証情報は含まれません。",
+      "reconnecting": "再接続中",
+      "retrySending": "送信を再試行",
+      "sendDiagnostics": "診断情報を Orca に送信",
+      "sending": "送信中…",
+      "sent": "診断情報を送信しました",
+      "stateWithAttempt": "{{state}} · 試行 {{attempts}} 回目",
+      "title": "ネットワーク診断"
+    },
+    "mobileWebBundleProbeRow": {
+      "assets": "アセット",
+      "build": "ビルド",
+      "bundle": "バンドル",
+      "bytes": "バイト数",
+      "connecting": "接続中…",
+      "elapsed": "経過時間",
+      "elapsedMilliseconds": "{{elapsedMs}} ミリ秒",
+      "fetchBundle": "モバイル Web バンドルを取得",
+      "fetching": "バンドルを取得中…",
+      "host": "ホスト",
+      "unknownHost": "不明なホスト"
+    },
+    "mobileWebShellUpdateFailureRow": {
+      "title": "ワークスペースの更新"
+    },
+    "troubleshootCommonIssues": {
+      "allowNotifications": "システム設定で Orca の通知が許可され、集中モードやおやすみモードがオフになっていることを確認してください。",
+      "checkTailnet": "デスクトップがスリープ状態になっておらず、tailnet 内で接続済みと表示されていることを確認してください。",
+      "desktopTitle": "デスクトップアプリが未起動",
+      "disableVpn": "その VPN を無効にするか、スプリットトンネリングまたは「LAN を許可」を有効にしてください。",
+      "firewallTitle": "ファイアウォールがポート {{port}} をブロック",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
+      "keepTailscaleOn": "100.x.x.x や *.ts.net のようなホストアドレスには Tailscale 経由で接続します。Tailscale をオンにしておいてください。",
+      "macosFirewall": "macOS: 「システム設定」→「ネットワーク」→「ファイアウォール」で Orca を許可してください。",
+      "notificationNetwork": "モバイルデータ通信か別の Wi-Fi ネットワークを試してください。切り替え後に通知が届く場合は、元のネットワークで配信が遅れている可能性があります。",
+      "notificationsTitle": "プッシュ通知",
+      "openDesktop": "接続を受け付けるには、デスクトップで Orca を起動しておく必要があります。",
+      "pairAfterUpdate": "更新後は、QR コードで再度ペアリングする必要がある場合があります。",
+      "reconnectWifi": "両方のデバイスで Wi-Fi を接続し直してください。",
+      "restartBothApps": "タイムアウトが続く場合は、両方のアプリを再起動してください。",
+      "restartDesktop": "Orca を再起動してみてください。アプリの起動時にモバイル連携用サーバーも起動します。",
+      "restartTailscale": "iOS/Android では、気づかないうちにトンネル接続が停止することがあります。Tailscale アプリで Tailscale を一度オフにしてから、再びオンにしてください。",
+      "restrictedNetwork": "企業や学校のネットワークでは P2P 通信がブロックされる場合があります。スマートフォンのテザリングを試してください。",
+      "retryHost": "ホスト一覧に戻り、ホストをタップして再試行してください。",
+      "sameNetwork": "Tailscale 経由で接続する場合を除き、両方のデバイスを同じ LAN に接続する必要があります。",
+      "sameSubnet": "Ethernet と Wi-Fi が同じサブネットに属している必要があります。",
+      "tailscaleTitle": "Tailscale ホストに接続できない",
+      "timeoutTitle": "接続タイムアウト",
+      "updateTailscale": "Tailscale アプリを更新してください。最近のバージョンでは再接続の不具合が修正されています。",
+      "vpnRouting": "Tailscale 以外の VPN では、ローカル通信がリモートサーバーを経由する場合があります。",
+      "vpnTitle": "他の VPN の干渉",
+      "wifiSignal": "スマートフォンの Wi-Fi の電波強度を確認してください。",
+      "wifiTitle": "異なる Wi-Fi ネットワーク",
+      "windowsFirewall": "Windows: 「Defender ファイアウォール」→「アプリの許可」で、プライベートネットワークでの Orca の通信を許可してください。"
+    },
+    "troubleshootView": {
+      "commonIssues": "よくある問題",
+      "runAgain": "再実行",
+      "runDiagnostics": "診断を実行",
+      "running": "実行中…",
+      "title": "トラブルシューティング",
+      "viewNetworkDiagnostics": "ネットワーク診断を表示"
+    },
+    "useTroubleshootDiagnostics": {
+      "connected": "接続済み",
+      "hostDataFailed": "ホストデータを読み取れませんでした。",
+      "hostTestFailed": "テストできませんでした。",
+      "hosts": "ホスト",
+      "internet": "インターネット",
+      "noConnection": "接続なし",
+      "noPairedHosts": "なし（QR をスキャンしてペアリング）",
+      "pairedCount": "{{count}} 台ペアリング済み",
+      "pairedHosts": "ペアリング済みのホスト",
+      "platform": "プラットフォーム",
+      "reachable": "{{endpoint}} に到達可能",
+      "unexpectedResponse": "予期しない応答"
+    },
+    "webShellUpdateFailureCopy": {
+      "blockedReason": "ブロックしました: {{reason}}。",
+      "blockedWorkspace": "ワークスペースをブロックしました。",
+      "failed": "エラー画面を表示しました。",
+      "failedAgo": "{{hostName}} からの前回の更新は {{time}} 前に失敗しました：{{reason}}{{offered}}。{{outcome}}",
+      "failedJustNow": "たった今、{{hostName}} からの前回の更新に失敗しました：{{reason}}{{offered}}。{{outcome}}",
+      "hostCodeCopy": {
+        "assetChanged": "ホスト上でアセットが変更されました",
+        "assetUnknown": "ホストがアセットを認識できませんでした",
+        "buildChanged": "ダウンロード中にホストのビルドが変更されました",
+        "offsetInvalid": "ホストが読み取りオフセットを拒否しました",
+        "readLimited": "ホストが同時読み取りを制限しました",
+        "unavailable": "ホストにワークスペースバンドルがありません"
+      },
+      "nativeRoute": "ネイティブ画面を表示しました。",
+      "offeredGeneration": " （世代 {{generation}}）",
+      "openedCached": "保存済みのバージョンに切り替えました。",
+      "openedCachedGeneration": "保存済みのバージョン（世代 {{generation}}）に切り替えました。",
+      "reasonCopy": {
+        "assetChecksumMismatch": "アセットのチェックサムが一致しませんでした",
+        "assetEntryChanged": "アセットがマニフェストと一致しなくなりました",
+        "assetNoProgress": "アセットの読み取りが進みませんでした",
+        "assetOverlong": "アセットのサイズがマニフェストに記載されたサイズを超えていました",
+        "assetShort": "アセットの読み取りが指定されたサイズに達する前に終了しました",
+        "buildChangedMidFetch": "ダウンロード中にホストのビルドが変更されました",
+        "cacheWriteFailed": "ダウンロードしたデータをこのスマートフォンに保存できませんでした",
+        "chunkMisrouted": "チャンクが要求と異なるアセットまたはオフセットのものでした",
+        "chunkOversize": "チャンクがホストの許容サイズを超えていました",
+        "connectionLost": "接続が切断されました",
+        "fetchStopped": "ダウンロードが停止されました",
+        "hostRefused": "ホストが読み取りを拒否しました",
+        "noConnection": "ホストに接続されていません",
+        "rangeUndecodable": "圧縮された読み取りデータをデコードできませんでした",
+        "replyUnreadable": "ホストからの応答をこのアプリで読み取れませんでした",
+        "unrecognisedError": "不明なエラー"
+      },
+      "routeUnavailable": "画面が利用できない旨を表示しました。",
+      "waiting": "ホストを待ちました。",
+      "wallCopy": {
+        "bundleShellTooOld": "このアプリのバージョンが古いため、保存済みのバンドルに対応していません",
+        "bundleTooOldForHost": "保存済みのバンドルが古いため、ホストに対応していません",
+        "bundleUnavailable": "ホストにワークスペースバンドルがありません",
+        "hostTooOldForBundle": "ホストのバージョンが古いため、保存済みのバンドルに対応していません",
+        "pageRouteGrantMissing": "この画面には、より新しいバージョンのアプリが必要です",
+        "pageRouteUnlisted": "ホストのワークスペースにこの画面は含まれていません"
+      }
+    }
+  },
+  "dictation": {
+    "setup": {
+      "alreadyActive": "コンピュータまたは別のスマートフォンで、すでにディクテーションを使用中です。",
+      "cloudModelNeedsKey": "OpenAI キーが必要",
+      "deleteFailed": "モデルの削除に失敗しました。",
+      "desktopUpdateRequired": "モバイルの音声設定を使用するには、ペアリング済みのデスクトップの Orca アプリを更新してください。",
+      "downloadFailed": "ダウンロードの開始に失敗しました。",
+      "loadFailed": "ディクテーションモデルの読み込みに失敗しました。",
+      "repairRequired": "ディクテーションを使用するには、このスマートフォンをコンピュータと再度ペアリングしてください。",
+      "serverUpdateRequired": "音声ディクテーションを使用するには、このサーバーの Orca を更新してください。",
+      "sessionLost": "ディクテーション中にコンピュータとの接続が切れました。再試行してください。",
+      "updateFailed": "ディクテーション設定の更新に失敗しました。"
+    }
+  },
+  "files": {
+    "fileExplorerPanel": {
+      "backToSession": "セッションに戻る",
+      "closeFiles": "ファイル一覧を閉じる",
+      "connecting": "デスクトップに接続中…",
+      "emptyState": "ファイルが見つかりません。",
+      "loadFailed": "ファイルを読み込めませんでした。",
+      "loadInterrupted": "フォルダーの読み込みが中断されました。",
+      "title": "ファイル",
+      "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
+      "waiting": "デスクトップへの接続を待っています…"
+    },
+    "fileExplorerRow": {
+      "fileUnavailable": "「{{name}}」はモバイルでは利用できません",
+      "loadFolderFailed": "フォルダーを読み込めませんでした",
+      "loading": "読み込み中…",
+      "openFolder": "フォルダー「{{name}}」を開く",
+      "previewFile": "ファイル「{{name}}」をプレビュー",
+      "retryLoading": "{{path}} の読み込みを再試行",
+      "unavailable": "モバイルでは利用不可"
+    },
+    "fileMarkdownPreview": {
+      "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
+      "copySource": "Markdown ソースをコピー",
+      "viewPreview": "レンダリング済みの Markdown プレビューを表示",
+      "viewSource": "Markdown ソースを表示"
+    },
+    "fileMediaPreview": {
+      "downloading": "ダウンロード中（{{bytes}} / {{total}}）",
+      "loadFailed": "メディアを読み込めませんでした。",
+      "loading": "メディアを読み込んでいます…",
+      "waiting": "デスクトップへの接続を待っています…"
+    },
+    "fileMutationOwnership": {
+      "sshOwnerChanged": "SSH 接続を確認できませんでした。ホストに再接続して、再試行してください。"
+    },
+    "filePreviewBody": {
+      "emptyFile": "空のファイル",
+      "imageLabel": "{{title}} の画像"
+    },
+    "filePreviewEditableSource": {
+      "editorLabel": "{{title}} のエディター"
+    },
+    "filePreviewResponse": {
+      "binaryUnavailable": "バイナリファイルはプレビューできません",
+      "bytes": "{{size}} B",
+      "fileChanged": "デスクトップでファイルが変更されました。プレビューを再読み込みしてから保存してください。",
+      "fileNotFound": "ファイルが見つかりません",
+      "fileTooLarge": "ファイルが大きすぎるため、モバイルではプレビューできません",
+      "filesystemUnreachable": "デスクトップのファイルシステムにアクセスできませんでした",
+      "kilobytes": "{{size}} KB",
+      "loadFailed": "プレビューを読み込めませんでした",
+      "megabytes": "{{size}} MB",
+      "reloadBeforeSaving": "プレビューを再読み込みしてから保存してください。",
+      "unknownSize": "サイズ不明"
+    },
+    "filePreviewScreen": {
+      "backToFiles": "ファイル一覧に戻る",
+      "chooseWorkspaceFile": "このワークスペース内のファイルを選択してください。",
+      "discard": "破棄",
+      "discardMessage": "未保存の編集内容は失われます。",
+      "discardMessageSaving": "進行中の保存は完了しない可能性があります。未保存の編集内容は失われます。",
+      "discardTitle": "変更を破棄しますか?",
+      "fileTitle": "ファイル",
+      "loadFailed": "プレビューを読み込めませんでした。",
+      "loading": "プレビューを読み込んでいます…",
+      "openFailed": "ファイルを開けませんでした。",
+      "saveArtifact": "ターミナルのアーティファクトを保存",
+      "saveFailed": "ファイルを保存できませんでした。",
+      "stay": "編集を続ける",
+      "title": "プレビュー",
+      "waiting": "デスクトップへの接続を待っています…"
+    },
+    "filePreviewSourceText": {
+      "previewLabel": "ファイルのプレビュー",
+      "truncatedNote": "プレビューは一部省略されています。ファイルサイズ: {{size}}。"
+    },
+    "markdownPreviewImage": {
+      "expandFallback": "画像を拡大",
+      "expandImage": "「{{alt}}」を拡大",
+      "imageLabel": "Markdown の画像",
+      "loadFailed": "画像を読み込めませんでした"
+    },
+    "pdfPreview": {
+      "open": "PDF を開く",
+      "openFailed": "この PDF を開けませんでした",
+      "opening": "PDF を開いています…",
+      "updateRequired": "PDF を開くには Orca Mobile を更新してください。"
+    }
+  },
+  "home": {
+    "accountUsageCards": {
+      "sectionHeading": "アカウントの使用状況",
+      "sessionWindow": "5時間",
+      "systemDefault": "システムのデフォルト",
+      "weeklyWindow": "7日"
+    },
+    "appUpdateCard": {
+      "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
+      "title": "Orca {{version}} が利用可能です",
+      "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。",
+      "updateHint": "タップして更新"
+    },
+    "emptyState": {
+      "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
+      "connectedTitle": "接続完了",
+      "description": "コンピュータ上の Orca とペアリングすると、スマートフォンから Agent の状況を確認したり、任意のターミナルを操作したりして、作業を進められます。",
+      "openDesktopDescription": "「設定」→「モバイル」を開き、ペアリング用の QR コードを生成してください。",
+      "openDesktopTitle": "デスクトップで Orca を開く",
+      "pairDesktop": "デスクトップのペアリング",
+      "scanCodeDescription": "上のボタンをタップしてスキャナーを開いてください。画面の QR コードにカメラを向けてください。",
+      "scanCodeTitle": "コードをスキャン",
+      "stepsHeading": "使い方",
+      "title": "デスクトップに接続"
+    },
+    "listFooter": {
+      "hostPickerTitle": "タスクを開くホスト",
+      "resumeHeading": "再開",
+      "tasksHeading": "タスク"
+    },
+    "listHeader": {
+      "agentTime": "Agent 時間",
+      "agentsSpawned": "Agent が生成されました",
+      "daysHours": "{{days}}日 {{hours}}時間",
+      "desktopsHeading": "デスクトップ",
+      "hoursMinutes": "{{hours}}時間 {{minutes}}分",
+      "minutes": "{{minutes}}分",
+      "prsCreated": "作成された PR",
+      "title": "おかえり"
+    },
+    "screen": {
+      "pairingCheckFailed": "ペアリングを確認できませんでした",
+      "removeHostFailed": "ホストを削除できませんでした",
+      "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
+      "removeHostTitle": "ホストを削除",
+      "tryAgain": "再試行してください。"
+    },
+    "tasksCard": {
+      "noSources": "タスクの連携先が接続されていません",
+      "openProviderTasks": "{{provider}} のタスクを開く",
+      "title": "タスク"
+    }
+  },
+  "hooks": {
+    "dictationDesktopStart": {
+      "recordingFailed": "マイクでの録音を開始できませんでした"
+    },
+    "useMobileDictation": {
+      "inputClosed": "このセッションが入力を受け付けなくなったため、音声ディクテーションを停止しました。再試行してください。",
+      "microphoneInitFailed": "マイクの初期化に失敗しました",
+      "microphoneInterrupted": "マイクの使用が中断されたため、音声ディクテーションを停止しました。再試行してください。",
+      "microphonePermissionDenied": "マイクの使用が許可されていません",
+      "noSpeech": "音声が検出されませんでした。"
+    }
+  },
+  "host": {
+    "edit": {
+      "address": "アドレス",
+      "addressHint": "IP、host:port、ws:// / wss:// を使用できます。ポートを省略した wss:// URL は 443 を使用します。アドレスのみの場合は、現在のポート（未設定の場合は 6768）を引き継ぎます。",
+      "connectionPreview": "{{endpoint}} に接続します",
+      "goBack": "戻る",
+      "help": "表示名や接続先アドレスを変更できます。名前を空欄にすると、デスクトップから取得した名前を使用します。アドレスを編集しても、このスマートフォンの接続先が変わるだけで、再ペアリングは行われません。同じデスクトップに別の IP で接続できる場合（自宅の LAN と Tailscale の切り替えなど）に使用してください。",
+      "hostNamePlaceholder": "ホスト名",
+      "hostRemoved": "このホストはこのスマートフォンから削除されました。",
+      "loadFailed": "ホストの読み込みに失敗しました。",
+      "missingHost": "ホストが指定されていません。",
+      "name": "名前",
+      "saveFailed": "ホストの保存に失敗しました。",
+      "saveHost": "ホストを保存",
+      "title": "ホストを編集"
+    }
+  },
+  "hostScreen": {
+    "hostListActionSheetActions": {
+      "connect": "接続",
+      "disconnect": "切断",
+      "editHost": "ホストを編集",
+      "networkDiagnostics": "ネットワーク診断",
+      "reconnect": "再接続"
+    },
+    "hostPendingCreationRow": {
+      "creatingWorkspace": "ワークスペースを作成中…"
+    },
+    "hostRailActions": {
+      "accounts": "アカウント",
+      "closeSearch": "検索を閉じる",
+      "floatingWorkspace": "フローティングワークスペース",
+      "newWorkspace": "新規ワークスペース",
+      "searchWorkspaces": "ワークスペースの検索",
+      "tasks": "タスク"
+    },
+    "hostScreenHeader": {
+      "accounts": "アカウント",
+      "activeFilters_one": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
+      "activeFilters_other": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
+      "backToHosts": "ホスト一覧に戻る",
+      "closeSearch": "検索を閉じる",
+      "floatingWorkspace": "フローティングワークスペース",
+      "hideSidebar": "サイドバーを非表示",
+      "reconnect": "再接続",
+      "searchWorkspaces": "ワークスペースの検索",
+      "tasks": "タスク",
+      "workspaceOptions": "ワークスペースのオプション"
+    },
+    "hostScreenOverlays": {
+      "deleteConfirmMessage": "「{{name}}」（{{branch}}）を削除しますか？",
+      "deleteWorktree": "ワークツリーを削除",
+      "pin": "ピン",
+      "primaryWorktreeDeleteHint": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",
+      "removeHost": "ホストを削除",
+      "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
+      "sleep": "スリープ",
+      "unpin": "固定を解除する"
+    },
+    "hostWorkspaceList": {
+      "searchPlaceholder": "ワークスペースを検索…",
+      "searchWorkspaces": "ワークスペースの検索"
+    },
+    "workspaceDetailsSheet": {
+      "checksFailing": "チェック：失敗",
+      "checksPassing": "チェック：成功",
+      "checksPending": "チェック：保留中",
+      "closed": "クローズ",
+      "createdByAutomation": "オートメーションによって作成",
+      "createdByNamedAutomation": "オートメーション「{{name}}」によって作成",
+      "createdFromCli": "Orca CLI から作成",
+      "draft": "下書き",
+      "merged": "マージ済み",
+      "openLink": "{{label}} を開く",
+      "openLinkWithTitle": "{{label}}、{{title}} を開く",
+      "prOpen": "オープン"
+    },
+    "workspaceOptionControls": {
+      "agentActivity": "Agent のアクティビティ",
+      "agentActivityLayout": "Agent アクティビティのレイアウト",
+      "agentActivitySort": "Agent のアクティビティ",
+      "agentActivitySortDescription": "注意が必要な Agent、次に最新のアクティビティ。",
+      "agentStatuses": "Agent ステータス",
+      "allHosts": "すべてのホスト",
+      "allProjects": "すべてのプロジェクト",
+      "automation": "オートメーション",
+      "branchFolderPath": "ブランチ / フォルダーパス",
+      "branchName": "ブランチ名",
+      "compact": "コンパクト",
+      "detailed": "詳細",
+      "fullList": "完全なリスト",
+      "githubIssues": "GitHub Issue",
+      "githubTicket": "GitHub チケット",
+      "host": "ホスト",
+      "hover": "ホバー",
+      "jiraIssue": "Jira Issue",
+      "jiraIssues": "Jira Issue",
+      "linearIssue": "Linear Issue",
+      "linearIssues": "Linear Issue",
+      "manual": "手動",
+      "manualProjectOrderDescription": "プロジェクトをドラッグして配置します",
+      "manualWorkspaceOrderDescription": "ワークスペースをドラッグして、各グループ内に配置します。",
+      "name": "名前",
+      "none": "なし",
+      "notes": "ノート",
+      "ports": "ポート",
+      "pr": "PR",
+      "prMrLink": "PR/MR リンク",
+      "project": "プロジェクト",
+      "recent": "最近の",
+      "recentProjectOrderDescription": "最新のワークスペースアクティビティ",
+      "searchProjects": "プロジェクトを検索する",
+      "searchProjectsPlaceholder": "プロジェクトを検索…",
+      "selectedCount": "{{total}} 件中 {{count}} 件",
+      "status": "状態"
+    },
+    "workspaceOptionsSheet": {
+      "backToOptions": "ワークスペースのオプションに戻る",
+      "cardDisplay": "カード表示",
+      "cardLayout": "カードのレイアウト",
+      "clearFilters": "フィルターをクリア",
+      "exceptDefaultBranch": "デフォルトのブランチを除く",
+      "filters": "フィルター",
+      "groupBy": "グループ化",
+      "hideAutomationCreated": "自動化で作成されたワークスペースを非表示",
+      "hideCliCreated": "CLI が作成したものを非表示",
+      "hideDefaultBranch": "デフォルトのブランチを非表示にする",
+      "hideDetachedHead": "分離 HEAD を非表示",
+      "hideOtherClientWorkspaces": "他のクライアントのワークスペースを非表示にする",
+      "hideSleeping": "スリープ中を非表示",
+      "hosts": "ホスト",
+      "localLinux": "ローカル Linux",
+      "localMac": "ローカル Mac",
+      "localWindows": "ローカル Windows",
+      "projectOrder": "プロジェクトの順序",
+      "projects": "プロジェクト",
+      "savingToDesktop": "デスクトップに保存中",
+      "show": "表示",
+      "showProperties": "プロパティを表示する",
+      "sortBy": "並べ替え",
+      "syncedAcrossDevices": "デバイス間で同期されます",
+      "thisComputer": "このコンピュータ",
+      "waitingForDesktop": "まだデスクトップの応答を待っています",
+      "workspaceOptions": "ワークスペースのオプション"
+    }
+  },
+  "navigation": {
+    "hostStackScreens": {
+      "accounts": "アカウント",
+      "agentSessionHistory": "Agent セッション履歴",
+      "changes": "変更点",
+      "editHost": "ホストを編集",
+      "host": "ホスト",
+      "pullRequest": "PR",
+      "sourceControl": "ソース管理",
+      "tasks": "タスク",
+      "terminal": "ターミナル",
+      "workspace": "ワークスペース"
+    }
+  },
+  "newWorkspace": {
+    "hostPicker": {
+      "title": "ワークスペースの作成先ホスト"
+    },
+    "loadingDrawer": {
+      "downloadProgress": "ダウンロード中… {{progress}}",
+      "downloading": "ダウンロード中",
+      "loading": "読み込み中"
+    }
+  },
+  "notifications": {
+    "desktopChannel": {
+      "name": "デスクトップ通知",
+      "silentName": "Orca のサイレント通知"
+    },
+    "notificationDeliverySection": {
+      "footer": "通知の種類は、ペアリング済みの各デスクトップの通知設定に従います。このアプリを7日間使用しないと通知が一時停止します。再開するには、アプリを開いて再接続してください。",
+      "onlyWhenAway": "デスクトップから離れているときのみ",
+      "onlyWhenAwayHint": "キーボードやマウスの操作が 3 分間ないとき、またはロック中に通知します。",
+      "sound": "通知音",
+      "suppressWhileFocused": "表示中は通知しない",
+      "suppressWhileFocusedHint": "このスマートフォンで開いているワークスペースの通知を省略します。"
+    }
+  },
+  "onboarding": {
+    "notificationOnboardingPreview": {
+      "claudeNeedsInput": "Claude が入力待ち",
+      "codexFinished": "Codex の作業が完了",
+      "now": "今",
+      "testsPassing": "テストは成功しています。",
+      "waitingOnYou": "対応を待っています。"
+    },
+    "onboardingPage": {
+      "enableAgentNotifications": "Agent の通知を有効にする",
+      "enableNotifications": "通知を有効にする",
+      "keepTerminal": "ターミナルのままにする",
+      "notNow": "後で",
+      "notificationsDescription": "アプリを使用していないときでも、Agent の作業が完了したときや対応待ちになったときに、このスマートフォンに通知が届きます。",
+      "notificationsDisclosure": "デスクトップで3分間操作がないと、Orca のプッシュ通知サービスを通じて配信されます。「設定」でいつでも変更できます。",
+      "notificationsTitle": "Agent からの呼びかけを見逃さない",
+      "openInChatUi": "セッションをチャット UI で開く",
+      "openInTerminal": "セッションをターミナルで開く",
+      "sessionViewDescription": "この端末で、対応する Agent セッションをターミナルとチャット UI のどちらで開くか選択してください。セッションタブを長押しすると表示を切り替えられます。デフォルトは後から「設定」で変更できます。",
+      "sessionViewTitle": "セッションの表示方法は？",
+      "skipNotifications": "今は通知を有効にしない",
+      "useChatUi": "チャット UI を使用"
+    }
+  },
+  "pullRequest": {
+    "checksSection": {
+      "actionRequired": "操作が必要です",
+      "cancelled": "キャンセル済み",
+      "checkDetails": "{{name}} のチェックの詳細",
+      "failed": "失敗",
+      "failing": "失敗 {{count}} 件",
+      "failingChecks_one": "失敗したチェック {{count}} 件",
+      "failingChecks_other": "失敗したチェック {{count}} 件",
+      "fix": "修正",
+      "fixFailing": "失敗したチェックを AI で修正",
+      "inProgress": "進行中",
+      "inspectOrFix": "詳細を確認するか、AI に修正を依頼してください。",
+      "loadDetailsFailed": "チェックの詳細を読み込めませんでした。",
+      "neutral": "中立",
+      "neutralCount": "中立 {{count}} 件",
+      "noChecks": "チェックなし",
+      "openOnWeb": "{{name}} をウェブで開く",
+      "passed": "成功 {{count}} 件",
+      "pending": "保留中",
+      "pendingCount": "保留中 {{count}} 件",
+      "queued": "キュー待ち",
+      "rerunFailing": "失敗したチェックを再実行",
+      "skipped": "スキップ済み",
+      "successful": "成功",
+      "timedOut": "タイムアウト",
+      "title": "チェック",
+      "unavailable": "チェックは利用できません"
+    },
+    "commentCard": {
+      "daysAgo_one": "{{count}} 日前",
+      "daysAgo_other": "{{count}} 日前",
+      "deleteComment": "コメントを削除",
+      "deleteConfirmMessage": "GitHub 上のコメントを完全に削除します。",
+      "deleteConfirmTitle": "コメントを削除しますか?",
+      "editComment": "コメントを編集",
+      "editPlaceholder": "コメントを編集…",
+      "hoursAgo_one": "{{count}} 時間前",
+      "hoursAgo_other": "{{count}} 時間前",
+      "justNow": "たった今",
+      "minutesAgo_one": "{{count}} 分前",
+      "minutesAgo_other": "{{count}} 分前",
+      "monthsAgo_one": "{{count}} か月前",
+      "monthsAgo_other": "{{count}} か月前",
+      "openOnGitHub": "GitHub でコメントを開く",
+      "reply": "返事",
+      "replyPlaceholder": "返信を入力…",
+      "replyToComment": "コメントに返信",
+      "resolve": "解決",
+      "resolveThread": "スレッドを解決",
+      "resolved": "解決済み",
+      "unresolve": "未解決に戻す",
+      "unresolveThread": "スレッドを未解決に戻す",
+      "yearsAgo_one": "{{count}} 年前",
+      "yearsAgo_other": "{{count}} 年前"
+    },
+    "commentsSection": {
+      "addCommentPlaceholder": "コメントを追加…",
+      "all": "全て",
+      "bots": "ボット",
+      "comment": "コメント",
+      "commentsLoadFailed": "コメントを読み込めませんでした。「更新」をタップして再試行してください。",
+      "description": "説明",
+      "descriptionLoadFailed": "説明を読み込めませんでした。「更新」をタップして再試行してください。",
+      "humans": "人間",
+      "noBotComments": "ボットのコメントはありません。",
+      "noComments": "コメントはまだありません。",
+      "noDescription": "説明はありません。",
+      "noHumanComments": "ユーザーによるコメントはありません。",
+      "resolvedCommentCount": "{{author}} の解決済みコメント（{{count}} 件）",
+      "resolvedCommentSingle": "{{author}} の解決済みコメント",
+      "resolvedThreadCount": "{{author}} の解決済みスレッド（{{count}} 件）",
+      "resolvedThreadSingle": "{{author}} の解決済みスレッド",
+      "showMore": "さらに {{count}} 件を表示",
+      "showMoreOf": "残り {{remaining}} 件のうち {{count}} 件を表示",
+      "title": "コメント"
+    },
+    "conflictingFilesSection": {
+      "commitsBehind_one": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
+      "commitsBehind_other": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
+      "copyCommands": "コマンドをコピー",
+      "copyFailed": "テキストのコピーに失敗しました",
+      "copyRefreshCommands": "マージ可否を再取得するコマンドをコピー",
+      "detailsUnavailable": "競合ファイルの詳細は利用できません",
+      "filesHeading": "競合するファイル",
+      "localMergeClean": "GitHub では競合が報告されていますが、ローカルの Git では再現されませんでした。PR を更新するか、ブランチをプッシュしてマージ可否を再計算してください。",
+      "mustResolve": "このブランチには解決する必要のある競合があります",
+      "refreshing": "競合の詳細を更新しています…",
+      "resolveWithAi": "AI で競合を解決",
+      "runFromWorktree": "このワークツリーから実行",
+      "title": "競合"
+    },
+    "linkPrForm": {
+      "linkButton": "PR をリンク",
+      "linkNumber": "#{{number}} をリンク",
+      "referenceLabel": "PR 番号または GitHub URL",
+      "referencePlaceholder": "#123 または https://github.com/owner/repo/pull/123",
+      "title": "既存の PR をリンク"
+    },
+    "markdownBlocks": {
+      "details": "詳細"
+    },
+    "prActionsSection": {
+      "autoMergeAccessibilityLabel": "自動マージを切り替え",
+      "autoMergeLabel": "準備が整ったら自動マージ",
+      "autoMergeOff": "オフ",
+      "autoMergeOn": "オン",
+      "closeAccessibilityLabel": "PR を閉じる",
+      "closeConfirmMessage": "#{{number}} をマージせずに閉じます。",
+      "closeConfirmTitle": "PR を閉じますか？",
+      "markReadyAccessibilityLabel": "PR をレビュー可能にする",
+      "markReadyButton": "レビュー可能にする",
+      "mergeAccessibilityLabel": "PR をマージ",
+      "mergeButton": "マージ",
+      "mergeConfirmTitle": "PR をマージしますか？",
+      "recheckAccessibilityLabel": "マージ状態を再確認",
+      "recheckButton": "再確認",
+      "reopenAccessibilityLabel": "PR を再オープン",
+      "reopenButton": "再オープン",
+      "reopenConfirmMessage": "#{{number}} を再オープンします。",
+      "reopenConfirmTitle": "PR を再オープンしますか？",
+      "unlinkAccessibilityLabel": "PR のリンクを解除",
+      "unlinkButton": "リンクを解除",
+      "unlinkFailed": "PR のリンク解除に失敗しました。"
+    },
+    "prActionsState": {
+      "behindHint": "マージする前にブランチを更新する",
+      "behindLabel": "遅れ",
+      "blockedHint": "GitHub がこの PR がブロックされていると報告しています",
+      "blockedLabel": "ブロック中",
+      "changesRequestedHint": "GitHub によると、この PR では変更が要求されています",
+      "changesRequestedLabel": "変更要求",
+      "checkingHint": "GitHub はまだこの PR のマージステータスを計算中です",
+      "checkingLabel": "確認中",
+      "checksPassedHint": "チェックは通過しました。マージ可否はマージ前に再確認されます。",
+      "checksPassedLabel": "チェックに合格しました",
+      "closedHint": "この PR は終了しました",
+      "closedLabel": "クローズ",
+      "conflictsHint": "GitHub がマージ競合を報告",
+      "conflictsLabel": "競合",
+      "draftHint": "この PR はまだドラフトです",
+      "draftLabel": "下書き",
+      "mergeConfirmMessage": "#{{number}} をベースブランチにマージします。",
+      "mergeQueueAutoMergeOnHint": "このベースブランチは GitHub マージキューを使用します",
+      "mergeQueueAutoMergeOnLabel": "自動マージ有効",
+      "mergeQueueHint": "このベースブランチは GitHub マージキューを使用します",
+      "mergeQueueLabel": "準備ができたらマージ",
+      "mergeStackMessage": "GitHub は、この PR と、同じスタック内でその下にあるすべての PR をマージします。",
+      "mergeStatusUnavailableHint": "この PR ではマージステータスを利用できません",
+      "mergeStatusUnavailableLabel": "マージ",
+      "mergeThrough_one": "#{{number}} までマージ · {{count}} 件の PR",
+      "mergeThrough_other": "#{{number}} までマージ · {{count}} 件の PR",
+      "mergeableChecksFailedHint": "GitHub は、この PR はマージできると言っていますが、一部のチェックが失敗しました",
+      "mergeableChecksFailedLabel": "チェックに失敗しました",
+      "mergeableChecksPassedHint": "GitHub によると、この PR はマージ可能で、チェックも成功しています",
+      "mergeableChecksPassedLabel": "マージ可能",
+      "mergeableChecksPendingHint": "GitHub によると、この PR はマージ可能ですが、チェックはまだ実行中です",
+      "mergeableChecksPendingLabel": "保留中のチェック",
+      "mergeableHint": "GitHub によると、この PR はマージ可能です",
+      "mergeableLabel": "マージ可能",
+      "mergedHint": "この PR はすでにマージされています",
+      "mergedLabel": "マージ済み",
+      "methodMerge": "マージコミットを作成",
+      "methodRebase": "リベースしてマージ",
+      "methodSquash": "スカッシュしてマージ",
+      "queueStackMessage": "GitHub は、この PR とその下のすべての PR をマージキューに追加します。",
+      "queueThrough_one": "#{{number}} までキューに追加 · {{count}} 件の PR",
+      "queueThrough_other": "#{{number}} までキューに追加 · {{count}} 件の PR",
+      "reviewRequiredHint": "この PR をマージするには、GitHub でレビューの承認が必要です",
+      "reviewRequiredLabel": "承認が必要です",
+      "stackBehind": "#{{number}} を更新する必要があります。",
+      "stackBlocked": "#{{number}} はブロックされています。",
+      "stackChangesRequested": "#{{number}} で変更が要求されています。",
+      "stackClosed": "#{{number}} はクローズされています。",
+      "stackConflicts": "#{{number}} にマージの競合があります。",
+      "stackDraft": "#{{number}} はまだ下書きです。",
+      "stackReviewRequired": "#{{number}} はまだレビューの承認が必要です。"
+    },
+    "prCheckDetail": {
+      "annotations": "注釈",
+      "annotationsTruncated": "最初の 20 個の注釈を表示",
+      "jobsTruncated": "最初の 100 件のジョブを表示しています",
+      "noDetails": "表示できる詳細がありません。"
+    },
+    "prCheckDetailContent": {
+      "annotation": "注釈",
+      "failedJobs": "失敗したジョブ",
+      "jobs": "ジョブ",
+      "unknown": "不明"
+    },
+    "prChecksPresentation": {
+      "failing_one": "{{count}} 件失敗",
+      "failing_other": "{{count}} 件失敗",
+      "neutral_one": "{{count}} 件中立",
+      "neutral_other": "{{count}} 件中立",
+      "noChecks": "チェックなし",
+      "passed_one": "{{count}} 件成功",
+      "passed_other": "{{count}} 件成功",
+      "pending_one": "{{count}} 件保留中",
+      "pending_other": "{{count}} 件保留中",
+      "stateClosed": "クローズ",
+      "stateDraft": "下書き",
+      "stateMerged": "マージ済み",
+      "stateOpen": "オープン",
+      "unavailable": "チェックは利用できません"
+    },
+    "prCommentAudienceLabels": {
+      "all": "全て",
+      "bots": "ボット",
+      "humans": "人間",
+      "noBotComments": "ボットのコメントはありません。",
+      "noComments": "コメントはまだありません。",
+      "noHumanComments": "ユーザーによるコメントはありません。"
+    },
+    "prSidebarCreateEmptyState": {
+      "branchNotLinked": "{{branch}} はオープンな PR にリンクされていません。",
+      "branchRequired": "PR を作成する前にブランチをチェックアウトしてください。",
+      "createFailed": "PR の作成に失敗しました。",
+      "createPr": "PR を作成",
+      "createPullRequest": "PR を作成",
+      "currentBranchNotLinked": "現在のブランチはオープンな PR にリンクされていません。",
+      "linkExistingPr": "既存の PR をリンク",
+      "linkExistingPullRequest": "既存の PR をリンク",
+      "linkedPrUnavailable": "リンク済みの PR #{{number}} は利用できません",
+      "noOpenPullRequest": "オープンな PR はありません",
+      "refreshOrCreate": "更新して再確認するか、このブランチの新しい PR を作成してください。",
+      "refreshPullRequest": "PR を更新",
+      "title": "PR"
+    },
+    "prSidebarHeader": {
+      "cancelEditingTitle": "タイトルの編集をキャンセル",
+      "editTitle": "PR のタイトルを編集",
+      "openInBrowser": "PR #{{number}} をブラウザで開く",
+      "openOnWeb": "PR #{{number}} をウェブで開く",
+      "saveTitle": "タイトルを保存"
+    },
+    "prViewPanel": {
+      "branchUnavailable": "現在のブランチを取得できません。",
+      "providerUnavailable": "このプロバイダーではホスト型レビューパネルを利用できません。"
+    },
+    "reviewerPickerDrawer": {
+      "loadFailed": "ユーザーの読み込みに失敗しました",
+      "noMatches": "一致するユーザーはいません",
+      "removeReviewer": "{{login}} をレビュアーから削除",
+      "requestReviewer": "{{login}} にレビューを依頼",
+      "searchPeople": "ユーザーを検索",
+      "title": "レビュアー"
+    },
+    "reviewersSection": {
+      "addOrRemove": "レビュアーを追加・削除",
+      "approved": "承認された",
+      "changesRequested": "変更要求",
+      "commented": "コメント済み",
+      "dismissed": "却下済み",
+      "loadFailed": "レビュアーを読み込めませんでした。「更新」をタップして再試行してください。",
+      "loading": "レビュアーを読み込み中…",
+      "noReviewers": "レビューの依頼はありません",
+      "pending": "保留中",
+      "removeReviewer": "{{login}} を削除",
+      "requested": "依頼済み",
+      "reviewed": "レビュー済み",
+      "title": "レビュアー"
+    }
+  },
+  "session": {
+    "accessoryKeys": {
+      "dismissKeyboard": "キーボードを閉じる",
+      "sendKey": "{{label}} を送信"
+    },
+    "activeContent": {
+      "createTab": "タブを作成",
+      "creatingTab": "作成中…",
+      "fileTitle": "ファイル",
+      "loadingTerminal": "ターミナルを読み込み中…",
+      "noTabs": "このセッションにはタブがありません。",
+      "retryLoadingTerminal": "ターミナルの読み込みを再試行",
+      "terminalTakingLonger": "ターミナルの読み込みに予想以上の時間がかかっています。"
+    },
+    "agentChildRow": {
+      "agent": "Agent",
+      "days_one": "{{count}}日",
+      "days_other": "{{count}}日",
+      "ended": "終了",
+      "hours_one": "{{count}}時間",
+      "hours_other": "{{count}}時間",
+      "minutes_one": "{{count}}分",
+      "minutes_other": "{{count}}分",
+      "noRecentUpdate": "最近の更新なし",
+      "noUpdate": "{{value0}}更新なし"
+    },
+    "agentMessageAttribution": {
+      "from": "{{sender}} から",
+      "fromMore": "{{sender}} ほか {{count}} 名から",
+      "fromUnnamed": "Agent から",
+      "messageFrom": "{{sender}} からのメッセージ",
+      "messageFromMore": "{{sender}} ほか {{count}} 名からのメッセージ",
+      "messageFromUnnamed": "Agent からのメッセージ",
+      "unnamedSender": "Agent"
+    },
+    "aiVaultResumeLaunch": {
+      "createFailed": "ターミナルの作成に失敗しました。",
+      "inputLocked": "ターミナル入力はロックされています。",
+      "sendFailed": "再開コマンドの送信に失敗しました。"
+    },
+    "aiVaultResumePreparation": {
+      "prepareFailed": "この旧形式の Codex セッションを準備できませんでした。再開を再試行してください。"
+    },
+    "backgroundTask": {
+      "agent": "バックグラウンド Agent",
+      "command": "バックグラウンドコマンド",
+      "countAgents_one": "{{count}} Agent",
+      "countAgents_other": "{{count}} Agent",
+      "countMonitors_one": "{{count}} モニター",
+      "countMonitors_other": "{{count}} モニター",
+      "countShellCommandOne": "1 シェルコマンド",
+      "countShell_one": "{{count}} シェル",
+      "countShell_other": "{{count}} シェル",
+      "countTasks_one": "{{count}} タスク",
+      "countTasks_other": "{{count}} タスク",
+      "countWorkflows_one": "{{count}} ワークフロー",
+      "countWorkflows_other": "{{count}} ワークフロー",
+      "detailsUnavailable": "このセッションではタスクの詳細は利用できません。",
+      "groupAgents": "Agent",
+      "groupMonitors": "モニター",
+      "groupShell": "シェル",
+      "groupTasks": "タスク",
+      "groupWorkflows": "ワークフロー",
+      "headerTotalCount_one": "{{count}} 件のバックグラウンドタスク",
+      "headerTotalCount_other": "{{count}} 件のバックグラウンドタスク",
+      "monitor": "バックグラウンドモニター",
+      "monitoring": "バックグラウンドタスクの監視",
+      "reasonBlocked": "失敗した",
+      "reasonWaiting": "承認が必要です",
+      "stateBlocked": "ブロックされました",
+      "stateBlockedCount_one": "ブロック中: {{value0}}",
+      "stateBlockedCount_other": "ブロック中: {{value0}}",
+      "stateDone": "終わり",
+      "stateDoneCount_one": "完了: {{value0}}",
+      "stateDoneCount_other": "完了: {{value0}}",
+      "stateIdle": "止まった",
+      "stateIdleCount_one": "停止: {{value0}}",
+      "stateIdleCount_other": "停止: {{value0}}",
+      "stateMonitoring": "監視",
+      "stateMonitoringCount_one": "監視中: {{value0}}",
+      "stateMonitoringCount_other": "監視中: {{value0}}",
+      "stateUnverifiable": "状態を取得できません",
+      "stateUnverifiableCount_one": "状態取得不可: {{value0}}",
+      "stateUnverifiableCount_other": "状態取得不可: {{value0}}",
+      "stateWaiting": "待機中",
+      "stateWaitingCount_one": "待機中: {{value0}}",
+      "stateWaitingCount_other": "待機中: {{value0}}",
+      "stateWorking": "実行中",
+      "stateWorkingCount_one": "実行中: {{value0}}",
+      "stateWorkingCount_other": "実行中: {{value0}}",
+      "stop": "停止",
+      "stopAll": "バックグラウンドタスクを停止する",
+      "stopTask": "{{value0}} を停止してください",
+      "task": "バックグラウンドタスク",
+      "workflow": "バックグラウンドワークフロー"
+    },
+    "browserTabActionSheet": {
+      "forward": "進む",
+      "reload": "リロード",
+      "title": "ブラウザ"
+    },
+    "bulkCloseSheetActions": {
+      "closeOtherTabs": "他のタブを閉じる"
+    },
+    "bulkTabClose": {
+      "confirm": "タブを閉じる",
+      "description": "選択したタブを閉じます。ピン留めしたタブは開いたままになります。",
+      "titleEditors": "すべてのエディタータブを閉じますか？",
+      "titleLeft": "左側のタブを閉じますか？",
+      "titleOthers": "他のタブを閉じますか？",
+      "titleRight": "右側のタブを閉じますか？"
+    },
+    "commandDock": {
+      "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
+      "liveInputLabel": "ターミナルへのリアルタイム入力",
+      "sendCommand": "コマンドを送信"
+    },
+    "contentRow": {
+      "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
+    },
+    "diffLineRow": {
+      "addNoteLabel": "{{line}} 行目にメモを追加",
+      "deleteNoteLabel": "{{line}} 行目のメモを削除",
+      "diffLineLabel": "{{title}} の差分、{{line}} 行目",
+      "lineNumber": "{{line}} 行目",
+      "notePlaceholder": "レビューメモを追加",
+      "saveNote": "メモを保存"
+    },
+    "diffReviewLoaders": {
+      "changesLoadFailed": "変更を読み込めません。",
+      "committedChangesFailed": "コミット済みの変更の読み込みに失敗しました。",
+      "committedChangesUnavailable": "コミット済みの変更は利用できません。",
+      "committedDiffUnavailable": "コミット済みの差分は利用できません。",
+      "desktopUpdateRequired": "モバイルで変更をレビューするには、デスクトップの Orca を更新してください。",
+      "diffLoadFailed": "差分を読み込めません。",
+      "invalidSourceControlResponse": "ソース管理からの応答が無効でした。",
+      "reviewNotesLoadFailed": "レビューノートを読み込めません。"
+    },
+    "diffReviewQueue": {
+      "committedOnBranch": "ブランチでコミット済み",
+      "staged": "ステージ済み",
+      "unstaged": "未ステージ"
+    },
+    "diffReviewScreenModel": {
+      "branch": "ブランチ",
+      "staged": "ステージ済み",
+      "unstaged": "未ステージ"
+    },
+    "failure": {
+      "accountSwitchInProgress": "このホストで {{agent}} のセットアップを変更中です。完了してからもう一度お試しください。",
+      "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
+      "agentCommandNotSignedIn": "このチャットを実行しているコンピューターで `{{loginCommand}}` を使って {{agent}} にサインインしてください。",
+      "agentNotSignedIn": "{{agent}} にサインインしてください。",
+      "agentStarting": "Agent はまだ起動中です。",
+      "agentStillWorking": "Agent はまだ作業中です。",
+      "answerUnconfirmed": "回答は記録されましたが、Agent が受け取ったことを確認できませんでした。",
+      "antigravityNotSignedIn": "Antigravity にサインインしていません。設定 → アカウント → Antigravityでサインインしてから、メッセージをもう一度送信してください。",
+      "argumentsMissingValue": "保存された引数の {{option}} に値が必要です。",
+      "argumentsMultipleValues": "保存された引数の {{option}} に複数の値が指定されています。",
+      "argumentsPositionalPrompt": "保存された引数にプロンプトが含まれています。",
+      "argumentsUnsupportedOption": "保存された引数に未対応のオプション（{{option}}）が含まれています。",
+      "attachmentAtMost": "{{agent}} が 1 つのメッセージで受け付ける画像は最大 {{limit}} 枚のため、このメッセージは送信されませんでした。",
+      "attachmentEmpty": "このメッセージの画像が空のため、メッセージは送信されませんでした。",
+      "attachmentInvalid": "このメッセージの添付ファイルは Agent に送信できません。",
+      "attachmentLargerThan": "このメッセージの画像が {{size}} MB を超えているため、メッセージは送信されませんでした。",
+      "attachmentNoSource": "このメッセージの画像に送信するファイルがないため、メッセージは送信されませんでした。",
+      "attachmentNotAFile": "このメッセージの画像がファイルではないため、メッセージは送信されませんでした。",
+      "attachmentTooLarge": "このメッセージの画像が大きすぎるため、メッセージは送信されませんでした。",
+      "attachmentTooMany": "このメッセージには画像が多すぎるため、送信されませんでした。",
+      "attachmentTotalMoreThan": "このメッセージの画像の合計が {{size}} MB を超えているため、メッセージは送信されませんでした。",
+      "attachmentTotalTooLarge": "このメッセージの画像の合計サイズが大きすぎるため、メッセージは送信されませんでした。",
+      "attachmentUnreadable": "このメッセージの添付ファイルを読み取れなかったため、メッセージは送信されませんでした。",
+      "attachmentUnsupportedType": "{{agent}} が受け付けるのは PNG、JPEG、GIF、WebP 画像のみのため、このメッセージは送信されませんでした。",
+      "backgroundTaskNotStopped": "バックグラウンドタスクは停止されませんでした。",
+      "backgroundTasksNotStopped": "バックグラウンドタスクは停止されませんでした。",
+      "backgroundTasksRunning": "バックグラウンドタスクがまだ実行中です。",
+      "cancelUnconfirmed": "キャンセルは確認されませんでした。",
+      "cancelled": "このメッセージは Agent が処理を始める前に取り消されました。",
+      "chatClosed": "このメッセージが送信される前にチャットが閉じられました。",
+      "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",
+      "chooseClaudeAccountThenRunCommand": "Claude アカウントの設定で選択または追加してから、/{{command}} をもう一度実行してください。",
+      "chooseClaudeAccountThenSend": "Claude アカウントの設定で選択または追加してから、メッセージをもう一度送信してください。",
+      "claudeAccountFolderMissing": "選択した Claude アカウントのフォルダーが見つかりません。もう一度サインインするか、別のアカウントを選択してください。",
+      "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
+      "claudeEffortInvalid": "Claude の推論レベルが無効です。low、medium、high、xhigh、max のいずれかを選択して、もう一度送信してください。",
+      "claudeManagedNotSignedIn": "この Claude アカウントにサインインしていません。設定の Claude アカウントで再度サインインしてください。",
+      "claudeSystemNotSignedIn": "Claude にサインインしていません。`{{loginCommand}}` を実行するか、Claude アカウント設定でアカウントを選択してください。",
+      "cliMissing": "このチャットを実行しているコンピューターで {{agent}} が見つかりませんでした。インストールするか、[設定] → [Agent] の [コマンド] を確認してください。",
+      "cliMissingInWslDistro": "WSL ディストリビューション {{distro}} に {{agent}} がインストールされていません。{{distro}} 内にインストールするか、[設定] → [Agent] の [コマンド] を確認してください。",
+      "cliTooOld": "{{agent}} {{installedVersion}} はチャットには古すぎます。{{minimumVersion}} 以降に更新してください。",
+      "codexManagedNotSignedIn": "この Codex アカウントにサインインしていません。設定の Codex アカウントで再度サインインしてください。",
+      "codexSystemNotSignedIn": "Codex にサインインしていません。`{{loginCommand}}` を実行してください。",
+      "commandAfterAnswer": "Agent の質問や承認リクエストに回答してから、/{{command}} を実行してください。",
+      "commandRefused": "このコマンドは実行されませんでした。",
+      "commandRefusedTryAgain": "このコマンドは実行されませんでした。もう一度お試しください。",
+      "commandUnavailable": "このコマンドは {{agent}} のチャットでは使用できないため、送信されませんでした。",
+      "compactionFailed": "圧縮に失敗しました。",
+      "compactionFailedQuoted": "圧縮に失敗しました: {{detail}}。",
+      "compactionUnconfirmed": "圧縮の完了は確認されていません。",
+      "conversationOpenElsewhere": "Codex がまだこの会話を開いたままにしています。少し待ってからもう一度試すか、ほかの Codex ターミナルを閉じてください。",
+      "conversationOpenInTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じて、ここで続けてください。",
+      "couldNotRestart": "{{agent}} を再起動できませんでした。",
+      "couldNotStart": "{{agent}} を起動できませんでした。",
+      "couldNotStop": "{{agent}} を停止できませんでした。",
+      "couldNotStopTheAgent": "Agent を停止できませんでした。",
+      "editSavedArguments": "設定 > Agent > 引数で編集してください。",
+      "emptyMessage": "このメッセージは空のため、送信されませんでした。",
+      "fullAccessAsRoot": "{{agent}} は root として実行されている間はフルアクセスを使用しません。このチャットを実行しているコンピューターの [設定 → Agent] で {{agent}} に別の権限を選択してから、新しいチャットを開始してください。",
+      "historyInOtherAccount": "このチャットの履歴は別の Claude アカウントにあります。続けるには、そのアカウントに切り替えてください。",
+      "historyTooLarge": "この会話の履歴は大きすぎるため、ここでは復元できません。",
+      "hostFault": "Orca で問題が発生したため、この操作は完了しませんでした。",
+      "hostFaultTryAgain": "Orca で問題が発生したため、この操作は完了しませんでした。もう一度お試しください。",
+      "hostRestarted": "このメッセージが送信される前に Orca が再起動しました。",
+      "hostStopped": "{{agent}} の起動が完了しなかったため、Orca が停止させました。",
+      "interactiveAgentNotSignedIn": "このチャットを実行しているコンピューターで `{{loginCommand}}` を起動し、`{{slashCommand}}` を使って {{agent}} にサインインしてください。",
+      "launchFolderMissing": "このチャットが実行されていたフォルダーは存在しなくなりました。このチャットを続けるには、フォルダーを復元してください。",
+      "launchPreparationFailed": "Orca は、このチャットを実行しているコンピューターで {{agent}} の起動を準備できませんでした。",
+      "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
+      "managedAccountUnsupported": "WSL に Claude アカウントが追加されていますが、Claude チャットには Windows の Claude アカウントが必要です。",
+      "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
+      "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
+      "notDelivered": "このメッセージは配信されませんでした。",
+      "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",
+      "notSignedIn": "{{agent}} にサインインしていません。",
+      "previousExitUnverifiable": "以前の {{agent}} を停止できませんでした。",
+      "providerExitedAnswer": "{{agent}} が停止したため、回答は送信されませんでした。続けるにはメッセージを送信してください。",
+      "providerExitedRejection": "このメッセージが送信される前に {{agent}} が停止しました。",
+      "providerExitedRow": "この応答の途中で {{agent}} が停止しました。この会話で続けることができます。",
+      "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
+      "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
+      "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",
+      "providerRetryLastError": "直近のエラー: {{detail}}。",
+      "providerRetryNumber": "{{attempt}} 回目の再試行です。",
+      "providerRetryNumberOf": "{{maxRetries}} 回中 {{attempt}} 回目の再試行です。",
+      "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
+      "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
+      "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
+      "queueFull": "Agent を待っているメッセージが多すぎたため、このメッセージは送信されませんでした。",
+      "quitTerminalAgent": "ここでチャットを続けるには、その Agent を終了してください。",
+      "runCommandAgain": "/{{command}} をもう一度実行してください。",
+      "runCommandWhenDone": "終わったら /{{command}} を実行してください。",
+      "runtimeNotInstalled": "{{agent}} はこのチャットを実行しているコンピューターにインストールされていません。最新バージョンの Orca でチャットからインストールしてください。",
+      "sendAgainToTryOnceMore": "メッセージをもう一度送信して、再度お試しください。",
+      "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
+      "sessionNotRestored": "{{agent}} は以前のセッションを再開できなかったため、このチャットは新しいセッションで続行します。{{agent}} は以前のメッセージを覚えていません。",
+      "signInFirst": "先にサインインしてください。",
+      "signInThenRunCommand": "サインインしてから、/{{command}} をもう一度実行してください。",
+      "signInThenSend": "サインインしてから、メッセージをもう一度送信してください。",
+      "startNewChat": "続けるには、新しいチャットを開始してください。",
+      "startTimedOut": "{{agent}} の起動に時間がかかりすぎました ({{seconds}} 秒経っても {{method}} に応答がありません)。",
+      "startTimedOutKeepsHappening": "これが繰り返し起こる場合は、このチャットを実行しているコンピューターが過負荷になっている可能性があります。",
+      "stopRefused": "{{agent}} は停止しませんでした。",
+      "stopRefusedQuoted": "{{agent}} は停止しませんでした: {{detail}}。",
+      "terminalAgentHoldsChat": "このチャットはまだターミナルの Agent で開かれています。",
+      "theAgent": "Agent",
+      "thenSendAgain": "その後、メッセージをもう一度送信してください。",
+      "usageLimitReached": "{{agent}} が使用量の上限に達しました。",
+      "usageLimitReachedNamed": "{{agent}} が{{window}}の上限に達しました。",
+      "usageLimitResetsAt": "{{when}} にリセットされます。",
+      "usageLimitSendAfterReset": "リセット後にメッセージを送信すると続行できます。",
+      "usageLimitWindowCredits": "追加使用量",
+      "usageLimitWindowSession": "セッション",
+      "usageLimitWindowWeekly": "週間",
+      "usageLimitWindowWeeklyModel": "モデル別の週間",
+      "waitForBackgroundTasks": "バックグラウンドタスクが終わるまでお待ちください。",
+      "waitForStart": "Agent の起動が終わるまでお待ちください。",
+      "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。"
+    },
+    "fileReader": {
+      "copyReviewNotes": "レビューメモをコピー",
+      "imageLabel": "{{title}} の画像",
+      "noReviewNotes": "レビューメモなし",
+      "previewLabel": "{{title}} のプレビュー",
+      "reviewNotes_one": "{{count}} 件のレビューメモ",
+      "reviewNotes_other": "{{count}} 件のレビューメモ",
+      "send": "送信",
+      "sendReviewNotes": "レビューメモを AI に送信"
+    },
+    "floatingWorkspace": {
+      "title": "フローティングワークスペース"
+    },
+    "githubPrMutations": {
+      "reviewThreadUpdateFailed": "レビュースレッドの更新に失敗しました。",
+      "titleUpdateFailed": "タイトルの更新に失敗しました。"
+    },
+    "githubPrRpc": {
+      "requestFailed": "リクエストに失敗しました: {{method}}"
+    },
+    "header": {
+      "backToWorktrees": "ワークツリー一覧に戻る",
+      "moreActions": "セッションのその他の操作",
+      "openFileExplorer": "ファイルエクスプローラーを開く",
+      "openSourceControl": "ソース管理を開く",
+      "reconnectToDesktop": "デスクトップに再接続",
+      "showSidebar": "サイドバーを表示",
+      "terminalTitle": "ターミナル"
+    },
+    "headerMoreActionsSheet": {
+      "agentHistory": "Agent の履歴",
+      "agentHistoryHint": "Agent セッションを閲覧・再開",
+      "checks": "チェック",
+      "checksHint": "PR のチェックを開く"
+    },
+    "markdownReader": {
+      "changedOnDesktop": "デスクトップで変更済み",
+      "copyLoaded": "読み込んだ部分をコピー",
+      "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
+      "copyPath": "パスをコピー",
+      "copyPathLabel": "Markdown ファイルのパスをコピー",
+      "copySource": "Markdown ソースをコピー",
+      "discard": "破棄",
+      "dismissKeyboard": "キーボードを閉じる",
+      "dismissKeyboardHint": "Markdown エディターを開いたまま、ソフトウェアキーボードを非表示にします。",
+      "readOnly": "読み取り専用"
+    },
+    "nativeChatAttachActions": {
+      "availableSkills": "{{count}} 件が利用可能",
+      "commands": "コマンド",
+      "fileTypes": "PDF、テキスト、コード…",
+      "files": "ファイル",
+      "photos": "写真",
+      "skills": "スキル",
+      "workspaceFile": "ワークスペースファイル"
+    },
+    "nativeChatCardHeaderAction": {
+      "collapse": "折りたたむ"
+    },
+    "nativeChatCliFork": {
+      "resumeInNewCli": "新しい CLI で再開"
+    },
+    "nativeChatFloatingControls": {
+      "scrollToLatest": "最新の内容にスクロール"
+    },
+    "nativeChatFullContent": {
+      "loadMessageFailed": "メッセージ全体を表示（読み込み失敗、タップして再試行）",
+      "loadOutputFailed": "出力をすべて表示（読み込み失敗、タップして再試行）",
+      "partialMessage": "このメッセージの一部を表示しています。",
+      "partialOutput": "{{total}} のうち {{shown}} を表示しています。",
+      "showFullMessage": "メッセージ全体を表示",
+      "showFullOutput": "出力をすべて表示"
+    },
+    "nativeChatRenderData": {
+      "defaultAgentLabel": "Agent",
+      "emptySubtitle": "{{agent}} にコードの確認や出力の説明、変更を依頼してください。",
+      "emptyTitle": "{{agent}} とチャットを開始",
+      "errorSubtitle": "トランスクリプトを読み取ることができませんでした。作業を続けるには、ターミナルに切り替えてください。",
+      "errorTitle": "会話を読み込めませんでした",
+      "notFoundSubtitle": "メッセージを送信して会話を始めるか、ターミナル表示を開いて {{agent}} の動作を確認してください。",
+      "notFoundTitle": "この会話はまだ見つかりません"
+    },
+    "nativeChatToggleAction": {
+      "switchToChatView": "チャット表示に切り替え",
+      "switchToTerminalView": "ターミナル表示に切り替え"
+    },
+    "newTabAgentHostLaunch": {
+      "notesNotSent": "Agent は起動しましたが、メモは送信されませんでした。",
+      "notesSent": "メモを送信しました。",
+      "notesUnconfirmed": "Agent は起動しましたが、メモの送信を確認できませんでした。",
+      "promptUnconfirmed": "Agent は起動しましたが、プロンプトの送信を確認できませんでした。"
+    },
+    "prActionsEngine": {
+      "mergeFailed": "PR のマージに失敗しました。",
+      "refreshFailed": "PR の更新に失敗しました。"
+    },
+    "prAiTriageLaunch": {
+      "agentStarted": "Agent を起動しました。",
+      "agentStartedIn": "「{{label}}」で Agent を起動しました。",
+      "emptyPrompt": "この操作用に保存されたプロンプトが空です。コンピュータで「ソース管理 AI」の設定を更新してください。",
+      "loadFailed": "利用可能な Agent を読み込めませんでした。",
+      "promptNotSent": "Agent は起動しましたが、プロンプトは送信されませんでした。",
+      "updateRequired": "スマートフォンから Agent を起動するには、コンピュータの Orca を更新してください。"
+    },
+    "prSidebarState": {
+      "loadFailed": "PR を読み込めませんでした。"
+    },
+    "queuedCardText": {
+      "showLess": "折りたたむ",
+      "showLessHint": "メッセージを折りたたんで表示します。",
+      "showMore": "さらに表示",
+      "showMoreHint": "メッセージ全体を表示します。"
+    },
+    "queuedMessageCardRow": {
+      "deleteHint": "キュー内のこのメッセージを削除",
+      "images_one": "画像 {{count}} 枚",
+      "images_other": "画像 {{count}} 枚",
+      "moreActions": "その他の操作",
+      "send": "送信",
+      "sendAgainHint": "このメッセージを再送信",
+      "sendHint": "このメッセージを送信",
+      "showLessHint": "メッセージを折りたたんで表示します。",
+      "steer": "今すぐ送信",
+      "steerHint": "モデルを中断せずに送信します"
+    },
+    "queuedMessageComposer": {
+      "commandsNotAllowed": "キュー内のメッセージにコマンドは保存できません。",
+      "editing": "メッセージを編集中",
+      "editingAttributed": "メッセージを編集中 · {{attribution}}"
+    },
+    "quickCommandEditorForm": {
+      "action": "操作",
+      "addQuickCommand": "クイックコマンドを追加",
+      "advanced": "詳細設定",
+      "agent": "Agent",
+      "agentPrompt": "Agent プロンプト",
+      "appendEnter": "Enter を追加",
+      "appendEnterDescription": "テキストの挿入後、すぐに送信します。",
+      "chooseAgent": "Agent を選択",
+      "commandText": "コマンドテキスト",
+      "globalScope": "グローバル",
+      "label": "ラベル",
+      "labelPlaceholder": "開発サーバーを起動する",
+      "olderHostPromptTooLong": "このホストには長すぎます。より長いプロンプトを保存するには、ホストの Orca を更新してください。",
+      "projectScope": "プロジェクト",
+      "prompt": "プロンプト",
+      "promptHint": "スキル、ファイルパス、組み込みコマンドに対応しています。",
+      "promptPlaceholder": "Agent にこのワークスペースを調査するよう依頼します",
+      "promptSizeCharacters": "{{used}} / {{max}} 文字",
+      "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
+      "promptTooLong": "長すぎるため保存できません。",
+      "scope": "スコープ",
+      "terminalCommand": "ターミナルコマンド"
+    },
+    "quickCommandLaunch": {
+      "defaultLabel": "クイックコマンド",
+      "editBeforeRunning": "実行前にこのクイックコマンドを編集してください。",
+      "runFailed": "「{{label}}」を実行できませんでした。"
+    },
+    "quickCommandRow": {
+      "copyCommand": "「{{label}}」をコピー",
+      "copyFailed": "コピーできませんでした",
+      "deleteCommand": "「{{label}}」を削除",
+      "editCommand": "「{{label}}」を編集",
+      "nothingToCopy": "コピーする内容がありません",
+      "runCommand": "「{{label}}」を実行"
+    },
+    "quickCommandsList": {
+      "emptyState": "クイックコマンドはまだありません。",
+      "globalGroup": "グローバル",
+      "newCommand": "新しいクイックコマンド",
+      "noMatches": "一致するクイックコマンドはありません。",
+      "projectGroup": "このプロジェクト",
+      "searchPlaceholder": "クイックコマンドを検索…"
+    },
+    "quickCommandsSheet": {
+      "addTitle": "クイックコマンドを追加",
+      "chooseAgentTitle": "Agent を選択",
+      "deleteConfirmMessage": "このクイックコマンドは保存されたリストから削除されます。",
+      "deleteConfirmTitle": "「{{label}}」を削除しますか？",
+      "editTitle": "クイックコマンドの編集",
+      "editorDescription": "ターミナルコマンドや Agent プロンプトを保存して、すぐに使えるようにします。",
+      "title": "クイックコマンド",
+      "untitled": "無題"
+    },
+    "quickCommandsTabButton": {
+      "quickCommands": "クイックコマンド"
+    },
+    "routeHelpers": {
+      "connected": "接続済み",
+      "connecting": "接続中",
+      "disconnected": "切断済み",
+      "pairingInvalid": "ペアリングが無効",
+      "reconnecting": "再接続中",
+      "securing": "接続を保護中"
+    },
+    "routeScreen": {
+      "openingWorkspace": "ワークスペースを開いています…"
+    },
+    "sheets": {
+      "browser": "ブラウザ",
+      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
+      "chat": "チャット",
+      "copyAllAndLeave": "すべてコピーして戻る",
+      "copyDraftsFailed": "下書きをコピーできませんでした。",
+      "copyNotes": "メモをコピー",
+      "copyNotesFailed": "メモをコピーできませんでした。",
+      "copyPath": "パスのコピー",
+      "discard": "破棄",
+      "discardAndLeave": "破棄して戻る",
+      "discardChanges": "変更を破棄する",
+      "discardMessage": "スマートフォンの下書きをデスクトップの最新ファイルで置き換えますか？",
+      "draftsHint": "画面を離れる前に、スマートフォンの下書きをコピーするか破棄してください。",
+      "file": "ファイル",
+      "markdown": "Markdown",
+      "markdownNote": "Markdown ノート",
+      "newBrowser": "新規ブラウザ",
+      "newTab": "新規タブ",
+      "notesCopied": "メモをコピーしました。",
+      "notesHint": "現在のメモの送信先となる Agent セッションを選択してください。",
+      "removeShortcutMessage": "このカスタムショートカットを削除しますか？",
+      "renameTerminal": "ターミナル名を変更",
+      "sendReviewNotes": "レビューメモを送信",
+      "shortcut": "ショートカット",
+      "terminal": "ターミナル",
+      "terminalName": "ターミナル名",
+      "unsavedMarkdown": "Markdown の未保存の変更",
+      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。"
+    },
+    "sideRail": {
+      "backToWorktrees": "ワークツリーに戻る"
+    },
+    "sourceControlLaunchAgent": {
+      "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",
+      "savedAgentUnavailable": "この操作用に保存された Agent は、このワークスペースホストでは利用できません。"
+    },
+    "structuredComposerCommand": {
+      "operationUnconfirmed": "会話の操作が実行されたことを確認できませんでした。",
+      "removeAttachments": "チャットセッションのコマンドを使う前に添付ファイルを削除してください。"
+    },
+    "structuredSendDelivery": {
+      "messageNotSent": "メッセージは送信されませんでした"
+    },
+    "tabStrip": {
+      "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
+      "newTab": "新規タブ",
+      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。",
+      "tabStatus": "{{title}}、{{status}}"
+    },
+    "terminalActionSheetActions": {
+      "clearTerminal": "ターミナルをクリア",
+      "rename": "名前を変更する",
+      "switchToDesktop": "デスクトップ表示に切り替え",
+      "switchToPhone": "スマートフォン表示に切り替え"
+    },
+    "terminalInputActions": {
+      "attachFileHint": "長押しすると、写真の代わりにファイルを添付できます。",
+      "attachPhoto": "写真を添付",
+      "sendingImage": "画像を送信中…",
+      "startDictation": "音声ディクテーションを開始",
+      "startingDictation": "音声ディクテーションを開始中",
+      "stopDictation": "音声ディクテーションを停止",
+      "transcribingDictation": "音声ディクテーションを文字起こし中"
+    },
+    "terminalLiveInputStatus": {
+      "listening": "聞き取り中",
+      "liveInput": "リアルタイム入力",
+      "preparingMic": "マイクを準備中",
+      "processing": "処理中",
+      "releaseMicHint": "マイクボタンから指を離すと停止",
+      "startingMic": "マイクを起動中",
+      "stopHint": "マイクをタップして停止",
+      "transcribing": "デスクトップで文字起こし中",
+      "uploadingImage": "ホストに画像をアップロード中",
+      "uploadingImageTitle": "画像をアップロード中"
+    },
+    "terminalRecords": {
+      "defaultTitle": "ターミナル"
+    },
+    "terminalTabAgent": {
+      "browser": "ブラウザ",
+      "chat": "チャット",
+      "file": "ファイル",
+      "markdown": "Markdown",
+      "newBrowser": "新規ブラウザ",
+      "terminal": "ターミナル"
+    },
+    "terminalViewportResubscribe": {
+      "fitFailed": "ターミナルをこの画面に合わせられませんでした。"
+    },
+    "useAccessorySelection": {
+      "copyFailed": "コピーできませんでした",
+      "selectionCleared": "選択を解除しました（スクロールでバッファーの範囲外になりました）。"
+    },
+    "useAttachmentInputLeaseGate": {
+      "reconnecting": "添付に失敗しました（再接続中）。"
+    },
+    "useContentCreateActions": {
+      "browserCommandFailed": "ブラウザコマンドの実行に失敗しました。",
+      "browserCreateFailed": "ブラウザの作成に失敗しました。",
+      "browserUnavailable": "ブラウザのページはまだ利用できません。",
+      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
+      "invalidUrl": "有効な URL を入力してください。",
+      "noteCreateFailed": "Markdown ノートの作成に失敗しました。",
+      "untitledNoteCreateFailed": "無題の Markdown ノートを作成できませんでした。"
+    },
+    "useDiffComments": {
+      "copyNotesFailed": "メモをコピーできませんでした。",
+      "deleteNoteFailed": "メモの削除に失敗しました。",
+      "noteAdded": "メモを追加しました。",
+      "notesCopied": "メモをコピーしました。",
+      "saveNoteFailed": "メモの保存に失敗しました。",
+      "saveNotesFailed": "レビューノートの保存に失敗しました。",
+      "waitingForDesktop": "デスクトップへの接続待ち…"
+    },
+    "useDiffReviewCommentActions": {
+      "saveFailed": "レビューの保存に失敗しました。",
+      "saveStateFailed": "レビューの状態を保存できませんでした。",
+      "waitingForDesktop": "デスクトップへの接続待ち…"
+    },
+    "useDiffReviewController": {
+      "loadFailed": "レビューを読み込めませんでした。",
+      "missingWorktree": "ワークツリーが指定されていません。",
+      "waitingForDesktop": "デスクトップへの接続待ち…"
+    },
+    "useDiffReviewDiffLoading": {
+      "loadFailed": "差分を読み込めませんでした。",
+      "waitingForDesktop": "デスクトップへの接続待ち…"
+    },
+    "useDiffReviewGitActions": {
+      "actionFailed": "ソース管理の操作に失敗しました。",
+      "reviewedFilesStaged_one": "レビュー済みファイル {{count}} 件をステージしました。",
+      "reviewedFilesStaged_other": "レビュー済みファイル {{count}} 件をステージしました。",
+      "stageResults": "{{staged}} 件はステージ済み、{{failed}} 件は失敗",
+      "waitingForDesktop": "デスクトップへの接続待ち…"
+    },
+    "useDiffReviewInteractions": {
+      "openFailed": "セッションで開けませんでした。"
+    },
+    "useDiffReviewSendActions": {
+      "copyFailed": "レビューノートをコピーできませんでした。",
+      "inputLocked": "ターミナルへの入力がロックされています。",
+      "loadSessionsFailed": "Agent セッションを読み込めませんでした。",
+      "notesCopied": "レビューノートをコピーしました。",
+      "notesSent": "レビューノートを送信しました。",
+      "notesSentWithWarning": "レビューノートを送信しました。 {{warning}}",
+      "promptNotSent": "Agent は起動しましたが、メモは送信されませんでした。「メモをコピー」でコピーして貼り付けてください。",
+      "sendFailed": "メモの送信に失敗しました。",
+      "startingAgent": "Agent を起動中…",
+      "waitingForDesktop": "デスクトップへの接続待ち…"
+    },
+    "useImageAttachment": {
+      "attachFailed": "添付に失敗しました。",
+      "disconnected": "添付に失敗しました（切断済み）。",
+      "imageTooLarge": "画像が大きすぎるため添付できません。",
+      "permissionDenied": "写真へのアクセスが拒否されました。"
+    },
+    "useMarkdownActions": {
+      "copyFailed": "コピーできませんでした",
+      "copyPathFailed": "パスをコピーできませんでした。",
+      "markdownTitle": "Markdown",
+      "pathCopied": "パスをコピーしました",
+      "saveFailed": "保存に失敗しました。",
+      "saved": "保存済み"
+    },
+    "useNativeChatDictation": {
+      "insertFailed": "ディクテーションの結果を挿入できませんでした。",
+      "insertFailedCopied": "ディクテーションの結果を挿入できず、クリップボードにコピーしました。",
+      "inserted": "ディクテーションの結果を挿入しました。",
+      "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
+    },
+    "useNativeChatStop": {
+      "stopNotSent": "停止要求を送信できませんでした。",
+      "stopUnconfirmed": "停止を確認できませんでした。再試行前にチャットを確認してください。",
+      "terminalNotReady": "停止要求を送信できませんでした（ターミナルの準備ができていません）。"
+    },
+    "usePanelRouteActions": {
+      "checkHostHint": "ホストの接続を確認してください",
+      "copyNotesHint": "代わりにメモをコピーしてください",
+      "detectingAgents": "Agent を検出中",
+      "newSessionHint": "新規 Agent セッション",
+      "noEnabledAgents": "有効な Agent なし",
+      "otherServerAgents": "別のサーバーの Agent",
+      "pairServerHint": "そのサーバーと直接ペアリングしてください",
+      "presetsUnavailable": "Agent プリセットを利用できません"
+    },
+    "usePrAiTriage": {
+      "launchFailed": "Agent の起動に失敗しました。",
+      "waitingForDesktop": "デスクトップへの接続待ち…"
+    },
+    "usePrCommentActions": {
+      "actionFailed": "コメントの操作に失敗しました。"
+    },
+    "usePrTitleAction": {
+      "disconnected": "デスクトップに接続されていません。",
+      "updateFailed": "タイトルの更新に失敗しました。"
+    },
+    "useQuickCommands": {
+      "loadFailed": "クイックコマンドの読み込みに失敗しました。",
+      "saveFailed": "クイックコマンドの保存に失敗しました"
+    },
+    "useSessionTerminalSendActions": {
+      "inputTooLarge": "入力データが大きすぎます（最大 256 KiB）。",
+      "liveInputInterrupted": "ライブ入力が中断されました。入力欄をクリアしました。続行する前にターミナルを確認してください。"
+    },
+    "useStartup": {
+      "wakeAgents": "スリープ中の Agent を再開するには、ホストで Orca を開いてください。"
+    },
+    "useTerminalCreateActions": {
+      "createFailed": "ターミナルの作成に失敗しました。",
+      "forkBusy": "別のターミナルを開いています。しばらく待ってから {{agentName}} のチャットを再試行してください。",
+      "forkUnavailable": "接続と更新が完了したホストで {{agentName}} のチャットを開き、再試行してください。",
+      "inputLocked": "別のクライアントがターミナル入力をロックしています。",
+      "notesSent": "メモを送信しました。",
+      "sendNotesError": "メモを送信できませんでした。",
+      "sendNotesFailed": "メモの送信に失敗しました。",
+      "terminalTitle": "ターミナル"
+    },
+    "useTerminalInput": {
+      "clearFailed": "ターミナルをクリアできませんでした。",
+      "cleared": "ターミナルをクリアしました。"
+    },
+    "useTerminalPaste": {
+      "clipboardReadFailed": "クリップボードを読み取れませんでした。",
+      "disconnected": "貼り付けに失敗しました（接続が切れています）。",
+      "imageTooLarge": "画像が大きすぎるため貼り付けできません。",
+      "pasteFailed": "貼り付けに失敗しました。",
+      "pasteTooLarge": "貼り付けるデータが大きすぎます（最大 256 KiB）。",
+      "terminalChanged": "貼り付けをキャンセルしました（ターミナルが変更されました）。"
+    },
+    "worktreeLabel": {
+      "fallback": "ワークツリー"
+    },
+    "writeNotice": {
+      "agentRefused": "Agent がこれを拒否しました。",
+      "agentStarting": "Agent はまだ起動中です。",
+      "agentStillWorking": "Agent はまだ作業中です。",
+      "answerFirst": "先に質問または承認依頼に回答してください。",
+      "attachmentExpired": "この添付ファイルは期限切れです。",
+      "backgroundTasksRunning": "バックグラウンドタスクがまだ実行中です。",
+      "cancelNotSaved": "この質問または承認依頼をキャンセルできませんでした。",
+      "cannotRunHere": "Orca はここでこの Agent をチャットで実行できません。",
+      "capacity": "このチャットを実行しているコンピューターの Orca がリクエストの上限に達しました。そのコンピューターで Orca を更新してから、もう一度お試しください。",
+      "chatNotFound": "Orca はこのチャットを見つけられません。",
+      "chatSavedByNewerOrca": "このチャットは新しいバージョンの Orca で保存されました。",
+      "clearAfterAnswer": "Agent の質問または承認依頼に回答してから、/clear を実行してください。",
+      "clearAfterRetry": "以前のメッセージを再試行してから、/clear を実行してください。",
+      "clearAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /clear を実行してください。",
+      "clearUnfinished": "前回の /clear は完了しませんでした。",
+      "commandRunning": "/compact または /clear がまだ実行中です。",
+      "compactAfterAnswer": "Agent の質問または承認依頼に回答してから、/compact を実行してください。",
+      "compactAfterRetry": "以前のメッセージを再試行してから、/compact を実行してください。",
+      "compactAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /compact を実行してください。",
+      "continuationSuperseded": "このチャットの状況が変わりました。続行する前に、最新のメッセージを確認してください。",
+      "conversationCleared": "この会話はクリアされました。",
+      "goalsUnsupported": "この Agent は目標に対応していません。",
+      "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
+      "historyUnusable": "このチャットを読み込めません。",
+      "hostReconciling": "Orca は再起動後、このチャットをまだ確認しています。",
+      "messageNotSaved": "メッセージを保存できませんでした。",
+      "messageTooLarge": "1 件のメッセージの上限である 256 KB を超えています。",
+      "messagesUnsettled": "以前に送信したメッセージの送信状況を、まだ確認できていません。",
+      "notAvailable": "このチャットでは利用できません。",
+      "notDoneAnswer": "回答は送信されませんでした。",
+      "notDoneCommand": "コマンドは実行されませんでした。",
+      "notDoneGoalChangeIncomplete": "目標の変更を完了できませんでした。チャットを確認してください。",
+      "notDoneOption": "設定は変更されませんでした。",
+      "notDoneQueuedEdit": "編集内容は保存されていません。",
+      "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
+      "notDoneSend": "メッセージは送信されませんでした。",
+      "notDoneStop": "Agent は停止されませんでした。",
+      "notDoneStopTask": "バックグラウンドタスクは停止されませんでした。",
+      "notDoneStopTasks": "バックグラウンドタスクは停止されませんでした。",
+      "openCurrentConversation": "続けるには、現在の会話を開いてください。",
+      "optionRejected": "Agent はこの設定を受け入れませんでした。",
+      "outcomeUnknown": "Orca は何が起きたかを確認できませんでした。チャットを確認してください。",
+      "ownerUnproven": "このチャットの以前の Agent がまだ実行中の可能性があります。",
+      "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージの送信が完了するまでお待ちください。",
+      "promptPending": "Agent は質問または承認依頼への回答を待っています。",
+      "questionChanged": "この質問はすでに回答済みか、変更されています。",
+      "queueTooLarge": "キューで待機中のテキストが多すぎます。",
+      "quitTerminalAgent": "ここでチャットを続けるには、その Agent を終了してください。",
+      "reattachFile": "削除してから、もう一度添付してください。",
+      "recordFailed": "Orca はこれをチャットの履歴に保存できませんでした。",
+      "recordUnreadable": "Orca はこのチャットの保存済みの状態を読み取れませんでした。",
+      "reopenChat": "もう一度確認するには、チャットを開き直してください。",
+      "restartFailed": "Agent を再起動できませんでした。",
+      "runClearWhenDone": "終わったら /clear を実行してください。",
+      "runCompactWhenDone": "終わったら /compact を実行してください。",
+      "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
+      "sendOutcomeLost": "Orca はメッセージが Agent に届いたことを確認できませんでした。チャットを確認し、必要であればもう一度送信してください。",
+      "settleEarlierMessage": "以前のメッセージが届くまで待つか、再試行してください。",
+      "shortenMessage": "短くするか分割してから、もう一度送信してください。",
+      "shrinkQueue": "キュー内のメッセージを削除するか、送信されるまで待ってから、もう一度お試しください。",
+      "startNewChat": "続けるには、新しいチャットを開始してください。",
+      "terminalAgentHoldsChat": "このチャットはまだターミナルの Agent で開かれています。",
+      "tryAgain": "もう一度お試しください。",
+      "tryAgainComposerSend": "もう一度送信してください。",
+      "turnActive": "Agent はまだ応答中です。",
+      "unreachable": "Orca は Agent に接続できませんでした。",
+      "unsupported": "このチャットを実行しているコンピューターに新しいバージョンの Orca が必要です。そのコンピューターで Orca を更新してから、もう一度お試しください。",
+      "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
+      "updateOrcaToOpenChat": "開くには Orca を更新してください。",
+      "waitForBackgroundTasks": "バックグラウンドタスクが終わるまでお待ちください。",
+      "waitForCommand": "/compact または /clear が終わるまでお待ちください。",
+      "waitForStart": "Agent の起動が終わるまでお待ちください。",
+      "waitForTurn": "Agent の応答が終わるまで待つか、Agent を停止してください。",
+      "waitMoment": "しばらくお待ちください。"
+    }
+  },
+  "settings": {
+    "aboutScreen": {
+      "openLinkFailed": "リンクを開けませんでした。再試行してください。",
+      "socialProfile": "Orca の X アカウント",
+      "sourceCode": "Orca のソースコード",
+      "tagline": "100 倍の生産性を目指す開発者向けのオープンソース Agent IDE",
+      "title": "Orca について",
+      "website": "Orca のウェブサイト"
+    },
+    "appUpdateSettingsRows": {
+      "checkFailed": "確認できませんでした",
+      "checkUpdates": "アップデートを確認",
+      "checkUpdatesStatus": "アップデートを確認、{{status}}",
+      "checking": "確認中…",
+      "installedVersion": "バージョン {{version}}",
+      "lastCheckedDays_one": "最終確認：{{count}} 日前",
+      "lastCheckedDays_other": "最終確認：{{count}} 日前",
+      "lastCheckedHours_one": "最終確認：{{count}} 時間前",
+      "lastCheckedHours_other": "最終確認：{{count}} 時間前",
+      "lastCheckedJustNow": "最終確認：たった今",
+      "lastCheckedMinutes_one": "最終確認：{{count}} 分前",
+      "lastCheckedMinutes_other": "最終確認：{{count}} 分前",
+      "neverChecked": "未確認",
+      "upToDate": "最新",
+      "update": "更新",
+      "updateToVersion": "Orca {{version}} に更新"
+    },
+    "appearance": {
+      "language": {
+        "description": "「システム」はこのデバイスの言語に従います。権限の確認画面には常にデバイスの言語が使われます。",
+        "heading": "言語",
+        "systemWithCurrent": "システム（{{language}}）"
+      },
+      "theme": {
+        "dark": "ダーク",
+        "description": "「システム」はこのデバイスのライト／ダーク設定に従います。",
+        "heading": "テーマ",
+        "light": "ライト",
+        "system": "システム"
+      },
+      "title": "外観"
+    },
+    "browserSettingsScreen": {
+      "desktopBrowser": "デスクトップの Orca ブラウザ",
+      "desktopBrowserDescription": "ペアリング済みのデスクトップからストリーミングされるブラウザで開きます。",
+      "linksDescription": "ターミナル出力でタップした HTTP(S) リンクを開く場所を選択してください。",
+      "linksHeading": "リンク",
+      "loadFailed": "ブラウザ設定を読み込めませんでした。再試行してください。",
+      "openTerminalLinks": "ターミナルのリンクを開く",
+      "phoneBrowser": "スマートフォンのブラウザ",
+      "phoneBrowserDescription": "このスマートフォンの Safari、Chrome などのブラウザで開きます。",
+      "saveFailed": "ブラウザ設定を保存できませんでした。再試行してください。",
+      "title": "ブラウザ"
+    },
+    "menuItems": {
+      "about": "Orca について",
+      "appearance": "外観",
+      "browser": "ブラウザ",
+      "chatUi": "Chat UI",
+      "notifications": "通知",
+      "terminal": "ターミナル",
+      "troubleshooting": "トラブルシューティング",
+      "voice": "音声"
+    },
+    "menuScreen": {
+      "privacyPolicy": "プライバシーポリシー",
+      "support": "サポート"
+    },
+    "nativeChatSettingsScreen": {
+      "defaultViewDescription": "対応する Agent セッション（Claude、Codex など、チャットに対応した Agent）をこのデバイスで開く際の表示方法を選択してください。「ターミナル」では CLI をそのまま表示し、「Chat UI」ではデスクトップアプリと同様のチャット画面を表示します。各セッションの表示方法は、長押しメニューから個別に切り替えられます。",
+      "defaultViewHeading": "デフォルトの表示",
+      "off": "オフ",
+      "on": "オン",
+      "openInChatUi": "セッションをチャット UI で開く",
+      "title": "Chat UI"
+    },
+    "nativeNotificationDeliverySettings": {
+      "loadFailed": "通知の配信設定を読み込めませんでした。再試行するには、この画面を開き直してください。",
+      "saveFailed": "通知の配信設定を保存できませんでした。再試行してください。",
+      "updateDesktopHint": "このスマートフォンで通知を受け取るには、更新済みのデスクトップとペアリングしてください。"
+    },
+    "notificationDisplayTest": {
+      "accepted": "Orca のプッシュサービスが通知を受け付けました。通知が届いているか確認してください。",
+      "connectDesktop": "デスクトップに接続してから再試行してください。",
+      "description": "プッシュ通知の配信をテストします。プッシュを利用できない場合はローカル通知をテストします。",
+      "desktopUnreachable": "デスクトップに接続できませんでした。再試行してください。",
+      "loadFailed": "ペアリング済みのデスクトップ一覧を読み込めませんでした。",
+      "pairDesktop": "デスクトップとペアリングしてから再試行してください。",
+      "pushServiceFailed": "Orca のプッシュサービス経由で送信できませんでした。再試行してください。",
+      "rateLimited": "通知が多すぎます。しばらくしてから再試行してください。",
+      "sendButton": "テスト通知を送信する",
+      "sendFailed": "テスト用のプッシュ通知を送信できませんでした。",
+      "sending": "送信中…",
+      "troubleReceivingAlerts": "通知が届きませんか？",
+      "troubleshooting": "トラブルシューティング",
+      "localTitle": "テスト通知",
+      "localBody": "この端末からのローカル通知テストです。",
+      "localScheduled": "{{reason}} ローカルテストを予約しました。通知を確認してください。このテストは表示のみを確認し、Agentのアラート配信は確認しません。",
+      "disabled": "Orca の通知がオフになっています。通知を有効にして、もう一度お試しください。",
+      "osDisabled": "システム設定で通知がオフになっています。通知を許可して、もう一度お試しください。",
+      "noToken": "この端末ではプッシュトークンを利用できません。",
+      "unsupportedHost": "このデスクトップはプッシュ通知に対応していません。受信するには更新してください。",
+      "registrationPending": "このデスクトップではプッシュ登録がまだ完了していません。しばらくしてからもう一度お試しください。",
+      "liveFallbackScheduled": "{{reason}} ローカルテストを予約しました。通知を確認してください。Orca が実行中で接続されている間は、リアルタイムのアラートを受信できます。"
+    },
+    "notificationSettingsScreen": {
+      "description": "Agent が入力を必要とするときやタスクを完了したときに、このデバイスに通知が届きます。",
+      "enableNotifications": "通知を有効にする",
+      "loadFailed": "通知設定を読み込めませんでした。再試行してください。",
+      "notificationsBlocked": "システム設定で通知が無効になっています。",
+      "openSettings": "設定を開く",
+      "openSettingsFailed": "システム設定を開けませんでした。再試行してください。",
+      "saveFailed": "通知設定を保存できませんでした。再試行してください。",
+      "title": "通知"
+    },
+    "pendingCredentialCleanupCard": {
+      "cleanupUnconfirmed_one": "このデバイスで、認証情報 {{count}} 件の削除完了を確認できませんでした。",
+      "cleanupUnconfirmed_other": "このデバイスで、認証情報 {{count}} 件の削除完了を確認できませんでした。",
+      "retryCleanup": "ペアリング認証情報の削除を再試行",
+      "retryFailed": "削除の完了をまだ確認できません。しばらくしてから再試行してください。",
+      "statusCheckFailed": "このデバイスでの認証情報の削除状況を確認できませんでした。念のため再試行してください。",
+      "title": "ペアリング認証情報の削除"
+    },
+    "uiLanguageSettingsSection": {
+      "pseudoLanguage": "疑似言語 (en-XA)"
+    },
+    "voiceSettingsScreen": {
+      "connectDesktop": "音声設定を管理するには、デスクトップに接続してください。",
+      "deleteFailed": "削除に失敗しました",
+      "dictationDescription": "デスクトップでフォーカスされている任意のペインに、音声でテキストを入力できます。",
+      "dictationHeading": "ディクテーション",
+      "dictationMode": "ディクテーションモード",
+      "dictationModeDescription": "トグル：1 回押すと開始し、もう一度押すと停止します。ホールド：押している間だけ音声入力します。",
+      "downloadFailed": "ダウンロードに失敗しました",
+      "enableDictation": "音声ディクテーションを有効にする",
+      "holdMode": "ホールド",
+      "loadFailed": "音声設定の読み込みに失敗しました。",
+      "loadFailedMessage": "音声設定の読み込みに失敗しました。",
+      "noneSelected": "未選択",
+      "selectModelFailed": "モデルを選択できませんでした",
+      "speechModel": "音声モデル",
+      "speechModelHeading": "音声モデル",
+      "title": "音声",
+      "toggleMode": "トグル",
+      "updateFailed": "更新できませんでした"
+    }
+  },
+  "sourceControl": {
+    "actionSheetRunners": {
+      "noBaseBranch": "リベース先のベースブランチがありません。",
+      "waitingForDesktop": "デスクトップへの接続を待機中…"
+    },
+    "actions": {
+      "checkingReviewStatus": "レビュー状態を確認中です。",
+      "checkoutBeforePublish": "コミットを公開する前にブランチをチェックアウトしてください。",
+      "commitStagedChanges": "ステージ済みの変更をコミットします。",
+      "commits": "コミット",
+      "committing": "コミット中です。",
+      "createPr": "PR を作成",
+      "enterCommitMessage": "コミットするには、コミットメッセージを入力してください。",
+      "forcePushWithLease": "lease 付きで強制プッシュしてリモートブランチを更新します。",
+      "forcePushing": "強制プッシュ中です。",
+      "linkedReviewUnavailable": "リンクされたレビューのブランチを利用できません。",
+      "publishToOrigin": "このブランチを origin に公開します。",
+      "pullCommits_one": "{{count}} 件のコミットをプルします。",
+      "pullCommits_other": "{{count}} 件のコミットをプルします。",
+      "pushAndCreatePr": "プッシュして PR を作成",
+      "pushCommits_one": "{{count}} 件のコミットをプッシュします。",
+      "pushCommits_other": "{{count}} 件のコミットをプッシュします。",
+      "pushLinkedReview": "リンクされたレビューのブランチに更新をプッシュします。",
+      "remoteOperationInProgress": "リモート操作を実行中です。",
+      "resolveConflicts": "コミットする前に競合を解決してください。",
+      "reviewAlreadyMerged": "コミットするものがありません。レビューはすでにマージ済みです。",
+      "stageAllChanges": "すべての変更をステージします。",
+      "stageFileToCommit": "コミットするには、ファイルを 1 つ以上ステージしてください。",
+      "switchBranch": "ブランチを切り替え",
+      "syncCounts": "{{behind}} 件をプルし、{{ahead}} 件をプッシュします。",
+      "upToDate": "コミットするものがありません。ブランチは最新です。",
+      "waitForRemoteOperation": "リモート操作が完了してから再試行してください。"
+    },
+    "branchBaseRef": {
+      "resolveFailed": "ベースブランチを特定できませんでした。"
+    },
+    "branchCard": {
+      "branchCount": "ブランチ内 {{count}} 件",
+      "changedCount": "変更 {{count}} 件",
+      "cherryPickState": "チェリーピック",
+      "mergeState": "マージ",
+      "rebaseState": "リベース",
+      "stagedCount": "ステージ済み {{count}} 件"
+    },
+    "branchCompare": {
+      "commits_one": "{{count}} 件のコミット",
+      "commits_other": "{{count}} 件のコミット",
+      "files_one": "{{count}} 個のファイル",
+      "files_other": "{{count}} 個のファイル",
+      "sectionTitle": "ブランチのコミット済み変更",
+      "summary": "{{files}} - {{baseRef}} との比較",
+      "summaryWithCommits": "{{files}} - {{commits}} - {{baseRef}} との比較"
+    },
+    "branchCompareOutcome": {
+      "baseBranchUnavailable": "比較用のベースブランチを特定できませんでした。",
+      "loadFailed": "コミット済みの変更を読み込めませんでした。"
+    },
+    "branchDiffPreviewDrawer": {
+      "closePreview": "コミット済みの差分プレビューを閉じる",
+      "committedOnBranch": "ブランチでコミット済み",
+      "loadFailed": "差分を読み込めません",
+      "truncated": "モバイルでのプレビュー用に差分を一部省略しています。"
+    },
+    "commitDropdown": {
+      "checkOutBranchToPush": "コミットをプッシュする前にブランチをチェックアウトしてください",
+      "checkOutBranchToSync": "コミットを同期する前にブランチをチェックアウトしてください",
+      "checkingBranchStatus": "ブランチの状態を確認中…",
+      "checkingPrStatus": "PR のステータスを確認中…",
+      "commit": "Commit",
+      "commitAndForcePush": "ステージ済みの変更をコミットし、lease 付きで強制プッシュ",
+      "commitAndPush": "ステージ済みの変更をコミットしてプッシュ",
+      "commitAndTryPush": "ステージ済みの変更をコミットし、プッシュを試行",
+      "commitForcePush": "コミットとフォースプッシュ",
+      "commitPush": "コミットとプッシュ",
+      "commitStagedChanges": "ステージ済みの変更をコミット",
+      "commitSync": "コミットと同期",
+      "commitThenPullPush": "コミットしてからプルとプッシュ",
+      "enterMessage": "コミットメッセージを入力してコミット",
+      "linkedReviewTargetUnavailable": "リンクされたレビューブランチのターゲットを利用できません",
+      "prAlreadyMerged": "PR はすでにマージされています",
+      "publishBranchFirstToPush": "コミットをプッシュするには、先にブランチを公開してください",
+      "publishBranchFirstToSync": "コミットを同期するには、先にブランチを公開してください",
+      "resolveConflicts": "コミットする前に競合を解決する",
+      "stageFile": "コミットするには、少なくとも 1 つのファイルをステージングしてください",
+      "useCommitAndForcePush": "「コミットとフォースプッシュ」を使用してください — リモートにはローカルコミットの古いコピーしかありません"
+    },
+    "commitFailurePanel": {
+      "fix": "修正",
+      "fixWithAi": "AI によるコミット失敗の修正",
+      "hideDetails": "詳細を非表示",
+      "hideFailureDetails": "コミット失敗の詳細を非表示",
+      "showDetails": "詳細を表示",
+      "showFailureDetails": "コミット失敗の詳細を表示",
+      "summary": "コミットに失敗しました。",
+      "title": "コミットに失敗しました"
+    },
+    "commitMessageAi": {
+      "generateFailed": "コミットメッセージの生成に失敗しました。"
+    },
+    "commitRunners": {
+      "actionFailed": "ソース管理の操作に失敗しました。",
+      "commitFailed": "コミットに失敗しました。"
+    },
+    "conflictAbort": {
+      "abortMerge": "マージを中止する",
+      "abortOperation": "{{operation}} を中止する",
+      "abortRebase": "リベースを中止する",
+      "aborting": "中止中…"
+    },
+    "content": {
+      "cancelGeneration": "コミットメッセージの生成をキャンセル",
+      "commitMessageDisabled": "コミットメッセージは入力できません。ステージ済みのファイルがありません。",
+      "commitMessagePlaceholder": "コミットメッセージ",
+      "emptyMessage": "ワークツリーに変更はありません。",
+      "emptyTitle": "ローカルの変更なし",
+      "generateMessage": "AIでコミットメッセージを生成",
+      "noStagedFiles": "ステージ済みのファイルなし",
+      "openActions": "ソース管理の操作を開く",
+      "reconnecting": "デスクトップに再接続中…",
+      "regenerateHint": "再生成するには、メッセージをクリアしてください。",
+      "stageAll": "ステージオール",
+      "unstageAll": "すべてステージ解除"
+    },
+    "createPrAction": {
+      "checkingStatus": "レビュー状態を確認中…",
+      "createPullRequest": "PR の作成",
+      "createReview": "{{titleLabel}} を作成",
+      "providerUnavailable": "このプロバイダーではレビューを作成できません",
+      "statusUnavailable": "レビュー状態を取得できません"
+    },
+    "dropdownCounts": {
+      "fastForwardCount_one": "{{count}} 件のコミットを fast-forward",
+      "fastForwardCount_other": "{{count}} 件のコミットを fast-forward",
+      "pullCount_one": "{{count}} 件のコミットをプル",
+      "pullCount_other": "{{count}} 件のコミットをプル",
+      "pushCount_one": "{{count}} 件のコミットをプッシュ",
+      "pushCount_other": "{{count}} 件のコミットをプッシュ",
+      "remoteBranchFallback": "リモートブランチ",
+      "syncCounts": "{{behind}} 件をプル、{{ahead}} 件をプッシュ",
+      "titleForcePushOlderCopiesBranch": "リモートにはローカルコミットの古いコピーしかありません。このブランチを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+      "titleForcePushOlderCopiesCount_one": "リモートにはローカルコミットの古いコピーしかありません。{{count}} 件のブランチコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+      "titleForcePushOlderCopiesCount_other": "リモートにはローカルコミットの古いコピーしかありません。{{count}} 件のブランチコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+      "titleManualForcePushReplaceRemote_one": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新し、リモートにのみあるコミットを置き換えます。",
+      "titleManualForcePushReplaceRemote_other": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新し、リモートにのみあるコミットを置き換えます。",
+      "titleManualForcePush_one": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+      "titleManualForcePush_other": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+      "titleUnpublishedForcePushBranch": "このブランチを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。",
+      "titleUnpublishedForcePushCount_one": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。",
+      "titleUnpublishedForcePushCount_other": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。"
+    },
+    "fileList": {
+      "committedSection": "ブランチのコミット済み変更"
+    },
+    "fileRows": {
+      "addedByThem": "相手側で追加",
+      "addedByUs": "こちら側で追加",
+      "bothAdded": "双方で追加",
+      "bothDeleted": "双方で削除",
+      "bothModified": "双方で変更",
+      "committedSection": "ブランチのコミット済み変更",
+      "committedUnavailable": "コミット済みの変更を表示できません。",
+      "deletedByThem": "相手側で削除",
+      "deletedByUs": "こちら側で削除",
+      "discardFile": "{{path}} の変更を破棄",
+      "loadingCommitted": "コミット済みの変更を読み込み中…",
+      "openChangedFile": "変更されたファイル {{path}} を開く",
+      "openCommittedChange": "{{path}} のコミット済みの変更を開く",
+      "renamedFrom": "変更前: {{path}}",
+      "stageFile": "{{path}} をステージ",
+      "unresolvedConflict": "未解決の競合",
+      "unstageFile": "{{path}} のステージを解除"
+    },
+    "gitHistory": {
+      "days_one": "{{count}}日",
+      "days_other": "{{count}}日",
+      "hours_one": "{{count}}時間",
+      "hours_other": "{{count}}時間",
+      "justNow": "たった今",
+      "loadFailed": "コミット履歴の読み込みに失敗しました。",
+      "minutes_one": "{{count}}分",
+      "minutes_other": "{{count}}分",
+      "months_one": "{{count}}か月",
+      "months_other": "{{count}}か月",
+      "noCommitMessage": "（コミットメッセージなし）",
+      "years_one": "{{count}}年",
+      "years_other": "{{count}}年"
+    },
+    "gitHistoryList": {
+      "loadFailed": "履歴の読み込みに失敗しました。",
+      "loadFilesFailed": "コミット内のファイルを読み込めません。",
+      "noCommits": "コミットがありません。",
+      "noFileChanges": "ファイルの変更なし",
+      "retryFiles": "コミット内のファイルの読み込みを再試行",
+      "waitingForDesktop": "デスクトップからの応答を待機中…"
+    },
+    "gitStatus": {
+      "changes": "変更点",
+      "conflicts": "競合",
+      "stagedChanges": "ステージ済みの変更"
+    },
+    "header": {
+      "backToSession": "セッションに戻る",
+      "close": "ソース管理を閉じる",
+      "openNumberedPrWeb": "PR #{{number}} をウェブで開く",
+      "openPrWeb": "PR をウェブで開く",
+      "refresh": "ソース管理を更新",
+      "title": "ソース管理"
+    },
+    "hostedReview": {
+      "mrCopy": {
+        "reviewLabel": "MR",
+        "shortLabel": "MR",
+        "titleLabel": "MR"
+      },
+      "prCopy": {
+        "reviewLabel": "PR",
+        "shortLabel": "PR",
+        "titleLabel": "PR"
+      }
+    },
+    "hostedReviewCopy": {
+      "committingChanges": "変更をコミット中…",
+      "creatingReview": "レビューを作成中…",
+      "forcePushing": "lease 付きで強制プッシュ中…",
+      "generatingCommitMessage": "コミットメッセージを生成中…",
+      "publishingBranch": "ブランチを公開中…",
+      "pushingCommits": "コミットをプッシュ中…",
+      "stagingChanges": "変更をステージング中…",
+      "updatingBranch": "ブランチを更新中…"
+    },
+    "hostedReviewCreate": {
+      "pushSucceeded": "プッシュは成功しましたが、{{shortLabel}} の作成に失敗しました: {{error}}"
+    },
+    "hostedReviewCreateIntent": {
+      "branchChanged": "PR の準備中にブランチが変更されました。",
+      "generateMessageFailed": "コミットメッセージを生成できませんでした。「ソース管理」で入力してから再試行してください。",
+      "resolveConflicts": "PR を作成する前に、競合を解決してください。",
+      "resolveOrStageChanges": "PR を作成する前に、競合を解決するか、変更をステージングしてください。",
+      "reviewCommitMessage": "コミットメッセージを確認してから、「PR を作成」を再試行してください。"
+    },
+    "hostedReviewGitPreparation": {
+      "commitFailed": "コミットに失敗しました。",
+      "refreshFailed": "ソース管理を更新できませんでした。",
+      "stageFailed": "変更のステージングに失敗しました。",
+      "updateBranchFailed": "リモートブランチを更新できませんでした。「PR を作成」を再試行してください。"
+    },
+    "hostedReviewRemotePrerequisite": {
+      "forcePushFailed": "lease 付きの強制プッシュに失敗しました。",
+      "publishFailed": "ブランチの公開に失敗しました。",
+      "pushFailed": "コミットのプッシュに失敗しました。"
+    },
+    "hostedReviewService": {
+      "createFailed": "PR の作成に失敗しました。",
+      "pushBeforeCreateFailed": "プッシュに失敗しました。プッシュのエラーを解決してから、もう一度お試しください。"
+    },
+    "hubTab": {
+      "changes": "変更点",
+      "commits": "コミット",
+      "pullRequest": "PR"
+    },
+    "loaders": {
+      "connectingToDesktop": "デスクトップに接続中…",
+      "loadFailed": "ソース管理を読み込めませんでした。",
+      "updateDesktop": "モバイルでソース管理を使うには、デスクトップ版 Orca を更新してください。",
+      "waitingForDesktop": "デスクトップへの接続を待機中…"
+    },
+    "modals": {
+      "actionsTitle": "ソース管理",
+      "currentBranch": "現在",
+      "discardButton": "破棄",
+      "discardConfirmMessage": "「{{path}}」への変更を破棄しますか？この操作は取り消せません。",
+      "discardTitle": "変更を破棄",
+      "openPrMessage": "ブラウザで開きますか？",
+      "openPrWithWarning": "ブラウザで開きますか？\n\n{{warning}}",
+      "prCreatedTitle": "PR を作成しました",
+      "switchBranchTitle": "ブランチを切り替え"
+    },
+    "openers": {
+      "openDiffFailed": "差分を開けませんでした。",
+      "tabNotReady": "ファイルは開きましたが、タブの準備がまだできていません。再試行してください。",
+      "waitingForDesktop": "デスクトップへの接続を待機中…"
+    },
+    "panel": {
+      "loadFailedTitle": "読み込めません",
+      "unavailableTitle": "ソース管理を利用できません"
+    },
+    "prChip": {
+      "createPr": "PR を作成",
+      "loading": "PR を読み込み中…",
+      "loadingLabel": "PR を読み込み中",
+      "openLabel": "PR #{{number}}、{{state}}、{{checks}}。PR を開く。",
+      "openWithComments_one": "PR #{{number}}、{{state}}、{{checks}}、未解決のコメント {{count}} 件。PR を開く。",
+      "openWithComments_other": "PR #{{number}}、{{state}}、{{checks}}、未解決のコメント {{count}} 件。PR を開く。",
+      "unavailableLabel": "PR を表示できません：{{message}}"
+    },
+    "prCreate": {
+      "authRequired": "{{reviewLabel}} を作成する前に認証してください。",
+      "baseNotOnRemote": "{{reviewLabel}} を作成する前にベースブランチをプッシュしてください。",
+      "createdNotRefreshed": "{{titleLabel}} を作成しましたが、Orca はまだその情報を更新できていません。",
+      "defaultBranch": "{{reviewLabel}} を作成する前に、フィーチャーブランチに切り替えてください。",
+      "detachedHead": "{{reviewLabel}} を作成する前にブランチをチェックアウトしてください。",
+      "dirty": "{{reviewLabel}} を作成する前に変更をコミットしてください。",
+      "existing": "{{titleLabel}} はすでにオープンです。",
+      "existingNumber": "{{titleLabel}} #{{number}} はすでにオープンです。",
+      "existingReview": "このブランチの {{reviewLabel}} はすでに存在します。",
+      "forkHeadUnsupported": "このフォークからの {{reviewLabel}} の作成はサポートされていません。",
+      "lookupUnconfirmed": "このブランチに既存の {{reviewLabel}} があるかどうかを Orca で確認できませんでした。しばらくしてから再試行してください。",
+      "needsSync": "{{reviewLabel}} を作成する前にこのブランチを同期してください。",
+      "noUpstream": "{{reviewLabel}} を作成する前にコミットを公開してください。",
+      "notReady": "このブランチは、まだ {{reviewLabel}} を作成できる状態ではありません。",
+      "unsupportedMergeRequests": "このリポジトリでは MR の作成に対応していません。",
+      "unsupportedPullRequests": "このリポジトリでは PR の作成に対応していません。"
+    },
+    "prLink": {
+      "updatePullRequestFailed": "リンクされた PR の更新に失敗しました。",
+      "updateReviewFailed": "リンクされたレビューの更新に失敗しました。"
+    },
+    "primaryAction": {
+      "commit": "Commit",
+      "forcePush": "フォースプッシュ",
+      "forcePushFromDesktop": "デスクトップからこの PR のブランチを強制プッシュ",
+      "publishBranch": "ブランチを公開",
+      "pull": "プル",
+      "push": "プッシュ",
+      "stageAll": "ステージオール",
+      "sync": "同期"
+    },
+    "remoteDropdown": {
+      "branchAlreadyPublished": "ブランチは既に公開されています",
+      "branchUpToDate": "ブランチは最新です",
+      "checkOutBranchToFastForward": "fast-forward する前にブランチをチェックアウトしてください",
+      "checkOutBranchToForcePush": "コミットを強制プッシュする前にブランチをチェックアウトしてください",
+      "checkOutBranchToPublish": "コミットを公開する前にブランチをチェックアウトしてください",
+      "checkOutBranchToPull": "コミットをプルする前にブランチをチェックアウトしてください",
+      "checkOutBranchToPush": "コミットをプッシュする前にブランチをチェックアウトしてください",
+      "checkOutBranchToSync": "コミットを同期する前にブランチをチェックアウトしてください",
+      "checkingBranchStatus": "ブランチの状態を確認中…",
+      "checkingPrStatus": "PR のステータスを確認中…",
+      "fastForward": "Fast-forward",
+      "fetch": "フェッチ",
+      "fetchTitle": "マージせずにリモートから取得",
+      "forcePush": "フォースプッシュ",
+      "linkedReviewBranchExists": "リンクされたレビューブランチは既に存在します",
+      "linkedReviewTargetUnavailable": "リンクされたレビューブランチのターゲットを利用できません",
+      "nothingNewToFastForward": "fast-forward する新しいものはありません — リモートにはローカルコミットの古いコピーしかありません",
+      "nothingNewToPull": "プルする新しいものはありません — リモートにはローカルコミットの古いコピーしかありません",
+      "nothingToFastForward": "fast-forward するものはありません",
+      "nothingToForcePush": "強制プッシュするものはありません",
+      "nothingToForcePushTo": "{{upstreamName}} に強制プッシュするものはありません",
+      "nothingToPull": "プルするものはありません",
+      "nothingToPush": "プッシュするものはありません",
+      "nothingToPushTo": "{{upstreamName}} にプッシュするものはありません",
+      "prAlreadyMerged": "PR はすでにマージされています",
+      "publishBranch": "ブランチを公開",
+      "publishBranchFirstToFastForward": "fast-forward するには、先にブランチを公開してください",
+      "publishBranchFirstToPull": "コミットをプルするには、先にブランチを公開してください",
+      "publishBranchFirstToSync": "コミットを同期するには、先にブランチを公開してください",
+      "publishLinkedReview": "リンク済みレビュー",
+      "publishNoBranch": "ブランチなし",
+      "publishPrStatus": "PR ステータス",
+      "publishToOrigin": "このブランチを origin に公開します",
+      "pull": "プル",
+      "push": "プッシュ",
+      "pushAndSetUpstream": "このブランチをプッシュし、必要に応じてアップストリームを設定",
+      "pushMayNeedSync": "ローカルのコミットをプッシュします。git が先に同期を要求する場合があります",
+      "pushToLinkedReview": "リンクされたレビューブランチに更新をプッシュ",
+      "rebaseChooseRemoteBase": "リベース元のリモートベースブランチを選択してください",
+      "rebaseDirtyHint": "リベースを試行します。git が先にローカルの変更のコミットまたは stash を要求する場合があります",
+      "rebaseFromBase": "ベースからリベース",
+      "rebaseFromNamedBase": "{{baseRef}} からリベース",
+      "rebaseWithLatestFrom": "現在のブランチを {{baseRef}} の最新コミットでリベース",
+      "sync": "同期",
+      "tryFastForwardPull": "fast-forward プルを試行します。git がローカルコミットを拒否する場合があります",
+      "tryRegularPush": "通常のプッシュを試行します。git が強制プッシュを要求する場合があります",
+      "useForcePushToSync": "強制プッシュを使用してください — リモートにはローカルコミットの古いコピーしかありません"
+    },
+    "runners": {
+      "actionFailed": "ソース管理の操作に失敗しました。"
+    },
+    "screenState": {
+      "noBranch": "ブランチなし"
+    },
+    "state": {
+      "noUpstream": "アップストリームなし",
+      "syncStatus": "{{ahead}} コミット先行、{{behind}} コミット遅れ"
+    },
+    "textGenerationFailure": {
+      "agentBinaryNotFound": "PATH に {{binary}} が見つかりません。AI コミットメッセージを使用するには、{{label}} をインストールしてください。",
+      "agentCannotGenerateBranchName": "Agent「{{agent}}」はソース管理 AI のブランチ名に対応していません。対応 Agent: {{agents}}、またはカスタムコマンド。",
+      "agentCannotGenerateChatName": "Agent「{{agent}}」はチャット名に対応していません。対応 Agent: {{agents}}、またはカスタムコマンド。",
+      "agentCannotGenerateCommitMessage": "Agent「{{agent}}」はソース管理 AI のコミットメッセージに対応していません。対応 Agent: {{agents}}、またはカスタムコマンド。",
+      "agentCannotGeneratePullRequest": "Agent「{{agent}}」はソース管理 AI の PR の詳細に対応していません。対応 Agent: {{agents}}、またはカスタムコマンド。",
+      "agentCouldNotStart": "{{label}} を起動できませんでした。設定で Agent のコマンドを確認し、もう一度お試しください。",
+      "agentFailedToStart": "{{label}} の起動に失敗しました。設定で Agent のコマンドを確認し、もう一度お試しください。",
+      "agentReportedError": "{{label}} がエラーを報告しました。",
+      "antigravityInvalidEvents": "Antigravity が無効な JSON イベントを返しました。",
+      "antigravityInvalidResult": "Antigravity が無効な結果を返しました。",
+      "antigravityNoFinalResult": "Antigravity が最終結果を返しませんでした。",
+      "chatNameAgentUnsupported": "この操作に対応するチャット名生成用の Agent を設定 -> チャット -> チャット名で選択してください。対応 Agent: {{agents}}、またはカスタムコマンド。",
+      "chatNameCustomCommandEmpty": "カスタムコマンドが空です。設定 -> チャット -> チャット名で追加してください。",
+      "cliFailed": "{{label}} の CLI コマンドがコード {{exitCode}} で失敗しました。",
+      "cliFailedWithDetail": "{{label}} の CLI コマンドがコード {{exitCode}} で失敗しました：{{detail}}",
+      "cliTerminated": "{{label}} の CLI コマンドは終了前に停止されました。",
+      "cliTerminatedWithDetail": "{{label}} の CLI コマンドは終了前に停止されました：{{detail}}",
+      "commandTemplateEmptyBranchName": "ブランチ名用のコマンドテンプレートが空です。",
+      "commandTemplateEmptyChatName": "チャット名用のコマンドテンプレートが空です。",
+      "commandTemplateEmptyCommitMessage": "コミットメッセージ用のコマンドテンプレートが空です。",
+      "commandTemplateEmptyPullRequest": "PR の詳細用のコマンドテンプレートが空です。",
+      "commitMessageUnparseable": "生成されたコミットメッセージを解析できませんでした。",
+      "emptyCommitMessage": "{{label}} が空のメッセージを返しました。",
+      "emptyCommitMessageWithDetail": "{{label}} が空のメッセージを返しました。CLI 出力: {{detail}}",
+      "emptyJiraSummary": "{{label}} が空の要約を返しました。",
+      "emptyJiraSummaryWithDetail": "{{label}} が空の要約を返しました。CLI 出力: {{detail}}",
+      "emptyPullRequestDetails": "{{label}} が返した詳細は空でした。",
+      "emptyPullRequestDetailsWithDetail": "{{label}} が返した詳細は空でした。CLI 出力: {{detail}}",
+      "jiraAccountDisconnected": "このホストで、選択した Jira アカウントを再接続してください。",
+      "jiraDescriptionRequired": "説明は必須です。",
+      "jiraSummaryBusyInOtherDraft": "別の下書きですでに Jira のタイトルを生成中です。",
+      "jiraSummaryEmptyAfterSanitization": "生成された要約はサニタイズ後に空になりました。",
+      "kimiAgentChangeOnResume": "Kimi はセッションの再開時に Agent を変更できません。テキスト生成レシピまたは CLI 引数で Agent の上書き指定を削除するか、新しいセッションを開始してください。",
+      "kimiAgentOptionsConflict": "Kimi に競合または重複する Agent オプションが渡されました。テキスト生成レシピまたは CLI 引数に --agent または --agent-file オプションを 1 つだけ残して、再試行してください。",
+      "kimiAuthFailed": "Kimi で認証できませんでした。実行ホストでサインインするか、プロバイダーの認証情報を修正してから、再試行してください。",
+      "kimiCancelled": "Kimi がテキスト生成の完了前にリクエストをキャンセルしました。もう一度お試しください。",
+      "kimiConfigInvalid": "Kimi の設定が無効です。再試行する前に実行ホストのモデルとプロバイダーの設定を確認してください。",
+      "kimiConflictingOptions": "Kimi に競合するオプションが渡されました：{{option}} と {{otherOption}}。再試行する前にテキスト生成レシピまたは CLI 引数を修正してください。",
+      "kimiConnectionFailed": "Kimi はプロバイダーに接続できませんでした。実行ホストのネットワークを確認してから、再試行してください。",
+      "kimiContextOverflow": "Kimi のコンテキストを使い切りました。プロンプトを短くするか、新しいセッションを開始してから、再試行してください。",
+      "kimiContinueSessionConflict": "Kimi に競合するオプションが渡されました：--continue, --session。再試行する前にテキスト生成レシピまたは CLI 引数を修正してください。",
+      "kimiCredentialVariableMissing": "Kimi で認証情報用に指定されている環境変数がありません。再試行する前に実行ホストで設定してください。",
+      "kimiCredentialsRequired": "Kimi にはプロバイダーの認証情報が必要です。実行ホストで Kimi を開き、プロバイダーを設定するかサインインしてから、再試行してください。",
+      "kimiEmptyAgent": "Kimi に空の Agent 値が渡されました。テキスト生成レシピまたは CLI 引数の該当する入力を修正してから、再試行してください。",
+      "kimiEmptyAgentFilePath": "Kimi に空の Agent ファイルパスが渡されました。テキスト生成レシピまたは CLI 引数の該当する入力を修正してから、再試行してください。",
+      "kimiEmptyModel": "Kimi に空のモデル値が渡されました。テキスト生成レシピまたは CLI 引数の該当する入力を修正してから、再試行してください。",
+      "kimiEmptyPrompt": "Kimi に空のプロンプトが渡されました。テキスト生成レシピまたは CLI 引数の該当する入力を修正してから、再試行してください。",
+      "kimiFailed": "Kimi はテキストの生成を完了できませんでした。再試行する前に実行ホストで Kimi を開き、エラーを確認してください。",
+      "kimiInterrupted": "Kimi はテキストの生成が完了する前に中断されました。もう一度お試しください。",
+      "kimiModelMissing": "Kimi に使用可能なモデルが設定されていません。実行ホストで Kimi を開き、モデルを設定または選択してから、再試行してください。",
+      "kimiOptionRejected": "Kimi がオプションまたは引数を拒否しました。テキスト生成レシピまたは CLI 引数を修正してから、再試行してください。",
+      "kimiOutputFormatInvalid": "Kimi の出力形式には、プロンプトモードと、サポートされている値 text または stream-json が必要です。再試行する前にテキスト生成レシピまたは CLI 引数を修正してください。",
+      "kimiPromptHookBlocked": "Kimi のプロンプトフックがリクエストをブロックしたか、ターンを開始できませんでした。再試行する前に Kimi のフックと設定を確認してください。",
+      "kimiProviderLimited": "Kimi がプロバイダーの制限に達したか、プロバイダーが混雑しています。しばらく待ってから再試行するか、リクエストの頻度を減らしてください。",
+      "kimiResponseBlocked": "ブロックされたため、Kimi は応答を返せませんでした。再試行する前にプロンプトまたはモデル設定を見直してください。",
+      "kimiSessionIdRequired": "Kimi のプロンプトモードでセッションを再開するには、セッション ID が必要です。テキスト生成レシピまたは CLI 引数を修正してから、再試行してください。",
+      "kimiSessionNotFound": "Kimi は指定されたセッションを見つけられませんでした。既存のセッションを使用するか、新しいセッションを開始してください。",
+      "kimiSessionOccupied": "Kimi は、別のクライアントで使用中のため、このセッションを使用できませんでした。そのクライアントでセッションを停止するか、クライアントを終了してから、もう一度お試しください。",
+      "kimiSessionOtherDirectory": "この Kimi セッションは別のディレクトリに属しています。そのディレクトリで再開するか、このワークスペース用に作成したセッションを使用してください。",
+      "kimiUnreadableOutput": "Kimi が Orca で読み取れない出力を返しました。もう一度お試しください。",
+      "noBranchChanges": "要約するブランチの変更はありません。",
+      "noModelForAgent": "{{label}} で利用できるモデルがありません。",
+      "noStagedChanges": "要約するステージ済みの変更はありません。",
+      "openCodeInvalidEvents": "OpenCode が無効な JSON イベントを返しました。",
+      "outputTooLarge": "{{label}} の CLI コマンドの出力が多すぎます。Agent の CLI 設定を確認し、もう一度お試しください。",
+      "planAgentUnsupported": "Agent「{{agent}}」は AI コミットメッセージに対応していません。",
+      "planCustomCommandEmpty": "カスタムコマンドが空です。設定 → Git → AI コミットメッセージで追加してください。",
+      "planModelUnavailable": "モデル「{{model}}」は {{label}} で利用できません。",
+      "planModelWithoutThinking": "モデル「{{model}}」は思考の強度設定に対応していません。",
+      "planThinkingLevelInvalid": "思考レベル「{{level}}」は {{model}} では無効です。",
+      "promptTooLargeForArgument": "{{label}} のプロンプトが大きすぎるため、単一のコマンドライン引数として渡せません。ステージする変更を減らして、もう一度お試しください。",
+      "promptTooLargeForWindows": "{{label}} のプロンプトが Windows のコマンドラインには大きすぎます。ステージする変更を減らして、もう一度お試しください。",
+      "pullRequestDetailsUnparseable": "生成された PR の詳細を解析できませんでした。",
+      "sourceControlAgentUnsupported": "この操作に対応する Agent を設定 -> Git -> ソース管理 AI で選択してください。対応 Agent: {{agents}}、またはカスタムコマンド。",
+      "sourceControlCustomCommandEmpty": "カスタムコマンドが空です。設定 -> Git -> ソース管理 AI で追加してください。",
+      "stagedChangesReadFailed": "ステージ済みの変更を読み取れませんでした。",
+      "timedOut": "生成が {{seconds}} 秒でタイムアウトしました。",
+      "windowsBatchUnsafeArguments": "{{label}} の実行に使われる Windows バッチスクリプトは、複数行のプロンプトを引数として受け取れません。設定で Agent の実行ファイルを指定するか、{prompt} を含まないカスタムコマンドを使用して、Orca がプロンプトを stdin に送信できるようにしてください。"
+    },
+    "useMobileCommitFailureRecovery": {
+      "launchFailed": "Agent の起動に失敗しました。",
+      "waitingForDesktop": "デスクトップへの接続を待機中…"
+    },
+    "useMobileCommitMessageGeneration": {
+      "generateFailed": "コミットメッセージの生成に失敗しました。"
+    },
+    "useMobileCreatePrRunner": {
+      "branchRequired": "PR を作成する前にブランチをチェックアウトしてください。"
+    },
+    "useMobileGitRequests": {
+      "actionFailed": "ソース管理の操作に失敗しました。",
+      "branchUnavailable": "ブランチの状態を確認できません。",
+      "commitFailed": "コミットに失敗しました。",
+      "waitingForDesktop": "デスクトップへの接続を待機中…"
+    }
+  },
+  "tasks": {
+    "composerSource": {
+      "baseFailed": "ベースブランチの特定に失敗しました。",
+      "forkPushWarning": "この PR は「メンテナーによる編集を許可」がオフのため、フォークへのプッシュが GitHub に拒否される場合があります。"
+    },
+    "detailCommentRenderers": {
+      "commentPlaceholder": "コメントを追加",
+      "comments_one": "{{count}} 件のコメント",
+      "comments_other": "{{count}} 件のコメント",
+      "reopenThread": "スレッドを再開",
+      "reply": "返事",
+      "resolveThread": "スレッドを解決",
+      "resolvedCommentBy": "{{author}} の解決済みコメント",
+      "resolvedThreadBy": "{{author}} の解決済みスレッド",
+      "sendComment": "コメントを送信",
+      "show": "表示"
+    },
+    "filterPickers": {
+      "allTeams": "全チーム",
+      "changeStatus": "ステータスを変更",
+      "fieldHidden": "カードでは非表示",
+      "fieldShown": "カードに表示",
+      "fieldsSubtitle": "アイテムカードに表示するプロジェクトのフィールドを選択してください。",
+      "fieldsTitle": "プロジェクトのフィールド",
+      "gitlabFilter": "GitLab フィルター",
+      "gitlabView": "GitLab ビュー",
+      "jiraFilter": "Jira フィルター",
+      "jiraSite": "Jira サイト",
+      "linearFilter": "Linear フィルター",
+      "linearIssue": "Linear Issue",
+      "linearWorkspace": "Linear ワークスペース",
+      "loadingStates": "ステータスを読み込み中…",
+      "noFields": "このビューに表示できる追加フィールドはありません。",
+      "noStates": "利用可能なステータスがありません。",
+      "switchWorkspaceFailed": "ワークスペースの切り替えに失敗しました",
+      "teamsSubtitle": "「タスク」に表示するチームを選択してください。",
+      "teamsTitle": "Linear チーム",
+      "teams_one": "{{count}} チーム",
+      "teams_other": "{{count}} チーム"
+    },
+    "githubProjectList": {
+      "browseProjects": "プロジェクトを参照",
+      "chooseProject": "GitHub プロジェクトを選択",
+      "emptyField": "空欄",
+      "issueSubtitle": "Issue · {{repository}}{{number}}",
+      "itemSubtitle": "プロジェクトアイテム · {{repository}}{{number}}",
+      "items": "アイテム",
+      "moreFields_one": "+{{count}} フィールド",
+      "moreFields_other": "+{{count}} フィールド",
+      "noItems": "プロジェクトのアイテムがありません。",
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+    },
+    "githubProjectPickers": {
+      "add": "追加",
+      "addByUrlHint": "表示されないプロジェクトは URL を入力して追加してください。",
+      "addPlaceholder": "URL または所有者/番号で追加",
+      "adding": "追加中…",
+      "browseAll": "すべて閲覧する",
+      "browseLoading": "すべて閲覧する（読み込み中…）",
+      "chooseView": "プロジェクトビューを選択",
+      "loadFailed": "プロジェクトのロードに失敗しました",
+      "noMatches": "一致するプロジェクトがありません。",
+      "noMoreProjects": "これ以上プロジェクトはありません。",
+      "noProjects": "読み込み済みのプロジェクトがありません。",
+      "organizationsError": "組織: {{message}}",
+      "organizationsLoadFailed": "一部の組織を読み込めませんでした（{{count}} 件）。",
+      "ownerLoadFailed": "{{owner}} のプロジェクトを読み込めませんでした。",
+      "pin": "ピン",
+      "pinned": "ピン留め済み",
+      "recent": "最近の",
+      "retryHint": "タップして再試行してください。",
+      "searchProjects": "プロジェクトを検索する",
+      "sort": "プロジェクトの並べ替え",
+      "subtitle": "「タスク」ページで使うプロジェクトビューを選択してください。",
+      "title": "GitHub Projects",
+      "unsupportedLayout": "Orca はこの GitHub プロジェクトのレイアウトにまだ対応していません。",
+      "view": "プロジェクトビュー"
+    },
+    "githubViewControls": {
+      "fields": "フィールド: {{fields}}",
+      "openView": "GitHub でビューを開く",
+      "sort": "並べ替え: {{sort}}",
+      "source": "ソース: {{source}}"
+    },
+    "itemActions": {
+      "changeStatus": "ステータスを変更",
+      "copyGitHubLink": "GitHub リンクをコピーする",
+      "copyLinearLink": "Linear リンクをコピーする",
+      "createWorkspace": "ワークスペースを作成",
+      "creating": "作成中…",
+      "mergeConflicts": "GitHub でマージの競合が報告されています。",
+      "mergeMergeRequest": "MR をマージ",
+      "mergePullRequest": "PR をマージ"
+    },
+    "itemDetailContent": {
+      "addSubIssue": "サブ Issue を追加",
+      "assignee": "担当者",
+      "assignees": "担当者",
+      "checks": "チェック",
+      "description": "説明",
+      "discussion": "ディスカッション",
+      "noChecks": "チェックが見つかりません。",
+      "noComments": "コメントはありません。",
+      "noPipelineRuns": "この MR のパイプライン実行履歴はありません。",
+      "noSubIssues": "サブ Issue はありません。",
+      "none": "なし",
+      "pipeline": "パイプライン",
+      "pipelineJobs_one": "{{count}} 件のジョブ",
+      "pipelineJobs_other": "{{count}} 件のジョブ",
+      "project": "プロジェクト",
+      "rerunAll": "すべて再実行",
+      "rerunFailed": "失敗分を再実行",
+      "status": "状態",
+      "subIssueTitle": "サブ Issue のタイトル",
+      "subIssues": "サブ Issue",
+      "type": "種類"
+    },
+    "itemDetailDrawer": {
+      "refreshDetails": "詳細を更新"
+    },
+    "itemFieldEditors": {
+      "addLabels": "追加するラベル（カンマ区切り）",
+      "addUsernames": "追加するユーザー名（カンマ区切り）",
+      "assignees": "担当者",
+      "labels": "ラベル",
+      "loadingAssignees": "担当者を読み込み中…",
+      "loadingLabels": "ラベルを読み込み中…",
+      "noAssignableUsers": "このリポジトリで担当者に指定できるユーザーが見つかりませんでした。",
+      "noLabels": "このリポジトリにはラベルがありません。",
+      "none": "なし",
+      "removeLabels": "削除するラベル（カンマ区切り）",
+      "removeUsernames": "削除するユーザー名（カンマ区切り）",
+      "saveTitle": "タイトルを保存",
+      "title": "タイトル",
+      "updateAssignees": "担当者を更新",
+      "updateLabels": "ラベルを更新"
+    },
+    "itemReviewSections": {
+      "binaryFile": "バイナリファイルです。",
+      "changedFilesTitle": "変更済みファイル",
+      "descriptionPlaceholder": "説明",
+      "fileContentsUnavailable": "ファイルの内容を表示できません。",
+      "hideFile": "非表示",
+      "loadingReviewers": "レビュアーを読み込み中…",
+      "markUnviewed": "未閲覧としてマークする",
+      "markViewed": "閲覧済みとしてマークする",
+      "noDescription": "説明はありません。",
+      "noReviewerSuggestions": "レビュアーの候補が見つかりませんでした。",
+      "noReviewersRequested": "レビュアーはリクエストされていません。",
+      "requestReview": "レビューを依頼",
+      "reviewersPlaceholder": "依頼するレビュアー",
+      "reviewersTitle": "レビュアー",
+      "saveDescription": "説明を保存",
+      "viewFile": "表示"
+    },
+    "legacySurface": {
+      "loadIssuesFailed": "{{source}} から Issue を読み込めませんでした。",
+      "mergeAction": "マージ",
+      "mergeMethodTitle": "マージ方法",
+      "mergePullRequestTitle": "PR をマージ",
+      "mergeRequestMergeMessage": "この MR のマージ方法を選択してください。",
+      "mergeRequestTitle": "MR をマージ",
+      "pullRequestMergeMessage": "この PR のマージ方法を選択してください。",
+      "retryLoadingIssues": "{{source}} からの Issue の読み込みを再試行",
+      "retrying": "再試行中…",
+      "sourceFallback": "{{repo}} では優先する Issue ソースの upstream が利用できません。origin を使用します。",
+      "subIssueDataUnavailable": "トークンではサブ Issue データを利用できません。",
+      "updateItemTitle": "項目を更新"
+    },
+    "linearList": {
+      "changeStatusFrom": "状態を「{{status}}」から変更"
+    },
+    "linearViewControls": {
+      "displayButton": "表示",
+      "groupLabel": "グループ化：{{group}}",
+      "orderLabel": "並べ替え：{{order}}"
+    },
+    "listDisplayPickers": {
+      "displayPropertiesTitle": "表示項目",
+      "linearGroupTitle": "Linear の Issue をグループ化",
+      "linearOrderTitle": "Linear の Issue を並べ替え",
+      "linearViewTitle": "Linear の表示",
+      "sortTasksTitle": "タスクを並べ替え"
+    },
+    "listSurface": {
+      "connectLinearButton": "Linear に接続",
+      "connectLinearMessage": "「タスク」から、担当する Linear の Issue を確認して作業を開始できます。",
+      "connectLinearTitle": "Linear アカウントを接続する",
+      "jiraStatusFailed": "Jira の状態の読み取りに失敗しました。",
+      "updateDesktopMessage": "モバイルの「タスク」画面には、新しいバージョンのデスクトップランタイムが必要です。",
+      "updateDesktopTitle": "Orca デスクトップを更新"
+    },
+    "options": {
+      "all": "全て",
+      "assignedToMe": "私に割り当てられた Issue",
+      "assignee": "担当者",
+      "board": "ボード",
+      "boardDescription": "グループ別の列で表示",
+      "closedState": "クローズ",
+      "completedState": "完了",
+      "createdState": "自分が作成",
+      "githubAssignedIssuesDescription": "私に割り当てられたオープンな Issue",
+      "githubDescription": "Issue と PR",
+      "githubIssuesDescription": "GitHub Issue",
+      "githubOpenIssuesDescription": "オープンな GitHub Issue",
+      "githubProjectsDescription": "GitHub Projects のビュー",
+      "githubPullRequestsDescription": "GitHub PR",
+      "gitlabAllDescription": "GitLab の全ての状態",
+      "gitlabClosedDescription": "クローズした Issue と MR",
+      "gitlabDescription": "Issue と MR",
+      "gitlabMergedDescription": "マージ済みの MR",
+      "gitlabOpenDescription": "オープンな Issue と MR",
+      "identifier": "識別子",
+      "issues": "Issue",
+      "jiraDescription": "担当する Issue と報告した Issue",
+      "labels": "ラベル",
+      "linearAllDescription": "接続済みワークスペース全体のオープンな Issue",
+      "linearAssignedDescription": "自分が担当する Issue",
+      "linearCompletedDescription": "最近完了した Issue",
+      "linearCreatedDescription": "自分が作成した Issue",
+      "linearDescription": "担当する Issue とチームの Issue",
+      "list": "リスト",
+      "listDescription": "Issue をコンパクトに一覧表示",
+      "mergedState": "マージ済み",
+      "mine": "私の",
+      "myIssues": "自分の Issue",
+      "myPullRequestsDescription": "私が作成した PR",
+      "myTodos": "私の ToDo",
+      "myTodosDescription": "未処理の GitLab ToDo",
+      "needsReview": "レビュー待ち",
+      "noGrouping": "グループ化なし",
+      "openPullRequestsDescription": "オープンな PR",
+      "openState": "オープン",
+      "priority": "優先度",
+      "projectMergeRequests": "プロジェクトの MR",
+      "projectMergeRequestsDescription": "リポジトリ別の MR と Issue",
+      "projects": "プロジェクト",
+      "pullRequests": "PR",
+      "repository": "リポジトリ",
+      "repositorySortDescription": "リポジトリ別にグループ化し、アクティビティが新しい順に表示",
+      "reviewRequestsDescription": "私に割り当てられたレビュー依頼",
+      "status": "状態",
+      "team": "チーム",
+      "updated": "更新日時",
+      "updatedSortDescription": "アクティビティが新しい順"
+    },
+    "pickerProjection": {
+      "allRepos": "すべてのリポジトリ",
+      "allSites": "すべてのサイト",
+      "currentlyAscending": "現在は昇順・タップで降順に変更",
+      "currentlyDescending": "現在は降順・タップで昇順に変更",
+      "fieldAscending": "{{field}} 昇順",
+      "fieldDescending": "{{field}} 降順",
+      "fields": "フィールド",
+      "repos_one": "{{count}} 件のリポジトリ",
+      "repos_other": "{{count}} 件のリポジトリ",
+      "selectTarget": "作成先を選択",
+      "selectedFields": "{{selected}}/{{total}} フィールド",
+      "sortAscending": "昇順に並べ替え",
+      "sources_one": "{{count}} 件のソース",
+      "sources_other": "{{count}} 件のソース",
+      "unsupportedLayout": "モバイルでは未対応のレイアウト",
+      "updatedSort": "更新日時",
+      "usesFieldAscending": "{{field}} の昇順を使用",
+      "usesFieldDescending": "{{field}} の降順を使用",
+      "usesGitHubRankOrder": "GitHub のランク順を使用",
+      "viewNumber": "ビュー #{{number}}",
+      "viewOrder": "ビューの並び順"
+    },
+    "prFileDiff": {
+      "commentOnLine": "{{line}} 行目にコメント",
+      "commentPlaceholder": "レビューコメントを追加",
+      "noTextChanges": "テキストの変更はありません。",
+      "showingDiffLines": "差分の全 {{total}} 行中、先頭 {{limit}} 行を表示しています。"
+    },
+    "projectComments": {
+      "comments_one": "{{count}} 件のコメント",
+      "comments_other": "{{count}} 件のコメント",
+      "discussion": "ディスカッション",
+      "editComment": "コメントを編集",
+      "noComments": "コメントはありません。",
+      "reopenThread": "スレッドを再開",
+      "reply": "返事",
+      "resolveThread": "スレッドを解決",
+      "resolvedCommentBy": "{{author}} のコメント（解決済み）",
+      "resolvedThreadBy": "{{author}} のスレッド（解決済み）",
+      "show": "表示"
+    },
+    "projectDetailDrawer": {
+      "addRepositoryFromDesktop": "{{repository}} は Orca に追加されていません。デスクトップアプリからこのリポジトリを追加し、モバイルの「タスク」を更新してください。",
+      "clearType": "種類をクリア",
+      "closeItem": "項目をクローズ",
+      "copyGitHubLink": "GitHub リンクをコピーする",
+      "copyRepository": "リポジトリ名をコピー",
+      "createWorkspace": "ワークスペースを作成",
+      "draftIssue": "下書きの Issue",
+      "issue": "Issue",
+      "issueType": "Issue の種類",
+      "loadingIssueTypes": "Issue の種類を読み込み中…",
+      "mergePullRequest": "PR をマージ",
+      "mergeRepositoryRequirement": "マージするには、このリポジトリを Orca に追加する必要があります。",
+      "noIssueTypes": "このリポジトリには Issue の種類が設定されていません。",
+      "noType": "種類なし",
+      "openInGitHub": "GitHub で開く",
+      "projectItem": "プロジェクト項目",
+      "projectSubtitle": "GitHub プロジェクト · {{repository}}{{itemNumber}}",
+      "pullRequest": "PR",
+      "reopenItem": "項目を再オープン",
+      "repositoryNotInOrca": "このリポジトリは Orca に登録されていません",
+      "status": "状態",
+      "type": "種類",
+      "workspaceCreationRequirement": "ワークスペースは GitHub の Issue と PR からのみ作成できます。"
+    },
+    "projectFieldEditors": {
+      "clearField": "フィールドをクリア",
+      "completedIteration": "完了 · {{startDate}} · {{duration}} 日",
+      "datePlaceholder": "YYYY-MM-DD",
+      "invalidDate": "日付は YYYY-MM-DD 形式で入力してください。",
+      "invalidNumber": "有効な数値を入力してください。",
+      "noIterations": "利用可能なイテレーションはありません。",
+      "numberPlaceholder": "数値",
+      "projectFields": "プロジェクトのフィールド",
+      "saveField": "フィールドを保存",
+      "textPlaceholder": "テキスト",
+      "upcomingIteration": "現在および今後の予定 · {{startDate}} · {{duration}} 日"
+    },
+    "projectMetadataEditors": {
+      "assignees": "担当者",
+      "description": "説明",
+      "labels": "ラベル",
+      "loadingAssignees": "担当者を読み込み中…",
+      "loadingLabels": "ラベルを読み込み中…",
+      "noAssignableUsers": "このリポジトリで割り当て可能なユーザーが見つかりません。",
+      "noDescription": "説明はありません。",
+      "noLabels": "このリポジトリにはラベルがありません。",
+      "none": "なし",
+      "saveDescription": "説明を保存",
+      "saveTitle": "タイトルを保存",
+      "title": "タイトル"
+    },
+    "projectReviewPanels": {
+      "binaryFile": "バイナリファイルです。",
+      "changedFiles": "変更済みファイル",
+      "checks": "チェック",
+      "fileUnavailable": "ファイルの内容を表示できません。",
+      "hideFile": "非表示",
+      "loadingReviewers": "レビュアーを読み込み中…",
+      "markUnviewed": "未閲覧としてマークする",
+      "markViewed": "閲覧済みとしてマークする",
+      "noChecks": "チェックが見つかりません。",
+      "noReviewers": "レビュアーはリクエストされていません。",
+      "noSuggestions": "レビュアー候補が見つかりません。",
+      "requestReview": "レビューを依頼",
+      "requestReviewers": "レビューの依頼先",
+      "rerunAll": "すべて再実行",
+      "rerunFailed": "失敗分を再実行",
+      "reviewers": "レビュアー",
+      "viewFile": "表示"
+    },
+    "providerControls": {
+      "myTodos": "自分の ToDo",
+      "projectMergeRequests": "プロジェクトの MR",
+      "sort": "並べ替え：{{sortLabel}}"
+    },
+    "providerItemList": {
+      "intoBranch": "{{base}} へ",
+      "nextPage": "次のページ",
+      "page": "{{page}} ページ",
+      "pageOfTotal": "{{page}} / {{total}} ページ",
+      "previousPage": "前のページへ",
+      "selectPage": "ページを選択、{{page}} ページ",
+      "selectPageOfTotal": "ページを選択、全 {{total}} ページ中 {{page}} ページ"
+    },
+    "providerPickers": {
+      "allRepositories": "すべてのリポジトリ",
+      "githubView": "GitHub の表示",
+      "issueSources": "GitHub Issue の取得元",
+      "issueSourcesDescription": "リポジトリごとに、検索や作業の作成に使うソースを upstream または origin から選択してください。",
+      "issues": "Issue",
+      "noIssueSources": "ほかに利用できる Issue の取得元はありません。",
+      "origin": "origin",
+      "pageHint": "読み込み済みまたは利用可能な結果ページに移動します。",
+      "pageLoaded": "読み込み済み",
+      "pageNotLoaded": "以前の結果を読み込み",
+      "pageNumber": "{{page}} ページ",
+      "pages": "GitHub の結果ページ",
+      "pullRequests": "PR",
+      "queryingSource": "検索対象: {{source}}",
+      "repoDescription": "検索対象のリポジトリを選択してください。",
+      "repos": "リポジトリ",
+      "taskSource": "タスクソース",
+      "upstream": "upstream"
+    },
+    "providerViewProjection": {
+      "all": "全て",
+      "allSites": "すべてのサイト",
+      "allTeams": "全チーム",
+      "allWorkspaces": "すべてのワークスペース",
+      "chooseProject": "プロジェクトを選択",
+      "default": "デフォルト",
+      "defaultSubtitle": "{{subtitle}} · デフォルト",
+      "issues": "Issue",
+      "list": "リスト",
+      "noGrouping": "グループ化なし",
+      "openState": "オープン",
+      "priority": "優先度",
+      "projects": "プロジェクト",
+      "pullRequests": "PR",
+      "teams_one": "{{count}} チーム",
+      "teams_other": "{{count}} チーム",
+      "workspace": "ワークスペース"
+    },
+    "reviewerLinear": {
+      "issues": "Issue",
+      "unassigned": "未割り当て"
+    },
+    "screenChrome": {
+      "connectLinear": "Linear に接続",
+      "newGitHubIssue": "GitHub の新規 Issue",
+      "newLinearIssue": "新規 Linear Issue",
+      "refreshGitHub": "GitHub の作業を更新する",
+      "refreshGitLab": "GitLab 作業項目を更新する",
+      "refreshJira": "Jira Issue を更新する",
+      "refreshLinear": "Linear を更新",
+      "title": "タスク"
+    },
+    "searchControl": {
+      "jiraPlaceholder": "Jira JQL（例：project = ABC AND statusCategory != Done）",
+      "projectPlaceholder": "プロジェクトビューを検索…",
+      "providerPlaceholder": "{{provider}} のタスクを検索…"
+    },
+    "smartSourceModes": {
+      "allStates": "全て",
+      "branch": "ブランチ",
+      "closedState": "クローズ",
+      "mergedState": "マージ済み",
+      "name": "名前",
+      "openState": "オープン",
+      "smart": "スマート"
+    },
+    "sparsePresetDraft": {
+      "directoryRequired": "少なくとも 1 つのディレクトリを追加してください。",
+      "repoRelativeDirectoriesRequired": "ルート、絶対パス、親セグメントではなく、リポジトリ相対ディレクトリを使用してください。"
+    },
+    "taskViewOptions": {
+      "allSubtitle": "選択したサイト全体の未解決の Issue",
+      "assignedSubtitle": "自分に割り当てられた未解決の Issue",
+      "doneSubtitle": "最近解決された自分の Issue",
+      "noGitHubTasks": "GitHub のタスクはありません。",
+      "noGitLabTasks": "GitLab のタスクはありません。",
+      "noJiraTasks": "Jira のタスクはありません。",
+      "noLinearTasks": "Linear のタスクはありません。",
+      "reportedSubtitle": "報告した未解決の Issue"
+    },
+    "tasksCreateDrawers": {
+      "connect": "接続",
+      "connectLinearWorkspace": "Linear ワークスペースに接続",
+      "createIssue": "Issue を作成",
+      "createWorkspaceIn": "ワークスペースの作成先リポジトリ",
+      "description": "説明",
+      "descriptionPlaceholder": "背景情報を追加",
+      "fileIn": "{{slug}} に登録",
+      "issueSource": "Issue ソース",
+      "keySecurityHint": "キーはホスト OS のキーチェーンで暗号化され、ローカルに保存されます。",
+      "linearConnectSubtitle": "ワークスペースの Issue を閲覧するには、個人用 API キーを貼り付けてください。",
+      "linearSettingsLink": "Linear の設定 / セキュリティ / 新規 API キー",
+      "linearTeam": "Linear チーム",
+      "linearTeamSubtitle": "選択した Linear チームに Issue を作成します。",
+      "newIssueTitle": "{{providerLabel}} の新規 Issue",
+      "origin": "オリジン",
+      "personalApiKey": "個人用APIキー",
+      "repository": "リポジトリ",
+      "repositorySubtitle": "選択したリポジトリに Issue を作成します。",
+      "team": "チーム",
+      "title": "タイトル",
+      "titlePlaceholder": "タスクのタイトル",
+      "upstream": "upstream"
+    },
+    "workspaceAgentSelection": {
+      "blankTerminal": "ブランクターミナル"
+    },
+    "workspaceCreateDrawer": {
+      "addRepository": "Linear の Issue からワークスペースを作成する前に、Git リポジトリを追加してください。",
+      "advanced": "詳細設定",
+      "agent": "Agent",
+      "connect": "接続",
+      "connectFirst": "先にリポジトリに接続",
+      "connectRepository": "リポジトリに接続",
+      "connecting": "接続中…",
+      "createFrom": "{{branch}} から作成",
+      "defaultBranch": "デフォルトブランチ",
+      "detectingAgents": "Agent を検出中…",
+      "optional": "[オプション]",
+      "remoteRepository": "リモートリポジトリ",
+      "repository": "リポジトリ",
+      "repositoryNotFound": "リポジトリが見つかりません。",
+      "selectRepository": "リポジトリを選択",
+      "sshConnection": "SSH 接続",
+      "startFrom": "作成元",
+      "title": "ワークスペースを作成",
+      "workspaceName": "ワークスペース名"
+    },
+    "workspaceCreateProjection": {
+      "nameAlreadyExists": "「{{name}}」は既に存在します。",
+      "nameRequired": "名前を入力してください。",
+      "nameTooLong": "名前は80文字以内にしてください。",
+      "openShell": "シェルを開く"
+    },
+    "workspaceOptionPickers": {
+      "baseBranchSubtitle": "既存のブランチまたは参照を選択してください。",
+      "baseBranchTitle": "作成元",
+      "branchName": "ブランチ名: {{name}}",
+      "defaultBranch": "デフォルトブランチ",
+      "defaultBranchSubtitle": "このリポジトリに設定されたベースブランチを使用",
+      "editPreset": "{{name}} を編集",
+      "fullCheckout": "フルチェックアウト",
+      "fullCheckoutSubtitle": "リポジトリ全体を使用",
+      "newPreset": "新規プリセット",
+      "noBranches": "一致するブランチはありません。",
+      "searchBranches": "ブランチを検索",
+      "sparseCheckoutTitle": "スパースチェックアウト"
+    },
+    "workspaceSshGate": {
+      "authenticationFailed": "認証に失敗しました",
+      "connected": "接続済み",
+      "connecting": "接続中",
+      "connectionFailed": "接続に失敗しました",
+      "deployingRelay": "リレーをデプロイ中",
+      "disconnected": "切断済み",
+      "reconnectFailed": "再接続に失敗しました",
+      "reconnecting": "再接続中"
+    },
+    "workspaceTrustDrawers": {
+      "alwaysTrustAndRun": "常に信頼して実行",
+      "creating": "作成中…",
+      "directoriesLabel": "ディレクトリ",
+      "directories_one": "{{count}} 個のディレクトリ",
+      "directories_other": "{{count}} 個のディレクトリ",
+      "dontRun": "実行しない",
+      "editSparsePreset": "スパースプリセットを編集",
+      "nameLabel": "名前",
+      "namePlaceholder": "レンダラー UI",
+      "newSetupScript": "新しいセットアップスクリプト",
+      "newSparsePreset": "新しいスパースプリセット",
+      "runHooks": "フックを実行する",
+      "runSetupAndCreate": "セットアップを実行して作成",
+      "runSetupTitle": "{{name}} のセットアップを実行しますか?",
+      "setupChangedTitle": "{{name}} のセットアップスクリプトが変更されました",
+      "setupScript": "セットアップスクリプト",
+      "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
+      "setupTitle": "セットアップスクリプトを実行しますか?",
+      "skipSetupAndCreate": "セットアップをスキップして作成",
+      "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。",
+      "trustSubtitle": "このリポジトリの orca.yaml は、ワークスペースの起動前にコンピュータ上で実行されます。このリポジトリを信頼できる場合のみ実行してください。"
+    },
+    "worktreeCreateRetry": {
+      "createFailed": "ワークスペースの作成に失敗しました"
+    }
+  },
+  "terminal": {
+    "keyDefinitions": {
+      "accessoryArrowDown": "下矢印",
+      "accessoryArrowLeft": "左矢印",
+      "accessoryArrowRight": "右矢印",
+      "accessoryArrowUp": "上矢印",
+      "arrowDown": "下矢印",
+      "arrowLeft": "左矢印",
+      "arrowRight": "右矢印",
+      "arrowUp": "上矢印",
+      "clearLineBeforeCursor": "カーソルから行頭まで削除",
+      "clearScreen": "画面をクリア",
+      "deleteWordBackward": "前の単語を削除",
+      "endOfLine": "行末",
+      "forwardDelete": "前方削除",
+      "interruptTerminal": "ターミナルを中断",
+      "reverseSearch": "逆方向検索",
+      "sendEof": "EOF を送信",
+      "startOfLine": "行頭",
+      "suspendProcess": "プロセスを一時停止"
+    },
+    "webView": {
+      "documentStartFailed": "ターミナルドキュメントの起動に失敗しました - {{message}}",
+      "httpError": "ターミナルの WebView で HTTP エラーが発生しました",
+      "loadFailed": "ターミナルの WebView の読み込みに失敗しました",
+      "renderProcessEnded": "ターミナルの WebView の描画プロセスが終了しました"
+    },
+    "webviewEngineErrorState": {
+      "code": "コード {{code}}",
+      "reload": "再読み込み",
+      "rendererCrashed": "レンダラーがクラッシュしました",
+      "status": "ステータス {{statusCode}}",
+      "title": "ターミナルの読み込みに失敗しました"
+    },
+    "webviewNotificationDispatch": {
+      "unknownError": "不明なターミナルエラー"
+    },
+    "webviewReadyWatchdog": {
+      "initializeFailed": "ターミナルを初期化できませんでした。ターミナルビューから準備完了の通知がありません。"
+    }
+  },
+  "webShell": {
+    "shellStateScreen": {
+      "checkingHost": "ホストを確認中",
+      "connectToDownload": "このホストに接続して、最新のアプリをダウンロードしてください。",
+      "documentLoadFailed": "ダウンロードしたアプリを開けませんでした。",
+      "downloadFailed": "このホストから最新のアプリをダウンロードできませんでした。",
+      "hostProfileUnreadable": "このデバイスでこのホストの情報を読み取れませんでした。再試行してください。",
+      "isolationUnavailable": "このデバイスの WebView が古すぎるため、ワークスペースを安全に開けません。",
+      "openingWorkspace": "ワークスペースを開いています",
+      "renderProcessGone": "ワークスペースが応答しなくなりました。",
+      "statusUnreadable": "このホストの状態を読み取れませんでした。前の画面に戻り、もう一度開いてください。",
+      "tryAgain": "再試行"
+    }
+  },
+  "workspace": {
+    "branchChoice": {
+      "automaticName": "自動で命名",
+      "existing": "既存のブランチ",
+      "existingHint": "新しいコミットはこのブランチに追加されます。",
+      "hostUpdateRequired": "ブランチを再利用するか、別のブランチを明示的に作成するには、ワークスペースのホストで Orca を更新してください。",
+      "new": "新しいブランチ",
+      "newHint": "新しいローカルブランチを作成",
+      "newName": "新しいブランチ名",
+      "title": "このワークツリーのブランチ"
+    }
+  },
+  "worktree": {
+    "agentRowDisplay": {
+      "blocked": "ブロック中",
+      "days_one": "{{count}}日",
+      "days_other": "{{count}}日",
+      "done": "完了",
+      "failed": "失敗",
+      "hours_one": "{{count}}時間",
+      "hours_other": "{{count}}時間",
+      "idle": "アイドル",
+      "interrupted": "中断",
+      "justNow": "たった今",
+      "minutes_one": "{{count}}分",
+      "minutes_other": "{{count}}分",
+      "monitoring": "バックグラウンドタスクを監視中",
+      "stopping": "停止中…",
+      "unconfirmed": "確認できませんでした",
+      "unverifiable": "最近の更新なし",
+      "waiting": "入力待ち",
+      "working": "作業中"
+    },
+    "hostWorkspaceListStates": {
+      "checkHost": "コンピュータがスリープしておらず、Orca が起動していることを確認してください。",
+      "empty": "ワークスペースがありません",
+      "loadFailed": "このホストからワークスペースを読み込めませんでした。",
+      "noFilterMatches": "フィルターに一致するワークスペースがありません",
+      "noMatches": "一致するワークスペースがありません",
+      "reopen": "開き直して更新",
+      "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。",
+      "retrying": "worktree.ps に失敗しました（{{error}}）。自動で再試行中です。"
+    },
+    "workspaceListSections": {
+      "all": "全て",
+      "closed": "クローズ",
+      "done": "完了",
+      "inProgress": "進行中",
+      "inReview": "レビュー中",
+      "pinned": "ピン留め済み"
+    }
+  }
+}

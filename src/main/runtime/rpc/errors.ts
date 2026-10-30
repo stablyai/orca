@@ -12,6 +12,7 @@ import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
+import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
@@ -29,6 +30,7 @@ import {
   SKILL_INSTALL_RPC_ERROR_CODE,
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
+import { PLUGIN_CLI_ERROR_CODES } from '../../../shared/plugins/approval/plugin-cli-approval'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
@@ -176,6 +178,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
+  ...PLUGIN_CLI_ERROR_CODES,
   // Keep owner conflicts distinct so clients can choose reload, re-adopt or stop offering the action.
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
   ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
@@ -261,6 +264,11 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       skillInstallFailure.code,
       skillInstallFailure
     )
+  }
+  // Same code older clients match; people read the sentence, programs the hold in `data`.
+  const held = wslDistroHoldRpcFailure(message)
+  if (held) {
+    return errorResponse(id, meta, 'runtime_error', held.message, held.data)
   }
   if (message === 'invalid_terminal_send') {
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')

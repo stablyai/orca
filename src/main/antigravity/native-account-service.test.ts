@@ -192,4 +192,20 @@ describe('Antigravity native account identity and selection', () => {
     expect(h.getNative()).toBe(credential('b'))
     expect((await h.service.addCurrentAccount()).accounts).toMatchObject([{ subject: 'b' }])
   })
+  it('keeps live truth and prior snapshots when final vault publication fails, then converges after restart', async () => {
+    const h = harness()
+    const a = (await h.service.addCurrentAccount()).activeAccountId!
+    h.setNative(credential('b'))
+    await h.service.addCurrentAccount()
+    const before = h.getVault()
+    vi.mocked(h.store.write).mockImplementationOnce(() => {
+      throw new Error('publication failed')
+    })
+    await expect(h.service.selectAccount(a)).rejects.toThrow('publication failed')
+    expect(h.getNative()).toBe(credential('a'))
+    expect(h.getVault()).toEqual(before)
+    const restarted = new AntigravityAccountService(h.store, h.backend)
+    expect((await restarted.listAccounts()).activeAccountId).toBe(a)
+    expect((await restarted.selectAccount(a)).selectedAccountId).toBe(a)
+  })
 })

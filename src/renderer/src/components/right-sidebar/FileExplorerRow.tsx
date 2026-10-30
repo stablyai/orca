@@ -1,16 +1,8 @@
 import React from 'react'
-import {
-  ChevronRight,
-  CircleAlert,
-  CircleSlash,
-  Folder,
-  FolderOpen,
-  Link,
-  Loader2
-} from 'lucide-react'
+import { ChevronRight, CircleAlert, CircleSlash, Link, Loader2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
@@ -215,9 +207,9 @@ export function FileExplorerRow({
               ) : showLoadError ? (
                 <CircleAlert className="size-3 shrink-0 text-destructive" />
               ) : isExpanded ? (
-                <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                <FolderIcon open className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <Folder className="size-3 shrink-0 text-muted-foreground" />
+                <FolderIcon open={false} className="size-3 shrink-0 text-muted-foreground" />
               )}
             </>
           ) : (
@@ -250,6 +242,10 @@ export function FileExplorerRow({
                   : undefined
             }
             onDoubleClick={(e) => {
+              // Outside-link rows are browse-only, so their name double-click pins the preview instead.
+              if (node.outsideProject) {
+                return
+              }
               // Keep icon/empty-row double-clicks available for pin preview and directory toggling.
               e.stopPropagation()
               onStartRename(node)

@@ -16,6 +16,7 @@ import {
 } from '@/lib/onboarding-folder-agent-launch'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
@@ -33,7 +34,13 @@ async function addSshFolderProject(args: {
   ownerOptions: ReturnType<typeof worktreeRefreshOptions>
 }> {
   if (!args.runtimeEnvironmentId) {
-    throw new Error(`SSH connection "${args.connectionId}" not found or not connected`)
+    throw new Error(
+      translate(
+        'auto.components.sidebar.NonGitFolderDialog.sshConnectionUnavailable',
+        'SSH connection "{{connection}}" not found or not connected',
+        { connection: args.connectionId }
+      )
+    )
   }
   const added = await addRuntimeSshRepo(args.runtimeEnvironmentId, {
     connectionId: args.connectionId,
@@ -50,6 +57,7 @@ async function addSshFolderProject(args: {
 }
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)

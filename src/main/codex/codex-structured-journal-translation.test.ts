@@ -78,8 +78,12 @@ function manualWindow() {
   }
 }
 
-function notification(method: string, params: unknown): CodexStructuredSessionEvent {
-  return { type: 'notification', sessionId: SESSION_ID, threadId: THREAD_ID, method, params }
+function notification(
+  method: string,
+  params: unknown,
+  threadId = THREAD_ID
+): CodexStructuredSessionEvent {
+  return { type: 'notification', sessionId: SESSION_ID, threadId, method, params }
 }
 
 const TURN_STARTED = notification('turn/started', { turn: { id: TURN_ID } })
@@ -469,6 +473,42 @@ describe('codex journal translation', () => {
       'codex:thread-abc:turn-1:0',
       'orca:codex-item%3Athread-abc%3Aitem-2'
     ])
+  })
+
+  it("leaves another thread's streamed output to its own checkpoint cadence", () => {
+    const { translator, tap, window } = translatorWith()
+    const outputBytes = () =>
+      tap.rows.flatMap(({ body }) =>
+        body.kind === 'tool-call' && body.output ? [body.output.byteLength] : []
+      )
+    const itemStarted = (threadId: string) =>
+      notification(
+        'item/started',
+        { item: { type: 'agentMessage', id: 'item-2', text: '' } },
+        threadId
+      )
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'exec-1', command: 'rg x', status: 'inProgress' }
+      })
+    )
+    translator.handle(
+      notification('item/commandExecution/outputDelta', {
+        itemId: 'exec-1',
+        delta: 'x'.repeat(1024)
+      })
+    )
+    window.fire()
+    translator.handle(
+      notification('item/commandExecution/outputDelta', { itemId: 'exec-1', delta: 'x' })
+    )
+    translator.handle(itemStarted('thread-other'))
+    expect(outputBytes()).toEqual([1024])
+
+    translator.handle(itemStarted(THREAD_ID))
+    expect(outputBytes()).toEqual([1024, 1025])
   })
 
   it('flushes what streamed when the child dies unannounced', () => {

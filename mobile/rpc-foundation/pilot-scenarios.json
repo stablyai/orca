@@ -14549,7 +14549,8 @@
           "params": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           },
           "reply": {
             "ok": true,
@@ -18476,6 +18477,17 @@
                 "side": "modified"
               }
             ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
             "mobileDiffReview": {
               "completedAt": 1767225600000,
               "files": {
@@ -18532,6 +18544,17 @@
           "complete": "worktree.set#1",
           "params": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -20058,7 +20081,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20097,7 +20125,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20137,7 +20170,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20177,7 +20215,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20717,7 +20760,8 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p"
+            "worktree": "id:repo42::/p",
+            "includeLineStats": false
           },
           "reply": {
             "ok": true,
@@ -21487,7 +21531,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "cleared": true
+              "clear": { "handle": "terminal-1", "cleared": true }
             }
           }
         },

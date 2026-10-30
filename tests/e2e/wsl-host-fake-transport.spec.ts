@@ -4,19 +4,11 @@
  * host through the real add-host UI, adds a project on it, and runs a terminal there.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  _electron as electron,
-  type ElectronApplication,
-  type Page
-} from '@stablyai/playwright-test'
-import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
-import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
-import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
-import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { expect, test, type forwardElectronProcessLogs } from './helpers/orca-app'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { encodePairingOffer } from '../../src/shared/pairing'
@@ -24,7 +16,6 @@ import {
   addWslHostEnvironment,
   findWslHostDeployment
 } from '../../src/shared/runtime-environment-wsl-host-store'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
@@ -34,6 +25,11 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  fakeWslConnects,
+  launchDesktopWithFakeWslPairing,
+  setWslHostsEnabled
+} from './helpers/wsl-host-fake-desktop'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
@@ -48,77 +44,6 @@ const WSL_ENVIRONMENT_ID = 'wsl:ubuntu'
 const WSL_HOST_LABEL = 'Ubuntu (WSL)'
 const UBUNTU_DISTRO = { name: 'Ubuntu', state: 'running', version: 2 }
 const LEGACY_DISTRO = { name: 'Legacy', state: 'stopped', version: 1 }
-
-async function launchDesktopWithFakeWsl(
-  pairingCode: string,
-  testInfo: Parameters<typeof forwardElectronProcessLogs>[1],
-  fakeOverrides: Record<string, unknown> = {},
-  options: { internalGate?: boolean; beforeLaunch?: (userDataDir: string) => void } = {}
-): Promise<{
-  app: ElectronApplication
-  page: Page
-  userDataDir: string
-  dispose: () => Promise<void>
-}> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-desktop-'))
-  writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-  )
-  options.beforeLaunch?.(userDataDir)
-  const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
-  void _unused
-  const isolation = createElectronHomeIsolation({
-    inheritedEnv: cleanEnv,
-    launchEnv: {},
-    extraEnv: {
-      // WSL hosts exist only behind this internal gate; the gated-off test leaves it closed.
-      ...(options.internalGate === false ? {} : { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' }),
-      ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify({
-        distros: [
-          { name: 'Ubuntu', state: 'running', version: 2 },
-          { name: 'Legacy', state: 'stopped', version: 1 }
-        ],
-        pairingCode,
-        ...fakeOverrides
-      })
-    },
-    userDataDir
-  })
-  const app = await electron.launch({
-    args: getOrcaElectronLaunchArgs(path.join(process.cwd(), 'out', 'main', 'index.js'), false),
-    env: { ...isolation.env, NODE_ENV: 'development', ORCA_E2E_HEADLESS: '1' }
-  })
-  forwardElectronProcessLogs(app, testInfo)
-  const dispose = async (): Promise<void> => {
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
-  }
-  try {
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await waitForSessionReady(page)
-    return { app, page, userDataDir, dispose }
-  } catch (error) {
-    await dispose()
-    throw error
-  }
-}
-
-/** Every distro the fake connector was asked to start, from the log file it appends to. */
-function fakeWslConnects(connectLogFile: string): string[] {
-  return existsSync(connectLogFile)
-    ? readFileSync(connectLogFile, 'utf8').split('\n').filter(Boolean)
-    : []
-}
-
-async function setWslHostsEnabled(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate(async (experimentalWslHosts) => {
-    const settings = await window.api.settings.set({ experimentalWslHosts })
-    window.__store?.setState({ settings })
-  }, enabled)
-}
 
 async function settleAnimations(page: Page): Promise<void> {
   // Why finite only: spinners and pulses run forever; the dialog and popover fades do not.
@@ -269,7 +194,7 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
   const distrosFile = path.join(distrosDir, 'distros.json')
   writeFileSync(distrosFile, JSON.stringify([LEGACY_DISTRO]))
   const connectLogFile = path.join(distrosDir, 'connects.log')
-  const desktop = await launchDesktopWithFakeWsl(offer.pairingUrl, testInfo, {
+  const desktop = await launchDesktopWithFakeWslPairing(offer.pairingUrl, testInfo, {
     distrosFile,
     connectLogFile
   })
@@ -517,7 +442,7 @@ test('a build without the WSL host server files says so instead of failing an ad
   test.setTimeout(180_000)
   await waitForSessionReady(orcaPage)
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-  const desktop = await launchDesktopWithFakeWsl(offer.pairingUrl, testInfo, {
+  const desktop = await launchDesktopWithFakeWslPairing(offer.pairingUrl, testInfo, {
     serverFiles: 'missing'
   })
   try {
@@ -555,7 +480,7 @@ test('with the internal gate closed and no saved WSL work, no WSL host surface s
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const logDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-gate-'))
   const connectLogFile = path.join(logDir, 'connects.log')
-  const desktop = await launchDesktopWithFakeWsl(
+  const desktop = await launchDesktopWithFakeWslPairing(
     offer.pairingUrl,
     testInfo,
     { connectLogFile },
@@ -596,6 +521,7 @@ test('with the internal gate closed and no saved WSL work, no WSL host surface s
     await expect(page.getByText(WSL_HOST_LABEL)).toHaveCount(0)
 
     expect(fakeWslConnects(connectLogFile)).toEqual([])
+    await expect(page.getByText(/WSL hosts are paused/)).toHaveCount(0)
     expect(findWslHostDeployment(userDataDir, WSL_ENVIRONMENT_ID)).toBeNull()
     await page.screenshot({ path: testInfo.outputPath('wsl-hosts-gated-off-settings.png') })
   } finally {
@@ -612,7 +538,7 @@ test('with the internal gate closed, a saved WSL host stays reachable but nothin
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const logDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-serve-only-'))
   const connectLogFile = path.join(logDir, 'connects.log')
-  const desktop = await launchDesktopWithFakeWsl(
+  const desktop = await launchDesktopWithFakeWslPairing(
     offer.pairingUrl,
     testInfo,
     { connectLogFile },
@@ -669,8 +595,17 @@ test('with the internal gate closed, a saved WSL host stays reachable but nothin
     await page.locator('[cmdk-item]').filter({ hasText: 'Add remote host' }).click()
     await expect(page.getByRole('button', { name: /Add SSH host/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Add WSL distro/ })).toHaveCount(0)
-    await page.keyboard.press('Escape')
-    await page.keyboard.press('Escape')
+    await expect(page.getByText('Adding WSL distros is paused in this build.')).toBeVisible()
+    await settleAnimations(page)
+    await page.screenshot({ path: testInfo.outputPath('wsl-hosts-paused-add-host-menu.png') })
+    // Two menus and the dialog: close them all so the Settings screenshot shows the section.
+    const addProject = page.getByRole('dialog', { name: /Add a project/i })
+    await expect
+      .poll(async () => {
+        await page.keyboard.press('Escape')
+        return addProject.count()
+      })
+      .toBe(0)
 
     await page.evaluate(() => {
       const state = window.__store?.getState()
@@ -679,6 +614,8 @@ test('with the internal gate closed, a saved WSL host stays reachable but nothin
     })
     await expect(page.getByText(WSL_HOST_LABEL).first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole('button', { name: 'Add WSL distro' })).toHaveCount(0)
+    await expect(page.getByText(/WSL hosts are paused in this build/)).toBeVisible()
+    await settleAnimations(page)
     expect(findWslHostDeployment(userDataDir, WSL_ENVIRONMENT_ID)).not.toBeNull()
     await page.screenshot({ path: testInfo.outputPath('wsl-hosts-serve-only-settings.png') })
   } finally {
