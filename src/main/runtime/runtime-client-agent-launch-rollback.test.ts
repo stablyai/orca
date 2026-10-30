@@ -59,7 +59,7 @@ it.each([false, true])(
             codex: 'own'
           }
         })
-        await controller.update({ theme: 'dark' })
+        await controller.update({ machineName: 'newer-host' })
       }
     } finally {
       gate.finish.resolve()
@@ -76,7 +76,7 @@ it.each([false, true])(
       }
       if (newer) {
         expect(settings).toMatchObject({
-          theme: 'dark',
+          machineName: 'newer-host',
           agentDefaultArgs: { grok: '--debug' },
           agentLaunchChoices: { grok: { model: 'opaque-current' } },
           agentDefaultEnv: { grok: { KEEP: 'newer' } },
