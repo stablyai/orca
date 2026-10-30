@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router'
 import NotificationsScreen from '../src/settings/notification-settings-screen'
 import { nativeNotificationSettingsOperations } from '../src/settings/native-notification-settings-operations'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
+import { LiveAlertsSettingsSection } from '../src/live-alerts/LiveAlertsSettingsSection'
 
 export default function NativeNotificationsRoute() {
   const t = useMobileTranslation()
@@ -20,6 +21,7 @@ export default function NativeNotificationsRoute() {
       {(enabled) => (
         <>
           <NativeNotificationDeliverySettings enabled={enabled} />
+          <LiveAlertsSettingsSection />
           <NotificationDisplayTest onTroubleshoot={() => router.push('/troubleshoot')} />
         </>
       )}

@@ -4,6 +4,8 @@ import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
+import { isBackgroundKeepAliveActive, subscribeBackgroundKeepAlive } from './background-keep-alive'
+import { startEndpointForegroundDemand } from './endpoint-foreground-demand'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
   // Keep app-visible RPC/subscription identity stable while replacing physical sockets.
@@ -16,13 +18,16 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   }
 
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
-  endpointLifecycle.setForeground(AppState.currentState === 'active')
-  const appStateSubscription = AppState.addEventListener('change', (state) => {
-    endpointLifecycle.setForeground(state === 'active')
+  // Foreground while the app is active, or while the live agent notification keeps it running.
+  const stopForegroundDemand = startEndpointForegroundDemand({
+    appState: AppState,
+    isKeepAliveActive: isBackgroundKeepAliveActive,
+    subscribeKeepAlive: subscribeBackgroundKeepAlive,
+    apply: (foreground) => endpointLifecycle.setForeground(foreground)
   })
   const closeLogical = logical.close
   logical.close = () => {
-    appStateSubscription.remove()
+    stopForegroundDemand()
     endpointLifecycle.stop()
     closeLogical()
   }
