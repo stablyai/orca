@@ -3,10 +3,27 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { createAgentSessionCatchUpReader } from './agent-session-history-page'
-import { HOST_TEST_SESSION as SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
-import { eventually, QUEUED_RIG_CALLER as CALLER } from './structured-agent-session-queued-message-rig.test-fixture'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data'
+import {
+  eventually,
+  QUEUED_RIG_CALLER as CALLER
+} from './structured-agent-session-queued-message-rig.test-fixture'
 
-import { fixture, Legacy, db, handOff, journalFor, legacyIds, message, nothingSentTo, seedLegacy, threadWrite, words } from './structured-agent-session-queue-import-contract-test-fixture'
+import {
+  fixture,
+  type Legacy,
+  db,
+  handOff,
+  journalFor,
+  legacyIds,
+  message,
+  nothingSentTo,
+  seedLegacy,
+  threadWrite
+} from './structured-agent-session-queue-import-contract-test-fixture'
 
 it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
   const journal = journalFor(SESSION)
@@ -134,7 +151,11 @@ it('a rewind while the import has failed moves the legacy cards first: a refused
   expect(
     await fixture.rig.host.conversationCommand(CALLER, {
       ...clear,
-      envelope: fixture.rig.envelope(clear, 'agentSession.conversationCommand', hostTestOperationId())
+      envelope: fixture.rig.envelope(
+        clear,
+        'agentSession.conversationCommand',
+        hostTestOperationId()
+      )
     })
   ).toMatchObject({ ok: true })
   const target = fixture.rig.send('rewound away')

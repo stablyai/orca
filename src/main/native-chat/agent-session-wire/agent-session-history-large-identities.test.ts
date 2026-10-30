@@ -5,7 +5,12 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { readAgentSessionHistory } from './agent-session-history-page'
 
-import { fixture, body, item, reopenWithRawRows, serializedPageBytes } from './agent-session-history-contract-test-fixture'
+import {
+  fixture,
+  body,
+  reopenWithRawRows,
+  serializedPageBytes
+} from './agent-session-history-contract-test-fixture'
 
 describe('pre-existing oversized identities', () => {
   // Legacy oversized tombstone IDs cannot fit any outbound page.

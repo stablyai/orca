@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 
-export function registerJournalUnsentSendHoldQueueTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalUnsentSendHoldQueueTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   describe('where kept sends go in the queue', () => {
     it.each([
       { by: 'Send now', origin: 'client' as const, order: ['A', 'H', 'B', 'C'] },
@@ -54,7 +56,7 @@ export function registerJournalUnsentSendHoldQueueTests(fixture: ReturnType<type
         {
           clientMessageId: 'A',
           state: 'rejected',
-          ...HOST_RESTARTED,
+          ...fixture.HOST_RESTARTED,
           fence: 0,
           recovered: true,
           keptAsQueuedMessageId: 'A'
@@ -93,7 +95,10 @@ export function registerJournalUnsentSendHoldQueueTests(fixture: ReturnType<type
       expect(fixture.cardOrder(journal)).toEqual(['person'])
       expect(journal.queuedMessages.get('person')).toMatchObject({ holdReason: null })
       for (const id of ['person', 'mail']) {
-        expect(journal.submission(id)).toMatchObject({ dispatchState: 'rejected', ...CHAT_CLOSED })
+        expect(journal.submission(id)).toMatchObject({
+          dispatchState: 'rejected',
+          ...fixture.CHAT_CLOSED
+        })
       }
     })
 

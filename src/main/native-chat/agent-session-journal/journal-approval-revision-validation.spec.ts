@@ -3,7 +3,9 @@ import { expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 
-export function registerJournalApprovalRevisionValidationTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalApprovalRevisionValidationTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   it('admits an answer on an exhausted approval without changing the saved item', async () => {
     await fixture.saveOldItems([
       {
@@ -18,7 +20,7 @@ export function registerJournalApprovalRevisionValidationTests(fixture: ReturnTy
       fixture.journal.appendItem(
         fixture.identity,
         {
-          ...pendingApproval(),
+          ...fixture.pendingApproval(),
           kind: 'approval',
           resolution: {
             state: 'resolved',

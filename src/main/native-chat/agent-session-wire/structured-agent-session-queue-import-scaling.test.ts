@@ -4,7 +4,15 @@ import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-w
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
-import { Legacy, db, handOff, journalFor, legacyIds, message, seedLegacy, words } from './structured-agent-session-queue-import-contract-test-fixture'
+import {
+  type Legacy,
+  db,
+  handOff,
+  journalFor,
+  legacyIds,
+  message,
+  seedLegacy
+} from './structured-agent-session-queue-import-contract-test-fixture'
 
 it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, adopt }))))(
   'publication reuse: $size historical items, adopted=$adopt',

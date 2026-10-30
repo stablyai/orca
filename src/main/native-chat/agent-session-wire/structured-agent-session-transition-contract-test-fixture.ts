@@ -2,11 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE, type AgentJournalItemIdentity, type AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalToolCallItem
+} from '../../../shared/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createDeferredStructuredAgentSessionEventSink, type StructuredAgentSessionSinkWatermarks } from './structured-agent-session-event-sink'
+import {
+  createDeferredStructuredAgentSessionEventSink,
+  type StructuredAgentSessionSinkWatermarks
+} from './structured-agent-session-event-sink'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
 import type { StructuredAgentSessionTransitionStep } from './structured-agent-session-transition'
 
@@ -25,7 +32,10 @@ export function identity(recordId: string): AgentJournalItemIdentity {
   return { provider: 'legacy', agent: 'grok', sessionId: SESSION, recordId }
 }
 
-export function tool(name: string, state: AgentJournalToolCallItem['state']): AgentJournalToolCallItem {
+export function tool(
+  name: string,
+  state: AgentJournalToolCallItem['state']
+): AgentJournalToolCallItem {
   return { kind: 'tool-call', name, input: { name }, state }
 }
 
@@ -71,8 +81,4 @@ export async function rig(watermarks: Partial<StructuredAgentSessionSinkWatermar
   })
   const bind = () => deferred.bind({ journal, fence: 1, publish: () => publishes.push(1) })
   return { root, journal, deferred, sink: deferred.sink, publishes, bind }
-}
-
-export const fixture = {
-
 }

@@ -4,10 +4,16 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AgentJournalItemBodySchema } from '../../../shared/agent-session-journal-schemas'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { liveTestJournalRows, openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  liveTestJournalRows,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
+import * as rowTable from './journal-row-table'
 
-export function registerJournalTerminalTimeValidationTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalTerminalTimeValidationTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   it.each([
     ['zero exit time', 0, undefined],
     ['zero renewal time', 1_000, 0]
@@ -79,7 +85,9 @@ export function registerJournalTerminalTimeValidationTests(fixture: ReturnType<t
     await fixture.settle()
     expect(fixture.journal.snapshot().items).toHaveLength(1)
     expect(fixture.journal.itemBody(oldKey)).toMatchObject({ resolution: { state: 'cancelled' } })
-    expect(fixture.journal.snapshot().items.filter((item) => item.body.kind === 'approval')).toHaveLength(1)
+    expect(
+      fixture.journal.snapshot().items.filter((item) => item.body.kind === 'approval')
+    ).toHaveLength(1)
     await fixture.expectSendStillWritable()
   })
 
@@ -189,7 +197,10 @@ export function registerJournalTerminalTimeValidationTests(fixture: ReturnType<t
       expect(fixture.journal.itemBody('orca:extension-7')).toHaveProperty('laterField', {
         kind: 'tool-call'
       })
-      expect(fixture.journal.itemBody('orca:extension-6')).toHaveProperty('contextUsage', laterContextUsage)
+      expect(fixture.journal.itemBody('orca:extension-6')).toHaveProperty(
+        'contextUsage',
+        laterContextUsage
+      )
       expect(fixture.journal.runningTurn()?.turnId ?? null).toBeNull()
       expect(fixture.journal.snapshot().items).toHaveLength(inputs.length + 1)
       const ended = fixture.journal.snapshot()

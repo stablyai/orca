@@ -3,10 +3,22 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
-import { HOST_TEST_SESSION as SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data'
 import { eventually } from './structured-agent-session-queued-message-rig.test-fixture'
 
-import { fixture, Legacy, db, handOff, journalFor, legacyIds, message, nothingSentTo, queueRows, seedLegacy } from './structured-agent-session-queue-import-contract-test-fixture'
+import {
+  fixture,
+  db,
+  handOff,
+  journalFor,
+  legacyIds,
+  nothingSentTo,
+  queueRows,
+  seedLegacy
+} from './structured-agent-session-queue-import-contract-test-fixture'
 
 it("moves an earlier build's cards into the journal, each action its own card, the rest once per open", async () => {
   // Legacy handoffs were journaled while cards lived in a separate table.

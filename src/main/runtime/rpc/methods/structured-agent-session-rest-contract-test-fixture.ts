@@ -1,13 +1,17 @@
-import { rm } from 'node:fs/promises'
-import { afterEach, beforeEach, it, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { createRestTestRig, foundRestTestChat, REST_TEST_SESSION as SESSION, type RestTestRig } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+import {
+  createRestTestRig,
+  foundRestTestChat,
+  REST_TEST_SESSION as SESSION,
+  type RestTestRig
+} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
-import * as fileOperations from 'node:fs/promises'
+import type * as fileOperations from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
 
 vi.mock('node:fs/promises', { spy: true })
@@ -78,7 +82,22 @@ afterEach(async () => {
 })
 
 export const fixture = {
-  get dispatcher() { return dispatcher }, set dispatcher(value: typeof dispatcher) { dispatcher = value },
-  get requests() { return requests }, set requests(value: typeof requests) { requests = value },
-  get rig() { return rig }, set rig(value: typeof rig) { rig = value },
+  get dispatcher() {
+    return dispatcher
+  },
+  set dispatcher(value: typeof dispatcher) {
+    dispatcher = value
+  },
+  get requests() {
+    return requests
+  },
+  set requests(value: typeof requests) {
+    requests = value
+  },
+  get rig() {
+    return rig
+  },
+  set rig(value: typeof rig) {
+    rig = value
+  }
 }

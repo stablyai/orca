@@ -2,11 +2,34 @@ import { expect, it } from 'vitest'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { ClaudeControlRequestError } from '../../claude/claude-agent-sdk-control-requests'
 import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
-import { claudeFrame as frame, claudeWasSent as wrote, PROVIDER_SESSION_ID } from '../../claude/claude-structured-session-test-support'
+import {
+  claudeFrame as frame,
+  claudeWasSent as wrote,
+  PROVIDER_SESSION_ID
+} from '../../claude/claude-structured-session-test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
-import { fixture, INTERRUPTED_RESULT, NEVER_ANSWERS, laneDrained } from './structured-agent-session-claude-stop-contract-test-fixture'
-import { agentStatus, childRecords, dispatch, eventually, interruptSent, openTurn, send, sendUnechoed, statusTexts, stop, stopEventsAtClose, turnOutcome, stopAcrossGrace } from './structured-agent-session-claude-stop-contract-test-actions'
+import {
+  fixture,
+  INTERRUPTED_RESULT,
+  NEVER_ANSWERS,
+  laneDrained
+} from './structured-agent-session-claude-stop-contract-test-fixture'
+import {
+  agentStatus,
+  childRecords,
+  dispatch,
+  eventually,
+  interruptSent,
+  openTurn,
+  send,
+  sendUnechoed,
+  statusTexts,
+  stop,
+  stopEventsAtClose,
+  turnOutcome,
+  stopAcrossGrace
+} from './structured-agent-session-claude-stop-contract-test-actions'
 
 it('answers on the interrupt, ends the child once the stopped turn ends, and rests at that turn', async () => {
   const connection = fixture.claude.connections[0]!
@@ -36,7 +59,7 @@ it('answers on the interrupt, ends the child once the stopped turn ends, and res
 it('reads a Stop pressed before Claude echoed the send as interrupted, not as a finished turn', async () => {
   const connection = fixture.claude.connections[0]!
   // Match CLI wind-down ordering after an interrupt before echo.
-  claude.routes.interrupt = () => {
+  fixture.claude.routes.interrupt = () => {
     setTimeout(() => {
       const written = connection.sent.find((message) => message.type === 'user')!
       frame(connection, { ...written, uuid: written.uuid })

@@ -6,7 +6,13 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
 import { hostTestOperationId } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { foundRestTestChat, REST_TEST_CALLER as CALLER, REST_TEST_SESSION as SESSION, REST_TEST_THREAD, restTestSend } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+import {
+  foundRestTestChat,
+  REST_TEST_CALLER as CALLER,
+  REST_TEST_SESSION as SESSION,
+  REST_TEST_THREAD,
+  restTestSend
+} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
 import { discardStructuredWorkerSession } from './orchestration-structured-worker-session'
 import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
@@ -68,6 +74,7 @@ it('is shown, not respawned; the next send starts the agent (P2-18)', async () =
     fence: running.fence,
     acquisitionGeneration: running.generation!
   })
+  // ast-grep-ignore: test-no-real-time-wait -- proves no respawn follows the exit; an absence has no condition to wait on.
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(fixture.rig.adapter.acquire).toHaveBeenCalledOnce()
 
@@ -82,7 +89,7 @@ it('whose settlement write failed is settled by the next send, which is delivere
   const open = fixture.rig.host.collaboratorsForTests().sessions.get(SESSION)!
   const running = open.child!
   // A turn in flight, so the exit has something to settle.
-  rig.adapter.acquire.mock.calls
+  fixture.rig.adapter.acquire.mock.calls
     .at(-1)?.[0]
     .events?.appendItem(
       { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'working', ordinal: 50 },
@@ -148,9 +155,9 @@ it.each([
     emit: (event) => reader.push(event)
   })
   const fence = fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence
-  expect((await fixture.rig.host.send(CALLER, restTestSend('closed before it went', fence))).ok).toBe(
-    true
-  )
+  expect(
+    (await fixture.rig.host.send(CALLER, restTestSend('closed before it went', fence))).ok
+  ).toBe(true)
 
   await close()
   // A close's rejection is a sentence with its fact beside it, never a marker.

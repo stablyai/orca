@@ -9,7 +9,7 @@ import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record
 import { recoverStructuredRewind } from '../native-chat/agent-session-wire/structured-rewind-recovery'
 import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal/journal-history-origin'
 
-import { fixture, SESSION, THREAD, chat, turn } from './codex-thread-catch-up-contract-test-fixture'
+import { SESSION, THREAD, chat, turn } from './codex-thread-catch-up-contract-test-fixture'
 
 it('retains the original adoption cutoff through native rewind and disk recovery', async () => {
   const clock = { now: 50_000 }

@@ -5,7 +5,9 @@ import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session
 import { structuredAgentSessionCompactBody } from '../agent-session-wire/structured-agent-session-command-turn'
 import { unsentSendKeptAsCard } from './journal-unsent-send-hold'
 
-export function registerJournalUnsentSendHoldRecoveryTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerJournalUnsentSendHoldRecoveryTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   describe('which sends an earlier host process left unsent are kept', () => {
     it('keeps a person’s and a launch’s text, and an older build’s client send', async () => {
       const journal = await fixture.afterRestart(async (earlier) => {
@@ -21,7 +23,7 @@ export function registerJournalUnsentSendHoldRecoveryTests(fixture: ReturnType<t
       for (const id of ['person', 'launch', 'legacy-client']) {
         expect(reopened.submission(id)).toMatchObject({
           dispatchState: 'rejected',
-          ...HOST_RESTARTED,
+          ...fixture.HOST_RESTARTED,
           keptAsQueuedMessageId: id
         })
         expect(reopened.queuedMessages.get(id)).toMatchObject({
@@ -74,7 +76,7 @@ export function registerJournalUnsentSendHoldRecoveryTests(fixture: ReturnType<t
       ]) {
         expect(journal.submission(id)).toMatchObject({
           dispatchState: 'rejected',
-          ...HOST_RESTARTED
+          ...fixture.HOST_RESTARTED
         })
         expect(journal.submission(id)).not.toHaveProperty('keptAsQueuedMessageId')
       }

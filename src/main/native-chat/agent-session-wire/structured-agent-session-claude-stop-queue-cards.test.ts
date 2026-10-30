@@ -1,11 +1,35 @@
-import { rm } from 'node:fs/promises'
 import { expect, it } from 'vitest'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { claudeFrame as frame, claudeWasSent as wrote } from '../../claude/claude-structured-session-test-support'
-import { HOST_TEST_SESSION as SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
+import {
+  claudeFrame as frame,
+  claudeWasSent as wrote
+} from '../../claude/claude-structured-session-test-support'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestMessage
+} from './structured-agent-session-host-test-data'
 
-import { fixture, BRANCH_QUESTION, CALLER, INTERRUPTED_RESULT, laneDrained } from './structured-agent-session-claude-stop-contract-test-fixture'
-import { ask, cancelCard, cardResolution, envelope, eventually, interruptSent, openTurn, send, statusTexts, stop, stopEventsAtClose, turnOutcome } from './structured-agent-session-claude-stop-contract-test-actions'
+import {
+  fixture,
+  BRANCH_QUESTION,
+  CALLER,
+  INTERRUPTED_RESULT,
+  laneDrained
+} from './structured-agent-session-claude-stop-contract-test-fixture'
+import {
+  ask,
+  cancelCard,
+  cardResolution,
+  envelope,
+  eventually,
+  interruptSent,
+  openTurn,
+  send,
+  statusTexts,
+  stop,
+  stopEventsAtClose,
+  turnOutcome
+} from './structured-agent-session-claude-stop-contract-test-actions'
 
 it('sends a queue-if-active message issued while the Stop ends the child directly to the resumed child', async () => {
   const connection = fixture.claude.connections[0]!
@@ -105,7 +129,7 @@ it('leaves the child and the follow-up alone for a Stop naming the turn that jus
   expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   expect(connection.closed).toBe(false)
   expect(await statusTexts()).toEqual([])
-}, 15_000)
+})
 
 it('keeps a second Stop pressed while the first ends the child quiet', async () => {
   const connection = fixture.claude.connections[0]!
@@ -142,9 +166,9 @@ it('dismisses an approval card on its Cancel with the Deny reply, and the turn a
   })
   expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   expect(connection.closed).toBe(false)
-  expect(activeStructuredAgentSessionTurnId((await fixture.host.journalSnapshot(SESSION)).items)).toBe(
-    turnId
-  )
+  expect(
+    activeStructuredAgentSessionTurnId((await fixture.host.journalSnapshot(SESSION)).items)
+  ).toBe(turnId)
   expect(await statusTexts()).toEqual([])
 })
 
@@ -238,7 +262,7 @@ it('dismisses a question card a finished turn raised, leaving the turn running n
   })
   expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   expect(connection.closed).toBe(false)
-  expect(activeStructuredAgentSessionTurnId((await fixture.host.journalSnapshot(SESSION)).items)).toBe(
-    running
-  )
+  expect(
+    activeStructuredAgentSessionTurnId((await fixture.host.journalSnapshot(SESSION)).items)
+  ).toBe(running)
 })

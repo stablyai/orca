@@ -1,8 +1,12 @@
-import type { createFixture } from './queued-message-pause-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
-import { deriveQueuePauses, nextSendableQueuedCard, queuePauseHolding, resumableQueuePause } from './queued-message-pause'
+import {
+  deriveQueuePauses,
+  nextSendableQueuedCard,
+  queuePauseHolding,
+  resumableQueuePause
+} from './queued-message-pause'
 
-export function registerQueuedMessagePauseHeldCardsTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerQueuedMessagePauseHeldCardsTests(): void {
   describe('which cards the pauses in force hold', () => {
     type Card = Parameters<typeof queuePauseHolding>[1] & { messageId: string }
 

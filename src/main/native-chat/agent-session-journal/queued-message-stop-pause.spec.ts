@@ -8,7 +8,9 @@ import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { parseJournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 
-export function registerQueuedMessageStopPauseTests(fixture: ReturnType<typeof createFixture>): void {
+export function registerQueuedMessageStopPauseTests(
+  fixture: ReturnType<typeof createFixture>
+): void {
   describe("the queue's pause, derived from the journal", () => {
     it("a person's Stop event pauses the queue, even with no card yet, survives reopen, and stores nothing", async () => {
       let journal = await fixture.open()
@@ -176,8 +178,8 @@ export function registerQueuedMessageStopPauseTests(fixture: ReturnType<typeof c
     it("only a person's Stop pauses: a host's, a close's or an unknown reason holds nothing", async () => {
       const journal = await fixture.open()
       await fixture.queueDraft(journal, 'draft-1')
-      for (const fixture.reason of ['user-close', 'host-stop', 'evict'] as const) {
-        await journal.appendStopEvent({ reason: fixture.reason }, 0)
+      for (const reason of ['user-close', 'host-stop', 'evict'] as const) {
+        await journal.appendStopEvent({ reason }, 0)
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately outside the type, as a newer build could write it.
       await journal.appendStopEvent({ reason: 'future-reason' as 'evict' }, 0)

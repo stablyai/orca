@@ -4,8 +4,8 @@ import { registerQueuedMessageReopenPauseTests } from './queued-message-reopen-p
 import { registerQueuedMessagePauseHeldCardsTests } from './queued-message-pause-held-cards.spec'
 
 export function registerQueuedMessagePauseTests(): void {
-    const fixture = createFixture()
-    registerQueuedMessageStopPauseTests(fixture)
-    registerQueuedMessageReopenPauseTests(fixture)
-    registerQueuedMessagePauseHeldCardsTests(fixture)
+  const fixture = createFixture()
+  registerQueuedMessageStopPauseTests(fixture)
+  registerQueuedMessageReopenPauseTests(fixture)
+  registerQueuedMessagePauseHeldCardsTests()
 }

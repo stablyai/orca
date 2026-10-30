@@ -3,7 +3,7 @@ import { projectStructuredItemsToNativeChat } from '../../shared/structured-agen
 import { expect, it } from 'vitest'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
-import { fixture, SESSION, THREAD, chat, turn } from './codex-thread-catch-up-contract-test-fixture'
+import { SESSION, THREAD, chat, turn } from './codex-thread-catch-up-contract-test-fixture'
 
 it('retains the complete outside answer tail through catch-up, disk reopen and display', async () => {
   const c = await chat({ now: 1_000 })
