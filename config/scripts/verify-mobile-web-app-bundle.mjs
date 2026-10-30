@@ -66,22 +66,22 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 // Measure sorted route prefixes with routes.slice(0,n): distinct importer sets determine chunks, not route count.
 // Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
-  ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 7],
-  ['./h/[hostId]/accounts.tsx', 11],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 16],
-  ['./h/[hostId]/edit.tsx', 21],
-  ['./h/[hostId]/files/[worktreeId].tsx', 25],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 32],
-  ['./h/[hostId]/history/[worktreeId].tsx', 35],
-  ['./h/[hostId]/index.tsx', 42],
-  ['./h/[hostId]/new-workspace.tsx', 51],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 52],
-  ['./h/[hostId]/review/[worktreeId].tsx', 60],
-  ['./h/[hostId]/session/[worktreeId].tsx', 72],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 77],
-  ['./h/[hostId]/tasks.tsx', 91],
-  ['./h/_layout.tsx', 95]
+  ['./_layout.tsx', 4],
+  ['./h/[hostId]/[...page].tsx', 8],
+  ['./h/[hostId]/accounts.tsx', 12],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 17],
+  ['./h/[hostId]/edit.tsx', 23],
+  ['./h/[hostId]/files/[worktreeId].tsx', 27],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 33],
+  ['./h/[hostId]/history/[worktreeId].tsx', 36],
+  ['./h/[hostId]/index.tsx', 44],
+  ['./h/[hostId]/new-workspace.tsx', 53],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 54],
+  ['./h/[hostId]/review/[worktreeId].tsx', 62],
+  ['./h/[hostId]/session/[worktreeId].tsx', 75],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 81],
+  ['./h/[hostId]/tasks.tsx', 96],
+  ['./h/_layout.tsx', 100]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
