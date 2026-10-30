@@ -19,6 +19,7 @@ import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
+import { requestLocalSessionTabFollow } from './mobile-session-tab-activation'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault-resume-target'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
@@ -116,6 +117,7 @@ export async function resumeAiVaultSessionInTerminal(
     translate('session.aiVaultResumeLaunch.createFailed', 'Failed to create terminal')
   )
   if (launchAtCreate) {
+    requestLocalSessionTabFollow(worktreeId)
     return terminalTab
   }
   assertCurrentOwner?.()
@@ -138,12 +140,19 @@ export async function resumeAiVaultSessionInTerminal(
       translate('session.aiVaultResumeLaunch.inputLocked', 'Terminal input is locked')
     )
   }
+  requestLocalSessionTabFollow(worktreeId)
   return terminalTab
 }
 
 export type MobileAiVaultResumeMutationRegistry = {
   claim(sessionId: string): string
   releaseOnSuccess(sessionId: string): void
+}
+
+export function createMobileAiVaultResumeMutationId(sessionId: string): string {
+  const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'
+  const randomPart = Math.random().toString(36).slice(2, 10)
+  return `ai-vault-resume:${sessionPart}:${Date.now().toString(36)}:${randomPart}`
 }
 
 // Reuse mutation ids after failed/interrupted resumes for deduplication; mint fresh only after success so deliberate forks remain possible.
