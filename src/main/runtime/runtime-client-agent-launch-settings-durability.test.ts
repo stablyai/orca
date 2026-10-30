@@ -48,6 +48,29 @@ const emptyLoadedArgs = Object.fromEntries(
 )
 const emptyLoadedEnv = Object.fromEntries(Object.keys(DEFAULT_TUI_AGENT_ENV).map((id) => [id, {}]))
 
+function legacyLaunchEditor(
+  controller: RuntimeClientSettingsController,
+  target: 'arguments' | 'user-arguments' | 'whole-map',
+  wholeMapSettings: Partial<GlobalSettings> = {}
+) {
+  const publication = controller.getAgentLaunch()
+  const text =
+    target === 'user-arguments'
+      ? publication.agentPermission?.userArgs.claude
+      : publication.agentDefaultArgs.claude
+  if (!text) {
+    throw new Error('missing legacy publication')
+  }
+  const edit = (value: string) =>
+    target === 'whole-map'
+      ? controller.update({
+          ...wholeMapSettings,
+          agentDefaultArgs: { ...controller.get().agentDefaultArgs, claude: value }
+        })
+      : controller.mutateAgentLaunch({ type: target, agent: 'claude', value })
+  return { text, edit }
+}
+
 describe('durable execution-host launch settings', () => {
   it('maps an old dropdown without clearing agent choices, persists it and publishes typed precedence', async () => {
     const { store, readState } = await fixture()
@@ -558,20 +581,7 @@ it('conserves the canonical tuple through durable legacy edit, reopen, terminal/
       }
     })
     const controller = new RuntimeClientSettingsController(store)
-    const publication = controller.getAgentLaunch()
-    const text =
-      target === 'user-arguments'
-        ? publication.agentPermission?.userArgs.claude
-        : publication.agentDefaultArgs.claude
-    if (!text) {
-      throw new Error('missing legacy publication')
-    }
-    const edit = async (value: string) =>
-      target === 'whole-map'
-        ? controller.update({
-            agentDefaultArgs: { ...controller.get().agentDefaultArgs, claude: value }
-          })
-        : controller.mutateAgentLaunch({ type: target, agent: 'claude', value })
+    const { text, edit } = legacyLaunchEditor(controller, target)
     await edit(`${text} --debug`)
     await store.flushPendingOrThrowAsync()
     const saved = readState()
@@ -669,21 +679,9 @@ it('persists compound publication ownership through both DTOs and whole-map edit
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
       const controller = new RuntimeClientSettingsController(store)
-      const publication = controller.getAgentLaunch()
-      const text =
-        target === 'user-arguments'
-          ? publication.agentPermission?.userArgs.claude
-          : publication.agentDefaultArgs.claude
-      if (!text) {
-        throw new Error('missing compound publication')
-      }
-      const edit = (value: string) =>
-        target === 'whole-map'
-          ? controller.update({
-              agentDefaultArgs: { ...controller.get().agentDefaultArgs, claude: value },
-              machineName: 'accepted-generic-setting'
-            })
-          : controller.mutateAgentLaunch({ type: target, agent: 'claude', value })
+      const { text, edit } = legacyLaunchEditor(controller, target, {
+        machineName: 'accepted-generic-setting'
+      })
       const before = store.getSettings()
       if (target === 'whole-map') {
         const published = controller.get()

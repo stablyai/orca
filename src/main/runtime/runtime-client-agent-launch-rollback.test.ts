@@ -101,7 +101,7 @@ it.each([false, true])(
   }
 )
 
-it('accumulates mixed restoration and omission across all four coupled maps', () => {
+it('accumulates mixed restoration and omission while preserving each newer whole-agent tuple', () => {
   const before = {
     agentDefaultArgs: { claude: '--before' },
     agentLaunchChoices: { claude: { model: 'sonnet' } },
@@ -119,4 +119,23 @@ it('accumulates mixed restoration and omission across all four coupled maps', ()
     agentDefaultEnv: { claude: { KEEP: 'after' }, codex: { ADDED: '1' }, grok: { ADDED: '1' } }
   } as const
   expect(agentLaunchSettingsRollbackUpdates(before, applied, applied, applied)).toEqual(before)
+  const current = {
+    ...applied,
+    agentDefaultArgs: { ...applied.agentDefaultArgs, claude: '--verbose newest' },
+    agentLaunchChoices: { ...applied.agentLaunchChoices, codex: { model: 'new-codex' } }
+  }
+  const restored = {
+    ...current,
+    ...agentLaunchSettingsRollbackUpdates(before, applied, current, applied)
+  }
+  for (const field of [
+    'agentDefaultArgs',
+    'agentLaunchChoices',
+    'agentPermissionOverrides',
+    'agentDefaultEnv'
+  ] as const) {
+    expect(restored[field]?.claude).toEqual(current[field].claude)
+    expect(restored[field]?.codex).toEqual(current[field].codex)
+    expect(restored[field]).not.toHaveProperty('grok')
+  }
 })

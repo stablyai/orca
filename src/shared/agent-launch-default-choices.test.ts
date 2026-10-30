@@ -8,7 +8,6 @@ import {
 } from './agent-launch-settings'
 import { AgentLaunchSettingsMutation } from './rpc-contract/agent-launch-settings-params'
 import { migrateAgentPermissionChoice } from './tui-agent-permission-lift'
-import { agentLaunchSettingsRollbackUpdates } from '../main/runtime/agent-launch-settings-rollback'
 import { structuredLaunchSeedOptions } from './native-chat/input/native-chat-session-option-defaults'
 
 const baseline: AgentLaunchSettingsSource = {
@@ -90,39 +89,6 @@ describe('host-authored launch defaults', () => {
     expect(matched.agentDefaultArgs?.claude).toBe('--verbose')
     expect(matched.agentPermissionOverrides?.claude).toBe('own')
     expect(matched.agentLaunchChoices?.claude?.options).toEqual({ other: 'kept' })
-  })
-
-  it('rolls back a complete failed tuple while preserving unrelated and newer agent edits', () => {
-    const updates = agentLaunchSettingsMutationUpdates(
-      baseline,
-      {
-        type: 'launch-choices',
-        agent: 'claude',
-        patch: { model: 'sonnet', permissionMode: 'own' },
-        userArgs: '--model sonnet'
-      },
-      'darwin'
-    )
-    const applied = { ...baseline, ...updates }
-    const unrelated = mutate(applied, {
-      type: 'launch-choices',
-      agent: 'codex',
-      patch: { model: 'new-codex' }
-    })
-    const restored = {
-      ...unrelated,
-      ...agentLaunchSettingsRollbackUpdates(baseline, applied, unrelated, updates)
-    }
-    expect(restored.agentLaunchChoices?.claude).toEqual(baseline.agentLaunchChoices?.claude)
-    expect(restored.agentDefaultArgs?.claude).toBe('--verbose')
-    expect(restored.agentPermissionOverrides?.claude).toBeUndefined()
-    expect(restored.agentLaunchChoices?.codex?.model).toBe('new-codex')
-    const newer = mutate(applied, {
-      type: 'launch-choices',
-      agent: 'claude',
-      userArgs: '--verbose newest'
-    })
-    expect(agentLaunchSettingsRollbackUpdates(baseline, applied, newer, updates)).toEqual({})
   })
 
   it('validates the additive mutation strictly without changing old mutation shapes', () => {

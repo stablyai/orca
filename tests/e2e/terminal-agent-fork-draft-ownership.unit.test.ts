@@ -10,6 +10,11 @@ import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settin
 import { retainedPrefillHost } from './terminal-agent-fork-retained-prefill.test-fixture'
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../src/shared/agent-session-host-authority'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
+import type * as SessionSnapshot from '@/runtime/web-runtime-session-snapshot'
+
+const actualSnapshots = await vi.importActual<typeof SessionSnapshot>(
+  '@/runtime/web-runtime-session-snapshot'
+)
 
 it.each(['local', 'web'] as const)(
   'settles the real fork draft independently of its created destination (%s)',
@@ -80,9 +85,6 @@ it.skipIf(process.platform === 'win32')(
   async () => {
     const host = await retainedPrefillHost()
     const snapshots = await import('@/runtime/web-runtime-session-snapshot')
-    const actualSnapshots = await vi.importActual<typeof snapshots>(
-      '@/runtime/web-runtime-session-snapshot'
-    )
     vi.mocked(snapshots.refreshWebRuntimeSessionTabsSnapshot).mockImplementationOnce(
       actualSnapshots.refreshWebRuntimeSessionTabsSnapshot
     )

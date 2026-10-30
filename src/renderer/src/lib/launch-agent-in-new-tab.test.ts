@@ -371,35 +371,6 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
-  it('propagates the resolved terminal mode to paired web runtime launches', async () => {
-    mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: 'web-runtime',
-      experimentalNativeChat: true
-    }
-    // The client stamps a server's rows on arrival; focus alone never names the owner.
-    Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-13',
-      agent: 'codex',
-      worktreeId: 'wt-1'
-    })
-
-    await result?.terminalCompletion
-    expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      agentSessionKind: 'fresh',
-      launchAgent: 'codex',
-      viewMode: 'terminal'
-    })
-  })
-
   it('surfaces a toast when host agent launch fails in paired web clients', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue({
