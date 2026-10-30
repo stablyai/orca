@@ -10,7 +10,10 @@ type Props = {
   contentScrollable?: boolean
   // Stable outer frame keeps docked input above keyboard while results reflow; content-sized sheets move it on every list change.
   fillAvailable?: boolean
-  // Pin outer sheet under fill picker without extra touches, backdrop or keyboard lift.
+  // Why: rename (and similar prompts) open over an IME that is already up.
+  seedKeyboard?: boolean
+  // Why: pin an outer content-sized sheet under an inner fill picker without
+  // letting it take touches, draw a second backdrop, or keyboard-lift.
   interactive?: boolean
   zIndex?: number
   scrollResetKey?: string | null

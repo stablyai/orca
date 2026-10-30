@@ -24,10 +24,7 @@ import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
-import {
-  BOTTOM_DRAWER_HIDE_DURATION_MS,
-  BOTTOM_DRAWER_SHOW_DURATION_MS
-} from './bottom-drawer-constants'
+import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import {
   useBottomDrawerModalHost,
@@ -41,8 +38,11 @@ import { hostOs } from '../platform/host-os'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
-// Damp upward pull with rubber-band factor to signal drawer cannot expand further.
+// Why: negative translateY (pulling up) is damped with a rubber-band factor
+// so the drawer resists upward dragging — a subtle polish touch that signals
+// the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
+const SHOW_DURATION = 180
 const TOP_SCROLL_EPSILON = 1
 
 export type MountedBottomDrawerProps = {
@@ -53,7 +53,12 @@ export type MountedBottomDrawerProps = {
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
   fillAvailable?: boolean
-  // Pinned-under sheet preserves size but must not receive touches, backdrop or keyboard lift.
+  // Why: a content-sized prompt can open while the IME is already up, so no
+  // new onShow fires. Opt in to seed the current height; default stays off so
+  // outer sheets do not inherit a stale height after an inner dismiss.
+  seedKeyboard?: boolean
+  // Why: outer sheets pinned under an inner fill picker stay laid out (size
+  // preserved) but must not take touches, stack backdrops, or keyboard-lift.
   interactive?: boolean
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
@@ -68,6 +73,7 @@ export function MountedBottomDrawer({
   dragContentToDismiss = true,
   contentScrollable = true,
   fillAvailable = false,
+  seedKeyboard = false,
   interactive = true,
   zIndex = 1000,
   scrollResetKey = null
@@ -114,7 +120,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = 0
-    progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+    progress.value = withTiming(1, { duration: SHOW_DURATION })
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -122,7 +128,7 @@ export function MountedBottomDrawer({
     if (visible) {
       translateY.value = 0
       scrollOffsetY.value = 0
-      progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+      progress.value = withTiming(1, { duration: SHOW_DURATION })
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
@@ -158,8 +164,12 @@ export function MountedBottomDrawer({
       }
     }
 
-    // Seed fill sheets (autoFocus may precede listeners) and page sheets (focus moving under an open IME sends no event); native content sheets own a Modal window, where stale metrics would stick.
-    if (fillAvailable || Platform.OS === 'web') {
+    // Why: autoFocus can raise the keyboard before listeners attach, and an
+    // already-open IME fires no new onShow. Fill sheets always seed; a
+    // content-sized sheet seeds only when it opts in. Page sheets on web seed
+    // because focus moving under an open IME sends no event; native content
+    // sheets own a Modal window, where stale metrics would stick.
+    if (fillAvailable || seedKeyboard || Platform.OS === 'web') {
       const existing = currentSoftKeyboardHeight()
       if (existing > 0) {
         applyKeyboardHeight(existing)
@@ -181,7 +191,7 @@ export function MountedBottomDrawer({
       keyboardOffset.value = 0
       setKeyboardInset(0)
     }
-  }, [visible, interactive, insets.bottom, fillAvailable])
+  }, [visible, interactive, insets.bottom, fillAvailable, seedKeyboard])
 
   const dismiss = useCallback(() => {
     // Never restart hide mid-close: cancellation prevents onHidden and leaves invisible Modal swallowing taps (Android Back).
