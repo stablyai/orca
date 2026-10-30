@@ -39,6 +39,22 @@ function normalizeIconUrl(value: unknown): string | null {
   }
 }
 
+/** State names in the `Removed` category across the given types, so a query can exclude them. */
+export function removedStateNamesForTypes(
+  typeNames: Iterable<string>,
+  workItemTypes: Record<string, AzureDevOpsWorkItemTypeMetadata>
+): string[] {
+  const names = new Set<string>()
+  for (const typeName of typeNames) {
+    for (const state of workItemTypes[typeName]?.states ?? []) {
+      if (state.category === 'Removed') {
+        names.add(state.name)
+      }
+    }
+  }
+  return [...names]
+}
+
 export async function getAzureDevOpsWorkItemTypes(
   repo: AzureDevOpsRepoRef
 ): Promise<Record<string, AzureDevOpsWorkItemTypeMetadata>> {

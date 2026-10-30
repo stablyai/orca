@@ -1,16 +1,7 @@
 import type { TaskPageRuntimeHostsModel } from './task-page/use-task-page-runtime-hosts'
-import { useCallback, useMemo, useState } from 'react'
-import { toast } from 'sonner'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import type {
-  AzureDevOpsBacklogLevel,
-  AzureDevOpsWorkItem
-} from '../../../shared/azure-devops/boards-types'
-import {
-  getAzureDevOpsWorkItemWorkspaceSeed,
-  getTaskPageRepoSourceContext
-} from './task-page/task-page-source-context'
+import type { AzureDevOpsBacklogLevel } from '../../../shared/azure-devops/boards-types'
 import {
   EMPTY_BACKLOG_FILTERS,
   filterBacklogPage,
@@ -38,6 +29,11 @@ import {
   type AzureDevOpsColumnWidthSettings
 } from './use-azure-devops-backlog-column-widths'
 import { useAzureDevOpsBoardView } from './use-azure-devops-board-view'
+import { useAzureDevOpsWorkItemWorktreeAction } from './use-azure-devops-work-item-worktree-action'
+import {
+  useAzureDevOpsWorkItemsLoader,
+  type AzureDevOpsWorkItemsErrorStatus
+} from './use-azure-devops-work-items-loader'
 import type { AzureDevOpsBoardErrorStatus } from './use-azure-devops-board-loader'
 import type {
   AzureDevOpsTaskView,
@@ -62,6 +58,16 @@ export type AzureDevOpsContentProps = {
   view: AzureDevOpsTaskView
   /** Null until the board for the selected level is loaded, or when the backlog is shown. */
   board: AzureDevOpsBoardProps | null
+  /** The project-wide, team-less Work items list and its own load state. */
+  workItems: {
+    table: AzureDevOpsBacklogTableProps
+    /** Rows before the filter bar, so "nothing assigned" reads differently from "nothing matches". */
+    totalItemCount: number
+    unhydratedItemCount: number
+    errorStatus: AzureDevOpsWorkItemsErrorStatus | null
+    errorMessage: string | null
+    loading: boolean
+  }
   /** Level items the host could not load, shown as a notice above the table. */
   backlogUnhydratedItemCount: number
   /** How the board load failed, so the page reuses the backlog's host notices. */
@@ -152,6 +158,7 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     collapsedLaneIds,
     toggleLane
   } = useAzureDevOpsBoardView({ active, repo, teamRoute, level, view, reportNoBoard })
+  const assigned = useAzureDevOpsWorkItemsLoader({ active, repo, view })
 
   const workItemTypes = useMemo(() => configuration?.workItemTypes ?? {}, [configuration])
   const allItems = useMemo(
@@ -159,9 +166,10 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
       ...(page
         ? [...page.items, ...page.children, ...page.parents, ...(page.ancestors ?? [])]
         : []),
-      ...(board ? [...board.items, ...board.parents] : [])
+      ...(board ? [...board.items, ...board.parents] : []),
+      ...assigned.items
     ],
-    [page, board]
+    [page, board, assigned.items]
   )
   const itemById = useMemo(() => new Map(allItems.map((i) => [i.id, i])), [allItems])
   const { detailId, setDetailId, detail, detailLoading, detailError } =
@@ -190,48 +198,16 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     [page, filteredPage, showParents, toggled]
   )
 
-  const useItem = useCallback(
-    (id: number) => {
-      const item: AzureDevOpsWorkItem | undefined =
-        itemById.get(id) ?? (detail?.id === id ? detail : undefined)
-      if (!item || !configuration || !teamName) {
-        return
-      }
-      // Why: the linked chip prepends `#number` itself; the title must stay the bare title.
-      const linkedWorkItem: LinkedWorkItemSummary = {
-        type: 'issue',
-        provider: 'azure-devops',
-        number: item.id,
-        title: item.title,
-        url: item.url,
-        azureDevOpsIdentifier: String(item.id)
-      }
-      const taskSourceContext = getTaskPageRepoSourceContext(repo, 'azure-devops', null, {
-        provider: 'azure-devops',
-        organization: configuration.repo.organization,
-        project: configuration.repo.project,
-        teamId: team?.id ?? null,
-        teamName
-      })
-      if (!taskSourceContext) {
-        toast.error(
-          translate(
-            'auto.components.TaskPage.azureDevOps.linkUnavailable',
-            'Couldn’t link this work item. Reload the backlog and try again.'
-          )
-        )
-        return
-      }
-      openModal('new-workspace-composer', {
-        linkedWorkItem,
-        taskSourceContext,
-        prefilledName: getAzureDevOpsWorkItemWorkspaceSeed(item),
-        telemetrySource: 'sidebar'
-      })
-      setDetailId(null)
-    },
-    [itemById, detail, configuration, teamName, team, repo, openModal, setDetailId]
-  )
+  const useItem = useAzureDevOpsWorkItemWorktreeAction({
+    repo,
+    itemById,
+    detail,
+    configuration,
+    team,
+    teamName,
+    openModal,
+    setDetailId
+  })
 
   const visibleLevels = useMemo(
     () => listVisibleAzureDevOpsLevels(configuration?.backlog?.levels ?? []),
@@ -243,6 +219,7 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
   const filterOptions = collectAzureDevOpsViewFilterOptions({
     view,
     boardItems: board?.items ?? null,
+    workItems: assigned.items,
     backlogItems: page ? [...page.items, ...page.children] : [],
     iterations: configuration?.iterations ?? []
   })
@@ -265,8 +242,13 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     showInProgress,
     setShowInProgress,
     columnWidths,
-    refresh: view === 'board' ? refreshBoard : refresh,
-    refreshing: view === 'board' ? boardStatus === 'loading' : refreshing,
+    refresh: view === 'board' ? refreshBoard : view === 'workItems' ? assigned.refresh : refresh,
+    refreshing:
+      view === 'board'
+        ? boardStatus === 'loading'
+        : view === 'workItems'
+          ? assigned.refreshing
+          : refreshing,
     filters,
     setFilters,
     filterOptions,
@@ -278,6 +260,11 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     boardAvailable,
     boardPage: board,
     backlogUnhydratedItemCount: page?.unhydratedItemCount ?? 0,
+    workItems: assigned.items,
+    workItemsUnhydratedItemCount: assigned.unhydratedItemCount,
+    workItemsErrorStatus: assigned.errorStatus,
+    workItemsErrorMessage: assigned.errorMessage,
+    workItemsLoading: assigned.status === 'loading',
     boardErrorStatus,
     boardErrorMessage,
     collapsedLaneIds,

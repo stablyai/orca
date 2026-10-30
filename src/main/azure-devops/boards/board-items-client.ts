@@ -14,15 +14,12 @@ import {
   listAzureDevOpsBoards
 } from './board-configuration-client'
 import { listAzureDevOpsTeamAreaPaths } from './team-resolution'
-import { getAzureDevOpsWorkItemTypes } from './work-item-type-metadata'
+import { quoteWiqlLiteral as quote } from './wiql-literal'
+import { getAzureDevOpsWorkItemTypes, removedStateNamesForTypes } from './work-item-type-metadata'
 
 const BOARD_TIMEOUT_MS = 15_000
 const STACK_RANK_FIELD = 'Microsoft.VSTS.Common.StackRank'
 const AREA_PATH_FIELD = 'System.AreaPath'
-
-function quote(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
-}
 
 // Why: stock processes name each board after its backlog level; a miss leaves Board disabled rather than guessing.
 export function resolveAzureDevOpsBoardForLevel(
@@ -38,15 +35,7 @@ export function removedStateNames(
   level: AzureDevOpsBacklogLevel,
   workItemTypes: Record<string, AzureDevOpsWorkItemTypeMetadata>
 ): string[] {
-  const names = new Set<string>()
-  for (const typeName of level.workItemTypes) {
-    for (const state of workItemTypes[typeName]?.states ?? []) {
-      if (state.category === 'Removed') {
-        names.add(state.name)
-      }
-    }
-  }
-  return [...names]
+  return removedStateNamesForTypes(level.workItemTypes, workItemTypes)
 }
 
 export function buildAzureDevOpsBoardWiql(
