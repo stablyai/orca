@@ -278,7 +278,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     failNextResubscribeWith(new Error('terminal_gone'))
     dropMultiplexedStream()
 
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(FIRST_PTY_ID))
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(FIRST_PTY_ID, undefined))
     // Lifecycle evidence, not a replaceable handle: no second re-resolve.
     expect(methodLog.filter((method) => method === 'terminal.resolvePane')).toHaveLength(1)
     expect(transport.getRecoveryState?.().phase).toBe('ended')

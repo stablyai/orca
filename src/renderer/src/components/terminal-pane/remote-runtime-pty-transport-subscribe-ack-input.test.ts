@@ -287,22 +287,27 @@ it('reconciles contradictory current ACK proof without adopting launch metadata 
   const unavailable = vi.fn()
   const defaultCall = runtimeCall.getMockImplementation()
   let resolvedIncarnation = 'i1'
-  runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) =>
-    request.method === 'terminal.resolvePane'
-      ? {
-          ok: true,
-          result: {
-            terminal: {
-              handle: 'terminal-1',
-              tabId: 'tab-1',
-              leafId: 'pane:1',
-              worktreeId: 'wt-1',
-              incarnationId: resolvedIncarnation
-            }
-          }
+  let resolutionGate: Promise<void> | null = null
+  runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+    if (request.method !== 'terminal.resolvePane') {
+      return defaultCall?.(request)
+    }
+    if (resolutionGate) {
+      await resolutionGate
+    }
+    return {
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1',
+          worktreeId: 'wt-1',
+          incarnationId: resolvedIncarnation
         }
-      : defaultCall?.(request)
-  )
+      }
+    }
+  })
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
     tabId: 'tab-1',
@@ -374,23 +379,30 @@ it('reconciles contradictory current ACK proof without adopting launch metadata 
     expect(inputFrameTexts().join('')).not.toContain('\x1b[<')
     b.sendInput('i2-live', 'driving')
     await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('i2-live'))
-    resolvedIncarnation = 'i2'
-    emitSnapshot(latestSubscribePayload().streamId, 'i2 prompt$ ')
-    subscriptionCallbacks?.onError?.({
-      code: 'remote_runtime_unavailable',
-      message: 'Remote runtime connection closed.'
+    // Cached same-h attach and snapshot preserve proof before a fresh resolver adopts metadata.
+    let releaseResolution!: () => void
+    resolutionGate = new Promise<void>((resolve) => {
+      releaseResolution = resolve
     })
+    emitSnapshot(latestSubscribePayload().streamId, 'still i2')
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      callbacks: { onWriteUnavailable: unavailable }
+    })
+    expect(transport.getInputSource?.()).toBe(b)
+    expect(b.isCurrent()).toBe(true)
     transport.sendInput('ordinary-again', 'driving')
     b.sendInput('i2-held', 'driving')
+    resolvedIncarnation = 'i2'
+    releaseResolution()
     await vi.waitFor(() => expect(subscribeFrameCount()).toBe(3))
     acknowledgeSubscribe(latestSubscribePayload().streamId, 'i2')
-    await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('ordinary-againi2-held'))
+    emitSnapshot(latestSubscribePayload().streamId, 'i2 prompt$ ')
+    await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('i2-held'))
+    expect(inputFrameTexts().join('')).not.toContain('ordinary-again')
     expect(transport.getInputSource?.()).toBe(b)
-    // Snapshot and cached same-h attach must preserve newer source proof despite older attribution.
-    emitSnapshot(latestSubscribePayload().streamId, 'still i2')
-    transport.attach({ existingPtyId: 'remote:env-1@@terminal-1', callbacks: {} })
-    expect(transport.getInputSource?.()).toBe(b)
-    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(4))
+    expect(transport.sendInput('ordinary-fresh-i2', 'driving')).toBe(true)
+    await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('ordinary-fresh-i2'))
     expect(transport.getInputSource?.()?.endpoint).toMatchObject({ incarnationId: 'i2' })
     expect(unavailable).not.toHaveBeenCalled()
   } finally {

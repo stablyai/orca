@@ -80,6 +80,7 @@ it('fences a host-produced valid direct-alias replacement before snapshot, with 
   register('i1', false)
   let releaseSnapshot = (): void => {}
   let snapshots = 0
+  const hostAcks: unknown[] = []
   mocks.runtimeSubscribe.mockImplementation(
     async (_args: unknown, next: NonNullable<MultiplexSubscriptionCallbacks>) => {
       callbacks = next
@@ -106,6 +107,9 @@ it('fences a host-produced valid direct-alias replacement before snapshot, with 
         },
         (message) => {
           const response = JSON.parse(message)
+          if (response.result?.type === 'subscribed') {
+            hostAcks.push(response.result)
+          }
           if (response.result?.type === 'ready') {
             queueMicrotask(() => next.onResponse(response))
           } else {
@@ -227,7 +231,11 @@ it('fences a host-produced valid direct-alias replacement before snapshot, with 
   releaseSnapshot()
   await recovering
   expect(original.isCurrent()).toBe(false)
-  expect(binding.getInputSource()?.endpoint?.incarnationId).toBe('i2')
+  const current = binding.getInputSource()
+  expect(current).not.toBeNull()
+  expect(current).not.toBe(original)
+  expect(current?.isCurrent()).toBe(true)
+  expect(hostAcks.at(-1)).toMatchObject({ terminal: handle, launchResult: { incarnationId: 'i2' } })
   press('mouseup')
   expect(request).not.toHaveBeenCalled()
   expect(writes).toEqual([])

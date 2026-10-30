@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/xterm'
+import { createPtyInputSourceBinding } from './pty-input-source'
+import { terminalLinkPressCandidate } from './terminal-link-press-candidate'
+import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import {
@@ -99,15 +103,105 @@ describe('floating file links preserve main-window selection', () => {
     useAppStore.setState({ activeWorktreeId: workspace, activeWorkspaceExecutionHostId: host })
     const before = mainSelection()
 
-    handleTerminalFileLink(
-      '/Users/me/report.html',
-      null,
-      null,
-      new MouseEvent('click', {
-        metaKey: true
-      }),
-      deps
-    )
+    const path = '/Users/me/report.html'
+    const emulator = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    await new Promise<void>((resolve) => emulator.write(path, resolve))
+    const element = document.createElement('div')
+    const screen = document.createElement('div')
+    screen.className = 'xterm-screen'
+    screen.getBoundingClientRect = () => new DOMRect(0, 0, 800, 240)
+    element.append(screen)
+    document.body.append(element)
+    const clearSelection = vi.fn()
+    const terminal = { element, buffer: emulator.buffer, cols: 80, rows: 24, clearSelection }
+    const candidate = (event: MouseEvent) => terminalLinkPressCandidate(terminal, event, true)
+    const owner = installTerminalLinkPtyMouseSuppression(terminal, {
+      candidate,
+      eligible: (event) => event.metaKey,
+      canContinue: () => true
+    })
+    const writes: string[] = []
+    const source = createPtyInputSourceBinding<string>({
+      same: (a, b) => a === b,
+      refine: (_, next) => next,
+      create: (endpoint, isCurrent) => {
+        const send = (data: string): boolean => {
+          if (!isCurrent()) {
+            return false
+          }
+          writes.push(data)
+          return true
+        }
+        return { ptyId: endpoint(), isCurrent, sendInput: send, sendInputImmediate: send }
+      }
+    })
+    source.change('floating-live-pty', () => {})
+    const observation = source.observe({
+      beforeChange: owner.invalidateSource,
+      afterChange: (current) =>
+        owner.bindSource(
+          current && {
+            isCurrent: current.isCurrent,
+            user: (data) => {
+              current.sendInput(data, 'driving')
+            },
+            unclassified: (data) => {
+              current.sendInput(data, 'query-reply')
+            }
+          }
+        )
+    })
+    try {
+      const eventOptions = {
+        bubbles: true,
+        cancelable: true,
+        metaKey: true,
+        button: 0,
+        clientX: 15,
+        clientY: 5
+      }
+      const down = new MouseEvent('mousedown', { ...eventOptions, buttons: 1 })
+      expect(candidate(down)).not.toBeNull()
+      element.dispatchEvent(down)
+      owner.handlePtyInput(
+        '\x1b[<0;2;1M',
+        (data) => {
+          source.current()?.sendInput(data, 'driving')
+        },
+        true
+      )
+      const up = new MouseEvent('mouseup', eventOptions)
+      element.dispatchEvent(up)
+      owner.handlePtyInput(
+        '\x1b[<0;2;1m',
+        (data) => {
+          source.current()?.sendInput(data, 'driving')
+        },
+        true
+      )
+      expect(
+        handleTerminalFileLink(path, null, null, up, {
+          ...deps,
+          commit: (event, operation) => {
+            const current = candidate(event)
+            return (
+              current !== null &&
+              owner.commitPointer(event, current, () => {
+                event.preventDefault()
+                operation.run()
+              })
+            )
+          }
+        })
+      ).toBe(true)
+      expect(clearSelection).toHaveBeenCalledOnce()
+      expect(writes).toEqual([])
+    } finally {
+      observation.dispose()
+      owner.dispose()
+      emulator.dispose()
+      element.remove()
+    }
     await flushOpen()
 
     expect(createBrowserTab).toHaveBeenCalledWith(

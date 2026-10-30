@@ -591,7 +591,7 @@ it.each([10, 100])(
       expect(transport.getInputSource?.()).toBeNull()
       const ending = Promise.withResolvers<void>()
       const options = { onAbandonedConnect: () => false }
-      lower.transport.destroy = vi.fn(function (
+      lower.transport.destroy = vi.fn().mockImplementationOnce(function (
         this: PtyTransport,
         received: Parameters<NonNullable<PtyTransport['destroy']>>[0]
       ) {

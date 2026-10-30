@@ -8,7 +8,12 @@ export const PTY_PRECONNECT_INPUT_MAX_CODE_UNITS = 4 * CLIPBOARD_TEXT_MEASURE_YI
 
 import {
   createBufferedInput,
+  createAcceptedBufferedInput,
   notifyRetainedInput,
+  settleBufferedInput,
+  withdrawBufferedInputs,
+  partitionScopedBufferedInputs,
+  writeAcceptedBufferedInput,
   type PtyPreconnectInputEntry,
   type AcceptedInputOptions,
   type BufferedInput,
@@ -40,7 +45,7 @@ export type PtyPreconnectInputBuffer = {
   ) => Promise<boolean>
   flush: (writer: PreconnectInputWriter) => Promise<void>
   clear: () => void
-  discardUnscoped: () => boolean
+  discardUnscoped: (onWithdrawn?: () => void) => boolean
 }
 
 export type PtyPreconnectInputBufferOptions = {
@@ -93,12 +98,16 @@ export function createPtyPreconnectInputBuffer(
   // Why: a caller that timed out already reported the write failed; delivering it later would land a stray fragment.
   const withdraw = (input: BufferedInput): void => {
     const index = pending.indexOf(input)
-    if (index === -1) {
+    if (index !== -1) {
+      pending.splice(index, 1)
+      pendingCodeUnits -= input.data.length
+    } else if (activeAcceptedInput !== input) {
       return
     }
-    pending.splice(index, 1)
-    pendingCodeUnits -= input.data.length
-    input.resolve?.(false)
+    if (activeAcceptedInput === input) {
+      activeAcceptedInput = null
+    }
+    settleBufferedInput(input, false)
   }
   // Seeded entries already belong to predecessor handoff; do not report them back as newly typed.
   for (const entry of initialEntries) {
@@ -120,14 +129,19 @@ export function createPtyPreconnectInputBuffer(
     buffering = false
     const inFlight = activeAcceptedInput
     activeAcceptedInput = null
-    inFlight?.resolve?.(false)
-    for (const input of dropped) {
-      input.resolve?.(false)
-    }
     stopFlush()
+    withdrawBufferedInputs([...(inFlight ? [inFlight] : []), ...dropped])
   }
 
   const runFlush = async (writer: PreconnectInputWriter): Promise<void> => {
+    let failure: unknown
+    const settle = (input: BufferedInput, accepted: boolean): void => {
+      try {
+        settleBufferedInput(input, accepted)
+      } catch (error) {
+        failure ??= error
+      }
+    }
     try {
       while (buffering && pending.length > 0) {
         const input = pending.shift()
@@ -136,7 +150,7 @@ export function createPtyPreconnectInputBuffer(
         }
         pendingCodeUnits -= input.data.length
         if (input.source && !input.source.isCurrent()) {
-          input.resolve?.(false)
+          settle(input, false)
           continue
         }
         if (input.kind === 'accepted') {
@@ -149,28 +163,20 @@ export function createPtyPreconnectInputBuffer(
           return
         }
         if (!buffering || !writer.isCurrent()) {
-          input.resolve?.(false)
+          settle(input, false)
           clear()
           return
         }
         if (input.kind === 'accepted') {
           let accepted: boolean | null = null
           try {
-            accepted = await Promise.race([
-              Promise.resolve(
-                writer.sendInputAccepted
-                  ? writer.sendInputAccepted(
-                      input.data,
-                      input.inputKind,
-                      input.signal ? { signal: input.signal } : undefined,
-                      input.source
-                    )
-                  : writer.sendInput(input.data, input.inputKind, input.source)
-              ),
-              flushStopped.then(() => null)
-            ])
+            accepted = await writeAcceptedBufferedInput(input, writer, flushStopped)
           } catch {
-            input.resolve?.(false)
+            const withdrawn = !input.resolve
+            settle(input, false)
+            if (withdrawn) {
+              continue
+            }
             if (input.source && !input.source.isCurrent()) {
               continue
             }
@@ -181,11 +187,14 @@ export function createPtyPreconnectInputBuffer(
               activeAcceptedInput = null
             }
           }
+          if (!input.resolve) {
+            continue
+          }
           if (!buffering || accepted === null) {
-            input.resolve?.(false)
+            settle(input, false)
             return
           }
-          input.resolve?.(accepted)
+          settle(input, accepted)
           // Why not for a withdrawn write: its caller gave up on it alone, not on what was typed after it.
           if (
             !accepted &&
@@ -218,8 +227,16 @@ export function createPtyPreconnectInputBuffer(
       buffering = false
       stopFlush()
     } catch (error) {
-      clear()
-      throw error
+      failure ??= error
+      try {
+        clear()
+      } catch (cleanupError) {
+        failure ??= cleanupError
+      }
+    } finally {
+      if (failure !== undefined) {
+        throw failure
+      }
     }
   }
 
@@ -253,59 +270,36 @@ export function createPtyPreconnectInputBuffer(
       return retained
     },
     enqueueAccepted(data, inputKind, onRetained, options, source) {
-      return new Promise<boolean>((resolve) => {
-        const signal = options?.signal
-        if (signal?.aborted) {
-          resolve(false)
-          return
-        }
-        const onAbort = (): void => withdraw(input)
-        // Why: a long-lived caller signal would otherwise pin every settled input through its listener.
-        const settle = (accepted: boolean): void => {
-          try {
-            signal?.removeEventListener('abort', onAbort)
-          } finally {
-            resolve(accepted)
-          }
-        }
-        const input = createBufferedInput(data, 'accepted', inputKind, settle, signal, source)
-        if (!retain(input)) {
-          resolve(false)
-          return
-        }
-        signal?.addEventListener('abort', onAbort, { once: true })
-        notifyRetainedInput(onRetained, input)
-      })
+      if (options?.signal?.aborted) {
+        return Promise.resolve(false)
+      }
+      const { input, completion, onAbort } = createAcceptedBufferedInput(
+        data,
+        inputKind,
+        options,
+        source,
+        withdraw
+      )
+      if (!retain(input)) {
+        settleBufferedInput(input, false)
+        return completion
+      }
+      options?.signal?.addEventListener('abort', onAbort, { once: true })
+      notifyRetainedInput(onRetained, input)
+      return completion
     },
     flush,
-    discardUnscoped: () => {
-      const retained: BufferedInput[] = []
-      const dropped: BufferedInput[] = []
-      let retainedCodeUnits = 0
-      let droppedTyping = false
-      for (const input of pending) {
-        if (!input.source || !input.source.isCurrent()) {
-          droppedTyping ||= !input.source && input.inputKind === 'driving'
-          dropped.push(input)
-        } else {
-          retained.push(input)
-          retainedCodeUnits += input.data.length
-        }
+    discardUnscoped: (onWithdrawn) => {
+      const partition = partitionScopedBufferedInputs(pending, activeAcceptedInput)
+      pending = partition.retained
+      pendingCodeUnits = partition.retainedCodeUnits
+      activeAcceptedInput = partition.active
+      if (pending.length === 0 && activeAcceptedInput === null) {
+        buffering = false
+        stopFlush()
       }
-      pending = retained
-      pendingCodeUnits = retainedCodeUnits
-      let failure: unknown
-      for (const input of dropped) {
-        try {
-          input.resolve?.(false)
-        } catch (error) {
-          failure ??= error
-        }
-      }
-      if (failure !== undefined) {
-        throw failure
-      }
-      return droppedTyping
+      withdrawBufferedInputs(partition.dropped, onWithdrawn)
+      return partition.droppedTyping
     },
     clear
   }

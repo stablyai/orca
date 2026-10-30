@@ -335,3 +335,134 @@ it.each([10, 100])(
     }
   }
 )
+
+it.each(['ordinary', 'current', 'retired'] as const)(
+  'ends a replaced ordinary expectation while preserving only current active scope: %s',
+  async (mode) => {
+    const { createPtyInputSourceBinding } = await import('./pty-input-source')
+    const sources = createPtyInputSourceBinding<string>({
+      same: (a, b) => a === b,
+      refine: (_, next) => next,
+      create: (get, isCurrent) => ({
+        ptyId: get(),
+        isCurrent,
+        sendInput: () => false,
+        sendInputImmediate: () => false
+      })
+    })
+    sources.change('original-host-A', () => {})
+    const original = sources.current()
+    if (!original) {
+      throw new Error('missing source')
+    }
+    const hold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+    const expectation = hold.expect(endpoint)
+    const signal = new AbortController()
+    const accepted = hold.enqueueAccepted(
+      endpoint,
+      'active-A',
+      'driving',
+      { signal: signal.signal },
+      mode === 'ordinary' ? undefined : original
+    )
+    let finish!: (accepted: boolean) => void
+    const { sent, writer } = createWriter()
+    const activeWriter = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve
+        })
+    )
+    const release = hold.release(endpoint, { ...writer, sendInputAccepted: activeWriter })
+    await vi.waitFor(() => expect(activeWriter).toHaveBeenCalledOnce())
+    if (mode === 'retired') {
+      sources.change('replacement', () => {})
+    }
+    hold.discardUnscoped()
+    expect(hold.isHoldingBeforeBind()).toBe(false)
+    expect(hold.hasPendingInput()).toBe(mode === 'current')
+    if (mode !== 'current') {
+      await expect(accepted).resolves.toBe(false)
+    }
+    const next = { handle: 'terminal-2', incarnationId: 'inc-2' }
+    expect(hold.enqueue(next, 'fresh-ordinary', 'driving')).toBe(true)
+    const currentRelease = hold.release(next, writer)
+    // An old connect's finally must not clear the fresh current hold.
+    hold.settleExpectation(expectation, false)
+    if (mode === 'current') {
+      expect(sent).toEqual([])
+      finish(true)
+      await expect(accepted).resolves.toBe(true)
+    }
+    await currentRelease?.done
+    await release?.done
+    expect(sent).toEqual(['fresh-ordinary'])
+    finish(false)
+    await Promise.resolve()
+    expect(hold.isHolding()).toBe(false)
+    expect(hold.hasPendingInput()).toBe(false)
+  }
+)
+
+it('publishes retirement before throwing abort cleanup reenters and keeps the successor expectation', async () => {
+  const hold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+  hold.expect(endpoint)
+  const firstSignal = new AbortController()
+  const first = hold.enqueueAccepted(endpoint, 'old-one', 'driving', { signal: firstSignal.signal })
+  const second = hold.enqueueAccepted(endpoint, 'old-two', 'driving')
+  const next = { handle: 'terminal-2', incarnationId: 'inc-2' }
+  let successor = hold.expect(endpoint)
+  vi.spyOn(firstSignal.signal, 'removeEventListener').mockImplementationOnce(() => {
+    expect(hold.isHoldingBeforeBind()).toBe(false)
+    expect(hold.hasPendingInput()).toBe(false)
+    successor = hold.expect(next)
+    expect(hold.enqueue(next, 'fresh', 'driving')).toBe(true)
+    throw new Error('old abort cleanup')
+  })
+  expect(() => hold.discardUnscoped()).toThrow('old abort cleanup')
+  await expect(first).resolves.toBe(false)
+  await expect(second).resolves.toBe(false)
+  hold.settleExpectation(successor, true)
+  const { sent, writer } = createWriter()
+  await hold.release(next, writer)?.done
+  expect(sent).toEqual(['fresh'])
+  expect(hold.isHolding()).toBe(false)
+})
+
+it('terminates when the last retained active scoped waiter aborts', async () => {
+  const { createPtyInputSourceBinding } = await import('./pty-input-source')
+  const sources = createPtyInputSourceBinding<string>({
+    same: (a, b) => a === b,
+    refine: (_, next) => next,
+    create: (get, isCurrent) => ({
+      ptyId: get(),
+      isCurrent,
+      sendInput: () => false,
+      sendInputImmediate: () => false
+    })
+  })
+  sources.change('A', () => {})
+  const source = sources.current()
+  if (!source) {
+    throw new Error('missing source')
+  }
+  const hold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+  const controller = new AbortController()
+  const accepted = hold.enqueueAccepted(
+    endpoint,
+    'active',
+    'driving',
+    { signal: controller.signal },
+    source
+  )
+  const { writer } = createWriter()
+  const send = vi.fn(() => new Promise<boolean>(() => {}))
+  const release = hold.release(endpoint, { ...writer, sendInputAccepted: send })
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce())
+  hold.discardUnscoped()
+  controller.abort()
+  await expect(accepted).resolves.toBe(false)
+  await release?.done
+  expect(hold.hasPendingInput()).toBe(false)
+  expect(hold.isHolding()).toBe(false)
+})

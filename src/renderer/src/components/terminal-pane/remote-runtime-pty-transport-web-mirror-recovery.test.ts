@@ -28,6 +28,8 @@ const {
   runtimeSubscribe,
   subscriptionSendBinary,
   latestSubscribePayload,
+  emitSnapshot,
+  inputFrameTexts,
   resetRemoteRuntimeTransport
 } = createRemoteRuntimeTransportMocks({
   getCallbacks: () => subscriptionCallbacks,
@@ -431,5 +433,90 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(currentOnError).not.toHaveBeenCalled()
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
     transport.destroy?.()
+  })
+  it('cancels both the published wait and in-flight old recovery when a new connect takes ownership', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const events = await import('../../runtime/web-session-terminal-handle-events')
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+    let finishOld!: (value: unknown) => void
+    let finishNew!: () => void
+    try {
+      transport.attach({ existingPtyId: 'remote:env-1@@terminal-1', callbacks: {} })
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledOnce())
+      emitSnapshot(latestSubscribePayload().streamId, 'live A')
+      const original = transport.getInputSource?.()
+      expect(original?.isCurrent()).toBe(true)
+      const call = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(
+        async (request: { method: string; params?: { intent?: string } }) => {
+          if (request.method === 'session.tabs.activate') {
+            if (request.params?.intent === 'automatic') {
+              return new Promise((resolve) => {
+                finishOld = resolve
+              })
+            }
+            await new Promise<void>((resolve) => {
+              finishNew = resolve
+            })
+          }
+          return call?.(request)
+        }
+      )
+      subscriptionCallbacks?.onError?.({ code: 'remote_runtime_unavailable', message: 'closed' })
+      await vi.waitFor(() => expect(finishOld).toBeTypeOf('function'))
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
+      // Queue a real absence publication while the old subscriber is eligible, then detach it before delivery.
+      events.queueAcceptedWebSessionTerminalSnapshot(
+        {
+          worktree: 'wt-1',
+          publicationEpoch: 'owned-entry',
+          snapshotVersion: 5,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        },
+        'env-1'
+      )
+      const connecting = transport.connect({ url: '', callbacks: {} })
+      await vi.waitFor(() => expect(finishNew).toBeTypeOf('function'))
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+      finishOld({
+        ok: true,
+        result: {
+          worktree: 'wt-1',
+          publicationEpoch: 'owned-entry',
+          snapshotVersion: 5,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(transport.getRecoveryState?.().phase).not.toBe('ended')
+      expect(onPtyExit).not.toHaveBeenCalled()
+      resolvedPaneHandle = 'terminal-2'
+      finishNew()
+      await connecting
+      emitSnapshot(latestSubscribePayload().streamId, 'live B')
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2')
+      expect(original?.isCurrent()).toBe(false)
+      expect(transport.sendInput('successor-positive', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('successor-positive'))
+      expect(onPtyExit).not.toHaveBeenCalled()
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+    } finally {
+      finishOld?.({ ok: true, result: {} })
+      finishNew?.()
+      transport.destroy?.()
+    }
   })
 })
