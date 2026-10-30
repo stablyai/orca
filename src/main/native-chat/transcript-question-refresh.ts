@@ -23,10 +23,6 @@ export function createTranscriptQuestionRefresh(
     }
     questionsRefresh = (async () => {
       const signal = AbortSignal.any([ownerSignal, AbortSignal.timeout(15_000)])
-      const repository = await waitForPromiseWithSignal(
-        args.prepareCurrentRequests?.() ?? Promise.resolve(),
-        signal
-      )
       if (closed() || !args.onCurrentRequests) {
         return
       }
@@ -36,9 +32,10 @@ export function createTranscriptQuestionRefresh(
         args.sessionId,
         decode,
         args.onCurrentRequests,
-        repository ?? undefined
+        undefined,
+        args.prepareCurrentRequests
       )
-      await questions.refresh()
+      await waitForPromiseWithSignal(questions.refresh(), signal)
     })()
       .catch(() => {
         // Current controls retry on the owning watcher's next reconciliation; history stays usable.

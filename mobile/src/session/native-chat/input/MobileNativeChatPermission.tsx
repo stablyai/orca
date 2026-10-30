@@ -18,8 +18,10 @@ function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
   onCancel,
-  onCollapse
+  onCollapse,
+  disabled = false
 }: {
+  disabled?: boolean
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
   onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
@@ -27,7 +29,8 @@ function MobileNativeChatPermissionImpl({
   onCollapse?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const [submitting, setSubmitting] = useState(false)
+  const [pending, setSubmitting] = useState(false)
+  const submitting = pending || disabled
   const submittingRef = useRef(false)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
   const newerSubject = isNewerApprovalSubject(permission.subject)

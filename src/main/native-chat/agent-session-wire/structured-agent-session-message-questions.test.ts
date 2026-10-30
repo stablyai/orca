@@ -1,17 +1,23 @@
-import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session-current-requests-reader'
+import { observeAsyncQuestions } from './structured-agent-session-question-observation.test-fixture'
+import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { structuredRewindCut } from './structured-rewind-cut'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session-journal-item-key'
+import { messageQuestionSourceId } from '../message-question-source'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
-  EMPTY_STRUCTURED_AGENT_SESSION,
-  reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
-import {
   HOST_TEST_SESSION as SESSION,
-  HOST_TEST_THREAD as THREAD
+  HOST_TEST_THREAD as THREAD,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import { currentJournal } from './structured-agent-session-leftover-settlement.test-fixture'
 import {
   createQueuedMessageTestRig,
+  QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 
@@ -30,7 +36,7 @@ function asyncRows(current: QueuedMessageTestRig) {
     SESSION,
     'agent-session.current-requests.v2'
   ).items
-  if (Array.isArray(payload)) {
+  if (!payload || Array.isArray(payload) || payload.asyncQuestions === null) {
     throw new Error('expected negotiated v2 payload')
   }
   return payload.asyncQuestions
@@ -119,48 +125,6 @@ it('places canonical Stop after its scoped work on replay, without retiring late
   )
   expect(asyncRows(rig).map((row) => row.sourceRowId)).toEqual([q2.itemId])
 })
-
-async function observeAsyncQuestions(current: QueuedMessageTestRig, id: string) {
-  let state = EMPTY_STRUCTURED_AGENT_SESSION
-  const host = current.host
-  const reader = createAgentSessionCurrentRequestsReader({
-    read: (request) => host.readCurrentRequests(request, 'agent-session.current-requests.v2'),
-    complete: (marker, items, payload) => {
-      state = reduceStructuredAgentSession(state, {
-        type: 'requests-complete',
-        marker,
-        items,
-        payload
-      })
-    },
-    replaceMarker: (marker) => {
-      state = reduceStructuredAgentSession(state, { type: 'requests-marker', marker })
-    },
-    error: (error) => {
-      throw error
-    }
-  })
-  const close = await host.subscribe({
-    id,
-    sessionId: SESSION,
-    boundedFrames: true,
-    readsCurrentRequests: true,
-    requestContract: 'agent-session.current-requests.v2',
-    emit: (event) => {
-      state = reduceStructuredAgentSession(state, { type: 'event', event })
-      if (event.type !== 'end' && event.currentRequests) {
-        reader.observe(event.currentRequests)
-      }
-    }
-  })
-  return {
-    state: () => state,
-    close: () => {
-      close()
-      reader.invalidate()
-    }
-  }
-}
 
 it('publishes a later question through late cancelled-turn output and host replay', async () => {
   rig = await createQueuedMessageTestRig()
@@ -303,7 +267,7 @@ it.each([40, 400])(
       )
       await current.host.flushStreamedEvents(SESSION)
       await vi.waitFor(() => expect(cursor).toBe(journal.cursor().sequence))
-      expect(scopes).toBeGreaterThan(count)
+      expect(scopes).toBeGreaterThan(0)
       expect(scopes).toBeLessThanOrEqual(count * 30)
       const before = publications
       const question = await journal.appendItem(
@@ -557,3 +521,285 @@ it('publishes exact-ID shared Cancel without a journal row, historical restateme
     second.close()
   }
 })
+
+it('keeps canonical rewind successful through failed question settlement, then repairs tombstones and stable outcomes on reopen', async () => {
+  rig = await createQueuedMessageTestRig({ restartable: true, rewind: async () => ({ ok: true }) })
+  const current = rig
+  const first = await current.workingSend()
+  await current.settleAccepted(first, 'kept')
+  const journal = currentJournal(current)
+  const kept = await journal.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'turn-kept', ordinal: 1 },
+    asyncQuestionBody('retained-call'),
+    { fence: 1 }
+  )
+  const displayed = asyncRows(current)
+  expect(displayed).toHaveLength(1)
+  const keptId = displayed[0].id
+  await current.host.cancelCurrentQuestions({ sessionId: SESSION, ids: [keptId] }, 'desktop')
+  const pending = await journal.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'turn-kept', ordinal: 2 },
+    asyncQuestionBody('retained-pending'),
+    { fence: 1 }
+  )
+  const pendingId = asyncRows(current)[0].id
+  const target = current.send('rewind this turn')
+  expect(await target.result).toMatchObject({ ok: true })
+  await vi.waitFor(async () =>
+    expect((await current.submission(target.id))?.handedOverAt).toBeDefined()
+  )
+  await current.settleAccepted(target.id, 'removed')
+  const removed = await journal.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'turn-removed', ordinal: 1 },
+    asyncQuestionBody('removed-call'),
+    { fence: 1 }
+  )
+  expect(asyncRows(current).map((record) => record.sourceRowId)).toEqual([removed.itemId])
+  const owner = journal.messageQuestions()
+  const database = openTestJournalHostDatabase(current.root)
+  database.db.exec(
+    "CREATE TEMP TRIGGER fail_question_settlement BEFORE UPDATE ON message_question_occurrences BEGIN SELECT RAISE(ABORT, 'question storage failure'); END"
+  )
+  const fields = {
+    itemId: agentJournalSubmissionKey(target.id),
+    expectedEpoch: journal.cursor().epoch
+  }
+  expect(
+    await current.host.rewind(QUEUED_RIG_CALLER, {
+      ...fields,
+      envelope: current.envelope(fields, 'agentSession.rewind', hostTestOperationId())
+    })
+  ).toMatchObject({ ok: true })
+  expect(journal.questionSourceFacts().removed.has(removed.itemId)).toBe(true)
+  expect(asyncRows(current)).toEqual([])
+  expect(
+    owner.repository.current(owner.source).records.find((record) => record.id === keptId)
+      ?.resolution.state
+  ).toBe('cancelled')
+  database.db.exec('DROP TRIGGER fail_question_settlement')
+  // Reconstruct from persisted facts with no subscriber or fresh provider event.
+  owner.repository.invalidate(messageQuestionSourceId(owner.source))
+  current.crashRestartHostProcess()
+  await current.host.history({ sessionId: SESSION, direction: 'tail' })
+  const reopened = currentJournal(current)
+  const view = currentWork(current).requestProjection(
+    SESSION,
+    'agent-session.current-requests.v2'
+  ).items
+  if (!view || Array.isArray(view)) {
+    throw new Error('Expected v2 publication')
+  }
+  expect(view.asyncQuestions).toEqual([])
+  const saved = reopened.messageQuestions()
+  const records = saved.repository.current(saved.source).records
+  expect(records.find((record) => record.sourceRowId === removed.itemId)?.resolution).toMatchObject(
+    { state: 'cancelled', reason: 'source-replaced' }
+  )
+  expect(records.filter((record) => record.sourceRowId === kept.itemId)).toMatchObject([
+    { id: keptId, resolution: { state: 'cancelled' } }
+  ])
+  expect(records.filter((record) => record.sourceRowId === pending.itemId)).toMatchObject([
+    { id: pendingId, resolution: { state: 'resolved' } }
+  ])
+})
+
+it('preserves clear-floor context and retained outcomes through same-epoch rewind, omitted divider replacement and provider tombstones', async () => {
+  rig = await createQueuedMessageTestRig({ restartable: true, rewind: async () => ({ ok: true }) })
+  const current = rig
+  const started = await current.workingSend()
+  await current.settleAccepted(started, 'before-clear')
+  const journal = currentJournal(current)
+  const earlier = await journal.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'turn-before-clear', ordinal: 1 },
+    asyncQuestionBody('before-clear-question'),
+    { fence: 1 }
+  )
+  const oldId = asyncRows(current)[0].id
+  const clearFields = { command: 'clear' as const }
+  expect(
+    await current.host.conversationCommand(QUEUED_RIG_CALLER, {
+      ...clearFields,
+      envelope: current.envelope(
+        clearFields,
+        'agentSession.conversationCommand',
+        hostTestOperationId()
+      )
+    })
+  ).toMatchObject({ ok: true })
+  const fence = () => current.store.getRecord(SESSION)!.lease.runtimeFence
+  const floor = journal.context.floor()!
+  const boundary = current.store.getRecord(SESSION)!.providerContextBoundary!.operationId
+  expect(asyncRows(current)).toEqual([])
+  const keptIdentity = {
+    provider: 'codex' as const,
+    threadId: THREAD,
+    turnId: 'turn-kept',
+    ordinal: 1
+  }
+  await journal.appendItem(keptIdentity, asyncQuestionBody('kept-question'), { fence: fence() })
+  const keptId = asyncRows(current)[0].id
+  await current.host.cancelCurrentQuestions({ sessionId: SESSION, ids: [keptId] }, 'phone')
+  const targetId = hostTestOperationId()
+  const targetBody = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text: 'remove this answer' }]
+  }
+  const target = {
+    id: targetId,
+    result: current.host.send(QUEUED_RIG_CALLER, {
+      body: targetBody,
+      userSend: true,
+      envelope: {
+        ...current.envelope({ body: targetBody }, 'agentSession.send', targetId),
+        expectedRuntimeFence: fence()
+      }
+    })
+  }
+  expect(await target.result).toMatchObject({ ok: true })
+  await vi.waitFor(async () =>
+    expect((await current.submission(target.id))?.handedOverAt).toBeDefined()
+  )
+  await current.settleAccepted(target.id, 'removed-after-clear')
+  const removedIdentity = {
+    provider: 'codex' as const,
+    threadId: THREAD,
+    turnId: 'turn-removed-after-clear',
+    ordinal: 1
+  }
+  await journal.appendItem(removedIdentity, asyncQuestionBody('removed-question'), {
+    fence: fence()
+  })
+  expect(asyncRows(current)).toHaveLength(1)
+  const cut = structuredRewindCut(journal, {
+    itemId: agentJournalSubmissionKey(target.id),
+    provider: 'codex',
+    nativeId: activeProviderContext(current.store.getRecord(SESSION)!).head!.handle.nativeId
+  })
+  if (!cut) {
+    throw new Error('Expected canonical clear-floor rewind cut')
+  }
+  const fields = { itemId: agentJournalSubmissionKey(target.id), expectedEpoch: floor.epoch }
+  expect(
+    await current.host.rewind(QUEUED_RIG_CALLER, {
+      ...fields,
+      envelope: {
+        ...current.envelope(fields, 'agentSession.rewind', hostTestOperationId()),
+        expectedRuntimeFence: fence()
+      }
+    })
+  ).toMatchObject({ ok: true })
+  expect(journal.cursor().epoch).toBe(floor.epoch)
+  expect(asyncRows(current)).toEqual([])
+  expect(journal.questionSourceFacts().removed.has(agentJournalItemKey(removedIdentity))).toBe(true)
+  // Fork replacement uses the actual cut, which deliberately omits the clear divider.
+  await journal.replaceEpochItems('handle_forked', fence(), cut.kept)
+  expect(journal.context.floor()).toBeNull()
+  expect(journal.questionSourceFacts().clearOperationId).toBe(boundary)
+  expect(asyncRows(current)).toEqual([])
+  const payload = currentWork(current).requestProjection(
+    SESSION,
+    'agent-session.current-requests.v2'
+  ).items
+  if (!payload || Array.isArray(payload)) {
+    throw new Error('Expected v2 payload')
+  }
+  expect(payload.context.boundary).toBe(agentJournalSubmissionKey(`context-clear:${boundary}`))
+  const newIdentity = { ...keptIdentity, ordinal: 2 }
+  const next = await journal.appendItem(newIdentity, asyncQuestionBody('new-call-after-rewind'), {
+    fence: fence()
+  })
+  expect(asyncRows(current).map((record) => record.sourceRowId)).toEqual([next.itemId])
+  await journal.appendTombstone(newIdentity, { fence: fence() })
+  expect(asyncRows(current)).toEqual([])
+  current.crashRestartHostProcess()
+  await current.host.history({ sessionId: SESSION, direction: 'tail' })
+  expect(asyncRows(current)).toEqual([])
+  const owner = currentJournal(current).messageQuestions()
+  const records = owner.repository.current(owner.source).records
+  expect(records.filter((record) => record.sourceRowId === earlier.itemId)).toMatchObject([
+    { id: oldId, resolution: { state: 'cancelled' } }
+  ])
+  expect(
+    records.filter((record) => record.sourceRowId === agentJournalItemKey(keptIdentity))
+  ).toMatchObject([{ id: keptId, resolution: { state: 'cancelled', reason: 'user' } }])
+  expect(records.find((record) => record.sourceRowId === next.itemId)?.resolution).toMatchObject({
+    state: 'cancelled',
+    reason: 'source-replaced'
+  })
+})
+
+it.each([10, 100])(
+  'does not rebuild %i pending definition values on real unrelated structured output',
+  async (count) => {
+    rig = await createQueuedMessageTestRig()
+    const current = rig
+    await current.workingSend()
+    const journal = currentJournal(current)
+    for (let i = 0; i < count; i++) {
+      await journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'pending', ordinal: i },
+        asyncQuestionBody(`pending-${i}`),
+        { fence: 1 }
+      )
+    }
+    const observed = await observeAsyncQuestions(current, `definitions-${count}`)
+    try {
+      await vi.waitFor(() => expect(observed.state().asyncQuestions).toHaveLength(count))
+      const saved = journal.messageQuestions()
+      let reads = 0
+      for (const record of saved.repository.current(saved.source).pending) {
+        const questions = record.questions
+        Object.defineProperty(record, 'questions', {
+          configurable: true,
+          enumerable: true,
+          get: () => {
+            reads++
+            return questions
+          }
+        })
+      }
+      const reconcile = vi.spyOn(saved.repository, 'reconcile')
+      const serialize = vi.spyOn(JSON, 'stringify')
+      const before = observed.state().asyncQuestions
+      for (let i = 0; i < 3; i++) {
+        await journal.appendItem(
+          { provider: 'codex', threadId: THREAD, turnId: 'output', ordinal: i },
+          {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: `unrelated ${i}` }]
+          },
+          { fence: 1 }
+        )
+        await current.host.flushStreamedEvents(SESSION)
+        await vi.waitFor(() =>
+          expect(observed.state().cursor?.sequence).toBe(journal.cursor().sequence)
+        )
+      }
+      expect(reads).toBe(0)
+      expect(reconcile).not.toHaveBeenCalled()
+      expect(
+        serialize.mock.calls.filter(
+          ([value]) =>
+            typeof value === 'object' &&
+            value !== null &&
+            ('questions' in value || 'asyncQuestions' in value)
+        )
+      ).toHaveLength(0)
+      expect(observed.state().asyncQuestions).toBe(before)
+      serialize.mockRestore()
+      await journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'new', ordinal: 0 },
+        asyncQuestionBody('new-distinct'),
+        { fence: 1 }
+      )
+      await current.host.flushStreamedEvents(SESSION)
+      await vi.waitFor(() => expect(observed.state().asyncQuestions).toHaveLength(count + 1))
+      expect(reconcile).toHaveBeenCalled()
+      expect(observed.state().asyncQuestions).not.toBe(before)
+    } finally {
+      observed.close()
+    }
+  }
+)

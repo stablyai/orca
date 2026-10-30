@@ -6,7 +6,7 @@ import type { AgentType } from './native-chat-types'
 export type SourceContext = { sessionId: string; boundary: string }
 export type CurrentRequestsPayload = {
   blocking: AgentJournalRenderItem[]
-  asyncQuestions: readonly MessageQuestionOccurrence[]
+  asyncQuestions: readonly MessageQuestionOccurrence[] | null
   context: SourceContext
 }
 

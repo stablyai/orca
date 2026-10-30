@@ -1,3 +1,5 @@
+import type { AgentSessionCurrentRequestsState } from '../../../../shared/agent-session-current-requests'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -5,13 +7,10 @@ import {
   clearRuntimeCompatibilityCacheForTests,
   markRuntimeEnvironmentCompatible
 } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 import {
   messageCancelAction,
   getNativeChatSessionTransport,
-  RUNTIME_NATIVE_CHAT_RECONNECT_MS,
-  toRuntimeNativeChatErrorMessage
+  RUNTIME_NATIVE_CHAT_RECONNECT_MS
 } from './native-chat-session-transport'
 
 const nativeChatReadSession = vi.fn()
@@ -49,9 +48,9 @@ function okEnvelope(result: unknown): { ok: true; result: unknown } {
 
 /** Let the compatibility-gate await chain reach the runtime bridge. */
 async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+  for (let turn = 0; turn < 20; turn++) {
+    await Promise.resolve()
+  }
 }
 
 function flush(): Promise<void> {
@@ -60,6 +59,8 @@ function flush(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  replaceRuntimeEnvironmentRevisions([])
+  replaceRuntimeEnvironmentRevisions([{ id: ENV, createdAt: 1 }])
   supportsCurrentRequests.mockResolvedValue(false)
   web.create.mockReturnValue({ readSession: web.read })
   web.resolve.mockImplementation((id) => ({ id }))
@@ -72,108 +73,10 @@ beforeEach(() => {
       nativeChat: { readSession: nativeChatReadSession, subscribe: nativeChatSubscribe },
       runtimeEnvironments: {
         call: runtimeEnvironmentsCall,
-        subscribe: runtimeEnvironmentsSubscribe
+        subscribe: runtimeEnvironmentsSubscribe,
+        cancelSubscription: vi.fn(async () => {})
       }
     }
-  })
-})
-
-describe('getNativeChatSessionTransport — selection', () => {
-  it('returns the local adapter for a null owner and forwards readSession args', async () => {
-    nativeChatReadSession.mockResolvedValue({ messages: [] })
-    const transport = getNativeChatSessionTransport(null)
-
-    await transport.readSession('claude', 'sess-1', 40, '/t/path')
-
-    expect(nativeChatReadSession).toHaveBeenCalledWith('claude', 'sess-1', 40, '/t/path')
-    expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
-  })
-
-  it('returns the runtime adapter for an owner on the desktop client', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ messages: [] }))
-    const transport = getNativeChatSessionTransport(ENV)
-
-    await transport.readSession('claude', 'sess-1', 40, '/t/path')
-
-    expect(runtimeEnvironmentsCall).toHaveBeenCalledWith({
-      selector: ENV,
-      method: 'nativeChat.readSession',
-      params: {
-        agent: 'claude',
-        sessionId: 'sess-1',
-        limit: 40,
-        transcriptPath: '/t/path',
-        capabilities: { transcriptSourceOrder: 1 }
-      },
-      timeoutMs: 15_000
-    })
-    expect(nativeChatReadSession).not.toHaveBeenCalled()
-  })
-
-  it('validates lifecycle metadata on runtime read responses', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
-    runtimeEnvironmentsCall
-      .mockResolvedValueOnce(okEnvelope({ messages: [message('valid')], lifecycle }))
-      .mockResolvedValueOnce(
-        okEnvelope({
-          messages: [message('invalid')],
-          lifecycle: { state: 'completed', turnId: '', timestamp: undefined }
-        })
-      )
-    const transport = getNativeChatSessionTransport(ENV)
-
-    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
-      messages: [message('valid')],
-      lifecycle
-    })
-    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
-      messages: [message('invalid')]
-    })
-  })
-
-  it('accepts interrupted lifecycle metadata from a remote runtime', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    const lifecycle = { state: 'interrupted', turnId: 'turn-2', timestamp: 43 } as const
-    runtimeEnvironmentsCall.mockResolvedValueOnce(
-      okEnvelope({ messages: [message('interrupted')], lifecycle })
-    )
-    const transport = getNativeChatSessionTransport(ENV)
-
-    await expect(transport.readSession('codex', 'sess-1')).resolves.toEqual({
-      messages: [message('interrupted')],
-      lifecycle
-    })
-  })
-
-  it('keeps lifecycle metadata whose timestamp is omitted, normalizing it to null', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    runtimeEnvironmentsCall.mockResolvedValueOnce(
-      okEnvelope({
-        messages: [message('no-ts')],
-        lifecycle: { state: 'completed', turnId: 'turn-3' }
-      })
-    )
-    const transport = getNativeChatSessionTransport(ENV)
-
-    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
-      messages: [message('no-ts')],
-      lifecycle: { state: 'completed', turnId: 'turn-3', timestamp: null }
-    })
-  })
-
-  it('captures the browser owner in its web adapter instead of the desktop bridge', async () => {
-    ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    nativeChatReadSession.mockResolvedValue({ messages: [] })
-    const transport = getNativeChatSessionTransport(ENV)
-
-    await transport.readSession('claude', 'sess-1', 40, undefined)
-
-    expect(web.create).toHaveBeenCalledWith({ environment: { id: ENV } })
-    expect(web.read).toHaveBeenCalledWith('claude', 'sess-1', 40, undefined)
-    expect(nativeChatReadSession).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
   })
 })
 
@@ -622,43 +525,6 @@ describe('runtime subscribe', () => {
   })
 })
 
-describe('runtime readSession error mapping', () => {
-  it('maps a method_not_found rejection to the too-old copy (R4)', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    runtimeEnvironmentsCall.mockResolvedValue({
-      ok: false,
-      error: { code: 'method_not_found', message: 'no such method' }
-    })
-    const transport = getNativeChatSessionTransport(ENV)
-
-    const result = await transport.readSession('claude', 'sess-1', 40, undefined)
-
-    expect(result).toEqual({ error: expect.stringContaining('too old') })
-  })
-
-  it('maps error classes precisely (KTD-4, not catch-all)', () => {
-    const tooOld = expect.stringContaining('too old')
-    const generic = "Couldn't read agent chat from the remote runtime."
-
-    expect(
-      toRuntimeNativeChatErrorMessage(
-        new RuntimeRpcCallError({
-          id: 'r-1',
-          ok: false,
-          error: { code: 'method_not_found', message: 'x' }
-        })
-      )
-    ).toEqual(tooOld)
-
-    const compatBlock = Object.assign(new Error('runtime too old'), {
-      code: RUNTIME_COMPAT_BLOCK_CODE
-    })
-    expect(toRuntimeNativeChatErrorMessage(compatBlock)).toEqual(tooOld)
-
-    expect(toRuntimeNativeChatErrorMessage(new Error('request timed out'))).toBe(generic)
-  })
-})
-
 it('routes exact-ID Cancel through the captured native or remote resource adapter', async () => {
   const request = {
     agent: 'codex' as const,
@@ -676,7 +542,10 @@ it('routes exact-ID Cancel through the captured native or remote resource adapte
   )(request.ids)
   expect(localCancel).toHaveBeenCalledExactlyOnceWith(request)
   markRuntimeEnvironmentCompatible(ENV)
-  runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ cancelled: true }))
+  runtimeEnvironmentsSubscribe.mockImplementation(async (_params, handlers) => {
+    handlers.onResponse(okEnvelope({ cancelled: true }))
+    return { unsubscribe: vi.fn() }
+  })
   const remote = getNativeChatSessionTransport(ENV)
   await messageCancelAction(
     remote,
@@ -684,13 +553,298 @@ it('routes exact-ID Cancel through the captured native or remote resource adapte
     request.sessionId,
     request.transcriptPath
   )(request.ids)
-  expect(runtimeEnvironmentsCall).toHaveBeenCalledWith(
+  expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
     expect.objectContaining({
       selector: ENV,
       method: 'nativeChat.cancelCurrentQuestions',
-      params: request
-    })
+      params: request,
+      expectedEnvironmentPairingRevision: 1,
+      timeoutMs: 15_000
+    }),
+    expect.objectContaining({ onResponse: expect.any(Function) })
   )
   expect(nativeChatSubscribe).not.toHaveBeenCalled()
-  expect(runtimeEnvironmentsSubscribe).not.toHaveBeenCalled()
+  expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
 })
+
+it.each([10, 100])(
+  'removes actual queued desktop reads across %i superseded/disposed views and a same-ID host replacement',
+  async (count) => {
+    const { RuntimeRpcCallQueuePool } = await import('../../../../shared/runtime-rpc-call-queue')
+    const { createNativeChatCurrentRequestsBinding } =
+      await import('../../../../shared/native-chat-current-requests-binding')
+    const queue = new RuntimeRpcCallQueuePool(1)
+    const owned = new Map<string, AbortController>()
+    const dispatched: string[] = []
+    let release = () => {}
+    const blocker = queue.enqueue(
+      ENV,
+      'terminal.send',
+      async () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    const cancelSubscription = vi.fn(async ({ subscriptionId }: { subscriptionId: string }) => {
+      owned.get(subscriptionId)?.abort()
+    })
+    Object.assign(window.api.runtimeEnvironments, { cancelSubscription })
+    const marker = {
+      contract: 'agent-session.current-requests.v2',
+      sessionId: 'same-session',
+      epoch: 'physical-A',
+      publisher: 'source-A',
+      owner: 'source-A:owner',
+      revision: 1,
+      version: 'A1'
+    }
+    runtimeEnvironmentsSubscribe.mockImplementation(async (params, handlers) => {
+      const controller = new AbortController()
+      owned.set(params.subscriptionId, controller)
+      void queue
+        .enqueue(
+          params.selector,
+          params.method,
+          async () => {
+            dispatched.push(params.method)
+            expect(params.expectedEnvironmentPairingRevision).toBe(2)
+            handlers.onResponse(
+              okEnvelope({
+                marker: { ...marker, version: 'B1', publisher: 'source-B' },
+                json: JSON.stringify({
+                  blocking: [],
+                  asyncQuestions: [],
+                  context: { sessionId: 'same-session', boundary: 'root' }
+                }),
+                nextCursor: null
+              })
+            )
+          },
+          0,
+          controller.signal
+        )
+        .catch((error) => handlers.onError({ message: String(error) }))
+        .finally(() => owned.delete(params.subscriptionId))
+      return { unsubscribe: () => controller.abort() }
+    })
+    markRuntimeEnvironmentCompatible(ENV)
+    const old = getNativeChatSessionTransport(ENV)
+    const request = {
+      agent: 'codex' as const,
+      sessionId: 'same-session',
+      transcriptPath: '/source'
+    }
+    for (let i = 0; i < count; i++) {
+      const binding = createNativeChatCurrentRequestsBinding({
+        read: (read, signal) => old.currentRequests!({ ...read, ...request }, signal),
+        publish: () => {}
+      })
+      binding.observe({
+        type: 'appended',
+        currentRequests: { ...marker, revision: i + 1, version: `A${i + 1}` }
+      })
+      await flushMicrotasks()
+      binding.invalidate()
+    }
+    await flush()
+    expect(Reflect.get(queue, 'queuedCallCount')).toBe(0)
+    expect(dispatched).toEqual([])
+    expect(owned.size).toBe(0)
+    const cancel = messageCancelAction(
+      old,
+      request.agent,
+      request.sessionId,
+      request.transcriptPath
+    )(['displayed-only']).catch((error) => error)
+    await flush()
+    expect(Reflect.get(queue, 'queuedCallCount')).toBe(1)
+    replaceRuntimeEnvironmentRevisions([{ id: ENV, createdAt: 2 }], {
+      retired: [ENV],
+      sameHost: []
+    })
+    await expect(cancel).resolves.toMatchObject({ name: 'AbortError' })
+    expect(Reflect.get(queue, 'queuedCallCount')).toBe(0)
+    await expect(
+      old.currentRequests!({ ...request, version: 'A1' }, new AbortController().signal)
+    ).rejects.toThrow('server changed')
+    release()
+    await blocker
+    await flush()
+    expect(dispatched).toEqual([])
+    markRuntimeEnvironmentCompatible(ENV)
+    const current = getNativeChatSessionTransport(ENV)
+    let installed = false
+    const binding = createNativeChatCurrentRequestsBinding({
+      read: (read, signal) => current.currentRequests!({ ...read, ...request }, signal),
+      publish: (state) => {
+        installed = state.asyncQuestionAuthority?.version === 'B1'
+      }
+    })
+    binding.observe({
+      type: 'appended',
+      currentRequests: { ...marker, publisher: 'source-B', version: 'B1' }
+    })
+    await vi.waitFor(() => expect(installed).toBe(true))
+    binding.invalidate()
+    await flush()
+    expect(dispatched).toEqual(['nativeChat.currentRequests'])
+    expect(Reflect.get(queue, 'queuedCallCount')).toBe(0)
+    expect(owned.size).toBe(0)
+  }
+)
+
+it('keeps a captured native resource across proven and pending same-host continuation', async () => {
+  markRuntimeEnvironmentCompatible(ENV)
+  const transport = getNativeChatSessionTransport(ENV)
+  replaceRuntimeEnvironmentRevisions([{ id: ENV, createdAt: 2 }], {
+    retired: [],
+    sameHost: [{ id: ENV, fromRevision: 1, toRevision: 2 }]
+  })
+  runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ messages: [message('continued')] }))
+  await expect(transport.readSession('codex', 'chat')).resolves.toMatchObject({
+    messages: [message('continued')]
+  })
+  expect(runtimeEnvironmentsCall).toHaveBeenLastCalledWith(
+    expect.objectContaining({ expectedEnvironmentPairingRevision: 2 })
+  )
+  replaceRuntimeEnvironmentRevisions([{ id: ENV, createdAt: 3 }], {
+    retired: [],
+    sameHost: [],
+    pending: [{ id: ENV, fromRevision: 2 }]
+  })
+  // The existing main qualification queue owns pending host proof, not a new physical-read refusal.
+  runtimeEnvironmentsCall.mockImplementation(async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: ENV, createdAt: 3 }], {
+      retired: [],
+      sameHost: [{ id: ENV, fromRevision: 2, toRevision: 3 }]
+    })
+    return okEnvelope({ messages: [message('proved')] })
+  })
+  await expect(transport.readSession('codex', 'chat')).resolves.toMatchObject({
+    messages: [message('proved')]
+  })
+  expect(runtimeEnvironmentsCall).toHaveBeenLastCalledWith(
+    expect.objectContaining({ expectedEnvironmentPairingRevision: 2 })
+  )
+})
+
+it.each(['pending', 'cancelled'] as const)(
+  'retains established %s authority through actual failed-probe reconnect without history revival',
+  async (outcome) => {
+    const { createNativeChatCurrentRequestsBinding } =
+      await import('../../../../shared/native-chat-current-requests-binding')
+    const { currentAsyncQuestion, currentMessageQuestionView } =
+      await import('../../../../shared/agent-session-current-requests')
+    const { messageQuestionFixture } =
+      await import('../../../../shared/message-question-occurrence.test-fixture')
+    const marker = {
+      contract: 'agent-session.current-requests.v2',
+      sessionId: 'chat',
+      epoch: 'epoch',
+      publisher: 'publisher',
+      owner: 'owner',
+      revision: 1,
+      version: 'version'
+    }
+    const legacy: NativeChatMessage = {
+      ...message('historical-question'),
+      blocks: [
+        {
+          type: 'tool-call',
+          id: 'legacy-call',
+          name: 'request_user_input_async',
+          input: {
+            questions: [
+              { question: 'Historical question', options: [{ label: 'A' }, { label: 'B' }] }
+            ]
+          }
+        }
+      ]
+    }
+    let state: AgentSessionCurrentRequestsState = {}
+    let failRead = false
+    let stream:
+      | { onResponse: (response: { ok: true; result: unknown }) => void; onClose: () => void }
+      | undefined
+    let binding: ReturnType<typeof createNativeChatCurrentRequestsBinding> | undefined
+    let stop: (() => void) | undefined
+    const read = vi.fn(async () => {
+      if (failRead) {
+        throw new Error('Read temporarily unavailable')
+      }
+      return {
+        marker,
+        nextCursor: null,
+        json: JSON.stringify({
+          blocking: [],
+          asyncQuestions: outcome === 'pending' ? [messageQuestionFixture('outside-history')] : [],
+          context: { sessionId: 'chat', boundary: 'root' }
+        })
+      }
+    })
+    try {
+      markRuntimeEnvironmentCompatible(ENV)
+      supportsCurrentRequests
+        .mockResolvedValueOnce(true)
+        .mockRejectedValue(new Error('Transient discovery failure'))
+      runtimeEnvironmentsSubscribe.mockImplementation(async (args, handlers) => {
+        if (args.method === 'nativeChat.currentRequests') {
+          try {
+            handlers.onResponse(okEnvelope(await read()))
+          } catch (error) {
+            handlers.onError({ message: String(error) })
+          }
+        } else {
+          stream = handlers
+        }
+        return { unsubscribe: vi.fn() }
+      })
+      const transport = getNativeChatSessionTransport(ENV)
+      binding = createNativeChatCurrentRequestsBinding({
+        read: (request, signal) =>
+          transport.currentRequests({ ...request, agent: 'codex', sessionId: 'chat' }, signal),
+        publish: (next) => {
+          state = next
+        }
+      })
+      stop = transport.subscribe(
+        { subscriptionId: 'reconnect', agent: 'codex', sessionId: 'chat' },
+        (frame) => binding!.observe(frame)
+      )
+      await flush()
+      stream!.onResponse(okEnvelope({ type: 'snapshot', messages: [], currentRequests: marker }))
+      await vi.waitFor(() => expect(currentMessageQuestionView(state)?.ready).toBe(true))
+      const retained = state.asyncQuestions
+      expect(currentAsyncQuestion(state, [legacy])?.questions[0]?.question).toBe(
+        outcome === 'pending' ? 'Which color?' : undefined
+      )
+      failRead = true
+      vi.useFakeTimers()
+      stream!.onClose()
+      await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
+      expect(runtimeEnvironmentsSubscribe).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({
+            capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, currentRequests: 2 }
+          })
+        }),
+        expect.any(Object)
+      )
+      stream!.onResponse(okEnvelope({ type: 'snapshot', messages: [legacy] }))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(currentMessageQuestionView(state)?.ready).toBe(false)
+      expect(state.asyncQuestions).toBe(retained)
+      expect(currentAsyncQuestion(state, [legacy])?.questions[0]?.question).toBe(
+        outcome === 'pending' ? 'Which color?' : undefined
+      )
+      failRead = false
+      await vi.advanceTimersByTimeAsync(750)
+      expect(currentMessageQuestionView(state)?.ready).toBe(true)
+      expect(state.asyncQuestions).toEqual(retained)
+    } finally {
+      binding?.invalidate()
+      stop?.()
+      vi.useRealTimers()
+    }
+  }
+)

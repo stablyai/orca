@@ -1,3 +1,4 @@
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -72,6 +73,8 @@ describe('structured agent-session read transport generations', () => {
   beforeEach(() => {
     attempts.length = 0
     vi.clearAllMocks()
+    replaceRuntimeEnvironmentRevisions([])
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-a', createdAt: 1 }])
     mocks.subscribe.mockImplementation((_target, _params, onEvent, onError, onClose) => {
       const attempt: SubscribeAttempt = {
         closed: Promise.withResolvers<{ unsubscribe: () => void }>(),
@@ -123,8 +126,6 @@ describe('structured agent-session read transport generations', () => {
       attempts[0].onEvent(snapshot(100))
       attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
       await flushPromises()
-      attempts[0].onClose()
-      await vi.advanceTimersByTimeAsync(720)
       attempts[0].onEvent({
         type: 'batch',
         sessionId: 'session-a',
@@ -136,7 +137,9 @@ describe('structured agent-session read transport generations', () => {
         }
       })
       expect(state.cursor?.sequence).toBe(100)
-      await vi.advanceTimersByTimeAsync(30)
+      attempts[0].onClose()
+      expect(state.cursor?.sequence).toBe(101)
+      await vi.advanceTimersByTimeAsync(750)
       expect(state.cursor?.sequence).toBe(101)
       expect(mocks.subscribe.mock.calls[1]?.[1]).toEqual({
         sessionId: 'session-a',
@@ -149,6 +152,50 @@ describe('structured agent-session read transport generations', () => {
       vi.useRealTimers()
     }
   })
+
+  it.each(['end', 'close', 'error'] as const)(
+    'reconnects after initial %s before the handle, releases that handle and ignores late frames',
+    async (reason) => {
+      vi.useFakeTimers()
+      try {
+        const applyEvent = vi.fn()
+        const transport = start(applyEvent)
+        await flushPromises()
+        const first = attempts[0]
+        if (reason === 'end') {
+          first.onEvent({ type: 'end' })
+        } else if (reason === 'close') {
+          first.onClose()
+        } else {
+          first.onError(new Error('Connection ended'))
+        }
+        const delivered = applyEvent.mock.calls.length
+        first.onEvent(snapshot(99))
+        expect(applyEvent).toHaveBeenCalledTimes(delivered)
+        // An uncancellable setup keeps its actual opening slot until its finite adapter settles.
+        await vi.advanceTimersByTimeAsync(750)
+        expect(attempts).toHaveLength(1)
+        first.closed.resolve({ unsubscribe: first.unsubscribe })
+        await flushPromises()
+        expect(first.unsubscribe).toHaveBeenCalledOnce()
+        await vi.advanceTimersByTimeAsync(1500)
+        expect(attempts).toHaveLength(2)
+        attempts[1].onEvent(snapshot(100))
+        attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+        await flushPromises()
+        expect(applyEvent).toHaveBeenLastCalledWith(
+          expect.objectContaining({ type: 'snapshot', fence: 100 })
+        )
+        first.onEvent(snapshot(101))
+        expect(applyEvent).toHaveBeenCalledTimes(delivered + 1)
+        transport.dispose()
+        expect(first.unsubscribe).toHaveBeenCalledOnce()
+        expect(attempts[1].unsubscribe).toHaveBeenCalledOnce()
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('ignores opening frames after disposal and a replacement transport starts', async () => {
     const applyEvent = vi.fn()
@@ -317,6 +364,8 @@ describe('structured agent-session read transport unattached refusals', () => {
   beforeEach(() => {
     attempts.length = 0
     vi.clearAllMocks()
+    replaceRuntimeEnvironmentRevisions([])
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-a', createdAt: 1 }])
     mocks.subscribe.mockImplementation((_target, _params, onEvent, onError, onClose) => {
       const attempt: SubscribeAttempt = {
         closed: Promise.withResolvers<{ unsubscribe: () => void }>(),
@@ -590,8 +639,11 @@ describe('structured agent-session read transport unattached refusals', () => {
       expect(attempts).toHaveLength(1)
 
       attempts[0].onError({ code: UNATTACHED, message: UNATTACHED })
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
       await vi.advanceTimersByTimeAsync(6_000)
-      attempts.at(-1)?.onEvent(snapshot(1))
+      expect(attempts).toHaveLength(2)
+      attempts[1].onEvent(snapshot(1))
       expect(applyEvent).toHaveBeenCalled()
 
       attempts.at(-1)?.onError({ code: UNATTACHED, message: UNATTACHED })
@@ -725,4 +777,44 @@ describe('structured agent-session read transport unattached refusals', () => {
     startWithHydration(async () => undefined, vi.fn()).dispose()
     expect(mocks.watchHostContact).not.toHaveBeenCalled()
   })
+})
+
+it('owns retirement before an actual synchronous subscribe callback and releases its late handle', async () => {
+  replaceRuntimeEnvironmentRevisions([])
+  replaceRuntimeEnvironmentRevisions([{ id: 'env-a', createdAt: 1 }])
+  const returned = Promise.withResolvers<{ unsubscribe: () => void }>()
+  const unsubscribe = vi.fn()
+  const onRetired = vi.fn()
+  const applyEvent = vi.fn()
+  mocks.subscribe.mockImplementationOnce((_target, _params, onEvent) => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-a', createdAt: 2 }], {
+      retired: ['env-a'],
+      sameHost: []
+    })
+    onEvent(snapshot(1))
+    return returned.promise
+  })
+  const transport = startStructuredAgentSessionReadTransport({
+    target: { kind: 'environment', environmentId: 'env-a' },
+    sessionId: 'session-a',
+    applyEvent,
+    applyError: vi.fn(),
+    getCursor: () => null,
+    onContactLost: vi.fn(),
+    onHistoryReadInvalidated: vi.fn(),
+    subscribeRetryNow: () => () => {},
+    onRetired
+  })
+  try {
+    expect(onRetired).toHaveBeenCalledOnce()
+    expect(transport.captureHistoryReadGuard()()).toBe(true)
+    expect(applyEvent).not.toHaveBeenCalled()
+    returned.resolve({ unsubscribe })
+    for (let turn = 0; turn < 10; turn++) {
+      await Promise.resolve()
+    }
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  } finally {
+    transport.dispose()
+  }
 })

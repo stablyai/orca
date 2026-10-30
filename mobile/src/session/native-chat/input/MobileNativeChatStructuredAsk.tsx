@@ -10,8 +10,10 @@ import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 export function MobileNativeChatStructuredAsk({
   questions,
   onAnswer,
-  onCancel
+  onCancel,
+  disabled
 }: {
+  disabled?: boolean
   questions: readonly AgentJournalQuestion[]
   /** Receives the whole answer set in the shared answer encoding. */
   onAnswer: (encodedAnswers: string) => Promise<boolean>
@@ -20,6 +22,7 @@ export function MobileNativeChatStructuredAsk({
   return (
     <MobileNativeChatAsk
       {...structuredQuestionCard(questions)}
+      disabled={disabled}
       onAnswer={async (selections) => {
         const answers = structuredQuestionAnswers(questions, selections)
         return answers ? onAnswer(encodeAgentSessionQuestionAnswers(answers)) : false

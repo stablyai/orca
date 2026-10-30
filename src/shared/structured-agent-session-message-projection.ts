@@ -1,3 +1,4 @@
+import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
 import type {
   AgentJournalCursor,
   AgentJournalMessageItem,
@@ -216,16 +217,21 @@ export type StructuredPromptItem = AgentJournalRenderItem & {
 export function pendingStructuredSessionPrompts({
   journalItems,
   currentRequests,
-  actionablePromptIds
+  actionablePromptIds,
+  requestMarker,
+  requestAuthority
 }: {
   journalItems: readonly AgentJournalRenderItem[]
   currentRequests?: readonly AgentJournalRenderItem[]
   actionablePromptIds?: readonly string[]
+  requestMarker?: AgentSessionCurrentRequestsMarker
+  requestAuthority?: AgentSessionCurrentRequestsMarker
 }): StructuredPromptItem[] {
   return selectAgentSessionCurrentRequests({ items: journalItems, currentRequests }).filter(
     (item): item is StructuredPromptItem =>
       (item.body.kind === 'approval' || item.body.kind === 'question') &&
       item.body.resolution.state === 'pending' &&
-      isActionableStructuredAgentSessionPrompt(item.itemId, actionablePromptIds)
+      ((requestMarker !== undefined && requestMarker.version === requestAuthority?.version) ||
+        isActionableStructuredAgentSessionPrompt(item.itemId, actionablePromptIds))
   )
 }

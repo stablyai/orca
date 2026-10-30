@@ -209,6 +209,20 @@ export function createReadOwner(
       },
       getCursor: () => snapshot.state.cursor,
       onContactLost: markStale,
+      onRetired: () => {
+        if (snapshot.state.requestMarker) {
+          setSnapshot({
+            ...snapshot,
+            state: {
+              ...snapshot.state,
+              requestAuthority: undefined,
+              asyncQuestionAuthority: undefined
+            }
+          })
+        }
+        forgetStructuredReadOwner(key, owner)
+        owner.dispose()
+      },
       onHistoryReadInvalidated: invalidateOlderPages,
       hydrate: snapshot.state.epoch === null ? hydrate : undefined,
       sessionId,

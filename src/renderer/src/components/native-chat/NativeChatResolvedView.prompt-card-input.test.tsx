@@ -1,3 +1,4 @@
+import type * as VerifiedRuntimeInput from '@/runtime/runtime-terminal-verified-input'
 import { clearCommandMarkerCacheForTests } from './native-chat-command-marker'
 import { messageQuestionFixture } from '../../../../shared/message-question-occurrence.test-fixture'
 // @vitest-environment happy-dom
@@ -13,7 +14,9 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 // The composer is a marker that counts its mounts, so the test sees whether the view remounted it.
 const retained = vi.hoisted((): { session: NativeChatLiveSession | null } => ({ session: null }))
 const composer = vi.hoisted(() => ({ mounts: 0 }))
-const ptyInput = vi.hoisted(() => ({ verified: vi.fn<() => Promise<boolean>>() }))
+const ptyInput = vi.hoisted(() => ({
+  verified: vi.fn<typeof VerifiedRuntimeInput.sendRuntimePtyInputVerified>()
+}))
 vi.mock('./use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
 }))
@@ -35,6 +38,12 @@ vi.mock('./NativeChatComposer', async () => {
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: ptyInput.verified
 }))
+
+const verifiedInput = await vi.importActual<typeof VerifiedRuntimeInput>(
+  '@/runtime/runtime-terminal-verified-input'
+)
+const { terminalQuestionAvailabilityFixture } =
+  await import('../../../../main/native-chat/transcript-question-availability.test-fixture')
 
 const { NativeChatResolvedView } = await import('./NativeChatResolvedView')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
@@ -382,3 +391,94 @@ it.each([10, 100])(
     expect(screen.getByTestId('native-chat-composer').closest('[hidden]')).toBeNull()
   }
 )
+
+it('keeps actual terminal approval and question writes usable through cold and established async unavailability', async () => {
+  const source = await terminalQuestionAvailabilityFixture()
+  const previousApi = Object.getOwnPropertyDescriptor(window, 'api')
+  const write = vi.fn<typeof window.api.pty.writeAccepted>()
+  const inferQuestionAnswered = vi
+    .fn<typeof window.api.agentStatus.inferQuestionAnswered>()
+    .mockResolvedValue(false)
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...window.api,
+      pty: { ...window.api?.pty, writeAccepted: write },
+      agentStatus: { ...window.api?.agentStatus, inferQuestionAnswered }
+    }
+  })
+  ptyInput.verified.mockImplementation(verifiedInput.sendRuntimePtyInputVerified)
+  let pane: ReturnType<typeof renderPane> | undefined
+  const showSource = () => {
+    retained.session = { ...transcript(), messageQuestions: source.view() }
+    if (pane) {
+      pane.rerender(paneElement())
+    }
+  }
+  try {
+    await vi.waitFor(() => expect(source.view()).toEqual({ records: [], ready: false }))
+    showSource()
+    setStatus({ state: 'waiting', interactivePrompt: APPROVAL })
+    pane = renderPane()
+    const approval = Promise.withResolvers<boolean>()
+    write.mockReturnValueOnce(approval.promise)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Allow' })))
+    expect(write).toHaveBeenCalledExactlyOnceWith(
+      'pty-card',
+      expect.any(String),
+      expect.any(String),
+      { requireWriteSettlement: true }
+    )
+    expect(source.view()?.ready).toBe(false)
+    await act(async () => approval.resolve(true))
+    expect(document.querySelector('[data-native-chat-approval-card="true"]')).toBeNull()
+    source.enable()
+    await vi.waitFor(() => expect(source.view()?.ready).toBe(true))
+    await source.failCreation()
+    await vi.waitFor(() => {
+      expect(source.state().requestAuthority).toBeDefined()
+      expect(source.state().asyncQuestionAuthority).toBeUndefined()
+      expect(source.view()).toMatchObject({ records: [expect.anything()], ready: false })
+    })
+    showSource()
+    act(() =>
+      setStatus(
+        {
+          state: 'waiting',
+          toolName: 'AskUserQuestion',
+          interactivePrompt: JSON.stringify({
+            questions: [
+              { question: 'Independent terminal choice?', options: [{ label: 'Continue' }] }
+            ]
+          })
+        },
+        200
+      )
+    )
+    expect(screen.getByTestId('native-chat-question-card-title')).toHaveTextContent(
+      'Independent terminal choice?'
+    )
+    const question = Promise.withResolvers<boolean>()
+    write.mockReturnValue(question.promise)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Continue/ }))
+    })
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+    expect(source.view()?.ready).toBe(false)
+    await act(async () => question.resolve(true))
+    await vi.waitFor(() => expect(screen.queryByText('Independent terminal choice?')).toBeNull())
+    expect(inferQuestionAnswered).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('native-chat-composer').closest('[hidden]')).toBeNull()
+    source.restoreCreation()
+    await vi.waitFor(() => expect(source.view()?.ready).toBe(true))
+    expect(source.view()?.records).toHaveLength(2)
+  } finally {
+    pane?.unmount()
+    if (previousApi) {
+      Object.defineProperty(window, 'api', previousApi)
+    } else {
+      Reflect.deleteProperty(window, 'api')
+    }
+    await source.close()
+  }
+}, 15_000)

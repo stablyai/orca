@@ -49,6 +49,8 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
   | 'item'
   | 'cursor'
   | 'messageQuestions'
+  | 'questionSourceFacts'
+  | 'historyOrigin'
 >
 
 function structuredAgentSessionHandsOver(
@@ -222,7 +224,10 @@ export class StructuredAgentSessionCurrentWork {
       return currentRequestsProjection(
         this.journal,
         sessionId,
-        { actionablePrompts: () => payload.blocking, viewKey: () => payload.context.boundary },
+        {
+          actionablePrompts: () => payload.blocking,
+          viewKey: () => JSON.stringify([payload.context.boundary, this.viewKey()])
+        },
         contract,
         payload
       )

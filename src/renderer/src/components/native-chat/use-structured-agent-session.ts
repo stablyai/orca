@@ -1,8 +1,9 @@
+import { useStructuredAgentSessionQuestionActions } from './use-structured-agent-session-question-actions'
 import {
   authoritativeAsyncQuestion,
+  hasCompleteBlockingRequests,
   currentMessageQuestionView
 } from '../../../../shared/agent-session-current-requests'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useQueuedMessageEditTransport } from './use-queued-message-edit-transport'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { refreshStructuredAgentSessionCommands } from './structured-agent-session-command-refresh'
@@ -77,6 +78,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     enabled: transportEnabled,
     agentName: structuredAgentLabel(agent)
   })
+  const questionActions = useStructuredAgentSessionQuestionActions(target, sessionId)
+  const messageQuestions = currentMessageQuestionView(state)
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
@@ -216,13 +219,11 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   return {
     epoch: state.epoch,
     asyncQuestion: authoritativeAsyncQuestion(state),
-    messageQuestions: currentMessageQuestionView(state),
-    cancelMessageQuestions: async (ids: readonly string[]) => {
-      await callStructuredAgentSession(target, 'agentSession.cancelCurrentQuestions', {
-        sessionId,
-        ids: [...ids]
-      })
+    messageQuestions: messageQuestions && {
+      ...messageQuestions,
+      ready: messageQuestions.ready && transportEnabled && readCurrent
     },
+    cancelMessageQuestions: questionActions.cancel,
     /** Whether a live `/clear` is fading the old transcript out, and how many this view drew. */
     contextClear,
     /** The transcript has caught up with the host since this pane last started reading. */
@@ -260,6 +261,9 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     olderHistoryGeneration,
     loadOlder,
     prompts,
+    promptsReady:
+      !state.requestMarker ||
+      (transportEnabled && readCurrent && hasCompleteBlockingRequests(state)),
     pending,
     /** A send is out, or a /clear holds sends; the chat takes none until it settles. */
     sendOut: sending || sends.held,

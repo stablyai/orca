@@ -1,4 +1,4 @@
-import type { RpcClient } from './rpc-client'
+import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { RpcResponse } from './types'
 
 type Deferred = {
@@ -10,7 +10,19 @@ type Deferred = {
 type SingleFlightEntry = {
   current: Promise<RpcResponse>
   // Keep one trailing read with latest params so mid-flight refreshes do not receive the older response.
-  followUp: { deferred: Deferred; params: unknown } | null
+  followUp: {
+    deferred: Deferred
+    params: unknown
+    options?: SingleFlightOptions
+    deadline?: number
+    timeout?: ReturnType<typeof setTimeout>
+  } | null
+}
+
+type SingleFlightOptions = {
+  key: string
+  signal?: AbortSignal
+  requestOptions: SendRequestOptions
 }
 
 const inFlightRequests = new WeakMap<RpcClient, Map<string, Map<string, SingleFlightEntry>>>()
@@ -29,8 +41,13 @@ export function sendSingleFlightRequest(
   client: RpcClient,
   hostId: string,
   requestKind: string,
-  params?: unknown
+  params?: unknown,
+  options?: SingleFlightOptions
 ): Promise<RpcResponse> {
+  if (options?.signal?.aborted) {
+    return Promise.reject(options.signal.reason)
+  }
+  const key = options?.key ?? requestKind
   let requestsByHost = inFlightRequests.get(client)
   if (!requestsByHost) {
     requestsByHost = new Map()
@@ -44,31 +61,56 @@ export function sendSingleFlightRequest(
 
   const send = (): Promise<RpcResponse> => {
     try {
-      return client.sendRequest(requestKind, params)
+      return options
+        ? client.sendRequest(requestKind, params, options.requestOptions)
+        : client.sendRequest(requestKind, params)
     } catch (error) {
       return Promise.reject(error)
     }
   }
 
-  const existing = requestsByKind.get(requestKind)
+  const existing = requestsByKind.get(key)
   if (existing) {
-    // Coalesce this trigger into one follow-up instead of duplicating or dropping it.
+    // Retired queued views must not donate their expired budget to the next view.
+    if (existing.followUp?.options?.signal?.aborted) {
+      clearTimeout(existing.followUp.timeout)
+      existing.followUp.deferred.reject(existing.followUp.options.signal.reason)
+      existing.followUp = null
+    }
+    // Coalesce this trigger into one follow-up without extending its original operation budget.
     if (existing.followUp) {
       existing.followUp.params = params
+      existing.followUp.options = options
     } else {
-      existing.followUp = { deferred: makeDeferred(), params }
+      const timeoutMs = options?.requestOptions.timeoutMs
+      const followUp: NonNullable<SingleFlightEntry['followUp']> = {
+        deferred: makeDeferred(),
+        params,
+        options,
+        ...(timeoutMs === undefined ? {} : { deadline: Date.now() + timeoutMs })
+      }
+      existing.followUp = followUp
+      if (timeoutMs !== undefined) {
+        followUp.timeout = setTimeout(() => {
+          if (existing.followUp !== followUp) {
+            return
+          }
+          existing.followUp = null
+          followUp.deferred.reject(new Error('Current-request read timed out in queue'))
+        }, timeoutMs)
+      }
     }
     return existing.followUp.deferred.promise
   }
 
   const entry: SingleFlightEntry = { current: send(), followUp: null }
-  requestsByKind.set(requestKind, entry)
+  requestsByKind.set(key, entry)
 
   const cleanup = (): void => {
-    if (requestsByKind.get(requestKind) !== entry) {
+    if (requestsByKind.get(key) !== entry) {
       return
     }
-    requestsByKind.delete(requestKind)
+    requestsByKind.delete(key)
     if (requestsByKind.size === 0) {
       requestsByHost.delete(hostId)
     }
@@ -85,9 +127,20 @@ export function sendSingleFlightRequest(
       return
     }
     entry.followUp = null
+    clearTimeout(followUp.timeout)
     let next: Promise<RpcResponse>
     try {
-      next = client.sendRequest(requestKind, followUp.params)
+      followUp.options?.signal?.throwIfAborted()
+      const remaining = followUp.deadline === undefined ? undefined : followUp.deadline - Date.now()
+      if (remaining !== undefined && remaining <= 0) {
+        throw new Error('Current-request read timed out in queue')
+      }
+      next = followUp.options
+        ? client.sendRequest(requestKind, followUp.params, {
+            ...followUp.options.requestOptions,
+            ...(remaining === undefined ? {} : { timeoutMs: remaining })
+          })
+        : client.sendRequest(requestKind, followUp.params)
     } catch (error) {
       next = Promise.reject(error)
     }

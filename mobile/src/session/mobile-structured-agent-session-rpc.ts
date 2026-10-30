@@ -23,6 +23,11 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './native-chat/mobile-native-chat-send'
+import { sendSingleFlightRequest } from '../transport/request-single-flight'
+import type {
+  AgentSessionCurrentRequestsPiece,
+  AgentSessionCurrentRequestsRead
+} from '../../../src/shared/agent-session-current-requests-wire'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
@@ -102,6 +107,33 @@ export async function callAgentSession<TResult>(
     )
   }
   return response.result as TResult
+}
+
+export async function readMobileCurrentRequests(
+  client: RpcClient,
+  source: string,
+  method: 'agentSession.currentRequests' | 'nativeChat.currentRequests',
+  request: AgentSessionCurrentRequestsRead & { agent?: string; transcriptPath?: string },
+  signal?: AbortSignal
+): Promise<AgentSessionCurrentRequestsPiece> {
+  const response = await sendSingleFlightRequest(client, source, method, request, {
+    key: JSON.stringify([method, request.sessionId, request.agent, request.transcriptPath]),
+    signal,
+    requestOptions: {
+      timeoutMs: STRUCTURED_SEND_TIMEOUT_MS,
+      budgetSpansConnect: true,
+      failWhenDisconnected: true
+    }
+  })
+  if (!response.ok) {
+    throw new AgentSessionRpcResponseError(
+      response.error.code,
+      response.error.message,
+      response.error.data
+    )
+  }
+  // SAFETY: the shared current-request reader validates every piece and complete payload before installation.
+  return response.result as AgentSessionCurrentRequestsPiece
 }
 
 export function timeoutForDeadline(deadline: number | undefined): number | null {
@@ -207,4 +239,22 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       message: agentSessionWriteFailureNotice(phoneWriteKind(fingerprintMethod, fields))
     }
   }
+}
+
+export async function cancelMobileNativeChatQuestions(
+  client: RpcClient | null,
+  agent: string | null,
+  sessionId: string | null,
+  transcriptPath: string | null,
+  ids: readonly string[]
+): Promise<void> {
+  if (!client || !agent || !sessionId) {
+    throw new Error('Chat source unavailable')
+  }
+  await callAgentSession(client, 'nativeChat.cancelCurrentQuestions', {
+    agent,
+    sessionId,
+    ...(transcriptPath ? { transcriptPath } : {}),
+    ids: [...ids]
+  })
 }

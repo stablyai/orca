@@ -79,10 +79,11 @@ type RuntimeClient = ReturnType<typeof getClientForEnvironment>
 async function probeRuntimeStatus(
   client: RuntimeClient,
   params: unknown,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<unknown>> {
   const epoch = client.connectionEpoch
-  const response = await client.call('status.get', params, { timeoutMs })
+  const response = await client.call('status.get', params, { timeoutMs, signal })
   const runtimeId = responseRuntimeId(response)
   if (response.ok && runtimeId && client.connectionEpoch === epoch) {
     probedConnections.set(client, { epoch, runtimeId })
@@ -96,22 +97,23 @@ async function callPinnedToRuntime(
   method: string,
   params: unknown,
   timeoutMs: number | undefined,
-  expectedEnvironmentRuntimeId: string | undefined
+  expectedEnvironmentRuntimeId: string | undefined,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
-    return probeRuntimeStatus(client, params, timeoutMs)
+    return probeRuntimeStatus(client, params, timeoutMs, signal)
   }
   if (expectedEnvironmentRuntimeId === undefined) {
-    return client.call(method, params, { timeoutMs })
+    return client.call(method, params, { timeoutMs, signal })
   }
   if (probedConnections.get(client)?.epoch !== client.connectionEpoch) {
-    await probeRuntimeStatus(client, undefined, timeoutMs)
+    await probeRuntimeStatus(client, undefined, timeoutMs, signal)
   }
   const probed = probedConnections.get(client)
   if (probed?.runtimeId !== expectedEnvironmentRuntimeId) {
     throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
   }
-  return client.call(method, params, { timeoutMs, expectedConnectionEpoch: probed.epoch })
+  return client.call(method, params, { timeoutMs, signal, expectedConnectionEpoch: probed.epoch })
 }
 
 export async function callEnvironmentEnvelope<TResult = unknown>(
@@ -120,7 +122,8 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   params?: unknown,
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
-  expectedEnvironmentRuntimeId?: string
+  expectedEnvironmentRuntimeId?: string,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
   const assertPairing = () => assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
@@ -128,19 +131,26 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    assertPairing()
-    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-      return Promise.resolve(manuallyDisconnectedResponse(environment))
-    }
-    return callPinnedToRuntime(
-      getClientForEnvironment(environment),
-      method,
-      params,
-      timeoutMs,
-      expectedEnvironmentRuntimeId
-    )
-  })
+  const response = await runtimeCallQueuePool.enqueue(
+    environment.id,
+    method,
+    () => {
+      assertPairing()
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        return Promise.resolve(manuallyDisconnectedResponse(environment))
+      }
+      return callPinnedToRuntime(
+        getClientForEnvironment(environment),
+        method,
+        params,
+        timeoutMs,
+        expectedEnvironmentRuntimeId,
+        signal
+      )
+    },
+    0,
+    signal
+  )
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }

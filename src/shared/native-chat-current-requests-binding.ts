@@ -1,6 +1,7 @@
 import { createAgentSessionCurrentRequestsReader } from './agent-session-current-requests-reader'
 import {
   applyCurrentRequestsMarker,
+  installCurrentRequestsCompletion,
   type AgentSessionCurrentRequestsState
 } from './agent-session-current-requests'
 import type {
@@ -11,38 +12,48 @@ import type {
 
 /** Transcript frames and complete pieces share one subscription owner on desktop and phone. */
 export function createNativeChatCurrentRequestsBinding(args: {
-  read: (request: AgentSessionCurrentRequestsRead) => Promise<AgentSessionCurrentRequestsPiece>
+  read: (
+    request: AgentSessionCurrentRequestsRead,
+    signal: AbortSignal
+  ) => Promise<AgentSessionCurrentRequestsPiece>
+  initialState?: AgentSessionCurrentRequestsState
   publish: (state: AgentSessionCurrentRequestsState) => void
 }) {
-  let state: AgentSessionCurrentRequestsState = {}
+  let state: AgentSessionCurrentRequestsState = args.initialState ?? {}
   function publish(next: AgentSessionCurrentRequestsState): void {
-    state = next
-    args.publish(state)
+    if (next !== state) {
+      state = next
+      args.publish(state)
+    }
   }
   const reader = createAgentSessionCurrentRequestsReader({
     read: args.read,
     complete: (marker, items, payload) =>
-      publish({
-        currentRequests: items,
-        asyncQuestions: payload?.asyncQuestions,
-        requestContext: payload?.context,
-        requestMarker: marker,
-        requestAuthority: marker
-      }),
+      publish(installCurrentRequestsCompletion(state, marker, items, payload)),
     replaceMarker: (marker) => publish(applyCurrentRequestsMarker(state, marker)),
     error: () => {}
   })
   return {
     invalidate: reader.invalidate,
     observe(frame: { type: string; currentRequests?: AgentSessionCurrentRequestsMarker }): void {
-      if (frame.type === 'snapshot' || frame.type === 'replacement') {
-        reader.invalidate()
-      }
       if (frame.currentRequests) {
         publish(applyCurrentRequestsMarker(state, frame.currentRequests))
         reader.observe(frame.currentRequests)
-      } else if (frame.type === 'snapshot') {
-        publish({})
+      } else if (
+        frame.type === 'snapshot' ||
+        frame.type === 'replacement' ||
+        frame.type === 'end' ||
+        frame.type === 'error'
+      ) {
+        if (state.requestMarker) {
+          if (state.requestAuthority || state.asyncQuestionAuthority) {
+            publish({ ...state, requestAuthority: undefined, asyncQuestionAuthority: undefined })
+          }
+          reader.observe(state.requestMarker)
+          reader.refresh()
+        } else {
+          publish({})
+        }
       }
     }
   }

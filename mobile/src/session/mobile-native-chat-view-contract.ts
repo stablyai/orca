@@ -79,6 +79,7 @@ type ChatViewProps = {
   ask?: AskPrompt | null
   // Keep dismissal identity above chat/terminal toggles.
   askKey?: string | null
+  promptDisabled?: boolean
   askDisabled?: boolean
   onDismissAsk?: () => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>

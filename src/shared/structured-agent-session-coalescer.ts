@@ -7,12 +7,15 @@ import {
 
 export const STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS = 48
 
-function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
+function bypassCoalescing(
+  event: AgentSessionSubscribeEvent,
+  markerVersion: string | undefined
+): boolean {
   return (
     event.type !== 'batch' ||
     // Deliver queue lists immediately or the queued response removes Sending before its replacement card arrives.
     event.queuedMessages !== undefined ||
-    event.currentRequests !== undefined ||
+    (event.currentRequests !== undefined && event.currentRequests.version !== markerVersion) ||
     event.batch.removedItemIds.length > 0 ||
     event.batch.items.some((item) => item.body.kind !== 'message' || item.body.role !== 'assistant')
   )
@@ -45,6 +48,9 @@ function mergeBatch(
       ? { commands: right.commands !== undefined ? right.commands : left.commands }
       : {}),
     sessionId: right.sessionId,
+    ...(right.currentRequests || left.currentRequests
+      ? { currentRequests: right.currentRequests ?? left.currentRequests }
+      : {}),
     batch: {
       cursor: right.batch.cursor,
       items: [...items.values()],
@@ -83,6 +89,7 @@ export function createStructuredAgentSessionEventCoalescer(
 } {
   let pending: Extract<AgentSessionSubscribeEvent, { type: 'batch' }> | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  let markerVersion: string | undefined
   const flush = (): void => {
     if (timer) {
       clearTimeout(timer)
@@ -96,8 +103,11 @@ export function createStructuredAgentSessionEventCoalescer(
   }
   return {
     push(event) {
-      if (bypassCoalescing(event)) {
+      if (bypassCoalescing(event, markerVersion)) {
         flush()
+        if (event.type !== 'end' && event.currentRequests) {
+          markerVersion = event.currentRequests.version
+        }
         emit(event)
         return
       }

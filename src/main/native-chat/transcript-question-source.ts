@@ -1,182 +1,300 @@
-import { isDeliveredNativeChatUserMessage } from '../../shared/native-chat/input/native-chat-ask'
-import { isInterruptedStatusMessage } from '../../shared/native-chat-types'
-import { isNativeChatContextClear } from '../../shared/agent-session-context-clear'
+import { readTranscriptQuestionCapture } from './transcript-question-acquisition'
+import { createTranscriptQuestionPublication } from './transcript-question-publication'
+import { foldTranscriptQuestionMessages } from './transcript-question-fold'
 import type { MessageQuestionRepository } from './message-question-repository'
 import { MessageQuestionIngest } from './message-question-ingest'
 import { messageQuestionSourceId, type MessageQuestionSourceState } from './message-question-source'
 import {
   messageQuestionTranscriptGeneration,
-  isPositionalMessageQuestionRow
+  qualifyMessageQuestionTranscript
 } from './message-question-transcript-generation'
-import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../shared/agent-session-current-requests-capability'
-import {
-  currentRequestsProjection,
-  type CurrentRequestsProjection
-} from './agent-session-wire/agent-session-current-requests'
 import type { NativeChatLineDecoder } from './transcript-tail-reader'
 import {
   createIncrementalTranscriptState,
-  readIncrementalTranscriptMessages,
+  type readIncrementalTranscriptMessages,
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
-import {
-  readTranscriptFileVersion,
-  transcriptFileVersionChanged,
-  type TranscriptFileVersion
-} from './transcript-file-version'
+
+type Frontier = NonNullable<MessageQuestionSourceState['file']>
+type RefreshCredit = {
+  promise: Promise<void>
+  resolve: () => void
+  reject: (error: unknown) => void
+}
 
 export function createTranscriptQuestionSource(
   filePath: string,
   agent: string,
   sessionId: string,
   decode: NativeChatLineDecoder,
-  repository: MessageQuestionRepository
+  prepare: MessageQuestionRepository | (() => Promise<MessageQuestionRepository>)
 ) {
   const source = { kind: 'transcript' as const, filePath, agent, sessionId }
   const sourceId = messageQuestionSourceId(source)
   const state = createIncrementalTranscriptState()
   const abort = new AbortController()
-  let ingest = new MessageQuestionIngest(repository, source)
-  let savedState = repository.sourceState(source)
-  let version: TranscriptFileVersion | undefined
-  let projection: CurrentRequestsProjection | undefined
-  let pending: ReturnType<typeof ingest.current>['pending'] | undefined
+  let repository: MessageQuestionRepository | undefined
+  let ingest: MessageQuestionIngest | undefined
+  let acquired: MessageQuestionSourceState | null = null
+  let releaseOwner: (() => void) | undefined
+  let contextVerified = false
+  const publication = createTranscriptQuestionPublication(sourceId, sessionId)
   let context = 'root'
-  let generation = savedState?.generation ?? ''
-  let serial = Promise.resolve()
-  const listeners = new Set<(projection: CurrentRequestsProjection) => void>()
-  const owner = {}
-  function publish(snapshot: ReturnType<typeof ingest.current>): void {
-    const boundary = JSON.stringify([sourceId, context])
-    if (
-      pending === snapshot.pending &&
-      projection?.marker.owner === `${projection.identity}:${boundary}`
-    ) {
-      return
-    }
-    const payload = {
-      blocking: [],
-      asyncQuestions: snapshot.pending,
-      context: { sessionId, boundary }
-    }
-    pending = snapshot.pending
-    const nextProjection = currentRequestsProjection(
-      owner,
-      sessionId,
-      { actionablePrompts: () => [], viewKey: () => boundary },
-      AGENT_SESSION_CURRENT_REQUESTS_V2,
-      payload,
-      sourceId
-    )
-    projection = nextProjection
-    listeners.forEach((notify) => notify(nextProjection))
+  let generation = ''
+  let replay:
+    | {
+        before: ReturnType<MessageQuestionRepository['current']>['records']
+        seen: Set<string>
+        replaced: boolean
+      }
+    | undefined
+  let capture: { end: number; frontiers: Frontier[] } | undefined
+  let reconstruct = true
+  let pendingRefresh: Promise<void> | undefined
+  let captured = false
+  let nextRefresh: RefreshCredit | undefined
+  let continuation: ReturnType<typeof setTimeout> | undefined
+  let knownTail = 0
+  const onDispose = new Set<() => void>()
+  const publish = (snapshot: ReturnType<MessageQuestionIngest['current']> | null) =>
+    publication.publish(snapshot, context)
+  const unavailable = () => publication.unavailable(contextVerified, context)
+  function quarantine(): void {
+    reconstruct = true
+    contextVerified = false
+    capture = undefined
+    knownTail = 0
   }
   async function refresh(): Promise<void> {
     abort.signal.throwIfAborted()
-    const next = await readTranscriptFileVersion(filePath, abort.signal)
-    abort.signal.throwIfAborted()
-    if (version && !transcriptFileVersionChanged(next, version) && next.size === state.offset) {
-      publish(ingest.current())
-      return
+    if (!repository) {
+      const prepared = typeof prepare === 'function' ? await prepare() : prepare
+      abort.signal.throwIfAborted()
+      const saved = prepared.sourceState(source)
+      const preparedIngest = new MessageQuestionIngest(prepared, source)
+      repository = prepared
+      ingest = preparedIngest
+      acquired = saved
+      generation = saved?.generation ?? ''
+      releaseOwner = repository.ownSource(source, () => dispose())
     }
-    const evidence = await messageQuestionTranscriptGeneration(filePath, savedState, abort.signal)
-    const replay = version === undefined || evidence.replaced
-    const before = replay ? repository.current(source).records : []
-    const seen = new Set<string>()
-    if (replay) {
+    let evidence: Awaited<ReturnType<typeof messageQuestionTranscriptGeneration>>
+    try {
+      const retained =
+        !reconstruct && acquired?.file
+          ? {
+              generation,
+              file: {
+                ...acquired.file,
+                offset: state.offset,
+                boundary: state.boundary.toString('base64')
+              }
+            }
+          : acquired
+      evidence = await messageQuestionTranscriptGeneration(filePath, retained, abort.signal)
+    } catch (error) {
+      contextVerified = false
+      throw error
+    }
+    abort.signal.throwIfAborted()
+    const previous = acquired
+    if (evidence.replaced) {
+      quarantine()
+      acquired = {
+        generation: evidence.generation,
+        file: { ...evidence.version, offset: 0, boundary: '' }
+      }
+    }
+    if (reconstruct || !ingest) {
+      const before = replay?.before ?? repository.current(source).records
       resetIncrementalTranscriptState(state)
       ingest = new MessageQuestionIngest(repository, source)
       context = 'root'
+      generation = evidence.generation
+      replay = { before, seen: new Set(), replaced: evidence.replaced || Boolean(replay?.replaced) }
+      reconstruct = false
     }
-    generation = evidence.generation
-    const append = (messages: Awaited<ReturnType<typeof readIncrementalTranscriptMessages>>) => {
-      for (const message of messages) {
-        const nativeContext = context
-        const positionalContext = JSON.stringify([context, generation])
-        const fact = {
-          id: message.id,
-          at: message.timestamp,
-          order: [message.transcriptOrder ?? 0, 0] as const
-        }
-        if (isNativeChatContextClear(message)) {
-          ingest.retire(nativeContext, fact)
-          ingest.retire(positionalContext, fact)
-          context = message.id
-        }
-        const rowContext = isPositionalMessageQuestionRow(filePath, message.id)
-          ? JSON.stringify([context, generation])
-          : context
-        const otherContext =
-          rowContext === context ? JSON.stringify([context, generation]) : context
-        if (isDeliveredNativeChatUserMessage(message)) {
-          ingest.deliver(otherContext, fact)
-        } else if (isInterruptedStatusMessage(message)) {
-          ingest.interruptContext(otherContext, fact)
-        }
-        for (const id of ingest.append(message, {
-          context: rowContext,
-          order: fact.order,
-          turnId: null
-        })) {
-          seen.add(id)
-        }
+    const activeIngest = ingest
+    if (contextVerified && !capture && !replay && state.offset === evidence.version.size) {
+      publish(activeIngest.current())
+      return
+    }
+    const start: Frontier = {
+      ...evidence.version,
+      offset: state.offset,
+      boundary: state.boundary.toString('base64')
+    }
+    if (!capture || evidence.version.size < capture.end) {
+      capture = {
+        end: evidence.version.size,
+        frontiers: acquired?.file ? [acquired.file, start] : [start]
       }
     }
-    append(
-      await readIncrementalTranscriptMessages(
+    const attempt = capture
+    acquired = { generation, file: start }
+    captured = true
+    // The closing qualification observation owns EOF; a reader must not choose a later extent.
+    if (state.offset < attempt.end) {
+      contextVerified = false
+      await readTranscriptQuestionCapture(
         filePath,
         state,
         decode,
         append,
-        undefined,
-        undefined,
         abort.signal,
-        true
-      )
-    )
-    const completed = await readTranscriptFileVersion(filePath, abort.signal)
-    // Never certify a partial/racing replay as the complete current set.
-    if (transcriptFileVersionChanged(completed, next)) {
-      version = undefined
-      return
-    }
-    if (replay && evidence.replaced) {
-      ingest.replace(
-        before.filter((record) => !seen.has(record.id)).map((record) => record.id),
-        {
-          id: `source:${generation}`,
-          at: null
-        }
+        attempt.end,
+        qualifyFrontier,
+        quarantine
       )
     }
-    const sourceState: MessageQuestionSourceState = {
-      generation,
-      file: { ...completed, offset: state.offset, boundary: state.boundary.toString('base64') }
+    try {
+      await qualifyFrontier()
+      if (state.offset !== attempt.end) {
+        throw new Error('Question source acquisition incomplete')
+      }
+    } catch (error) {
+      contextVerified = false
+      throw error
     }
     abort.signal.throwIfAborted()
-    const snapshot = ingest.current(sourceState)
-    savedState = sourceState
-    version = completed
+    if (replay?.replaced && knownTail > state.offset) {
+      // Known reconstruction is unfinished: keep prior/seen until its observed tail is acquired.
+      capture = undefined
+      contextVerified = false
+      unavailable()
+      return
+    }
+    if (replay?.replaced) {
+      activeIngest.replace(
+        replay.before.filter((record) => !replay?.seen.has(record.id)).map((record) => record.id),
+        { id: `source:${generation}`, at: null }
+      )
+    }
+    contextVerified = true
+    capture = undefined
+    // Only admitted folds reach irreversible materialization; failed storage retains the same ingest.
+    const progressed =
+      previous?.file?.offset !== state.offset || previous?.generation !== generation
+    const snapshot = activeIngest.current(progressed ? (acquired ?? undefined) : undefined)
+    replay = undefined
     publish(snapshot)
+
+    async function qualifyFrontier(): Promise<void> {
+      const end: Frontier = {
+        ...evidence.version,
+        offset: state.offset,
+        boundary: state.boundary.toString('base64')
+      }
+      const qualified = await qualifyMessageQuestionTranscript(
+        filePath,
+        [...attempt.frontiers, end],
+        abort.signal
+      )
+      if (qualified.replaced) {
+        quarantine()
+        throw new Error('Question source replaced during acquisition')
+      }
+      acquired = {
+        generation,
+        file: { ...qualified.version, offset: state.offset, boundary: end.boundary }
+      }
+      knownTail = qualified.version.size > attempt.end ? qualified.version.size : 0
+    }
+    function append(messages: Awaited<ReturnType<typeof readIncrementalTranscriptMessages>>): void {
+      foldTranscriptQuestionMessages(messages, {
+        filePath,
+        generation,
+        ingest: activeIngest,
+        readContext: () => context,
+        writeContext: (next) => {
+          context = next
+        },
+        seen: replay?.seen
+      })
+    }
+  }
+  function credit(): RefreshCredit {
+    if (!nextRefresh) {
+      let resolve!: () => void
+      let reject!: (error: unknown) => void
+      const promise = new Promise<void>((yes, no) => {
+        resolve = yes
+        reject = no
+      })
+      nextRefresh = { promise, resolve, reject }
+    }
+    return nextRefresh
+  }
+  function startRefresh(joined?: RefreshCredit): Promise<void> {
+    let succeeded = false
+    const operation = refresh()
+      .then(() => {
+        succeeded = true
+      })
+      .catch((error: unknown) => {
+        if (!abort.signal.aborted) {
+          unavailable()
+        }
+        throw error
+      })
+      .finally(() => {
+        pendingRefresh = undefined
+        captured = false
+        if (!abort.signal.aborted && (nextRefresh || (succeeded && knownTail > state.offset))) {
+          continuation = setTimeout(() => {
+            continuation = undefined
+            const joined = nextRefresh
+            nextRefresh = undefined
+            void startRefresh(joined).catch(() => {})
+          }, 0)
+          continuation.unref?.()
+        }
+      })
+    pendingRefresh = operation
+    if (joined) {
+      void operation.then(joined.resolve, joined.reject)
+    }
+    return operation
+  }
+  function dispose(): void {
+    if (abort.signal.aborted) {
+      return
+    }
+    abort.abort()
+    if (continuation) {
+      clearTimeout(continuation)
+    }
+    continuation = undefined
+    nextRefresh?.reject(abort.signal.reason)
+    nextRefresh = undefined
+    onDispose.forEach((notify) => notify())
+    onDispose.clear()
+    repository?.invalidate(sourceId)
+    releaseOwner?.()
   }
   return {
-    listeners,
+    listeners: publication.listeners,
+    onDispose,
     current: () => {
       abort.signal.throwIfAborted()
-      return projection
+      return publication.current()
     },
     cancel: (ids: readonly string[], caller: string, now: number) => {
       abort.signal.throwIfAborted()
+      if (!contextVerified || !ingest) {
+        throw new Error('Current questions unavailable')
+      }
       publish(ingest.cancel(ids, caller, now))
     },
     refresh: () => {
-      const run = serial.then(refresh)
-      serial = run.catch(() => {})
-      return run
+      if (abort.signal.aborted) {
+        return Promise.reject(abort.signal.reason)
+      }
+      if (continuation || (pendingRefresh && captured)) {
+        return credit().promise
+      }
+      return pendingRefresh ?? startRefresh()
     },
-    dispose: () => {
-      abort.abort()
-      repository.invalidate(sourceId)
-    }
+    dispose
   }
 }

@@ -1,4 +1,5 @@
 import './__mocks__/mobile-prompt-render-mocks'
+import { terminalQuestionAvailabilityFixture } from '../../../src/main/native-chat/transcript-question-availability.test-fixture'
 import { messageQuestionFixture } from '../../../src/shared/message-question-occurrence.test-fixture'
 import { act } from 'react-test-renderer'
 import { Pressable, Text } from 'react-native'
@@ -655,3 +656,77 @@ describe('complete message-question records through phone card actions', () => {
     expect(titles()).toEqual(['Which color?'])
   })
 })
+
+it('settles independent terminal controls on the phone during real cold and established async source failure', async () => {
+  const source = await terminalQuestionAvailabilityFixture()
+  try {
+    await vi.waitFor(() => expect(source.view()).toEqual({ records: [], ready: false }))
+    session.messageQuestions = source.view()
+    const approval = Promise.withResolvers<RpcResponse>()
+    vi.mocked(client.sendRequest).mockReturnValueOnce(approval.promise)
+    await render({ tab: permissionTab })
+    let approved: Promise<void> | undefined
+    await act(async () => {
+      approved = permissionAction(0).props.onPress()
+    })
+    expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(
+      'terminal.send',
+      expect.objectContaining({ requireWriteSettlement: true, enter: false }),
+      expect.any(Object)
+    )
+    expect(source.view()?.ready).toBe(false)
+    await act(async () => {
+      approval.resolve(response())
+      await expect(approved).resolves.toBeUndefined()
+    })
+    expect(getController().nativeChatPermission).toBeNull()
+    source.enable()
+    await vi.waitFor(() => expect(source.view()?.ready).toBe(true))
+    await source.failCreation()
+    await vi.waitFor(() => {
+      expect(source.state().requestAuthority).toBeDefined()
+      expect(source.state().asyncQuestionAuthority).toBeUndefined()
+      expect(source.view()).toMatchObject({ records: [expect.anything()], ready: false })
+    })
+    session.messageQuestions = source.view()
+    const tab = {
+      ...baseTab,
+      agentStatus: {
+        ...baseTab.agentStatus,
+        stateStartedAt: 200,
+        toolName: 'AskUserQuestion',
+        interactivePrompt: JSON.stringify({
+          questions: [
+            { question: 'Independent terminal choice?', options: [{ label: 'Continue' }] }
+          ]
+        })
+      }
+    }
+    await render({ tab })
+    expect(getController().nativeChatAsk?.questions[0].question).toBe(
+      'Independent terminal choice?'
+    )
+    expect(getController().nativeChatAskDisabled).toBe(false)
+    const before = vi.mocked(client.sendRequest).mock.calls.length
+    let answered: Promise<boolean> | undefined
+    await act(async () => {
+      answered = askAnswer([{ indices: [0] }])
+    })
+    await act(async () => {
+      await expect(answered).resolves.toBe(true)
+    })
+    expect(vi.mocked(client.sendRequest).mock.calls.length).toBeGreaterThan(before)
+    expect(source.view()?.ready).toBe(false)
+    expect(
+      getController().nativeChatAsk?.questions.map((question) => question.question) ?? []
+    ).not.toContain('Independent terminal choice?')
+    expect(sendButton().props.disabled).toBe(false)
+    source.restoreCreation()
+    await vi.waitFor(() => expect(source.view()?.ready).toBe(true))
+    expect(source.view()?.records).toHaveLength(2)
+    expect(sendError).not.toHaveBeenCalled()
+  } finally {
+    await unmount()
+    await source.close()
+  }
+}, 15_000)

@@ -100,6 +100,7 @@ export function MobileNativeChatView({
   ask,
   askKey,
   askDisabled,
+  promptDisabled,
   onDismissAsk,
   onAnswerAsk,
   askRequiresTerminal = false,
@@ -278,6 +279,7 @@ export function MobileNativeChatView({
       )}
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
+        promptDisabled={promptDisabled}
         answering={promptOwnsInput && keyboardInset > 0}
         {...{
           ask,

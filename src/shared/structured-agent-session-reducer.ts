@@ -8,6 +8,7 @@ import {
 } from './structured-agent-session-history-state'
 import {
   currentRequestsAfterEvent,
+  installCurrentRequestsCompletion,
   currentRequestsState,
   applyCurrentRequestsMarker,
   type AgentSessionCurrentRequestsState
@@ -140,18 +141,17 @@ export function reduceStructuredAgentSession(
   receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
   if (action.type === 'requests-marker') {
-    return { ...state, ...applyCurrentRequestsMarker(state, action.marker) }
+    const requests = applyCurrentRequestsMarker(state, action.marker)
+    return requests === state ? state : { ...state, ...currentRequestsState(requests) }
   }
   if (action.type === 'requests-complete') {
-    return action.marker.version === state.requestMarker?.version
-      ? {
-          ...state,
-          currentRequests: action.items,
-          asyncQuestions: action.payload?.asyncQuestions,
-          requestContext: action.payload?.context,
-          requestAuthority: action.marker
-        }
-      : state
+    const requests = installCurrentRequestsCompletion(
+      state,
+      action.marker,
+      action.items,
+      action.payload
+    )
+    return requests === state ? state : { ...state, ...currentRequestsState(requests) }
   }
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
@@ -215,7 +215,7 @@ export function reduceStructuredAgentSession(
         admitAgentSessionBackgroundTaskState(event.backgroundTasks),
         event.activity
       ),
-      ...requests,
+      ...currentRequestsState(requests),
       status: 'ready',
       commands: event.commands,
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
@@ -266,7 +266,8 @@ export function reduceStructuredAgentSession(
     state.error === undefined &&
     requests.currentRequests === state.currentRequests &&
     requests.requestMarker === state.requestMarker &&
-    requests.requestAuthority === state.requestAuthority
+    requests.requestAuthority === state.requestAuthority &&
+    requests.asyncQuestionAuthority === state.asyncQuestionAuthority
   ) {
     return state
   }
@@ -283,7 +284,7 @@ export function reduceStructuredAgentSession(
   const lostTurnRow = outsideWindow.some((item) => readAgentJournalTurn(item.body) !== null)
   return {
     ...state,
-    ...requests,
+    ...currentRequestsState(requests),
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
     items,

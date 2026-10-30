@@ -77,7 +77,7 @@ export function useMobileNativeChatPromptController({
   | 'collapseNativeChatAsk'
   | 'handleNativeChatAnswerAsk'
   | 'handleNativeChatCancelAsk'
-> & { hasPromptCard: boolean; nativeChatAskDisabled: boolean } {
+> & { hasPromptCard: boolean; nativeChatAskDisabled: boolean; nativeChatPromptDisabled: boolean } {
   const asyncHides = useMobileAsyncQuestionHides(scopeKey, asyncSourceScope, streamIdentity)
   const actions = useMessageQuestionCancel({
     sourceKey: JSON.stringify([scopeKey, streamIdentity, asyncSourceScope]),
@@ -150,6 +150,7 @@ export function useMobileNativeChatPromptController({
   })
 
   return {
+    nativeChatPromptDisabled: structured?.promptsReady === false,
     nativeChatAskDisabled:
       capable && nativeChatAskPrompt?.replyAsMessage === true && !actions.ready,
     hasPromptCard: (legacyNativeChatPermission ?? nativeChatAskPrompt) != null,

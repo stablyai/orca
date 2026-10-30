@@ -7,6 +7,8 @@ import {
   type AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { MAX_RETAINED_OWN_ITEMS } from '../../../shared/structured-agent-session-item-retention'
 import { createStructuredAgentSessionEventCoalescer } from '../../../shared/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -98,7 +100,9 @@ it('keeps full child requests answerable outside the bounded transcript and clea
     attribution
   )
   let state = EMPTY_STRUCTURED_AGENT_SESSION
+  const appliedFrames: AgentSessionSubscribeEvent[] = []
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
+    appliedFrames.push(event)
     state = reduceStructuredAgentSession(state, { type: 'event', event })
   })
   const reader = createAgentSessionCurrentRequestsReader({
@@ -113,13 +117,13 @@ it('keeps full child requests answerable outside the bounded transcript and clea
       throw error
     }
   })
-  const emit = (event: Parameters<typeof coalescer.push>[0]) => {
+  const emit = vi.fn((event: Parameters<typeof coalescer.push>[0]) => {
     expect(Buffer.byteLength(JSON.stringify(event))).toBeLessThan(MOBILE_BRIDGE_MAX_FRAME_BYTES)
     coalescer.push(event)
     if (event.type !== 'end' && event.currentRequests) {
       reader.observe(event.currentRequests)
     }
-  }
+  })
   const close = await current.host.subscribe({
     id: 'visible',
     sessionId: SESSION,
@@ -140,8 +144,9 @@ it('keeps full child requests answerable outside the bounded transcript and clea
   }
   close()
   reader.invalidate()
-  for (let ordinal = 0; ordinal < 605; ordinal++) {
-    await journal.appendItem(
+  let lastOutputId: string | undefined
+  for (let ordinal = 0; ordinal < MAX_RETAINED_OWN_ITEMS + 1; ordinal++) {
+    const output = await journal.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'root-output', ordinal },
       {
         kind: 'message',
@@ -150,11 +155,15 @@ it('keeps full child requests answerable outside the bounded transcript and clea
       },
       { fence: 1, ownerFence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
+    lastOutputId = output.itemId
   }
   expect(current.host.currentWork(SESSION)?.requestProjection(SESSION).marker.version).toBe(
     requestVersion
   )
-  await current.host.subscribe({
+  const resumedCursor = journal.cursor()
+  const beforeReopen = emit.mock.calls.length
+  const beforeApplied = appliedFrames.length
+  const resumed = await current.host.subscribe({
     id: 'reopened',
     sessionId: SESSION,
     boundedFrames: true,
@@ -163,9 +172,38 @@ it('keeps full child requests answerable outside the bounded transcript and clea
     emit
   })
   coalescer.flush()
-  await vi.waitFor(() =>
-    expect(state.requestAuthority?.version).toEqual(state.requestMarker?.version)
-  )
+  try {
+    await vi.waitFor(() => {
+      expect(
+        emit.mock.results.filter((result) => result.type === 'throw').map((result) => result.value)
+      ).toEqual([])
+      expect(state.cursor).toEqual(resumedCursor)
+      expect(state.items.some((item) => item.itemId === lastOutputId)).toBe(true)
+      expect(state.requestAuthority?.version).toEqual(state.requestMarker?.version)
+    })
+  } finally {
+    console.log('child-current-requests-reopen', {
+      targetCursor: resumedCursor,
+      received: emit.mock.calls.slice(beforeReopen).map(([event]) =>
+        event.type === 'end'
+          ? { type: event.type }
+          : event.type === 'batch'
+            ? { type: event.type, cursor: event.batch.cursor, items: event.batch.items.length }
+            : {
+                type: event.type,
+                cursor: event.page.liveCursor ?? event.page.window.nextCursor,
+                items: event.page.items.length
+              }
+      ),
+      applied: appliedFrames.slice(beforeApplied).map((event) => event.type),
+      loadedCursor: state.cursor,
+      loadedItems: state.items.length,
+      childIdsLoaded: state.items
+        .filter((item) => item.itemId === approval.itemId || item.itemId === question.itemId)
+        .map((item) => item.itemId),
+      lastOutputLoaded: state.items.some((item) => item.itemId === lastOutputId)
+    })
+  }
   expect(state.items.length).toBeLessThanOrEqual(200)
   expect(
     state.items.some((item) => item.itemId === approval.itemId || item.itemId === question.itemId)
@@ -202,6 +240,7 @@ it('keeps full child requests answerable outside the bounded transcript and clea
   expect(journal.cursor()).toEqual(beforeExit)
   expect(selectAgentSessionCurrentRequests(state)).toEqual([])
   reader.invalidate()
+  resumed()
   coalescer.dispose()
 })
 

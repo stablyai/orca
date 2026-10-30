@@ -1,8 +1,14 @@
+import { INITIAL_LIMIT, MAX_MESSAGES, nextPageWindow } from './mobile-native-chat-page-window'
 import type {
+  MobileNativeChatReadSessionResult,
+  MobileNativeChatSessionArgs,
   MobileNativeChatStatus,
   MobileNativeChatSession
 } from './mobile-native-chat-session-contract'
-import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import {
+  cancelMobileNativeChatQuestions,
+  readMobileCurrentRequests
+} from './mobile-structured-agent-session-rpc'
 import { createNativeChatCurrentRequestsBinding } from '../../../src/shared/native-chat-current-requests-binding'
 import {
   authoritativeAsyncQuestion,
@@ -23,7 +29,6 @@ import type {
   NativeChatTurnLifecycle
 } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat/native-chat-stream-unsubscribe'
-import type { RpcClient } from '../transport/rpc-client'
 import { nativeChatSessionPageRead } from './mobile-session-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
@@ -37,37 +42,16 @@ export type {
   MobileNativeChatSession
 } from './mobile-native-chat-session-contract'
 
-const INITIAL_LIMIT = 40
-const PAGE = 60
-const MAX_MESSAGES = 2000
-
-function nextPageWindow(
-  limit: number,
-  listLength: number
-): { nextLimit: number; pageLimit: number } | null {
-  // Live output grows the list past the last read, so the next page counts from what is held.
-  const held = Math.max(limit, listLength)
-  const nextLimit = Math.min(held + PAGE, MAX_MESSAGES)
-  return nextLimit > held ? { nextLimit, pageLimit: nextLimit - held } : null
-}
-
-type ReadSessionResult =
-  | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
-  | { error: string }
 // Retain paged history across contiguous replay; ordered read windows replace while live appends merge by id.
-export function useMobileNativeChatSession(args: {
-  client: RpcClient | null
-  currentRequests?: boolean
-  /** Stable host/workspace source; unlike `client`, it survives manual reconnect. */
-  sourceIdentity: string
-  agent: string | null
-  sessionId: string | null
-  transcriptPath: string | null
-}): MobileNativeChatSession {
+export function useMobileNativeChatSession(
+  args: MobileNativeChatSessionArgs
+): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const [requests, setRequests] = useState<
     AgentSessionCurrentRequestsState & { identity?: string }
   >({})
+  const requestsRef = useRef(requests)
+  requestsRef.current = requests
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
@@ -140,13 +124,24 @@ export function useMobileNativeChatSession(args: {
 
     const subscriptionId = buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid())
     const requestReader = createNativeChatCurrentRequestsBinding({
-      read: (request) =>
-        callAgentSession(client, 'nativeChat.currentRequests', {
-          ...request,
-          agent,
-          transcriptPath: transcriptPath ?? undefined
-        }),
-      publish: (state) => setRequests({ ...state, identity })
+      initialState: requestsRef.current.identity === identity ? requestsRef.current : undefined,
+      read: (request, signal) =>
+        readMobileCurrentRequests(
+          client,
+          sourceIdentity,
+          'nativeChat.currentRequests',
+          {
+            ...request,
+            agent,
+            transcriptPath: transcriptPath ?? undefined
+          },
+          signal
+        ),
+      publish: (state) => {
+        const next = { ...state, identity }
+        requestsRef.current = next
+        setRequests(next)
+      }
     })
     const unsubscribe = client.subscribe(
       'nativeChat.subscribe',
@@ -217,7 +212,14 @@ export function useMobileNativeChatSession(args: {
           supersede()
           beforeOffsetRef.current = null
         }
-        setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
+        const nextStatus = applied.pending ? 'awaiting-transcript' : 'ready'
+        setRead((previous) =>
+          previous?.client === client &&
+          previous.identity === identity &&
+          previous.status === nextStatus
+            ? previous
+            : { client, identity, status: nextStatus }
+        )
       }
     )
 
@@ -265,7 +267,7 @@ export function useMobileNativeChatSession(args: {
         return 'failed'
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this payload unread; the reader hands back the same result.
-      const result = payload as ReadSessionResult
+      const result = payload as MobileNativeChatReadSessionResult
       if ('error' in result) {
         return 'failed'
       }
@@ -309,17 +311,8 @@ export function useMobileNativeChatSession(args: {
       requests.identity === identity ? authoritativeAsyncQuestion(requests) : undefined,
     messageQuestions:
       requests.identity === identity ? currentMessageQuestionView(requests) : undefined,
-    cancelMessageQuestions: async (ids) => {
-      if (!client || !agent || !sessionId) {
-        throw new Error('Chat source unavailable')
-      }
-      await callAgentSession(client, 'nativeChat.cancelCurrentQuestions', {
-        agent,
-        sessionId,
-        ...(transcriptPath ? { transcriptPath } : {}),
-        ids: [...ids]
-      })
-    },
+    cancelMessageQuestions: (ids) =>
+      cancelMobileNativeChatQuestions(client, agent, sessionId, transcriptPath, ids),
     status,
     transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,

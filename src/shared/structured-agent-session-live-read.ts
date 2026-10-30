@@ -57,7 +57,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   sessionId: string
   subscribe: StructuredAgentSessionLiveSubscribe
   readCurrentRequests: (
-    request: AgentSessionCurrentRequestsRead
+    request: AgentSessionCurrentRequestsRead,
+    signal: AbortSignal
   ) => Promise<AgentSessionCurrentRequestsPiece>
   /** Calls `retryNow` when the host is likely reachable again; returns what stops listening. */
   subscribeRetryNow: (retryNow: () => void) => () => void
@@ -92,7 +93,6 @@ export function startStructuredAgentSessionLiveRead(args: {
     connected = false
     // Flush before marking contact lost or buffered frames would appear to restore contact.
     coalescer.flush()
-    requestReader.invalidate()
     args.onContactLost()
     reconnectScheduler.schedule()
   }
@@ -147,7 +147,6 @@ export function startStructuredAgentSessionLiveRead(args: {
       reconnectScheduler.reset()
     }
     if (event.type === 'snapshot' || event.type === 'reset') {
-      requestReader.invalidate()
       coalescer.flush()
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {
         return
@@ -169,7 +168,11 @@ export function startStructuredAgentSessionLiveRead(args: {
       coalescer.flush()
       if (isCurrentOpenGeneration(eventOpenGeneration)) {
         args.applyEvent(event, { opensSubscription: true })
-        requestReader.observe(event.currentRequests)
+        if (event.currentRequests) {
+          requestReader.observe(event.currentRequests)
+        } else {
+          requestReader.refresh()
+        }
       }
       return
     }
@@ -177,6 +180,8 @@ export function startStructuredAgentSessionLiveRead(args: {
     coalescer.push(event)
     if (event.type !== 'end' && event.currentRequests?.sessionId === args.sessionId) {
       requestReader.observe(event.currentRequests)
+    } else if ((event.type === 'snapshot' || event.type === 'reset') && !event.currentRequests) {
+      requestReader.refresh()
     }
   }
   async function open(): Promise<void> {
@@ -195,7 +200,6 @@ export function startStructuredAgentSessionLiveRead(args: {
     }
     const currentOpenGeneration = ++openGeneration
     openingFrameGeneration = currentOpenGeneration
-    requestReader.invalidate()
     args.onHistoryReadInvalidated()
     unsubscribe()
     unsubscribe = (): void => {}
@@ -207,7 +211,15 @@ export function startStructuredAgentSessionLiveRead(args: {
       const cursor = args.getCursor()
       const handle = await args.subscribe(
         { sessionId: args.sessionId, ...(cursor ? { cursor } : {}) },
-        (event) => handleEvent(event, currentOpenGeneration),
+        (event) => {
+          if (closedDuringOpen) {
+            return
+          }
+          if (event.type === 'end') {
+            closedDuringOpen = true
+          }
+          handleEvent(event, currentOpenGeneration)
+        },
         (error) => {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {
             return

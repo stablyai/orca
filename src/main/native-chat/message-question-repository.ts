@@ -123,7 +123,10 @@ export class MessageQuestionRepository {
         throw new Error('Message question identity mismatch')
       }
       const saved = next.get(record.id)
-      const definition = saved ? { ...record, resolution: saved.resolution } : record
+      const definition =
+        saved && saved.resolution.state !== 'pending'
+          ? { ...record, resolution: saved.resolution }
+          : record
       if (!saved || JSON.stringify(definition) !== prior.json.get(record.id)) {
         definitionChanged = true
       }

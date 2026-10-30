@@ -1,3 +1,4 @@
+import { releaseStructuredQuestionImport } from './structured-agent-session-question-import'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -33,6 +34,10 @@ export class StructuredAgentSessionConversations extends Map<
 
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
     const { journal } = session
+    const previous = this.get(sessionId)
+    if (previous && previous.journal !== journal) {
+      releaseStructuredQuestionImport(previous.journal)
+    }
     let queued = false
     journal.observeCommits((rows) => {
       if (this.get(sessionId)?.journal !== journal) {
@@ -85,8 +90,8 @@ export class StructuredAgentSessionConversations extends Map<
     })
     this.activity.set(sessionId, this.delivery.now())
     const adopted = super.set(sessionId, session)
-    this.delivery.observe?.(sessionId, journal)
     this.delivery.onOpened?.(sessionId)
+    this.delivery.observe?.(sessionId, journal)
     return adopted
   }
 

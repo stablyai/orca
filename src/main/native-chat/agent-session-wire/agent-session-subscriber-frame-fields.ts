@@ -142,7 +142,10 @@ export function emitSubscriberFrame(
           .marker
       : undefined
   const includeMarker =
-    marker && (event.type !== 'batch' || marker.version !== subscriber.requestVersion)
+    marker &&
+    (event.type !== 'batch' ||
+      marker.version !== subscriber.requestVersion ||
+      event.actionablePromptIds !== undefined)
   const built = buildSubscriberFrame(
     hooks,
     subscriber,

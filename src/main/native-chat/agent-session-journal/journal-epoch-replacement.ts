@@ -29,6 +29,7 @@ import {
 } from './journal-reducer'
 import {
   buildJournalItemRow,
+  buildJournalTombstoneRow,
   buildJournalSubmissionRow,
   journalRowBase
 } from './journal-row-builders'
@@ -105,6 +106,33 @@ export function replaceJournalEpoch(input: {
   }
   const rows: JournalRow[] = [epochRow]
   applyJournalRow(state, epochRow)
+  if (input.previous && input.reason !== 'legacy_import' && input.reason !== 'session_created') {
+    const previous = input.previous
+    const retained = new Set(
+      input.items.map((item) => {
+        const key = agentJournalItemKey(item.identity)
+        return previous.aliases.get(key) ?? key
+      })
+    )
+    const removed = new Set([...previous.tombstones.keys(), ...previous.items.keys()])
+    for (const itemId of removed) {
+      if (retained.has(itemId)) {
+        continue
+      }
+      const tombstone = {
+        ...buildJournalTombstoneRow({
+          state: previous,
+          itemId,
+          seq: state.lastSequence + 1,
+          fence: input.fence,
+          ts: input.now()
+        }),
+        epoch
+      }
+      applyJournalRow(state, tombstone)
+      rows.push(tombstone)
+    }
+  }
   for (const item of input.items) {
     const row = buildJournalItemRow({
       state,

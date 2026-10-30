@@ -21,7 +21,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import {
   agentSessionReadFailureRefusal,
   agentSessionReadRefusalText,
-  callAgentSession
+  callAgentSession,
+  readMobileCurrentRequests
 } from './mobile-structured-agent-session-rpc'
 import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-subscription'
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
@@ -118,8 +119,14 @@ export function useMobileStructuredAgentState(args: {
       getCursor: () => stateRef.current.cursor,
       onContactLost: () => {},
       onHistoryReadInvalidated: supersede,
-      readCurrentRequests: (request) =>
-        callAgentSession(client, 'agentSession.currentRequests', request),
+      readCurrentRequests: (request, signal) =>
+        readMobileCurrentRequests(
+          client,
+          sessionKey ?? sessionId,
+          'agentSession.currentRequests',
+          request,
+          signal
+        ),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
       subscribeRetryNow: subscribeConnectionRevival

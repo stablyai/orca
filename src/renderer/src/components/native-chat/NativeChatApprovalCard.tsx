@@ -24,6 +24,7 @@ export type NativeChatApprovalCardProps = {
   /** Without `onCancel`: fold the card to a strip and give the input back, writing nothing. */
   onCollapse?: () => void
   /** A choice is being delivered: the options wait for its answer. */
+  disabled?: boolean
   isSubmitting?: boolean
   shouldFocus?: boolean
   /** A plan body renders as markdown; these make its file paths clickable. */
@@ -38,6 +39,7 @@ export function NativeChatApprovalCard({
   onCancel,
   onCollapse,
   isSubmitting = false,
+  disabled = false,
   shouldFocus = false,
   onLinkClick,
   allowFileUriLinks = false
@@ -54,7 +56,8 @@ export function NativeChatApprovalCard({
     approval.detail
   )
   useNativeChatPromptCardFocus(cardRef, shouldFocus)
-  const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
+  const blocked = disabled || isSubmitting
+  const escape = blocked ? undefined : (onCancel ?? onCollapse)
 
   return (
     <SecuritySurface>
@@ -86,6 +89,7 @@ export function NativeChatApprovalCard({
               {onCancel ? (
                 <button
                   type="button"
+                  disabled={blocked}
                   onClick={onCancel}
                   aria-label={translate('components.native-chat.approval.cancel', 'Cancel')}
                   className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -93,11 +97,7 @@ export function NativeChatApprovalCard({
                   <X className="size-4" />
                 </button>
               ) : onCollapse ? (
-                <NativeChatPromptCollapseToggle
-                  expanded
-                  disabled={isSubmitting}
-                  onToggle={onCollapse}
-                />
+                <NativeChatPromptCollapseToggle expanded disabled={blocked} onToggle={onCollapse} />
               ) : null}
             </div>
             {hasContext ? (
@@ -171,7 +171,7 @@ export function NativeChatApprovalCard({
                 <button
                   key={`${opt.label}-${i}`}
                   type="button"
-                  disabled={newerSubject || isSubmitting}
+                  disabled={newerSubject || blocked}
                   onClick={() => onChoose(opt.send)}
                   className={cn(
                     'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',

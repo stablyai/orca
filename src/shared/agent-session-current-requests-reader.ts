@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { messageQuestionOccurrenceSchema } from './message-question-occurrence'
-import { waitForPromiseWithSignal } from './abort-signal-reason'
 import type { CurrentRequestsPayload } from './agent-session-current-requests-wire'
 import {
   AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
@@ -19,7 +18,7 @@ import type {
 
 const payloadSchema = z.object({
   blocking: z.array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem)),
-  asyncQuestions: z.array(messageQuestionOccurrenceSchema),
+  asyncQuestions: z.array(messageQuestionOccurrenceSchema).nullable(),
   context: z.object({ sessionId: z.string(), boundary: z.string() })
 })
 function supported(contract: string): boolean {
@@ -50,6 +49,7 @@ export function createAgentSessionCurrentRequestsReader(args: {
   let attempted: string | undefined
   let failedVersion: string | undefined
   let activeRead: AbortController | undefined
+  let assembly: { version: string; cursor: number; chunks: string[] } | undefined
   async function readPiece(
     request: AgentSessionCurrentRequestsRead
   ): Promise<AgentSessionCurrentRequestsPiece> {
@@ -60,10 +60,8 @@ export function createAgentSessionCurrentRequestsReader(args: {
       15_000
     )
     try {
-      return await waitForPromiseWithSignal(
-        args.read(request, controller.signal),
-        controller.signal
-      )
+      // Keep the actual transport slot until supported abort or its finite transport deadline settles.
+      return await args.read(request, controller.signal)
     } finally {
       clearTimeout(timeout)
       if (activeRead === controller) {
@@ -87,8 +85,13 @@ export function createAgentSessionCurrentRequestsReader(args: {
     const ownedGeneration = generation
     let marker = desired
     attempted = marker.version
-    let cursor = 0
-    const chunks: string[] = []
+    if (assembly?.version !== marker.version) {
+      assembly = { version: marker.version, cursor: 0, chunks: [] }
+    }
+    const partial = assembly
+    let cursor = partial.cursor
+    const chunks = partial.chunks
+    const deadline = Date.now() + 15_000
     const current = () => generation === ownedGeneration && desired?.version === marker.version
     let reading = false
     try {
@@ -113,9 +116,15 @@ export function createAgentSessionCurrentRequestsReader(args: {
           }
           desired = marker = piece.marker
           attempted = marker.version
+          partial.version = marker.version
           args.replaceMarker(marker)
           chunks.length = 0
-          cursor = 0
+          cursor = partial.cursor = 0
+          if (Date.now() >= deadline) {
+            failedVersion = marker.version
+            retry.schedule()
+            return
+          }
           continue
         }
         if (
@@ -147,18 +156,31 @@ export function createAgentSessionCurrentRequestsReader(args: {
           ) {
             throw new Error('Invalid current requests')
           }
-          retry.reset()
+          assembly = undefined
           if (payload) {
             args.complete(marker, value, payload)
           } else {
             args.complete(marker, value)
+          }
+          if (payload?.asyncQuestions === null) {
+            failedVersion = marker.version
+            retry.schedule()
+          } else {
+            failedVersion = undefined
+            retry.dispose()
+            retry.reset()
           }
           return
         }
         if (!Number.isSafeInteger(piece.nextCursor) || piece.nextCursor <= cursor) {
           throw new Error('Invalid current-request cursor')
         }
-        cursor = piece.nextCursor
+        cursor = partial.cursor = piece.nextCursor
+        if (Date.now() >= deadline) {
+          failedVersion = marker.version
+          retry.schedule()
+          return
+        }
       }
     } catch (error) {
       // Answers that break the contract fail the same way again; only transport and host failures retry.
@@ -177,6 +199,12 @@ export function createAgentSessionCurrentRequestsReader(args: {
     }
   }
   return {
+    refresh(): void {
+      if (desired) {
+        failedVersion = desired.version
+        retry.schedule()
+      }
+    },
     observe(marker: AgentSessionCurrentRequestsMarker | undefined): void {
       if (marker && !supported(marker.contract)) {
         return
@@ -191,7 +219,9 @@ export function createAgentSessionCurrentRequestsReader(args: {
       ) {
         return
       }
+      retry.dispose()
       desired = marker
+      assembly = undefined
       activeRead?.abort()
       void pump()
     },
@@ -199,6 +229,8 @@ export function createAgentSessionCurrentRequestsReader(args: {
       generation += 1
       desired = undefined
       attempted = undefined
+      assembly = undefined
+      failedVersion = undefined
       activeRead?.abort()
       retry.dispose()
       retry.reset()

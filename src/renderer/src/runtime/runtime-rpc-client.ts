@@ -132,15 +132,18 @@ export async function ensureRuntimeEnvironmentCompatible(
 
 export async function getRuntimeEnvironmentStatus(
   environmentId: string,
-  timeoutMs?: number
+  timeoutMs?: number,
+  qualification: { expectedEnvironmentPairingRevision?: number; signal?: AbortSignal } = {}
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
   const entry = compatibilityEntry()
   // Publish before awaiting so concurrent cold capability reads share this status probe.
   const check = (async () => {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: trimmed,
+    const response = await callRuntimeEnvironmentWithRevision({
+      environmentId: trimmed,
+      ...qualification,
       method: 'status.get',
+      params: undefined,
       timeoutMs
     })
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
@@ -183,9 +186,14 @@ export function readCachedRuntimeEnvironmentCapability(
 export async function runtimeEnvironmentSupportsCapability(
   environmentId: string,
   capability: RuntimeCapability,
-  timeoutMs?: number
+  timeoutMs?: number,
+  qualification?: { expectedEnvironmentPairingRevision: number; signal?: AbortSignal }
 ): Promise<boolean> {
   const trimmed = environmentId.trim()
+  if (qualification) {
+    const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs, qualification)
+    return status.capabilities?.includes(capability) === true
+  }
   const cached = runtimeCompatibilityChecks.get(trimmed)
   // Capability reads must discard rejected probes like ordinary RPCs or a recovered host stays blocked until failure TTL.
   if (cached && cached.failedAt === null) {

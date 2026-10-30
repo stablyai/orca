@@ -1,3 +1,4 @@
+import { createJournalItemReads } from './journal-item-reads'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
@@ -5,24 +6,14 @@ import { randomUUID } from 'node:crypto'
 import { structuredMessageQuestions } from '../message-question-repository'
 import { createJournalPublicReader } from './journal-public-read'
 import type {
-  AgentJournalAcceptanceReceipt,
   AgentJournalCursor,
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
   AgentJournalThreadGoal,
-  AgentJournalTurnLifecycle,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
-import {
-  newestStructuredAgentSessionTurnBySequence,
-  runningStructuredAgentSessionTurnItemBySequence
-} from '../../../shared/structured-agent-session-live-turn'
 import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
@@ -40,7 +31,6 @@ import {
 import { journalTombstoneRowBuilder } from './journal-row-builders'
 import type {
   AgentSessionJournalOptions,
-  JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
   JournalPlannedLifecycleBatchInput,
   JournalReadSince,
@@ -57,11 +47,9 @@ import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-wr
 import type { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
-import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalStepWriter } from './journal-step-writer'
-import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -76,6 +64,7 @@ export class AgentSessionJournal {
 
   private state: JournalReducerState
   private readonly readPublic = createJournalPublicReader()
+  private readonly itemReads = createJournalItemReads(() => this.state)
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
   private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
@@ -186,72 +175,41 @@ export class AgentSessionJournal {
   publicRead = () =>
     this.readPublic(this.state, this.queuedMessages.displayState(), this.queuedMessages.revision())
 
-  /** Visit without allocating/sorting a snapshot. */
-  visitItems = (
-    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
-  ): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body)
-    }
-  }
-
-  itemBody = (itemId: string): AgentJournalItemBody | null =>
-    this.state.items.get(itemId)?.body ?? null
-
-  /** Host-only stopped-history IDs carried by each send. */
-  stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
-    this.state.stoppedHistoryCarried
-
-  item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
-
-  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body, item)
-    }
-  }
-
-  /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
-
-  newestTurn = (): AgentJournalTurnLifecycle | null =>
-    newestStructuredAgentSessionTurnBySequence(this.state.items.values())
-
-  threadGoalSource = (): JournalThreadGoalSource =>
-    journalThreadGoalSource(this.state.items.values())
+  visitItems = this.itemReads.visitItems
+  itemBody = this.itemReads.itemBody
+  stoppedHistoryCarried = this.itemReads.stoppedHistoryCarried
+  item = this.itemReads.item
+  visitItemsWithLinkage = this.itemReads.visitItemsWithLinkage
+  runningTurn = this.itemReads.runningTurn
+  newestTurn = this.itemReads.newestTurn
+  threadGoalSource = this.itemReads.threadGoalSource
+  contextUsage = this.itemReads.contextUsage
+  itemFence = this.itemReads.itemFence
+  itemProvenance = this.itemReads.itemProvenance
 
   /** Read across the journal, beyond any client's loaded page. */
   threadGoal = (): AgentJournalThreadGoal | null => this.threadGoalSource().goal
 
-  /** Read across the journal, beyond any client's loaded page. */
-  contextUsage = (): AgentSessionContextUsage =>
-    latestStructuredAgentContextFacts(this.state.items.values())
-
   /** Includes activity from revisions/tombstones absent from rendered items. */
   lastActivityAt = (): number => this.state.lastActivityAt
-
-  /** Prefer later execution ownership for reusable children, otherwise creation provenance. */
-  itemFence = (itemId: string): number | undefined => journalItemExecutionFence(this.state, itemId)
-
-  /** Preserve both provenance fields during rebuild. */
-  itemProvenance = (itemId: string) => journalItemProvenance(this.state, itemId)
 
   /** Excludes client actions and recovery bookkeeping. */
   lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
 
   messageQuestions = () => structuredMessageQuestions(this.database, this.identity)
 
-  submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
+  /** Actual item removal and clear facts survive canonical replacement and failed derived writes. */
+  questionSourceFacts = () => ({
+    removed: this.state.tombstones,
+    canonicalItemId: this.canonicalItemId,
+    clearOperationId: this.state.queuePauseMarks.cleared?.operationId
+  })
 
-  historyOrigin = () => this.state.historyOrigin
-
-  submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
-
+  submissions = this.itemReads.submissions
+  historyOrigin = this.itemReads.historyOrigin
+  submission = this.itemReads.submission
   pendingSubmissions = () => this.submissions().filter((entry) => entry.dispatchState === 'pending')
-
-  /** Reconnecting clients read durable acceptance instead of resending. */
-  receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>
-    this.state.receipts.get(clientMessageId) ?? null
+  receiptFor = this.itemReads.receiptFor
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 

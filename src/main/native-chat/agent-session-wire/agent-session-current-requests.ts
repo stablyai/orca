@@ -18,10 +18,23 @@ export type CurrentRequestsSubscriber = {
 export type CurrentRequestsProjection = {
   identity: string
   marker: AgentSessionCurrentRequestsMarker
+  items?: AgentJournalRenderItem[] | CurrentRequestsPayload
+  json?: string
+}
+type ReadableCurrentRequestsProjection = CurrentRequestsProjection & {
   items: AgentJournalRenderItem[] | CurrentRequestsPayload
   json: string
 }
-const projections = new WeakMap<object, Map<CurrentRequestsContract, CurrentRequestsProjection>>()
+function isReadable(
+  projection: CurrentRequestsProjection | undefined
+): projection is ReadableCurrentRequestsProjection {
+  return projection?.json !== undefined && projection.items !== undefined
+}
+type Publication = {
+  current: CurrentRequestsProjection
+  complete?: { items: CurrentRequestsPayload; json: string }
+}
+const projections = new WeakMap<object, Map<CurrentRequestsContract, Publication>>()
 // Even six escaped bytes per UTF-16 unit leave room for the RPC and phone envelopes.
 const REQUEST_PIECE_UNITS = 24 * 1024
 
@@ -32,28 +45,44 @@ export function currentRequestsProjection(
   contract: CurrentRequestsContract = AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
   payload?: CurrentRequestsPayload,
   epoch = source.cursor?.().epoch ?? 'source'
-): CurrentRequestsProjection {
-  const items = payload ?? work.actionablePrompts()
+): ReadableCurrentRequestsProjection {
+  let items = payload ?? work.actionablePrompts()
   let versions = projections.get(source)
   if (!versions) {
     versions = new Map()
     projections.set(source, versions)
   }
-  const previous = versions.get(contract)
+  const retained = versions.get(contract)
+  const previous = retained?.current
+  const memo = retained?.complete
+  const semantic =
+    payload &&
+    memo &&
+    payload.asyncQuestions !== null &&
+    memo.items.asyncQuestions === payload.asyncQuestions &&
+    memo.items.blocking === payload.blocking &&
+    memo.items.context.sessionId === payload.context.sessionId &&
+    memo.items.context.boundary === payload.context.boundary
+      ? memo
+      : undefined
+  if (semantic) {
+    items = semantic.items
+  }
   const identity = previous?.identity ?? randomUUID()
   const owner = `${identity}:${work.viewKey()}`
   if (
-    previous?.items === items &&
+    isReadable(previous) &&
+    previous.items === items &&
     previous.marker.epoch === epoch &&
     previous.marker.owner === owner &&
     previous.marker.sessionId === sessionId
   ) {
     return previous
   }
-  const projection: CurrentRequestsProjection = {
+  const projection: ReadableCurrentRequestsProjection = {
     identity,
     items,
-    json: JSON.stringify(items),
+    json: semantic?.json ?? JSON.stringify(items),
     marker: {
       contract,
       sessionId,
@@ -64,7 +93,48 @@ export function currentRequestsProjection(
       version: randomUUID()
     }
   }
-  versions.set(contract, projection)
+  versions.set(contract, {
+    current: projection,
+    complete:
+      payload && payload.asyncQuestions !== null
+        ? { items: semantic?.items ?? payload, json: projection.json }
+        : memo
+  })
+  return projection
+}
+
+/** The same source publisher can announce unavailability without claiming a semantic context. */
+export function unavailableCurrentRequestsProjection(
+  source: object,
+  sessionId: string,
+  contract: CurrentRequestsContract,
+  resource: string
+): CurrentRequestsProjection {
+  let versions = projections.get(source)
+  if (!versions) {
+    versions = new Map()
+    projections.set(source, versions)
+  }
+  const retained = versions.get(contract)
+  const previous = retained?.current
+  const identity = previous?.identity ?? randomUUID()
+  const owner = `${identity}:${resource}`
+  if (previous && previous.json === undefined && previous.marker.owner === owner) {
+    return previous
+  }
+  const projection: CurrentRequestsProjection = {
+    identity,
+    marker: {
+      contract,
+      sessionId,
+      epoch: resource,
+      publisher: identity,
+      owner,
+      revision: (previous?.marker.revision ?? 0) + 1,
+      version: randomUUID()
+    }
+  }
+  versions.set(contract, { current: projection, complete: retained?.complete })
   return projection
 }
 
@@ -77,6 +147,9 @@ export function readCurrentRequestsPiece(
     return { marker: projection.marker, json: '', nextCursor: 0, restart: true }
   }
   const json = projection.json
+  if (json === undefined) {
+    throw new Error('Current questions temporarily unavailable')
+  }
   const cursor = request.cursor ?? 0
   if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor >= json.length) {
     throw new Error('Invalid current-request cursor')

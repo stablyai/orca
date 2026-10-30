@@ -1,3 +1,4 @@
+import { hasCompleteBlockingRequests } from '../../../src/shared/agent-session-current-requests'
 import { projectMobileStructuredChatSession } from './mobile-structured-session-projection'
 import { authoritativeAsyncQuestion } from '../../../src/shared/agent-session-current-requests'
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
@@ -17,10 +18,7 @@ import {
   structuredAgentSessionHostSaysWorking,
   structuredAgentSessionQueueSendsNext
 } from '../../../src/shared/structured-agent-session-live-turn'
-import {
-  actionableStructuredApproval,
-  actionableStructuredQuestion
-} from './mobile-structured-actionable-prompt'
+import { useMobileStructuredActionablePrompts } from './mobile-structured-actionable-prompt'
 import {
   projectStructuredPermission,
   projectStructuredQuestion
@@ -208,12 +206,8 @@ export function useMobileStructuredAgentSession(
     sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const { items, currentRequests, actionablePromptIds, epoch } = state
-  // Prefer host actionability: ended-agent prompts must receive no answer.
-  const [approvalPrompt, questionPrompt] = useMemo(() => {
-    const prompts = { items, currentRequests, actionablePromptIds }
-    return [actionableStructuredApproval(prompts), actionableStructuredQuestion(prompts)] as const
-  }, [items, currentRequests, actionablePromptIds])
+  const { epoch } = state
+  const [approvalPrompt, questionPrompt] = useMobileStructuredActionablePrompts(state)
   const commandRefusalCauses = useMemo(
     () => ({
       working: turnId !== null || queueSendsNext,
@@ -279,7 +273,13 @@ export function useMobileStructuredAgentSession(
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
-      ...projectMobileStructuredChatSession({ state, messages, olderPages, loadEarlier }),
+      ...projectMobileStructuredChatSession({
+        state,
+        connected,
+        messages,
+        olderPages,
+        loadEarlier
+      }),
       cancelMessageQuestions: (ids) => requestMobileMessageQuestionCancel(client, sessionId, ids)
     },
     isWorking: isWorking || queueSendsNext,
@@ -293,6 +293,7 @@ export function useMobileStructuredAgentSession(
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
     receipts: structuredQuestionTranscript(transcriptItems).receipts,
     actionablePromptIds: state.actionablePromptIds,
+    promptsReady: !state.requestMarker || (connected && hasCompleteBlockingRequests(state)),
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt),
     respondPermission,

@@ -19,6 +19,7 @@ export function MobileNativeChatPromptCard({
   answering = false,
   askKey,
   askDisabled = false,
+  promptDisabled = false,
   onDismissAsk,
   onAnswerAsk,
   requiresTerminal = false,
@@ -37,6 +38,7 @@ export function MobileNativeChatPromptCard({
   // The keyboard is up for this card's reply, so it may take the whole conversation area.
   answering?: boolean
   askKey?: string | null
+  promptDisabled?: boolean
   askDisabled?: boolean
   onDismissAsk?: () => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
@@ -98,6 +100,7 @@ export function MobileNativeChatPromptCard({
     ) : permission ? (
       <MobileNativeChatPermission
         key={JSON.stringify(permission)}
+        disabled={promptDisabled}
         permission={permission}
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
         onCancel={onCancelPrompt}
@@ -106,6 +109,7 @@ export function MobileNativeChatPromptCard({
     ) : question?.questions ? (
       <MobileNativeChatStructuredAsk
         key={mobileChatQuestionKey(question)}
+        disabled={promptDisabled}
         questions={question.questions}
         onAnswer={async (answers) => (await onAnswerQuestion?.(answers, question.prompt)) ?? false}
         onCancel={onCancelPrompt && (() => onCancelPrompt(question.prompt))}
@@ -113,6 +117,7 @@ export function MobileNativeChatPromptCard({
     ) : question ? (
       <MobileNativeChatQuestion
         key={mobileChatQuestionKey(question)}
+        disabled={promptDisabled}
         question={question}
         onAnswer={async (text) => (await onAnswerQuestion?.(text)) ?? false}
         onCancel={onCancelPrompt}

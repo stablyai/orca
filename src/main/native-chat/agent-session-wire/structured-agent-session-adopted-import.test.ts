@@ -1,6 +1,19 @@
+import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
+import * as sourceFiles from 'node:fs'
+vi.mock('node:fs', async (original) => ({ ...(await original<typeof sourceFiles>()) }))
+import * as transcriptReaders from '../transcript-tail-reader'
+import { MessageQuestionIngest } from '../message-question-ingest'
+import * as lifecycle from '../message-question-lifecycle'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session-current-requests-reader'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../shared/structured-agent-session-reducer'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, open, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +30,10 @@ import { performAttach, type AttachFlowInput } from './structured-agent-session-
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
@@ -48,6 +64,7 @@ let store: AgentSessionRecordStore | null = null
 
 afterEach(async () => {
   if (root) {
+    closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   }
   root = null
@@ -409,3 +426,342 @@ describe('adopting a provider conversation on create', () => {
     expect(prepare).toHaveBeenCalledTimes(1)
   })
 })
+
+it.each([
+  { mode: 'new', count: 2200, fault: 'none' },
+  { mode: 'saved', count: 2200, fault: 'none' },
+  { mode: 'saved', count: 22000, fault: 'none' },
+  { mode: 'saved', count: 2200, fault: 'unreadable' },
+  { mode: 'saved', count: 2200, fault: 'digest' }
+])(
+  'reconstructs complete at-rest questions for a $mode bounded import of $count rows with $fault source through actual source and piece owners',
+  async ({ mode, count, fault }) => {
+    root = await mkdtemp(join(tmpdir(), 'orca-async-bounded-import-'))
+    const home = join(root, 'account')
+    await mkdir(join(home, 'sessions'), { recursive: true })
+    const transcriptPath = join(home, 'sessions', `rollout-2026-09-06T18-00-00-${THREAD}.jsonl`)
+    const question = (id: string, label: string) =>
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          id,
+          type: 'function_call',
+          name: 'request_user_input_async',
+          call_id: id,
+          arguments: JSON.stringify({ questions: [{ title: id, options: [label, 'other'] }] })
+        }
+      })
+    const large = 'full-definition-'.repeat(3000)
+    const mixed = JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Unrelated blocks do not shift accepted async-call slots' },
+          { type: 'tool_use', name: 'shell', input: { command: 'pwd' } },
+          {
+            type: 'tool_use',
+            id: 'early-q',
+            name: 'request_user_input_async',
+            input: { questions: [{ title: 'duplicate early call', options: ['skip'] }] }
+          },
+          {
+            type: 'tool_use',
+            name: 'request_user_input_async',
+            input: { questions: [{ title: 'mixed first', options: [large] }] }
+          },
+          {
+            type: 'tool_use',
+            name: 'request_user_input_async',
+            input: { questions: [{ title: 'mixed second', options: ['same text', 'other'] }] }
+          }
+        ]
+      }
+    })
+    const prefix = [
+      JSON.stringify({ type: 'session_meta', payload: { id: THREAD, cwd: root } }),
+      question('answered-prefix', 'answered'),
+      JSON.stringify({
+        type: 'event_msg',
+        payload: { id: 'prefix-human', type: 'user_message', message: 'delivered answer' }
+      }),
+      question('stopped-prefix', 'interrupted'),
+      JSON.stringify({ type: 'event_msg', payload: { id: 'prefix-stop', type: 'turn_aborted' } }),
+      question('early-q', 'early-choice')
+    ]
+    await writeFile(transcriptPath, `${prefix.join('\n')}\n`)
+    // Distinct modest valid records evict the early row without exercising record-size rejection.
+    for (let group = 0; group < count / 100; group++) {
+      await appendFile(
+        transcriptPath,
+        `${Array.from({ length: 100 }, (_, offset) =>
+          JSON.stringify({
+            type: 'response_item',
+            payload: {
+              id: `ordinary-${group}-${offset}`,
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'text', text: 'working '.repeat(1200) }]
+            }
+          })
+        ).join('\n')}\n`
+      )
+    }
+    await appendFile(transcriptPath, `${mixed}\n${question('large-q', large)}\n`)
+    const params = attachParams(transcriptPath, {
+      accountHome: { variable: 'CODEX_HOME', path: home }
+    })
+    const sessionAdapter = adapter()
+    store = await openTestAgentSessionRecordStore(root)
+    const makeHost = () =>
+      new StructuredAgentSessionHost({
+        agents: NO_STRUCTURED_AGENTS,
+        store,
+        adapter: sessionAdapter,
+        logger: createStructuredAgentSessionLogger(),
+        journalDatabase: openTestJournalHostDatabase(root),
+        claimKeyId: 'key-1',
+        resolveWorkspacePath: async () => root!,
+        now: () => NOW
+      })
+    let host = makeHost()
+    if (mode === 'saved') {
+      expect(await host.create({ callerKey: 'client-1' }, params)).toMatchObject({ ok: true })
+      await host.flushAllStreamedEvents()
+      closeTestJournalHostDatabase(root)
+      store = await openTestAgentSessionRecordStore(root)
+      host = makeHost()
+    }
+    const tail = `${question('large-q', large)}\n`
+    const tailPosition = (await stat(transcriptPath)).size - Buffer.byteLength(tail)
+    const writeTail = async (value: string) => {
+      const file = await open(transcriptPath, 'r+')
+      try {
+        await file.write(value, tailPosition, 'utf8')
+      } finally {
+        await file.close()
+      }
+    }
+    const originalRead = sourceFiles.createReadStream
+    let sourcePasses = 0
+    let sourceBytes = 0
+    vi.spyOn(sourceFiles, 'createReadStream').mockImplementation((...args) => {
+      const stream = originalRead(...args)
+      if (String(args[0]) === transcriptPath) {
+        sourcePasses++
+        stream.on('data', (chunk: Buffer | string) => {
+          sourceBytes += Buffer.byteLength(chunk)
+        })
+      }
+      return stream
+    })
+    const originalDecoder = transcriptReaders.nativeChatLineDecoderForAgent
+    const ingestVisits = vi.spyOn(MessageQuestionIngest.prototype, 'append')
+    const lifecycleVisits = vi.spyOn(lifecycle, 'reconcileMessageQuestionResolution')
+    let decoderVisits = 0
+    vi.spyOn(transcriptReaders, 'nativeChatLineDecoderForAgent').mockImplementation((agent) => {
+      const decode = originalDecoder(agent)
+      return decode
+        ? (line, fallback) => {
+            decoderVisits++
+            return decode(line, fallback)
+          }
+        : null
+    })
+    if (mode === 'new') {
+      expect(await host.create({ callerKey: 'client-1' }, params)).toMatchObject({ ok: true })
+    }
+    // A provider append after import is outside its proven boundary and has no native journal fact.
+    await appendFile(transcriptPath, `${question('not-imported', 'must not resurrect')}\n`)
+    if (fault === 'unreadable') {
+      await rename(transcriptPath, `${transcriptPath}.held`)
+    }
+    if (fault === 'digest') {
+      await writeTail(`${question('large-q', large.replace('full', 'WRNG'))}\n`)
+    }
+    await host.history({ sessionId: SESSION, direction: 'tail' })
+    const session = host.collaboratorsForTests().sessions.get(SESSION)!
+    const journal = session.journal
+    expect(JSON.stringify(journal.snapshot())).not.toContain('early-choice')
+    const owner = journal.messageQuestions()
+    if (mode === 'saved') {
+      expect(owner.repository.current(owner.source).records).toEqual([])
+    }
+    let state = EMPTY_STRUCTURED_AGENT_SESSION
+    const reads = vi.fn((request: AgentSessionCurrentRequestsRead) =>
+      host.readCurrentRequests(request, 'agent-session.current-requests.v2')
+    )
+    const reader = createAgentSessionCurrentRequestsReader({
+      read: reads,
+      replaceMarker: (marker) => {
+        state = reduceStructuredAgentSession(state, { type: 'requests-marker', marker })
+      },
+      complete: (marker, items, payload) => {
+        state = reduceStructuredAgentSession(state, {
+          type: 'requests-complete',
+          marker,
+          items,
+          payload
+        })
+      },
+      error: (error) => {
+        throw error
+      }
+    })
+    const close = await host.subscribe({
+      id: 'import-proof',
+      sessionId: SESSION,
+      boundedFrames: true,
+      readsCurrentRequests: true,
+      requestContract: 'agent-session.current-requests.v2',
+      emit: (event) => {
+        state = reduceStructuredAgentSession(state, { type: 'event', event })
+        if (event.type !== 'end') {
+          reader.observe(event.currentRequests)
+        }
+      }
+    })
+    try {
+      if (fault !== 'none') {
+        await vi.waitFor(() => expect(reads.mock.calls.length).toBeGreaterThanOrEqual(2))
+        expect(state.requestAuthority).toBeDefined()
+        expect(state.asyncQuestionAuthority).toBeUndefined()
+        expect(owner.repository.current(owner.source).records).toEqual([])
+        // Restore only source readability/definition bytes; existing reader retry advances the owner.
+        await (fault === 'unreadable'
+          ? rename(`${transcriptPath}.held`, transcriptPath)
+          : writeTail(tail))
+      }
+      await vi.waitFor(
+        () =>
+          expect(state.asyncQuestions?.map((record) => record.questions[0].question)).toEqual([
+            'early-q',
+            'mixed first',
+            'mixed second',
+            'large-q'
+          ]),
+        { timeout: 30_000 }
+      )
+      expect(state.asyncQuestions?.[1].questions[0].options[0].label).toBe(large)
+      expect(state.asyncQuestions?.[3].questions[0].options[0].label).toBe(large)
+      const mixedId = agentJournalItemKey({
+        provider: 'legacy',
+        agent: 'codex',
+        sessionId: THREAD,
+        recordId: `#${count + 6}`
+      })
+      expect(
+        state.asyncQuestions
+          ?.slice(1, 3)
+          .map((record) => [record.sourceRowId, record.callSlot, record.timestamp])
+      ).toEqual([
+        [mixedId, 1, null],
+        [mixedId, 2, null]
+      ])
+      const terminalPrefix = owner.repository
+        .current(owner.source)
+        .records.filter((record) => record.questions[0].question.endsWith('-prefix'))
+      expect(
+        terminalPrefix.map((record) => [record.questions[0].question, record.resolution.state])
+      ).toEqual([
+        ['answered-prefix', 'resolved'],
+        ['stopped-prefix', 'cancelled']
+      ])
+      expect(state.asyncQuestionAuthority?.version).toBe(state.requestMarker?.version)
+      expect(reads.mock.calls.length).toBeGreaterThan(1)
+      const visits = decoderVisits
+      const ingests = ingestVisits.mock.calls.length
+      const settlements = lifecycleVisits.mock.calls.length
+      const passes = sourcePasses
+      const bytes = sourceBytes
+      const writes = vi.spyOn(owner.repository, 'reconcile')
+      const projection = hostStructuredAgentSessionCurrentWork(
+        { store: store!, sessions: host.collaboratorsForTests().sessions },
+        SESSION
+      )!.requestProjection(SESSION, 'agent-session.current-requests.v2')
+      for (const fanout of [10, 100]) {
+        for (let view = 0; view < fanout; view++) {
+          await host.readCurrentRequests(
+            { sessionId: SESSION, version: projection.marker.version, cursor: 0 },
+            'agent-session.current-requests.v2'
+          )
+        }
+      }
+      expect(decoderVisits).toBe(visits)
+      expect(ingestVisits).toHaveBeenCalledTimes(ingests)
+      expect(lifecycleVisits).toHaveBeenCalledTimes(settlements)
+      expect({
+        passes: sourcePasses,
+        bytes: sourceBytes,
+        writes: writes.mock.calls.length
+      }).toEqual({ passes, bytes, writes: 0 })
+      expect(passes).toBeLessThanOrEqual(mode === 'new' || fault === 'digest' ? 2 : 1)
+      expect(bytes).toBeGreaterThan(16 * 1024 * 1024)
+      expect(ingests).toBeGreaterThan(6)
+      expect(ingests).toBeLessThanOrEqual(20)
+      expect(settlements).toBeGreaterThan(0)
+      expect(settlements).toBeLessThanOrEqual(30)
+      console.log('question-import-operations', {
+        mode,
+        count,
+        fault,
+        sourcePasses: passes,
+        sourceBytes: bytes,
+        decoderVisits: visits,
+        ingestVisits: ingests,
+        lifecycleVisits: settlements,
+        fanoutReads: 110,
+        unchangedReconciliations: writes.mock.calls.length
+      })
+      expect(visits).toBeGreaterThan(count)
+      expect(visits).toBeLessThanOrEqual(
+        (count + 10) * (mode === 'new' || fault === 'digest' ? 2 : 1)
+      )
+      expect(sessionAdapter.acquire).not.toHaveBeenCalled()
+      expect(sessionAdapter.dispatch).not.toHaveBeenCalled()
+      const ids = state.asyncQuestions!.map((record) => record.id)
+      await host.cancelCurrentQuestions({ sessionId: SESSION, ids: [ids[0]] }, 'phone')
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: 'delivered-old-client-answer' },
+        { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'the full choice' }] },
+        { fence: 1 }
+      )
+      await host.flushStreamedEvents(SESSION)
+      await vi.waitFor(() => expect(state.asyncQuestions).toEqual([]))
+      expect(
+        owner.repository
+          .current(owner.source)
+          .records.filter((record) => ids.includes(record.id))
+          .map((record) => record.resolution.state)
+      ).toEqual(['cancelled', 'resolved', 'resolved', 'resolved'])
+      await host.close(SESSION, 'evict')
+      await host.history({ sessionId: SESSION, direction: 'tail' })
+      const reopened = hostStructuredAgentSessionCurrentWork(
+        { store: store!, sessions: host.collaboratorsForTests().sessions },
+        SESSION
+      )!
+      await vi.waitFor(
+        () => {
+          const payload = reopened.requestProjection(
+            SESSION,
+            'agent-session.current-requests.v2'
+          ).items
+          expect(payload && !Array.isArray(payload) && payload.asyncQuestions).toEqual([])
+        },
+        { timeout: 30_000 }
+      )
+      expect(
+        owner.repository
+          .current(owner.source)
+          .records.filter((record) => ids.includes(record.id))
+          .map((record) => record.id)
+      ).toEqual(ids)
+    } finally {
+      close()
+      reader.invalidate()
+      await host.flushAllStreamedEvents()
+    }
+  },
+  60_000
+)

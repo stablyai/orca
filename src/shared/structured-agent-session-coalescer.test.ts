@@ -415,3 +415,46 @@ describe('coalesced history removals', () => {
     }
   })
 })
+
+it.each([10, 100])(
+  'preserves current-marker ID provenance while coalescing %i unchanged claims and immediately delivering advancement',
+  (count) => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+    const marker = {
+      contract: 'agent-session.current-requests.v2',
+      sessionId: 'session-1',
+      publisher: 'publisher',
+      epoch: 'epoch-1',
+      owner: 'owner',
+      revision: 1,
+      version: 'one'
+    }
+    try {
+      coalescer.push({ ...batch(1), currentRequests: marker, actionablePromptIds: [] })
+      expect(events).toHaveLength(1)
+      for (let index = 0; index < count; index++) {
+        coalescer.push({
+          ...batch(index + 2),
+          currentRequests: { ...marker },
+          actionablePromptIds: []
+        })
+      }
+      expect(events).toHaveLength(1)
+      const newer = { ...marker, revision: 2, version: 'two' }
+      coalescer.push({
+        ...batch(count + 2),
+        currentRequests: newer,
+        actionablePromptIds: ['new-prompt']
+      })
+      expect(events).toHaveLength(3)
+      expect(events[1]).toMatchObject({ currentRequests: marker, actionablePromptIds: [] })
+      expect(events[2]).toMatchObject({
+        currentRequests: newer,
+        actionablePromptIds: ['new-prompt']
+      })
+    } finally {
+      coalescer.dispose()
+    }
+  }
+)

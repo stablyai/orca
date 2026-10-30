@@ -1,9 +1,7 @@
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { afterEach, expect, it, vi } from 'vitest'
-import { JournalHostDatabase } from './agent-session-journal/journal-host-database'
-import { messageQuestionsFor } from './message-question-repository'
+import { appendFile, writeFile } from 'node:fs/promises'
+import { expect, it, vi } from 'vitest'
+import { MessageQuestionIngest } from './message-question-ingest'
+import * as lifecycle from './message-question-lifecycle'
 import {
   readCurrentRequestsPiece,
   type CurrentRequestsProjection
@@ -16,48 +14,161 @@ import {
 import * as fileVersions from './transcript-file-version'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { installTranscriptWatcher } from './transcript-watch-engine'
+import { cleanup, fixture, question, output } from './transcript-current-questions-test-fixture'
 
-const cleanup: (() => void | Promise<void>)[] = []
-afterEach(async () => {
-  vi.restoreAllMocks()
-  vi.useRealTimers()
-  for (const release of cleanup.toReversed()) {
-    await release()
+it.each([10, 100])(
+  'preserves ordered terminal outcomes through a complete terminal replay of %i answer/Stop boundaries',
+  async (count) => {
+    const f = await fixture()
+    const rows: string[] = []
+    for (let i = 0; i < count; i++) {
+      rows.push(
+        question(`answered-${i}`, `answered-${i}`),
+        output(`human-${i}`, 'user'),
+        question(`stopped-${i}`, `stopped-${i}`),
+        `${JSON.stringify({ type: 'event_msg', payload: { id: `stop-${i}`, type: 'turn_aborted' } })}\n`
+      )
+    }
+    rows.push(question('pending'))
+    await writeFile(f.path, rows.join(''))
+    const decode = vi.fn(decodeCodexTranscriptLine)
+    const ingest = vi.spyOn(MessageQuestionIngest.prototype, 'append')
+    const settle = vi.spyOn(lifecycle, 'reconcileMessageQuestionResolution')
+    const reconcile = vi.spyOn(f.repository, 'reconcile')
+    const query = () =>
+      queryTranscriptCurrentQuestions(
+        f.path,
+        'codex',
+        'ordered',
+        decode,
+        (projection) => projection,
+        undefined,
+        f.repository
+      )
+    const publication = await query()
+    const source = {
+      kind: 'transcript' as const,
+      agent: 'codex',
+      sessionId: 'ordered',
+      filePath: f.path
+    }
+    const records = f.repository.current(source).records
+    expect(records.filter((record) => record.resolution.state === 'resolved')).toHaveLength(count)
+    expect(records.filter((record) => record.resolution.state === 'cancelled')).toHaveLength(count)
+    expect(records.filter((record) => record.resolution.state === 'pending')).toHaveLength(1)
+    const operations = {
+      decoder: decode.mock.calls.length,
+      ingest: ingest.mock.calls.length,
+      lifecycle: settle.mock.calls.length,
+      repository: reconcile.mock.calls.length
+    }
+    expect(operations.decoder).toBe(4 * count + 1)
+    expect(operations.ingest).toBe(4 * count + 1)
+    expect(operations.lifecycle).toBeGreaterThan(2 * count)
+    expect(operations.lifecycle).toBeLessThanOrEqual(6 * count + 2)
+    expect(operations.repository).toBe(1)
+    for (let i = 0; i < 10; i++) {
+      expect(await query()).toBe(publication)
+    }
+    expect({
+      decoder: decode.mock.calls.length,
+      ingest: ingest.mock.calls.length,
+      lifecycle: settle.mock.calls.length,
+      repository: reconcile.mock.calls.length
+    }).toEqual(operations)
+    console.log('question-terminal-replay-operations', {
+      count,
+      ...operations,
+      unchangedQueries: 10
+    })
   }
-  cleanup.length = 0
-})
-async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'orca-question-source-'))
-  cleanup.push(() => rm(root, { recursive: true, force: true }))
-  const database = JournalHostDatabase.open(join(root, 'host'))
-  cleanup.push(() => database.close())
-  return { path: join(root, 'rollout.jsonl'), repository: messageQuestionsFor(database), database }
-}
-function question(id: string, detail = 'A choice') {
-  return `${JSON.stringify({
-    type: 'response_item',
-    payload: {
-      id,
-      type: 'function_call',
-      name: 'request_user_input_async',
-      call_id: id,
-      arguments: JSON.stringify({
-        questions: [{ title: 'Which color?', options: [detail, 'Red'] }]
-      })
+)
+
+it.each([40, 400])(
+  'preserves delivered outcomes for %i already-saved terminal questions before a batched later Stop',
+  async (count) => {
+    const f = await fixture()
+    await writeFile(
+      f.path,
+      Array.from({ length: count }, (_, i) => question(`saved-${i}`, 'A choice', i % 2 === 1)).join(
+        ''
+      )
+    )
+    const decode = vi.fn(decodeCodexTranscriptLine)
+    const ingest = vi.spyOn(MessageQuestionIngest.prototype, 'append')
+    const settle = vi.spyOn(lifecycle, 'reconcileMessageQuestionResolution')
+    const reconcile = vi.spyOn(f.repository, 'reconcile')
+    const query = () =>
+      queryTranscriptCurrentQuestions(
+        f.path,
+        'codex',
+        'saved-order',
+        decode,
+        (projection) => projection,
+        undefined,
+        f.repository
+      )
+    await query()
+    const source = {
+      kind: 'transcript' as const,
+      agent: 'codex',
+      sessionId: 'saved-order',
+      filePath: f.path
     }
-  })}\n`
-}
-function output(id: string, role = 'assistant') {
-  return `${JSON.stringify({
-    type: 'response_item',
-    payload: {
-      id,
-      type: 'message',
-      role,
-      content: [{ type: 'text', text: role === 'user' ? 'Blue' : 'Still working' }]
+    const before = f.repository.current(source).pending
+    expect(before).toHaveLength(count)
+    await appendFile(
+      f.path,
+      `${output('delivered-before-stop', 'user')}${Array.from({ length: count }, (_, i) => question(`later-${i}`, 'A choice', i % 2 === 1)).join('')}${JSON.stringify({ type: 'event_msg', payload: { id: 'batched-stop', type: 'turn_aborted' } })}\n${question('still-pending')}`
+    )
+    const publication = await query()
+    const records = f.repository.current(source).records
+    const savedIds = new Set(before.map((record) => record.id))
+    expect(
+      records.filter((record) => savedIds.has(record.id)).map((record) => record.resolution)
+    ).toEqual(
+      before.map(() => ({
+        state: 'resolved',
+        reason: 'delivery',
+        factId: 'delivered-before-stop',
+        resolvedAt: null,
+        resolvedBy: null
+      }))
+    )
+    expect(records.filter((record) => record.resolution.state === 'cancelled')).toHaveLength(count)
+    expect(f.repository.current(source).pending.map((record) => record.sourceRowId)).toEqual([
+      'still-pending'
+    ])
+    const operations = {
+      decoder: decode.mock.calls.length,
+      ingest: ingest.mock.calls.length,
+      lifecycle: settle.mock.calls.length,
+      repository: reconcile.mock.calls.length
     }
-  })}\n`
-}
+    expect(operations.decoder).toBe(2 * count + 3)
+    expect(operations.ingest).toBe(2 * count + 3)
+    expect(operations.lifecycle).toBeLessThanOrEqual(6 * count + 3)
+    expect(operations.repository).toBe(2)
+    for (let i = 0; i < 10; i++) {
+      expect(await query()).toBe(publication)
+    }
+    expect({
+      decoder: decode.mock.calls.length,
+      ingest: ingest.mock.calls.length,
+      lifecycle: settle.mock.calls.length,
+      repository: reconcile.mock.calls.length
+    }).toEqual(operations)
+    console.log('question-terminal-saved-batch-operations', {
+      count,
+      ...operations,
+      unchangedQueries: 10
+    })
+    vi.useFakeTimers()
+    await vi.advanceTimersByTimeAsync(30_001)
+    await query()
+    expect(f.repository.current(source).records).toEqual(records)
+  }
+)
 
 it('keeps one immutable multi-piece resource publication without any subscriber, after the last subscriber, and through idle reacquisition', async () => {
   vi.useFakeTimers()
@@ -115,13 +226,14 @@ it('keeps one immutable multi-piece resource publication without any subscriber,
 it.each([40, 400])(
   'does no pending-definition work for unrelated output with %i pending calls on the real shared watcher',
   async (count) => {
+    vi.useFakeTimers()
     const f = await fixture()
     await writeFile(
       f.path,
       Array.from({ length: count }, (_, i) => question(`q-${i}`, 'detail'.repeat(200))).join('')
     )
     let publication: CurrentRequestsProjection | undefined
-    let appends = 0
+    const appendedIds: string[][] = [[], []]
     const notify = vi.fn((next: CurrentRequestsProjection) => {
       publication = next
     })
@@ -134,8 +246,8 @@ it.each([40, 400])(
         reconciliationIntervalMs: 20,
         prepareCurrentRequests: async () => f.repository,
         onInitialSnapshot: () => {},
-        onAppend: () => {
-          appends++
+        onAppend: (messages) => {
+          appendedIds[viewer].push(...messages.map((message) => message.id))
         },
         onCurrentRequests: (next) => notify(next)
       })
@@ -144,7 +256,24 @@ it.each([40, 400])(
       }
       cleanup.push(subscription.unsubscribe)
     }
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(
+        publication?.items &&
+          !Array.isArray(publication.items) &&
+          publication.items.asyncQuestions?.length
+      ).toBe(count)
+    )
+    await queryTranscriptCurrentQuestions(
+      f.path,
+      'codex',
+      's',
+      decodeCodexTranscriptLine,
+      () => {},
+      undefined,
+      f.repository
+    )
+    expect(notify.mock.calls.filter(([value]) => value.items === undefined)).toHaveLength(2)
+    const initialPublications = notify.mock.calls.length
     const before = publication
     const saved = f.repository.current({
       kind: 'transcript',
@@ -169,14 +298,27 @@ it.each([40, 400])(
     const query = vi.spyOn(f.database.db, 'prepare')
     for (let i = 0; i < 3; i++) {
       await appendFile(f.path, output(`output-${i}`))
-      await vi.waitFor(() => expect(appends).toBe((i + 1) * 2))
+      await vi.waitFor(() =>
+        appendedIds.forEach((ids) => {
+          expect(ids.filter((id) => id === `output-${i}`).length).toBeGreaterThanOrEqual(1)
+        })
+      )
       await queryTranscriptCurrentQuestions(
         f.path,
         'codex',
         's',
         decodeCodexTranscriptLine,
         (current) => {
-          expect(current).toBe(before)
+          expect(
+            current,
+            JSON.stringify({
+              before: before?.marker,
+              current: current.marker,
+              sameItems: current.items === before?.items,
+              definitionReads,
+              publications: notify.mock.calls.map(([value]) => value.marker)
+            })
+          ).toBe(before)
         },
         undefined,
         f.repository
@@ -187,20 +329,117 @@ it.each([40, 400])(
     expect(query.mock.calls.filter(([sql]) => sql.startsWith('SELECT occurrence_id'))).toHaveLength(
       0
     )
-    expect(notify).toHaveBeenCalledTimes(2)
+    expect(notify).toHaveBeenCalledTimes(initialPublications)
     serialize.mockRestore()
     query.mockRestore()
     await appendFile(f.path, question('new-question'))
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(4))
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(initialPublications + 2))
     expect(definitionReads).toBeGreaterThan(0)
     expect(publication).not.toBe(before)
     await appendFile(f.path, output('delivered-answer', 'user'))
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(6))
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(initialPublications + 4))
     const payload = publication?.items
     if (!payload || Array.isArray(payload)) {
       throw new Error('Expected complete payload')
     }
     expect(payload.asyncQuestions).toEqual([])
+  }
+)
+
+it.each([40, 400])(
+  'retains incremental work and immutable definition bytes after a real racing read with %i pending calls',
+  async (count) => {
+    vi.useFakeTimers()
+    const f = await fixture()
+    await writeFile(
+      f.path,
+      Array.from({ length: count }, (_, i) => question(`race-q-${i}`)).join('')
+    )
+    const decode = vi.fn(decodeCodexTranscriptLine)
+    const query = () =>
+      queryTranscriptCurrentQuestions(
+        f.path,
+        'codex',
+        'race',
+        decode,
+        (projection) => projection,
+        undefined,
+        f.repository
+      )
+    const before = await query()
+    const publications: CurrentRequestsProjection[] = []
+    const initial = vi.fn()
+    const history = vi.fn()
+    const watcher = await installTranscriptWatcher(f.path, decodeCodexTranscriptLine, {
+      agent: 'codex',
+      sessionId: 'race',
+      initialLimit: 1,
+      debounceMs: 1,
+      reconciliationIntervalMs: 20,
+      prepareCurrentRequests: async () => f.repository,
+      onInitialSnapshot: initial,
+      onAppend: history,
+      onCurrentRequests: (projection) => publications.push(projection)
+    })
+    if (!watcher) {
+      throw new Error('Expected real watcher')
+    }
+    cleanup.push(watcher.unsubscribe)
+    await vi.waitFor(() => expect(initial).toHaveBeenCalledTimes(1))
+    expect(await query()).toBe(before)
+    decode.mockClear()
+    publications.length = 0
+    const ingest = vi.spyOn(MessageQuestionIngest.prototype, 'append')
+    const reconcile = vi.spyOn(f.repository, 'reconcile')
+    const serialize = vi.spyOn(JSON, 'stringify')
+    const originalVersion = fileVersions.readTranscriptFileVersion
+    let versions = 0
+    vi.spyOn(fileVersions, 'readTranscriptFileVersion').mockImplementation(async (...args) => {
+      if (++versions === 2) {
+        await appendFile(f.path, output('raced-after-read'))
+      }
+      return originalVersion(...args)
+    })
+    await appendFile(f.path, output('ordinary-before-race'))
+    const recovered = await query()
+    expect(recovered).toBe(before)
+    expect(recovered.items).toBe(before.items)
+    expect(decode).toHaveBeenCalledTimes(2)
+    expect(ingest).toHaveBeenCalledTimes(2)
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    const definitionSerializations = () =>
+      serialize.mock.calls.filter(
+        ([value]) =>
+          value !== null &&
+          typeof value === 'object' &&
+          ('responseMode' in value || 'asyncQuestions' in value)
+      ).length
+    expect(definitionSerializations()).toBe(0)
+    expect(publications).toHaveLength(0)
+    const operations = {
+      decoder: decode.mock.calls.length,
+      ingest: ingest.mock.calls.length,
+      repository: reconcile.mock.calls.length,
+      definitionSerializations: definitionSerializations()
+    }
+    for (let i = 0; i < 10; i++) {
+      expect(await query()).toBe(recovered)
+    }
+    expect({
+      decoder: decode.mock.calls.length,
+      ingest: ingest.mock.calls.length,
+      repository: reconcile.mock.calls.length,
+      definitionSerializations: definitionSerializations()
+    }).toEqual(operations)
+    await vi.waitFor(() =>
+      expect(
+        history.mock.calls.flatMap(([messages]) => messages.map((message) => message.id))
+      ).toEqual(['ordinary-before-race', 'raced-after-read'])
+    )
+    expect(decode).toHaveBeenCalledTimes(2)
+    expect(ingest).toHaveBeenCalledTimes(2)
+    expect(publications).toHaveLength(0)
+    console.log('question-terminal-race-operations', { count, ...operations, unchangedQueries: 10 })
   }
 )
 
@@ -261,143 +500,4 @@ it('cancels only displayed IDs through the source owner and preserves native ter
     f.repository
   )
   expect(await current()).toEqual([])
-})
-
-it('keeps history usable after occurrence setup fails and retries on unchanged-file reconciliation', async () => {
-  const f = await fixture()
-  await writeFile(f.path, question('pending-through-store-recovery'))
-  const prepare = vi
-    .fn()
-    .mockRejectedValueOnce(new Error('Store temporarily unavailable'))
-    .mockResolvedValue(f.repository)
-  const snapshot = vi.fn()
-  const notify = vi.fn()
-  const subscription = await installTranscriptWatcher(f.path, decodeCodexTranscriptLine, {
-    agent: 'codex',
-    sessionId: 's',
-    initialLimit: 1,
-    debounceMs: 1,
-    reconciliationIntervalMs: 20,
-    prepareCurrentRequests: prepare,
-    onInitialSnapshot: snapshot,
-    onAppend: () => {},
-    onCurrentRequests: notify
-  })
-  if (!subscription) {
-    throw new Error('Expected watcher')
-  }
-  cleanup.push(subscription.unsubscribe)
-  await vi.waitFor(() => expect(snapshot).toHaveBeenCalledTimes(1))
-  await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(1))
-  expect(prepare.mock.calls.length).toBeGreaterThanOrEqual(2)
-  const publication = notify.mock.calls[0][0]
-  if (Array.isArray(publication.items)) {
-    throw new Error('Expected complete occurrence payload')
-  }
-  expect(publication.items.asyncQuestions.map((record) => record.sourceRowId)).toEqual([
-    'pending-through-store-recovery'
-  ])
-})
-
-it('never publishes a complete set past failed creation and recovers on unchanged-file watcher reconciliation', async () => {
-  const f = await fixture()
-  await writeFile(f.path, question('q1'))
-  const notify = vi.fn()
-  const subscription = acquireTranscriptCurrentQuestions(
-    f.path,
-    'codex',
-    's',
-    decodeCodexTranscriptLine,
-    notify,
-    f.repository
-  )
-  cleanup.push(subscription.dispose)
-  await subscription.refresh()
-  expect(notify).toHaveBeenCalledTimes(1)
-  await appendFile(f.path, question('q2'))
-  const fail = vi.spyOn(f.database, 'transaction').mockImplementation(() => {
-    throw new Error('creation failed')
-  })
-  await expect(subscription.refresh()).rejects.toThrow('creation failed')
-  expect(notify).toHaveBeenCalledTimes(1)
-  await expect(
-    queryTranscriptCurrentQuestions(
-      f.path,
-      'codex',
-      's',
-      decodeCodexTranscriptLine,
-      (projection) => projection,
-      undefined,
-      f.repository
-    )
-  ).rejects.toThrow('creation failed')
-  expect(notify).toHaveBeenCalledTimes(1)
-  fail.mockRestore()
-  const watched = await installTranscriptWatcher(f.path, decodeCodexTranscriptLine, {
-    agent: 'codex',
-    sessionId: 's',
-    initialLimit: 1,
-    debounceMs: 1,
-    reconciliationIntervalMs: 20,
-    prepareCurrentRequests: async () => f.repository,
-    onInitialSnapshot: () => {},
-    onAppend: () => {},
-    onCurrentRequests: notify
-  })
-  if (!watched) {
-    throw new Error('Expected watcher')
-  }
-  cleanup.push(watched.unsubscribe)
-  await vi.waitFor(() => {
-    const latest = notify.mock.calls.at(-1)?.[0]
-    if (!latest || Array.isArray(latest.items)) {
-      throw new Error('Expected complete publication')
-    }
-    expect(latest.items.asyncQuestions.map((record) => record.sourceRowId)).toEqual(['q1', 'q2'])
-  })
-})
-
-it('aborts an in-flight source refresh before authoritative deletion removes durable linkage', async () => {
-  const f = await fixture()
-  await writeFile(f.path, question('q1'))
-  const notify = vi.fn()
-  const subscription = acquireTranscriptCurrentQuestions(
-    f.path,
-    'codex',
-    's',
-    decodeCodexTranscriptLine,
-    notify,
-    f.repository
-  )
-  cleanup.push(subscription.dispose)
-  await subscription.refresh()
-  await appendFile(f.path, question('q2'))
-  const readVersion = fileVersions.readTranscriptFileVersion
-  let resume: () => void = () => {}
-  let reachedCommit = false
-  const blocked = new Promise<void>((resolve) => {
-    resume = resolve
-  })
-  let reads = 0
-  vi.spyOn(fileVersions, 'readTranscriptFileVersion').mockImplementation(async (...args) => {
-    const version = await readVersion(...args)
-    if (++reads === 3) {
-      reachedCommit = true
-      await blocked
-    }
-    return version
-  })
-  const inflight = subscription.refresh()
-  const settled = expect(inflight).rejects.toThrow()
-  await vi.waitFor(() => expect(reachedCommit).toBe(true))
-  // The existing owner has removed the file; release live source before the linkage transaction.
-  await rm(f.path)
-  f.repository.deleteTranscriptSources('codex', f.path)
-  resume()
-  await settled
-  await expect(subscription.refresh()).rejects.toThrow()
-  expect(notify).toHaveBeenCalledTimes(1)
-  const source = { kind: 'transcript' as const, agent: 'codex', sessionId: 's', filePath: f.path }
-  expect(f.repository.current(source).records).toEqual([])
-  expect(f.database.db.prepare('SELECT source_id FROM message_question_sources').all()).toEqual([])
 })

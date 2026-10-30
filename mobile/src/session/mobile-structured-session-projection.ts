@@ -10,20 +10,23 @@ import type { OlderPagePhase } from './use-mobile-older-page-loader'
 
 export function projectMobileStructuredChatSession({
   state,
+  connected = true,
   messages,
   olderPages,
   loadEarlier
 }: {
   state: StructuredAgentSessionState
+  connected?: boolean
   messages: NativeChatMessage[]
   olderPages: OlderPagePhase
   loadEarlier: () => void
 }): MobileNativeChatSession {
   const { status } = state
+  const questions = currentMessageQuestionView(state)
   return {
     messages,
     asyncQuestion: authoritativeAsyncQuestion(state),
-    messageQuestions: currentMessageQuestionView(state),
+    messageQuestions: questions ? { ...questions, ready: questions.ready && connected } : undefined,
     status,
     transcriptLoading: status === 'loading',
     error: state.error,

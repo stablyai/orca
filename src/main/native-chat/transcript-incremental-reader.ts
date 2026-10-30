@@ -51,9 +51,10 @@ export async function readIncrementalTranscriptMessages(
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
   signal?: AbortSignal,
-  sourceOrder = false
+  sourceOrder = false,
+  sourceRead?: { endExclusive: number; onFailure: (safeIo: boolean) => void }
 ): Promise<NativeChatMessage[]> {
-  const end = (await transcriptFileStat(filePath, 'exact', signal)).size
+  const end = sourceRead?.endExclusive ?? (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
     return []
   }
@@ -64,9 +65,11 @@ export async function readIncrementalTranscriptMessages(
     'exact',
     signal
   )
+  let processingChunk = false
   try {
     let absoluteOffset = state.offset
     for await (const rawChunk of stream) {
+      processingChunk = true
       const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
       let segmentStart = 0
       let newline = chunk.indexOf(0x0a)
@@ -85,8 +88,23 @@ export async function readIncrementalTranscriptMessages(
       absoluteOffset += chunk.length
       state.offset = absoluteOffset
       state.boundary = extendTranscriptBoundary(state.boundary, chunk)
+      processingChunk = false
     }
     return messages
+  } catch (error) {
+    if (sourceRead) {
+      const safeIo = !processingChunk && !signal?.aborted
+      sourceRead.onFailure(false)
+      if (safeIo && onBatch) {
+        // A completed chunk's residual rows belong to the acquired cursor even if next() fails.
+        if (messages.length) {
+          onBatch(messages)
+          messages.length = 0
+        }
+        sourceRead.onFailure(true)
+      }
+    }
+    throw error
   } finally {
     // Early exits must close both the fd and any UNC gate permit held by the generator.
     stream.destroy()
@@ -140,7 +158,12 @@ export async function readIncrementalTranscriptMessages(
     state.latestTimestamp = ordered.latest
     messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
-      onBatch(messages.splice(0))
+      if (sourceRead) {
+        onBatch(messages)
+        messages.length = 0
+      } else {
+        onBatch(messages.splice(0))
+      }
     }
   }
 }

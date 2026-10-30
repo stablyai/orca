@@ -13,14 +13,24 @@ import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-r
 
 export function createWebNativeChatApi(captured?: {
   environment: StoredWebRuntimeEnvironment | null
-}): NativeChatApi {
+}): NativeChatApi & {
+  currentRequests: (
+    request: Parameters<NativeChatApi['currentRequests']>[0],
+    signal?: AbortSignal
+  ) => ReturnType<NativeChatApi['currentRequests']>
+} {
   const capturedRevision = captured?.environment
     ? (captured.environment.pairingRevision ?? captured.environment.createdAt)
     : undefined
   const capturedRuntimeId = captured?.environment?.runtimeId ?? undefined
   const environmentForCall = () =>
     captured ? captured.environment : requireActiveEnvironmentOrNull()
-  async function call<TResult>(method: string, params?: unknown): Promise<TResult> {
+  let currentRequestsSupported = false
+  async function call<TResult>(
+    method: string,
+    params?: unknown,
+    signal?: AbortSignal
+  ): Promise<TResult> {
     const environment = environmentForCall()
     if (!environment) {
       throw new Error('Pair a host to view agent chat history.')
@@ -31,7 +41,8 @@ export function createWebNativeChatApi(captured?: {
       params,
       15_000,
       capturedRevision ?? environment.pairingRevision ?? environment.createdAt,
-      captured ? capturedRuntimeId : (environment.runtimeId ?? undefined)
+      captured ? capturedRuntimeId : (environment.runtimeId ?? undefined),
+      signal
     )
     if (!response.ok) {
       throw Object.assign(new Error(response.error.message), { code: response.error.code })
@@ -40,7 +51,7 @@ export function createWebNativeChatApi(captured?: {
   }
   return {
     cancelCurrentQuestions: (request) => call('nativeChat.cancelCurrentQuestions', request),
-    currentRequests: (request) => call('nativeChat.currentRequests', request),
+    currentRequests: (request, signal) => call('nativeChat.currentRequests', request, signal),
     // The full output stays on the host that ran the agent; the web client shows the message.
     getConversationNameFailureOutput: async () => null,
     readSession: async (agent, sessionId, limit, transcriptPath) =>
@@ -81,7 +92,7 @@ export function createWebNativeChatApi(captured?: {
             environment.id,
             capturedRevision ?? environment.pairingRevision ?? environment.createdAt
           )
-          const supported =
+          currentRequestsSupported ||=
             status.capabilities?.includes(AGENT_SESSION_CURRENT_REQUESTS_V2) === true
           return getClientForEnvironment(environment).subscribe(
             'nativeChat.subscribe',
@@ -94,7 +105,7 @@ export function createWebNativeChatApi(captured?: {
               capabilities: {
                 transcriptPending: 1,
                 transcriptSourceOrder: 1,
-                ...(supported ? { currentRequests: 2 } : {})
+                ...(currentRequestsSupported ? { currentRequests: 2 } : {})
               }
             },
             {

@@ -203,6 +203,7 @@ export function MobileNativeChatOverlay({
                     onStop={controller.handleNativeChatStop}
                     ask={controller.nativeChatAsk}
                     askKey={controller.nativeChatAskKey}
+                    promptDisabled={controller.nativeChatPromptDisabled}
                     askDisabled={controller.nativeChatAskDisabled}
                     promptKey={controller.nativeChatPromptKey}
                     onDismissAsk={controller.dismissNativeChatAsk}

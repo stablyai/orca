@@ -4,7 +4,7 @@ import type { CurrentRequestsProjection } from './agent-session-wire/agent-sessi
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { NativeChatTranscriptSubscription } from './transcript-watch-contract'
 import { subscribeNativeChatTranscript as subscribeTranscript } from './transcript-watch'
@@ -28,6 +28,7 @@ afterEach(async () => {
     subscription.unsubscribe()
   }
   subscriptions.clear()
+  vi.restoreAllMocks()
   for (const database of questionDatabases) {
     database.close()
   }
@@ -159,7 +160,8 @@ it.each([40, 400])(
       return decodeCodexTranscriptLine(line, fallbackId)
     }
     const repository = await questionRepository()
-    let projections = 0
+    const reconciles = vi.spyOn(repository, 'reconcile')
+    const projections: CurrentRequestsProjection[][] = [[], []]
     let snapshots = 0
     let appends = 0
     for (let viewer = 0; viewer < 2; viewer++) {
@@ -176,20 +178,41 @@ it.each([40, 400])(
         onAppend: () => {
           appends++
         },
-        onCurrentRequests: () => {
-          projections++
+        onCurrentRequests: (projection) => {
+          projections[viewer].push(projection)
         }
       })
       if (subscription) {
         subscriptions.add(subscription)
       }
     }
-    await waitFor(() => snapshots === 2 && projections === 2)
+    const complete = (projection: CurrentRequestsProjection | undefined) =>
+      projection?.items !== undefined &&
+      !Array.isArray(projection.items) &&
+      projection.items.asyncQuestions !== null
+    await waitFor(() => snapshots === 2 && projections.every((events) => complete(events.at(-1))))
+    const settled = projections.map((events) => events.at(-1)!)
+    expect(settled[0]).toBe(settled[1])
+    expect(settled[0].items).toMatchObject({
+      blocking: [],
+      asyncQuestions: [],
+      context: { sessionId: `perf-${count}` }
+    })
+    for (const events of projections) {
+      expect(events.every((event) => event.items === undefined || complete(event))).toBe(true)
+      expect(events.filter((event) => event.items === undefined).length).toBeLessThanOrEqual(1)
+      expect(events.filter(complete)).toEqual([settled[0]])
+      expect(new Set(events.map((event) => event.marker.version)).size).toBe(events.length)
+    }
+    const initialNotifications = projections.map((events) => events.length)
     expect(decoded).toBeLessThanOrEqual(count + 4)
+    expect(reconciles).toHaveBeenCalledOnce()
     const initial = decoded
     await appendFile(filePath, line(count))
-    await waitFor(() => appends === 2)
+    await waitFor(() => appends === 2 && reconciles.mock.calls.length >= 2)
     expect(decoded - initial).toBeLessThanOrEqual(4)
-    expect(projections).toBe(2)
+    expect(reconciles).toHaveBeenCalledTimes(2)
+    expect(projections.map((events) => events.length)).toEqual(initialNotifications)
+    expect(projections.map((events) => events.at(-1))).toEqual(settled)
   }
 )

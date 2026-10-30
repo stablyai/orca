@@ -10,7 +10,7 @@ type Source = ReturnType<typeof createTranscriptQuestionSource> & {
   users: number
   idle?: ReturnType<typeof setTimeout>
 }
-const sources = new WeakMap<MessageQuestionRepository, Map<string, Source>>()
+const sources = new Map<string, Source>()
 const SOURCE_IDLE_MS = 30_000
 
 function hostRepository(): MessageQuestionRepository {
@@ -26,39 +26,39 @@ function retainSource(
   agent: string,
   sessionId: string,
   decode: NativeChatLineDecoder,
-  repository: MessageQuestionRepository
+  repository?: MessageQuestionRepository,
+  prepare?: () => Promise<MessageQuestionRepository | void>
 ) {
   agent = resolveNativeChatTranscriptAgent(agent) ?? agent
-  let ownedSources = sources.get(repository)
-  if (!ownedSources) {
-    ownedSources = new Map()
-    sources.set(repository, ownedSources)
-  }
+  const ownedSources = sources
   const key = JSON.stringify([filePath, agent, sessionId])
   let source = ownedSources.get(key)
   if (!source) {
     source = {
-      ...createTranscriptQuestionSource(filePath, agent, sessionId, decode, repository),
+      ...createTranscriptQuestionSource(
+        filePath,
+        agent,
+        sessionId,
+        decode,
+        repository ??
+          (async () => {
+            const prepared = await prepare?.()
+            return prepared ?? hostRepository()
+          })
+      ),
       users: 0
     }
     ownedSources.set(key, source)
     const created = source
-    const dispose = created.dispose
-    const releaseOwner = repository.ownSource(
-      { kind: 'transcript', filePath, agent, sessionId },
-      () => created.dispose()
-    )
-    created.dispose = () => {
+    created.onDispose.add(() => {
       if (created.idle) {
         clearTimeout(created.idle)
       }
-      dispose()
       created.listeners.clear()
-      releaseOwner()
       if (ownedSources.get(key) === created) {
         ownedSources.delete(key)
       }
-    }
+    })
   }
   if (source.idle) {
     clearTimeout(source.idle)
@@ -96,9 +96,10 @@ export function acquireTranscriptCurrentQuestions(
   sessionId: string,
   decode: NativeChatLineDecoder,
   notify: (projection: CurrentRequestsProjection) => void,
-  repository: MessageQuestionRepository = hostRepository()
+  repository?: MessageQuestionRepository,
+  prepare?: () => Promise<MessageQuestionRepository | void>
 ) {
-  const retained = retainSource(filePath, agent, sessionId, decode, repository)
+  const retained = retainSource(filePath, agent, sessionId, decode, repository, prepare)
   const { source } = retained
   source.listeners.add(notify)
   const current = source.current()
@@ -121,14 +122,22 @@ async function withTranscriptQuestionSource<T>(
   decode: NativeChatLineDecoder,
   run: (source: Source) => T,
   signal: AbortSignal | undefined,
-  repository: MessageQuestionRepository
+  repository: MessageQuestionRepository | undefined,
+  requireRefresh = false
 ): Promise<T> {
   signal?.throwIfAborted()
   const retained = retainSource(filePath, agent, sessionId, decode, repository)
   const deadline = AbortSignal.timeout(15_000)
   const querySignal = signal ? AbortSignal.any([signal, deadline]) : deadline
   try {
-    await waitForPromiseWithSignal(retained.source.refresh(), querySignal)
+    await waitForPromiseWithSignal(
+      retained.source.refresh().catch((error: unknown) => {
+        if (requireRefresh) {
+          throw error
+        }
+      }),
+      querySignal
+    )
     querySignal.throwIfAborted()
     return run(retained.source)
   } finally {
@@ -144,7 +153,7 @@ export function queryTranscriptCurrentQuestions<T>(
   decode: NativeChatLineDecoder,
   read: (projection: CurrentRequestsProjection) => T,
   signal?: AbortSignal,
-  repository: MessageQuestionRepository = hostRepository()
+  repository?: MessageQuestionRepository
 ): Promise<T> {
   return withTranscriptQuestionSource(
     filePath,
@@ -173,7 +182,7 @@ export function cancelTranscriptCurrentQuestions(
   caller: string,
   now: number,
   signal?: AbortSignal,
-  repository: MessageQuestionRepository = hostRepository()
+  repository?: MessageQuestionRepository
 ): Promise<void> {
   return withTranscriptQuestionSource(
     filePath,
@@ -182,6 +191,7 @@ export function cancelTranscriptCurrentQuestions(
     decode,
     (source) => source.cancel(ids, caller, now),
     signal,
-    repository
+    repository,
+    true
   )
 }

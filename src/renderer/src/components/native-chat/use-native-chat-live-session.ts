@@ -1,3 +1,4 @@
+import { useNativeChatLiveSessionView } from './use-native-chat-live-session-view'
 import { useNativeChatCurrentQuestions } from './use-native-chat-current-questions'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -9,7 +10,6 @@ import {
   createNativeChatMerger,
   replaceList
 } from '../../../../shared/native-chat/native-chat-merge'
-import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT,
@@ -21,7 +21,7 @@ import type {
   ReadState,
   UseNativeChatLiveSessionArgs
 } from './native-chat-live-session-contract'
-import { messageCancelAction, getNativeChatSessionTransport } from './native-chat-session-transport'
+import { getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
@@ -161,8 +161,11 @@ export function useNativeChatLiveSession(
     loadSession(0)
 
     const subscriptionId = nextTranscriptId()
-    const requestReader = bindCurrentQuestions((request) =>
-      transport.currentRequests({ ...request, agent, transcriptPath: transcriptPath ?? undefined })
+    const requestReader = bindCurrentQuestions((request, signal) =>
+      transport.currentRequests(
+        { ...request, agent, transcriptPath: transcriptPath ?? undefined },
+        signal
+      )
     )
     const closeStream = openNativeChatTranscriptStream(
       transport,
@@ -294,31 +297,7 @@ export function useNativeChatLiveSession(
     appended
   })
 
-  return useMemo<NativeChatLiveSession>(() => {
-    const session = mergeNativeChatLiveSession({
-      messages: normalizedMessages,
-      sessionId,
-      agent,
-      hookState,
-      stateStartedAt: hookStateStartedAt,
-      transcriptLifecycle,
-      statusTailMessage: assembledMessages.at(-1),
-      hookHasWorkingSubagents,
-      // Live content outranks stale errors/spinners; apply overrides only before any append (#8401).
-      loading: read.phase === 'loading' && appended.length === 0,
-      ...(read.phase === 'error' && appended.length === 0 ? { error: read.error } : {})
-    })
-    return {
-      ...session,
-      ...currentQuestionView,
-      cancelMessageQuestions: messageCancelAction(transport, agent, sessionId, transcriptPath),
-      hasMore,
-      loadingEarlier,
-      olderHistoryGeneration,
-      loadEarlier,
-      readPhase: read.phase
-    }
-  }, [
+  return useNativeChatLiveSessionView({
     normalizedMessages,
     assembledMessages,
     currentQuestionView,
@@ -336,5 +315,5 @@ export function useNativeChatLiveSession(
     olderHistoryGeneration,
     loadEarlier,
     appended
-  ])
+  })
 }

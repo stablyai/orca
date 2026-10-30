@@ -13,6 +13,10 @@ import {
   type StructuredAgentSessionState
 } from '../../../shared/structured-agent-session-reducer'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
+import {
+  hasCompleteBlockingRequests,
+  selectAgentSessionCurrentRequests
+} from '../../../shared/agent-session-current-requests'
 
 const marker: AgentSessionCurrentRequestsMarker = {
   contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
@@ -66,7 +70,7 @@ it('pulls a greater-than-frame record and greater-than-window collection lossles
   reader.invalidate()
 })
 
-it('retires positive owner changes, rejects late reads, and relinquishes authority on unsupported openings', async () => {
+it('rejects late reads, retains established controls disabled on marker-less reconnect and admits initial legacy history', async () => {
   let resolve: ((piece: AgentSessionCurrentRequestsPiece) => void) | undefined
   const complete = vi.fn()
   const reader = createAgentSessionCurrentRequestsReader({
@@ -96,13 +100,15 @@ it('retires positive owner changes, rejects late reads, and relinquishes authori
     }
     const replacement = { ...marker, owner: 'host:fence-2', version: 'v2', revision: 2 }
     state = reduceStructuredAgentSession(state, { type: 'requests-marker', marker: replacement })
-    expect(state.currentRequests).toEqual([])
+    expect(state.currentRequests).toBe(items)
+    expect(hasCompleteBlockingRequests(state)).toBe(false)
     state = reduceStructuredAgentSession(state, {
       type: 'requests-complete',
       marker,
       items: [prompt]
     })
-    expect(state.currentRequests).toEqual([])
+    expect(state.currentRequests).toBe(items)
+    expect(state.requestAuthority).toBe(marker)
     const batch = {
       type: 'batch' as const,
       sessionId: 's',
@@ -114,7 +120,9 @@ it('retires positive owner changes, rejects late reads, and relinquishes authori
       event: batch,
       opensSubscription: true
     })
-    expect(state.currentRequests).toBeUndefined()
+    expect(state.currentRequests).toBe(items)
+    expect(state.requestMarker).toBe(replacement)
+    expect(state.requestAuthority).toBeUndefined()
     state = reduceStructuredAgentSession(state, { type: 'requests-marker', marker: replacement })
     state = reduceStructuredAgentSession(state, {
       type: 'event',
@@ -135,7 +143,31 @@ it('retires positive owner changes, rejects late reads, and relinquishes authori
         }
       }
     })
-    expect(state.currentRequests).toBeUndefined()
+    expect(state.currentRequests).toBe(items)
+    expect(state.requestMarker).toBe(replacement)
+    expect(hasCompleteBlockingRequests(state)).toBe(false)
+    const legacy = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 's',
+        fence: 2,
+        page: {
+          sessionId: 's',
+          epoch: 'e',
+          direction: 'tail',
+          items: [prompt],
+          removedItemIds: [],
+          submissions: [],
+          hasOlder: false,
+          hasNewer: false,
+          window: { oldest: null, newest: null, nextCursor: { epoch: 'e', sequence: 1 } }
+        }
+      }
+    })
+    expect(legacy.currentRequests).toBeUndefined()
+    expect(legacy.requestMarker).toBeUndefined()
+    expect(selectAgentSessionCurrentRequests(legacy)).toEqual([prompt])
   }
 })
 
@@ -213,54 +245,102 @@ it('negotiates lossless message-answerable controls separately from v1 callbacks
   legacy.invalidate()
 })
 
-it('settles a disposed read immediately so its replacement can finish while the old transport never answers', async () => {
-  let reads = 0
-  let oldSignal: AbortSignal | undefined
-  const complete = vi.fn()
-  const reader = createAgentSessionCurrentRequestsReader({
-    read: async (request, signal) => {
-      if (++reads === 1) {
-        oldSignal = signal
-        return new Promise(() => {})
+it.each([10, 100])(
+  'coalesces %i supersessions while an uncancellable actual read drains finitely without overlap',
+  async (count) => {
+    vi.useFakeTimers()
+    let reads = 0
+    let active = 0
+    let maximum = 0
+    let oldSignal: AbortSignal | undefined
+    const complete = vi.fn()
+    const error = vi.fn()
+    const reader = createAgentSessionCurrentRequestsReader({
+      read: async (request, signal) => {
+        maximum = Math.max(maximum, ++active)
+        try {
+          if (++reads === 1) {
+            oldSignal = signal
+            await new Promise((resolve) => setTimeout(resolve, 15_000))
+            return { marker, json: '[]', nextCursor: null }
+          }
+          return {
+            marker: { ...marker, version: request.version, revision: count + 1 },
+            json: '[]',
+            nextCursor: null
+          }
+        } finally {
+          active--
+        }
+      },
+      complete,
+      error,
+      replaceMarker: vi.fn()
+    })
+    try {
+      reader.observe(marker)
+      let next = marker
+      for (let index = 1; index <= count; index++) {
+        reader.invalidate()
+        next = { ...marker, version: `v${index + 1}`, revision: index + 1 }
+        reader.observe(next)
+        expect(active).toBe(1)
+        expect(reads).toBe(1)
       }
-      return {
-        marker: { ...marker, version: request.version, revision: 2 },
-        json: '[]',
-        nextCursor: null
-      }
-    },
-    complete,
-    error: vi.fn(),
-    replaceMarker: vi.fn()
-  })
-  reader.observe(marker)
-  reader.invalidate()
-  const next = { ...marker, version: 'v2', revision: 2 }
-  reader.observe(next)
-  await vi.waitFor(() => expect(complete).toHaveBeenCalledWith(next, []))
-  expect(oldSignal?.aborted).toBe(true)
-  expect(reads).toBe(2)
-  reader.invalidate()
-})
+      expect(oldSignal?.aborted).toBe(true)
+      await vi.advanceTimersByTimeAsync(14_999)
+      expect(active).toBe(1)
+      expect(complete).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(complete).toHaveBeenCalledExactlyOnceWith(next, [])
+      expect({ reads, active, maximum }).toEqual({ reads: 2, active: 0, maximum: 1 })
+      expect(error).not.toHaveBeenCalled()
+    } finally {
+      reader.invalidate()
+      vi.useRealTimers()
+    }
+  }
+)
 
 it('retries a timed-out piece through the existing backoff and completes after a legitimate transport wake', async () => {
   vi.useFakeTimers()
   const complete = vi.fn()
   let calls = 0
+  let active = 0
+  let maximum = 0
+  let signal: AbortSignal | undefined
+  const error = vi.fn()
   const reader = createAgentSessionCurrentRequestsReader({
-    read: async () =>
-      ++calls === 1 ? new Promise(() => {}) : { marker, json: '[]', nextCursor: null },
+    read: async (_request, ownedSignal) => {
+      maximum = Math.max(maximum, ++active)
+      try {
+        if (++calls === 1) {
+          signal = ownedSignal
+          await new Promise<void>((_resolve, reject) => {
+            ownedSignal.addEventListener('abort', () => reject(ownedSignal.reason), { once: true })
+          })
+        }
+        return { marker, json: '[]', nextCursor: null }
+      } finally {
+        active--
+      }
+    },
     complete,
-    error: vi.fn(),
+    error,
     replaceMarker: vi.fn()
   })
   try {
     reader.observe(marker)
     await vi.advanceTimersByTimeAsync(15_000)
+    expect(signal?.aborted).toBe(true)
+    expect({ calls, active, maximum }).toEqual({ calls: 1, active: 0, maximum: 1 })
     expect(complete).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(complete).toHaveBeenCalledWith(marker, [])
-    expect(calls).toBe(2)
+    await vi.advanceTimersByTimeAsync(749)
+    expect(calls).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(complete).toHaveBeenCalledExactlyOnceWith(marker, [])
+    expect({ calls, active, maximum }).toEqual({ calls: 2, active: 0, maximum: 1 })
+    expect(error).not.toHaveBeenCalled()
   } finally {
     reader.invalidate()
     vi.useRealTimers()

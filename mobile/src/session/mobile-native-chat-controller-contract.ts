@@ -63,6 +63,7 @@ export type MobileNativeChatController = {
   // Keep dismissal above chat-view unmounts so toggling views cannot resurrect an answered ask.
   nativeChatAsk: AskPrompt | null
   nativeChatAskKey: string | null
+  nativeChatPromptDisabled?: boolean
   nativeChatAskDisabled?: boolean
   dismissNativeChatAsk: () => void
   handleNativeChatAnswerAsk: (

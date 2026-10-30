@@ -1,5 +1,5 @@
 import type { UseNativeChatLiveSessionArgs } from './native-chat-live-session-contract'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { createNativeChatCurrentRequestsBinding } from '../../../../shared/native-chat-current-requests-binding'
 import {
   authoritativeAsyncQuestion,
@@ -18,11 +18,18 @@ export function useNativeChatCurrentQuestions(args: UseNativeChatLiveSessionArgs
   const [requests, setRequests] = useState<AgentSessionCurrentRequestsState & { source?: string }>(
     {}
   )
+  const latest = useRef(requests)
+  latest.current = requests
   const bind = useCallback(
     (read: Parameters<typeof createNativeChatCurrentRequestsBinding>[0]['read']) =>
       createNativeChatCurrentRequestsBinding({
         read,
-        publish: (state) => setRequests({ ...state, source })
+        initialState: latest.current.source === source ? latest.current : undefined,
+        publish: (state) => {
+          const next = { ...state, source }
+          latest.current = next
+          setRequests(next)
+        }
       }),
     [source]
   )

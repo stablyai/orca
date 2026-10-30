@@ -16,6 +16,7 @@ import {
 } from './mobile-native-chat-question'
 
 type Props = {
+  disabled?: boolean
   question: MobileChatQuestion
   onAnswer: (text: string) => Promise<boolean>
   onCancel?: (prompt?: NonNullable<MobileChatQuestion['prompt']>) => Promise<boolean>
@@ -28,14 +29,16 @@ export function MobileNativeChatQuestion({
   question,
   onAnswer,
   onCancel,
-  onCollapse
+  onCollapse,
+  disabled = false
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
-  const [sending, setSending] = useState(false)
+  const [pending, setSending] = useState(false)
+  const sending = pending || disabled
   const sendingRef = useRef(false)
   const allowOther = question.allowOther !== false
 
@@ -137,6 +140,7 @@ export function MobileNativeChatQuestion({
             const isSelected = selectedOptionIndexes.includes(optIndex)
             return (
               <Pressable
+                disabled={sending}
                 key={key}
                 accessibilityRole={question.multiSelect ? 'checkbox' : 'button'}
                 accessibilityState={question.multiSelect ? { checked: isSelected } : undefined}
@@ -193,6 +197,7 @@ export function MobileNativeChatQuestion({
             ref={inputRef}
             onFocus={revealReply}
             style={mobileNativeChatInputStyles.freeInput}
+            editable={!sending}
             value={freeText}
             onChangeText={setFreeText}
             placeholder={

@@ -1,3 +1,4 @@
+import type { RpcClient } from '../transport/rpc-client'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { MessageQuestionView } from '../../../src/shared/message-question-occurrence'
 import type {
@@ -35,3 +36,17 @@ export type MobileNativeChatSession = {
   /** Latest provider turn boundary from the transcript feed; absent from older hosts. */
   transcriptLifecycle?: NativeChatTurnLifecycle
 }
+
+export type MobileNativeChatSessionArgs = {
+  client: RpcClient | null
+  currentRequests?: boolean
+  /** Stable host/workspace source; unlike `client`, it survives manual reconnect. */
+  sourceIdentity: string
+  agent: string | null
+  sessionId: string | null
+  transcriptPath: string | null
+}
+
+export type MobileNativeChatReadSessionResult =
+  | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
+  | { error: string }
