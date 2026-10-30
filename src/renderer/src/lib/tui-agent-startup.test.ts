@@ -44,6 +44,17 @@ describe('buildAgentStartupPlan', () => {
     expect(recognizeAgentProcessFromCommandLine(processTableLine)?.agent).toBe('claude')
   })
 
+  it('reuses a trailing -- from a Claude command override instead of adding a second one', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'claude',
+        prompt: 'Fix the bug',
+        cmdOverrides: { claude: 'claude-wrapper --' },
+        platform: 'darwin'
+      })?.launchCommand
+    ).toBe("claude-wrapper -- 'Fix the bug'")
+  })
+
   // Native chat ignores a custom launch command; a terminal launch must still run it.
   it('starts a terminal Claude with its custom launch command', () => {
     expect(

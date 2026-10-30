@@ -137,6 +137,16 @@ export function tokenizeStartupCommand(
     : tokenizeCustomCommandTemplate(value)
 }
 
+/** Whether a built command already ends in `arg`, so an argv prompt reuses a trailing `--` from an override or agent args. */
+export function startupCommandEndsWithArg(
+  command: string,
+  arg: string,
+  shell: AgentStartupShell
+): boolean {
+  const parsed = tokenizeStartupCommand(command, shell)
+  return parsed.ok && parsed.tokens.at(-1) === arg
+}
+
 export function resolveStartupShell(
   platform: NodeJS.Platform,
   shell?: AgentStartupShell

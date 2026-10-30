@@ -7,6 +7,7 @@ import {
   commandSeparator,
   quoteStartupArg,
   resolveStartupShell,
+  startupCommandEndsWithArg,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
@@ -110,7 +111,11 @@ export function buildAgentStartupPlan(args: {
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
-    const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
+    const promptSeparator =
+      config.argvPromptSeparator &&
+      !startupCommandEndsWithArg(launchCommand, config.argvPromptSeparator, shell)
+        ? ` ${config.argvPromptSeparator}`
+        : ''
     return {
       agent,
       launchCommand:
