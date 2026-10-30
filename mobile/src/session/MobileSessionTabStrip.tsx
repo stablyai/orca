@@ -30,10 +30,12 @@ const DOUBLE_TAP_RENAME_MS = 300
 
 export function MobileSessionTabStrip({
   controller,
-  inTopBar
+  inTopBar,
+  tabTitles
 }: {
   controller: MobileSessionController
   inTopBar: boolean
+  tabTitles?: ReadonlyMap<string, string>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -194,7 +196,7 @@ export function MobileSessionTabStrip({
           {visibleTabs.map((tab, index) => {
             const tabState = tabStates.get(tab.id)
             const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
-            const title = getMobileSessionTabTitle(tab, hostAgentIdentity)
+            const title = tabTitles?.get(tab.id) ?? getMobileSessionTabTitle(tab, hostAgentIdentity)
             return (
               <Pressable
                 key={tab.id}

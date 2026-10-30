@@ -4,12 +4,7 @@
   "family": "session.terminal-inventory",
   "namedDeltas": [],
   "values": {
-    "34f7b35ae07c": {
-      "name": "terminal.list#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}"
-    },
-    "549f65d398b9": {
+    "0ad96d4d0b9e": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -20,7 +15,7 @@
         {
           "name": "params",
           "value": {
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -54,6 +49,11 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": false
+    },
+    "f3f4dfba2bc0": {
+      "name": "terminal.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":true}}"
     }
   },
   "recording": {
@@ -62,8 +62,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["549f65d398b9"],
-          "payloads": ["34f7b35ae07c"],
+          "sender": ["0ad96d4d0b9e"],
+          "payloads": ["f3f4dfba2bc0"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },

@@ -1,4 +1,9 @@
-import { useRef, useCallback, useEffect, useMemo } from 'react'
+import { useRef, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  mobileDesktopTabTitlesEqual,
+  readMobileDesktopTabTitles,
+  type MobileDesktopTabTitle
+} from './mobile-desktop-tab-titles'
 import { sessionTerminalListRead } from './mobile-session-read-operations'
 import type { Terminal } from './mobile-session-route-types'
 import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
@@ -43,6 +48,10 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     () => new MobileTerminalInventoryRequest(),
     [client, hostId, worktreeId]
   )
+  const [desktopTitles, setDesktopTitles] = useState<{
+    request: MobileTerminalInventoryRequest
+    titles: ReadonlyMap<string, MobileDesktopTabTitle>
+  } | null>(null)
 
   useEffect(() => {
     lastKnownTerminalCountRef.current = 0
@@ -62,7 +71,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
             const response = sessionTerminalListRead.interpret(
               await sessionTerminalListRead.request(client, {
                 worktree: `id:${worktreeId}`,
-                includeVisualLayouts: false
+                includeVisualLayouts: true
               })
             )
             if (!isCurrent() || !response.accepted) {
@@ -144,8 +153,15 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               terminalRecordsEqual(prev, mergedTerminals) ? prev : mergedTerminals
             )
             terminalsRef.current = mergedTerminals
+            const titles = readMobileDesktopTabTitles(response.value, worktreeId)
+            setDesktopTitles((previous) =>
+              previous?.request === terminalInventoryRequest &&
+              mobileDesktopTabTitlesEqual(previous.titles, titles)
+                ? previous
+                : { request: terminalInventoryRequest, titles }
+            )
 
-            // Session tabs own surfaces; inventory refreshes only existing terminals’ metadata.
+            // Session tabs own surfaces; inventory refreshes metadata and saved display names.
             return true
           } catch {
             // Failed to list terminals
@@ -168,6 +184,8 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     ]
   )
   return {
+    desktopTabTitles:
+      desktopTitles?.request === terminalInventoryRequest ? desktopTitles.titles : undefined,
     lastKnownTerminalCountRef,
     fetchTerminals
   }
