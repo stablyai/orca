@@ -195,10 +195,9 @@ function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JS
 function DefaultAgentAction(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
-  const { chatAgents, chatDetected } = useChatAgentDetection()
+  const { chatAgents, chatDetected, refreshDetectedAgents } = useChatAgentDetection()
   const selectedAgent =
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent

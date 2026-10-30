@@ -1,17 +1,28 @@
 // @vitest-environment happy-dom
 
-import { act, useRef, useState } from 'react'
+import { act, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { useOnboardingAgentSurface } from './use-onboarding-agent-surface'
+import { useChatAgentDetection, useOnboardingAgentSurface } from './use-onboarding-agent-surface'
 import { usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import type * as HostStructuredAgents from '@/runtime/host-structured-agents'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import {
+  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT
+} from '../../../../shared/protocol-version'
 
+const rpc = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc.call }))
+vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: rpc.subscribe }))
 vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
   ...(await importOriginal<typeof HostStructuredAgents>()),
   relearnHostStructuredAgents: vi.fn().mockResolvedValue(undefined)
@@ -87,6 +98,9 @@ function choose(label: string): void {
 }
 
 beforeEach(() => {
+  resetRendererAppPlatformCacheForTests()
+  rpc.call.mockReset().mockResolvedValue({ agents: [] })
+  rpc.subscribe.mockReset().mockResolvedValue({ unsubscribe: vi.fn() })
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   useAppStore.setState({
     settings: { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'aider' },
@@ -97,7 +111,7 @@ beforeEach(() => {
       }
       useAppStore.setState({ settings: { ...settings, ...updates } })
     },
-    ensureNativeDetectedAgents: vi.fn().mockResolvedValue([]),
+    refreshNativeDetectedAgents: vi.fn().mockResolvedValue([]),
     localDetectedAgentIdsByContext: {}
   })
   Reflect.set(window, 'api', {
@@ -114,7 +128,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetRendererAppPlatformCacheForTests()
   act(() => root.unmount())
+  resetHostStructuredAgentsForTests()
+  setLocalRuntimeCapabilitiesForTests(null)
   container.remove()
   useAppStore.setState(initialState, true)
   Reflect.set(window, 'api', initialApi)
@@ -166,4 +183,128 @@ it('keeps the confirmed default when native detection finishes after the agent p
   act(() => useAppStore.setState({ localDetectedAgentIdsByContext: { host: ['codex'] } }))
   expect(container.querySelector('output')?.textContent).toBe('aider')
   expect(useAppStore.getState().settings?.defaultTuiAgent).toBe('aider')
+})
+
+function DetectionProbe() {
+  const { chatDetected, refreshDetectedAgents } = useChatAgentDetection()
+  useEffect(() => {
+    void refreshDetectedAgents(undefined, { wakeWslDistro: true })
+  }, [refreshDetectedAgents])
+  return <output>{chatDetected?.join(',') ?? 'pending'}</output>
+}
+
+it.each(['darwin', 'linux', 'win32'] as const)(
+  'refreshes a cold native %s inventory once and publishes it to Chat',
+  async (platform) => {
+    initialState.clearLocalDetectedAgents()
+    const detectAgents = vi.fn().mockResolvedValue(['claude'])
+    const refreshAgents = vi.fn().mockResolvedValue({
+      agents: ['codex'],
+      pathSource: 'process_env',
+      pathFailureReason: 'none'
+    })
+    Reflect.set(window, 'api', {
+      platform: { get: () => ({ platform }) },
+      preflight: { detectAgents, refreshAgents }
+    })
+    useAppStore.setState({
+      refreshNativeDetectedAgents: initialState.refreshNativeDetectedAgents,
+      refreshDetectedAgents: initialState.refreshDetectedAgents,
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        localWindowsRuntimeDefault: { kind: 'windows-host' }
+      },
+      activeRepoId: null,
+      activeWorktreeId: null,
+      repos: [],
+      projects: []
+    })
+
+    await act(async () => root.render(<DetectionProbe />))
+
+    expect(refreshAgents).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ enabledOnly: true, wakeWslDistro: true })
+    )
+    expect(detectAgents).not.toHaveBeenCalled()
+    expect(container.querySelector('output')?.textContent).toBe('codex')
+  }
+)
+
+it('re-reads a cached native inventory when refreshing WSL', async () => {
+  initialState.clearLocalDetectedAgents()
+  const detectAgents = vi.fn().mockResolvedValue(['codex'])
+  const refreshAgents = vi.fn(async (args: { wslDistro?: string }) => ({
+    agents: args.wslDistro ? ['codex'] : ['claude'],
+    pathSource: 'process_env',
+    pathFailureReason: 'none'
+  }))
+  Reflect.set(window, 'api', {
+    platform: { get: () => ({ platform: 'win32' }) },
+    preflight: { detectAgents, refreshAgents }
+  })
+  useAppStore.setState({
+    refreshNativeDetectedAgents: initialState.refreshNativeDetectedAgents,
+    refreshDetectedAgents: initialState.refreshDetectedAgents,
+    settings: {
+      ...getDefaultSettings('/tmp'),
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    },
+    activeRepoId: null,
+    activeWorktreeId: null,
+    repos: [],
+    projects: []
+  })
+  // Codex was uninstalled natively since the last read.
+  await act(async () => {
+    await initialState.ensureNativeDetectedAgents()
+  })
+
+  await act(async () => root.render(<DetectionProbe />))
+
+  expect(refreshAgents).toHaveBeenCalledTimes(2)
+  expect(refreshAgents).toHaveBeenCalledWith(
+    expect.objectContaining({ wslDistro: 'Ubuntu', wakeWslDistro: true })
+  )
+  expect(refreshAgents).toHaveBeenCalledWith({ enabledOnly: true })
+  expect(container.querySelector('output')?.textContent).toBe('claude')
+  expect(useAppStore.getState().detectedAgentIds).toEqual(['codex'])
+})
+
+it('counts a downloaded Chat runtime without the CLI on PATH', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
+  rpc.call.mockResolvedValue({
+    agents: [{ agent: 'antigravity', capabilities: {}, managedRuntime: true }]
+  })
+  useAppStore.setState({ localDetectedAgentIdsByContext: { host: ['aider'] } })
+  await act(async () => root.render(<Probe />))
+  expect(rpc.subscribe.mock.calls.at(-1)?.[0]).toEqual({ kind: 'local' })
+
+  act(() =>
+    rpc.subscribe.mock.calls.at(-1)?.[3].onEvent({
+      type: 'availability',
+      agents: [{ agent: 'antigravity', state: 'available', chatProgram: 'available' }]
+    })
+  )
+  choose('Chat')
+
+  expect(container.querySelector('output')?.textContent).toBe('antigravity')
+})
+
+it('does not count a managed Chat runtime that is only installable', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
+  rpc.call.mockResolvedValue({
+    agents: [{ agent: 'antigravity', capabilities: {}, managedRuntime: true }]
+  })
+  useAppStore.setState({ localDetectedAgentIdsByContext: { host: ['aider'] } })
+  await act(async () => root.render(<Probe />))
+
+  act(() =>
+    rpc.subscribe.mock.calls.at(-1)?.[3].onEvent({
+      type: 'availability',
+      agents: [{ agent: 'antigravity', state: 'available', chatProgram: 'installable' }]
+    })
+  )
+  choose('Chat')
+
+  expect(container.querySelector('output')?.textContent).toBe('aider')
 })

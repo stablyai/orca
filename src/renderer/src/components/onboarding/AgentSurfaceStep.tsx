@@ -6,7 +6,6 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n, translate } from '@/i18n/i18n'
@@ -33,7 +32,7 @@ export function AgentSurfaceStep({
             onSelect(value)
           }
         }}
-        className="gap-3 md:grid-cols-2"
+        layout="cards"
       >
         <SurfaceOption
           value="chat"
@@ -114,14 +113,7 @@ function SurfaceOption({
   selected: boolean
 }) {
   return (
-    <RadioGroupItem
-      value={value}
-      className={cn(
-        'size-auto overflow-hidden rounded-xl border p-3 text-left text-foreground transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        selected ? 'border-foreground/60 bg-accent' : 'border-border hover:bg-accent/60'
-      )}
-    >
+    <RadioGroupItem value={value} variant="card">
       <div
         aria-hidden
         className="relative mb-3 h-32 overflow-hidden rounded-lg border border-border"

@@ -1,5 +1,6 @@
 import { Info, MessagesSquare, SquareTerminal } from 'lucide-react'
 import { Trans } from 'react-i18next'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -73,30 +74,25 @@ export function AgentSurfaceModeRow({
     )
   }
   return (
-    <div
-      role="radiogroup"
-      aria-label={label}
-      className="flex shrink-0 flex-wrap items-center gap-2.5 text-xs text-muted-foreground"
-    >
+    <div className="flex shrink-0 flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
       <span aria-hidden>{label}</span>
-      {(['chat', 'terminal'] as const).map((option) => (
-        <button
-          key={option}
-          type="button"
-          role="radio"
-          aria-checked={surface === option}
-          className={cn(
-            surfacePillClass,
-            'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            surface === option
-              ? 'border-foreground/60 bg-accent'
-              : 'border-border hover:bg-accent/60'
-          )}
-          onClick={() => onChange(option)}
-        >
-          <AgentSurfaceLabel surface={option} />
-        </button>
-      ))}
+      <RadioGroup
+        aria-label={label}
+        layout="inline"
+        orientation="horizontal"
+        value={surface}
+        onValueChange={(value) => {
+          if (value === 'chat' || value === 'terminal') {
+            onChange(value)
+          }
+        }}
+      >
+        {(['chat', 'terminal'] as const).map((option) => (
+          <RadioGroupItem key={option} value={option} variant="pill">
+            <AgentSurfaceLabel surface={option} />
+          </RadioGroupItem>
+        ))}
+      </RadioGroup>
     </div>
   )
 }

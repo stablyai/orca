@@ -35,7 +35,6 @@ export function useOnboardingFlow(
 ) {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
   const pathSource = useAppStore((s) => s.pathSource)
@@ -136,12 +135,13 @@ export function useOnboardingFlow(
     []
   )
 
-  const { agentSurface, setAgentSurface, chatAgents, chatDetected } = useOnboardingAgentSurface({
-    settings,
-    selectedAgent,
-    agentInteractedRef,
-    setSelectedAgent
-  })
+  const { agentSurface, setAgentSurface, chatAgents, chatDetected, refreshDetectedAgents } =
+    useOnboardingAgentSurface({
+      settings,
+      selectedAgent,
+      agentInteractedRef,
+      setSelectedAgent
+    })
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]

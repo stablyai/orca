@@ -27,10 +27,16 @@ const initialState = useAppStore.getState()
 
 const progress = {
   ready: true,
-  stepDone: Object.fromEntries(FEATURE_WALL_SETUP_STEP_IDS.map((id) => [id, false])) as Record<
-    (typeof FEATURE_WALL_SETUP_STEP_IDS)[number],
-    boolean
-  >,
+  stepDone: {
+    'default-agent': false,
+    'add-two-repos': false,
+    notifications: false,
+    'two-worktrees': false,
+    browser: false,
+    'task-sources': false,
+    'agent-capabilities': false,
+    'setup-script': false
+  },
   coreDoneCount: 0,
   coreTotal: FEATURE_WALL_SETUP_STEP_IDS.length
 }
@@ -46,7 +52,7 @@ function renderDefaultAgentStep(settings: Partial<GlobalSettings>): void {
       useAppStore.setState({ settings: { ...current, ...updates } })
     },
     refreshDetectedAgents: vi.fn().mockResolvedValue(undefined),
-    ensureNativeDetectedAgents: vi.fn().mockResolvedValue(['claude', 'aider']),
+    refreshNativeDetectedAgents: vi.fn().mockResolvedValue(['claude', 'aider']),
     detectedAgentIds: ['claude', 'aider'],
     localDetectedAgentIdsByContext: { host: ['claude', 'aider'] }
   })
@@ -106,6 +112,25 @@ describe('setup guide default agent step', () => {
     act(() => radio('Terminal UI').click())
 
     expect(useAppStore.getState().settings?.experimentalNativeChat).toBe(false)
+  })
+
+  it('moves focus and saves the surface with arrow keys from one tab stop', async () => {
+    renderDefaultAgentStep({ experimentalNativeChat: false })
+    act(() => radio('Terminal UI').focus())
+    expect(radio('Terminal UI').tabIndex).toBe(0)
+    expect(radio('Chat UI').tabIndex).toBe(-1)
+
+    await act(async () => {
+      radio('Terminal UI').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(document.activeElement).toBe(radio('Chat UI'))
+    expect(useAppStore.getState().settings?.experimentalNativeChat).toBe(true)
+    expect(radio('Chat UI').tabIndex).toBe(0)
+    expect(radio('Terminal UI').tabIndex).toBe(-1)
   })
 
   it('shows and saves the Yolo mode setting', () => {
