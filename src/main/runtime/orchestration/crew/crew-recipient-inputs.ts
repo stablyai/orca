@@ -7,11 +7,6 @@ import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { OrchestrationDb } from '../db'
 import {
-  structuredWorkerIdentities,
-  structuredWorkerIdentityFromRow
-} from '../../structured-worker-identity'
-import { structuredWorkerRecordIsCurrent } from '../../structured-worker-identity'
-import {
   createLineageRunningSessionResolver,
   type AgentSessionRecordReader
 } from '../structured-session-lineage'
@@ -32,6 +27,7 @@ import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-h
 
 import {
   createCrewRecipientWorkerFacts,
+  heldCrewDispatchWorker,
   type CrewRecipientKey as Key
 } from './crew-recipient-worker-facts'
 const sourceKey = (key: Key) => key.sourceKey ?? key.address
@@ -240,6 +236,7 @@ export function createCrewRecipientInputs(
     }
     const nested = new Map<string, Key>()
     for (const row of selected.values()) {
+      let held: ReturnType<typeof heldCrewDispatchWorker> = null
       const key = dispatchAssigneeCoordinatorKey(
         row,
         () => row.protocol_version !== null,
@@ -247,20 +244,13 @@ export function createCrewRecipientInputs(
           if (!isStructuredWorkerHandle(handle)) {
             return terminal.livePane(handle)
           }
-          const identity =
-            structuredWorkerIdentities.get(handle) ??
-            (row.nested_resource ? structuredWorkerIdentityFromRow(row.nested_resource) : null)
-          const live = identity ? running(identity.sessionId) : null
-          return live?.kind === 'here' &&
-            structuredWorkerRecordIsCurrent(
-              live.record,
-              live.record.ownerObservation.claimStatus === 'released' && listed.has(live.sessionId)
-            ) &&
-            row.nested_resource?.release_state !== 'released'
-            ? (identity?.paneKey ?? null)
-            : null
+          held = heldCrewDispatchWorker(handle, row.nested_resource, running, listed)
+          return held?.paneKey ?? null
         },
-        terminal.process
+        (handle) =>
+          isStructuredWorkerHandle(handle)
+            ? (held?.processIncarnation ?? null)
+            : terminal.process(handle)
       )
       if (key) {
         nested.set(row.id, { ...key, address: `nested:${row.id}` })

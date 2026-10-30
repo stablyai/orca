@@ -10,10 +10,30 @@ import {
 import { deriveWorkerTerminalListState } from '../worker-terminal-ownership'
 import type { createLineageRunningSessionResolver } from '../structured-session-lineage'
 import { sessionPartyFromWorkerIdentity } from '../orchestration-party'
-import type { crewRecipientOwnerQueries } from './crew-recipient-owner-queries'
+import type { crewRecipientOwnerQueries, DispatchInput } from './crew-recipient-owner-queries'
 
 export type CrewRecipientKey = OrchestrationCoordinatorKey & { address: string; sourceKey?: string }
 type Key = CrewRecipientKey
+
+export function heldCrewDispatchWorker(
+  handle: string,
+  resource: DispatchInput['nested_resource'],
+  running: ReturnType<typeof createLineageRunningSessionResolver>,
+  listed: ReadonlySet<string>
+): StructuredWorkerIdentity | null {
+  const identity =
+    structuredWorkerIdentities.get(handle) ??
+    (resource ? structuredWorkerIdentityFromRow(resource) : null)
+  const live = identity ? running(identity.sessionId) : null
+  return live?.kind === 'here' &&
+    structuredWorkerRecordIsCurrent(
+      live.record,
+      live.record.ownerObservation.claimStatus === 'released' && listed.has(live.sessionId)
+    ) &&
+    resource?.release_state !== 'released'
+    ? identity
+    : null
+}
 
 /** Registry precedence and durable custody remain source facts of the same host generation. */
 export function createCrewRecipientWorkerFacts(
