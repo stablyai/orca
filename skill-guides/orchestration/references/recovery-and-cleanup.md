@@ -111,10 +111,12 @@ optional.
 
 Retry only a positively proven failed or stopped attempt. Name the failed Task
 with `--task`, since `--spec` creates a new one. Placement is never silently
-inherited:
+inherited, and a failed attempt is not a reason to promote the worker's agent,
+model, or effort; a replacement follows the same defaults rule as an ordinary
+launch:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <explicit_placement> --agent <agent> --json
+ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <explicit_placement> --json
 ```
 
 After three consecutive failures for one Task, its dispatch context
