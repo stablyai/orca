@@ -18,7 +18,6 @@ function item(overrides: Partial<GitHistoryItem> = {}): GitHistoryItem {
 
 describe('formatCommitTime', () => {
   it('formats across thresholds from epoch-millisecond timestamps', () => {
-    // GitHistoryItem.timestamp is epoch ms (git-history-log-parser scales git %at by 1000).
     const ms = { min: 60_000, hour: 3_600_000, day: 86_400_000 }
     expect(formatCommitTime(NOW - 3 * ms.hour, NOW)).toBe('3h')
     expect(formatCommitTime(NOW - 30_000, NOW)).toBe('just now')
@@ -33,7 +32,7 @@ describe('formatCommitTime', () => {
   })
 
   it('formats a real epoch-0 timestamp instead of dropping it', () => {
-    // 0 is a valid (very old) timestamp, not "missing".
+    // Epoch zero is valid, not missing.
     expect(formatCommitTime(0, NOW)).not.toBe('')
   })
 })

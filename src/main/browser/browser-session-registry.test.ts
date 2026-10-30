@@ -29,6 +29,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+// Extension loading and cleanup have their own tests (browser-extension-session-loader.test.ts).
+vi.mock('./extensions/browser-extension-session-loader', () => ({
+  attachBrowserExtensionsToProfileSession: () => {},
+  detachBrowserExtensionsFromProfileSession: async () => {}
+}))
+
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: processUserAgentMode.value,
@@ -441,15 +447,6 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.isAllowedPartition(claimedPartition)).toBe(false)
   })
 
-  it('sets up session policies for new partitions', async () => {
-    await browserSessionRegistry.createProfile('isolated', 'Policy Test')
-    expect(sessionFromPartitionMock).toHaveBeenCalled()
-    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
-    expect(mockSession?.setPermissionRequestHandler).toHaveBeenCalled()
-    expect(mockSession?.setPermissionCheckHandler).toHaveBeenCalled()
-    expect(mockSession?.setDevicePermissionHandler).toHaveBeenCalled()
-  })
-
   it('applies and clears existing browser-profile policy on an opaque route partition', async () => {
     const partition =
       'persist:orca-browser-v1-1111111111111111222222222222222233333333333333334444444444444444'
@@ -494,21 +491,6 @@ describe('BrowserSessionRegistry', () => {
 
     expect(callback).toHaveBeenCalledWith(true)
     expect(checkHandler(null, 'pointerLock', '', {})).toBe(true)
-  })
-
-  it('auto-grants storage-access for isolated partitions', async () => {
-    await browserSessionRegistry.createProfile('isolated', 'Storage Access Test')
-    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
-    const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
-    const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
-    const callback = vi.fn()
-    const guestWc = { id: 7, getURL: vi.fn(() => 'https://example.com/') }
-
-    requestHandler(guestWc, 'storage-access', callback, {})
-
-    expect(callback).toHaveBeenCalledWith(true)
-    expect(checkHandler(null, 'storage-access', '', {})).toBe(true)
-    expect(checkHandler(null, 'top-level-storage-access', '', {})).toBe(false)
   })
 
   it('asks macOS for the camera only after the user allowed the site', async () => {

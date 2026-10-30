@@ -62,7 +62,7 @@ async function openFeed() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => clock
   })
   const published: AgentSessionStatusSummary[] = []

@@ -63,12 +63,12 @@ export function hostCanStartRecord(
 /** Include saved chats whose agents are no longer registered when bounding client audiences. */
 export function knownAgentIds(deps: {
   agents: Pick<StructuredAgentRegistry, 'definitions'>
-  store: { listRecords: () => readonly Pick<AgentSessionRecord, 'provider'>[] }
+  store: { listConversations: () => readonly Pick<AgentSessionRecord, 'provider'>[] }
 }): readonly string[] {
   return [
     ...new Set([
       ...deps.agents.definitions().map(({ agent }) => agent),
-      ...deps.store.listRecords().map(({ provider }) => provider)
+      ...deps.store.listConversations().map(({ provider }) => provider)
     ])
   ]
 }

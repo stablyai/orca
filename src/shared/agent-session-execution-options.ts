@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
-/** Choices fixed when a message is accepted. Permission remains a launch setting. Unknown keys are
- *  stripped: a send's `options` record and a saved row are free-form, and only these keys apply. */
+/** Freeze choices on acceptance; permission stays a launch setting. Strip unknown keys from free-form send/saved options. */
 export const AgentSessionExecutionOptionsSchema = z.object({
   model: z.string().min(1).max(256).optional(),
   effort: z.string().min(1).max(64).optional(),
@@ -28,3 +27,8 @@ export function agentSessionExecutionOptionsRecord(
     Object.entries(options).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
 }
+
+/** Exact picker domain; personality remains host-captured. */
+export const AgentSessionSelectionSchema = AgentSessionExecutionOptionsSchema.omit({
+  personality: true
+}).strict()

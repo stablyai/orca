@@ -4,21 +4,18 @@ import { serializeRichMarkdownForReconcile } from './rich-markdown-reconcile-ser
 import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import type { RichMarkdownImageResolverContext } from './rich-markdown-image-context'
 
-// A deterministic stand-in for the live editor's canonicalization, covering the
-// exact style rewrites #6080 reports. Used both to derive baseCanonical/edited
-// and as the injected safety `roundTrip`, so the fake stays self-consistent.
+// Use one deterministic style canonicalizer for base/edited text and the safety reparse so the fake stays self-consistent.
 function fakeCanonicalize(md: string): string {
   return md
     .split('\n')
-    .map((line) => line.replace(/^(\s*)\* /, '$1- ')) // `* bullet` -> `- bullet`
+    .map((line) => line.replace(/^(\s*)\* /, '$1- '))
     .join('\n')
-    .replace(/__([^_]+)__/g, '**$1**') // `__strong__` -> `**strong**` (before emphasis)
-    .replace(/_([^_]+)_/g, '*$1*') // `_emphasis_` -> `*emphasis*`
+    .replace(/__([^_]+)__/g, '**$1**')
+    .replace(/_([^_]+)_/g, '*$1*')
 }
 
 const roundTrip = (md: string): string => fakeCanonicalize(md)
 
-/** Reconcile using the fake canonicalizer for both the base and the safety re-parse. */
 function reconcileWithFake(originalSource: string, edited: string): string {
   return reconcileSerializedMarkdown({
     originalSource,
@@ -36,14 +33,11 @@ describe('reconcileSerializedMarkdown', () => {
 
     const reconciled = reconcileWithFake(originalSource, edited)
 
-    // Untouched markup keeps its original bytes.
     expect(reconciled).toContain('_emphasis_')
     expect(reconciled).toContain('__strong__')
     expect(reconciled).toContain('* one')
     expect(reconciled).toContain('* two')
-    // The edited region reflects the change.
     expect(reconciled).toContain('# Title!')
-    // Never re-canonicalized.
     expect(reconciled).not.toContain('*emphasis*')
     expect(reconciled).not.toContain('- one')
   })
@@ -64,15 +58,14 @@ describe('reconcileSerializedMarkdown', () => {
 
     const reconciled = reconcileWithFake(originalSource, edited)
 
-    expect(reconciled).toContain('_old_') // original preserved
-    expect(reconciled).toContain('*new*') // new content stays canonical
+    expect(reconciled).toContain('_old_')
+    expect(reconciled).toContain('*new*')
   })
 
   it('returns edited when the source is already canonical (branch 2)', () => {
     const originalSource = '*word* here\n'
     const edited = '*word* there\n'
 
-    // baseCanonical === originalSource, so there is nothing to preserve.
     expect(reconcileWithFake(originalSource, edited)).toBe(edited)
   })
 
@@ -88,16 +81,14 @@ describe('reconcileSerializedMarkdown', () => {
       roundTrip
     })
 
-    // Exact bytes, including trailing newline — zero disk churn.
     expect(reconciled).toBe(originalSource)
   })
 
   it('falls back to canonical when either string exceeds the size cap (branch 3)', () => {
-    const big = 'line of text\n'.repeat(9000) // ~117 KB, above the size cap
+    const big = 'line of text\n'.repeat(9000)
     const originalSource = `${big}_x_\n`
     const edited = `${big}*x* y\n`
 
-    // Non-canonical source + real semantic change, but oversize → canonical fallback.
     expect(reconcileWithFake(originalSource, edited)).toBe(edited)
   })
 
@@ -119,8 +110,7 @@ describe('reconcileSerializedMarkdown', () => {
       })
 
       expect(reconciled).toBe(edited)
-      // The 10ms budget expires almost immediately; the dependency's default
-      // one-second budget takes ~102 reads with this deterministic clock.
+      // The deterministic clock distinguishes the 10 ms budget from the dependency’s one-second default.
       expect(dateNow.mock.calls.length).toBeLessThan(10)
     } finally {
       dateNow.mockRestore()
@@ -141,8 +131,7 @@ describe('reconcileSerializedMarkdown', () => {
       })
 
       expect(reconciled).toBe(edited)
-      // The dependency reads the clock when diffing; zero reads proves the
-      // repetitive-input preflight returned before its unbounded half-match scan.
+      // Zero clock reads proves preflight avoided the dependency’s unbounded repeated-seed half-match scan.
       expect(dateNow).not.toHaveBeenCalled()
     } finally {
       dateNow.mockRestore()
@@ -190,7 +179,6 @@ describe('reconcileSerializedMarkdown', () => {
       originalSource: '_a_\n',
       baseCanonical: '*a*\n',
       edited: '*a* b\n',
-      // Simulates a fuzzy misplacement whose render differs from `edited`.
       roundTrip: () => 'something entirely different'
     })
 
@@ -217,8 +205,7 @@ describe('reconcileSerializedMarkdown', () => {
     expect(reconciled1).toContain('_emphasis_')
     expect(reconciled1).toContain('* item')
 
-    // Simulate the commit helper advancing the refs: originalSource := reconciled1,
-    // baseCanonical := edited1. The second edit must still preserve the markup.
+    // Advance source/canonical refs as commit does; later edits must still preserve original markup.
     const edited2 = edited1.replace('# Title A', '# Title AB')
     const reconciled2 = reconcileSerializedMarkdown({
       originalSource: reconciled1,
@@ -233,9 +220,7 @@ describe('reconcileSerializedMarkdown', () => {
   })
 
   it('skips the safety re-parse for a canonical LF file with a trailing newline (branch 2)', () => {
-    // The common case: file is already canonical but ends in \n, so getMarkdown
-    // (which strips the trailing newline) never equals it byte-for-byte. This
-    // must NOT pay the expensive re-parse — the whole point of branch 2.
+    // Canonical sources with one trailing newline should preserve it without paying for a safety reparse.
     const originalSource = '# Title\n\n*word*\n\n- one\n- two\n'
     const baseCanonical = '# Title\n\n*word*\n\n- one\n- two' // getMarkdown: no trailing \n
     const edited = '# Title!\n\n*word*\n\n- one\n- two'
@@ -249,13 +234,12 @@ describe('reconcileSerializedMarkdown', () => {
     })
 
     expect(roundTrip).not.toHaveBeenCalled()
-    // Edit applied, and the source's trailing newline is preserved.
     expect(reconciled).toBe('# Title!\n\n*word*\n\n- one\n- two\n')
   })
 
   it('preserves CRLF + trailing newline for a canonical CRLF file without re-parsing (branch 2)', () => {
     const originalSource = '# H\r\n\r\n*word*\r\n'
-    const baseCanonical = '# H\n\n*word*' // getMarkdown: LF, no trailing
+    const baseCanonical = '# H\n\n*word*'
     const edited = '# H!\n\n*word*'
     const roundTrip = vi.fn(() => edited)
 
@@ -268,13 +252,12 @@ describe('reconcileSerializedMarkdown', () => {
 
     expect(roundTrip).not.toHaveBeenCalled()
     expect(reconciled).toBe('# H!\r\n\r\n*word*\r\n')
-    // No mixed endings.
     expect(reconciled.replace(/\r\n/g, '')).not.toContain('\n')
   })
 
   it('restores CRLF on the oversize fallback so a uniform-CRLF file never flips to LF (branch 3)', () => {
-    const big = 'line of text\r\n'.repeat(9000) // ~130 KB, above the cap, all CRLF
-    const originalSource = `${big}_x_\r\n` // non-canonical emphasis, oversize
+    const big = 'line of text\r\n'.repeat(9000)
+    const originalSource = `${big}_x_\r\n`
     const editedLf = `${big.replace(/\r\n/g, '\n')}*x* y\n`
 
     const reconciled = reconcileSerializedMarkdown({
@@ -284,7 +267,6 @@ describe('reconcileSerializedMarkdown', () => {
       roundTrip: () => null
     })
 
-    // Canonical fallback content, but the source's CRLF endings are kept.
     expect(reconciled).toContain('\r\n')
     expect(reconciled.replace(/\r\n/g, '')).not.toContain('\n')
   })
@@ -301,13 +283,11 @@ describe('reconcileSerializedMarkdown', () => {
       roundTrip
     })
 
-    // Falls back to canonical content, but in the source's CRLF ending.
     expect(reconciled).toBe('The quick brown fox LEAPS over the lazy dog.\r\n')
   })
 
   it('preserves CRLF endings on disk without mixing (branch 4 EOL restore)', () => {
     const originalSource = '# H\r\n\r\n_word_\r\n\r\n* one\r\n'
-    // getMarkdown always emits LF, so base/edited are LF.
     const baseCanonical = '# H\n\n*word*\n\n- one\n'
     const edited = '# H!\n\n*word*\n\n- one\n'
 
@@ -321,31 +301,25 @@ describe('reconcileSerializedMarkdown', () => {
     expect(reconciled).toContain('\r\n')
     expect(reconciled).toContain('_word_')
     expect(reconciled).toContain('# H!')
-    // No mixed endings: stripping CRLF leaves no lone LF.
     expect(reconciled.replace(/\r\n/g, '')).not.toContain('\n')
   })
 
   it('lands a repeated-substring edit on the correct occurrence or falls back', () => {
     const originalSource = ['- _alpha_', '- _beta_', '', '- _alpha_', '- _beta_', ''].join('\n')
     const baseCanonical = fakeCanonicalize(originalSource)
-    // Edit only the FIRST "alpha".
     const edited = baseCanonical.replace('*alpha*', '*alpha edited*')
 
     const reconciled = reconcileWithFake(originalSource, edited)
 
-    // Invariant: the reconciled bytes render exactly to `edited` — the change is
-    // never silently relocated to the wrong occurrence or dropped.
+    // Prove edits cannot move to another repeated occurrence or disappear during fuzzy patching.
     expect(fakeCanonicalize(reconciled).trimEnd()).toBe(edited.trimEnd())
-    // Either the source-preserving path landed it, or it cleanly fell back.
     const landedInStyle =
       reconciled.includes('_alpha edited_') && reconciled.split('_beta_').length === 3
     expect(landedInStyle || reconciled === edited).toBe(true)
   })
 
   it('reconciles a multi-byte edit without throwing "Failed to determine byte offset" (#9492)', () => {
-    // Regression: dmp's byte/char index mixup crashes when the patch seed lands mid multi-byte run.
-    // Build a mostly-Chinese doc with non-canonical `_`/`*` markers and edit a position that
-    // previously threw; every such edit must reconcile and stay render-equal to `edited`.
+    // Regression: byte/code-unit confusion crashed patch seeds in multibyte text; every sampled edit must stay render-equivalent.
     const lines: string[] = []
     for (let i = 0; i < 20; i++) {
       lines.push(`_强调${i}_ 😀 café 这是一段包含很多中文字符的文本内容用来测试多字节偏移问题`)
@@ -361,7 +335,6 @@ describe('reconcileSerializedMarkdown', () => {
 
       const reconciled = reconcileWithFake(originalSource, edited)
 
-      // Never throws or falls back to a whole-document canonical rewrite.
       expect(reconciled).not.toBe(edited)
       expect(fakeCanonicalize(reconciled).trimEnd()).toBe(edited.trimEnd())
     }
@@ -401,12 +374,10 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     serializeRichMarkdownForReconcile(md, serializerContext)
 
   it('applies normalizeEmptyListItems so empty list items round-trip stably', () => {
-    // `3. ` immediately before a heading parses as an empty list item; without the
-    // normalize step the safety re-parse would spuriously mismatch and no-op.
+    // Normalize paragraph-less empty list items or the safety reparse spuriously mismatches.
     const doc = '3. \n# Heading\n'
     const once = serialize(doc)
     expect(once).not.toBeNull()
-    // Idempotent: re-serializing the output is stable (the live editor's steady state).
     expect(serialize(once!)?.trimEnd()).toBe(once!.trimEnd())
   })
 
@@ -422,14 +393,12 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       roundTrip: (md) => serialize(md)
     })
 
-    expect(reconciled).toContain('_emphasis_') // original style preserved
-    expect(reconciled).toContain('# Title!') // edit applied
-    // Safety invariant: reconciled renders exactly to the editor's canonical output.
+    expect(reconciled).toContain('_emphasis_')
+    expect(reconciled).toContain('# Title!')
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
   })
 
   it('minimizes the diff for the exact #6080 repro (real serializer)', () => {
-    // The reported case: a 1-char H1 edit must not rewrite untouched markup.
     const originalSource =
       '# Title\n\n_emphasis_ and __strong__\n\n* one\n* two\n* three\n\n_more emphasis_\n'
     const baseCanonical = serialize(originalSource)!
@@ -442,7 +411,6 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       roundTrip: (md) => serialize(md)
     })
 
-    // Every untouched non-canonical construct keeps its original bytes.
     for (const preserved of [
       '_emphasis_',
       '__strong__',
@@ -453,21 +421,17 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     ]) {
       expect(reconciled).toContain(preserved)
     }
-    // The edit landed, and nothing else was re-canonicalized.
     expect(reconciled).toContain('# Title!')
     expect(reconciled).not.toContain('*emphasis*')
     expect(reconciled).not.toContain('- one')
-    // Safety invariant: reconciled renders exactly to the editor's canonical output.
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
   })
 
   it('branch-2 fast path output still renders to the canonical edit (real serializer)', () => {
-    // Guards the re-parse-skipping fast path: even though branch 2 does NOT run
-    // the safety re-parse, its output must satisfy the same invariant the full
-    // path proves — reconciled renders exactly to the editor's canonical output.
-    const originalSource = '# Title\n\n*emphasis* text\n\n- one\n- two\n' // canonical + trailing \n
+    // The fast path skips reparse but must satisfy the same canonical-output invariant.
+    const originalSource = '# Title\n\n*emphasis* text\n\n- one\n- two\n'
     const baseCanonical = serialize(originalSource)!
-    expect(originalSource).not.toBe(baseCanonical) // differs only by the trailing \n
+    expect(originalSource).not.toBe(baseCanonical)
     const edited = baseCanonical.replace('# Title', '# Title!')
     let roundTripCalls = 0
 
@@ -481,19 +445,16 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       }
     })
 
-    expect(roundTripCalls).toBe(0) // took the cheap path
+    expect(roundTripCalls).toBe(0)
     expect(reconciled).toBe('# Title!\n\n*emphasis* text\n\n- one\n- two\n')
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
   })
 
   it('does not drop a user-added trailing empty paragraph (branch 2 edited-side guard)', () => {
-    // getMarkdown keeps `\n\n` for a real trailing empty paragraph, so the fast
-    // path must NOT strip it: a canonical doc with a single trailing newline
-    // (branch-2 eligible on the source side) edited to add a trailing empty
-    // paragraph must persist that block, not silently drop it on save.
+    // A real trailing empty paragraph is semantic; the fast path must not trim it away.
     const originalSource = '# H\n\ntext\n'
-    const baseCanonical = serialize(originalSource)! // '# H\n\ntext'
-    const edited = '# H\n\ntext\n\n' // user pressed Enter at EOF
+    const baseCanonical = serialize(originalSource)!
+    const edited = '# H\n\ntext\n\n'
     let roundTripCalls = 0
 
     const reconciled = reconcileSerializedMarkdown({
@@ -506,16 +467,12 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       }
     })
 
-    expect(roundTripCalls).toBeGreaterThan(0) // deferred to the safety-verified path
-    // Exact reload equality (NOT trimEnd): the empty paragraph survives.
+    expect(roundTripCalls).toBeGreaterThan(0)
     expect(serialize(reconciled)).toBe(serialize(edited))
   })
 
   it('does not introduce a spurious &nbsp; when a trailing-blank-line doc is edited (branch 2 guard)', () => {
-    // A canonical heading-ending doc with 3 trailing blank lines: the fast path
-    // must NOT preserve that long trailing run while skipping the re-parse, or a
-    // reload materializes a literal &nbsp; paragraph (a content change). The
-    // >1-trailing-newline guard defers this to the safety-checked path.
+    // Long trailing blank runs need safety checking or reload can introduce a literal &nbsp; paragraph.
     const originalSource = '# Notes\n\nSome text here.\n\n## TODO\n\n\n\n'
     const baseCanonical = serialize(originalSource)!
     const edited = baseCanonical.replace('## TODO', '## TODO\n\nA new note.')
@@ -531,15 +488,13 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       }
     })
 
-    expect(roundTripCalls).toBeGreaterThan(0) // took the safety-verified path
+    expect(roundTripCalls).toBeGreaterThan(0)
     expect(reconciled).not.toContain('&nbsp;')
-    // Safety invariant: reconciled renders exactly to the editor's canonical edit.
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
   })
 
   it('falls back cleanly when an empty-list doc cannot be source-preserved', () => {
-    // Combines an empty list item with non-canonical emphasis; whatever the fuzzy
-    // patch does, the output must render to `edited` (no corruption).
+    // Empty-list normalization and fuzzy style preservation must still produce the edited document.
     const originalSource = '_lead_\n\n3. \n# Heading\n'
     const baseCanonical = serialize(originalSource)!
     const edited = baseCanonical.replace('Heading', 'Heading!')

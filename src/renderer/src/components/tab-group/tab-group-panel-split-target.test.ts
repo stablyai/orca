@@ -123,11 +123,6 @@ function mockTabGroupGeometry(
   return { queryAll }
 }
 
-function percentile(values: number[], p: number): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]
-}
-
 function fourGroupFixture(): {
   counts: { panelReads: number; bodyReads: number }[]
   groupsByWorktree: Record<string, TabGroup[]>
@@ -334,7 +329,12 @@ describe('resolvePanelEdgePaneColumnSplit', () => {
         targetGroupId: 'group-2',
         worktreeId: 'wt-1',
         pointer: { x: 499, y: 300 },
-        groupsByWorktree: twoGroupLayout,
+        groupsByWorktree: {
+          'wt-1': [
+            { ...twoGroupLayout['wt-1'][0], tabOrder: ['tab-1', 'tab-3'] },
+            twoGroupLayout['wt-1'][1]
+          ]
+        },
         layoutByWorktree,
         panelRect
       })
@@ -584,54 +584,6 @@ describe('resolveActivePaneColumnSplitTarget', () => {
       })
     }
 
-    expect(queryAll).toHaveBeenCalledTimes(1)
-    expect(counts.reduce((sum, entry) => sum + entry.panelReads + entry.bodyReads, 0)).toBe(8)
-  })
-
-  it('reports cached split-target resolution timing without gating CI on wall-clock time', () => {
-    const {
-      counts,
-      groupsByWorktree,
-      layoutByWorktree: fourGroupLayoutByWorktree,
-      queryAll
-    } = fourGroupFixture()
-    const geometry = captureTabGroupPanelGeometrySnapshot('wt-1')
-    const points = [
-      { x: 295, y: 300 },
-      { x: 360, y: 300 },
-      { x: 595, y: 300 },
-      { x: 664, y: 300 },
-      { x: 899, y: 300 },
-      { x: 968, y: 300 },
-      { x: 1204, y: 300 },
-      { x: 650, y: 300 }
-    ]
-    const durations: number[] = []
-    for (let index = 0; index < 1_000; index += 1) {
-      const pointer = points[index % points.length]!
-      const startedAt = performance.now()
-      resolveActivePaneColumnSplitTarget({
-        event: makeEvent({
-          activeData: makeDragData({ groupId: 'group-1' }),
-          overData: null,
-          pointer
-        }),
-        groupsByWorktree,
-        layoutByWorktree: fourGroupLayoutByWorktree,
-        worktreeId: 'wt-1',
-        getDragPointer: () => pointer,
-        geometry
-      })
-      durations.push(performance.now() - startedAt)
-    }
-
-    const p95Ms = percentile(durations, 0.95)
-    const maxMs = Math.max(...durations)
-    console.info(
-      `tab split preview resolver perf: p95=${p95Ms.toFixed(3)}ms max=${maxMs.toFixed(
-        3
-      )}ms samples=${durations.length}`
-    )
     expect(queryAll).toHaveBeenCalledTimes(1)
     expect(counts.reduce((sum, entry) => sum + entry.panelReads + entry.bodyReads, 0)).toBe(8)
   })

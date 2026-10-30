@@ -9,8 +9,15 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { BrowserAnnotationSendMenuContent } from '../annotate/BrowserAnnotationSendMenuContent'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import {
+  BrowserAnnotationSendMenuContent,
+  browserAnnotationCopyTooltip
+} from '../annotate/BrowserAnnotationSendMenuContent'
+import { browserAnnotationLimitMessage } from '../annotate/browser-annotation-limit-message'
+import {
+  isBrowserAnnotationPageFull,
+  type BrowserGrabPayload
+} from '../../../../../shared/browser-grab-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import { preventAgentSendTargetOutsideDismiss } from '../annotate/prevent-agent-send-target-outside-dismiss'
 import type { GrabIntent } from '../describe-page/browser-page-types'
@@ -27,6 +34,8 @@ export function BrowserPageChromeBanners({
   worktreeId,
   activeGroupId,
   browserAnnotationsPrompt,
+  includePageDetails,
+  handleIncludePageDetailsChange,
   handleBrowserAnnotationsSentToAgent,
   handleBrowserAnnotationsHandedOff,
   handleCopyBrowserAnnotations,
@@ -45,6 +54,8 @@ export function BrowserPageChromeBanners({
   worktreeId: string
   activeGroupId: string | undefined
   browserAnnotationsPrompt: string
+  includePageDetails: boolean
+  handleIncludePageDetailsChange: (include: boolean) => void
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   handleCopyBrowserAnnotations: () => void
@@ -97,22 +108,24 @@ export function BrowserPageChromeBanners({
                       'auto.components.browser.pane.BrowserPane.b733a91bd9',
                       'Add feedback for the selected element.'
                     )
-                  : browserAnnotationsLength === 1
-                    ? translate(
-                        'auto.components.browser.pane.BrowserPane.074f0ed10b',
-                        '{{value0}} annotation ready. Select another element or copy all feedback.',
-                        { value0: browserAnnotationsLength }
-                      )
-                    : browserAnnotationsLength > 0
+                  : isBrowserAnnotationPageFull(browserAnnotationsLength)
+                    ? browserAnnotationLimitMessage()
+                    : browserAnnotationsLength === 1
                       ? translate(
-                          'auto.components.browser.pane.BrowserPane.a2164a6e5a',
-                          '{{value0}} annotations ready. Select another element or copy all feedback.',
+                          'auto.components.browser.pane.BrowserPane.074f0ed10b',
+                          '{{value0}} annotation ready. Select another element or copy all feedback.',
                           { value0: browserAnnotationsLength }
                         )
-                      : translate(
-                          'auto.components.browser.pane.BrowserPane.777b5bc4ec',
-                          'Click an element to add feedback for the agent.'
-                        )
+                      : browserAnnotationsLength > 0
+                        ? translate(
+                            'auto.components.browser.pane.BrowserPane.a2164a6e5a',
+                            '{{value0}} annotations ready. Select another element or copy all feedback.',
+                            { value0: browserAnnotationsLength }
+                          )
+                        : translate(
+                            'auto.components.browser.pane.BrowserPane.777b5bc4ec',
+                            'Click an element to add feedback for the agent.'
+                          )
                 : grab.state === 'confirming'
                   ? translate(
                       'auto.components.browser.pane.BrowserPane.e852e20cea',
@@ -161,26 +174,38 @@ export function BrowserPageChromeBanners({
                     worktreeId={worktreeId}
                     groupId={activeGroupId ?? worktreeId}
                     prompt={browserAnnotationsPrompt}
+                    includePageDetails={includePageDetails}
+                    onIncludePageDetailsChange={handleIncludePageDetailsChange}
                     onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                     onPromptHandedOff={handleBrowserAnnotationsHandedOff}
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                size="xs"
-                variant="outline"
-                className="h-6 gap-1.5"
-                onClick={handleCopyBrowserAnnotations}
-              >
-                {browserAnnotationsCopied ? (
-                  <CircleCheck className="size-3" />
-                ) : (
-                  <Copy className="size-3" />
-                )}
-                {browserAnnotationsCopied
-                  ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
-                  : translate('auto.components.browser.pane.BrowserPane.499b31b84e', 'Copy All')}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="h-6 gap-1.5"
+                    onClick={handleCopyBrowserAnnotations}
+                  >
+                    {browserAnnotationsCopied ? (
+                      <CircleCheck className="size-3" />
+                    ) : (
+                      <Copy className="size-3" />
+                    )}
+                    {browserAnnotationsCopied
+                      ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
+                      : translate(
+                          'auto.components.browser.pane.BrowserPane.499b31b84e',
+                          'Copy All'
+                        )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {browserAnnotationCopyTooltip(includePageDetails)}
+                </TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

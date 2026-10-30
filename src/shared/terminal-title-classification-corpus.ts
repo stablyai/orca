@@ -1,10 +1,4 @@
-/**
- * Realistic terminal-title corpus for pinning agent classification.
- *
- * Why a shared const: the corpus is the contract the memoized classifiers must
- * reproduce byte-for-byte, so the pinning test and the memo regression test
- * read the same titles.
- */
+/** Share the same title corpus between exact-verdict and memo-regression tests. */
 export const TERMINAL_TITLE_CLASSIFICATION_CORPUS: readonly string[] = [
   // Plain shell / directory titles — must classify as nothing.
   '',

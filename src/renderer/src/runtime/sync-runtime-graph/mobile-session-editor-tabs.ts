@@ -4,8 +4,10 @@ import type {
   RuntimeMobileSessionMarkdownTab
 } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
+import { editorRowHost } from '../../../../shared/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'
 import {
+  getMobileMarkdownSourceFile,
   isFileActiveEditorSurface,
   isMobileFileDiffSource,
   isUnifiedTabActiveInActiveGroup
@@ -16,16 +18,10 @@ export function buildMobileMarkdownTab(
   file: AppState['openFiles'][number],
   unifiedTab?: Tab
 ): RuntimeMobileSessionMarkdownTab | null {
-  if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
+  const sourceFile = getMobileMarkdownSourceFile(file, inputs.openFilesById)
+  if (!sourceFile) {
     return null
   }
-  if (file.language !== 'markdown' && file.mode !== 'markdown-preview') {
-    return null
-  }
-  const sourceFile =
-    file.mode === 'markdown-preview' && file.markdownPreviewSourceFileId
-      ? (inputs.openFilesById?.get(file.markdownPreviewSourceFileId) ?? file)
-      : file
   const draftVersion = inputs.editorDraftVersionByFileId.get(sourceFile.id)
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
   const unifiedTabId = unifiedTab?.id
@@ -36,7 +32,7 @@ export function buildMobileMarkdownTab(
     filePath: file.filePath,
     relativePath: file.relativePath,
     language: 'markdown',
-    mode: file.mode,
+    mode: file.mode === 'markdown-preview' ? 'markdown-preview' : 'edit',
     isDirty: file.isDirty || sourceFile.isDirty,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
@@ -47,7 +43,8 @@ export function buildMobileMarkdownTab(
     ...(sourceFile.isUntitled ? { isUntitled: true as const } : {}),
     documentVersion: draftVersion ?? `file:${sourceFile.id}`,
     color: unifiedTab?.color ?? null,
-    isPinned: unifiedTab?.isPinned === true
+    isPinned: unifiedTab?.isPinned === true,
+    ...editorRowHost(file)
   }
 }
 
@@ -73,6 +70,7 @@ export function buildMobileFileTab(
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
-      : isFileActiveEditorSurface(inputs, file)
+      : isFileActiveEditorSurface(inputs, file),
+    ...editorRowHost(file)
   }
 }

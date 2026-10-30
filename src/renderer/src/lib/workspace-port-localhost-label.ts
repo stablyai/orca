@@ -24,9 +24,7 @@ export function localhostWorktreeLabelRouteForPort({
     targetUrl: browserUrlForPort(port),
     projectName: projectSource.displayName,
     worktreeName: port.owner.displayName,
-    // Why: getLocalhostWorktreeHostLabel derives the slug from worktreePath ??
-    // worktreeName, so omitting it here would yield a different label than the
-    // terminal-link/runtime builders that always pass port.owner.path.
+    // Pass owner.path like terminal/runtime builders or getLocalhostWorktreeHostLabel derives a different slug.
     worktreePath: port.owner.path,
     repoId: repo.id,
     worktreeId: port.owner.worktreeId

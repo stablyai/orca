@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply
@@ -579,12 +579,7 @@ describe('web session pending terminal handle recovery', () => {
     )
   })
 
-  // Retargeted (#11495): this pinned the quarantine, and the quarantine was the bug. The listing
-  // ran with `requireFreshPtyLiveness: true` and came back `orphaned: true` under a replacement
-  // PTY, which is a host attestation that the handle is LIVE — a PTY id rotating across a host
-  // relaunch is the normal case, not evidence of death. The row stays bound to the handle, which is
-  // the identity the host answers on; the stale `ptyId` on the carried-over row settles on the next
-  // frame. See web-session-terminal-orphan-recovery-inventory.ts.
+  // Fresh orphaned:true under a replacement PTY proves live host relaunch, not quarantine (#11495). Retain handle identity; next frame settles stale PTY ID (web-session-terminal-orphan-recovery-inventory.ts).
   it('rebinds a cached handle the host now serves from a different PTY', async () => {
     const snapshot = pendingSnapshot()
     const call = vi.fn(async () => ({

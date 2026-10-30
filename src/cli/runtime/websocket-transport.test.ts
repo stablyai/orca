@@ -34,7 +34,10 @@ import {
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
-import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from '../../shared/terminal-quick-command-capabilities'
+import {
+  TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
+  TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
+} from '../../shared/terminal-quick-command-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
 
 vi.mock('./launch', () => ({
@@ -91,6 +94,7 @@ describe('CLI remote WebSocket transport', () => {
           AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
           REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
           TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
+          TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
           AGENT_LAUNCH_RUNTIME_CAPABILITY
         ]
       })

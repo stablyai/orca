@@ -154,7 +154,7 @@ it('moves the generation when a purge reclaims rows nothing can reach', async ()
   }
 })
 
-it("leaves the generation alone when a replace swaps a session's own rows", async () => {
+it('leaves the generation alone when messages attached to live sessions are deleted', async () => {
   // Deleting messages attached to live sessions must not fire the orphan-reclamation trigger.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
@@ -213,7 +213,7 @@ it('keeps the generation across a reopen, because the bump rides its own commit'
   }
 })
 
-it('fences a reader against a writer it does not share a process with', async () => {
+it('fences a reader against another database handle moving the index', async () => {
   // A process-local generation would miss another process’s writes and admit stale cursors.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')

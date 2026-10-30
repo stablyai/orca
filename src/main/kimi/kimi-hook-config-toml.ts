@@ -11,6 +11,7 @@ import {
 } from '../agent-hooks/managed-toml-ownership'
 
 export const KIMI_HOOK_EVENTS = [
+  'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PostToolUse',
@@ -123,11 +124,13 @@ function tomlBasicString(value: string): string {
 
 export function buildManagedKimiHooksBlock(command: string, eol = '\n'): string {
   const commandLiteral = tomlBasicString(command)
-  // Omit matcher: Kimi treats it as regex, so * is invalid. Host timeout backs up the normal curl deadline.
+  // Kimi treats matcher as regex (so * is invalid); omit it except to scope SessionStart. Host timeout backs up the normal curl deadline.
   const entries = KIMI_HOOK_EVENTS.map((event) =>
     [
       HOOK_TABLE_HEADER,
       `event = "${event}"`,
+      // Why: Kimi awaits SessionStart during a new session's first prompt; only a resume is used.
+      ...(event === 'SessionStart' ? ['matcher = "^resume$"'] : []),
       `command = ${commandLiteral}`,
       `timeout = ${MANAGED_HOOK_TIMEOUT_SECONDS}`
     ].join(eol)

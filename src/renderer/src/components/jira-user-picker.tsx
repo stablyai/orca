@@ -5,11 +5,11 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { jiraSearchUsers, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { JiraUser } from '../../../shared/jira/jira-types'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
 
-/** Renders the selectable user rows inside the picker popover. */
 export function JiraUserOptionList({
   users,
   onSelect
@@ -36,11 +36,7 @@ export function JiraUserOptionList({
   )
 }
 
-/**
- * Searchable single-user combobox for Jira user fields. These need an accountId,
- * not the display name a plain text box would collect, since Jira rejects a bare
- * string for user fields.
- */
+/** User fields require accountId values; Jira rejects display-name strings. */
 export type JiraUserPickerFixedOption = {
   key: string
   label: string
@@ -72,6 +68,7 @@ export function JiraUserPicker({
   searchUsers?: (query: string) => Promise<JiraUser[]>
   allowKnownUserId?: boolean
 }): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<JiraUser[]>([])
@@ -118,7 +115,8 @@ export function JiraUserPicker({
         value0: label
       })
     )
-  }, [label, selectedUser, value])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [label, selectedUser, value, languageRevision])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

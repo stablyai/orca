@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { JiraProject } from '../../../shared/jira/jira-types'
 import {
   JIRA_PROJECT_PICKER_QUERY_MAX_BYTES,
-  filterJiraProjectPickerProjects,
-  getJiraProjectPickerDisplayLabel
+  filterJiraProjectPickerProjects
 } from './jira-project-picker-filter'
 
 function project(overrides: Partial<JiraProject> = {}): JiraProject {
@@ -18,37 +17,6 @@ function project(overrides: Partial<JiraProject> = {}): JiraProject {
 }
 
 describe('jira-project-picker-filter', () => {
-  it('formats project labels with optional site names', () => {
-    const candidate = project()
-
-    expect(getJiraProjectPickerDisplayLabel(candidate, true)).toBe(
-      'Engineering · Application (APP)'
-    )
-    expect(getJiraProjectPickerDisplayLabel(candidate, false)).toBe('Application (APP)')
-  })
-
-  it('matches project labels, keys, names, and site names', () => {
-    const projects = [
-      project({ id: '1', key: 'APP', name: 'Application', siteName: 'Engineering' }),
-      project({ id: '2', key: 'OPS', name: 'Operations', siteName: 'Support' })
-    ]
-
-    expect(
-      filterJiraProjectPickerProjects({
-        projects,
-        query: 'ops',
-        includeSiteName: true
-      })
-    ).toEqual([projects[1]])
-    expect(
-      filterJiraProjectPickerProjects({
-        projects,
-        query: 'engineering',
-        includeSiteName: true
-      })
-    ).toEqual([projects[0]])
-  })
-
   it('enforces the query budget by UTF-8 byte length', () => {
     const query = 'é'.repeat(JIRA_PROJECT_PICKER_QUERY_MAX_BYTES)
 

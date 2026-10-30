@@ -49,8 +49,7 @@ describe('assertMobileWebBundleBuilt', () => {
 
   it('fails on a file the manifest does not list, so no stale asset ships inside asar', async () => {
     await withBundle(async ({ bundleDir }) => {
-      // An asset dropped from the manifest keeps its content-addressed name, so nothing ever
-      // overwrites it; without this check it packs unreachable and unverified.
+      // Dropped content-addressed assets never overwrite themselves; reject leftovers rather than pack unverified unreachable bytes.
       await writeFile(join(bundleDir, 'assets', 'stale.js'), '// from an earlier build\n', 'utf8')
       expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(
         /does not list: assets\/stale\.js/
@@ -182,8 +181,7 @@ describe('electron-builder packaging wiring', () => {
   })
 
   it('verifies the bundle root it is given, not the repo one', async () => {
-    // The seam exists so unit tests need no built out/; it would be worthless if the root were
-    // accepted and then ignored.
+    // Injected root must reach verifier so unit tests can use scratch build without real out/.
     await withBundle(async ({ bundleDir }) => {
       await rm(join(bundleDir, 'manifest.json'))
       expect(() =>

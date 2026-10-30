@@ -7,7 +7,7 @@ import {
   type AgentSessionPromptResponse
 } from '../../../../shared/agent-session-question-answer'
 import type { AgentSessionPromptResult } from '../../../../shared/agent-session-wire'
-import type { StructuredPromptItem } from './structured-agent-session-message-projection'
+import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
 import type { StructuredAgentSessionAction } from './use-structured-agent-session-mutate'
 
 export async function respondToStructuredAgentSessionPrompt({

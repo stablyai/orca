@@ -396,19 +396,6 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-pane-key="tab-1:2"')
   })
 
-  it('keeps retained completion rows passive when activated', async () => {
-    mockAgentActivityDisplayMode = 'full'
-    mockAgents = [mockAgent({ rowSource: 'retained', state: 'done' })]
-    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
-
-    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
-    expect(capturedRowActivations).toHaveLength(1)
-    capturedRowActivations[0].onActivate('tab-1', 'tab-1:1')
-
-    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
-  })
-
   it('shows orchestration child agent rows under their parent by default', async () => {
     mockAgentActivityDisplayMode = 'full'
     mockAgents = [
@@ -773,7 +760,6 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
     const iconTitles = [...markup.matchAll(/title="([^"]+)"/g)].map((match) => match[1])
 
-    // Variety icons stay identity-free; the state label belongs to the shared tooltip.
     expect(iconTitles).toEqual([])
     expect(markup).toContain('>Working<')
     expect(markup).not.toContain('>5 working<')

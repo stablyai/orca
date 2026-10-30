@@ -1,11 +1,6 @@
 import type { BrowserWindow } from 'electron'
 
-/**
- * Marks a window close that a user Quit asked for on a host that stays running (`orca serve`).
- * Why separate from isQuitting: the process is not quitting, but the close still needs the quit
- * close semantics — the frozen-renderer ack deadline and no minimize-to-tray.
- */
-/** Only the window's identity is used, so a narrow slice of BrowserWindow is enough. */
+/** User Quit on serve closes windows while the host stays alive; retain quit acknowledgement deadlines and bypass tray minimization without setting process isQuitting. */
 export type UserQuitClosingWindow = Pick<BrowserWindow, 'isDestroyed'>
 
 const pendingUserQuitCloses = new WeakSet<UserQuitClosingWindow>()

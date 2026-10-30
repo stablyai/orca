@@ -10,7 +10,8 @@ vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   execCommand: execCommandMock
 }))
 
-const { detectRemoteHostPlatform } = await import('./ssh-remote-platform-detection')
+const { detectRemoteHostPlatform, remoteHostPlatformFromUnameProbe } =
+  await import('./ssh-remote-platform-detection')
 
 const conn = {} as SshConnection
 
@@ -230,8 +231,7 @@ describe('detectRemoteHostPlatform failure reporting', () => {
   })
 
   it('does not call an unmappable uname unsupported when the PowerShell probe timed out', async () => {
-    // The timed-out channel is the better explanation, and it is identified by execCommand's typed
-    // code — matching "timed out after Ns" in the message let any look-alike claim the branch.
+    // Prefer typed exec timeout evidence; matching wording could misclassify unrelated errors.
     execCommandMock
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
       .mockRejectedValueOnce(
@@ -263,5 +263,17 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64'
     })
+  })
+})
+
+describe('remoteHostPlatformFromUnameProbe', () => {
+  it('reads only marker-backed platform lines, past other output folded into the same exec', () => {
+    expect(
+      remoteHostPlatformFromUnameProbe(
+        '5.15.167.4-microsoft-standard-WSL2\n/home/u\n\n__ORCA_REMOTE_PLATFORM__ Linux aarch64\n'
+      )
+    ).toMatchObject({ os: 'linux', arch: 'arm64' })
+    expect(remoteHostPlatformFromUnameProbe('Linux x86_64\n')).toBeNull()
+    expect(remoteHostPlatformFromUnameProbe('\n__ORCA_REMOTE_PLATFORM__ Linux sparc\n')).toBeNull()
   })
 })

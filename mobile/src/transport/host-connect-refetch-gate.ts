@@ -1,8 +1,6 @@
 import type { ConnectionState } from './types'
 
-// Why: a logical client survives socket drops, so screens that fetch once per client latched
-// after the first connect and never refreshed after a background/handoff reconnect. Gate the
-// refetch on the transition INTO 'connected' — one read per reconnect, no polling timer.
+// Refetch on each transition into connected; logical client identity survives socket replacements.
 export function createHostConnectRefetchGate(): {
   observe: (state: ConnectionState) => boolean
 } {

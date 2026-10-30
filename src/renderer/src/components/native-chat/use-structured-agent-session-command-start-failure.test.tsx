@@ -19,6 +19,7 @@ let items: AgentJournalRenderItem[] = []
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: mocks.quietRepeatedStop
 }))
@@ -121,8 +122,7 @@ function renderPane() {
   )
 }
 
-// The fence moves while the command is in flight, as a start during the command does, and then
-// the command's reply lands. The reply still answers what this pane asked.
+// Move the fence during the command, then deliver its reply; it still answers this pane’s original request.
 async function commandAcrossFenceMove(
   command: 'clear' | 'compact',
   reply: unknown,
@@ -161,7 +161,7 @@ afterEach(async () => {
 describe('a conversation command whose reply lands after the fence moved', () => {
   it("shows, in the reader's language, why a start during the command failed", async () => {
     await i18n.changeLanguage('fr')
-    // A /clear's start is its new chat's; a /compact's restarts this one.
+    // /clear starts a new chat; /compact restarts the current chat.
     for (const [command, failure, error] of [
       ['clear', START_FAILED, "Codex n'a pas pu démarrer. Relancez /clear."],
       ['compact', RESTART_FAILED, "Codex n'a pas pu redémarrer. Relancez /compact."]
@@ -197,7 +197,6 @@ describe('a conversation command whose reply lands after the fence moved', () =>
   })
 
   it("says nothing for a /compact whose start failed, when that start's row is loaded", async () => {
-    // The row arrives with the new fence, after the command was sent.
     expect(
       await commandAcrossFenceMove('compact', commandReply('compact', RESTART_FAILED), undefined, [
         startFailureRow(RESTART_FAILED)
@@ -224,7 +223,6 @@ describe('a conversation command whose reply lands after the fence moved', () =>
   })
 
   it('keeps the reply of a /clear that stopped the running agent: done clears the draft, failed says why', async () => {
-    // A live runtime at fence 3; stopping it for the new chat moves the fence during the request.
     expect(await commandAcrossFenceMove('clear', commandReply('clear'))).toEqual({
       accepted: true,
       error: null
@@ -287,7 +285,6 @@ describe('any other write across a fence move', () => {
     fence = 5
     rerender({ sessionId: 'session-1', transportEnabled: true })
     await act(async () => {
-      // The Stop reaches the host once the client knows the host's capabilities.
       await vi.waitFor(() => expect(mocks.call).toHaveBeenCalled())
       answer({ ok: true, replayed: false, fence: 3, value: { cancelled: true } })
       await stopped

@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { AppState } from '../../types'
 import type { NewBrowserTabProfile } from './browser-slice-contract'
 import { findWorktreeById } from '../worktree-helpers'
+import { getDefaultBrowserProfileForHost } from './browser-host-state'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../workspace-record-selectors'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
@@ -28,10 +29,7 @@ export function resolveNewBrowserTabProfile(
       managedProfileLabel(state, owner, worktreeId)
     )
   }
-  return {
-    sessionProfileId:
-      state.defaultBrowserSessionProfileIdByHostId[hostId] ?? state.defaultBrowserSessionProfileId
-  }
+  return { sessionProfileId: getDefaultBrowserProfileForHost(state, hostId) }
 }
 
 function managedProfileLabel(

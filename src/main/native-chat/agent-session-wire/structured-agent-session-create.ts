@@ -1,7 +1,8 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session-definitive-refusal'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   refuse,
   type AgentSessionAttachResult,
@@ -14,7 +15,7 @@ import type { StructuredAgentSessionAttachContext } from './structured-agent-ses
 import { reserveRequestFor, type AgentSessionAttachParams } from './structured-agent-session-attach'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
 import {
-  prepareAdoptedTranscript,
+  prepareCreateTranscript,
   importAdoptedTranscript
 } from './structured-agent-session-adopted-import'
 import {
@@ -30,10 +31,10 @@ import { observedReceipt } from './structured-agent-session-operation-settlement
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { openingMessageOptions } from './structured-agent-session-execution-options'
 
 export type StructuredAgentSessionCreateOptions = {
-  firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
+  firstMessage?: StructuredAgentSessionFirstMessage
   hostLaunchDirectory?: string
   catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
   /** Publish after durable creation, before agent delivery starts. */
@@ -155,7 +156,7 @@ async function foundConversation(
   }
   const prepared = replayed
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params)
+    : await prepareCreateTranscript(context, params)
   if (!prepared.ok) {
     const { refusal } = prepared
     return {
@@ -168,16 +169,17 @@ async function foundConversation(
   const existing = context.sessions.get(sessionId)
   const opened = existing
     ? { session: existing }
-    : await openStructuredAgentSessionConversationJournal(deps, candidate.record).catch(
-        (error: unknown) => {
-          deps.logger.warn('opening the journal of a new chat failed', {
-            scope: 'create-journal-open',
-            sessionId,
-            error
-          })
-          throw journalOpenRefusalError(error)
-        }
-      )
+    : await openStructuredAgentSessionConversationJournal(
+        deps,
+        agentSessionConversationView(candidate.record)
+      ).catch((error: unknown) => {
+        deps.logger.warn('opening the journal of a new chat failed', {
+          scope: 'create-journal-open',
+          sessionId,
+          error
+        })
+        throw journalOpenRefusalError(error)
+      })
   const { session } = opened
   const fence = candidate.record.lease.runtimeFence
   let committed = replayed
@@ -210,14 +212,12 @@ async function foundConversation(
           },
           {
             ...first,
-            payloadFingerprint: computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.send',
-              sessionId,
-              fields: { body: first.body }
-            }),
+            payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, first.body),
             origin: 'client',
             source: { kind: 'user' },
-            ...openingMessageOptions(candidate.record.options)
+            ...(first.selection === undefined
+              ? openingMessageOptions(candidate.record.options)
+              : {})
           }
         )
         if (!sent.ok) {
@@ -294,12 +294,4 @@ export function structuredAgentSessionEntryDelegates(
       options?: StructuredAgentSessionCreateOptions
     ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
   }
-}
-
-/** Opening messages retain creation-time model/effort choices like later sends. */
-function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
-  options?: AgentSessionExecutionOptions
-} {
-  const { model, effort } = options ?? {}
-  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
 }

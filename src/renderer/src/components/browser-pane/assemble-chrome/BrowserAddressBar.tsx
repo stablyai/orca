@@ -47,10 +47,7 @@ type BrowserAddressBarProps = {
   onOpenWorkspaceDoc?: (docLocation: BrowserPageDocLocation) => void
   inputRef: React.RefObject<HTMLInputElement | null>
   dismissSuggestionsRef?: React.MutableRefObject<(() => void) | null>
-  /**
-   * Set by panes React can swap out from under a live edit, so an unmount mid-typing is handed on
-   * to whatever mounts next for the same page. Panes that never remount leave it off.
-   */
+  /** Carry a live edit across pane replacement for the same page; omit on panes that never remount. */
   editSession?: BrowserAddressBarEditSessionBinding | null
   /** Replaces the leading globe (e.g. the SSH egress indicator). */
   leadingIcon?: React.ReactNode
@@ -77,8 +74,7 @@ export default function BrowserAddressBar({
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
   const prePreviewValueRef = useRef<string | null>(null)
-  // Why: while previewing a highlighted suggestion the input shows the full URL,
-  // but suggestions must keep matching the original typed query.
+  // Match suggestions against the typed query while the input previews a full URL.
   const autocompleteQuery = prePreviewValueRef.current ?? value
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const workspaceDocHistory = useAppStore((s) => s.workspaceDocHistory)
@@ -209,15 +205,7 @@ export default function BrowserAddressBar({
   }, [inputRef, value])
 
   const handleBlur = useCallback(() => {
-    // Why: delay close so that clicking a suggestion item registers before
-    // the popover unmounts. Without this, onSelect never fires because the
-    // mousedown on PopoverContent triggers input blur first.
-    //
-    // Why (grace window): BrowserPane's focusAddressBarNow() retries focus
-    // across multiple animation frames to fight webview focus stealing. Each
-    // cycle can cause a transient blur on the input. Without this guard the
-    // popover opens on focus, immediately gets a blur, and closes ~150ms later
-    // — producing the "flash then disappear" on first click.
+    // Delay close for suggestion clicks and allow focus retries to settle; their transient blurs must not dismiss the list.
     const elapsed = Date.now() - openedAtRef.current
     const grace = elapsed < 400
     clearTimerRef(blurCloseTimerRef)
@@ -237,8 +225,7 @@ export default function BrowserAddressBar({
       setOpen(false)
       clearSuggestionPreview()
       noteTyped(null)
-      // Why looked up by row: a workspace-doc suggestion opens on a fresh grant instead of
-      // navigating; its url is the document's path, so even the fallback routes via detection.
+      // Document suggestions need a fresh grant; their path identity still uses detection on the fallback route.
       const docLocation = suggestions.find(
         (suggestion) => suggestion.url === url && suggestion.docLocation
       )?.docLocation
@@ -288,8 +275,7 @@ export default function BrowserAddressBar({
           switchToTab.switchToTab(selectedValue)
           return
         }
-        // Why: match Chrome — otherwise Enter navigates to the current input text,
-        // not the highlighted dropdown row (click still picks a row directly).
+        // Enter follows the bar text, including the highlighted preview; direct row clicks select independently.
         submitTypedValue()
         return
       }
@@ -303,9 +289,7 @@ export default function BrowserAddressBar({
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         const idx = suggestions.findIndex((s) => s.url === selectedValue)
-        // Why: row 0 stays highlighted while the input still shows the typed
-        // query, so the first ArrowDown should advance to the next row instead
-        // of redundantly previewing the row Enter already covers.
+        // Row zero already describes Enter; ArrowDown must advance instead of previewing it again.
         const next = idx !== -1 && idx < suggestions.length - 1 ? idx + 1 : 0
         selectSuggestionAtIndex(next)
         return
@@ -355,20 +339,13 @@ export default function BrowserAddressBar({
   }, [dismissSuggestions, dismissSuggestionsRef])
 
   return (
-    // Why: min-w-11 keeps the leading globe a real hit target once the toolbar
-    // squeezes the bar away — without it neighbouring buttons overlap the only
-    // affordance for reopening the URL field.
-    // Why stretch: the toolbar row pins the address slot's height, and the bar must fill it rather
-    // than size itself — otherwise it and the document chip drift apart again.
+    // Keep the globe clickable when squeezed and stretch to the toolbar’s fixed slot height.
     <div ref={slotRef} className="flex min-w-11 flex-1 items-stretch">
       <Popover
         modal={false}
         open={open}
         onOpenChange={(next) => {
-          // Why: Radix fires onOpenChange(false) when it detects an outside
-          // interaction, but during the focus-retry loop the input may still
-          // hold focus. Only allow programmatic closes (setOpen(false) from
-          // our handlers) or genuine outside dismissals.
+          // Ignore outside-dismiss during focus retries while the input still owns focus; handlers may still close directly.
           if (!next && inputRef.current && document.activeElement === inputRef.current) {
             return
           }
@@ -384,15 +361,12 @@ export default function BrowserAddressBar({
             data-orca-browser-address-bar-overlay={overlay ? 'true' : undefined}
             className={cn(
               'flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm',
-              // Why: the toolbar row is the positioned ancestor, so the overlay
-              // spans it edge to edge (matching its px-3) instead of the few
-              // pixels the squeezed slot has left.
+              // Position against the toolbar row so the overlay spans it, not the squeezed slot.
               overlay
                 ? 'absolute inset-x-3 top-1/2 z-30 -translate-y-1/2 shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
                 : 'relative min-w-0 flex-1'
             )}
-            // Why: when squeezed the input is zero-width, so clicks land on the
-            // form padding — forward them to the input so it expands and edits.
+            // Forward padding clicks when the squeezed input has zero width.
             onClick={() => inputRef.current?.focus()}
             onSubmit={(event) => {
               event.preventDefault()
@@ -420,10 +394,7 @@ export default function BrowserAddressBar({
               autoCorrect="off"
               onChange={(event) => {
                 const nextValue = event.target.value
-                // Why: typing creates a new suggestion list, so keyboard selection
-                // should return to the derived top match instead of a stale row.
-                // Clearing preview state here also prevents stale hover/selection
-                // from repopulating the input after Cmd+A → Delete.
+                // Typing resets previews and stale row focus so changed queries or Cmd+A/Delete cannot restore an old suggestion.
                 prePreviewValueRef.current = null
                 setSelectedValueOverride(null)
                 switchToTab.clearFocus()
@@ -450,9 +421,7 @@ export default function BrowserAddressBar({
             sideOffset={4}
             className="w-[var(--radix-popover-trigger-width)] p-0"
             onOpenAutoFocus={(e) => {
-              // Why: prevent the popover from stealing focus away from the
-              // address bar input. The user is still typing; the popover is
-              // an overlay of suggestions, not a focus target.
+              // Suggestions must leave focus in the input while the user types.
               e.preventDefault()
             }}
           >

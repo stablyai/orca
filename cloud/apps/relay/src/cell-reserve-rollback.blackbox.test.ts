@@ -229,8 +229,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(reply.socket.readyState).toBe(WebSocket.OPEN)
   }, 30_000)
 
-  // Step 5 off stays write-free: a db switch (read, generation > 0) writes no row, nor does a
-  // booted cell before its first flag read. Leaving reserve writes db once, then nothing.
+  // Step 5 off adds no writes before/after flag reads; leaving reserve owes exactly one db write.
   it('writes an admit-effective row only while its switch says reserve, plus one db write on the way out', async () => {
     let now = Date.now()
     const booting = await cell(() => now, { flagsUnread: true })
@@ -275,8 +274,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
       .mock.calls.map(([line]) => String(line))
       .filter((line) => line.includes('orca_relay_cell_reserve_dead_man_tripped'))
     expect(tripped.map((line) => JSON.parse(line).cellId)).toEqual([reserve.config.cellId])
-    // The cell's own row says db at once, while Postgres still records reserve: the database
-    // path places on it by this row, whether or not any director's feed poll gets through.
+    // Publish raw db mode immediately despite PG’s reserve stamp so placement can recover without a working feed poll.
     await until(async () => (await reserve.admitEffectiveRow())?.mode === 'db')
     expect((await reserve.admitEffectiveRow())?.cell_incarnation).toBe(reserve.relay.cellIncarnation)
     await until(async () => (await reserve.controlLeases()).length === 2)

@@ -38,8 +38,7 @@ const observeActivityListRect: typeof observeElementRect = (instance, cb) =>
     cb(rect.height > 0 ? rect : ZERO_RECT_FALLBACK_VIEWPORT)
   })
 
-// A saved offset the content cannot contain yet is restored once it can; past
-// this window it is stale (the list shrank) and restoring would yank the viewport.
+// Allow briefly undersized content to hydrate before restoring scroll; abandon stale offsets before later growth can yank the viewport.
 const DEFERRED_SCROLL_RESTORE_WINDOW_MS = 3000
 
 export function ActivityThreadListPane({
@@ -123,8 +122,7 @@ export function ActivityThreadListPane({
   const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
     () => new Set()
   )
-  // Precedence: explicit props, then a caller-owned context (hosts that unmount
-  // the pane on body switches), then pane-local state.
+  // Prefer explicit collapse props, then retained caller context, then pane-local state.
   const contextCollapse = useContext(ActivityThreadCollapseContext)
   const isControlled = collapsedGroupKeys !== undefined && onToggleGroupCollapse !== undefined
   const effectiveCollapsedGroupKeys = isControlled
@@ -191,9 +189,7 @@ export function ActivityThreadListPane({
     [virtualItems, selectedPaneKey]
   )
 
-  // Why keyed on virtualItems: getItemKey identity is a measurement-memo input in tanstack
-  // virtual. A per-render closure recomputes every row on unrelated re-renders; a fully stable
-  // one would miss same-count reorders. Changing exactly with the items is the correct middle.
+  // Key getItemKey to virtualItems: per-render closures invalidate measurements; a fully stable closure misses same-count reorders.
   const getItemKey = useCallback(
     (index: number) => {
       const item = virtualItems[index]
@@ -256,8 +252,7 @@ export function ActivityThreadListPane({
     virtualizer.measure()
   }, [virtualizer, compactMode])
 
-  // Restore only once the (estimated) content can contain the saved offset, so a
-  // pre-hydration mount doesn't clamp the restore to 0.
+  // Wait for content to contain the saved offset; pre-hydration clamping would consume the one restore.
   const totalSize = virtualizer.getTotalSize()
   const restoreArmedAtRef = useRef<number | null>(null)
   useEffect(() => {
@@ -267,8 +262,7 @@ export function ActivityThreadListPane({
     if (restoreArmedAtRef.current === null) {
       restoreArmedAtRef.current = Date.now()
     } else if (Date.now() - restoreArmedAtRef.current > DEFERRED_SCROLL_RESTORE_WINDOW_MS) {
-      // The list stayed too small for the saved offset (it shrank); firing the
-      // restore on some later growth would yank the viewport out from the user.
+      // Abandon offsets the shrunken list cannot hold before later growth can yank the viewport.
       hasRestoredScrollRef.current = true
       scrollTopRef.current = 0
       return
@@ -277,8 +271,7 @@ export function ActivityThreadListPane({
     if (!scrollContainer) {
       return
     }
-    // Against the max offset, not the content height: a viewport taller than the
-    // remaining content clamps the assignment to 0 and burns the one restore.
+    // Use max scroll offset, not content height, or a taller viewport clamps to zero and consumes the restore.
     const maxScrollTop = Math.max(0, totalSize - scrollContainer.clientHeight)
     if (scrollTopRef.current > maxScrollTop) {
       return

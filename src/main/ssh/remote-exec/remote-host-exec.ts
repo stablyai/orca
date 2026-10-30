@@ -8,7 +8,7 @@ export function execHostCommand(
   command: string,
   options?: { signal?: AbortSignal; timeoutMs?: number; onStderr?: (stderr: string) => void }
 ): Promise<string> {
-  // Why the dialect, not the os: the wrapper is POSIX shell, so it follows the command dialect.
+  // Choose wrapper by command dialect; the wrapper itself is POSIX shell.
   return execCommand(conn, command, {
     wrapCommand: host.commandDialect !== 'powershell',
     ...options

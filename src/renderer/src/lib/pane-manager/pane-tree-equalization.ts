@@ -1,4 +1,3 @@
-/** Find non-divider children (panes and splits) of an element. */
 export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
   return Array.from(parent.children).filter(
     (child): child is HTMLElement =>
@@ -20,9 +19,7 @@ function getEqualizeWeight(
     return 1
   }
 
-  // Keyed by element alone: `direction` is always the parent split's axis, which the
-  // tree position fixes, so one element is never asked for two different weights.
-  // The map lives for one sweep, so a split/close/resize can never read a stale weight.
+  // Element keys suffice because parent axis is fixed within one sweep; a new map per sweep prevents stale split/close/resize weights.
   const cached = weights.get(el)
   if (cached !== undefined) {
     return cached
@@ -52,8 +49,7 @@ export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
     const children = findPaneChildren(el)
     if (children.length >= 2) {
       for (const child of children) {
-        // Why: same-axis nested splits need pane-count weighting so three
-        // side-by-side panes become thirds, not 50/25/25.
+        // Weight same-axis nested splits by pane count so three peers become thirds, not 50/25/25.
         const weight = getEqualizeWeight(child, direction, weights)
         const nextFlex = `${weight} 1 0%`
         if (child.style.flex !== nextFlex) {

@@ -1,7 +1,6 @@
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 
-// Real user input durably relinquishes orchestration ownership.
 export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: string): number {
   this.db.exec('BEGIN IMMEDIATE')
   try {

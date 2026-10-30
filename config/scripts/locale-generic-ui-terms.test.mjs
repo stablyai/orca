@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
-// Why: #12113 — repair-locale-catalog rewrote ~2000 translated values back to English because
-// generic UI words (agent, terminal, commit, repo, Continue) were treated as brands. These pin
-// the boundary: generic words stay translated, real brand names stay Latin.
+// #12113: generic-word brand repair reverted ~2000 translations; keep UI vocabulary translated and real brands Latin.
 describe('locale generic UI terms', () => {
   it('keeps a translated generic term when the whole value is that term', () => {
     expect(

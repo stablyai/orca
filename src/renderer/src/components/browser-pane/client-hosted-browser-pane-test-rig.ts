@@ -26,11 +26,7 @@ export function paneChannel<T>(): PaneChannel<T> {
   }
 }
 
-/**
- * The `window.api` surface ClientHostedBrowserPagePane subscribes to on mount. Every channel is
- * inert by default so a suite only wires the ones it drives; the pane crashes on a missing bridge,
- * which would otherwise make each new subscription break unrelated suites.
- */
+/** Provide inert defaults for every mount subscription so new preload channels do not break unrelated tests. */
 export function installClientHostedPaneApi(overrides?: {
   browser?: Record<string, unknown>
   ui?: Record<string, unknown>
@@ -46,7 +42,9 @@ export function installClientHostedPaneApi(overrides?: {
         onPermissionDenied: inert,
         onContextMenuRequested: inert,
         onContextMenuDismissed: inert,
+        onTargetUrlChanged: inert,
         openDevTools: vi.fn(async () => true),
+        onDevToolsDockChanged: inert,
         proceedCertificate: vi.fn(async () => ({ ok: true })),
         publishClientPageMetadata: vi.fn(async () => ({ status: 'published', accepted: true })),
         ...overrides?.browser

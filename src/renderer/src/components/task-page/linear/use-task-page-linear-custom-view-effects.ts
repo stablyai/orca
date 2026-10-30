@@ -1,10 +1,12 @@
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { translate } from '@/i18n/i18n'
 import type { TaskPageLinearInOrcaEffectsModel } from './use-task-page-linear-in-orca-effects'
 import { useEffect } from 'react'
 import {
   LINEAR_CUSTOM_VIEW_MODELS,
   mergeLinearCollectionResults
 } from './task-page-linear-issue-model'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {
@@ -79,7 +81,9 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
       .catch((error) => {
         if (!cancelled) {
           setLinearCustomViewsError(
-            error instanceof Error ? error.message : 'Failed to load views.'
+            error instanceof Error
+              ? taskProviderErrorText(error.message)
+              : translate('taskProviders.linear.viewsLoadFailed', 'Failed to load views.')
           )
           setLinearCustomViewsLoading(false)
         }
@@ -87,7 +91,6 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskResumeApplied,
     taskSource,
@@ -98,7 +101,10 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     linearRefreshNonce,
     getCachedLinearCustomViews,
     listLinearCustomViews,
-    linearTaskSourceContext
+    linearTaskSourceContext,
+    setLinearCustomViewsError,
+    setLinearCustomViewsLoading,
+    setLinearCustomViewsResult
   ])
   useEffect(() => {
     if (!selectedLinearCustomView?.workspaceId) {
@@ -149,7 +155,12 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
       .catch((error) => {
         if (!cancelled) {
           setLinearCustomViewContentsError(
-            error instanceof Error ? error.message : 'Failed to load view contents.'
+            error instanceof Error
+              ? taskProviderErrorText(error.message)
+              : translate(
+                  'taskProviders.linear.viewContentsLoadFailed',
+                  'Failed to load view contents.'
+                )
           )
           setLinearCustomViewContentsLoading(false)
         }

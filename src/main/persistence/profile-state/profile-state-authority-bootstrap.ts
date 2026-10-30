@@ -48,11 +48,10 @@ export type ProfileStateAuthorityBootstrapOptions = {
   dataFile: string
   databaseFile: string
   profileId: string
-  /** Establish empty profiles before their first Store write. */
+  /** Admit empty profiles before their first Store write. */
   allowEmptyProfileState?: boolean
 }
 
-/** Normalize legacy state once, then hand one validated authority to Store. */
 export function bootstrapProfileStateAuthority(
   options: ProfileStateAuthorityBootstrapOptions
 ): ProfileStateAuthorityBootstrapResult {
@@ -115,7 +114,7 @@ export function bootstrapProfileStateAuthority(
   }
 }
 
-/** Diagnosis only: a failure to plan keeps the whole-file recovery guidance. */
+/** Diagnostic failure retains whole-file recovery guidance. */
 function findRepairableSections(
   options: ProfileStateAuthorityBootstrapOptions
 ): readonly ProfileStateRepairSection[] | undefined {

@@ -31,7 +31,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('decodes a single owned unterminated tail without copying it or advancing its cursor', async () => {
+it('decodes a single owned unterminated tail without concatenation or cursor advancement', async () => {
   const tail = JSON.stringify({ text: 'é😀 growing final record' })
   const prefix = '\r\nmalformed\n{"type":"user"}\r\n'
   const content = prefix + tail
@@ -85,7 +85,7 @@ it('still joins an unterminated multi-part UTF-8 tail exactly once', async () =>
   expect(copiedBytes).toEqual([bytes.length])
 })
 
-it('copies only the carried line when the next chunk contains many complete lines', async () => {
+it('bounds concatenation when the next chunk contains many complete lines', async () => {
   source.chunks = Array.from({ length: 100 }, () => Buffer.from(`${'a\n'.repeat(1000)}x`))
   const original = Buffer.concat
   let copied = 0

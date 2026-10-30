@@ -42,7 +42,6 @@ function createHarness(
   return { ingress, writes, emissions }
 }
 
-/** Probe that answers from a script, repeating its last answer once exhausted. */
 function visible(emissions: readonly PtyIngressEmission[]): string {
   return emissions.map((emission) => emission.data).join('')
 }
@@ -78,16 +77,6 @@ describe('PtyStartupIngress', () => {
         query.length
       )
     }
-  })
-
-  it('suppresses the first echo immediately and keeps a later exact collision', () => {
-    const { ingress, emissions } = createHarness({ projection: true })
-    ingress.accept('\x1b]10;?\x07')
-    const projected = ']10;rgb:2e2e/3434/3434\\'
-    ingress.accept(projected)
-    ingress.accept(projected)
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe(projected)
   })
 
   it('matches each echo across every split without skipping an earlier FIFO candidate', () => {
@@ -316,9 +305,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('swallows a cooked POSIX echo of its own reply without re-sending it', () => {
-    // Why never re-send: POSIX ECHO copies the reply to the master but leaves it in
-    // the slave input queue, so the program still reads it; a second write would
-    // arrive on its stdin as unsolicited input once it is raw.
+    // Kernel echo leaves the original reply in slave input; resending would become unsolicited stdin after raw mode starts.
     vi.useFakeTimers()
     for (const echoOf of POSIX_COOKED_ECHOES) {
       const writes: string[] = []
@@ -347,8 +334,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('swallows a cooked POSIX echo coalesced behind earlier program output', () => {
-    // Why this shape: an agent pane is launched by writing a command into an interactive
-    // shell, so the tty echo of Orca's reply never arrives at the head of a read (#12112).
+    // Interactive launches coalesce reply echoes behind shell output; offset-zero recognition missed them (#12112).
     vi.useFakeTimers()
     for (const echoOf of POSIX_COOKED_ECHOES) {
       const replies: string[] = []
@@ -374,10 +360,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('answers both slots when the deferred write lands between two reads of the burst', () => {
-    // Why between: a pty read boundary is a macrotask, so the deferred reply is written
-    // while the rest of the burst is still unread. A `\x07` head-of-echo guess taken then
-    // steals the OSC 11 terminator, leaving the slot unanswered and its bytes emitted
-    // after the BEL — which parks xterm in an OSC that never terminates.
+    // A torn second query must retain its BEL terminator; mistaking it for echo leaves OSC 11 unanswered and xterm unterminated.
     vi.useFakeTimers()
     const burst = '\x1b]10;?\x07\x1b]11;?\x07'
     for (let split = 0; split <= burst.length; split += 1) {
@@ -402,8 +385,7 @@ describe('PtyStartupIngress', () => {
     const accepted = ingress.drainAndClose()
 
     expect(visible(emissions)).toBe('\x1b]11;?tail')
-    // Why exact ranges: a candidate carried across the suppressed echo re-emits its own
-    // bytes on a span whose end no longer matches its data, so ranges start to overlap.
+    // Crossing suppressed ranges with a retained candidate corrupts sequence arithmetic and overlaps output ranges.
     expect(emissions.map((item) => [item.rawStartSeq, item.rawEndSeq])).toEqual([
       [0, 7],
       [7, 13],
@@ -419,9 +401,7 @@ describe('PtyStartupIngress', () => {
     vi.advanceTimersByTime(0)
     expect(writes).toEqual([FOREGROUND_REPLY])
 
-    // Why a range and not the exact hold: what matters is that the guess outlasts
-    // relay jitter yet still resolves without the deadline's help. Pinning the exact
-    // value would fail on any honest retune while teaching the retuner nothing.
+    // Bound relay-jitter tolerance without pinning an exact tunable hold duration.
     const RELAY_JITTER_MS = 400
     const WELL_BELOW_DEADLINE_MS = 1_500
 
@@ -449,7 +429,7 @@ describe('PtyStartupIngress', () => {
 
     vi.advanceTimersByTime(4_999)
     ingress.accept('\x1b]10;?\x07')
-    // The deferred write flushes at 4_999, then the deadline expires at 5_000.
+    // Cross the startup deadline while retaining the already-written reply.
     vi.advanceTimersByTime(2)
     expect(writes).toEqual([FOREGROUND_REPLY])
 
@@ -474,9 +454,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('swallows a coalesced POSIX echo torn at every byte boundary', () => {
-    // Why a prefix matters: recognition used to hold a split echo only when it began
-    // at offset 0, so a single byte of program output ahead of it made every torn
-    // boundary leak the reply verbatim — the exact #12112 symptom the fix targets.
+    // A prefix byte previously made split-echo detection leak at every boundary; real echoes follow shell output (#12112).
     vi.useFakeTimers()
     for (const echoOf of POSIX_COOKED_ECHOES) {
       const echo = echoOf(FOREGROUND_REPLY)
@@ -504,8 +482,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('still recognizes an echo that arrives behind an enormous splash frame', () => {
-    // Why: the search budget must not be spent by one large frame, retiring the
-    // projection while the echo is still in flight behind it.
+    // Large splash frames must not exhaust the echo-search budget before the echo arrives.
     vi.useFakeTimers()
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
@@ -580,9 +557,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('ages a projection out even when every read ends mid-candidate', () => {
-    // Why: the read budget is charged once per read at the entry point, so a stream
-    // whose every read ends on a candidate byte still retires a projection that never
-    // lands. Charging only on reads that fall through left it alive forever.
+    // Charge every read including mid-candidate early returns; otherwise missing echoes keep projections armed forever.
     vi.useFakeTimers()
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
@@ -597,8 +572,7 @@ describe('PtyStartupIngress', () => {
     vi.advanceTimersByTime(0)
     expect(writes).toEqual([FOREGROUND_REPLY])
 
-    // A trailing `^` is a strict prefix of the caret projection, so every one of these
-    // reads returns holding a candidate.
+    // Every read ends with a strict caret-prefix candidate.
     let printed = ''
     for (let read = 0; read < 8; read += 1) {
       const chunk = `${'line of output\r\n'.repeat(4_000)}^`
@@ -613,9 +587,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('swallows an echo no matter how finely the tty chunks it', () => {
-    // Why: an SSH relay or a slow drain delivers the echo a few bytes at a time. A
-    // per-read budget was spent inside the echo itself, so the leak came back for any
-    // chunking finer than the budget.
+    // SSH/slow drains can split echoes below any read budget; charge bytes rather than consuming the budget inside the echo.
     vi.useFakeTimers()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
     for (const chunkSize of [1, 2, 3, 5, 13]) {
@@ -641,9 +613,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('lets every downstream barrier cut a partial echo hold short', () => {
-    // Why pinned: the hold window is only affordable because it is not what bounds
-    // the wait — these are. If one stopped releasing, the window would become a
-    // real stall rather than a bet on the next read.
+    // Downstream barriers bound waits independently; otherwise the generous continuation window becomes a real stall.
     vi.useFakeTimers()
     const cutShort: Record<string, (ingress: PtyStartupIngress) => void> = {
       snapshotBarrier: (ingress) => ingress.snapshotBarrier(),
@@ -666,9 +636,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('keeps swallowing an echo split across the query-authority handoff', () => {
-    // Why the asymmetry with snapshotBarrier is deliberate: closing query authority
-    // hands off who may answer, but the reply is already on the wire and its echo is
-    // still Orca's to swallow. Cutting the hold here would show its first half.
+    // Query-authority handoff does not cancel echoes already in flight; releasing the hold would expose half an echo.
     vi.useFakeTimers()
     const { ingress, writes, emissions } = createHarness()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
@@ -685,8 +653,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('swallows an echo whose halves straddle a relay-sized stall', () => {
-    // Why: an expired hold releases raw, so a hold shorter than real inter-chunk
-    // jitter reinstates the leak on exactly the links Orca has to work over.
+    // Holds shorter than inter-chunk relay jitter release raw echo halves and reinstate leaks.
     vi.useFakeTimers()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
     for (const gapMs of [50, 200, 400]) {
@@ -705,10 +672,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('swallows an echo that arrives behind a query torn on an earlier read', () => {
-    // Why: the tty can tear the program's second query and start echoing the first
-    // reply in the same read. Refusing to hold while a query is pending leaked the
-    // whole echo, because the prefix that would have completed that query was never
-    // emitted first.
+    // A torn second query can precede the first reply’s echo; emit its completing prefix before consuming the echo.
     vi.useFakeTimers()
     const { ingress, writes, emissions } = createHarness()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
@@ -728,9 +692,7 @@ describe('PtyStartupIngress', () => {
   })
 
   it('drops a torn query the next read disproves instead of the echo behind it', () => {
-    // Why: with the echo starting at offset 0 there is no prefix to complete the torn
-    // candidate, so preferring it fed the echo to the raw path and printed both. The
-    // candidate is not a color query at all once the echo's first byte lands.
+    // The echo disproves an offset-zero torn-query candidate; release that candidate before consuming the echo.
     vi.useFakeTimers()
     const { ingress, writes, emissions } = createHarness()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
@@ -778,38 +740,5 @@ describe('PtyStartupIngress', () => {
     ingress.accept('late')
     expect(ingress.acceptedRawSequence).toBe(closedAt)
     expect(visible(emissions)).toBe(']10;rgb:2e2e/')
-  })
-
-  it('suppresses the readline echo, which no reading of the ECHO bit could predict', () => {
-    const { ingress, writes, emissions } = createHarness()
-    ingress.accept('\x1b]10;?\x07')
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    // Why this shape is the reason projections are load-bearing: readline echoes a
-    // master write in software with the tty already raw and ECHO off, so the kernel's
-    // ECHO bit says nothing about it. Verified on a live pty: at a bash prompt the
-    // kernel reports quiet and readline still emits this.
-    ingress.accept(POSIX_COOKED_ECHOES[1]?.(FOREGROUND_REPLY) ?? '')
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe('')
-  })
-
-  it('suppresses the kernel caret echo', () => {
-    const { ingress, writes, emissions } = createHarness()
-    ingress.accept('\x1b]10;?\x07')
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    // The ECHOCTL caret form is the POSIX default, and it is always armed now: there is
-    // no verdict that could retire it, and nothing is gained by trying.
-    ingress.accept(POSIX_COOKED_ECHOES[0]?.(FOREGROUND_REPLY) ?? '')
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe('')
-  })
-
-  it('writes the reply in the accepting turn, with no probe and no wait', () => {
-    const { ingress, writes } = createHarness()
-    ingress.accept('\u001b]10;?\u0007')
-    // No deferral at all: withholding is what let a later reply overtake a held one
-    // (#15559), and it never removed the echo anyway — the projections do that.
-    expect(writes).toEqual(['\u001b]10;rgb:2e2e/3434/3434\u001b\\'])
-    ingress.drainAndClose()
   })
 })

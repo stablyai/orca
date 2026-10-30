@@ -1,3 +1,4 @@
+import { createAgentStatusSlice } from './agent-status/agent-status'
 import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -135,6 +136,7 @@ export function createTestStore() {
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
         ...createWorkspaceAttentionSlice(...a),
+        ...createAgentStatusSlice(...a),
         trustedOrcaHooks: {},
         sshConnectionStates: new Map([
           [
@@ -221,8 +223,7 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
   return store
 }
 
-// Why: both the metadata fallback and removeWorktree write this module-level memory, so a leaked entry from an
-// earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
+// Reset removal memory per case: both metadata fallback and removeWorktree write it, so leaked entries silently suppress rows.
 export function resetWorktreeSliceModuleMemory() {
   resetAuthoritativelyRemovedWorktreeMemoryForTests()
   mockApi.worktrees.create.mockReset()

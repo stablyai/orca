@@ -48,8 +48,7 @@ export function useNotificationPaneNavigation({
   switchSessionTab: (tab: MobileSessionTab) => void
 }) {
   const client = usePageBridgeClient()
-  // Seeded from the route this page was opened on: a tap that opened the session arrives in the
-  // first `init` and never as an update, so a hook that only listened would lose it.
+  // The opening tap arrives only in the initial init, before route-update listeners.
   const opened = client.getShellSession()?.route?.params?.paneKey ?? null
   const pending = useRef<PendingNotificationRequest | null>(toPendingSeed(opened))
   /** The pane this hook last acted on, so one request is not served twice. Cleared by the erase. */
@@ -61,9 +60,7 @@ export function useNotificationPaneNavigation({
   })
 
   useEffect(() => {
-    // The route this page opened on is erased once, here: it arrived in the first `init`, which
-    // is not an update, so nothing below would ever name it back. Read from the client rather
-    // than from the render above, which keeps this effect keyed on the client alone.
+    // Acknowledge the initial init separately; read from the client to keep the effect keyed only on client.
     const seed = client.getShellSession()?.route?.params?.paneKey ?? null
     if (seed !== null && seed !== '') {
       client.clearRouteParam('paneKey', seed)

@@ -273,11 +273,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     await applySelector(Object.fromEntries(CELLS.map((cell) => [cell.id, 'general'])))
   }
 
-  // The selector is fleet-wide and this database is shared with every other
-  // Postgres file in the project, all of which write admission through the
-  // generation-0 helpers. Advancing the generation and leaving it advanced
-  // would fail every one of them with admission_selector_boundary_active, so
-  // this file puts the boundary back exactly as it found it.
+  // Shared PostgreSQL suites use generation-0 helpers; restore the exact selector boundary or later files fail admission_selector_boundary_active.
   async function resetSelectorBoundary(): Promise<void> {
     await databases[0]!.query(
       `UPDATE relay_admission_selectors SET generation = 0, attempt_id = NULL
@@ -329,9 +325,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
   afterAll(async () => {
     if (databases[0]) {
       await deleteHostRows()
-      // Order matters: drop the cells first, then rebuild the selector's
-      // membership from what is left, or it names rows that no longer exist and
-      // every later read fails admission_selector_membership_drift.
+      // Drop cell rows before rebuilding membership or later reads fail admission_selector_membership_drift.
       for (const cell of CELLS) {
         for (const table of [
           'relay_cell_connection_snapshots',
@@ -497,9 +491,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     )
     expect(granted.length).toBeGreaterThan(0)
 
-    // However many dials were granted, only one re-placement may have
-    // committed: the epoch advances by exactly one and the target gains exactly
-    // one unit. The source keeps its lease until the source releases it.
+    // Concurrent dials may grant repeatedly but commit one move: one epoch/unit on target, preserving source leases until release.
     const settled = await stores[0]!.resolve(identity)
     expect(settled?.assignmentEpoch).toBe(first.assignmentEpoch + 1)
     expect(settled?.cellId).not.toBe(ISOLATED.id)

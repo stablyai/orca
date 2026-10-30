@@ -1,5 +1,4 @@
-// Admission for the context facts a turn row carries. Bounded to what the
-// writer can produce, so a replayed row can never hold more than a live one.
+// Bound replayed context facts to what live writers can produce.
 
 import { z } from 'zod'
 import {

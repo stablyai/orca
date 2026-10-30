@@ -46,12 +46,10 @@ export async function getTerminalAgentSendReadiness(
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       if (!options.allowLegacyFallback) {
-        // Why: selected-target sends are immediate; without terminal.agentStatus
-        // an older remote runtime cannot rule out permission/action prompts.
+        // Immediate selected-target sends require agentStatus to rule out permission/action prompts on older hosts.
         return { status: 'status-unavailable', supportsGuardedSend: false }
       }
-      // Why: active-focused sends still wait for tui-idle, preserving old
-      // runtime compatibility without immediate selected-target risk.
+      // Focused sends still wait for tui-idle, preserving older-runtime compatibility.
       return await getLegacyTerminalAgentSendStatus(runtimeTarget, terminalHandle)
     }
     if (isRuntimeTerminalUnavailable(error)) {

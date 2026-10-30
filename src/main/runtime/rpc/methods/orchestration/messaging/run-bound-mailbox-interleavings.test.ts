@@ -52,17 +52,22 @@ describe('Run binding during Dispatch checks', () => {
       subject
     })
   }
+  // A Run this lead created earlier and that lost its binding: the one kind a worker may resume.
+  function orphanedOwnRun(): string {
+    const id = state.db.createRun({
+      objective: 'resume',
+      coordinatorHandle: 'term_lead',
+      coordinatorPaneKey: LEAD
+    }).id
+    state.db.db
+      .prepare(
+        'UPDATE runs SET coordinator_handle = NULL, coordinator_pane_key = NULL WHERE id = ?'
+      )
+      .run(id)
+    return id
+  }
   async function bind(method: 'runCreate' | 'runUse') {
-    const params =
-      method === 'runCreate'
-        ? { objective: 'child' }
-        : {
-            id: state.db.createRun({
-              objective: 'adopt',
-              coordinatorHandle: 'term_other',
-              coordinatorPaneKey: OTHER
-            }).id
-          }
+    const params = method === 'runCreate' ? { objective: 'child' } : { id: orphanedOwnRun() }
     await h.call(`orchestration.${method}`, { from: 'term_lead', ...params }, state.ctx)
     const run = state.db.getCurrentRunForPane(LEAD)
     if (!run) {

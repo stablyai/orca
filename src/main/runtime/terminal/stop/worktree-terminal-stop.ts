@@ -50,13 +50,12 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     worktreeSelector: string
   ): Promise<RuntimeWorktreeTerminalCloseResult> {
     const graphEpoch = this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     const hostFence = this.getWorktreeHostFence(worktree)
 
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
-      // Why: emptying a rotated runtime partition re-routes the session owner, so the
-      // records cleared below live in the partition that owned the tabs at the start.
+      // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
       const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(worktree.id)
       const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`)
       const targetPtyIds = collectWorktreePtyIds(
@@ -69,8 +68,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         hostFence,
         true
       )
-      // Switch point: a terminal main binds as the close begins may run through a host's listing
-      // gap, as the window kept it connected; only its certified exit counts as stopped.
+      // Main-bound terminals can survive inventory gaps; only certified exits count them stopped.
       const mainBound = new Set(
         [...targetPtyIds].filter(
           (ptyId) => ORCA_LAYOUT_OWNER_IS_MAIN && mainHoldsTerminal(this, ptyId)
@@ -177,7 +175,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = options.resolvedWorktreeId
       ? { id: options.resolvedWorktreeId }
-      : await this.resolveWorktreeSelector(worktreeSelector)
+      : await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     const pastDeadline = (): boolean =>
       options.deadline !== undefined && Date.now() >= options.deadline
@@ -257,7 +255,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     worktreeSelector: string,
     options: { soleLivePtyId?: string } = {}
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     const scope = resolveSleepScope(this.store?.getRepos() ?? [], worktree)
     const existing = this.terminalSleepByHostWorktree.get(scope.key)
     if (existing) {
@@ -319,8 +317,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     worktreeId: string,
     operation: () => Promise<T>
   ): Promise<T> {
-    // Why exclusive: adoption reconciles this worktree's terminal records, so
-    // it must not interleave with a spawn registering a pty or with a sleep.
+    // Adoption reconciles terminal records and must exclude concurrent spawns and sleeps.
     const release = await this.acquireWorktreeTerminalMutation(worktreeId, 'exclusive')
     try {
       return await operation()

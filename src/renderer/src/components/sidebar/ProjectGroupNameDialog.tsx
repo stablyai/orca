@@ -40,13 +40,11 @@ export function ProjectGroupNameDialog({
   const trimmedName = name.trim()
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
-    // Why: save can finish after the dialog closes; the content ref keeps late
-    // completions from mutating stale dialog state without an Effect.
+    // Track content attachment so late saves cannot update closed dialog state.
     mountedRef.current = node !== null
   }, [])
 
-  // Why: the input should mount already seeded and selectable for the active
-  // group; Effect-based hydration shows one frame with the prior draft.
+  // Seed before paint so selection sees the current name instead of the prior draft.
   if (open !== previousOpenState.open || initialName !== previousOpenState.initialName) {
     setPreviousOpenState({ open, initialName })
     if (open) {

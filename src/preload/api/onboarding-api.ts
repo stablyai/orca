@@ -1,4 +1,4 @@
-import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat-upgrade-tip-audience'
+import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat/native-chat-upgrade-tip-audience'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 
 export type OnboardingApi = {

@@ -1,5 +1,4 @@
-// A provider retrying writes a row per attempt, and the journal keeps them all. A transcript
-// draws only the latest row of each agent's run: its retry rows, none of its other rows between.
+// Keep every retry in the journal but draw only each agent run’s latest retry row, preserving intervening non-retry rows.
 
 import { agentJournalItemSubagentId } from '../agent-session-journal-producer'
 import type { NativeChatMessage } from '../native-chat-types'
@@ -14,8 +13,7 @@ function isProviderRetryRow(message: NativeChatMessage): boolean {
   )
 }
 
-/** Runs are per agent because each agent's rows are drawn apart (the conversation, or a
- *  subagent's section), so another agent's row never ends a run and one never hides another's. */
+/** Track runs per agent: interleaved conversation/subagent sections cannot end or hide one another’s runs. */
 export function collapseProviderRetryRuns(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatMessage[] {

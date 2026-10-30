@@ -14,7 +14,7 @@ vi.mock('../repo-worktrees', () => ({
 vi.mock('../local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.runtimes
 }))
-import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from './filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,

@@ -7,6 +7,7 @@ import {
   getSendCommandCalls,
   getSendCommandMethods,
   sendAndReceive,
+  mockAsWebContents,
   type MockWebContents
 } from './cdp-ws-proxy-test-harness'
 
@@ -21,8 +22,7 @@ describe('CdpWsProxy', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-    proxy = new CdpWsProxy(mock.webContents as never, () => () => {})
+    proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {})
     endpoint = await proxy.start()
   })
 
@@ -335,6 +335,26 @@ describe('CdpWsProxy', () => {
     expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
       'DOM.enable',
       {},
+      'oopif-session-123'
+    )
+    client.close()
+  })
+
+  it('never leaves auto-attached workers and frames waiting on a client that may leave', async () => {
+    mock.webContents.debugger.sendCommand.mockResolvedValueOnce({})
+
+    const client = await connect(endpoint)
+    // agent-browser 0.39 asks child targets to wait for it; the shared guest debugger outlives it.
+    await sendAndReceive(client, {
+      id: 1,
+      method: 'Target.setAutoAttach',
+      params: { autoAttach: true, waitForDebuggerOnStart: true, flatten: true },
+      sessionId: 'oopif-session-123'
+    })
+
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'Target.setAutoAttach',
+      { autoAttach: true, waitForDebuggerOnStart: false, flatten: true },
       'oopif-session-123'
     )
     client.close()

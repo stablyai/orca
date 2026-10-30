@@ -75,7 +75,7 @@ describe('a Task whose supervised worker is stopping', () => {
       const { task, dispatch } = localWorker()
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       db.beginWorkerStop(dispatch.id, 'epoch_home')
-      // beginWorkerStop moved the Task to blocked; put it back the only way that is not a re-open.
+      // Use SQL to restore dispatched without invoking the guarded reopen path.
       db.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(task.id)
 
       expect(db.updateTaskStatus(task.id, 'dispatched')?.status).toBe('dispatched')
@@ -87,7 +87,7 @@ describe('a Task whose supervised worker is stopping', () => {
       const { task, dispatch } = localWorker()
       db.beginWorkerStop(dispatch.id, 'epoch_dead_runtime')
 
-      // The runtime that owned the first stop died mid-flight; the re-issue is the way out.
+      // A new runtime epoch must be able to reissue a stop abandoned by a crashed owner.
       const reissued = db.beginWorkerStop(dispatch.id, 'epoch_new_runtime')
       expect(reissued).toMatchObject({ disposition: 'stopping' })
       expect(db.getWorkerDispatch(dispatch.id)?.runtime_epoch).toBe('epoch_new_runtime')
@@ -103,13 +103,11 @@ describe('a Task whose supervised worker is stopping', () => {
       const { dispatch } = localWorker()
       db.beginWorkerStop(dispatch.id, 'epoch_this_runtime')
 
-      // The terminal is closing and its exit event has not landed yet. Letting this second pass
-      // record stop_unknown would make the exit read as a crash instead of this stop succeeding.
+      // A repeated stop must not overwrite stopping with unknown before the exit event lands.
       expect(() => db.beginWorkerStop(dispatch.id, 'epoch_this_runtime')).toThrowError(
         /cannot stop from stopping/
       )
 
-      // The row is still the one the exit path claims a clean stop from: stopping, same epoch.
       expect(db.getWorkerDispatch(dispatch.id)).toMatchObject({
         state: 'stopping',
         runtime_epoch: 'epoch_this_runtime'

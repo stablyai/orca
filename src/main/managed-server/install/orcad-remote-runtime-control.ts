@@ -126,7 +126,7 @@ export async function launchOrcadAndAwaitReadiness(
         target.host,
         spec,
         target.conn.orcadLaunchDetach ?? 'nohup',
-        (await target.conn.orcadLaunchEnv?.()) ?? []
+        (await target.conn.orcadLaunchEnv?.({ fullVersion: spec.fullVersion })) ?? []
       )
     )
   }

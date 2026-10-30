@@ -4,13 +4,15 @@ import { readNativeNotificationData } from '../src/notifications/native-notifica
 import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
 import { firstParam } from '../src/navigation/route-param-reader'
 import { useCallback, useEffect, useRef } from 'react'
-import { View, StyleSheet } from 'react-native'
-import { Stack, useRouter, useGlobalSearchParams, usePathname } from 'expo-router'
+import { View } from 'react-native'
+import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
-import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
+import { startMobileAppearance } from '../src/theme/mobile-appearance'
+import { themedStyleSheet } from '../src/theme/themed-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
@@ -23,21 +25,31 @@ import {
 import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
 import { loadHostCatalog } from '../src/transport/host-store'
-import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { usePairingLinks } from '../src/navigation/use-pairing-links'
+import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
+import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
+import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
+import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { InAppNotificationBanner } from '../src/notifications/InAppNotificationBanner'
 
-// Why: keeps the native splash screen visible until the React tree is mounted
-// and ready to render. Without this the user sees a blank white/black frame
-// between the native splash and the first React paint.
-SplashScreen.preventAutoHideAsync()
+export { NativeScreenRecovery as ErrorBoundary } from '../src/components/NativeScreenRecovery'
 
-// Why at boot and not only on subscribe: the gateway's FCM payload targets the
-// 'orca-desktop' channel, and a background push can land before any socket has
-// connected. Android drops a notification whose channel does not exist yet.
+// Keep splash visible until React content is ready to avoid a blank frame.
+SplashScreen.preventAutoHideAsync()
+// Apply the phone's scheme before the first render; the saved choice lands under the splash.
+const appearanceReady = startMobileAppearance()
+// Likewise the UI language: the saved choice and its catalog load under the splash.
+const languageReady = startMobileUiLanguage()
+
+// Create orca-desktop channel at boot: background FCM can arrive before socket subscription, and Android drops unknown-channel pushes.
 void ensureDesktopNotificationChannel().catch(() => {})
+// Channel names show in Android settings; rename them in the active language.
+subscribeMobileUiLanguage(() => {
+  void ensureDesktopNotificationChannel().catch(() => {})
+})
 void registerPushDismissalTask().catch(() => {})
 
 // Register before scheduling so foreground delivery uses the same suppression policy.
@@ -45,8 +57,12 @@ Notifications.setNotificationHandler({
   handleNotification: foregroundNotificationBehavior
 })
 
+// Survive root recovery, including shells without clearLastNotificationResponse.
+const handledNotificationIds = new Set<string>()
+
 export default function RootLayout() {
-  const router = useRouter()
+  const colorScheme = useMobileColorScheme()
+  useFollowDeviceUiLocale()
   const pathname = usePathname()
   const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
     hostId?: string | string[]
@@ -67,17 +83,16 @@ export default function RootLayout() {
     if (effectiveHostId !== '') {
       lastHostIdRef.current = effectiveHostId
     }
-    if (
-      pathname.includes('/session/') &&
-      effectiveHostId !== '' &&
-      effectiveWorktreeId !== ''
-    ) {
+    if (pathname.includes('/session/') && effectiveHostId !== '' && effectiveWorktreeId !== '') {
       setNotificationViewingWorkspace({
         hostId: effectiveHostId,
         worktreeId: effectiveWorktreeId,
         ...(resolvedExecutionHost !== '' ? { executionHost: resolvedExecutionHost } : {})
       })
-    } else if (pathname.startsWith('/h/') && (effectiveHostId !== '' || lastHostIdRef.current !== '')) {
+    } else if (
+      pathname.startsWith('/h/') &&
+      (effectiveHostId !== '' || lastHostIdRef.current !== '')
+    ) {
       setNotificationViewingWorkspace(null, {
         preserveInPageForHostId: effectiveHostId || lastHostIdRef.current
       })
@@ -88,51 +103,20 @@ export default function RootLayout() {
     }
   }, [pathname, resolvedHostId, resolvedWorktreeId, resolvedExecutionHost])
   const openNotificationRoute = useOpenNotificationRoute()
-  const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+  usePairingLinks()
 
   useEffect(() => {
-    // Why: pairing publication is journaled across process death; startup must
-    // reconcile the server result before another scan can replace that journal.
+    // Reconcile the crash-persistent pairing journal before another scan can replace it.
     void recoverMobileRelayPairing()
   }, [])
 
-  // Why: a rolled APNs/FCM token stops delivering silently, so every paired host
-  // has to be re-registered with the new one as soon as the provider hands it over.
+  // Re-register rolled APNs/FCM tokens with every paired host or delivery silently stops.
   useEffect(() => startPushTokenSync(), [])
   // Cold start, then foreground and timer checks on the desktop updater's cadence.
   useEffect(() => appUpdateChecker.start(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
 
-  // Why: route `orca://pair?...` deep links to the confirm screen so
-  // the same pairing flow runs whether the link arrived via QR scan,
-  // paste, AirDrop, Messages, or `xcrun simctl openurl`. getInitialURL
-  // covers cold-start (link tapped while app was closed); the listener
-  // covers warm-start (link tapped while app is in memory).
-  useEffect(() => {
-    function handleUrl(url: string) {
-      const code = extractPairingCodeFromUrl(url)
-      if (code) {
-        // Why: Android camera launches can leave Expo Router's unmatched
-        // `orca://pair` route underneath this screen; replacing keeps cancel
-        // and edge-back from revealing the router error page.
-        router.replace({ pathname: '/pair-confirm', params: { code } })
-      }
-    }
-
-    void Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleUrl(url)
-      }
-    })
-
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
-    return () => sub.remove()
-  }, [router])
-
-  // ─── Notification tap routing ───
-  // Why: iOS delivers local notification taps through expo-notifications,
-  // not Linking. Route both cold-start and warm-start responses to the host
-  // and worktree that scheduled the notification.
+  // Notification taps arrive through expo-notifications, not Linking; route both cold and warm responses to their host/worktree.
   useEffect(() => {
     let disposed = false
 
@@ -140,8 +124,7 @@ export default function RootLayout() {
       try {
         Notifications.clearLastNotificationResponse()
       } catch {
-        // Older native shells may not expose the clear API; duplicate guards
-        // still protect the current JS runtime.
+        // Older native shells may lack clear API; duplicate guards still protect this JS runtime.
       }
     }
 
@@ -156,9 +139,7 @@ export default function RootLayout() {
     async function getNavigationTarget(notification: Notifications.Notification) {
       const hosts = await loadHostCatalog().catch(() => null)
       const data = readNativeNotificationData(notification.request)
-      // A gateway push names its host by key fingerprint, not by this device's hostId.
-      // With no catalog to resolve against, such a push stays unrouted instead of
-      // falling back to whatever hostId its raw data carries.
+      // Gateway pushes identify hosts by key fingerprint; without catalog resolution, never fall back to their raw hostId.
       const routeData = pushNotificationRouteData(
         data,
         hosts ?? [],
@@ -179,16 +160,15 @@ export default function RootLayout() {
       }
 
       const notificationId = response.notification.request.identifier
-      if (handledNotificationIdsRef.current.has(notificationId)) {
+      if (handledNotificationIds.has(notificationId)) {
         return
       }
-      handledNotificationIdsRef.current.add(notificationId)
-      // Why: RootLayout never unmounts, so cap this tap-dedup set (FIFO) rather
-      // than letting it grow one id per notification tapped for the app's life.
-      if (handledNotificationIdsRef.current.size > 256) {
-        const oldest = handledNotificationIdsRef.current.values().next().value
+      handledNotificationIds.add(notificationId)
+      // Bound process-lifetime tap dedup with FIFO eviction.
+      if (handledNotificationIds.size > 256) {
+        const oldest = handledNotificationIds.values().next().value
         if (oldest !== undefined) {
-          handledNotificationIdsRef.current.delete(oldest)
+          handledNotificationIds.delete(oldest)
         }
       }
 
@@ -202,7 +182,9 @@ export default function RootLayout() {
       }
     }
 
-    const initialResponse = getInitialNotificationResponse()
+    const initialResponse = consumeInitialLaunchIntent('notification')
+      ? getInitialNotificationResponse()
+      : null
     if (initialResponse) {
       void handleNotificationResponse(initialResponse)
     }
@@ -215,20 +197,19 @@ export default function RootLayout() {
       sub.remove()
     }
   }, [openNotificationRoute])
-  // ─── End notification tap routing ───
 
-  // Why: hide the native splash only once the navigation Stack has been laid
-  // out — this is the earliest moment the user will see actual app content.
-  // Previously the splash hid when a placeholder View rendered, leaving a
-  // grey gap before the real screen appeared.
+  // Hide splash only after Stack layout; a placeholder render can precede real screen content and expose a grey gap.
   const onNavigatorLayout = useCallback(async () => {
+    await Promise.all([appearanceReady, languageReady])
+    // Let the language switch commit before revealing the first frame.
+    await new Promise((resolve) => requestAnimationFrame(resolve))
     await SplashScreen.hideAsync()
   }, [])
 
   return (
     <RpcClientProvider>
       <View style={styles.root} onLayout={onNavigatorLayout}>
-        <StatusBar style="light" />
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         <SideSafeArea>
           <Stack
             screenOptions={{
@@ -237,11 +218,7 @@ export default function RootLayout() {
               headerTitleStyle: { fontSize: 16, fontWeight: '600' },
               contentStyle: { backgroundColor: colors.bgBase },
               headerShadowVisible: false
-              // Why: deliberately no `orientation` screenOption. react-native-screens
-              // has no value that respects the device rotation lock — even 'default'
-              // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
-              // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
-              // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
+              // Leave orientation unset: react-native-screens overrides rotation lock even for default; Android manifest fullUser honors the user’s setting.
             }}
           >
             <Stack.Screen
@@ -259,6 +236,7 @@ export default function RootLayout() {
               options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
             />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
+            <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
             <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
             <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
             <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
@@ -286,9 +264,9 @@ export default function RootLayout() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     backgroundColor: colors.bgBase
   }
-})
+}))

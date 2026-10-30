@@ -7,7 +7,8 @@ export const BROWSER_SITE_PERMISSIONS = [
   'clipboard',
   'midi',
   'window-management',
-  'idle-detection'
+  'idle-detection',
+  'local-network'
 ] as const
 
 export type BrowserSitePermission = (typeof BROWSER_SITE_PERMISSIONS)[number]

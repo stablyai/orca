@@ -108,9 +108,7 @@ describe('FloatingTerminalPanel close behavior', () => {
   it('keeps the shared pane overlay mounted but hidden while the panel is closed', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
-    // Why: the closed panel stays mounted but CSS-hidden; passing isVisible=open routes every
-    // retained pane through the standard hidden-terminal suspend/resume path (pinned on the
-    // shared TerminalOverlaySlot), so no live glyph atlas can corrupt while hidden.
+    // The hidden panel retains panes; isVisible must suspend terminals to protect their glyph atlases.
     await renderPanel(false)
     runEffects()
     await Promise.resolve()
@@ -121,7 +119,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     const openElement = await renderPanel(true)
     const openLayers = findByTypeName(openElement, 'WorkspacePaneOverlayLayers')
     expect(openLayers.props.isVisible).toBe(true)
-    // Terminal panes mount against the host-resolved floating cwd once the viewport settles.
     expect(openLayers.props.worktreePath).toBe('/tmp/orca')
   })
 
@@ -133,8 +130,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     await Promise.resolve()
     const element = await renderPanel(true)
 
-    // Cold-park selection itself is owned by the shared overlay layer; the floating panel's
-    // contract is the policy it feeds in.
     expect(findByTypeName(element, 'WorkspacePaneOverlayLayers').props).toEqual(
       expect.objectContaining({
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -156,7 +151,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
-    // Terminals route through closeTerminalTab (its own pin guard + F9 force-reenter), not the raw store close.
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({ onClosed: expect.any(Function) })
@@ -192,7 +186,6 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(tabBar.props.activeTabType).toBe('simulator')
     expect(tabBar.props.activeSimulatorTabId).toBe(tab.id)
-    // The emulator pane itself renders through the shared overlay stack.
     expect(findByTypeName(element, 'WorkspacePaneOverlayLayers').props.mountEmulatorOverlay).toBe(
       true
     )
@@ -427,8 +420,6 @@ describe('FloatingTerminalPanel tab drag wiring', () => {
 
     expect(dragLayer.props.worktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
     expect(dragLayer.props.enabled).toBe(true)
-    // The one strip and the group tree live inside the same scope, so a drag can
-    // reorder in the strip or split against the tree.
     expect(findByTypeName(element, 'TabBar')).toBeDefined()
     expect(findByTypeName(element, 'TabGroupSplitNodeTree')).toBeDefined()
   })
@@ -439,14 +430,10 @@ describe('FloatingTerminalPanel tab drag wiring', () => {
     const element = await renderPanel(true)
     const frame = findByProp(element, 'data-floating-workspace-surface-frame')
 
-    // Regression (0px panes): the tree's nodes size themselves as flex items, so their host
-    // must be a flex container that owns the body rect — TabGroupSplitNodeTree's host
-    // contract. Without it every group body, and every pane anchored to one, measures 0px
-    // tall. jsdom computes no layout, so pin the class contract; the e2e spec measures boxes.
+    // The tree needs a flex host or pane heights collapse to zero; this probe cannot measure layout.
     expect(frame.props.className).toBe('absolute inset-0 flex')
     expect(findByTypeName(frame, 'TabGroupSplitNodeTree')).toBeDefined()
-    // The overlays share the frame so anchor()/fallback geometry resolves in the same
-    // containing block as the group bodies they cover — as in WorktreeSplitSurface.
+    // Keep overlays in the group bodies’ containing block so anchor/fallback geometry agrees.
     expect(findByTypeName(frame, 'WorkspacePaneOverlayLayers')).toBeDefined()
   })
 

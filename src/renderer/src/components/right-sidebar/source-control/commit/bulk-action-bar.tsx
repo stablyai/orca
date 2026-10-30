@@ -27,8 +27,11 @@ export function BulkActionBar({
             <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
           ) : (
             <span className="tabular-nums">
-              {selectedCount}{' '}
-              {translate('auto.components.right.sidebar.BulkActionBar.60ed678138', 'selected')}
+              {translate(
+                'auto.components.right.sidebar.BulkActionBar.selectedCount',
+                '{{count}} selected',
+                { count: selectedCount, defaultValue_one: '{{count}} selected' }
+              )}
             </span>
           )}
         </div>
@@ -43,8 +46,13 @@ export function BulkActionBar({
               disabled={isExecuting}
             >
               <Plus className="mr-1 size-3" />
-              {translate('auto.components.right.sidebar.BulkActionBar.ef5f5bd06e', 'Stage (')}
-              {stageableCount})
+              {translate(
+                'auto.components.right.sidebar.BulkActionBar.stageCount',
+                'Stage ({{count}})',
+                {
+                  count: stageableCount
+                }
+              )}
             </Button>
           )}
           {unstageableCount > 0 && (
@@ -57,8 +65,13 @@ export function BulkActionBar({
               disabled={isExecuting}
             >
               <Minus className="mr-1 size-3" />
-              {translate('auto.components.right.sidebar.BulkActionBar.79a9f5f712', 'Unstage (')}
-              {unstageableCount})
+              {translate(
+                'auto.components.right.sidebar.BulkActionBar.unstageCount',
+                'Unstage ({{count}})',
+                {
+                  count: unstageableCount
+                }
+              )}
             </Button>
           )}
           <Button

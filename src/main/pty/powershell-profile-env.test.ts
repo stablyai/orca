@@ -13,7 +13,7 @@ const { registryDocumentsDir } = vi.hoisted(() => {
   return { registryDocumentsDir: state }
 })
 
-// Why: the Documents known folder comes from the registry, absent off Windows.
+// Off-Windows registry reads cannot resolve the Documents known folder.
 vi.mock('../windows-native-registry', () => ({
   loadWindowsNativeRegistry: () => ({
     HK: { CU: 1, LM: 2 },
@@ -23,7 +23,7 @@ vi.mock('../windows-native-registry', () => ({
 
 let root: string
 
-// Why: $PSHOME profiles hang off these, so the developer's real ones must not leak in.
+// Isolate all-users profiles under $PSHOME from the developer's real files.
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-ps-profile-'))
   vi.stubEnv('SystemRoot', join(root, 'Windows'))
@@ -81,7 +81,6 @@ describe('readPowerShellProfileEnvValues', () => {
   it('reads the registry-named Documents folder, e.g. one OneDrive redirected', () => {
     const documentsDir = join(root, 'OneDrive', 'Dokumente')
     registryDocumentsDir.value = documentsDir
-    // PowerShell loads only the redirected folder, so a stale default is ignored.
     writeProfile(
       join(root, 'me', 'Documents', 'PowerShell', 'profile.ps1'),
       "$env:CODEX_HOME = 'C:\\stale'\n"

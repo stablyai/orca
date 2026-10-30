@@ -3,7 +3,7 @@ import {
   acknowledgeWatcherSubscribe as ackSubscribe,
   currentWatcherChild,
   FakeWatcherChild as FakeChild
-} from './parcel-watcher-process-test-child'
+} from './filesystem/watcher-process/parcel-watcher-process-test-child'
 
 const { forkMock, existsSyncMock } = vi.hoisted(() => ({
   forkMock: vi.fn(),
@@ -21,10 +21,10 @@ import {
   CANARY_STALL_BACKOFF_INITIAL_MS,
   CANARY_STALL_BACKOFF_MAX_MS
 } from './parcel-watcher-delivery-canary'
-import { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
+import { WatcherProcessCrashFuse } from './filesystem/watcher-process/parcel-watcher-crash-fuse'
 import { WatcherDeliveryHealthMonitor } from './parcel-watcher-delivery-health'
-import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
-import { createWatcherProcessSupervisor } from './parcel-watcher-process'
+import type { WatcherProcessSubscriptionRecord } from './filesystem/watcher-process/parcel-watcher-process-subscription'
+import { createWatcherProcessSupervisor } from './filesystem/watcher-process/parcel-watcher-process'
 
 describe('watcher delivery stall reporting', () => {
   beforeEach(() => {

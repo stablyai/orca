@@ -62,7 +62,6 @@ export function SmartWorkspaceSourceResultList({
   return (
     <>
       {mode === 'gitlab' ? (
-        // Why: state chips mirror GitLab's merge-request tab strip.
         <div
           className="flex shrink-0 items-center gap-1 border-b border-border/40 px-2 py-1.5"
           onMouseDown={(e) => e.preventDefault()}

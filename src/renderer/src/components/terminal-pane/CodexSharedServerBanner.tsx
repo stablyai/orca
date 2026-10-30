@@ -101,8 +101,7 @@ export function CodexSharedServerBanner({
     captureReturnFocus()
     setOpenDialog(dialog)
   }
-  // Why an open dialog keeps it: this pane's Codex can end mid-dialog (Stop server does it), and
-  // the dialog must still close normally so focus returns.
+  // Keep open dialogs mounted after Codex ends so they close normally and return focus.
   if (!status && openDialog === null) {
     return null
   }

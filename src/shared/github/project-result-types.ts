@@ -1,6 +1,4 @@
-// Why: the ok/error envelopes returned by Project IPC calls all share one
-// classified error, and they pull in cross-module work-item/comment/user types
-// that the ProjectV2 data model in `./project-types` never needs.
+// Project IPC envelopes share classified failures and cross-module work-item/comment/user types unnecessary in the ProjectV2 domain model.
 import type { PRComment } from './comment-types'
 import type {
   GitHubIssueType,
@@ -11,8 +9,6 @@ import type {
 } from './project-types'
 import type { GitHubAssignableUser } from './pull-request-types'
 import type { GitHubWorkItemDetails } from './work-item-types'
-
-// ─── Classified errors ─────────────────────────────────────────────────
 
 export type GitHubProjectViewErrorType =
   | 'auth_required'
@@ -26,11 +22,43 @@ export type GitHubProjectViewErrorType =
   | 'rate_limited'
   | 'unknown'
 
+/** Distinguishes Orca-authored sentences that share one `type`; renderers fall back to `message` for unknown or missing reasons. */
+export type GitHubProjectViewErrorReason =
+  | 'project_or_view_not_found'
+  | 'project_not_found'
+  | 'view_not_found'
+  | 'owner_not_found'
+  | 'item_not_found'
+  | 'issue_not_found'
+  | 'input_required'
+  | 'input_too_large'
+  | 'input_unparseable'
+  | 'invalid_slug'
+  | 'invalid_positive_integer'
+  | 'invalid_owner_type'
+  | 'invalid_item_type'
+  | 'missing_ids'
+  | 'updates_required'
+  | 'comment_body_required'
+  | 'duplicate_target_not_allowed'
+  | 'duplicate_target_required'
+  | 'request_invalid'
+  | 'request_failed'
+  | 'unexpected_rest_response'
+
 export type GitHubProjectViewError = {
   type: GitHubProjectViewErrorType
+  /** English copy kept for mobile, older clients and logs. */
   message: string
-  /** Populated when the error is classifiable from a GraphQL response. Never
-   *  includes tokens or full command stdout. */
+  reason?: GitHubProjectViewErrorReason
+  /** GitHub host for sign-in commands. */
+  host?: string
+  rateLimit?: { remaining: number; limit: number; resetMinutes: number }
+  /** Untranslated diagnostic or field name that follows Orca's own prefix. */
+  detail?: string
+  /** Rejected slug value for `invalid_slug`. */
+  value?: string
+  /** Classified GraphQL details only; never include tokens or full command stdout. */
   details?: { path?: (string | number)[]; code?: string }
 }
 
@@ -48,10 +76,7 @@ export type ListAccessibleProjectsResult =
   | {
       ok: true
       projects: GitHubProjectSummary[]
-      /** Why: per-org discovery can partially fail (a single org 504s while
-       *  the rest succeed). The picker renders a banner listing the affected
-       *  org logins so the user knows their list is incomplete and can paste
-       *  a URL to reach missing projects. Empty when discovery was clean. */
+      /** Org discovery can partially fail; name failed owners so the picker can show incompleteness and accept pasted URLs for missing projects. */
       partialFailures?: { owner: string; message: string }[]
     }
   | { ok: false; error: GitHubProjectViewError }
@@ -64,10 +89,7 @@ export type ResolveProjectRefResult =
       number: number
       title: string
       host?: string
-      // Why: when the input is a /views/{n} URL, surface the parsed view
-      // number so the picker can skip the view-pick step and commit the
-      // selection directly. Absent for owner/number shorthand and project
-      // URLs without a /views/ segment.
+      // Parsed /views/{n} lets the picker commit directly; absent for shorthand and plain project URLs.
       viewNumber?: number
     }
   | { ok: false; error: GitHubProjectViewError }
@@ -79,8 +101,6 @@ export type ListProjectViewsResult =
 export type ProjectWorkItemDetailsBySlugResult =
   | { ok: true; details: GitHubWorkItemDetails }
   | { ok: false; error: GitHubProjectViewError }
-
-// ─── Mutations ─────────────────────────────────────────────────────────
 
 export type GitHubProjectMutationResult =
   | { ok: true }

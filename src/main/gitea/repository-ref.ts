@@ -16,6 +16,7 @@ const KNOWN_NON_GITEA_HOSTS = new Set([
   'github.com',
   'gitlab.com',
   'bitbucket.org',
+  'ssh.bitbucket.org',
   'dev.azure.com',
   'ssh.dev.azure.com'
 ])

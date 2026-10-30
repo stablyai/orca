@@ -3,6 +3,7 @@ import {
   buildJcodeRuntimeDirEnv,
   JCODE_RUNTIME_DIR_ENV_KEY
 } from '../../../shared/jcode-runtime-dir'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
 
@@ -49,6 +50,7 @@ export function stampPtySpawnPaneEnv(
     delete env.ORCA_TAB_ID
     delete env.ORCA_WORKTREE_ID
     delete env.ORCA_AGENT_LAUNCH_TOKEN
+    applyScrubSafeAgentEnvAliases(env)
     return
   }
   env.ORCA_PANE_KEY = pane.paneKey
@@ -66,6 +68,8 @@ export function stampPtySpawnPaneEnv(
   if (args.jcodeRuntimeDir !== undefined) {
     env[JCODE_RUNTIME_DIR_ENV_KEY] = args.jcodeRuntimeDir
   }
+  // Why: SSH relay spawns skip the local/daemon env builders that otherwise mirror these.
+  applyScrubSafeAgentEnvAliases(env)
 }
 
 /** Window local providers validate asynchronously; daemon spawns retain their synchronous preparation. */

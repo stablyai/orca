@@ -6,10 +6,7 @@ export function getBrowserLinkRoutingShortcutLabel(platform: { isMac: boolean })
   return platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'
 }
 
-// Why: "always" stops being true once inverting is on, so only then does the nested
-// row take over the chord sentence — with it off this reads exactly as it always has.
-// Each variant is a complete catalog entry: stitched suffixes break in locales whose
-// sentence joining differs from English.
+// Modifier inversion changes always-copy; use complete localized variants because sentence suffixes cannot be safely stitched across locales.
 export function getBrowserLinkRoutingDescription(
   platform: { isMac: boolean },
   modifierInverts = false
@@ -17,22 +14,17 @@ export function getBrowserLinkRoutingDescription(
   if (modifierInverts) {
     return translate(
       'auto.components.settings.BrowserLinkRoutingSetting.descriptionBase',
-      "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
+      'Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages still open in your system browser.'
     )
   }
   return translate(
     'auto.components.settings.BrowserLinkRoutingSetting.description',
-    "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
+    'Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages and {{shortcut}} always use your system browser.',
     { shortcut: getBrowserLinkRoutingShortcutLabel(platform) }
   )
 }
 
-/**
- * Title and description both name the destination the modifier reaches, which is
- * the opposite of wherever Link Routing points. Kept out of the component so the
- * settings-search index can reuse the same strings; the index pins openLinksInApp
- * to false, so it also indexes the other title as a keyword.
- */
+/** Share destination copy with search, which indexes the alternate title because its routing mode is fixed to false. */
 export function getLinkRoutingModifierTitle(openLinksInApp: boolean): string {
   return openLinksInApp
     ? translate(
@@ -45,8 +37,7 @@ export function getLinkRoutingModifierTitle(openLinksInApp: boolean): string {
       )
 }
 
-// Why: the Orca branch is enabled-state copy — with the toggle off the chord
-// still lands on the system browser, so it must not promise Orca in present tense.
+// Orca describes enabled inversion; while disabled the chord still opens the system browser.
 export function getLinkRoutingModifierDescription({
   openLinksInApp,
   isMac

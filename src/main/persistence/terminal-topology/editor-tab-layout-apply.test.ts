@@ -184,8 +184,7 @@ describe('a window moveTabToWorkspace between a local and an SSH workspace', () 
       })
     ).resolves.toEqual({ ok: true, result: { tabId: 'e1', groupId: `group-${to}` } })
 
-    // The move resolves once durable; a reload would drop the SSH workspace, whose repo the fixture
-    // catalog lacks.
+    // Inspect before reload: this fixture lacks the SSH repo needed to retain its workspace.
     const source = store.getWorkspaceSession(routes[from])
     const target = store.getWorkspaceSession(routes[to])
     expect(source.unifiedTabs?.[from]?.some((tab) => tab.id === 'e1') ?? false).toBe(false)

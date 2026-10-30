@@ -10,8 +10,8 @@ import { resetSshConnectionMocks } from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -57,8 +57,7 @@ describe('SshConnection', () => {
     await conn.exec(original)
 
     const wrapped = clientInstances[0].lastExecCommand!
-    // Why: sshd lets the login shell parse this first, so raw newlines let
-    // csh/tcsh split the command before /bin/sh receives it (issue #8701).
+    // sshd passes commands through the login shell first; raw newlines break csh/tcsh before /bin/sh (#8701).
     expect(wrapped).not.toContain('\n')
     expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*printf %b .*' orca-command /)
     expect(wrapped).not.toContain('base64')
@@ -192,8 +191,7 @@ describe('SshConnection', () => {
         .catch((error: Error) => error)
 
       controller.abort()
-      // Why: a hung socket must not pin the aborted caller for the full 30s
-      // connect timeout — the abort settles at the 5s grace bound instead.
+      // Abort must settle at5s grace, not wait out the30s hung connect.
       await vi.advanceTimersByTimeAsync(5_000)
 
       await expect(outcomePromise).resolves.toMatchObject({
@@ -293,8 +291,7 @@ describe('SshConnection', () => {
     controller.abort()
     pendingExecCallback?.(undefined, lateChannel)
 
-    // Why: the sshd session slot is freed only when the channel finishes
-    // closing — settling before 'close' lets the next open race the close.
+    // Session slots remain occupied until physical channel close; early settlement races the next open.
     const early = await Promise.race([outcomePromise, Promise.resolve('pending')])
     expect(early).toBe('pending')
     expect(lateChannel.close).toHaveBeenCalledTimes(1)

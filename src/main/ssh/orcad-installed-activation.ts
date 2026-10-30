@@ -1,10 +1,4 @@
-/**
- * The locked half of a deploy: stop, snapshot, start and commit, journaled at every step.
- *
- * The journal is durable before the first mutation, so a crash at any point leaves enough on
- * the host for `recoverInterruptedOrcadActivation` to finish or undo it. A run that ends with
- * the host provably back on one slot drops the fence; one that cannot prove it keeps it.
- */
+/** Journal durably before mutation so interrupted deploys can finish or recover. Release the fence only once the host is provably settled on one slot. */
 import { orcadRemoteBaseDir } from '../managed-server/install/orcad-remote-windows-node'
 import { randomUUID } from 'node:crypto'
 import type { OrcadDeployOptions, OrcadDeployResult } from './orcad-remote-deploy'
@@ -25,7 +19,10 @@ import {
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
 import { runFencedStop } from './orcad-fenced-stop'
-import { CURRENT_ORCAD_DAEMON_PROTOCOL } from './orcad-daemon-protocol-crossing'
+import {
+  censusNeedsHostDaemonProtocols,
+  CURRENT_ORCAD_DAEMON_PROTOCOL
+} from './orcad-daemon-protocol-crossing'
 import { ORCAD_LOG_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 import { orcadSnapshotFailureReason } from '../managed-server/host-state/orcad-state-snapshot-space'
 import {
@@ -40,7 +37,7 @@ import {
 } from '../managed-server/host-state/orcad-state-snapshot'
 import { joinRemotePath } from './ssh-remote-platform'
 import { computeLocalOrcadBuildHash } from './orcad-local-build-hash'
-import { preflightInstalledOrcad } from '../managed-server/install/orcad-remote-preflight'
+import { preflightOrcadCandidate } from './orcad-candidate-preflight'
 import type { OrcadActivationLockControl } from '../managed-server/activation/orcad-activation-lock'
 import type { OrcadActivateTransaction } from '../managed-server/activation/orcad-activation-transaction'
 import {
@@ -76,7 +73,6 @@ import { errorMessage } from '../../shared/error-message'
 
 type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }>
 
-/** The caller's `admitRecord` refused the record found under the fence; nothing was touched. */
 export const ORCAD_ACTIVATION_POLICY_REFUSED_CODE = 'orcad_activation_policy_refused'
 
 function countedLockedRecord(options: OrcadDeployOptions, record: OrcadActivationRecord): boolean {
@@ -86,7 +82,7 @@ function countedLockedRecord(options: OrcadDeployOptions, record: OrcadActivatio
   )
 }
 
-/** A census counted against another incumbent says nothing about this one's terminals. */
+/** A census of another incumbent cannot authorize stopping this one. */
 function censusForLockedRecord(
   options: OrcadDeployOptions,
   record: OrcadActivationRecord
@@ -108,13 +104,20 @@ export async function activateInstalledOrcad(
     reason
   })
   const record = await readOrcadActivationRecord(options)
-  const plan = planOrcadUpdate({
-    record,
-    candidateVersion: fullVersion,
-    census: censusForLockedRecord(options, record),
-    candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
-    ...(options.force !== undefined ? { force: options.force } : {})
-  })
+  const planFor = (
+    census: OrcadTerminalCensus,
+    hostDaemonProtocols?: readonly number[]
+  ): ReturnType<typeof planOrcadUpdate> =>
+    planOrcadUpdate({
+      record,
+      candidateVersion: fullVersion,
+      census,
+      candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
+      ...(hostDaemonProtocols ? { hostDaemonProtocols } : {}),
+      ...(options.force !== undefined ? { force: options.force } : {})
+    })
+  const census = censusForLockedRecord(options, record)
+  let plan = planFor(census)
   if (plan.action === 'noop') {
     return { outcome: 'already-active', fullVersion }
   }
@@ -122,22 +125,25 @@ export async function activateInstalledOrcad(
   if (refusal) {
     return notActivated(ORCAD_ACTIVATION_POLICY_REFUSED_CODE, refusal)
   }
-  if (plan.action === 'defer') {
+  // Hosts predating the census protocol set cannot name mixed generations; the candidate can.
+  const asksCandidate = censusNeedsHostDaemonProtocols(census)
+  if (
+    plan.action === 'defer' &&
+    !(asksCandidate && plan.code === 'orcad_update_daemon_protocol_unverifiable')
+  ) {
     return notActivated(plan.code, plan.reason)
   }
-
-  try {
-    await preflightInstalledOrcad({
-      ...options,
-      remoteInstallDir: remoteDir,
-      fullVersion
-    })
-  } catch (error) {
-    options.signal?.throwIfAborted()
-    return notActivated(
-      'orcad_candidate_preflight_failed',
-      `Candidate profile preflight failed; the incumbent was not stopped: ${errorMessage(error)}`
-    )
+  const preflight = await preflightOrcadCandidate(
+    { ...options, remoteInstallDir: remoteDir, fullVersion },
+    asksCandidate
+  )
+  if ('failure' in preflight) {
+    return notActivated('orcad_candidate_preflight_failed', preflight.failure)
+  }
+  const { hostDaemonProtocols } = preflight
+  plan = planFor(census, hostDaemonProtocols)
+  if (plan.action === 'defer') {
+    return notActivated(plan.code, plan.reason)
   }
 
   let incumbent: OrcadSlotIdentity | null = null
@@ -171,7 +177,7 @@ export async function activateInstalledOrcad(
     }
   }
 
-  // Before the recount: a slow scan must not outdate the census that admits the stop.
+  // Scan snapshot room before recount so slow scans cannot outdate stop admission.
   const roomless = await orcadSnapshotRoomRefusal(options, record, fullVersion)
   if (roomless) {
     return notActivated(ORCAD_SNAPSHOT_SPACE_INSUFFICIENT_CODE, roomless)
@@ -188,11 +194,11 @@ export async function activateInstalledOrcad(
   })
   const beginMutating = (): void => {
     lock.retainOnError()
-    // Past the first mutation a cancel would strand a stopped host, so the run finishes or rolls back.
+    // After mutation starts, cancellation would strand a stopped host; finish or roll back.
     options = withoutAbortSignal(options)
   }
   if (incumbent) {
-    // Last check before anything stops: the census above may predate a long upload.
+    // Recount immediately before stop; the initial census may predate a long upload.
     const fenced = await runFencedStop({
       recountCensus: () =>
         countedLockedRecord(options, record)
@@ -200,14 +206,8 @@ export async function activateInstalledOrcad(
           : Promise.reject(new Error('not the incumbent this update counted')),
       releaseIncumbentAdmission: options.releaseIncumbentAdmission,
       now: () => now().getTime(),
-      refuse: (census) => {
-        const plan = planOrcadUpdate({
-          record,
-          candidateVersion: fullVersion,
-          census,
-          candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
-          ...(options.force !== undefined ? { force: options.force } : {})
-        })
+      refuse: (recounted) => {
+        const plan = planFor(recounted, hostDaemonProtocols)
         return plan.action === 'defer' ? notActivated(plan.code, plan.reason) : null
       },
       prepare: () => writeOrcadActivationTransaction(options, transaction),
@@ -241,7 +241,7 @@ export async function activateInstalledOrcad(
   transaction = withOrcadActivationIncumbentStopped(transaction, now())
   await writeOrcadActivationTransaction(options, transaction)
 
-  // A live SQLite WAL is not a backup boundary, so the snapshot waits for confirmed exit.
+  // Wait for confirmed exit before snapshotting; a live SQLite WAL is not a backup boundary.
   const snapshotDir = orcadSnapshotPath(options, transaction.snapshot.dirName)
   const captureOutput = await execOrcadStateMutationOr(
     options,

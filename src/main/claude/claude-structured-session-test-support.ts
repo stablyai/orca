@@ -11,17 +11,15 @@ import type {
 } from './claude-stream-json-connection'
 import {
   ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionAdapterDeps,
-  type ClaudeStructuredLaunch,
-  type ClaudeStructuredSessionEvent
+  type ClaudeStructuredLaunch
 } from './claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
-export {
-  claudeStartupSettled,
-  claudeOpened
-} from './claude-structured-startup-settled-test-support'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
@@ -58,6 +56,7 @@ export function fakeClaude(
     initSessionId?: string
     initUuid?: string
     initModel?: string
+    initPermissionMode?: string
     /** Default: live SessionStart proof; 'none': no hook; 'init': unmeasured startup shape. */
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
@@ -94,6 +93,7 @@ export function fakeClaude(
         session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
         uuid: options.initUuid ?? 'init-uuid',
         model: options.initModel ?? 'claude-sonnet-5',
+        ...(options.initPermissionMode ? { permissionMode: options.initPermissionMode } : {}),
         apiKeySource: 'none',
         ...(options.capabilities ? { capabilities: options.capabilities } : {})
       })
@@ -260,6 +260,7 @@ export function adapterAtPublishFor(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false,
       ...launch,
       env: { ...launch.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }

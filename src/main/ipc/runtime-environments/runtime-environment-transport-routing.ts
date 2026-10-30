@@ -2,7 +2,11 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../../shared/runtime-environment-store'
-import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import {
+  requireWslHostWithoutStart,
+  resolveManagedRuntimeEnvironment,
+  type ManagedRuntimeCallPreparation
+} from './runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import type {
   RuntimeOrchestrationEnvelope,
@@ -11,7 +15,7 @@ import type {
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime-client'
+} from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
@@ -38,9 +42,20 @@ export async function callRuntimeEnvironment(
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  options?: { signal?: AbortSignal; expectedEnvironmentRuntimeId?: string }
+  options?: {
+    signal?: AbortSignal
+    expectedEnvironmentRuntimeId?: string
+    preparation?: ManagedRuntimeCallPreparation
+  }
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
+    let statusOptions = options
+    // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
+    if (options?.preparation) {
+      const { preparation, ...rest } = options
+      await requireWslHostWithoutStart(userDataPath, selector, preparation)
+      statusOptions = rest
+    }
     const environment = resolveEnvironment(userDataPath, selector)
     const failure = runtimeEnvironmentRevisionFailure(
       environment,
@@ -53,7 +68,7 @@ export async function callRuntimeEnvironment(
         userDataPath,
         selector,
         timeoutMs,
-        options,
+        statusOptions,
         expectedEnvironmentPairingRevision === undefined
       )
     )
@@ -68,7 +83,8 @@ export async function callRuntimeEnvironment(
       async () => {
         const currentEnvironment = await resolveManagedRuntimeEnvironment(
           userDataPath,
-          environment.id
+          environment.id,
+          options?.preparation
         )
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
@@ -161,13 +177,14 @@ export async function subscribeRuntimeEnvironment(
     onClose: () => void
   },
   isCurrent: () => boolean = () => true,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  preparation?: ManagedRuntimeCallPreparation
 ): Promise<RemoteRuntimeSubscription> {
   const callbacks = {
     ...rawCallbacks,
     onEvent: decodeSessionTabsDeltaEvents(method, rawCallbacks.onEvent)
   }
-  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector)
+  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
   const pairedConnection = getPreferredPairedRuntimeConnection(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false

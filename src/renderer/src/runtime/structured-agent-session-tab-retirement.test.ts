@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/structured-agent-session-launch-registry'
-import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
+import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({
+  remember: vi.fn(),
   closeSession:
     vi.fn<(target: RuntimeClientTarget, sessionId: string) => Promise<'closed' | 'unsupported'>>(),
   callRuntime:
@@ -25,9 +26,12 @@ const mocks = vi.hoisted(() => ({
     >()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', () => ({
   hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone,
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
+}))
+vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
+  enqueueSessionOptionSettingsWrite: mocks.remember
 }))
 vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: mocks.discardOutbox
@@ -73,6 +77,14 @@ import {
 } from './web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+
+import {
+  structuredSessionSelectionController,
+  forgetStructuredSessionSelection
+} from '@/lib/structured-agent-session-selection-controller'
+import { retirePurgedTabLaunches } from '@/store/slices/worktrees/teardown/purged-structured-launch-retirement'
+import { useAppStore } from '@/store'
+import { agentSessionTabFixture } from '@/components/native-chat/native-chat-workspace-test-fixtures'
 
 const layoutOwner: StructuredLaunchSlotOwner = {
   unifiedTabsByWorktree: {},
@@ -375,4 +387,101 @@ describe('structured agent session tab retirement', () => {
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
   })
+})
+
+it('releases ordinary close/purge owners while retaining the same-session other-host scope', async () => {
+  const remote = { kind: 'environment', environmentId: 'selection-generations' } as const
+  const local = { kind: 'local' } as const
+  const sessionId = 'selection-lifetime'
+  const retained = new Set<string>()
+  const set = Map.prototype.set
+  const del = Map.prototype.delete
+  const added = vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key,
+    value
+  ) {
+    if (value?.sessionId === sessionId && value?.controller) {
+      retained.add(key)
+    }
+    return set.call(this, key, value)
+  })
+  const deleted = vi.spyOn(Map.prototype, 'delete').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key
+  ) {
+    retained.delete(key)
+    return del.call(this, key)
+  })
+  try {
+    const previous = structuredSessionSelectionController(remote, sessionId, 'codex')
+    previous.issue('model', 'model-1', null)
+    expect(retained.size).toBe(1)
+    const survivor = structuredSessionSelectionController(local, sessionId, 'codex')
+    survivor.issue('model', 'surviving-model', null)
+    expect(retained.size).toBe(2)
+    const reply = Promise.withResolvers<{ kind: 'accepted'; options: Record<string, string> }>()
+    previous!.flush(() => previous!.request(() => reply.promise))
+    const drain = previous!.drain()
+    await retireStructuredAgentSessionTab({ target: remote, worktreeId: 'wt-1', sessionId })
+    await drain
+    expect(retained.size).toBe(1)
+    expect(survivor.overlay()).toEqual({ model: 'surviving-model' })
+    // The host can still finish the accepted write; no obsolete client owner remembers it.
+    reply.resolve({ kind: 'accepted', options: { model: 'model-1' } })
+    await reply.promise
+    await Promise.resolve()
+    expect(mocks.remember).not.toHaveBeenCalled()
+    expect(previous!.overlay()).toEqual({})
+    const noSend = vi.fn()
+    await expect(previous!.issue('model', 'dead', null).result).resolves.toEqual({
+      kind: 'superseded'
+    })
+    previous!.flush(noSend)
+    expect(previous!.freeze()).toEqual([])
+    await expect(previous!.request(noSend)).rejects.toThrow('retired')
+    expect(noSend).not.toHaveBeenCalled()
+    const purged = structuredSessionSelectionController(remote, sessionId, 'codex')
+    expect(purged).not.toBe(previous)
+    expect(purged.captureRead()).toEqual([])
+    purged.issue('effort', 'high', 'sonnet')
+    retirePurgedTabLaunches(
+      useAppStore.getState(),
+      'wt-1',
+      [],
+      [
+        agentSessionTabFixture(sessionId, 'wt-1', {
+          entityId: sessionId,
+          executionHostId: 'runtime:selection-generations'
+        })
+      ],
+      new Set([sessionId])
+    )
+    expect(purged.overlay()).toEqual({})
+    expect(retained.size).toBe(1)
+    expect(structuredSessionSelectionController(local, sessionId, 'codex')).toBe(survivor)
+    expect(survivor.overlay()).toEqual({ model: 'surviving-model' })
+    survivor.settle(survivor.pending()[0]!, {
+      kind: 'accepted',
+      options: { model: 'surviving-model' }
+    })
+    expect(mocks.remember).toHaveBeenLastCalledWith(local, {
+      type: 'apply-picks',
+      agent: 'codex',
+      picks: [{ modelId: 'surviving-model', optionId: 'model', value: 'surviving-model' }]
+    })
+    console.info(
+      'selection-registry-lifetime',
+      JSON.stringify({
+        ownerScopes: 2,
+        retainedPerChat: 1,
+        retainedAfterScopedClose: 1,
+        retainedAfterScopedPurge: 1
+      })
+    )
+  } finally {
+    forgetStructuredSessionSelection(sessionId)
+    added.mockRestore()
+    deleted.mockRestore()
+  }
 })

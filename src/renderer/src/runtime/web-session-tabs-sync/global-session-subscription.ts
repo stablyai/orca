@@ -58,7 +58,6 @@ function parseEnvironments(value: string | null): MirroredRuntimeEnvironment[] {
     .filter(({ environmentId }) => environmentId.trim())
 }
 
-/** Install all-worktree subscriptions and their visibility-resume coordinator. */
 export function installGlobalSessionTabsSubscriptions({
   runtimeSessionMirrorEnvironmentKey,
   workspaceSessionReady,

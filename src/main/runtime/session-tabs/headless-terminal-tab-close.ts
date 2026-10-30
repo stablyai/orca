@@ -84,9 +84,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       options.authorizedPty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(options.authorizedPty.ptyId, false)
     }
-    // Why: local provider ids can be reused after restart, so a dormant
-    // persisted id is not kill authority. SSH relay ids remain durable exact
-    // identities even before pane metadata reconnects.
+    // Persisted local provider ids may be reused after restart; only dormant SSH relay ids remain exact stop authority.
     const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
     for (const candidate of snapshot.tabs) {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
@@ -106,9 +104,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
           other.ptyId === ptyId
       )
       if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
-        // Why: a live serve leaf can exist before its debounced binding reaches
-        // persistence. Include it from the authoritative snapshot so split
-        // close cannot leave a provider process behind.
+        // Include live serve bindings from the authoritative snapshot before their debounced durable write, or split close leaks processes.
         ptyIdsToKill.add(ptyId)
       }
     }
@@ -124,10 +120,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       return false
     })
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-    // A close is not a handover: the generation publishing this worktree still is. Minting an epoch
-    // here published a stranger for a worktree the renderer owns, and a client that retires what it
-    // displaces then rejected that renderer's own next frame. The sibling headless writers carry the
-    // stored epoch forward for the same reason; `...snapshot` is what does it here.
+    // Close is no handover: retain the publisher epoch or clients fence the renderer's next frame.
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1,
@@ -159,7 +152,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
   ): Promise<RuntimeMobileSessionTabMoveResult> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -182,8 +175,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       throw new Error('target_group_not_found')
     }
 
-    // Why: web clients address terminal surfaces as tab::leaf, while desktop
-    // tab grouping is owned by the outer terminal tab id.
+    // Clients address panes as tab::leaf; desktop groups use the outer tab id.
     if (move.kind === 'reorder') {
       const tabOrder = this.normalizeMobileSessionTabOrder(snapshot, targetGroup, move.tabOrder)
       if (!tabOrder.includes(hostTabId)) {
@@ -203,11 +195,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     return { moved: true }
   }
 
-  // Why: pane geometry inside a tab (split ratios, expanded pane, pane titles)
-  // is host-authoritative for remote-server tabs but had no push path, so a
-  // client divider-drag / expand / pane-rename reverted on the next snapshot.
-  // Persist the structural fields onto the tab's layout, keeping host-owned
-  // pty bindings and active leaf.
+  // Persist client geometry/expand/titles to prevent snapshot reverts; preserve host-owned PTY bindings and active leaf.
   async updateMobileSessionPaneLayout(
     worktreeSelector: string,
     args: {
@@ -221,21 +209,17 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: resolve to the host tab id (older/raw-id clients) so the persisted
-    // layout entry matches, matching setMobileSessionTabProps.
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    // Resolve legacy raw ids to the host tab id, matching tab-prop persistence.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    // Switch point: pane names in a tab main owns are main's renames, so only geometry goes on.
+    // Main owns pane renames; pass only geometry onward.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       args = await this.nameMainPanes(worktreeId, hostTabId, args)
     }
-    // Why: when a renderer is authoritative (desktop host reached via shared
-    // control), it owns pane geometry and republishes it — a headless write here
-    // would be overwritten and could fight the renderer. Only pane names, which
-    // the window takes one pane at a time, are passed on to it.
+    // Attached renderers own geometry; forward only explicitly renamed panes so stale resent maps cannot overwrite host names.
     if (this.getAvailableAuthoritativeWindow()) {
       // Why: only panes the client says it renamed; a resent map may predate the host's names.
       const renamed = new Set(args.renamedLeafIds)

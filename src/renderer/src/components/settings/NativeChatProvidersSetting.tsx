@@ -3,7 +3,7 @@ import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat-providers'
+import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat/native-chat-providers'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
@@ -25,6 +25,7 @@ import {
   antigravityProviderSignInShown
 } from './AntigravityProviderSignInArea'
 import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 // The agents listed here are this computer's, so their downloaded programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
@@ -63,6 +64,7 @@ function ProviderStatus({
           <a
             href={homepageUrl}
             target="_blank"
+            onClick={openAppHttpLinkFromAnchor}
             rel="noopener noreferrer"
             className="text-foreground underline-offset-2 hover:underline"
           >
@@ -74,9 +76,7 @@ function ProviderStatus({
   )
 }
 
-/** The agent's name and status line, plus any install button, which sits beside the switch.
- *  An agent whose chats run a program Orca downloads shows that program's install state as its
- *  status line, since its CLI's install state says nothing about whether its chats can start. */
+/** Use managed chat-runtime status for downloaded providers; CLI installation does not establish chat readiness. */
 function ProviderDetail(props: {
   agent: TuiAgent
   label: string
@@ -160,7 +160,6 @@ function ProviderDetail(props: {
   )
 }
 
-/** Antigravity chats sign in on this computer, directly below the program they run. */
 function AntigravityChatProviderSignIn(): React.JSX.Element | null {
   const runtime = useManagedRuntimeInstall(CHAT_HOST, 'antigravity', true)
   if (runtime.kind !== 'active' || !antigravityProviderSignInShown(runtime)) {
@@ -226,7 +225,6 @@ export function NativeChatProvidersSetting({
                       updateSettings={updateSettings}
                     />
                   </div>
-                  {/* Chats sign in on the host they run on, under the program that serves them. */}
                   {agent === 'antigravity' && enabledInAgents ? (
                     <AntigravityChatProviderSignIn />
                   ) : null}

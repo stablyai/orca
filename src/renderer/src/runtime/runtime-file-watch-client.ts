@@ -105,8 +105,7 @@ function createSharedRuntimeFileWatch(
     closed: false,
     ready: false
   }
-  // Why: editor reloads and the Explorer can watch the same remote worktree.
-  // Keep one runtime WebSocket/server watcher and fan out events in renderer.
+  // Editor/Explorer share one host watcher/WebSocket with renderer event fan-out.
   shared.start = window.api.runtimeEnvironments
     .subscribe(
       {
@@ -178,12 +177,10 @@ function handleSharedRuntimeFileWatchResponse(
         listener.onPayload({ worktreePath, events: event.events })
       }
     } else if (event.type === 'error') {
-      // Why: error listeners may synchronously retry. Evict the terminal watch
-      // before callbacks run so the retry cannot join a stream awaiting `end`.
+      // Evict before callbacks: synchronous retries must not join a dying stream.
       failSharedRuntimeFileWatch(key, shared, new Error(event.message))
     } else if (event.type === 'end') {
-      // Why: shared-control completes without onClose; evict and release its
-      // transport handle so later listeners start cleanly without retained state.
+      // Shared-control can finish without onClose; evict/release so later readers start without retained state.
       if (sharedRuntimeFileWatches.get(key) === shared) {
         sharedRuntimeFileWatches.delete(key)
       }
@@ -226,8 +223,7 @@ function closeSharedRuntimeFileWatch(key: string, shared: SharedRuntimeFileWatch
   shared.closed = true
   sharedRuntimeFileWatches.delete(key)
   if (shared.keepStreamUntilReady) {
-    // Why: WebRuntimeClient owns shared-socket file-watch cleanup, including
-    // pre-ready cancellation ownership and late-ready files.unwatch.
+    // WebRuntimeClient owns shared-socket cleanup, pre-ready cancellation and late-ready unwatch.
     shared.unsubscribe?.()
     shared.unsubscribe = null
     return

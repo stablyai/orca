@@ -79,8 +79,7 @@ describe('workspace source policy', () => {
         url: 'https://acme.atlassian.net/browse/FUS-1'
       })
     ).toBe(true)
-    // Why: Jira items picked from smart search may arrive without an explicit
-    // provider; preservation must still hold via URL/identifier inference.
+    // Jira smart results may omit provider; preserve via URL/identifier inference too.
     expect(
       shouldPreserveWorkspaceSourceOnRepoChange({
         type: 'issue',
@@ -99,8 +98,7 @@ describe('workspace source policy', () => {
         url: 'https://github.com/o/r/issues/1'
       })
     ).toBe(false)
-    // Why: GitLab is repo-scoped; pin both the explicit MR and the
-    // URL-inferred shape clear, since folder-source/project-group paths delegate here.
+    // GitLab is repo-scoped; clear explicit and URL-inferred sources through folder/project-group delegates too.
     expect(
       shouldPreserveWorkspaceSourceOnRepoChange({
         provider: 'gitlab',
@@ -118,7 +116,6 @@ describe('workspace source policy', () => {
         url: 'https://gitlab.example.com/g/p/-/work_items/3'
       })
     ).toBe(false)
-    // Why: a null source (branch-only) has nothing to preserve; callers guard on this.
     expect(shouldPreserveWorkspaceSourceOnRepoChange(null)).toBe(false)
   })
 

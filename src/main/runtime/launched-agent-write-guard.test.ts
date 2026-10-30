@@ -29,15 +29,13 @@ describe('the check before each write of a launch prompt', () => {
     const { runtime, guard } = guardHarness(['agent'])
 
     await guard.beforeWrite('pty-1')
-    // The agent's own output after the paste says nothing about a shell.
     await guard.beforeWrite('pty-1')
     await guard.beforeWrite('pty-1')
 
     expect(runtime.readLaunchedAgentForeground).toHaveBeenCalledTimes(1)
   })
 
-  // Why: a ready signal can come from a shell whose agent exited, so only a read that finds the
-  // agent may let the text through; an unanswered read is not that.
+  // Composer signals can come from returned shells; unknown foreground cannot authorize writing.
   it.each(['shell', 'unknown'] as const)(
     'refuses a write when the read finds %s',
     async (found) => {
@@ -85,7 +83,10 @@ describe('the check before each write of a launch prompt', () => {
 
     const cleared = guardHarness(['agent'])
     await cleared.guard.beforeWrite('pty-1')
+    const scheduled = Promise.resolve().then(() => cleared.guard.beforeWrite('pty-1'))
     cleared.guard.dispose()
+    await expect(scheduled).rejects.toThrow('request_aborted')
+    expect(cleared.runtime.subscribeToTerminalData).toHaveBeenCalledTimes(1)
     expect(cleared.unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

@@ -5,11 +5,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
 import { restoreLocalStructuredSessionTabsOnce } from './local-structured-session-tabs-sync/inventory-refresh'
 
-// Whether THIS machine's runtime holds a structured chat (a saved record, or one a client created
-// here), as main derives it from the host's records. Building the host alone is not holding one:
-// session history and phone launches build it too. The chat setting picks what new launches open
-// as, so the chats that exist show whatever it says; a machine that holds none pays for no chat
-// mirror. The browser client has no runtime of its own.
+// Mirror existing local chats regardless of new-launch settings. Host construction alone proves no chats (history/phone also builds it); only held records justify mirror cost. Browser clients have no own runtime.
 
 let held = false
 let pushes = 0

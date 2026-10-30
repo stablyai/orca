@@ -1,6 +1,7 @@
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
+import type {
+  ClaudeJournalTranslator,
+  ClaudeJournalTranslatorDeps
+} from './claude-journal-translator-contract'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
@@ -33,28 +34,21 @@ import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
-import { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
-import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 
-export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
-
-export type ClaudeJournalTranslatorDeps = {
-  sink: StructuredAgentSessionEventSink
-  bindPromptItemId?: (journalItemId: string, promptKey: string) => void
-  coalesceMs?: number
-  schedule?: AgentSessionDeltaCoalescerDeps['schedule']
-  fallbackIdPrefix?: string
-  onBackgroundTaskJournalFailure?: (error: Error) => void
-  account?: () => AgentSessionAccountKind | undefined
-  goalBackgroundWork?: () => ClaudeGoalBackgroundWork
-}
+export type {
+  ClaudeJournalTranslator,
+  ClaudeJournalTranslatorDeps
+} from './claude-journal-translator-contract'
 
 export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
+  const coverage = createClaudeFinalOutputCoverage(deps.sink)
+  deps = { ...deps, sink: coverage.sink }
   const tools = new Map<string, ClaudeToolUse>()
   // Every row joins the root turn open when it is written, whoever produced it.
   const turnScope = () => turn.turnScope
@@ -112,9 +106,13 @@ export function createClaudeJournalTranslator(
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
-    persist: (identity, text, options) => {
+    persist: (identity, text, options, ended) => {
       const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, { ...options, turnScope: turnScope() })
+      deps.sink.appendItem(identity, body, {
+        ...options,
+        turnScope: turnScope(),
+        ...(ended ? { lifecycle: true } : {})
+      })
       deps.sink.publish()
     }
   })
@@ -164,7 +162,7 @@ export function createClaudeJournalTranslator(
     providerFallback,
     corrections,
     turn,
-    authenticationFailures: new ClaudeAuthenticationFailures(deps.account),
+    assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
     usageLimits: new ClaudeUsageLimits(),
     threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
   }
@@ -175,13 +173,6 @@ export function createClaudeJournalTranslator(
     context,
     goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable')
   }
-
-  const handleMessage = (
-    message: Record<string, unknown>,
-    startsTurn: boolean,
-    observedAt: number,
-    requestedAt?: number
-  ): boolean => journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt)
 
   return {
     handle: (event) => {
@@ -209,6 +200,10 @@ export function createClaudeJournalTranslator(
             event.message.type === 'stream_event'
           ) {
             turn.observeProviderCycleWork()
+            turn.inputChoiceWorkObserved ||=
+              event.message.type !== 'assistant' ||
+              event.message.is_api_error_message !== true ||
+              event.startedSend != null
           }
         }
       }
@@ -241,7 +236,8 @@ export function createClaudeJournalTranslator(
         messageContext.usageLimits.observe(event.message)
         const kind = claudeProviderFrameKind(event.message)
         if (
-          !handleMessage(
+          !journalClaudeMessage(
+            messageContext,
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
@@ -274,6 +270,7 @@ export function createClaudeJournalTranslator(
     get currentTurnId() {
       return turn.id
     },
+    currentTurnScope: turnScope,
     get commandTurnId() {
       return turn.command ? turn.id : null
     },
@@ -282,6 +279,9 @@ export function createClaudeJournalTranslator(
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
     get openTurnInLiveProviderCycle() {
       return turn.openedInLiveProviderCycle
+    },
+    get openTurnHasInputWork() {
+      return turn.isOpen && turn.inputChoiceWorkObserved
     },
     flush,
     childToolOwner: childQueries.childToolOwner,
@@ -293,6 +293,9 @@ export function createClaudeJournalTranslator(
     },
     get contextActivity() {
       return context.activityRevision
+    },
+    get finalOutputAdmitted() {
+      return coverage.admitted
     },
     markContextActivity: () => context.markActivity(),
     subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),

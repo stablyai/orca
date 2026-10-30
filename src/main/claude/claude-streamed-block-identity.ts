@@ -31,6 +31,11 @@ export type ClaudeStreamedBlockRegistry = {
   clear: () => void
 }
 
+/** A content block's transcript-stable id: what a streamed row and its saved transcript row share. */
+export function claudeSourceBlockId(messageId: string, index: number): string {
+  return `block:${messageId}:${index}`
+}
+
 function scopeKey(sessionId: string, parentToolUseId: string | null): string {
   return `${sessionId}/${parentToolUseId ?? ''}`
 }
@@ -56,7 +61,11 @@ export function createClaudeStreamedBlockRegistry(
     uuid: string,
     startedAt: number
   ): StreamedBlock => {
-    const identity: AgentJournalItemIdentity = { provider: 'claude', sessionId, uuid }
+    const identity: AgentJournalItemIdentity = {
+      provider: 'claude',
+      sessionId,
+      uuid: streamed.messageId ? claudeSourceBlockId(streamed.messageId, index) : uuid
+    }
     const block = { identity, startedAt }
     streamed.blocks.set(index, block)
     streamed.awaitingFinal.push(block)

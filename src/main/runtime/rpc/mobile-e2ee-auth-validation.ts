@@ -133,8 +133,7 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
     : { ok: false, code: 'bad_proof' }
 }
 
-// Why: sealed, so only the pinned host can tell a client its key is revoked (it then deletes it);
-// 'Unauthorized' marks an unpaired device for the re-pair prompt, storage trouble is not one.
+// Seal revocation so only the pinned host can make clients delete keys; storage failures must not become Unauthorized re-pair prompts.
 export function describeMobileE2EEAuthFailure(failure: {
   code: MobileE2EEAuthFailureCode
   deviceId?: string

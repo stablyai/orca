@@ -2,6 +2,8 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/pty-binding-refusals'
+import type { PtySpawnOutcome } from '../spawn-outcome'
+import type { PaneSpawnReservation } from './spawn-reservation'
 
 export class PaneOwnerContentionError extends Error {
   constructor() {
@@ -13,7 +15,16 @@ export class PaneOwnerContentionError extends Error {
 export type AbsentPaneBinding = { ptyId: string; incarnationIds: readonly string[] }
 
 /** In-process authority of the enclosing operation; never sent over IPC/RPC or saved. */
-export type PaneSpawnOperation = { mustExist: boolean; absentOwner?: AbsentPaneBinding }
+export type PaneSpawnOperation = {
+  mustExist: boolean
+  absentOwner?: AbsentPaneBinding
+  acquisition?: {
+    key: string
+    reservation: PaneSpawnReservation
+    surfaceWithdrawn?: true
+    settle: (outcome: PtySpawnOutcome) => void
+  }
+}
 
 // A delayed window save can replay a proven-dead binding without creating a new owner.
 export function isAbsentBindingReplay(

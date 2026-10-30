@@ -3,13 +3,17 @@ import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import type { OrcaRuntimeWithCreateTerminal } from './terminal/launch/terminal-create'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-types'
 
-// A create with no workspace lands in whatever the window is showing, so only the window can make it.
+// Without a window, the missing piece the caller can supply is the workspace, so name that.
+const NO_WORKSPACE_OR_WINDOW_MESSAGE =
+  'No workspace was given or found for this terminal, and this Orca host has no open app window to create one in. Pass --worktree to choose a workspace. No terminal was created.'
+
+// Workspace-less creates target the window's current view, so only it can perform them.
 export async function createDesktopTerminal(
   runtime: OrcaRuntimeWithCreateTerminal,
   opts: dependencies.TerminalCreateOptions,
   presentation: RuntimeTerminalPresentation | undefined
 ): Promise<dependencies.RuntimeTerminalCreate> {
-  // A worktree-less create has no execution host to resolve the shell on.
+  // Without a workspace there is no host on which to resolve a shell.
   if (opts.shellOverride) {
     throw new Error(
       `--shell ${opts.shellOverride} needs a workspace, because the shell is resolved on the workspace's execution host. No terminal was created.`
@@ -17,7 +21,9 @@ export async function createDesktopTerminal(
   }
   opts = applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
   runtime.assertGraphReady()
-  const win = runtime.getAuthoritativeWindow()
+  const rendererWebContents = runtime.getAuthoritativeWindow(
+    NO_WORKSPACE_OR_WINDOW_MESSAGE
+  ).webContents
   const requestId = dependencies.randomUUID()
   const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -33,7 +39,7 @@ export async function createDesktopTerminal(
         error?: string
       }
     ): void => {
-      if (event.sender !== win.webContents || response.requestId !== requestId) {
+      if (event.sender !== rendererWebContents || response.requestId !== requestId) {
         return
       }
       clearTimeout(timer)
@@ -45,7 +51,7 @@ export async function createDesktopTerminal(
       }
     }
     dependencies.getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
-    win.webContents.send('terminal:requestTabCreate', {
+    rendererWebContents.send('terminal:requestTabCreate', {
       requestId,
       command: opts.command,
       cwd: opts.cwd,

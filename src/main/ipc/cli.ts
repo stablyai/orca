@@ -8,11 +8,16 @@ import {
   recordWslCliRegistrationRemoved
 } from '../cli/wsl-cli-registration-registry'
 import { WslCliInstaller } from '../cli/wsl-cli-installer'
-import { unreachableWslCliStatus, WslCliUnreachableError } from '../cli/wsl-cli-status'
+import {
+  notRunningWslCliStatus,
+  unreachableWslCliStatus,
+  WslCliUnreachableError
+} from '../cli/wsl-cli-status'
 import { runSerializedWslCliRegistrationOperation } from '../cli/wsl-cli-registration-operation'
 import { getCanonicalUserDataPath } from '../persistence'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getDefaultWslDistro } from '../wsl'
+import { blockedWslDistroForExec, runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
 import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
 
 const APPIMAGE_REPAIR_RETRY_MS = 30_000
@@ -136,18 +141,29 @@ export function registerCliHandlers(): void {
 
   ipcMain.handle(
     'cli:getWslInstallStatus',
-    async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
+    async (
+      _event,
+      args?: { distro?: string | null; wakeWslDistro?: boolean }
+    ): Promise<CliInstallStatus> => {
       // Keep status reads independent of long repairs; re-polling corrects transient state.
       const distro = resolveWslCliDistro(args)
-      try {
-        return await new WslCliInstaller({ distro }).getStatus()
-      } catch (error) {
-        // Cold/busy distros are retryable Settings states, not raw IPC failures (#29497).
-        if (distro && error instanceof WslCliUnreachableError) {
-          return unreachableWslCliStatus(distro)
+      const readStatus = async (): Promise<CliInstallStatus> => {
+        // Opening Settings must not start a stopped distro (E9); its refresh button wakes it.
+        const blocked = await blockedWslDistroForExec(distro)
+        if (blocked) {
+          return notRunningWslCliStatus(blocked.distro, blocked.state)
         }
-        throw error
+        try {
+          return await new WslCliInstaller({ distro }).getStatus()
+        } catch (error) {
+          // Cold/busy distros are retryable Settings states, not raw IPC failures (#29497).
+          if (distro && error instanceof WslCliUnreachableError) {
+            return unreachableWslCliStatus(distro)
+          }
+          throw error
+        }
       }
+      return args?.wakeWslDistro ? runAsWslExecUserAct(distro, readStatus) : readStatus()
     }
   )
 

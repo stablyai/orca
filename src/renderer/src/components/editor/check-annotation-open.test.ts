@@ -36,9 +36,7 @@ describe('openAnnotationLocation', () => {
       line: 3
     })
 
-    // Why: the annotation's editor file is the surface — the jump must not re-seed
-    // a shell into a workspace whose last terminal the user closed. The host keeps a
-    // remote workspace from switching to its local twin with the same id.
+    // The file supplies the initial surface, so do not seed a terminal; host identity prevents switching to a same-ID local twin.
     expect(mocks.state.getKnownWorktreeById).toHaveBeenCalledWith('wt-1', 'ssh:devbox')
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true,

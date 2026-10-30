@@ -1,9 +1,7 @@
 import { expect } from 'vitest'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 
-// A startup plan's launch command carries the real script encoded for the target shell — octal
-// escapes fed to `printf %b` on POSIX, UTF-16 base64 for PowerShell. Assertions want the script,
-// so these decode it back.
+// Decode target-shell script carriers for assertions: POSIX octal via printf %b or PowerShell UTF-16 base64.
 
 export function unwrapPosixShellScript(command: string | undefined): string {
   const tokenized = tokenizeStartupCommand(command ?? '', 'posix')

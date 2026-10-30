@@ -9,10 +9,7 @@ type SelectingState = SelectionState & {
   setActiveWorktree: (worktreeId: string | null, executionHostId?: ExecutionHostId) => unknown
 }
 
-/**
- * The selected workspace as one value. Worktree ids repeat across hosts, so a selection saved or
- * restored by id alone loses which copy of a same-id twin the user was on.
- */
+/** Workspace IDs repeat across hosts; persist selection with its owner to preserve the chosen same-ID copy. */
 export type WorkspaceSelection = {
   worktreeId: string | null
   executionHostId: ExecutionHostId | null
@@ -44,7 +41,6 @@ export function restoreWorkspaceSelection(
   }
 }
 
-/** The host the user selected for `worktreeId` when it is the active workspace; else null. */
 export function getActiveWorkspaceExecutionHostId(
   state: SelectionState,
   worktreeId: string
@@ -54,7 +50,6 @@ export function getActiveWorkspaceExecutionHostId(
     : null
 }
 
-/** Re-selects `worktreeId`; when it is already active, keeps the selected copy of a same-id twin. */
 export function reselectWorkspaceKeepingHost(
   state: SelectionState & {
     setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => unknown

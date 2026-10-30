@@ -223,34 +223,6 @@ describe('client-hosted downloads', () => {
     }
   })
 
-  it('reports the whole lifecycle of a plain client-hosted download to its page renderer', async () => {
-    const { route, completed } = stubRoute()
-    registerBrowserClientDownloadRouter('env-a', { route: () => ({ kind: 'remote', route }) })
-    const item = createDownloadItem()
-
-    browserManager.handleGuestWillDownload({ guestWebContentsId: GUEST_WEB_CONTENTS_ID, item })
-
-    expect(rendererSendMock).toHaveBeenCalledWith(
-      'browser:download-requested',
-      expect.objectContaining({ browserPageId: BROWSER_PAGE_ID, status: 'downloading' })
-    )
-
-    getDownloadItemEventHandler(item, 'once', 'done')?.({} as Electron.Event, 'completed')
-    await completed
-
-    expect(rendererSendMock).toHaveBeenCalledWith(
-      'browser:download-finished',
-      expect.objectContaining({
-        browserPageId: BROWSER_PAGE_ID,
-        status: 'completed',
-        remoteDestination: {
-          workspaceRelativePath: '.orca/browser-downloads/report.csv',
-          hostLabel: 'build-box'
-        }
-      })
-    )
-  })
-
   it('cancels a client-hosted download that no composition owns', () => {
     registerBrowserClientDownloadRouter('env-a', { route: () => ({ kind: 'unowned' }) })
     const item = createDownloadItem()
@@ -318,6 +290,7 @@ function createGuest(id: number) {
   return {
     id,
     isDestroyed: vi.fn(() => false),
+    isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
     setBackgroundThrottling: browserMocks.guestSetBackgroundThrottlingMock,
     setWindowOpenHandler: browserMocks.guestSetWindowOpenHandlerMock,

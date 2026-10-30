@@ -6,6 +6,10 @@ import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
+import {
+  parseWslMovedSurfacesKey,
+  selectWslMovedSurfacesKey
+} from '@/store/repos/wsl-moved-projects'
 import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reused-array-identity'
 import { usePairedRuntimeParkingEnvironmentIds } from '@/store/use-runtime-status-view'
 import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
@@ -32,30 +36,32 @@ export function useTerminalWorkspaceFoundation() {
   const activeWorktreeDeferralHostId = useAppStore((state) =>
     getResolvedExecutionHostIdForWorktree(state, renderedActiveWorktreeId)
   )
-  // Why narrow it: only the folder-collision tie-break reads this host, so a git
-  // workspace's ownership settling must not re-identify the whole mount projection.
+  // Only folder collision resolution needs host state; git ownership changes must not rebuild the mount projection.
   const activeFolderSurfaceHostId =
     parseWorkspaceKey(renderedActiveWorktreeId ?? '')?.type === 'folder'
       ? activeWorktreeDeferralHostId
       : null
-  // Why gate the id on the host: the projection reads `activeWorkspaceId` only behind a
-  // truthy resolved host, so without one every active id yields the same surfaces — and a
-  // worktree switch must not re-project (and re-identify) every surface to rediscover that.
+  // Without a resolved host, active workspace cannot affect projection; omit it to avoid rebuilding every surface on switches.
   const activeFolderSurfaceId = activeFolderSurfaceHostId ? renderedActiveWorktreeId : null
-  const workspaceSurfaces = useMemo(
-    () =>
-      projectWorkspaceSurfaces({
-        worktreesById,
-        folderWorkspaces,
-        activeWorkspaceId: activeFolderSurfaceId,
-        activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
-      }),
-    [worktreesById, folderWorkspaces, activeFolderSurfaceId, activeFolderSurfaceHostId]
-  )
-  // Why split the ids out: every mount/park/activation pass reads only `.id`, but
-  // the surface array is re-identified on any worktree write. Reusing the previous
-  // id-array identity keeps those effects and their per-fire Sets from re-firing
-  // when the workspace set itself did not change.
+  const wslMovedSurfacesKey = useAppStore(selectWslMovedSurfacesKey)
+  const workspaceSurfaces = useMemo(() => {
+    const surfaces = projectWorkspaceSurfaces({
+      worktreesById,
+      folderWorkspaces,
+      activeWorkspaceId: activeFolderSurfaceId,
+      activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
+    })
+    // A WSL-moved project's chats mount beside the catalog; it lists none of its workspaces.
+    const moved = parseWslMovedSurfacesKey(wslMovedSurfacesKey)
+    return moved.length > 0 ? [...surfaces, ...moved] : surfaces
+  }, [
+    worktreesById,
+    folderWorkspaces,
+    activeFolderSurfaceId,
+    activeFolderSurfaceHostId,
+    wslMovedSurfacesKey
+  ])
+  // Reuse equal ID arrays across worktree row replacements to avoid restarting mount/park effects and rebuilding their Sets.
   const workspaceSurfaceIds = useReusedArrayIdentity(
     useMemo(() => workspaceSurfaces.map((workspace) => workspace.id), [workspaceSurfaces])
   )
@@ -64,9 +70,7 @@ export function useTerminalWorkspaceFoundation() {
     [workspaceSurfaceIds]
   )
   const activeView = useAppStore((state) => state.activeView)
-  // Why: terminal titles are leaf chrome. The root host only subscribes to
-  // mount/parking semantics; a real transition publishes fresh tab objects,
-  // while LiveTerminalTabBar reads title-only updates from the active bucket.
+  // Root subscriptions track mount/parking transitions; LiveTerminalTabBar alone consumes title-only updates.
   const tabsByWorktree = useAppStore((state) =>
     terminalTopologyProjectionRef.current!.project(state.tabsByWorktree)
   )

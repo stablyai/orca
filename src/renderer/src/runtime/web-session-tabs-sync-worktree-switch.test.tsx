@@ -4,7 +4,6 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeMobileSessionTabsResult, RuntimeStatus } from '../../../shared/runtime-types'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 
@@ -34,6 +33,7 @@ import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-t
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-runtime-initial-terminal-bootstrap'
 import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/terminal-hidden-view-parking'
+import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
 
 const ENV = 'env-a'
 const WORKTREE_A = 'repo-a::worktree-a'
@@ -184,10 +184,9 @@ describe('session-tabs streams across worktree switches on one host', () => {
     resetWebRuntimeInitialTerminalBootstrapForTests()
     clearHostLiveTerminalProbesForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror scan and revision ledger read only id, createdAt and pairingRevision.
     const runtimeEnvironments = [
-      { id: ENV, createdAt: 100, pairingRevision: REVISION }
-    ] as PublicKnownRuntimeEnvironment[]
+      publicRuntimeEnvironment({ id: ENV, createdAt: 100, pairingRevision: REVISION })
+    ]
     replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
     useAppStore.setState(
       {
@@ -384,11 +383,10 @@ describe('session-tabs streams across worktree switches on one host', () => {
     mocks.ownerEnvironmentIdForWorkspace.mockImplementation((_state, worktreeId) =>
       worktreeId === WORKTREE_B ? 'env-b' : ENV
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror scan and revision ledger read only id, createdAt and pairingRevision.
     const withHostB = [
       ...useAppStore.getState().runtimeEnvironments,
-      { id: 'env-b', createdAt: 200, pairingRevision: 201 }
-    ] as PublicKnownRuntimeEnvironment[]
+      publicRuntimeEnvironment({ id: 'env-b', createdAt: 200, pairingRevision: 201 })
+    ]
     replaceRuntimeEnvironmentRevisions(withHostB)
     await act(async () => {
       useAppStore.setState({ runtimeEnvironments: withHostB })

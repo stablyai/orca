@@ -1,13 +1,13 @@
-// One host status stream per runtime target, shared by every session-list projection.
-//
-// The feed is a read-only mirror: the host projects each session's status from its journal and
-// this owner keeps the latest summary per session while anyone is looking. Losing the stream
-// keeps the cached summaries and reconnects; a fresh snapshot merges over them.
-// Which sessions are listed is the tab map's decision, so the feed never retracts a summary.
+// Share one read-only host status stream per target. Retain latest summaries across disconnect and merge fresh snapshots; tab maps own visibility, so this feed never retracts summaries.
 
-import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session-workspace-sleep'
+import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import {
+  foldAgentSessionConversationNames,
+  type AgentSessionConversationNames
+} from '../../../shared/agent-session-conversation-names'
+import {
+  AgentSessionAssociationObservation,
   foldAgentSessionStatusEvent,
   revokeAgentSessionStatusLive,
   type AgentSessionStatusSnapshot
@@ -22,6 +22,8 @@ export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
 export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
   getSnapshot: () => StructuredAgentSessionStatusSnapshot
+  getNamingSnapshot: () => AgentSessionConversationNames
+  getAssociationRevision: () => number
   getSessionSleepState: (sessionId: string) => number | null | undefined
   getNamingActive: (sessionId: string) => boolean | null
   getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
@@ -41,6 +43,8 @@ export function structuredAgentSessionStatusFeedKey(target: RuntimeClientTarget)
 
 function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   let snapshot: StructuredAgentSessionStatusSnapshot = new Map()
+  let names: AgentSessionConversationNames = new Map()
+  const associations = new AgentSessionAssociationObservation()
   let namingActiveSessionIds: Set<string> | null = null
   const confirmedSessions = new Set<string>()
   // Disconnect revokes live execution, but each chat's last Sleep answer still holds.
@@ -86,6 +90,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     } else {
       return
     }
+    associations.observe(event)
+    names = foldAgentSessionConversationNames(names, event)
     setSnapshot(foldAgentSessionStatusEvent(snapshot, event))
   }
   const active = (candidate: number): boolean => activations.size > 0 && candidate === generation
@@ -119,8 +125,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     }, delay)
   }
-  // Losing contact is never exit: the sessions go unverifiable and this client stops
-  // claiming host-owned execution, but nothing here settles them.
+  // Lost contact revokes verified execution, never proves exit or settles sessions.
   const loseConnection = (candidate: number): void => {
     if (candidate !== generation) {
       return
@@ -168,6 +173,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   }
   open = (): void => {
     const candidate = ++generation
+    associations.renew()
     dropHandle()
     if (target.kind !== 'environment') {
       // A local host is this build; only a remote one can predate the method.
@@ -193,8 +199,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           sleepResolved = true
           emit()
         }
-        // A host without the method is terminal, not a fault: retrying would relay-probe
-        // forever. A failed probe is not an answer, so that path still reconnects.
+        // Unsupported method is final to avoid endless relay probes; failed capability probes remain retryable.
         if (supported) {
           subscribeToHost(candidate)
           return
@@ -209,8 +214,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     dropHandle()
     revokeSnapshotOwnership()
     reconnectAttempt = 0
-    // Teardown only runs once nothing is activated, so re-confirmation is the next
-    // subscribe's job and there is no mounted reader left to notify.
+    // Teardown has no active readers; next subscription owns re-confirmation.
     namingActiveSessionIds = null
     confirmedSessions.clear()
   }
@@ -230,6 +234,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     },
     getSnapshot: () => snapshot,
+    getNamingSnapshot: () => names,
+    getAssociationRevision: () => associations.revision,
     getSessionSleepState: (sessionId) => {
       const known = knownSleep.get(sessionId)
       return known !== undefined ? known : sleepResolved ? null : undefined
@@ -258,8 +264,7 @@ export function getStructuredAgentSessionStatusFeed(
 }
 
 export function resetStructuredAgentSessionStatusFeedsForTests(): void {
-  // Dropping the map alone leaves a live subscription and its pending reconnect running
-  // into the next test, where they reopen a stream nothing is holding.
+  // Stop subscriptions/reconnects before clearing map or they reopen unheld streams in the next test.
   for (const owner of owners.values()) {
     owner.stop()
   }

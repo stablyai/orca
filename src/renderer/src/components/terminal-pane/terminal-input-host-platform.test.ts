@@ -308,9 +308,7 @@ describe('resolveTerminalInputHostPlatform', () => {
     ).toBe('win32')
   })
 
-  // A probe that did not come back says nothing about which OS the host runs. Falling through to
-  // the client's platform re-points every keystroke and every path at the wrong conventions --
-  // a Windows host driven from a Mac silently starts speaking POSIX mid-session.
+  // Unanswered probes cannot substitute client platform: Mac-driven Windows hosts must retain host input/path conventions.
   it('keeps the Windows host platform while its probe is unverifiable', () => {
     const worktreeId = 'repo::C:\\repo'
     expect(

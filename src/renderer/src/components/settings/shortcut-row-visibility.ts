@@ -39,9 +39,10 @@ export function buildShortcutRowVisibility(options: {
     rows: group.items
       .filter(
         (item) =>
-          (options.managedBrowserCreationEnabled || item.id !== 'tab.newBrowser') &&
+          (options.managedBrowserCreationEnabled ||
+            (item.id !== 'tab.newBrowser' && item.id !== 'tab.newBrowserSplitRight')) &&
           (options.mobileEmulatorCreationEnabled || item.id !== 'tab.newSimulator') &&
-          // Why: the toggle is inert while the experiment is off, so binding it here would silently do nothing.
+          // Binding an experimental action while disabled would silently do nothing.
           (options.agentDashboardEnabled || item.id !== 'dashboard.toggle')
       )
       .map((item) => {

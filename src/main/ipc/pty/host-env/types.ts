@@ -25,6 +25,7 @@ export type BuildPtyHostEnvOptions = {
   /** WSL relay target; null selects the default distro. Read only for WSL spawns. */
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
+  claudeSubagentNavigationEnabled?: boolean
   terminalInlineImages?: boolean
   /** Per-agent opt-out; disabled agents must not receive managed extensions. */
   disabledTuiAgents?: Iterable<unknown> | null

@@ -13,22 +13,8 @@ import {
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
-/**
- * The file preview's unsaved-draft prompt, in a real browser.
- *
- * The render check next door mounts both files routes and reads what they paint, but it never taps
- * anything, so the one control on this screen that opens a modal was unproved on the page. Two
- * things only a browser answers for it: that `ConfirmModal` — a `BottomDrawer`, and so Reanimated,
- * a portal and a gesture handler — actually paints inside the shell's page, and that opening it
- * registers no `hardwareBackPress` handler.
- *
- * The second is the whole reason this file exists. React Native Web's
- * `BackHandler.addEventListener` is a `console.error` and an inert subscription, and the drawer
- * registered one whenever it was visible and interactive. So the page's own hardware-back guard
- * being platform-gated was never the end of it: any page drawer opening put that line on the
- * console. Asserted as the absence of the line, with the modal's title as the precondition that
- * something was actually opened.
- */
+// Exercise editable artifact’s draft-confirm drawer in a real browser, including portal/gesture/Reanimated paint.
+// Require modal title before asserting no RN-Web BackHandler error; opening the drawer once registered an unsupported hardware-back listener.
 
 const HOST_ROUTE = '/h/render-check-host'
 const WORKTREE = 'wt-1'
@@ -50,13 +36,7 @@ const SHELL_HOST = {
 /** Exactly what the preview declares in `MOBILE_WEB_PAGE_ROUTES`, plus the protocol's own grant. */
 const PREVIEW_GRANTS = ['navigate', 'storage', 'externalLink', 'haptics']
 
-/**
- * A terminal artifact, which is the only preview this screen lets anyone edit.
- *
- * A worktree file is read-only, so it can hold no draft and never reaches the prompt.
- * `isEditableMobileTerminalArtifactPreview` wants a ready, untruncated, non-image preview, and
- * `hasUnsavedMobileTerminalArtifactDraft` wants the draft to differ from what was loaded.
- */
+// Only ready, untruncated, non-image terminal artifacts are editable; draft must differ from loaded text. Worktree files cannot reach confirmation.
 const ARTIFACT_PATH = '/logs/run.txt'
 const ARTIFACT_TITLE = 'run.txt'
 const LOADED_CONTENT = 'hello'
@@ -143,8 +123,7 @@ describeRender(
   () => {
     it('asks before discarding a draft, without registering a hardware back handler', async () => {
       const { page, errors } = await openPreview()
-      // The editor is the proof the artifact loaded and the screen decided it was editable; the
-      // prompt is unreachable otherwise, so a missing one here would be a vacuous pass below.
+      // Require editor to prove loaded/editable precondition or missing prompt would pass vacuously.
       const editor = page.getByLabel(`${ARTIFACT_TITLE} editor`)
       await editor.waitFor({ timeout: 60_000 })
       await editor.fill(EDITED_CONTENT)
@@ -153,8 +132,7 @@ describeRender(
       const title = page.getByText('Discard changes?')
       await title.waitFor({ timeout: 30_000 })
       expect(await title.isVisible()).toBe(true)
-      // The line react-native-web logs from `BackHandler.addEventListener`. The drawer registered
-      // one on every open before it was platform-gated, so this is red without that guard.
+      // RN-Web logs this unsupported BackHandler registration; every interactive drawer once emitted it.
       expect(errors.filter((entry) => entry.includes('BackHandler'))).toEqual([])
       await page.close()
     }, 180_000)

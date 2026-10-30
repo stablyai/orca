@@ -11,7 +11,6 @@ import {
 
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
 
-// One file open in two workspaces (one record), autosave off, the saving tab closed mid-write.
 describe('editor save queue: the saving view closes mid-write', () => {
   let h: ClosedViewHarness
 
@@ -37,7 +36,6 @@ describe('editor save queue: the saving view closes mid-write', () => {
     expect(h.store.getState().editorDrafts.B).toBeUndefined()
     expect(h.loaded.B?.content).toBe('edit')
 
-    // B undoes the saved change: its text now differs from h.disk.
     h.type('B', 'disk')
     expect(h.view('B').isDirty).toBe(true)
     expect(needsSavePromptOnClose(h.store.getState(), 'B')).toBe(true)

@@ -1,4 +1,4 @@
-import type { CodexAppServerNotificationMethod } from '../../codex/codex-app-server-notification-schema'
+import type { CodexAppServerNotificationMethod } from '../../codex/app-server/codex-app-server-notification-schema'
 import { CODEX_SUBAGENT_ITEM_TYPE } from '../../codex/codex-subagent-activity'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import type { ClaudeStreamJsonFrameKind } from './claude-stream-json-frame-schema'

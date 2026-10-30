@@ -1,13 +1,5 @@
 // @vitest-environment happy-dom
-// Replays a recorded Windows/WSL 2-Set Korean capture and asserts the preedit stayed visible for
-// every composition update the IME actually emitted — 37 of them across 11 balanced sessions.
-//
-// It does NOT cover the resume-without-compositionstart ordering, and an earlier version of this
-// file wrongly claimed it did. The capture logs each event twice (a dispatch record and a batched
-// next-frame re-log); replaying both fabricates updates that appear to land after a session ended.
-// Filtered to dispatch records the capture holds zero resumes. The fixture is now filtered, so this
-// asserts real emissions only. The resume ordering is pinned synthetically in
-// terminal-ime-xterm-resumed-preedit-visibility.test.ts, which says so.
+// Replay dispatch-only Windows/WSL Korean events: 37 visible updates across 11 balanced sessions. Batched frame re-logs would fabricate resume-without-start ordering; that behavior has separate synthetic coverage.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import trace from './__fixtures__/windows-wsl-hangul-resumed-preedit-trace.json'
@@ -114,8 +106,7 @@ describe('Windows/WSL Korean — recorded composition updates keep the preedit v
     // Guards against a fixture that silently stops covering anything.
     expect(shown).toHaveLength(37)
     expect(shown.filter((sample) => !sample.visible)).toEqual([])
-    // The real capture never resumes a composition without a start; if it ever appears to, the
-    // fixture has picked up the batched re-log again.
+    // Dispatch records contain no update-only resumes; seeing one here means batched re-logs contaminated the fixture.
     expect(resumed).toEqual([])
   })
 })

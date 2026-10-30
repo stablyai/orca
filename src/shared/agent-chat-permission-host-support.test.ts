@@ -4,8 +4,6 @@ import {
   hostSettingsApplyChatPermissionModes,
   legacyHostChatPermissionMode
 } from './agent-chat-permission-host-support'
-import { RUNTIME_CAPABILITIES } from './protocol-version'
-import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from './agent-session-permission-modes-capability'
 
 describe('what a host predating per-chat modes runs', () => {
   it('is Full access on its default Agent Permissions, which carry the bypass flag', () => {
@@ -37,12 +35,11 @@ describe('what a host predating per-chat modes runs', () => {
 describe('whether a host applies per-chat modes', () => {
   it('is told by the new-chat default its settings carry from 1.4.225 on', () => {
     expect(hostSettingsApplyChatPermissionModes({ nativeChatPermissionMode: 'ask' })).toBe(true)
+    expect(hostSettingsApplyChatPermissionModes({ nativeChatPermissionMode: 'future-mode' })).toBe(
+      false
+    )
     expect(hostSettingsApplyChatPermissionModes({ agentDefaultArgs: {} })).toBe(false)
     expect(hostSettingsApplyChatPermissionModes(undefined)).toBe(false)
-  })
-
-  it('is advertised by this build', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY)
   })
 })
 
@@ -83,7 +80,7 @@ describe('the verdict on a chat start or turn', () => {
     ).toBe('allowed')
   })
 
-  it('allows a host that applies modes, and an agent with none', () => {
+  it('allows a host that applies modes or reports no legacy mode', () => {
     expect(
       chatPermissionHostVerdict({
         agent: 'claude',

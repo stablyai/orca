@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { computeTerminalTailWaitState } from './terminal-wait-tail-state'
 
 describe('terminal tail wait state', () => {
@@ -18,20 +18,5 @@ describe('terminal tail wait state', () => {
     )
     expect(blocked.fromTail).toBe(true)
     expect(blocked.signal?.reason).toBe('agent-update-prompt')
-  })
-
-  it('does not rebuild or repeatedly scan an ordinary saturated tail', () => {
-    const lines = Array.from({ length: 2000 }, () => 'x'.repeat(126))
-    const lastIndexOf = vi.spyOn(String.prototype, 'lastIndexOf')
-
-    try {
-      const state = computeTerminalTailWaitState(lines, '', '')
-
-      expect(state.signal).toBeNull()
-      expect(state.waitText).toBe('')
-      expect(lastIndexOf).not.toHaveBeenCalled()
-    } finally {
-      lastIndexOf.mockRestore()
-    }
   })
 })

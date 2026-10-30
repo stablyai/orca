@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import { Coordinator } from './coordinator'
+import { warnStaleDispatches } from './coordinator-task-dispatch'
 import type { CoordinatorRuntime } from './coordinator-runtime-contract'
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import { DISPATCH_STALE_THRESHOLD } from './coordinator-stale-base-flag'
@@ -112,7 +113,6 @@ function insertWorkerDone(
   })
 }
 
-/** Drive the mocked scheduler through its existing polling intervals. */
 async function settleCoordinatorRun<T>(run: Promise<T>): Promise<T> {
   let settled = false
   void run.then(
@@ -168,20 +168,16 @@ describe('Coordinator', () => {
       spec: 'implement feature'
     })
 
-    // Simulate worker_done arriving after dispatch
     const coordinator = new Coordinator(db, runtime, {
       spec: 'build it',
       coordinatorHandle: 'coord',
       pollIntervalMs: 50
     })
 
-    // Run coordinator in background, then simulate completion
     const runPromise = coordinator.run()
 
-    // Wait for dispatch to happen
     await vi.advanceTimersByTimeAsync(100)
 
-    // Simulate the worker completing
     insertWorkerDone(db, { taskId: task.id, filesModified: ['a.ts'] })
 
     const result = await settleCoordinatorRun(runPromise)
@@ -349,7 +345,6 @@ describe('Coordinator', () => {
     expect(runtime.createdTerminals.length).toBe(1)
     expect(runtime.createdTerminalOptions[0]).not.toHaveProperty('presentation')
 
-    // Complete the task
     insertWorkerDone(db, { taskId: task.id, from: runtime.createdTerminals[0] })
 
     const result = await settleCoordinatorRun(runPromise)
@@ -377,7 +372,6 @@ describe('Coordinator', () => {
 
     const runPromise = coordinator.run()
 
-    // Send 3 escalations to trigger circuit breaker
     for (let i = 0; i < 3; i++) {
       await vi.advanceTimersByTimeAsync(100)
       const dispatch = db.getDispatchContext(task.id)
@@ -440,10 +434,8 @@ describe('Coordinator', () => {
 
     const runPromise = coordinator.run()
 
-    // Wait for dispatch
     await vi.advanceTimersByTimeAsync(100)
 
-    // Worker sends decision gate
     const dispatch = db.getDispatchContext(task.id)
     expect(dispatch).toBeDefined()
     db.insertMessage({
@@ -462,17 +454,14 @@ describe('Coordinator', () => {
 
     await vi.advanceTimersByTimeAsync(100)
 
-    // Verify task is blocked
     const blocked = db.getTask(task.id)
     expect(blocked?.status).toBe('blocked')
     expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
 
-    // Resolve the gate
     const gates = db.listGates({ taskId: task.id, status: 'pending' })
     expect(gates.length).toBe(1)
     db.resolveGate(gates[0].id, 'yes')
 
-    // Wait for re-dispatch and simulate completion
     await vi.advanceTimersByTimeAsync(200)
 
     insertWorkerDone(db, { taskId: task.id })
@@ -504,23 +493,17 @@ describe('Coordinator', () => {
 
     const runPromise = coordinator.run()
 
-    // Wait for t1 dispatch
     await vi.advanceTimersByTimeAsync(100)
 
-    // t2 should still be pending
     expect(db.getTask(t2.id)?.status).toBe('pending')
 
-    // Complete t1
     insertWorkerDone(db, { taskId: t1.id })
 
-    // Wait for t2 to be promoted and dispatched
     await vi.advanceTimersByTimeAsync(200)
 
-    // t2 should now be dispatched
     const t2Status = db.getTask(t2.id)?.status
     expect(t2Status === 'dispatched' || t2Status === 'ready').toBe(true)
 
-    // Complete t2
     insertWorkerDone(db, { taskId: t2.id })
 
     const result = await settleCoordinatorRun(runPromise)
@@ -553,11 +536,9 @@ describe('Coordinator', () => {
 
     await vi.advanceTimersByTimeAsync(100)
 
-    // Only 2 should be dispatched
     const dispatched = db.listTasks({ status: 'dispatched' })
     expect(dispatched.length).toBe(2)
 
-    // Complete all tasks
     for (const task of [t1, t2, t3]) {
       insertWorkerDone(db, { taskId: task.id })
       await vi.advanceTimersByTimeAsync(100)
@@ -570,13 +551,11 @@ describe('Coordinator', () => {
   it('logs a stale warning for dispatched rows past the threshold and does not auto-fail', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
-    // No terminals available so dispatchReadyTasks creates one and we can
-    // drive the stale-scan deterministically via SQL backdating.
+    // Use no available terminal so the backdated dispatch drives the stale scan deterministically.
     const task = db.createTask({ runId, spec: 'work' })
     const ctx = createRootDispatch(db, task.id, 'term_stale')
 
-    // Backdate dispatched_at and last_heartbeat_at beyond the 10-min threshold
-    // so getStaleDispatches returns this row on the first tick.
+    // Backdate both timestamps beyond 10 minutes so the first tick sees the stale row.
     const sqlite = (
       db as unknown as { db: { prepare: (s: string) => { run: (...a: unknown[]) => void } } }
     ).db
@@ -593,14 +572,32 @@ describe('Coordinator', () => {
       onLog: (m) => logs.push(m)
     })
 
-    // Drive one tick then stop — we only need the stale warning to have fired.
     const runPromise = coordinator.run()
     await vi.advanceTimersByTimeAsync(80)
     coordinator.stop()
     await settleCoordinatorRun(runPromise)
 
     expect(logs.some((l) => /has not sent a heartbeat/.test(l) && l.includes(task.id))).toBe(true)
-    // Task status must NOT have been auto-failed — logging only.
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+  })
+
+  it('warns after 30 minutes, not 11, with a 15-minute heartbeat interval', () => {
+    db = new OrchestrationDb(':memory:')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const now = Date.parse('2026-10-26T12:00:00Z')
+    vi.setSystemTime(now)
+    const task = db.createTask({ runId, spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    db.db
+      .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
+      .run(new Date(now - 60 * 60_000).toISOString(), dispatch.id)
+    const onLog = vi.fn()
+    for (const age of [11, 30, 31]) {
+      db.recordHeartbeat(dispatch.id, new Date(now - age * 60_000).toISOString())
+      warnStaleDispatches(db, onLog, 15)
+      expect(onLog).toHaveBeenCalledTimes(age > 30 ? 1 : 0)
+    }
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('heartbeat in ~30 min'))
     expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
@@ -633,7 +630,6 @@ describe('Coordinator', () => {
 
     expect(db.getDispatchContext(task.id)?.last_heartbeat_at).toBeTruthy()
 
-    // Complete the task so the coordinator run finishes cleanly.
     insertWorkerDone(db, { taskId: task.id })
 
     const result = await settleCoordinatorRun(runPromise)
@@ -820,14 +816,11 @@ describe('Coordinator', () => {
       coordinator.stop()
       const result = await settleCoordinatorRun(runPromise)
 
-      // Why: silent-skip must NOT burn the circuit-breaker budget. Task must
-      // stay in `ready`; failDispatch must NOT be called; no prompt injection
-      // should happen; no dispatch context should exist.
+      // A recoverable stale base must leave the task ready without consuming circuit-breaker budget.
       expect(runtime.sentMessages).toHaveLength(0)
       expect(db.getTask(task.id)?.status).toBe('ready')
       expect(db.getDispatchContext(task.id)).toBeUndefined()
-      // Coordinator was stopped externally, so overall status is 'failed'
-      // because tasks are not complete — but the task itself never dispatched.
+      // External stop fails the run while leaving the undispatched task out of failedTasks.
       expect(result.status).toBe('failed')
       expect(result.failedTasks).not.toContain(task.id)
     })
@@ -864,7 +857,6 @@ allow-stale-base: true`
       expect(sent).toBeDefined()
       expect(sent!.text).toContain('--- BASE DRIFT ---')
       expect(sent!.text).toContain('200 commits behind origin/main')
-      // Why (§3.4): stripped spec must not contain the infra flag line.
       expect(sent!.text).toContain('Investigate issue #42')
       expect(sent!.text).not.toContain('allow-stale-base: true')
     })
@@ -914,7 +906,6 @@ allow-stale-base: true`
         spec: 'go',
         coordinatorHandle: 'coord',
         pollIntervalMs: 50,
-        // worktree deliberately omitted
         onLog: (msg) => logs.push(msg)
       })
 
@@ -927,7 +918,6 @@ allow-stale-base: true`
       expect(result.status).toBe('completed')
       expect(runtime.probeDriftCalls).toHaveLength(0)
       expect(logs.some((m) => m.includes('stale-base guard inert'))).toBe(true)
-      // Dispatch still went through normally.
       expect(runtime.sentMessages.length).toBeGreaterThan(0)
     })
 

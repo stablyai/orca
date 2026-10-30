@@ -40,8 +40,7 @@ export function createFetchDetectedWorktrees(
           ? (getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
       if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: this function's contract is detected-only. The fallback runs for its store side effect, but
-        // callers keep seeing null as they did before the metadata path existed.
+        // Fallback hydrates store only; detected-only callers retain the existing null return contract.
         await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
         return null
       }

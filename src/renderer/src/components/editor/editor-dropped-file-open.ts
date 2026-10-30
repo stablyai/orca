@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { detectLanguage } from '@/lib/language-detect'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename, joinPath } from '@/lib/path'
@@ -10,9 +10,11 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { describeSharedDropFailureReason } from '@/lib/drop-skip-reason-copy'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -39,7 +41,7 @@ export function getEditorFileDropOperationContext(
   connectionId: string | undefined
 ): RuntimeFileOperationArgs {
   return {
-    // Why: OS drops target the selected worktree's owner, never the focused server.
+    // OS drops follow the selected workspace owner rather than the focused server.
     target: requireRuntimeTargetForFileOwner(store, worktreeId, undefined),
     worktreeId,
     worktreePath,
@@ -152,10 +154,7 @@ function canOpenEditorFileDrop(
   }
 }
 
-/**
- * Captures the destination workspace's host at drop time and returns the open
- * step; a host change before preparation finishes refuses instead of re-routing.
- */
+/** Capture destination ownership at drop time; refuse host changes during preparation instead of rerouting. */
 export function captureEditorFileDropOpen(
   destination: EditorFileDropDestination,
   source?: WorkspaceFileDragSource
@@ -211,18 +210,15 @@ async function openEditorFileDropPaths(
       return
     }
     try {
-      // Why: OS file drops provide client-local paths. Remote runtime and
-      // SSH editors must upload into the server worktree before opening.
-      const destinationDir = joinPath(worktreePath, '.orca/drops')
+      // OS drops supply client paths; upload before opening them in remote/SSH workspaces.
+      const destinationDir = joinPath(worktreePath, DROP_STAGING_RELATIVE_DIR)
       const { results } = await importExternalPathsToRuntime(
         fileContext,
         [...paths],
         destinationDir,
         { ensureDestinationDir: true, nameExtensionlessImages: true }
       )
-      if (!canOpenEditorFileDrop(context, destination)) {
-        return
-      }
+      // Rechecked per result, so it also covers the wait for the upload itself.
       for (const result of results) {
         if (!canOpenEditorFileDrop(context, destination)) {
           return
@@ -244,12 +240,14 @@ async function openEditorFileDropPaths(
           { suppressActiveRuntimeFallback: runtimeEnvironmentId === null, ...groupOptions }
         )
       }
-      if (results.some((result) => result.status !== 'imported')) {
+      const rejected = results.filter((result) => result.status !== 'imported')
+      if (rejected.length > 0) {
         toast.error(
           translate(
             'auto.hooks.useGlobalFileDrop.d720e2f855',
             'Some dropped files could not be uploaded.'
-          )
+          ),
+          { description: describeSharedDropFailureReason(rejected) }
         )
       }
     } catch {
@@ -274,8 +272,7 @@ async function openEditorFileDropPaths(
         continue
       }
       let relativePath = filePath
-      // Why: a project link out of the project keeps its absolute path, so it reads as
-      // user-named instead of being refused as a project file.
+      // Escaping project links retain absolute paths so they are treated as user-named files rather than rejected project resources.
       if (worktreePath && !stat.escapesWorktree && isPathInsideWorktree(filePath, worktreePath)) {
         const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
         if (maybeRelative !== null && maybeRelative.length > 0) {

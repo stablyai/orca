@@ -78,7 +78,7 @@ export function createTerminalOutputBatcher(
         return
       }
       if (!timer) {
-        // Why: coalesce stream output before it crosses the network; desktop subscribers share the same burst boundary.
+        // Coalesce before network delivery; desktop subscribers share this burst boundary.
         timer = setTimeout(flush, TERMINAL_OUTPUT_FLUSH_MS)
         if (typeof timer.unref === 'function') {
           timer.unref()

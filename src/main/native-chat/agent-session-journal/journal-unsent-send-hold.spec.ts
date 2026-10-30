@@ -11,7 +11,7 @@ import {
   USER_MESSAGE_SOURCE,
   type AgentMessageSource,
   type AgentSessionMessageSource
-} from '../../../shared/agent-session-message-source'
+} from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'

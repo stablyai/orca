@@ -17,6 +17,7 @@ import { LoaderCircle, ChevronDown, Check } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { GitHubAssigneeAvatar } from './Avatars'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 export function GHAssigneesCell({
   item,
   repo,
@@ -142,11 +143,16 @@ export function GHAssigneesCell({
                       updates
                     })
               if (res && res.ok === false) {
-                throw new Error(res.error)
+                throw new Error(codeHostErrorText(res))
               }
               return res
             }
-            throw new Error('No GitHub repository context available for this issue.')
+            throw new Error(
+              translate(
+                'auto.components.TaskPage.noGitHubRepositoryContext',
+                'No GitHub repository context available for this issue.'
+              )
+            )
           }
         })
       } finally {

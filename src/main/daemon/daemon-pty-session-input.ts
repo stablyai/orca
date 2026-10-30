@@ -3,13 +3,32 @@ import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-err
 import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
 
 export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
+  getPtyAvailability(id: string): boolean | null {
+    if (
+      !this.client.isConnected() ||
+      this.sessionsAwaitingDaemonRecovery.has(id) ||
+      this.inputClosedIncarnations.isClosed(id, this.ptyInventory.currentIncarnation(id))
+    ) {
+      return false
+    }
+    // Inventory includes retained sessions this host has not attached yet.
+    return this.activeSessionIds.has(id) || this.ptyInventory.has(id)
+  }
+
   write(id: string, data: string): boolean {
+    // Remount recovery cannot reopen a live child's retired PTY master; refuse instead of dropping.
+    if (this.inputClosedIncarnations.isClosed(id, this.ptyInventory.currentIncarnation(id))) {
+      return false
+    }
     const recoverable = this.prepareWrite(id)
     return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
   }
 
   /** Preserve ambiguous delivery as a settlement: throwing would look like proven refusal and permit replay. */
   async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
+    if (this.inputClosedIncarnations.isClosed(id, this.ptyInventory.currentIncarnation(id))) {
+      return writeRefused('provider_refused_write')
+    }
     let recoverable: boolean
     try {
       recoverable = this.prepareWrite(id)

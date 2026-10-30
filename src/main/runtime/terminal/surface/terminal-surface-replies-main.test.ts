@@ -28,7 +28,6 @@ const MOUNTED = Object.keys(SURFACE_PTYS).map((leafId, index) => ({
   paneTitle: null
 }))
 
-// Layout-owner build: main answers from its own layout and terminal bindings.
 describe('terminal replies from main (switch on)', () => {
   it('match the window-owned build when the window sends only what it mounts', async () => {
     const { runtime } = surfaceRuntime()
@@ -212,8 +211,7 @@ describe('terminal replies from main (switch on)', () => {
     })
   })
 
-  // Switch-on variant (ruled behaviour): a pane main owns is no proof its terminal runs, so the
-  // window's graph no longer reconnects a disconnected terminal; the host's inventory decides.
+  // Main-owned liveness comes from host inventory, so graph sync must not reconnect disconnected records.
   it("a graph sync leaves a disconnected terminal of main's pane disconnected, with no reinstall", async () => {
     const { runtime } = surfaceRuntime()
     runtime.attachWindow(1)

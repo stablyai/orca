@@ -19,14 +19,16 @@ export function worktreeCreateRepoSelector(
   return hostQualifiedRepoSelector(params.repo, params.repoHostId)
 }
 
-/** Wire params → runtime create args. Kept out of the method table so the mapping can grow with
- *  the schema without the table becoming unreadable. */
 export function buildManagedWorktreeCreateArgs(
   params: WorktreeCreateParams,
   provenance: CreateProvenance,
   origin?: Parameters<typeof terminalImageViewerSupported>[0]
 ): ManagedWorktreeCreateArgs {
   const viewerSupported = origin && terminalImageViewerSupported(origin)
+  // Why: another owner's provenance is a label only; this host's create policy stays as before.
+  const hostAutomationCreate =
+    provenance.automationProvenance !== undefined &&
+    provenance.automationProvenance.origin !== 'client'
   return {
     repoSelector: worktreeCreateRepoSelector(params),
     // A phone's retry key is the identity of its creation.
@@ -38,6 +40,7 @@ export function buildManagedWorktreeCreateArgs(
     baseBranch: params.baseBranch,
     compareBaseRef: params.compareBaseRef,
     branchNameOverride: params.branchNameOverride,
+    ...(params.branchIntent ? { branchIntent: params.branchIntent } : {}),
     linkedIssue: params.linkedIssue,
     linkedPR: params.linkedPR,
     linkedLinearIssue: params.linkedLinearIssue,
@@ -88,9 +91,10 @@ export function buildManagedWorktreeCreateArgs(
     ...(params.setupOnly !== undefined ? { setupOnly: params.setupOnly } : {}),
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
-    // Why: a person initiated this create (the phone, CLI text and agent.launch don't surface the
-    // fallback yet); an automation run has no one watching, so it keeps the network error.
-    ...(provenance.automationProvenance ? {} : { allowLocalBaseFallback: true }),
+    // Only user-visible creates offer offline fallback; automation retains the network error.
+    ...(hostAutomationCreate ? {} : { allowLocalBaseFallback: true }),
+    // An automation's create is background work: its terminals never start a stopped WSL distro (E9).
+    ...(hostAutomationCreate ? {} : { wslUserAct: true as const }),
     startup: params.startupCommand
       ? {
           command: params.startupCommand,

@@ -4,11 +4,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AppState } from '../store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
-// Why: Part B publishes never-mounted background automation tabs into the
-// runtime graph, gated on a live eager buffer. Stub the eager-buffer lookup so
-// the test can flip "still-live unmounted PTY" on and off without the real IPC
-// dispatcher, and spy on the anomaly warning to prove it stays scoped to mounted
-// tabs.
+// Stub eager-buffer liveness to toggle never-mounted automation publication without IPC; anomaly spy must report only mounted tabs.
 const { warnTerminalLifecycleAnomaly } = vi.hoisted(() => ({
   warnTerminalLifecycleAnomaly: vi.fn()
 }))
@@ -139,8 +135,7 @@ describe('syncRuntimeGraph background automation tabs', () => {
       expect.objectContaining({ tabId: 'auto-tab-1', leafId: LEAF, ...withPty(AUTO_PTY) })
     )
     expect(reportedTabIds(graph)).toContain('auto-tab-1')
-    // Why: the no-live-transport anomaly must stay scoped to mounted tabs; an
-    // unmounted background tab legitimately has no live transport yet.
+    // Unmounted background tabs legitimately lack live transport; scope the anomaly to mounted tabs.
     expect(warnTerminalLifecycleAnomaly).not.toHaveBeenCalled()
   })
 

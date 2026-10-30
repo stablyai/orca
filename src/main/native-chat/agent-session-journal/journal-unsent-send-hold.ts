@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type { AgentSessionJournal } from './journal-store'
@@ -65,7 +65,7 @@ export async function holdUnsentSends(
     fence: number
     hold: UnsentSendHold
     /** Settle handed-over sends instead when failed initialization proves none ran. */
-    unrun?: true
+    unrun?: true | ((submission: AgentJournalSubmission) => boolean)
   }
 ): Promise<number | null> {
   const { hold } = input
@@ -73,7 +73,7 @@ export async function holdUnsentSends(
     .submissions()
     .filter((entry) =>
       input.unrun
-        ? isUnansweredHandedOverSubmission(entry)
+        ? isUnansweredHandedOverSubmission(entry) && (input.unrun === true || input.unrun(entry))
         : isQueuedAgentJournalSubmission(entry) &&
           (hold.cause === 'hostRestarted'
             ? journal.wroteBeforeOpen(entry.acceptedSequence)

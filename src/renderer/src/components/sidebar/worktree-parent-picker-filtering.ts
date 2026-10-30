@@ -7,9 +7,7 @@ export function getWorktreeParentPickerItemValue(candidate: Worktree, repoName =
   return `${candidate.displayName} ${branchDisplayName(candidate.branch)} ${candidate.path} ${repoName}`
 }
 
-// Why: a repo with hundreds of workspaces makes every eligible sibling a
-// candidate, so the list is scored here rather than handed to cmdk — cmdk
-// mounts, scores and DOM-reorders every registered item on each keystroke.
+// Score before rendering so cmdk cannot mount and reorder hundreds of sibling candidates per keystroke.
 export function filterWorktreeParentCandidates(
   candidates: readonly Worktree[],
   search: string,

@@ -7,10 +7,8 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV as SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
-import type {
-  ClaudeStructuredSessionAdapter,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   acquired,
   adapterFor,
@@ -20,13 +18,39 @@ import {
   PROVIDER_SESSION_ID,
   tick,
   USER_MESSAGE,
-  type FakeConnection,
-  claudeOpened
+  type FakeConnection
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
+  it('ends a stalled initialize at its 60-second deadline with the timed-out step', async () => {
+    vi.useFakeTimers()
+    try {
+      const claude = fakeClaude({ initDelayMs: 60_001 })
+      const adapter = adapterFor(claude)
+      let settled = false
+      const result = adapter
+        .acquire({ identity: identityFor(), fence: 7, spawnToken: 'deadline' })
+        .catch((error: unknown) => {
+          settled = true
+          return error
+        })
+      await vi.advanceTimersByTimeAsync(59_999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(providerRequestTimeoutOf(await result)).toEqual({
+        method: 'initialize',
+        timeoutMs: 60_000
+      })
+      expect(claude.connections).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('pins the account and proves init without treating the system-frame uuid as a chain leaf', async () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
@@ -159,6 +183,23 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     await adapter.acquire({ ...start, permissionMode: 'accept-edits' })
     expect(claude.connections[0].launch.options).not.toHaveProperty('effort')
     expect(resolveLaunch.mock.calls[0]?.[0].permissionMode).toBe('accept-edits')
+  })
+
+  it('names a launch that could not be resolved on the host, keeping its error (#34795)', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    vi.spyOn(adapter['deps'], 'resolveLaunch').mockRejectedValueOnce(
+      new Error('selector_not_found')
+    )
+
+    await expect(
+      adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    ).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchPreparationFailed',
+      message: 'selector_not_found'
+    })
+    expect(claude.connections).toHaveLength(0)
   })
 
   it('recovers a cancellable lifecycle when the replay arrives after dispatch returned', async () => {
@@ -560,6 +601,20 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
       expect.objectContaining({ type: 'ended', cause: 'unexpected-exit' })
     )
     await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(true)
+  })
+
+  it('forgets the stored crash when the host acknowledges session release', async () => {
+    const claude = fakeClaude()
+    const adapter = await acquired(claude)
+    claude.connections[0].handlers.onExit?.(new Error('retained crash'))
+    await adapter.drainObservedExits()
+    expect(() => adapter.readOptions({ sessionId: 'session-1', fence: 7 })).toThrow(
+      'retained crash'
+    )
+    adapter.acknowledgeSessionRelease('session-1')
+    expect(() => adapter.readOptions({ sessionId: 'session-1', fence: 7 })).toThrow(
+      'no live claude stream-json session'
+    )
   })
 
   it('keeps shutdown pending until a retained unexpected-exit proof settles', async () => {

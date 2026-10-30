@@ -5,7 +5,7 @@ import type {
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
 } from '../../runtime/agent-session-recovery-capsule-entries'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker
@@ -32,6 +32,7 @@ type FailureCapsule = Pick<
 
 export type StructuredAgentSessionRestartFailureLedger = {
   read: () => Promise<AgentSessionResumeFailureRecord[]>
+  /** Saved failure rows a surface can show; retry eligibility is checked separately. */
   list: () => Promise<StructuredAgentSessionResumeFailure[]>
   /** File failures or complete reservations, then reopen only rows still owned by this action. */
   settle: (
@@ -62,11 +63,10 @@ export function continuationFailureOutcome(
 
 export function createStructuredAgentSessionRestartFailureLedger(deps: {
   capsule?: FailureCapsule
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  getRecord: (sessionId: string) => AgentSessionConversationView | null
   retryable: (marker: AgentSessionResumeMarker) => boolean
   /** Preserve newer-chat failures for compatible builds, hidden here. */
   savedByNewerOrca: (sessionId: string) => boolean
-  reveal: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Share the capsule mutation lane with offer operations. */
@@ -115,7 +115,6 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
 
   const list = async (): Promise<StructuredAgentSessionResumeFailure[]> => {
     const failures = await read()
-    await deps.reveal(failures.map((failure) => failure.marker))
     return failures.flatMap(toRow)
   }
 

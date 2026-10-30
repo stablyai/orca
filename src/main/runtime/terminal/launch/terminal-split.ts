@@ -45,6 +45,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
       telemetrySource?: TerminalPaneSplitSource
       /** The leaf id a timed-out split reported: wait for that pane instead of splitting again. */
       retrySplit?: string
+      /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
+      wslUserAct?: true
     } = {},
     // Internal creation evidence; RPC and preload callers never supply it.
     createdWorktree?: Worktree
@@ -76,14 +78,14 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
           command: opts.command,
           env: opts.env,
           envToDelete: opts.envToDelete,
-          activate: opts.activate
+          activate: opts.activate,
+          ...(opts.wslUserAct ? { wslUserAct: true } : {})
         }
       )
     }
 
     if (opts.retrySplit) {
-      // A retry only waits: the window may still be making the pane, and a pane missing from the
-      // graph may be remounting rather than closed, so asking again could run the command twice.
+      // Retries only wait: reissuing during a pending start or remount gap could execute the command twice.
       const split = this.rendererSplits.get(opts.retrySplit)
       if (split?.tabId !== leaf.tabId) {
         throw splitRetryUnknownError(leaf.tabId, opts.retrySplit)

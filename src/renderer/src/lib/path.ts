@@ -29,8 +29,7 @@ export function getRelativePathInsideRoot(
   if (!rootPath) {
     return null
   }
-  // Why: delegate so renderer containment folds Unicode the same way the rest of
-  // the app does — a local copy silently missed NFD-vs-NFC matches (#10832).
+  // Share Unicode containment folding; local case-only copies missed NFD/NFC matches (#10832).
   return relativePathInsideRoot(rootPath, filePath)
 }
 

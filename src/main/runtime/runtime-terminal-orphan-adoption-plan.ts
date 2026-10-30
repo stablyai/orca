@@ -202,7 +202,7 @@ export function planRuntimeTerminalOrphanAdoption(
     ) {
       throw new Error('terminal_orphan_surface_occupied')
     }
-    // Why the close record too: it outlives a host restart, which the client's retirement proofs do not.
+    // Durable close records survive host restart; client retirement proofs do not.
     if (
       session.terminalSurfaceTombstonesByPaneKey?.[paneKey] ||
       hasClosedTerminalTabRecord(session.closedTerminalTabTombstonesByTabId, claim.tabId)

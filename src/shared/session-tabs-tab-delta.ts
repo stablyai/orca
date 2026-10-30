@@ -1,9 +1,5 @@
-// Per-stream tab-list delta for `session.tabs.subscribe` / `subscribeAll`.
-//
-// A capable client gets every frame for a worktree stamped with `tabsRevision`. An `updated` frame
-// may then replace `tabs` with `tabsDelta`: each entry is either the index of an identical tab in
-// the previous frame for that worktree on this stream, or the tab itself. Everything else in the
-// frame is sent as before. A client that never advertised the capability never sees either field.
+// Capable streams stamp tabsRevision and may encode updated tabs as previous-frame indexes or full tabs.
+// Bases are per-worktree/per-stream; non-tab fields stay whole, and legacy clients see neither delta nor revision.
 import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from './session-tabs-runtime-capabilities'
 
 export type SessionTabsTabDeltaRef = number | Record<string, unknown>
@@ -98,10 +94,7 @@ export function createSessionTabsTabDeltaEncoder(
 
 export type SessionTabsTabDeltaDecodeResult = { ok: true; result: unknown } | { ok: false }
 
-/**
- * Client side of one stream: restores each frame to exactly what a legacy host would have sent.
- * Fails (rather than guessing) when a delta's base is not the last frame this stream delivered.
- */
+/** Rebuild legacy-shaped frames per stream; fail instead of guessing when the delta base is not the last delivered frame. */
 export function createSessionTabsTabDeltaDecoder(): {
   decode: (result: unknown) => SessionTabsTabDeltaDecodeResult
 } {

@@ -2,6 +2,10 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence'
 import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { awaitSignInForCredentialHosts } from './ssh-sign-in-requirement'
+import {
+  holdLaunchReconnectOptOuts,
+  resetLaunchReconnectOptOutsForTests
+} from './ssh-host-user-disconnect'
 import { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
@@ -48,7 +52,10 @@ import {
   setPortForwardManager
 } from './ssh-ipc-context'
 import { registerSshPortForwardHandlers } from './ssh-port-forward-handlers'
-import { persistPortForwardsWithUnrestored } from './ssh-port-forward-persistence'
+import { persistPortForwards } from './ssh-port-forward-persistence'
+import { recordForwardFailure } from './ssh-port-forward-unrestored'
+import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
+import { setSshHostServedListener } from '../../ssh/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
@@ -82,6 +89,8 @@ const SSH_IPC_CHANNELS = [
   'ssh:updatePortForward',
   'ssh:removePortForward',
   'ssh:listPortForwards',
+  'ssh:listUnrestoredPortForwards',
+  'ssh:removeSavedPortForward',
   'ssh:listDetectedPorts'
 ] as const
 
@@ -114,6 +123,7 @@ export function registerSshHandlers(
     setConnectionManager(new SshConnectionManager(callbacks))
     // Window re-registration must not re-gate hosts already signed in during this process.
     awaitSignInForCredentialHosts(getSshTargetRegistryStore()!)
+    holdLaunchReconnectOptOuts(getSshTargetRegistryStore()!.listTargets())
   }
   setPortForwardManager(portForwardManager ?? new SshPortForwardManager())
   portForwardManager!.setCallbacks({
@@ -124,11 +134,20 @@ export function registerSshHandlers(
             reason.detail ? `: ${reason.detail}` : ''
           }`
         )
+        // An ssh that starts and later dies backs off like one that never started.
+        recordForwardFailure(
+          entry.connectionId,
+          entry,
+          reason.detail ?? 'exited unexpectedly',
+          'exit'
+        )
       }
-      persistPortForwardsWithUnrestored(entry.connectionId)
+      persistPortForwards(entry.connectionId)
       broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
     }
   })
+  // Every served status restores saved forwards, whichever path brought the host up.
+  setSshHostServedListener((targetId) => void restoreManagedHostPortForwards(targetId))
   registerPowerMonitorReconnect(() => getAppEnvironment().getPath('userData'))
   registerSshBrowseHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
@@ -176,6 +195,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   credentialRequestedForTarget.clear()
   resetSshCredentialDeclinesForTests()
   resetSshUserDisconnectsForTests()
+  resetLaunchReconnectOptOutsForTests()
   quitTeardownStartGate.resetForTests()
   resetSshShutdownDrain()
 

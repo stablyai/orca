@@ -31,9 +31,11 @@ const LEGACY_MARKER_KINDS: ReadonlySet<SubmissionRejectionKind> = new Set([
   'queueFull'
 ])
 
-/** Every fact shape a kind can carry: bare, with a person or a log detail, with a refusal, and
- *  for an attachment each reason with and without its limit. */
+/** Cover every fact shape, with person/log/refusal details and every attachment reason with/without a limit. */
 function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
+  if (kind === 'modelUnavailable') {
+    return [{ kind }, { kind, detail: { text: 'retired-model', audience: 'log' } }]
+  }
   const facts: AgentSessionFailureFact[] = [
     { kind },
     { kind, detail: { text: 'Context window exceeded.', audience: 'person' } },
@@ -71,17 +73,23 @@ describe('the words written beside a failure fact', () => {
         ] as const) {
           const context = { agentName, command, provider: 'claude' } as const
           const sentence = agentSessionFailureSentence(fact, surface, context)
-          expect([fact, sentence]).toEqual([fact, expect.stringMatching(/[^.]\.$/)])
+          expect(sentence).toMatch(/[^.]\.$/)
           expect(sentence).not.toMatch(/\.\./)
           expect(sentence).not.toMatch(ORCA_INTERNAL)
           if (surface === 'row') {
-            expect(agentSessionFailureWords(fact, { ...context, surface }).text).toBe(sentence)
+            expect(agentSessionFailureWords(fact, { ...context, surface })).toEqual({
+              text: sentence,
+              failure: fact
+            })
           } else if (
             surface === 'rejection' &&
             isSubmissionRejectionFact(fact) &&
             !LEGACY_MARKER_KINDS.has(fact.kind)
           ) {
-            expect(agentSessionFailureWords(fact, { ...context, surface }).reason).toBe(sentence)
+            expect(agentSessionFailureWords(fact, { ...context, surface })).toEqual({
+              reason: sentence,
+              rejection: fact
+            })
           }
         }
       }

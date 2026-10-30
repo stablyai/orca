@@ -82,6 +82,62 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
+  it('delivers output and exit that land while ConPTY startup is still being confirmed', async () => {
+    const proc = mockPtyProcess()
+    // The shell dies before ConPTY announces its input reader, so nothing has subscribed yet.
+    // Each event is emitted once, to whoever listens at that moment, as node-pty does.
+    proc.onData.mockImplementationOnce((cb: (data: string) => void) => {
+      queueMicrotask(() => cb('\x1b[1t'))
+      return { dispose: vi.fn() }
+    })
+    proc.onExit.mockImplementationOnce((cb: (e: { exitCode: number }) => void) => {
+      queueMicrotask(() => queueMicrotask(() => cb({ exitCode: 7 })))
+      return { dispose: vi.fn() }
+    })
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      const data: string[] = []
+      const exitCode = new Promise<number>((resolve) => handle.onExit((code) => resolve(code)))
+      handle.onData((chunk) => data.push(chunk))
+      expect(await exitCode).toBe(7)
+      expect(data[0]).toBe('\x1b[1t')
+      expect(spawnMock).toHaveBeenCalledOnce()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('never respawns a dead ConPTY pane whose user shell args may run a command', async () => {
+    const proc = mockPtyProcess()
+    proc.onData.mockImplementationOnce((cb: (data: string) => void) => {
+      queueMicrotask(() => cb('Microsoft Windows\r\n'))
+      return { dispose: vi.fn() }
+    })
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { COMSPEC: CMD_ABS },
+        terminalShellArgs: ['/c', 'deploy.cmd']
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+    expect(spawnMock).toHaveBeenCalledOnce()
+    expect(proc.kill).not.toHaveBeenCalled()
+  })
+
   it('keeps powershell.exe when the inbox PowerShell implementation is selected on Windows', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

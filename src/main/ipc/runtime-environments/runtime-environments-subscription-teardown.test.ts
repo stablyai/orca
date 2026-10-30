@@ -49,7 +49,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
@@ -163,7 +163,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           id: 1,
           isDestroyed: () => false,
           send: vi.fn(),
-          once: vi.fn(),
+          on: vi.fn(),
           removeListener: destroyedListenerRemoved
         }
       },
@@ -235,7 +235,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           id: 1,
           isDestroyed: () => false,
           send: senderSend,
-          once: vi.fn(),
+          on: vi.fn(),
           removeListener: vi.fn()
         }
       },
@@ -301,7 +301,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         id: 1,
         isDestroyed: () => false,
         send: senderSend,
-        once: vi.fn(),
+        on: vi.fn(),
         removeListener: vi.fn()
       }
     }
@@ -379,7 +379,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           id: 1,
           isDestroyed: () => false,
           send: senderSend,
-          once: vi.fn(),
+          on: vi.fn(),
           removeListener: vi.fn()
         }
       },
@@ -450,7 +450,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           return false
         },
         send: senderSend,
-        once: vi.fn(),
+        on: vi.fn(),
         removeListener: vi.fn()
       }
     }
@@ -514,7 +514,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           id: 1,
           isDestroyed: () => false,
           send: senderSend,
-          once: vi.fn(),
+          on: vi.fn(),
           removeListener: vi.fn()
         }
       },

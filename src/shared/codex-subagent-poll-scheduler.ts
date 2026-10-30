@@ -1,12 +1,5 @@
-/**
- * Coalesces per-pane Codex transcript wakeups onto one deadline timer.
- *
- * Each key still owns its own deadline and payload; only the timer that wakes
- * the process is shared. This keeps pane cancellation and ordering independent
- * while avoiding one live timer per pane.
- */
-// Timer APIs and performance.now() both use elapsed monotonic time; wall-clock
-// corrections must not stretch a pending poll's deadline.
+/** Share one deadline timer while keeping each pane’s deadline/payload/cancellation independent. */
+// Use elapsed monotonic time so wall-clock corrections cannot stretch poll deadlines.
 const monotonicNow = (): number => performance.now()
 
 export class CodexSubagentPollScheduler<T> {
@@ -39,7 +32,6 @@ export class CodexSubagentPollScheduler<T> {
     this.cancelTimer()
   }
 
-  /** Number of pane wakeups currently waiting for a deadline. */
   get size(): number {
     return this.entries.size
   }
@@ -64,8 +56,7 @@ export class CodexSubagentPollScheduler<T> {
     this.timerDueAt = nextDueAt
     const timer = setTimeout(
       () => {
-        // A cleared/replaced timer can still have its callback queued. It must
-        // not consume the active timer's metadata or flush its entries.
+        // Queued callbacks from replaced timers must not consume the active timer’s metadata or entries.
         if (this.timerGeneration !== generation || this.timer !== timer) {
           return
         }
@@ -94,8 +85,7 @@ export class CodexSubagentPollScheduler<T> {
   private flush(): void {
     const now = this.now()
     try {
-      // Find one entry at a time so a callback can clear a sibling that has
-      // not fired yet, matching independent timer cancellation semantics.
+      // Select one entry per callback so it can cancel unfired siblings like independent timers.
       while (true) {
         let dueEntry: { key: string; value: T } | undefined
         for (const [key, entry] of this.entries) {
@@ -111,7 +101,6 @@ export class CodexSubagentPollScheduler<T> {
         this.onDue(dueEntry.key, dueEntry.value)
       }
     } finally {
-      // A callback may have scheduled, cleared, or replaced any key.
       this.arm()
     }
   }

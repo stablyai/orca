@@ -78,6 +78,9 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-model-capacity-fullscreen': 12,
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
   'hermes-tui-ready': 2,
+  'hermes-0-22-slash-setup': 2,
+  // Hermes 0.22's bottom statusbar restores the cursor one column short after shrink.
+  'hermes-0-22-statusbar-bottom': 2,
   // Agy/Cline/Prime reproduce background leaks; Prime also has cursor-row diffs after alt-screen repaint.
   'antigravity-1-2-14-busy-thinking': 2,
   'antigravity-1-2-14-command-palette': 4,

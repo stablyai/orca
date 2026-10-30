@@ -5,13 +5,7 @@ import {
 } from '@/lib/agent-launch-through-host'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
 
-/**
- * Whether a new agent tab starts from the host's plan, in its own pane's spawn: an AI button's
- * launch, whose prompt is pasted once the agent is ready, in a terminal this window makes. Temporary:
- * the window keeps pasting the prompt as main does until the host delivers it. A typed prompt
- * (`auto-submit`, `draft`) keeps main's launch, and so does a launch the host could turn into a chat
- * or one in a workspace that runs over SSH, which the pane's local spawn cannot start.
- */
+/** AI-button terminal launches start via their own pane spawn while this window pastes. Typed prompts, chat-capable routes and SSH retain main’s launch path; local pane spawn cannot start those SSH sessions. */
 export function newTabPromptLaunchesThroughHost(args: {
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   pastesPrompt: boolean
@@ -25,12 +19,7 @@ export function newTabPromptLaunchesThroughHost(args: {
   )
 }
 
-/**
- * Starts the agent in a new tab's own pane and pastes the prompt as main does. Readiness is watched
- * from the moment the tab's terminal exists, as main watches it, so an agent that is ready before
- * the spawn returns is not missed; the paste is written only once the pane's spawn says the agent
- * started there.
- */
+/** Observe readiness as soon as the tab PTY exists, but paste only after its pane confirms agent startup; a fast agent may be ready before spawn returns. */
 export function launchNewTabPromptThroughHost(
   args: HostAgentLaunchArgs & {
     /** What is pasted, which can differ from the prompt the user wrote. */
@@ -44,7 +33,10 @@ export function launchNewTabPromptThroughHost(
   promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }>
 } {
   const { pasteContent, submit, onPromptDelivered, onPromptDeliveryUnconfirmed, ...launch } = args
-  const { tabId, started } = launchAgentThroughHost(launch)
+  const { tabId, started } = launchAgentThroughHost({
+    ...launch,
+    suppressStartupUpdatePrompt: submit
+  })
   const pasted = pasteAgentLaunchPromptOnceReady({
     worktreeId: args.worktreeId,
     tabId,

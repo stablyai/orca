@@ -1,4 +1,5 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import { mainAgentState } from '../../shared/main-agent-status'
 import { writeFencedAgentKeys } from './terminal-agent-fenced-keys'
 import type { TerminalAgentPromptAnswerRuntime } from './terminal-agent-prompt-answer'
 
@@ -38,7 +39,7 @@ export async function interruptWorkingAgent(
       throw new Error('agent_not_reachable')
     }
     // Escape stops only the main agent's turn; background work alone leaves an idle composer.
-    if ((row.mainAgent?.state ?? row.state) !== 'working') {
+    if (mainAgentState(row) !== 'working') {
       return null
     }
     const { ptyId, processIncarnation } = runtime.getTerminalPromptRequestBinding(handle)
