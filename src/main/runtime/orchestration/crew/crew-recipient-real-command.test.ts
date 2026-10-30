@@ -46,6 +46,7 @@ afterEach(async () => {
 })
 
 it('keeps cold local first-frame authority through real CLI import, settlement, mailbox move, run-use and individual reply effects', async () => {
+  const fixtureNow = 1_700_000_000_000
   const homeRef: { current: unknown } = { current: null }
   const workerRef: { current: unknown } = { current: null }
   const home = createSessionCallerHarness(homeRef)
@@ -122,10 +123,10 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
       probe: { outcome: 'indeterminate', reason: 'at-rest creation starts no process' },
       operation: {
         callerKey: 'private-witness',
-        operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+        operationId: `${fixtureNow}-${randomUUID().replaceAll('-', '')}`,
         fingerprint: `found:${sessionId}`
       },
-      now: Date.now()
+      now: fixtureNow
     })
     return {
       result,
@@ -548,7 +549,7 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     await localStore.reconcileOnRestart({
       sessionId: localId,
       probe: async () => ({ outcome: 'pid-absent' }),
-      now: Date.now()
+      now: fixtureNow + 1_000
     })
     expect(localStore.getRecord(localId)?.lease.unreconciled).toBe(false)
     const localClient = makeClient(worker, workerRef, localId)
