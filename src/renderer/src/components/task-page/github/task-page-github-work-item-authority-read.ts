@@ -10,11 +10,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 
 import { githubTaskSourceKey } from '@/lib/github-task-target'
 
-import {
-  getLastConfirmedClientEntries,
-  getLastConfirmedClientEntry,
-  getLastConfirmedClientValue
-} from './task-page-github-confirmed-client-values'
+import { getLastConfirmedClientEntries } from './task-page-github-confirmed-client-values'
 
 import type { GitHubTaskObservation } from '@/lib/github-task-observation'
 
@@ -65,33 +61,6 @@ export function getTaskPageGitHubConfirmedAuthorities(): TaskPageGitHubAuthority
     }
   }
   return [...records.values()]
-}
-export function hasConfirmedAuthorityForItem(
-  repoId: string,
-  itemId: string,
-  sourceScope: string | null,
-  observation?: GitHubTaskObservation,
-  itemType?: GitHubWorkItem['type']
-): boolean {
-  return (
-    getConfirmedListSnapshot(sourceScope, repoId, itemId, 'assignees', observation, itemType) !==
-      undefined ||
-    getConfirmedListSnapshot(
-      sourceScope,
-      repoId,
-      itemId,
-      'reviewRequests',
-      observation,
-      itemType
-    ) !== undefined ||
-    ['state', 'autoMerge'].some((family) => {
-      const entry = getLastConfirmedClientEntry(sourceScope, repoId, itemId, family)
-      return (
-        entry?.observation?.key === observation?.key &&
-        getLastConfirmedClientValue(sourceScope, repoId, itemId, family) !== undefined
-      )
-    })
-  )
 }
 export function getTaskPageGitHubMutationSnapshot(
   owners: readonly GitHubTaskObservation[]

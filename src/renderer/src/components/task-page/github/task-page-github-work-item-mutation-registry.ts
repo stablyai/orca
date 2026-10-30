@@ -288,7 +288,6 @@ export function setTaskPageGitHubMutationQueryKey(
 export type { TaskPageGitHubAuthority } from './task-page-github-work-item-authority-read'
 export {
   getTaskPageGitHubConfirmedAuthorities,
-  hasConfirmedAuthorityForItem,
   getTaskPageGitHubMutationSnapshot,
   getTaskPageGitHubPendingOwnerKeys
 } from './task-page-github-work-item-authority-read'

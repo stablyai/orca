@@ -1,4 +1,9 @@
 import {
+  gitHubTaskReadInstructions,
+  gitHubTaskReadRowKey,
+  type ReadBatch
+} from './task-read-batches'
+import {
   type createTaskPageGitHubAuthorityProjection,
   restoreTaskPageGitHubListOutput
 } from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
@@ -46,12 +51,52 @@ export const dependency = (row: ObservedGitHubWorkItem, family: string) =>
 export function applyGitHubTaskReadProgram(
   items: readonly GitHubWorkItem[],
   current: readonly GitHubWorkItem[],
-  program: readonly ReadOperation[],
+  program: readonly ReadBatch[],
+  domains: ReadonlyMap<string, number>,
   pending: readonly GitHubWorkItem[] | undefined,
   ownedFields: ReadonlyMap<string, ReadonlySet<keyof GitHubWorkItem>>,
   borrowed: ReadonlySet<string>,
   borrowedRows: ReadonlyMap<string, GitHubWorkItem>
-): GitHubWorkItem[] {
+) {
+  const adopted = new Map<string, Set<keyof GitHubWorkItem>>()
+  const record = (
+    before: ObservedGitHubWorkItem,
+    after: ObservedGitHubWorkItem,
+    direct = false
+  ) => {
+    if (before === after && !direct) {
+      return
+    }
+    const fields = adopted.get(rowKey(after)) ?? new Set<keyof GitHubWorkItem>()
+    for (const field of [
+      'title',
+      'state',
+      'labels',
+      'assignees',
+      'author',
+      'authorAvatarUrl',
+      'updatedAt',
+      'reviewRequests',
+      'autoMergeEnabled'
+    ] as const) {
+      const family =
+        field === 'autoMergeEnabled'
+          ? 'autoMerge'
+          : field === 'state' || field === 'assignees' || field === 'reviewRequests'
+            ? field
+            : undefined
+      if (
+        (direct && field !== 'reviewRequests' && field !== 'autoMergeEnabled') ||
+        before[field] !== after[field] ||
+        (family && before.githubValueOrigins?.[family] !== after.githubValueOrigins?.[family])
+      ) {
+        fields.add(field)
+      }
+    }
+    if (fields.size) {
+      adopted.set(rowKey(after), fields)
+    }
+  }
   if (pending && items !== pending && ownedFields.size) {
     const index = new Map(pending.map((row: ObservedGitHubWorkItem) => [rowKey(row), row]))
     items = items.map((row: ObservedGitHubWorkItem) => {
@@ -78,67 +123,21 @@ export function applyGitHubTaskReadProgram(
     })
   }
   if (!program.length) {
-    return items as GitHubWorkItem[]
+    return { items: items as GitHubWorkItem[], adopted }
   } // SAFETY: callers never mutate the unchanged readonly array.
-  const keyOf = (repoId: string, itemId: string) => `${repoId}\0${itemId}`
-  const instructions = new Map<
-    string,
-    (
-      | ReadPatch
-      | (ListRetirement & {
-          projection: ReturnType<typeof createTaskPageGitHubAuthorityProjection>
-        })
-      | ReadWrite
-      | GitHubTaskDeliveryWrite
-    )[]
-  >()
-  for (const operation of program) {
-    if ('plans' in operation) {
-      for (const { address } of operation.plans) {
-        const key = keyOf(address.repoId, address.itemId)
-        const group = instructions.get(key) ?? []
-        if (!group.includes(operation)) {
-          group.push(operation)
-        }
-        instructions.set(key, group)
-      }
-      continue
-    }
-    if ('before' in operation) {
-      const key = keyOf(operation.before.repoId, taskPageGitHubMutationItemId(operation.before))
-      const group = instructions.get(key) ?? []
-      group.push(operation)
-      instructions.set(key, group)
-      continue
-    }
-    for (const instruction of 'retirements' in operation
-      ? operation.retirements.map((retirement) => ({
-          ...retirement,
-          projection: operation.projection
-        }))
-      : [operation]) {
-      const key =
-        'target' in instruction
-          ? keyOf(instruction.item.repoId, taskPageGitHubMutationItemId(instruction.item))
-          : 'plans' in instruction
-            ? ''
-            : keyOf(instruction.address.repoId, instruction.address.itemId)
-      const group = instructions.get(key) ?? []
-      group.push(instruction)
-      instructions.set(key, group)
-    }
-  }
   const latest = new Map(current.map((row: ObservedGitHubWorkItem) => [rowKey(row), row]))
   let projection: ReturnType<typeof createTaskPageGitHubAuthorityProjection> | undefined
-  return items.map((row: ObservedGitHubWorkItem) => {
+  const resultItems = items.map((row: ObservedGitHubWorkItem) => {
     let result = row
     const retiredFamilies = new Set<'assignees' | 'reviewRequests'>()
     const dependencies = new Set(
       ['assignees', 'reviewRequests'].filter((family) => borrowed.has(dependency(row, family)))
     )
-    for (const instruction of instructions.get(
-      keyOf(row.repoId, taskPageGitHubMutationItemId(row))
-    ) ?? []) {
+    const instructionKey = gitHubTaskReadRowKey(row)
+    for (const instruction of program.flatMap((batch) =>
+      gitHubTaskReadInstructions(batch, instructionKey, domains)
+    )) {
+      const before = result
       if ('before' in instruction) {
         if (
           instruction.before.id !== row.id ||
@@ -150,8 +149,14 @@ export function applyGitHubTaskReadProgram(
           continue
         }
         const fields = instruction.written.filter(
-          (field) => borrowedRows.has(rowKey(row)) || ownedFields.get(rowKey(row))?.has(field)
+          (field) =>
+            borrowedRows.has(rowKey(row)) ||
+            ownedFields.get(rowKey(row))?.has(field) ||
+            adopted.get(rowKey(row))?.has(field)
         )
+        if (!fields.length) {
+          continue
+        }
         const origins: ObservedGitHubWorkItem['githubValueOrigins'] = {}
         for (const family of ['state', 'autoMerge', 'assignees', 'reviewRequests'] as const) {
           if (fields.includes(family === 'autoMerge' ? 'autoMergeEnabled' : family)) {
@@ -164,6 +169,9 @@ export function applyGitHubTaskReadProgram(
           origins
         )
       } else if ('plans' in instruction) {
+        if (!dependencies.size) {
+          continue
+        }
         const composed = instruction.apply(result)
         for (const family of ['assignees', 'reviewRequests'] as const) {
           if (dependencies.has(family)) {
@@ -222,6 +230,7 @@ export function applyGitHubTaskReadProgram(
               )
             : restoreTaskPageGitHubListOutput(result, instruction)
       }
+      record(before, result, 'target' in instruction)
     }
     // Only dependent output participates; ordinary incoming provider rows stay raw.
     for (const family of retiredFamilies) {
@@ -239,6 +248,8 @@ export function applyGitHubTaskReadProgram(
         })
       }
     }
+    record(row, result)
     return result
   })
+  return { items: resultItems, adopted }
 }

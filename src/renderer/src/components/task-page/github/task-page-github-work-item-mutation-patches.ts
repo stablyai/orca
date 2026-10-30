@@ -53,25 +53,41 @@ export function applyTaskPageGitHubListOps(
   snapshot: readonly GitHubAssignableUser[],
   ops: readonly PendingListOp[]
 ): GitHubAssignableUser[] {
-  let list = freezeUsers(snapshot)
+  const slots: (GitHubAssignableUser | undefined)[] = freezeUsers(snapshot)
+  const active = new Map<string, number[]>()
+  const index = (user: GitHubAssignableUser, slot: number) => {
+    const key = user.login.toLowerCase()
+    const group = active.get(key) ?? []
+    group.push(slot)
+    active.set(key, group)
+  }
+  slots.forEach((user, slot) => {
+    if (user) {
+      index(user, slot)
+    }
+  })
   for (const op of ops) {
     for (let i = 0; i < op.logins.length; i++) {
       const login = op.logins[i]
+      const group = active.get(login)
       if (op.kind === 'add') {
-        if (!list.some((user) => user.login.toLowerCase() === login)) {
+        if (!group?.length) {
           const candidate = op.users?.[i]
-          list.push(
-            candidate
-              ? { login: candidate.login, name: candidate.name, avatarUrl: candidate.avatarUrl }
-              : { login, name: null, avatarUrl: '' }
-          )
+          const user = candidate
+            ? { login: candidate.login, name: candidate.name, avatarUrl: candidate.avatarUrl }
+            : { login, name: null, avatarUrl: '' }
+          index(user, slots.length)
+          slots.push(user)
         }
-      } else {
-        list = list.filter((user) => user.login.toLowerCase() !== login)
+      } else if (group) {
+        for (const slot of group) {
+          slots[slot] = undefined
+        }
+        active.delete(login)
       }
     }
   }
-  return list
+  return slots.filter((user): user is GitHubAssignableUser => user !== undefined)
 }
 
 export function loginSetOfUsers(users: readonly GitHubAssignableUser[] | undefined): Set<string> {

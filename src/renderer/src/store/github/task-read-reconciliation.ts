@@ -7,10 +7,7 @@ import type {
   ListComposition,
   ListRetirement
 } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
-import {
-  getGitHubTaskObservation,
-  type ObservedGitHubWorkItem
-} from '@/lib/github-task-observation'
+import { getGitHubTaskObservation } from '@/lib/github-task-observation'
 import { githubTaskSourceKey } from '@/lib/github-task-target'
 import { getGitHubSourceRuntimeTarget } from '@/lib/github-source-runtime-context'
 import { captureGitHubTaskReadDomains } from './task-read-domains'
@@ -23,11 +20,16 @@ import {
   rowKey,
   dependency,
   type RefreshTarget,
-  type ReadOperation,
   type ReadPatch,
-  type ReadWrite,
   type GitHubTaskDeliveryWrite
 } from './task-read-program'
+import {
+  prepareGitHubTaskReadBatch,
+  gitHubTaskReadInstructions,
+  gitHubTaskReadRowKey,
+  type ReadBatch,
+  type ReadIndex
+} from './task-read-batches'
 import { materializeGitHubTaskDelivery } from './task-read-delivery'
 export type { GitHubTaskDeliveryWrite } from './task-read-program'
 
@@ -41,7 +43,9 @@ export function beginGitHubTaskRead(
   destinationItems?: GitHubWorkItem[]
 ) {
   const { scopes, legacy, listDomains } = captureGitHubTaskReadDomains(sources, state)
-  let program: ReadOperation[] = []
+  let program: ReadBatch[] = []
+  const domains = new Map([...listDomains].map((domain, order) => [domain, order]))
+  domains.set('*', -1)
   const borrowed = new Set<string>()
   const borrowedRows = new Map<string, GitHubWorkItem>()
   let pending: GitHubWorkItem[] | undefined
@@ -52,14 +56,41 @@ export function beginGitHubTaskRead(
   let version = 0,
     settled = false,
     committed = 0
-  const receive = (operation: ReadOperation) => {
-    program = [...program, operation]
-    if (pending && publish) {
-      read.deliver(pending, publish)
+  const receive = (batch: ReadBatch) => {
+    if (![...domains.keys()].some((domain) => batch.domains.has(domain))) {
+      return
+    }
+    program.push(batch)
+    if (
+      pending &&
+      publish &&
+      pending.some(
+        (row) => gitHubTaskReadInstructions(batch, gitHubTaskReadRowKey(row), domains).length
+      )
+    ) {
+      const evaluated = applyGitHubTaskReadProgram(
+        pending,
+        [],
+        program,
+        domains,
+        pending,
+        ownedFields,
+        borrowed,
+        borrowedRows
+      )
+      if (!evaluated.adopted.size && evaluated.items.every((row, i) => row === pending![i])) {
+        return
+      }
+      read.deliver(pending, publish, evaluated)
     }
   }
   const read = {
-    mark(target: RefreshTarget, item: GitHubWorkItem, body: string) {
+    mark(
+      target: RefreshTarget,
+      item: GitHubWorkItem,
+      body: string,
+      batch = prepareGitHubTaskReadBatch([['*', [{ target, item, body }]]])
+    ) {
       if (
         target.observations.some((owner) => owner && scopes.has(owner.key)) ||
         target.sources.some((source) =>
@@ -69,26 +100,22 @@ export function beginGitHubTaskRead(
           JSON.stringify(projectTarget) ===
             JSON.stringify(getGitHubSourceRuntimeTarget(target.source)))
       ) {
-        receive({ target, item, body })
+        receive(batch)
       }
     },
     retire(
-      index: ReadonlyMap<string, readonly ListRetirement[]>,
+      index: ReadIndex<ListRetirement>,
       projection = createTaskPageGitHubAuthorityProjection()
     ) {
-      for (const domain of listDomains) {
-        const retirements = index.get(domain)
-        if (retirements?.length) {
-          receive({ retirements, projection })
-        }
-      }
+      receive(
+        index.batch ??
+          prepareGitHubTaskReadBatch(
+            [...index].map(([domain, retirements]) => [domain, [{ retirements, projection }]])
+          )
+      )
     },
-    assign(index: ReadonlyMap<string, readonly GitHubTaskDeliveryWrite[]>) {
-      for (const domain of listDomains) {
-        for (const write of index.get(domain) ?? []) {
-          receive(write)
-        }
-      }
+    assign(index: ReadIndex<GitHubTaskDeliveryWrite>) {
+      receive(index.batch ?? prepareGitHubTaskReadBatch(index))
     },
     borrow(items: readonly GitHubWorkItem[]) {
       for (const item of items) {
@@ -100,66 +127,35 @@ export function beginGitHubTaskRead(
         }
       }
     },
-    write(index: ReadonlyMap<string, readonly ListComposition[]>, apply: ReadWrite['apply']) {
-      for (const domain of listDomains) {
-        const plans = index.get(domain)
-        if (plans?.length) {
-          receive({ plans, apply })
-        }
-      }
-    },
-    deliver(items: readonly GitHubWorkItem[], destination: NonNullable<typeof publish>) {
-      const next = read.apply(items)
-      for (const operation of program) {
-        if ('target' in operation) {
-          const key = rowKey(operation.item, operation.target.hostId)
-          ownedFields.set(
-            key,
-            new Set([
-              ...(ownedFields.get(key) ?? []),
-              'title',
-              'state',
-              'labels',
-              'assignees',
-              'author',
-              'authorAvatarUrl',
-              'updatedAt'
-            ])
+    write(index: ReadIndex<ListComposition>, apply: (item: GitHubWorkItem) => GitHubWorkItem) {
+      receive(
+        index.batch ??
+          prepareGitHubTaskReadBatch(
+            [...index].map(([domain, plans]) => [domain, [{ plans, apply }]])
           )
+      )
+    },
+    deliver(
+      items: readonly GitHubWorkItem[],
+      destination: NonNullable<typeof publish>,
+      evaluated = applyGitHubTaskReadProgram(
+        items,
+        [],
+        program,
+        domains,
+        pending,
+        ownedFields,
+        borrowed,
+        borrowedRows
+      )
+    ) {
+      const next = evaluated.items
+      for (const [key, fields] of evaluated.adopted) {
+        const owned = ownedFields.get(key) ?? new Set<keyof GitHubWorkItem>()
+        for (const field of fields) {
+          owned.add(field)
         }
-      }
-      for (let index = 0; index < next.length; index++) {
-        const before: ObservedGitHubWorkItem = items[index],
-          after: ObservedGitHubWorkItem = next[index]
-        if (before === after) {
-          continue
-        }
-        const fields = ownedFields.get(rowKey(after)) ?? new Set<keyof GitHubWorkItem>()
-        for (const field of [
-          'title',
-          'state',
-          'labels',
-          'assignees',
-          'author',
-          'authorAvatarUrl',
-          'updatedAt',
-          'reviewRequests',
-          'autoMergeEnabled'
-        ] as const) {
-          const family =
-            field === 'autoMergeEnabled'
-              ? 'autoMerge'
-              : field === 'state' || field === 'assignees' || field === 'reviewRequests'
-                ? field
-                : undefined
-          if (
-            before[field] !== after[field] ||
-            (family && before.githubValueOrigins?.[family] !== after.githubValueOrigins?.[family])
-          ) {
-            fields.add(field)
-          }
-        }
-        ownedFields.set(rowKey(after), fields)
+        ownedFields.set(key, owned)
       }
       program = []
       pending = next
@@ -195,7 +191,9 @@ export function beginGitHubTaskRead(
       }
     },
     projectPatches() {
-      return program.filter((p): p is ReadPatch => 'target' in p && p.target.current())
+      return program
+        .flatMap((batch) => batch.patches)
+        .filter((p): p is ReadPatch => p.target.current())
     },
     apply(
       items: readonly GitHubWorkItem[],
@@ -205,11 +203,12 @@ export function beginGitHubTaskRead(
         items,
         current,
         program,
+        domains,
         pending,
         ownedFields,
         borrowed,
         borrowedRows
-      )
+      ).items
     },
     dispose() {
       liveTaskReads.delete(read)
@@ -224,8 +223,9 @@ export function beginGitHubTaskRead(
   return read
 }
 export function markGitHubTaskReads(target: RefreshTarget, item: GitHubWorkItem, body: string) {
+  const batch = prepareGitHubTaskReadBatch([['*', [{ target, item, body }]]])
   for (const read of liveTaskReads) {
-    read.mark(target, item, body)
+    read.mark(target, item, body, batch)
   }
 }
 
@@ -239,8 +239,13 @@ export function markGitHubTaskListRetirements(retirements: readonly ListRetireme
     index.set(key, group)
   }
   const projection = createTaskPageGitHubAuthorityProjection()
+  const prepared = Object.assign(index, {
+    batch: prepareGitHubTaskReadBatch(
+      [...index].map(([domain, retirements]) => [domain, [{ retirements, projection }]])
+    )
+  })
   for (const read of liveTaskReads) {
-    read.retire(index, projection)
+    read.retire(prepared, projection)
   }
   taskPageGitHubResumeCache.patch(
     () => true,
@@ -262,8 +267,13 @@ export function markGitHubTaskListWrites(plans: readonly ListComposition[]) {
     index.set(key, group)
   }
   const apply = createTaskPageGitHubListCompositionProgram(plans)
+  const prepared = Object.assign(index, {
+    batch: prepareGitHubTaskReadBatch(
+      [...index].map(([domain, plans]) => [domain, [{ plans, apply }]])
+    )
+  })
   for (const read of liveTaskReads) {
-    read.write(index, apply)
+    read.write(prepared, apply)
   }
 }
 
@@ -282,7 +292,8 @@ export function markGitHubTaskDeliveryWrites(writes: readonly GitHubTaskDelivery
     group.push(write)
     index.set(key, group)
   }
+  const prepared = Object.assign(index, { batch: prepareGitHubTaskReadBatch(index) })
   for (const read of liveTaskReads) {
-    read.assign(index)
+    read.assign(prepared)
   }
 }
