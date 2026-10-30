@@ -6,12 +6,25 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
 import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
 
+type CrewPortalController = Pick<
+  TerminalPaneController,
+  | 'tabId'
+  | 'worktreeId'
+  | 'paneTransportsRef'
+  | 'isRendererVisible'
+  | 'expandedPaneId'
+  | 'isolatedPaneKey'
+  | 'managedPanes'
+  | 'effectiveChatViewMode'
+  | 'chatPane'
+>
+
 function TerminalCrewPortal({
   pane,
   controller
 }: {
   pane: ManagedPane
-  controller: TerminalPaneController
+  controller: CrewPortalController
 }) {
   const { tabId, worktreeId, paneTransportsRef } = controller
   const paneKey = makePaneKey(tabId, pane.leafId)
@@ -28,12 +41,20 @@ function TerminalCrewPortal({
     return null
   }
   return createPortal(
-    <OrchestrationCrewPanel target={target} party={party} />,
+    <OrchestrationCrewPanel
+      target={target}
+      party={party}
+      isVisible={
+        controller.isRendererVisible &&
+        (controller.expandedPaneId === null || controller.expandedPaneId === pane.id) &&
+        (controller.isolatedPaneKey === null || controller.isolatedPaneKey === paneKey)
+      }
+    />,
     pane.container,
     `crew-${pane.id}`
   )
 }
-export function TerminalCrewPortals({ controller }: { controller: TerminalPaneController }) {
+export function TerminalCrewPortals({ controller }: { controller: CrewPortalController }) {
   return (
     <>
       {controller.managedPanes.map((pane) =>

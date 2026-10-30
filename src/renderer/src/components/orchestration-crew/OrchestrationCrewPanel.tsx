@@ -1,22 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  MoreHorizontal,
-  PanelRight,
-  PanelRightClose
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { ChevronDown, ChevronRight, ExternalLink, PanelRight, PanelRightClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import { isAgentStatusState } from '../../../../shared/agent-status-types'
@@ -35,7 +21,7 @@ import { translate } from '@/i18n/i18n'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
-import { useCrewMenuFocus } from './use-crew-menu-focus'
+import { CrewRowMenu } from './CrewRowMenu'
 
 function Avatar({ row, tooltip = false }: { row: OrchestrationCrewRow; tooltip?: boolean }) {
   const agent = isTuiAgent(row.agentKind) ? row.agentKind : null
@@ -99,6 +85,7 @@ function IconButton({
 type PanelProps = {
   target: RuntimeClientTarget
   party: string
+  isVisible?: boolean
 }
 export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | null {
   const snapshot = useOrchestrationCrew(props.target, props.party)
@@ -107,7 +94,8 @@ export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | n
 
 export function CrewPanelContent({
   target,
-  snapshot
+  snapshot,
+  isVisible = true
 }: PanelProps & { snapshot: OrchestrationCrewSnapshot }): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -221,7 +209,12 @@ export function CrewPanelContent({
                     <span>{rows.length}</span>
                   </div>
                   {rows.map((row) => (
-                    <CrewRowView key={row.partyKey} row={row} target={target} />
+                    <CrewRowView
+                      key={row.partyKey}
+                      row={row}
+                      target={target}
+                      isVisible={isVisible}
+                    />
                   ))}
                 </section>
               ) : null
@@ -281,9 +274,16 @@ export function CrewPanelContent({
   )
 }
 
-function CrewRowView({ row, target }: { row: OrchestrationCrewRow; target: RuntimeClientTarget }) {
+function CrewRowView({
+  row,
+  target,
+  isVisible
+}: {
+  row: OrchestrationCrewRow
+  target: RuntimeClientTarget
+  isVisible: boolean
+}) {
   const [disclosure, setDisclosure] = useState<{ question?: string; expanded: boolean }>()
-  const menu = useCrewMenuFocus()
   const question = row.pendingQuestion?.at
   const expanded =
     disclosure?.question === question
@@ -333,50 +333,7 @@ function CrewRowView({ row, target }: { row: OrchestrationCrewRow; target: Runti
             >
               <ExternalLink />
             </IconButton>
-            <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  ref={menu.triggerRef}
-                  aria-label={translate('components.orchestrationCrew.more', 'More for {{name}}', {
-                    name: row.label
-                  })}
-                >
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                ref={menu.contentRef}
-                align="end"
-                onPointerDownOutside={menu.onPointerDownOutside}
-                onCloseAutoFocus={menu.onCloseAutoFocus}
-              >
-                <DropdownMenuItem onSelect={open}>
-                  {translate('components.orchestrationCrew.openChat', 'Open its chat')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!row.sendAddress}
-                  onSelect={() => {
-                    if (row.sendAddress) {
-                      void window.api.ui
-                        .writeTerminalClipboardText(row.sendAddress)
-                        .then(() =>
-                          toast.success(
-                            translate(
-                              'components.orchestrationCrew.copiedAddress',
-                              "Copied {{name}}'s address",
-                              { name: row.label }
-                            )
-                          )
-                        )
-                    }
-                  }}
-                >
-                  {translate('components.orchestrationCrew.copyAddress', 'Copy address')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {isVisible ? <CrewRowMenu row={row} open={open} /> : null}
             <IconButton
               label={translate(
                 'components.orchestrationCrew.showDetails',

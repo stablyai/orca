@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
+import { holdPhysicalCloseTasks } from './crew-menu.test-fixture'
 
 const rig = vi.hoisted(() => ({ snapshot: {}, open: vi.fn(), copy: vi.fn(), success: vi.fn() }))
 vi.mock('../native-chat/use-orchestration-crew', () => ({
@@ -271,19 +272,6 @@ it.each(['pointer', 'keyboard'] as const)(
   }
 )
 
-function holdPhysicalCloseTasks() {
-  const tasks: (() => void)[] = []
-  const timer = globalThis.setTimeout
-  vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
-    // Observe the installed FocusScope cleanup task; never invoke the consumer callback directly.
-    if (callback.toString().includes('unmountEvent')) {
-      tasks.push(() => callback(...args))
-      return timer(() => {}, 0)
-    }
-    return timer(callback, delay, ...args)
-  })
-  return tasks
-}
 async function showMenu() {
   const user = userEvent.setup()
   const view = mount()
