@@ -15,8 +15,6 @@ import { restrictJiraQueryToProject } from '../../../../shared/jira/jira-project
 import { getBranchSearchRequest } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
-type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
-
 export function useSmartWorkspaceSecondarySearches({
   foundation,
   shouldQueryLinear,
@@ -26,7 +24,7 @@ export function useSmartWorkspaceSecondarySearches({
   shouldQueryJira,
   jiraSearchQuery
 }: {
-  foundation: Foundation
+  foundation: ReturnType<typeof useWorkItemSourceFoundation>
   shouldQueryLinear: boolean
   linearQuery: string
   linearUrlIntent: ReturnType<typeof parseBoundedSmartWorkspaceLinearIssueUrlIntent>
@@ -50,7 +48,7 @@ export function useSmartWorkspaceSecondarySearches({
     fetchLinearIssue,
     searchLinearIssues,
     listLinearIssues,
-    linearSourceContext,
+    linearSourceContext: linearSource,
     linearWorkspaceIdOverride,
     setLinearIssues,
     setLinearLoading,
@@ -80,8 +78,9 @@ export function useSmartWorkspaceSecondarySearches({
     searchLinearIssues
   }
   const failedLinearReadRef = useRef<readonly unknown[] | null>(null)
-  const linearConnected = linearStatus.connected === true
   const linearScopeSignature = linearWorkspaceScopeSignature(linearStatus)
+  const readScope = JSON.stringify([linearSource, linearWorkspaceIdOverride, linearScopeSignature])
+  const previousLinearReadScope = useRef(readScope)
   const branchSearchRequest = useMemo(
     () =>
       getBranchSearchRequest({
@@ -156,11 +155,11 @@ export function useSmartWorkspaceSecondarySearches({
   ])
 
   useEffect(() => {
-    const readKey = [linearQuery, linearSourceContext, linearWorkspaceIdOverride] as const
+    const readKey = [linearQuery, linearSource, linearWorkspaceIdOverride] as const
     // Why: the status refresh after a failure re-runs this same read; don't blink its error.
     const rereadOfFailure =
       failedLinearReadRef.current?.every((part, index) => part === readKey[index]) === true
-    const canQuery = !disabled && shouldQueryLinear && linearConnected
+    const canQuery = !disabled && shouldQueryLinear && linearStatus.connected
     if (!rereadOfFailure || !canQuery) {
       failedLinearReadRef.current = null
       setLinearReadError(null)
@@ -177,15 +176,16 @@ export function useSmartWorkspaceSecondarySearches({
       setLinearLoading(true)
       setSettledLinearUrlQuery(null)
     }
-    // Why: empty-query list must not briefly paint the previous non-empty result set.
-    if (trimmed === '') {
+    // Retain rows while typing within a scope, never across workspace or source changes.
+    if (trimmed === '' || previousLinearReadScope.current !== readScope) {
       setLinearIssues([])
     }
+    previousLinearReadScope.current = readScope
     const request = linearUrlIntent
       ? lookupLinearIssueUrl({
           intent: linearUrlIntent,
           knownStatus: linearStatusRef.current,
-          sourceContext: linearSourceContext,
+          sourceContext: linearSource,
           fetchLinearIssue: (identifier, workspaceId, options) =>
             linearReadMethodsRef.current.fetchLinearIssue(identifier, workspaceId, {
               ...options,
@@ -197,7 +197,7 @@ export function useSmartWorkspaceSecondarySearches({
             getSmartWorkspaceLinearSearchQuery(trimmed),
             RESULT_LIMIT,
             {
-              sourceContext: linearSourceContext,
+              sourceContext: linearSource,
               ...(linearWorkspaceIdOverride !== undefined
                 ? { workspaceId: linearWorkspaceIdOverride }
                 : {})
@@ -207,7 +207,7 @@ export function useSmartWorkspaceSecondarySearches({
             .listLinearIssues(
               { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
               {
-                sourceContext: linearSourceContext,
+                sourceContext: linearSource,
                 ...(linearWorkspaceIdOverride !== undefined
                   ? { workspaceId: linearWorkspaceIdOverride }
                   : {})
@@ -242,10 +242,10 @@ export function useSmartWorkspaceSecondarySearches({
     }
   }, [
     disabled,
-    linearConnected,
+    linearStatus.connected,
     linearQuery,
-    linearScopeSignature,
-    linearSourceContext,
+    readScope,
+    linearSource,
     linearWorkspaceIdOverride,
     linearUrlIntent,
     setLinearIssues,

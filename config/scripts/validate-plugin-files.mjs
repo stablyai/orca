@@ -20,77 +20,21 @@ const { materializePluginGitTree } = loadPluginSchemaModule(
 )
 const { hashPluginTree } = loadPluginSchemaModule('../../main/plugins/plugin-content-hash.ts')
 const { gitExecFileAsync } = loadPluginSchemaModule('../../main/git/runner.ts')
-const { formatPluginSchemaIssues } = loadPluginSchemaModule('manifest/plugin-schema-issues.ts')
 const { isPluginRepositoryPath } = loadPluginSchemaModule('installation/plugin-path-safety.ts')
 const { parseGitRepositoryIdentity } = loadPluginSchemaModule('catalog/plugin-marketplace.ts')
 const { catalogImagesFromManifest } = loadPluginSchemaModule(
   'images/plugin-manifest-catalog-images.ts'
 )
-const ARTIFACT_PARSERS = {
-  themes: loadPluginSchemaModule('artifacts/plugin-theme-artifact.ts').parsePluginAppThemeArtifact,
-  terminalThemes: loadPluginSchemaModule('artifacts/plugin-terminal-theme-artifact.ts')
-    .parsePluginTerminalThemeArtifact,
-  iconThemes: loadPluginSchemaModule('artifacts/plugin-icon-theme-artifact.ts')
-    .parsePluginIconThemeArtifact
-}
-const { parsePluginLanguagePackArtifact } = loadPluginSchemaModule(
-  'artifacts/plugin-language-pack-artifact.ts'
-)
-const { parsePluginLanguageConfiguration } = loadPluginSchemaModule(
-  'artifacts/plugin-syntax-artifact.ts'
+// Why shared: `orca plugin validate` runs these same strict artifact checks.
+const { strictPluginArtifactErrors } = loadPluginSchemaModule(
+  'authoring/plugin-strict-artifact-checks.ts'
 )
 
-// Why strict here: Orca skips unknown theme tokens and icon slots at runtime, so authors only
-// learn about a typo from this check.
-function artifactErrors(pluginDir, manifest) {
-  return Object.entries(ARTIFACT_PARSERS).flatMap(([point, parse]) =>
-    manifest.contributes[point].flatMap((contribution) => {
-      let text = ''
-      try {
-        text = readFileSync(path.join(pluginDir, ...contribution.path.split('/')), 'utf8')
-        parse(text, 'strict')
-        return []
-      } catch (error) {
-        const detail = error.issues
-          ? formatPluginSchemaIssues(error.issues, JSON.parse(text))
-          : error.message
-        return [`contributes.${point} "${contribution.id}" (${contribution.path}): ${detail}`]
-      }
-    })
-  )
-}
-
-// Why: Orca drops protected security copy from a pack at load, which authors would never notice.
-function languagePackErrors(pluginDir, manifest) {
-  return manifest.contributes.languagePacks.flatMap((pack) => {
-    const file = path.join(pluginDir, ...pack.path.split('/'))
-    const parsed = existsSync(file)
-      ? parsePluginLanguagePackArtifact(readFileSync(file, 'utf8'), 'strict')
-      : { ok: false, error: 'file not found' }
-    return parsed.ok
-      ? []
-      : [`contributes.languagePacks "${pack.locale}" (${pack.path}): ${parsed.error}`]
-  })
-}
-
-// Why: Orca drops an unsafe auto-closing pair or comment marker at load instead of failing.
-function syntaxConfigurationErrors(pluginDir, manifest) {
-  return manifest.contributes.syntaxes.flatMap((syntax) => {
-    if (!syntax.configuration) {
-      return []
-    }
-    let text = ''
-    try {
-      text = readFileSync(path.join(pluginDir, ...syntax.configuration.split('/')), 'utf8')
-      parsePluginLanguageConfiguration(text, 'strict')
-      return []
-    } catch (error) {
-      const detail = error.issues
-        ? formatPluginSchemaIssues(error.issues, JSON.parse(text))
-        : error.message
-      return [`contributes.syntaxes "${syntax.id}" (${syntax.configuration}): ${detail}`]
-    }
-  })
+function readPluginText(pluginDir) {
+  return (manifestPath) => {
+    const file = path.join(pluginDir, ...manifestPath.split('/'))
+    return existsSync(file) ? readFileSync(file, 'utf8') : null
+  }
 }
 
 async function git(cwd, args) {
@@ -206,11 +150,7 @@ for (const target of targets) {
     const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
       const { manifest } = parsePluginManifest(raw)
-      errors.push(
-        ...artifactErrors(root, manifest),
-        ...languagePackErrors(root, manifest),
-        ...syntaxConfigurationErrors(root, manifest)
-      )
+      errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root)))
     }
     for (const error of errors) {
       console.error(`${file}: ${error}`)

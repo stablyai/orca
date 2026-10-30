@@ -5,6 +5,9 @@ import type { PluginHostListEntry } from '../../../../shared/plugins/plugin-list
 import type { PluginService } from '../../../plugins/plugin-service'
 import type { PluginConsentRequest } from '../../../../shared/plugins/approval/plugin-consent-request'
 import {
+  PluginDevLoadParams,
+  PluginDevUnloadParams,
+  PluginGetLogsParams,
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,
   PluginRpcConsentParams,
@@ -16,6 +19,7 @@ import {
   pluginCliApprovalRequest
 } from '../../../plugins/plugin-cli-approval'
 import { PluginApprovalRequiredError } from '../../../../shared/plugins/approval/plugin-cli-approval'
+import { loadPluginDevFolder, unloadPluginDevFolder } from '../../../plugins/plugin-dev-folders'
 
 /** Expose desktop IPC's plugin consent/actions over serve/headless RPC through the same PluginService permission boundary. */
 
@@ -25,17 +29,20 @@ let pluginServiceForRpc: PluginService | null = null
 // closures instead of the store itself.
 let pluginConsentForRpc: ((request: PluginConsentRequest) => Promise<void>) | null = null
 let pluginEnablementForRpc: ((pluginKey: string, enabled: boolean) => Promise<void>) | null = null
+let pluginDevPathsForRpc: ((paths: string[]) => void) | null = null
 
 export function setPluginServiceForRpc(
   service: PluginService | null,
   writes?: {
     applyConsent: (request: PluginConsentRequest) => Promise<void>
     applyEnablement: (pluginKey: string, enabled: boolean) => Promise<void>
+    setDevPluginPaths?: (paths: string[]) => void
   }
 ): void {
   pluginServiceForRpc = service
   pluginConsentForRpc = writes?.applyConsent ?? null
   pluginEnablementForRpc = writes?.applyEnablement ?? null
+  pluginDevPathsForRpc = writes?.setDevPluginPaths ?? null
 }
 
 function requirePluginService(): PluginService {
@@ -50,6 +57,19 @@ function requireConsentWrite(): (request: PluginConsentRequest) => Promise<void>
     throw new Error('Plugin consent is not available on this runtime')
   }
   return pluginConsentForRpc
+}
+
+function requireDevPathsWrite(): (paths: string[]) => void {
+  if (!pluginDevPathsForRpc) {
+    throw new Error('Plugin development folders are not available on this runtime')
+  }
+  return pluginDevPathsForRpc
+}
+
+async function listEntryForRpc(pluginKey: string | null): Promise<PluginHostListEntry | null> {
+  return pluginKey === null
+    ? null
+    : ((await listForRpc()).find((entry) => entry.pluginKey === pluginKey) ?? null)
 }
 
 async function listForRpc(): Promise<PluginHostListEntry[]> {
@@ -135,6 +155,65 @@ export const PLUGIN_METHODS = [
         caller: context.caller
       })
       return listForRpc()
+    }
+  }),
+  defineMethod({
+    // Agent dev loop: same list Settings → Plugins edits; code stays inert without the approve flag.
+    name: 'plugins.devLoad',
+    permission: 'host-admin',
+    params: PluginDevLoadParams,
+    handler: async (params, context) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      const result = await loadPluginDevFolder({
+        service,
+        writes: {
+          setDevPluginPaths: requireDevPathsWrite(),
+          applyConsent: requireConsentWrite()
+        },
+        path: params.path,
+        approvalFingerprint: params.approvalFingerprint,
+        caller: context.caller
+      })
+      return { ...result, plugin: await listEntryForRpc(result.pluginKey) }
+    }
+  }),
+  defineMethod({
+    name: 'plugins.devUnload',
+    permission: 'host-admin',
+    params: PluginDevUnloadParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      return unloadPluginDevFolder({
+        service,
+        writes: { setDevPluginPaths: requireDevPathsWrite() },
+        target:
+          params.pluginKey !== undefined
+            ? { pluginKey: params.pluginKey }
+            : { path: params.path ?? '' }
+      })
+    }
+  }),
+  defineMethod({
+    name: 'plugins.refresh',
+    permission: 'host-admin',
+    params: null,
+    handler: async () => {
+      const service = requirePluginService()
+      await service.whenReady()
+      await service.refresh()
+      return listForRpc()
+    }
+  }),
+  defineMethod({
+    name: 'plugins.getLogs',
+    permission: 'host-admin',
+    params: PluginGetLogsParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      return { pluginKey: params.pluginKey, lines: service.getLogs(params.pluginKey) }
     }
   }),
   defineMethod({

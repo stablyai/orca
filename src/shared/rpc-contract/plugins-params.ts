@@ -32,3 +32,27 @@ export const PluginInvokeCommandParams = z.object({
 })
 
 export const PluginsPanelActionParams = z.unknown()
+
+// Why 32 KiB: the same bound settings keep for each development folder entry.
+const devFolderPathParam = z
+  .string()
+  .min(1)
+  .max(32 * 1024)
+
+export const PluginDevLoadParams = z.object({
+  path: devFolderPathParam,
+  approvalFingerprint: approvalFingerprintParam
+})
+
+export const PluginDevUnloadParams = z
+  .object({
+    path: devFolderPathParam.optional(),
+    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key').optional()
+  })
+  .refine((params) => (params.path === undefined) !== (params.pluginKey === undefined), {
+    message: 'pass exactly one of path or pluginKey'
+  })
+
+export const PluginGetLogsParams = z.object({
+  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+})

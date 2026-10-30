@@ -68,11 +68,13 @@ export async function getOfflineRuntimeAdmission(
       1000,
       undefined,
       undefined,
-      (error) => {
-        const code = 'code' in error ? error.code : undefined
-        return (code === 'EPERM' || code === 'EACCES') && isProcessRunning(metadata.pid)
-          ? runtimeAccessDeniedError(error)
-          : null
+      {
+        classifySocketError: (error) => {
+          const code = 'code' in error ? error.code : undefined
+          return (code === 'EPERM' || code === 'EACCES') && isProcessRunning(metadata.pid)
+            ? runtimeAccessDeniedError(error)
+            : null
+        }
       }
     )
     const status = projectConnectedStatus(metadata, response)

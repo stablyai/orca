@@ -19,12 +19,33 @@ import type { PluginManifest } from '../manifest/plugin-manifest'
 export const PLUGIN_APPROVAL_REQUIRED_CODE = 'approval_required'
 export const PLUGIN_APPROVAL_STALE_CODE = 'approval_stale'
 export const PLUGIN_NOT_FOUND_CODE = 'plugin_not_found'
+export const PLUGIN_INVALID_CODE = 'plugin_invalid'
+export const PLUGIN_SYSTEM_DISABLED_CODE = 'plugin_system_disabled'
 /** Codes the runtime passes through to CLI callers with their `data`. */
 export const PLUGIN_CLI_ERROR_CODES = [
   PLUGIN_APPROVAL_REQUIRED_CODE,
   PLUGIN_APPROVAL_STALE_CODE,
-  PLUGIN_NOT_FOUND_CODE
+  PLUGIN_NOT_FOUND_CODE,
+  PLUGIN_INVALID_CODE,
+  PLUGIN_SYSTEM_DISABLED_CODE
 ] as const
+
+/** A plugin CLI refusal whose `data` carries `nextSteps` for the caller. */
+export class PluginCliError extends Error {
+  readonly code: string
+  readonly data: { nextSteps: string[] } & Record<string, unknown>
+
+  constructor(
+    code: string,
+    message: string,
+    data: { nextSteps: string[] } & Record<string, unknown>
+  ) {
+    super(message)
+    this.name = 'PluginCliError'
+    this.code = code
+    this.data = data
+  }
+}
 
 /** What the caller was doing; install and update reuse the same flag in later commands. */
 export type PluginApprovalAction = 'enable' | 'dev-load' | 'install' | 'update'
@@ -148,11 +169,11 @@ export function buildPluginApprovalRequest(
 /** One message for humans; agents read `data` instead. */
 export function formatPluginApprovalMessage(request: PluginApprovalRequest, stale = false): string {
   const lead = stale
-    ? `${request.pluginKey} changed since that approval was shown, so the fingerprint no longer matches. Review what it would get now.`
+    ? `That fingerprint does not match what ${request.pluginKey} would get now: the plugin changed since it was shown, or the fingerprint is for something else. Review the current grants.`
     : `${request.pluginKey} ${request.version} needs approval before it can run.`
   const lines = [
     lead,
-    `Approving ${request.name} (${request.pluginKey} ${request.version}${request.isDev ? ', development folder' : ''}) lets it:`,
+    `Approving ${request.name} (${request.pluginKey} ${request.version}${request.isDev ? ', development folder' : ''}) grants:`,
     `- ${request.grants.executionDescription}`,
     ...request.grants.capabilities.map((capability) => `- ${capability.description}`)
   ]

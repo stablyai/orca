@@ -160,19 +160,7 @@ describe('structured chat adoption guard on the launch path', () => {
               null,
               createElement(AgentLaunchPickerMenu, {
                 entries: [entry],
-                runLaunch,
-                model: {
-                  state: 'settled',
-                  rows,
-                  detection: {
-                    detectedIds: [agent],
-                    isLoading: false,
-                    isRefreshing: false,
-                    detectionFailed: false,
-                    needsServerUpdate: false,
-                    refresh: async () => [agent]
-                  }
-                }
+                runLaunch
               })
             )
           )
