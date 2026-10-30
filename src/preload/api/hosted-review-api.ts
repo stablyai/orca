@@ -1,5 +1,6 @@
 import type {
   BitbucketConnectArgs,
+  BitbucketConnectResult,
   BitbucketConnectionStatus
 } from '../../shared/bitbucket-credentials'
 import type {
@@ -23,9 +24,7 @@ export type HostedReviewApi = {
 }
 
 export type BitbucketApi = {
-  connect: (
-    args: BitbucketConnectArgs
-  ) => Promise<{ ok: true; account: string | null } | { ok: false; error: string }>
+  connect: (args: BitbucketConnectArgs) => Promise<BitbucketConnectResult>
   disconnect: () => Promise<void>
   status: () => Promise<BitbucketConnectionStatus>
 }

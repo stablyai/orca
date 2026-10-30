@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -575,3 +576,36 @@ describe('agentSession.subscribeTurnCompletions', () => {
     expect(subscribed().map((sub) => sub.includePrompts)).toEqual([true])
   })
 })
+
+it.each([false, true])(
+  'negotiates command demand per request and subscriber: capable=%s',
+  async (capable) => {
+    const client = {
+      ...STRUCTURED_CLIENT,
+      clientCapabilities: [
+        ...STRUCTURED_CLIENT.clientCapabilities,
+        ...(capable ? [AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY] : [])
+      ]
+    }
+    hostCalls.readCommands = vi.fn(async () => ({ commands: [] }))
+    expect(await call('agentSession.commands', { sessionId: SESSION }, client)).toMatchObject({
+      ok: true
+    })
+    expect(hostCalls.readCommands).toHaveBeenCalledWith(SESSION, capable)
+    let subscription: AgentSessionSubscribeInput | undefined
+    hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
+      subscription = input
+      input.emit({ type: 'end' })
+      return () => {}
+    })
+    await call('agentSession.subscribe', { sessionId: SESSION }, client)
+    expect(subscription?.commandsOnRequest).toBe(capable)
+    expect(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+    expect(
+      parseRuntimeClientCapabilities([...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES])
+    ).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+  }
+)

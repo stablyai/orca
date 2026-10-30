@@ -357,7 +357,7 @@ describe('load-time normalization durability', () => {
         expect(launch.command).toBe(
           recipe.agentId === 'claude'
             ? "claude '--model' 'retired-unlisted-id' '--effort' 'high' '--dangerously-skip-permissions'"
-            : "codex '-m' 'retired-unlisted-id' '-c' 'model_reasoning_effort=high' '--dangerously-bypass-approvals-and-sandbox'"
+            : "codex '-c' 'disable_paste_burst=true' '-m' 'retired-unlisted-id' '-c' 'model_reasoning_effort=high' '--dangerously-bypass-approvals-and-sandbox'"
         )
       }
       const write = vi.spyOn(domainWrites, 'writeProfileStateDomains')

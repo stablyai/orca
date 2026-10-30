@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
-import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 import {
   AutomationRunErrorNotice,
   formatAutomationDateTimeWithRelative
@@ -328,7 +328,7 @@ export function AutomationDetail({
               ? translate(
                   'auto.components.automations.AutomationDetail.precheckEnabled',
                   'Enabled, {{timeout}}',
-                  { timeout: formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds) }
+                  { timeout: formatUiNarrowDuration(automation.precheck.timeoutSeconds, 'second') }
                 )
               : translate('auto.components.automations.AutomationDetail.precheckNone', 'None')
           }

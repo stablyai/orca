@@ -8,14 +8,10 @@ import {
   notificationPreferencesFilter
 } from './notification-delivery-preferences'
 import { sendRegister } from './mobile-push-registration-operations'
+import type { HostPushState as HostPushRegistrationState } from './host-push-registration-state'
 
-export type HostPushState = {
-  connection: { client: RpcOperationSender | null }
-  // An unanswered probe is unknown, not unsupported.
-  supported: boolean | null
+export type HostPushState = HostPushRegistrationState & {
   routeKeySupported?: boolean
-  capabilityProbeStop: (() => void) | null
-  chain: Promise<void>
   preparation?: { releaseIfObsolete(): void }
   running?: boolean
   dirty?: boolean

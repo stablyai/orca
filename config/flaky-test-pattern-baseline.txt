@@ -376,7 +376,6 @@
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-cap.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-offer-withdrawal.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-ownership.test.ts
-1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-restore.test.ts
 2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-start-admission.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-stop-aborts-start.test.ts
@@ -403,7 +402,6 @@
 2 test-no-real-time-wait:src/main/providers/startup-line-typed-length.live-shell.test.ts
 1 test-no-real-time-wait:src/main/pty/node-pty-master-fd-retirement.test.ts
 1 test-no-real-time-wait:src/main/pty/posix-pty-process-groups.integration.test.ts
-2 test-no-real-time-wait:src/main/pty/windows-environment-path-main-loop.test.ts
 1 test-no-real-time-wait:src/main/rate-limits/opencode-go-usage-fetcher.test.ts
 1 test-no-real-time-wait:src/main/runtime/agent-session/ownership/structured-agent-session-spawn-token-descendants.test.ts
 1 test-no-real-time-wait:src/main/runtime/claude-structured-idle-releases-unknown.test.ts
@@ -435,14 +433,13 @@
 1 test-no-real-time-wait:src/main/runtime/runtime-rpc-dispatch-inject-long-poll.test.ts
 6 test-no-real-time-wait:src/main/runtime/runtime-rpc-long-poll-transport.test.ts
 1 test-no-real-time-wait:src/main/runtime/sidebar-inputs/paired-server-rows-producer.test.ts
-1 test-no-real-time-wait:src/main/runtime/sidebar-inputs/workspace-rows-producer.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-legacy-send-behind-command.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-provider-operations-while-starting.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-runtime-exit.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-runtime.test.ts
 4 test-no-real-time-wait:src/main/runtime/structured-agent-shell-environment.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-chat-coordinator-mail.test.ts
-2 test-no-real-time-wait:src/main/runtime/structured-chat-worker-error-escalation.test.ts
+1 test-no-real-time-wait:src/main/runtime/structured-chat-worker-error-escalation.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-session-worktree-teardown.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal-focus-navigation-coalescer.test.ts
 2 test-no-real-time-wait:src/main/runtime/tui-idle-name-only-real-pty.integration.test.ts
@@ -771,7 +768,6 @@
 4 test-no-wall-clock:src/cli/runtime/serve-bundle-park.test.ts
 5 test-no-wall-clock:src/cli/runtime/serve-pid1-init-reaper.test.ts
 1 test-no-wall-clock:src/cli/runtime/status-caller.test.ts
-2 test-no-wall-clock:src/cli/runtime/status.test.ts
 1 test-no-wall-clock:src/main/acp/acp-structured-mail-admission.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/managed-hook-timeout.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/manual-compact-hook-stream.test.ts
@@ -845,7 +841,6 @@
 1 test-no-wall-clock:src/main/daemon/terminal-session-teardown.test.ts
 2 test-no-wall-clock:src/main/daemon/terminal-shell-recovery-barrier.test.ts
 1 test-no-wall-clock:src/main/daemon/terminal-spawn-gate-legacy-restores.test.ts
-2 test-no-wall-clock:src/main/ephemeral-vm/runtime-ssh.test.ts
 2 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel-settlement.test.ts
 3 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel.test.ts
 1 test-no-wall-clock:src/main/fish-history-session.test.ts
@@ -884,7 +879,6 @@
 2 test-no-wall-clock:src/main/ipc/native-chat-subscribe-lifecycle.test.ts
 2 test-no-wall-clock:src/main/ipc/native-chat.test.ts
 1 test-no-wall-clock:src/main/ipc/pty/provider/liveness-inventory.test.ts
-1 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged-exit.test.ts
 2 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged.test.ts
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts
@@ -987,7 +981,6 @@
 2 test-no-wall-clock:src/main/runtime/orca-runtime-terminal-close-records.test.ts
 3 test-no-wall-clock:src/main/runtime/orchestration-cli-subprocess.test.ts
 2 test-no-wall-clock:src/main/runtime/orchestration-codex-real-pty.integration.test.ts
-1 test-no-wall-clock:src/main/runtime/orchestration/db.test.ts
 1 test-no-wall-clock:src/main/runtime/orchestration/structured-pointer-operation-id.test.ts
 6 test-no-wall-clock:src/main/runtime/orchestration/worker-output-archive.test.ts
 1 test-no-wall-clock:src/main/runtime/owned-session-teardown-policy.test.ts
@@ -1107,7 +1100,6 @@
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.unsent-message.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSession.stopping.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSession.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSessionStatus.test.tsx
 8 test-no-wall-clock:src/renderer/src/components/native-chat/structured-child-records-switch.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx
@@ -1132,7 +1124,7 @@
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/tab-bar/cli-chat-resume-run.test.ts
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/open-tab-search.test.ts
-4 test-no-wall-clock:src/renderer/src/components/task-page-jira-cache-selectors.test.ts
+4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 1 test-no-wall-clock:src/renderer/src/components/task-page-jira-saved-filter-load-failure.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/cache-timer-seeding.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
@@ -1147,7 +1139,6 @@
 6 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/workspace-cleanup-confirm-remove.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/worktree-creation/WorktreeCreationPanel.test.tsx
 2 test-no-wall-clock:src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts
-1 test-no-wall-clock:src/renderer/src/hooks/ipc-events/worktree-event-lineage-refresh.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 1 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-agent-status-hook-titles.test.ts
 1 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts
@@ -1231,7 +1222,6 @@
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/recorded-request-params.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/rpc-recording-through-bridge.test.ts
 1 test-timeout-needs-reason:mobile/src/transport/mobile-web-bundle-host-slow-link.test.ts
-1 test-timeout-needs-reason:mobile/src/transport/rpc-client-live-recovery.test.ts
 3 test-timeout-needs-reason:mobile/src/transport/rpc-client-reconnect-wait.test.ts
 1 test-timeout-needs-reason:src/cli/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/launch-serve-replaced-app-restart.test.ts
@@ -1341,7 +1331,6 @@
 3 test-timeout-needs-reason:src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
 2 test-timeout-needs-reason:src/main/providers/startup-line-typed-length.live-shell.test.ts
 7 test-timeout-needs-reason:src/main/pty/node-pty-master-fd-retirement.test.ts
-1 test-timeout-needs-reason:src/main/rate-limits/antigravity-usage-real-cli.test.ts
 2 test-timeout-needs-reason:src/main/runtime/cline-screen-readiness-transcripts.test.ts
 4 test-timeout-needs-reason:src/main/runtime/codex-header-readiness-transcripts.test.ts
 1 test-timeout-needs-reason:src/main/runtime/codex-quiet-ready-screen.test.ts

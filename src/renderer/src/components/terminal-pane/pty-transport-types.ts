@@ -53,6 +53,8 @@ export type PtyBufferSnapshot = {
    *  means unknown; never rewrite that silence into a known `0`. */
   kittyKeyboardFlags?: number
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken; absent from older hosts. */
+  lastTitle?: string
 }
 
 /** Metadata for one authoritative replay payload. */
@@ -66,6 +68,8 @@ export type PtyReplayDataMeta = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken, so live-agent judgement cannot race a separate title publication. */
+  lastTitle?: string
   /** Grid the payload was serialized at. Present only when the producer proved
    *  it; the drain replays there and fits back to the pane afterwards. */
   snapshotCols?: number

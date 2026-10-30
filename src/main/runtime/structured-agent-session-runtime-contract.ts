@@ -3,24 +3,38 @@ import type { AgentSessionAccountKind } from '../../shared/agent-session-availab
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
-import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
+import type {
+  StructuredAgentCommand,
+  StructuredAgentCommandSettings
+} from '../native-chat/structured-agent-command-resolution'
 import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import type { RuntimeAgentAccountHomeResolver } from './structured-agent-model-catalog-wiring'
 import type { ClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type {
+  AgentSessionStatusSummary,
+  AgentSessionTurnCompletionEvent
+} from '../../shared/agent-session-wire'
 
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
+  legacySessionTabIds?: readonly string[]
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
    *  probe and not ours to spawn for. */
   hostId: string
   /** Key id this host's claims are minted under. */
   claimKeyId: string
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
-  resolveClaudeCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  resolveCodexCommand?: (options?: {
+    pathEnv?: string | null
+    homePath?: string
+  }) => StructuredAgentCommand
+  resolveClaudeCommand?: (options?: {
+    pathEnv?: string | null
+    homePath?: string
+  }) => StructuredAgentCommand
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   /** Gives each chat a scratch folder and the visuals skill that teaches it, and sweeps folders
@@ -60,6 +74,11 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   assertNoTerminalWriter?: StructuredAgentSessionHostDeps['assertNoTerminalWriter']
   /** Host-owned phone delivery and reconciliation from the current journal projection. */
   attentionDelivery?: StructuredAttentionMobileDelivery
+  /** Every live turn completion and pending prompt, with the host's status at that edge. */
+  onTurnAttention?: (
+    event: AgentSessionTurnCompletionEvent,
+    readStatus: (sessionId: string) => AgentSessionStatusSummary | undefined
+  ) => void
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver

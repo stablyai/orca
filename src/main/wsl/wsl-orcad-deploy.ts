@@ -46,6 +46,7 @@ import {
   wslOrcadDeferralFailure
 } from './wsl-orcad-update-admission'
 import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
+import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from './wsl-node-runtime-download-budget'
 
 /** An update this app carries that the host may not take yet; the incumbent keeps serving. */
 export type WslOrcadDeferredUpdate = WslHostDeferredUpdate
@@ -209,6 +210,7 @@ async function launchOverTransport(
       force: intent === 'force',
       appVersion,
       recordedNodeRuntimeProbe: true,
+      nodeRuntimeDownload: WSL_NODE_RUNTIME_DOWNLOAD_BUDGET,
       ...extra
     }).catch((error: unknown) => {
       if (!signal?.aborted) {

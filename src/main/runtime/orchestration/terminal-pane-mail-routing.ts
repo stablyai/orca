@@ -10,12 +10,8 @@ import {
   GENERIC_PROCESS_NAME_AGENTS,
   recognizeAgentProcess
 } from '../../../shared/agent-process-recognition'
-import {
-  resolveStructuredWorkerAuthority,
-  resolveStructuredWorkerIdentityForSession
-} from '../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
-import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 import {
   chatDispatchMailTarget,
   handleLessCoordinatorSessionId,
@@ -125,11 +121,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
     try {
-      const livePty = this.getLivePtyForHandle(handle)
-      const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
-      const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
-      const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
-      if (!ptyId || !trackedPty || !this.ptyController) {
+      const { pty: trackedPty } = this.getTerminalPtyForHandle(handle)
+      const { ptyId } = trackedPty
+      if (!this.ptyController) {
         return false
       }
       let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
@@ -163,14 +157,6 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
         this.getLiveLeafForHandle(handle)
       }
     })
-  }
-
-  /** Pane keys authorize mailbox access; resolve locally and never expose them through renderer-embedded session ids. */
-  getStructuredWorkerPaneKeyForSession(sessionId: string): string | null {
-    const identity = resolveStructuredWorkerIdentityForSession(sessionId, this._orchestrationDb)
-    return identity && resolveStructuredWorkerAuthority(identity.handle, this._orchestrationDb)
-      ? identity.paneKey
-      : null
   }
 
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
@@ -332,9 +318,5 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     } catch {
       // The unref'd repair can outlive a test/runtime-owned database during shutdown.
     }
-  }
-
-  protected deliverPendingMessagesForLeaf(leaf: OrchestrationMailboxLeaf): void {
-    this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
   }
 }

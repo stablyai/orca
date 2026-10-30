@@ -65,6 +65,7 @@ export function buildMobileFileTab(
     language: file.language,
     mode: file.mode === 'diff' ? 'diff' : 'edit',
     ...(diffSource ? { diffSource } : {}),
+    ...(diffSource === 'staged' && file.branchOldPath ? { oldPath: file.branchOldPath } : {}),
     isDirty: file.isDirty,
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,

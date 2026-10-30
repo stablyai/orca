@@ -9,7 +9,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import { holdForNewerDaemon } from './newer-daemon-hold-pane'
 import { holdForStoppedWslDistro, wslRestoreStartArgs } from './wsl-distro-stopped-hold-pane'
-import { parseWslDistroStoppedHold } from '../../../../../shared/wsl-distro-stopped-hold'
+import { parseWslDistroHold } from '../../../../../shared/wsl-distro-stopped-hold'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../shared/newer-daemon-hold'
 import { PANE_NOT_LIVE_ERROR } from '../../../../../shared/pane-attach-only-view'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -91,7 +91,7 @@ function connectDeferredSessionReattach(
   let paneOwnerUnverified = false
   let paneOwnerChanged = false
   let heldByNewerDaemon = false
-  let heldForStoppedDistro: string | null = null
+  let heldForStoppedDistro: ReturnType<typeof parseWslDistroHold> = null
   // Why: main started this pane's agent; the window's attach never resumes it a second time.
   const attachOnlyView = mainStartsPane(session)
   const resumeStartup = session.buildColdRestoreAgentResumeStartup()
@@ -112,9 +112,7 @@ function connectDeferredSessionReattach(
         heldByNewerDaemon = true
         return
       }
-      heldForStoppedDistro ??= session.runtimeEnvironmentId
-        ? null
-        : parseWslDistroStoppedHold(message)
+      heldForStoppedDistro ??= session.runtimeEnvironmentId ? null : parseWslDistroHold(message)
       if (heldForStoppedDistro) {
         return
       }

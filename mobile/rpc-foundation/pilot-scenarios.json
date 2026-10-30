@@ -14549,7 +14549,8 @@
           "params": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           },
           "reply": {
             "ok": true,
@@ -14867,10 +14868,7 @@
       "id": "terminal-raw-input-reported",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": [
-        "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14898,18 +14896,6 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
           "checkpoint": "reported"
         }
       ]
@@ -14918,10 +14904,7 @@
       "id": "terminal-raw-input-refused",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": [
-        "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14950,78 +14933,6 @@
         },
         {
           "checkpoint": "not-reported"
-        }
-      ]
-    },
-    {
-      "id": "terminal-takeover-report-retried",
-      "operation": "terminal.takeover-report",
-      "family": "terminal.takeover-report",
-      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "report",
-          "id": "report"
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "busy"
-            }
-          }
-        },
-        {
-          "advance": 250
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#2",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "reported-on-retry"
-        }
-      ]
-    },
-    {
-      "id": "terminal-takeover-report-accepted",
-      "operation": "terminal.takeover-report",
-      "family": "terminal.takeover-report",
-      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "report",
-          "id": "report"
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "reported"
         }
       ]
     },
@@ -16517,18 +16428,6 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
-        },
-        {
           "checkpoint": "accepted"
         }
       ]
@@ -16665,18 +16564,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
             }
           }
         },
@@ -17946,18 +17833,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
             }
           }
         },
@@ -19664,8 +19539,7 @@
       "family": "session.terminal-paste",
       "sites": [
         "mobile/src/session/use-mobile-terminal-paste.ts",
-        "mobile/src/session/use-mobile-session-accessory-selection.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
+        "mobile/src/session/use-mobile-session-accessory-selection.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19718,18 +19592,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
             }
           }
         },
@@ -19860,10 +19722,7 @@
       "id": "terminal-input-send-accepted",
       "operation": "session.terminal-input-send",
       "family": "session.terminal-input-send",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-send-actions.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19901,18 +19760,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
             }
           }
         },
@@ -20007,18 +19854,6 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
           "checkpoint": "live-sent"
         }
       ]
@@ -20080,7 +19915,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20119,7 +19959,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20159,7 +20004,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20199,7 +20049,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20739,7 +20594,8 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p"
+            "worktree": "id:repo42::/p",
+            "includeLineStats": false
           },
           "reply": {
             "ok": true,
@@ -21478,18 +21334,6 @@
         },
         {
           "checkpoint": "sent"
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
         },
         {
           "checkpoint": "reported"

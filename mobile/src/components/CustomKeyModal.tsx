@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
+import { TextField } from './composer-input/TextField'
 import {
   buildTerminalShortcutKey,
   normalizeShortcutKeyInput,
@@ -378,24 +379,21 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
         <View style={styles.group}>
           <View style={styles.macroForm}>
             <Text style={styles.fieldLabel}>{t('components.customKeyModal.label', 'Label')}</Text>
-            <TextInput
-              style={styles.fieldInput}
+            <TextField
               value={macroLabel}
               onChangeText={setMacroLabel}
               placeholder={t('components.customKeyModal.labelPlaceholder', 'e.g. Build')}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
             />
             <Text style={styles.fieldLabel}>
               {t('components.customKeyModal.command', 'Command')}
             </Text>
-            <TextInput
-              style={styles.fieldInput}
+            <TextField
+              monospace
               value={macroText}
               onChangeText={setMacroText}
               placeholder={t('components.customKeyModal.commandPlaceholder', 'e.g. pnpm build')}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
             />

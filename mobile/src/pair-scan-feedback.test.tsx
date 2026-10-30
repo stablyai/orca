@@ -2,6 +2,7 @@ import { createElement, useEffect, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import PairScanScreen from '../app/pair-scan'
+import { activateMobileUiLocale } from './i18n/mobile-i18n'
 import { findAllByHostType, findByHostType } from './test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => {
@@ -53,8 +54,8 @@ vi.mock('expo-camera', () => ({
     return [value, mocks.requestPermission, mocks.getPermission]
   }
 }))
-vi.mock('./transport/pairing', () => ({
-  decodePairingUrl: mocks.parse,
+vi.mock(import('./transport/pairing'), async (importOriginal) => ({
+  ...(await importOriginal()),
   parsePairingCode: mocks.parse
 }))
 vi.mock('./transport/pre-profile-pairing-coordinator', () => ({
@@ -93,9 +94,10 @@ beforeEach(() => {
     dispose() {}
   }))
 })
-afterEach(() => {
+afterEach(async () => {
   act(() => renderer?.unmount())
   renderer = null
+  await activateMobileUiLocale('en')
 })
 async function render() {
   await act(async () => {
@@ -170,3 +172,81 @@ it('keeps denied access retryable if a foreground permission read fails', async 
   await act(async () => mocks.appState?.('active'))
   expect(findAllByHostType(root(), 'CameraView')).toHaveLength(1)
 })
+
+it.each([
+  'https://apps.apple.com/app/orca-ide/id6766130217',
+  ' HTTPS://APPS.APPLE.COM/us/app/orca-ide/id6766130217?mt=8\n',
+  'https://www.onorca.dev/download/android',
+  'https://onorca.dev/download/android/',
+  'https://testflight.apple.com/join/YjeGMQBA',
+  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.52/app-release.apk'
+])('explains the download QR and retries scanning: %s', async (data) => {
+  mocks.permission = { granted: true, canAskAgain: true }
+  await render()
+  await act(async () => findByHostType(root(), 'CameraView').props.onBarcodeScanned({ data }))
+  expect(screen()).toContain(
+    "That's the download code. Scan the pairing code in step 2 on your desktop."
+  )
+  expect(mocks.start).not.toHaveBeenCalled()
+  const retry = findAllByHostType(root(), 'Pressable').find((node) =>
+    findAllByHostType(node, 'Text').some((text) => text.props.children === 'Try Again')
+  )
+  if (!retry) {
+    throw new Error('Retry action is missing')
+  }
+  await act(async () => retry.props.onPress())
+  expect(findAllByHostType(root(), 'CameraView')).toHaveLength(1)
+})
+
+it.each([
+  'https://example.com',
+  'https://www.onorca.dev.evil.example/download/android',
+  'https://apps.apple.com@evil.example/app/orca-ide/id6766130217',
+  'https://apps.apple.com/app/another-app/id123',
+  'https://testflight.apple.com/join/another-app',
+  'https://github.com/another/orca/releases/download/mobile-android-v0.0.52/app-release.apk',
+  'orca://pair?code=broken'
+])('keeps unrelated and malformed QR codes invalid: %s', async (data) => {
+  mocks.permission = { granted: true, canAskAgain: true }
+  await render()
+  await act(async () => findByHostType(root(), 'CameraView').props.onBarcodeScanned({ data }))
+  expect(screen()).toContain('Not a valid Orca QR code')
+  expect(mocks.start).not.toHaveBeenCalled()
+})
+
+it('localizes the download QR guidance', async () => {
+  await activateMobileUiLocale('es')
+  mocks.permission = { granted: true, canAskAgain: true }
+  await render()
+  await act(async () =>
+    findByHostType(root(), 'CameraView').props.onBarcodeScanned({
+      data: 'https://www.onorca.dev/download/android'
+    })
+  )
+  expect(screen()).toContain(
+    'Ese es el código de descarga. Escanea el código de emparejamiento del paso 2 en tu ordenador.'
+  )
+})
+
+it.each(['orca://pair?code=', 'orca://pair#'])(
+  'still pairs from an older desktop QR using %s',
+  async (prefix) => {
+    const offer = {
+      v: 2,
+      endpoint: 'ws://192.168.1.2:6768',
+      deviceToken: 'test-token',
+      publicKeyB64: 'test-key'
+    }
+    const code = btoa(JSON.stringify(offer))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+    mocks.permission = { granted: true, canAskAgain: true }
+    await render()
+    await act(async () =>
+      findByHostType(root(), 'CameraView').props.onBarcodeScanned({ data: `${prefix}${code}` })
+    )
+    expect(screen()).toContain('Connecting…')
+    expect(mocks.start).toHaveBeenCalledWith(expect.objectContaining({ offer }))
+  }
+)

@@ -1,13 +1,11 @@
-import { takeWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 import { holdPaneForStoppedWslDistro } from '../wsl-distro-stopped-hold-state'
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import type { WslDistroHoldState } from '../../../../../shared/wsl-distro-stopped-hold'
 
 // Clears the saved screen the hold painted so the restore below paints it once.
 const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'
-
-// The mounts a user's switch itself causes land well inside this; a later remount does not.
-const SWITCH_MOUNT_WINDOW_MS = 10_000
 
 /**
  * Whether a local restore may start a stopped WSL distro: only Start, or this pane's first mount
@@ -21,9 +19,7 @@ export function wslRestoreStartArgs(
   if (
     session.runtimeEnvironmentId ||
     userAct ||
-    takeWorkspaceSwitchWake(session.deps.worktreeId, `pane-restore:${session.cacheKey}`, {
-      withinMs: SWITCH_MOUNT_WINDOW_MS
-    })
+    takeRecentWorkspaceSwitchWake(session.deps.worktreeId, `pane-restore:${session.cacheKey}`)
   ) {
     return {}
   }
@@ -34,10 +30,10 @@ export function wslRestoreStartArgs(
 export function holdForStoppedWslDistro(
   session: ConnectPanePtySession,
   sessionId: string,
-  distro: string,
+  hold: { distro: string; state: WslDistroHoldState },
   reconnect: () => Promise<unknown>
 ): void {
-  recordPtyConnectDiagnostic(`pane=${session.pane.id} -> HELD FOR STOPPED WSL ${distro}`)
+  recordPtyConnectDiagnostic(`pane=${session.pane.id} -> HELD FOR WSL ${hold.state} ${hold.distro}`)
   const generation = session.transportStreamGeneration
   const terminal = session.pane.terminal
   const isCurrent = (): boolean =>
@@ -49,7 +45,7 @@ export function holdForStoppedWslDistro(
   // Why: nothing backs this pane, so keystrokes have nowhere to go.
   terminal.options.disableStdin = true
   const forget = holdPaneForStoppedWslDistro(session.cacheKey, {
-    distro,
+    ...hold,
     release: async () => {
       held = false
       if (!isCurrent()) {

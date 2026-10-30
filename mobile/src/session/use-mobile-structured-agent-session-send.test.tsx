@@ -228,8 +228,7 @@ describe('mobile structured send actions', () => {
       })
       expect(calls()).toHaveLength(1)
       expect(onSendError).toHaveBeenCalledWith('Use /compact without arguments.', undefined)
-      expect(kinds).toBeGreaterThanOrEqual(count)
-      expect(names).toBeGreaterThanOrEqual(count)
+      expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
     }
   )
 

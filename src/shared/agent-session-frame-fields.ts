@@ -3,6 +3,7 @@ import type { AgentSessionQueuePublicationFields } from './agent-session-queued-
 
 /** Published-frame host wall clock (epoch ms per AgentSessionHistoryPage) and queuedMessages companions. */
 export type AgentSessionFrameFields = {
+  commandsChanged?: true
   hostNow?: number
   /** Version of the independent current-request read; absent from older hosts. */
   currentRequests?: AgentSessionCurrentRequestsMarker

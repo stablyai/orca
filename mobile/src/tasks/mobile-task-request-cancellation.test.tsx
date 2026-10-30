@@ -40,9 +40,9 @@ afterEach(() => {
   mounted.clear()
 })
 
-function reply(request: SentRequest): RpcResponse {
+function reply(request: SentRequest, rowCount = 1): RpcResponse {
   if (request.method === 'github.countWorkItems') {
-    return { id: 'count', ok: true, result: { count: 100 } }
+    return { id: 'count', ok: true, result: 100 }
   }
   const params = request.args[1]
   const query =
@@ -51,19 +51,17 @@ function reply(request: SentRequest): RpcResponse {
     id: 'list',
     ok: true,
     result: {
-      items: [
-        {
-          id: 'issue-1',
-          type: 'issue',
-          number: 1,
-          title: query,
-          state: 'open',
-          labels: [],
-          url: 'https://example.com/issues/1',
-          updatedAt: '2026-10-27T00:00:00Z',
-          author: null
-        }
-      ]
+      items: Array.from({ length: rowCount }, (_, index) => ({
+        id: `issue-${index}`,
+        type: 'issue',
+        number: index + 1,
+        title: query,
+        state: 'open',
+        labels: [],
+        url: 'https://example.com/issues/1',
+        updatedAt: '2026-10-27T00:00:00Z',
+        author: null
+      }))
     }
   }
 }
@@ -184,11 +182,11 @@ async function mount(provider: Provider, repoCount = 30, counted = false) {
       return { request: request! }
     },
     pending,
-    async answer(requests = pending()) {
+    async answer(requests = pending(), respond = reply) {
       await act(async () => {
         for (const request of requests) {
           answered.add(request)
-          request.resolve(reply(request))
+          request.resolve(respond(request))
         }
       })
     },
@@ -310,5 +308,79 @@ describe('task repository request ownership', () => {
     await fixture.drain()
     await old.request
     expect(fixture.model().setRefreshing).toHaveBeenLastCalledWith(false)
+  })
+})
+
+describe('GitHub next-page source failures', () => {
+  for (const [source, type, message] of [
+    ['prs', 'rate_limited', 'API rate limit exceeded'],
+    ['issues', 'permission_denied', 'Resource not accessible'],
+    ['issues', 'validation_error', 'Invalid query'],
+    ['prs', 'validation_error', 'Only the first 1000 search results are available']
+  ] as const) {
+    it(`keeps Next retryable for ${source} ${type}`, async () => {
+      const fixture = await mount('github', 1)
+      const first = await fixture.load()
+      await fixture.answer(fixture.pending(), (request) => reply(request, 72))
+      await first.request
+      expect(fixture.model().githubCanLoadUncountedNextPage).toBe(true)
+      let page: Promise<void> | undefined
+      await act(async () => {
+        page = fixture.model().handleGitHubPageChange(1)
+      })
+      await fixture.answer(fixture.pending(), () => ({
+        id: 'page',
+        ok: true,
+        result: { items: [], errors: { [source]: { type, message } } }
+      }))
+      await page
+      expect(fixture.model().setError).toHaveBeenLastCalledWith(
+        'Page 2 could not be loaded from GitHub.'
+      )
+      expect(fixture.model().githubCanLoadUncountedNextPage).toBe(true)
+      expect(fixture.model().githubCountedTotalPages).toBeNull()
+      expect(fixture.model().githubPages).toHaveLength(1)
+    })
+  }
+
+  it('keeps a proven issue-search window limit through a late count, resetting on reload', async () => {
+    const fixture = await mount('github', 1, true)
+    const first = await fixture.load()
+    await fixture.answer(fixture.pending(), (request) => reply(request, 72))
+    await first.request
+    const count = fixture.pending()
+    expect(starts(count, 'github.countWorkItems')).toHaveLength(1)
+    let page: Promise<void> | undefined
+    await act(async () => {
+      page = fixture.model().handleGitHubPageChange(1)
+    })
+    await fixture.answer(
+      fixture.pending().filter((request) => !count.includes(request)),
+      () => ({
+        id: 'page',
+        ok: true,
+        result: {
+          items: [],
+          errors: {
+            issues: {
+              type: 'validation_error',
+              message: 'Only the first 1000 search results are available'
+            }
+          }
+        }
+      })
+    )
+    await page
+    expect(fixture.model().setError).toHaveBeenLastCalledWith(
+      'Page 2 is beyond what GitHub search can return.'
+    )
+    expect(fixture.model().githubCanLoadUncountedNextPage).toBe(false)
+    await fixture.answer(count)
+    expect(fixture.model().githubCountedTotalPages).toBe(3)
+    expect(fixture.model().githubTotalPages).toBe(1)
+    const fresh = await fixture.load()
+    await fixture.drain()
+    await fresh.request
+    expect(fixture.model().githubTotalPages).toBe(3)
   })
 })

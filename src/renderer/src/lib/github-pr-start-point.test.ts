@@ -36,4 +36,31 @@ describe('resolveGitHubPrStartPointForRepo', () => {
       })
     ).rejects.toThrow('Could not resolve PR head.')
   })
+
+  it('marks creating from a PR as a user act, locally and on a paired host (E9)', async () => {
+    const startPoint = { baseBranch: 'origin/main' }
+    vi.mocked(window.api.worktrees.resolvePrBase).mockResolvedValue(startPoint)
+    vi.mocked(callRuntimeRpc).mockResolvedValue(startPoint)
+
+    await resolveGitHubPrStartPointForRepo({
+      repoId: 'repo-1',
+      prNumber: 7,
+      target: { kind: 'local' }
+    })
+    await resolveGitHubPrStartPointForRepo({
+      repoId: 'repo-1',
+      prNumber: 7,
+      target: { kind: 'environment', environmentId: 'env-1' }
+    })
+
+    expect(window.api.worktrees.resolvePrBase).toHaveBeenCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      expect.anything(),
+      'worktree.resolvePrBase',
+      expect.objectContaining({ wakeWslDistro: true }),
+      expect.anything()
+    )
+  })
 })

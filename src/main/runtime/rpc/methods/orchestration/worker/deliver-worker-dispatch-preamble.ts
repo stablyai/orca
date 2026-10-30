@@ -49,7 +49,6 @@ export async function deliverWorkerDispatchPreamble(args: {
   const preamble = buildDispatchPreamble({
     // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
     canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
-    heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
     taskId: args.taskId,
     dispatchId: args.dispatchId,
     taskSpec: args.taskSpec,

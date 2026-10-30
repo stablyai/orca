@@ -13,15 +13,19 @@ export function WslDistroStoppedHoldCard({
   tabId: string
   leafId: string
 }): React.JSX.Element | null {
-  const distro = useWslDistroStoppedHold(makePaneKey(tabId, leafId))
-  if (!distro) {
+  const hold = useWslDistroStoppedHold(makePaneKey(tabId, leafId))
+  if (!hold) {
     return null
   }
   return (
     <WslDistroStoppedCard
-      distro={distro}
-      data={{ 'data-terminal-wsl-distro-stopped-hold': distro }}
-      onStart={() => startHeldPanesForWslDistro(distro)}
+      distro={hold.distro}
+      unverifiable={hold.state === 'unverifiable'}
+      data={{
+        'data-terminal-wsl-distro-stopped-hold': hold.distro,
+        'data-terminal-wsl-distro-hold-state': hold.state
+      }}
+      onStart={() => startHeldPanesForWslDistro(hold.distro)}
     />
   )
 }

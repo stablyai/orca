@@ -116,7 +116,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       models: [
         {
           id: 'gpt-live',
-          label: 'gpt-live',
+          label: 'GPT Live',
+          description: 'gpt-live',
           isDefault: false,
           efforts: [],
           effortsKnown: false
@@ -149,7 +150,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })

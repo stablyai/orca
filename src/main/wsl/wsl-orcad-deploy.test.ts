@@ -227,7 +227,9 @@ describe('deployAndLaunchWslOrcad', () => {
       appVersion: '1.5.0',
       localOrcadDir: '/local/orcad',
       target: 'linux-x64-glibc',
-      recordedNodeRuntimeProbe: true
+      recordedNodeRuntimeProbe: true,
+      // A dropped network fails a first deploy in well under a minute.
+      nodeRuntimeDownload: { desktopConnectTimeoutMs: 15_000, hostConnectTimeoutSeconds: 15 }
     })
     expect(options.preRead).toBeUndefined()
     const newer = { ...emptyOrcadActivationRecord(), active: '2.0.0+cd', activeAppVersion: '2.0.0' }

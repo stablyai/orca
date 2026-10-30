@@ -1,3 +1,8 @@
+import {
+  terminalPaneViewport,
+  resolveTerminalPaneHandles,
+  type TerminalPaneViewport
+} from './mobile-terminal-pane-layout'
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
@@ -9,6 +14,7 @@ import type { TerminalModes, TerminalWebViewHandle } from '../terminal/terminal-
 import { useTerminalLiveInputFocus } from '../terminal/use-terminal-live-input-focus'
 import { reopensFocusedInputWhenKeyboardHidden } from '../terminal/terminal-live-input-keyboard-reopen'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
+import type { TerminalLiveInputFailure } from '../terminal/terminal-live-pending-flush-state'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-connection-gate'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
@@ -34,6 +40,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     client,
     clientId,
     sessionTabs,
+    terminals,
     setLiveInputCapture,
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
@@ -57,11 +64,28 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Carry measured phone dimensions on subscribes so the host fits before snapshot serialization.
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
+  const terminalPaneViewportsRef = useRef(new Map<string, TerminalPaneViewport>())
+  const getTerminalPaneViewport = useCallback(
+    (handle: string) => terminalPaneViewport(terminalPaneViewportsRef.current, handle),
+    []
+  )
+  const [splitTerminalHandles, setSplitTerminalHandles] = useState<readonly string[] | null>(null)
+  const visibleTerminalHandles = resolveTerminalPaneHandles(
+    activeHandle,
+    splitTerminalHandles,
+    terminals.map((terminal) => terminal.handle)
+  )
+  // The controller publishes the committed list, once native chat has had its say.
+  const visibleTerminalHandlesRef = useRef<readonly string[]>(visibleTerminalHandles)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
+  const onLiveInputSendFailureRef = useRef<(failure: TerminalLiveInputFailure) => void>(() => {})
+  const handleLiveInputSendFailure = useCallback((failure: TerminalLiveInputFailure) => {
+    onLiveInputSendFailureRef.current(failure)
+  }, [])
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -141,6 +165,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     activeSessionTabType: activeSessionTab?.type,
     activeSessionTabTypeRef,
     framesLivePaste,
+    onSendFailure: handleLiveInputSendFailure,
     connected: connState === 'connected',
     liveInputRef,
     liveInputTerminalHandles,
@@ -159,6 +184,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
+    commandInputRef,
     inputRef: liveInputRef,
     keyboardHeight,
     lifecycleIdentity: client,
@@ -187,11 +213,18 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     connStateRef,
     viewportRef,
     viewportMeasuredRef,
+    terminalPaneViewportsRef,
+    getTerminalPaneViewport,
+    splitTerminalHandles,
+    setSplitTerminalHandles,
+    visibleTerminalHandles,
+    visibleTerminalHandlesRef,
     terminalRefs,
     liveInputRef,
     commandInputRef,
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
+    onLiveInputSendFailureRef,
     sessionTabActionSheetKeyboardHideSubRef,
     sessionTabActionSheetRequestSeqRef,
     dictationRouteContextRef,

@@ -1,6 +1,7 @@
 import { translateMain } from '../../i18n/main-i18n'
 import { dialog, session, type BrowserWindow } from 'electron'
 import { summarizePartitionSkips } from './browser-cookie-partition-summary'
+import { browserCookieImportFailure } from '../../../shared/browser-cookie-import-failure-copy'
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary
@@ -173,22 +174,22 @@ export async function importCookiesFromFile(
   try {
     rawContent = await readFile(filePath, 'utf-8')
   } catch {
-    return { ok: false, reason: 'Could not read the selected file.' }
+    return browserCookieImportFailure('fileUnreadable')
   }
 
   let parsed: unknown
   try {
     parsed = JSON.parse(rawContent)
   } catch {
-    return { ok: false, reason: 'File is not valid JSON.' }
+    return browserCookieImportFailure('fileInvalidJson')
   }
 
   if (!Array.isArray(parsed)) {
-    return { ok: false, reason: 'Expected a JSON array of cookie objects.' }
+    return browserCookieImportFailure('fileNotArray')
   }
 
   if (parsed.length === 0) {
-    return { ok: false, reason: 'Cookie file is empty.' }
+    return browserCookieImportFailure('fileEmpty')
   }
 
   const validated: ValidatedCookie[] = []
@@ -207,10 +208,7 @@ export async function importCookiesFromFile(
   }
 
   if (validated.length === 0) {
-    return {
-      ok: false,
-      reason: `No valid cookies found. ${skipped} entries were skipped due to missing or invalid fields.`
-    }
+    return browserCookieImportFailure('fileNoValidCookies', { count: skipped })
   }
 
   return importValidatedCookies(validated, parsed.length, cookieImportTarget(targetPartition))

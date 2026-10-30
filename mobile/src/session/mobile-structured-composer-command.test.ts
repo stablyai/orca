@@ -125,11 +125,8 @@ describe('mobile structured conversation commands', () => {
     const { input, sendRequest } = setup()
     input.text = '/fast'
     input.controller.agent = 'omp'
-    await dispatchMobileStructuredCommand(input)
-    expect(input.onError).toHaveBeenCalledWith(
-      expect.stringContaining('/fast is not available'),
-      undefined
-    )
+    expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+    expect(input.onError).not.toHaveBeenCalled()
     input.controller.sessionCommands = [{ name: 'fast', kind: 'command' }]
     expect(await dispatchMobileStructuredCommand(input)).toBeNull()
     expect(sendRequest).not.toHaveBeenCalled()

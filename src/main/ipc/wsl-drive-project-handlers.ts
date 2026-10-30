@@ -62,8 +62,9 @@ function gatedDeps(store: Store): WslDriveProjectDeps {
       }
       return runtime
     },
-    // No wslDistro: this runs the host's Git even for a WSL-runtime project.
-    runWindowsGit: async (args, cwd) => (await gitExecFileAsync(args, { cwd })).stdout,
+    // Host Git on purpose: this checks whether Git for Windows can take the project over.
+    runWindowsGit: async (args, cwd) =>
+      (await gitExecFileAsync(args, { cwd, hostGit: true })).stdout,
     readWorktreeLinks
   }
 }

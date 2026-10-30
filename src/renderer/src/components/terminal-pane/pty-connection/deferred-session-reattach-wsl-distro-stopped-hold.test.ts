@@ -6,7 +6,7 @@ import {
   noteUserWorkspaceSwitch,
   resetWorkspaceSwitchUserActsForTests
 } from '@/lib/workspace-switch-user-act'
-import { wslDistroStoppedHoldMessage } from '../../../../../shared/wsl-distro-stopped-hold'
+import { wslDistroHoldMessage } from '../../../../../shared/wsl-distro-stopped-hold'
 import {
   startHeldPanesForWslDistro,
   wslDistroStoppedHoldStore
@@ -20,7 +20,7 @@ vi.mock('./pty-connect-limits', () => ({
   isSshSessionGoneError: () => false
 }))
 
-const HOLD = `Error invoking remote method 'pty:spawn': Error: ${wslDistroStoppedHoldMessage('Ubuntu')}`
+const HOLD = `Error invoking remote method 'pty:spawn': Error: ${wslDistroHoldMessage('Ubuntu', 'stopped')}`
 
 function createSession(opts: { runtimeEnvironmentId?: string } = {}) {
   let onError: (message: string) => void = () => {}

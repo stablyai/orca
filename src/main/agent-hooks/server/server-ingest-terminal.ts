@@ -280,13 +280,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.payload.agentType && event.payload.agentType !== 'unknown'
         ? event.payload.agentType
         : undefined
-    // Launch seeds are not completed turns; real completed sessions must not leak into reused panes.
+    // A live agent's turn after `done` keeps its session (OSC 7501 reports hookless slash commands); a new run or an exited agent's resume-only row does not. Launch seeds are not completed turns.
     const preservedProviderSession =
       previous?.providerSession &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
       (previous.payload.state !== 'done' ||
         event.payload.state === 'done' ||
-        previous.observation?.origin === 'launch')
+        previous.observation?.origin === 'launch' ||
+        (!newRun && previous.providerSessionOnly !== true))
         ? previous.providerSession
         : undefined
     // Without a new main-agent fact, preserve it only while the row's state and agent still match.
@@ -314,7 +315,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.origin ?? 'osc',
       undefined,
       mutationBefore,
-      newRun
+      newRun,
+      !preservedProviderSession
     )
   }
 }

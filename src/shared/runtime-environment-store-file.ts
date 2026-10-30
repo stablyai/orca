@@ -20,6 +20,7 @@ import {
   type EnvironmentStoreContentReader,
   type EnvironmentStoreRecords,
   backUpBlankEnvironmentStore,
+  remoteServerPairingStoreError,
   RuntimeEnvironmentStoreError,
   type EnvironmentStoreRecordsReadOptions,
   warnUnreadableEnvironmentState
@@ -150,10 +151,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   const unreadableIds = new Set(onDisk.unreadable.map((record) => record.id))
   // A new readable record must not shadow one a newer build owns under the same id.
   if (environments.some(({ id }) => unreadableIds.has(id) && !readableIds.has(id))) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'A server with this id already exists in a format that needs a newer version of Orca.'
-    )
+    throw remoteServerPairingStoreError('idNeedsNewerOrca')
   }
   let serialized: string
   try {

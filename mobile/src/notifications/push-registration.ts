@@ -1,6 +1,11 @@
 import { mutateRecords, resetRegistrationRecords } from './mobile-push-registration-records'
 import type { HostPushState } from './mobile-push-host-target'
 import {
+  createHostPushSupportCompletion,
+  createHostPushState,
+  type HostPushSupportCompletion
+} from './host-push-registration-state'
+import {
   saveNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
 } from './notification-delivery-preferences'
@@ -19,6 +24,16 @@ type PushClient = RpcOperationSender
 const REMOVAL_TIMEOUT_MS = 2_000
 
 const hostsById = new Map<string, HostPushState>()
+export function getHostPushSupported(hostId: string): boolean | null {
+  return hostsById.get(hostId)?.supported ?? null
+}
+export function getHostPushSupportCompletion(
+  hostId: string,
+  client: PushClient
+): HostPushSupportCompletion | null {
+  const connection = hostsById.get(hostId)?.connection
+  return connection?.client === client ? connection.support : null
+}
 let owner: MobilePushOwner | undefined
 // A late registration must not overwrite a newer preference or consent choice.
 let consentGeneration = 0
@@ -41,12 +56,7 @@ const reconciliation: HostReconciliationContext = {
 function hostState(hostId: string): HostPushState {
   let state = hostsById.get(hostId)
   if (!state) {
-    state = {
-      connection: { client: null },
-      supported: null,
-      capabilityProbeStop: null,
-      chain: Promise.resolve()
-    }
+    state = createHostPushState()
     hostsById.set(hostId, state)
   }
   return state
@@ -97,6 +107,8 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
   if (state.connection.client !== client) {
     state.capabilityProbeStop?.()
     state.capabilityProbeStop = null
+    state.connection.support?.retire()
+    state.connection.support = createHostPushSupportCompletion()
     state.connection.client = client
     state.supported = null
     state.preparation?.releaseIfObsolete()
@@ -108,6 +120,8 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
   const connection = state.connection
   return () => {
     if (connection.client === client) {
+      connection.support?.retire()
+      connection.support = null
       connection.client = null
       state.capabilityProbeStop?.()
       state.capabilityProbeStop = null
@@ -168,6 +182,7 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   const state = hostsById.get(hostId)
   // Retire ownership before waiting for earlier RPCs to settle.
   hostsById.delete(hostId)
+  state?.connection.support?.retire()
   state?.preparation?.releaseIfObsolete()
   state?.capabilityProbeStop?.()
   if (state) {
@@ -190,6 +205,7 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   return () => {
     if (state && !hostsById.has(hostId)) {
       // Preserve disconnect ownership without reviving stale registration work.
+      state.connection.support = state.connection.client ? createHostPushSupportCompletion() : null
       hostsById.set(hostId, { ...state, supported: null, capabilityProbeStop: null })
       enqueueReconcile(hostId)
     }
@@ -241,6 +257,9 @@ export function resetPushRegistrationForTests(): void {
   owner?.stop()
   owner = undefined
   const retired = [...hostsById.values()]
+  for (const state of retired) {
+    state.connection.support?.retire()
+  }
   hostsById.clear()
   for (const state of retired) {
     state.preparation?.releaseIfObsolete()

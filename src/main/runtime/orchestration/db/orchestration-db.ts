@@ -28,6 +28,10 @@ class OrchestrationDbCore {
   pendingMailHandBacks: MailHandBack[] = []
   /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
+  /** The runtime's auto-release timer, re-armed whenever a deadline moves. */
+  workerTerminalAutoReleaseListener: (() => void) | undefined
+  /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
+  workerAutoReleaseEnabled: (() => boolean) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)

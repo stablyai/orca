@@ -333,7 +333,9 @@ describe('OrcaRuntimeService', () => {
       prRepo,
       42,
       'pr',
-      null
+      null,
+      undefined,
+      {}
     )
   })
 

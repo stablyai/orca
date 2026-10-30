@@ -46,6 +46,9 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   isSavingTemplate: boolean
   hasUnsavedChanges?: boolean
+  defaultAgentLabel?: string
+  defaultAgentSupportText?: string
+  defaultAgentArgsPlaceholder?: string
   repoOverrideNote?: React.ReactNode
   onAgentChange: (
     actionId: ActionId,
@@ -92,6 +95,9 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   defaultTuiAgent,
   isSavingTemplate,
   hasUnsavedChanges,
+  defaultAgentLabel,
+  defaultAgentSupportText,
+  defaultAgentArgsPlaceholder,
   repoOverrideNote,
   onAgentChange,
   surface,
@@ -117,12 +123,15 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   const isLaunchAction = !AI_TEXT_ACTION_ID_SET.has(actionId)
   const templateDirty =
     hasUnsavedChanges ?? JSON.stringify(draftValue) !== JSON.stringify(baseValue)
-  const agentArgsPlaceholder = getSourceControlAgentArgsPlaceholder(
-    resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
-  )
+  const agentArgsPlaceholder =
+    (!selectedAgent && defaultAgentArgsPlaceholder) ||
+    getSourceControlAgentArgsPlaceholder(
+      resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
+    )
   const agentOptions = getAgentCatalogForAction(actionId, selectedAgent)
   const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
-  const agentSupportText = getSourceControlActionAgentSupportText(actionId)
+  const agentSupportText =
+    (!selectedAgent && defaultAgentSupportText) || getSourceControlActionAgentSupportText(actionId)
 
   return (
     <div className="rounded-md border border-border px-3 py-3">
@@ -152,10 +161,11 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
                 <SelectItem value={DEFAULT_AGENT_VALUE}>
                   <span className="flex items-center gap-2">
                     <Terminal className="size-3.5 text-muted-foreground" />
-                    {translate(
-                      'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-                      'Use default agent'
-                    )}
+                    {defaultAgentLabel ??
+                      translate(
+                        'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+                        'Use default agent'
+                      )}
                   </span>
                 </SelectItem>
                 {AI_TEXT_ACTION_ID_SET.has(actionId) ? (

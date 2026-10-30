@@ -91,6 +91,7 @@ export async function reconcileHost(
         return
       }
       state.supported = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
+      state.connection.support?.complete(state.supported)
       state.routeKeySupported = capabilities.includes('notifications.push-route-key.v1')
       enqueueReconcile(hostId)
     })

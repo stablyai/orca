@@ -10,7 +10,10 @@ import {
   THREAD_ID
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -160,6 +163,11 @@ it('steers inherited applied inputs and sends an explicit effort or tier change 
     await eventually(() => expect(calls('turn/steer')).toHaveLength(2))
     const tier = await send({ model: 'model-a', serviceTier: 'flex' })
     await expectHeld(tier, 3, 2)
+    expect(
+      (await host.journalSnapshot(SESSION)).submissions.find(
+        (entry) => entry.clientMessageId === tier
+      )
+    ).toMatchObject({ options: { serviceTier: 'flex' } })
     codex.routes['turn/start'] = openTurn('turn-flex')
     await finish('turn-high')
     await eventually(() => expect(calls('turn/start')).toHaveLength(4))
@@ -202,6 +210,7 @@ it('steers inherited applied inputs and sends an explicit effort or tier change 
   } finally {
     await host.flushAllStreamedEvents()
     await adapter.closeAll()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
 })
