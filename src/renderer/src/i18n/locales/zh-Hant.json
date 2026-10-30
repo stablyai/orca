@@ -5030,7 +5030,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "概覽",
           "grokUsageTab": "Grok",
-          "trackingSince": "自 {{value0}} 開始追蹤"
+          "trackingSince": "自 {{value0}} 開始追蹤",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "供應商",
@@ -5088,7 +5089,8 @@
             "d6e9f0a1b2": "額度",
             "a3b6c7d8e9": "grok 用量",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -5151,6 +5153,25 @@
           "emptyMessage": "此範圍目前沒有本機 Muse 用量資料。",
           "noCostNote": "Muse 工作階段記錄包含 Token 數量，但不包含費用，因此不顯示費用估計。",
           "recentSessionsDescription": "此範圍內最近的本機 Muse 工作階段。"
+        },
+        "OmpUsagePane": {
+          "title": "omp 用量追蹤",
+          "enableLabel": "啟用 omp 用量分析",
+          "disabledDescription": "讀取本機 omp 工作階段記錄，顯示 Token、模型與工作階段統計。",
+          "scopeAll": "所有本機 omp 用量",
+          "optionsLabel": "omp 用量選項",
+          "refreshAriaLabel": "重新整理 omp 用量",
+          "emptyMessage": "此範圍目前沒有本機 omp 用量資料。",
+          "notAvailable": "不適用",
+          "sessions": "工作階段",
+          "cost": "費用",
+          "lastActive": "最近活動",
+          "recentSessions": "最近工作階段",
+          "recentSessionsDescription": "此範圍內最近的本機 omp 工作階段。",
+          "sessionCount_one": "{{count}} 個工作階段",
+          "sessionCount_other": "{{count}} 個工作階段",
+          "tokenAccountingNote": "推理 Token 會單獨顯示，永不計入輸出總量。快取寫入與快取讀取分開統計。",
+          "dailyScopeCaption": "每日總計涵蓋所有本機 omp 用量；範圍僅套用於工作階段、細分與最近工作階段。"
         },
         "usageFormatters": {
           "notScannedYet": "尚未掃描",

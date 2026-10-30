@@ -41,14 +41,19 @@ export function UsageOverviewPane(): React.JSX.Element {
   const museScanState = useAppStore((state) => state.museUsageScanState)
   const museSummary = useAppStore((state) => state.museUsageSummary)
   const museDaily = useAppStore((state) => state.museUsageDaily)
+  const ompScanState = useAppStore((state) => state.ompUsageScanState)
+  const ompSummary = useAppStore((state) => state.ompUsageSummary)
+  const ompDaily = useAppStore((state) => state.ompUsageDaily)
   const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
   const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
+  const fetchOmpUsage = useAppStore((state) => state.fetchOmpUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const refreshMuseUsage = useAppStore((state) => state.refreshMuseUsage)
+  const refreshOmpUsage = useAppStore((state) => state.refreshOmpUsage)
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
@@ -60,7 +65,8 @@ export function UsageOverviewPane(): React.JSX.Element {
     void fetchCodexUsage()
     void fetchOpenCodeUsage()
     void fetchMuseUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage])
+    void fetchOmpUsage()
+  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage, fetchOmpUsage])
 
   const overview = useMemo(
     () =>
@@ -84,6 +90,12 @@ export function UsageOverviewPane(): React.JSX.Element {
           scanState: museScanState,
           summary: museSummary,
           daily: museDaily
+        },
+        // Resolution: omp feeds the combined daily series; its provider row stays deferred.
+        omp: {
+          scanState: ompScanState,
+          summary: ompSummary,
+          daily: ompDaily
         }
       }),
     [
@@ -96,6 +108,9 @@ export function UsageOverviewPane(): React.JSX.Element {
       museDaily,
       museScanState,
       museSummary,
+      ompDaily,
+      ompScanState,
+      ompSummary,
       openCodeDaily,
       openCodeScanState,
       openCodeSummary
@@ -112,7 +127,8 @@ export function UsageOverviewPane(): React.JSX.Element {
       claudeScanState?.enabled ? refreshClaudeUsage() : Promise.resolve(),
       codexScanState?.enabled ? refreshCodexUsage() : Promise.resolve(),
       openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve(),
-      museScanState?.enabled ? refreshMuseUsage() : Promise.resolve()
+      museScanState?.enabled ? refreshMuseUsage() : Promise.resolve(),
+      ompScanState?.enabled ? refreshOmpUsage() : Promise.resolve()
     ])
   }
 

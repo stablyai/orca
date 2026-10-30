@@ -4,6 +4,7 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-us
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
+import type { OmpUsageDailyAggregate, OmpUsageSession } from '../omp-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageScanWorkerProviderId,
@@ -144,6 +145,18 @@ export async function scanMuseUsageOnWorker(
   const value = await scan({ operation: 'scan', providerId: 'muse', worktrees, sourceCache })
   if (value.operation !== 'scan' || value.providerId !== 'muse') {
     throw wrongProvider('muse', value)
+  }
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
+}
+
+export async function scanOmpUsageOnWorker(
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<OmpUsageSession, OmpUsageDailyAggregate>> {
+  const value = await scan({ operation: 'scan', providerId: 'omp', worktrees, sourceCache })
+  if (value.operation !== 'scan' || value.providerId !== 'omp') {
+    throw wrongProvider('omp', value)
   }
   return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }

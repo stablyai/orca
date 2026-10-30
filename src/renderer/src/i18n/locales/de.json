@@ -5143,7 +5143,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Übersicht",
           "grokUsageTab": "Grok",
-          "trackingSince": "Erfassung seit {{value0}}"
+          "trackingSince": "Erfassung seit {{value0}}",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Anbieter",
@@ -5202,7 +5203,8 @@
             "d6e9f0a1b2": "Credits",
             "a3b6c7d8e9": "grok-Nutzung",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -5268,6 +5270,25 @@
           "emptyMessage": "Bisher wurde keine lokale Muse-Nutzung in diesem Geltungsbereich gefunden.",
           "noCostNote": "Muse-Sitzungsprotokolle erfassen Token, aber keine Kosten. Daher wird keine Kostenschätzung angezeigt.",
           "recentSessionsDescription": "Neueste lokale Muse-Sitzungen in diesem Geltungsbereich."
+        },
+        "OmpUsagePane": {
+          "title": "omp-Nutzungsverfolgung",
+          "enableLabel": "Nutzungsanalyse für omp aktivieren",
+          "disabledDescription": "Liest lokale omp-Sitzungsprotokolle, um Statistiken zu Token, Modellen und Sitzungen anzuzeigen.",
+          "scopeAll": "Gesamte lokale omp-Nutzung",
+          "optionsLabel": "Optionen zur omp-Nutzung",
+          "refreshAriaLabel": "omp-Nutzungsdaten aktualisieren",
+          "emptyMessage": "Bisher wurde keine lokale omp-Nutzung in diesem Geltungsbereich gefunden.",
+          "notAvailable": "k. A.",
+          "sessions": "Sitzungen",
+          "cost": "Kosten",
+          "lastActive": "Zuletzt aktiv",
+          "recentSessions": "Letzte Sitzungen",
+          "recentSessionsDescription": "Neueste lokale omp-Sitzungen in diesem Geltungsbereich.",
+          "sessionCount_one": "{{count}} Sitzung",
+          "sessionCount_other": "{{count}} Sitzungen",
+          "tokenAccountingNote": "Reasoning-Token werden separat angezeigt und zählen nie zu den Ausgabe-Summen. Cache-Schreibvorgänge werden getrennt von Cache-Lesevorgängen erfasst.",
+          "dailyScopeCaption": "Tägliche Summen umfassen die gesamte lokale omp-Nutzung; der Geltungsbereich gilt für Sitzungen, Aufschlüsselungen und letzte Sitzungen."
         },
         "usageFormatters": {
           "notScannedYet": "Noch nicht gescannt",

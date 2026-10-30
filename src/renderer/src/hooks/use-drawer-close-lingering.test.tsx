@@ -2,15 +2,15 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useWorkspaceKanbanDrawerLingering } from './use-workspace-kanban-drawer-lingering'
+import { useDrawerCloseLingering } from './use-drawer-close-lingering'
 
-describe('workspace board close linger', () => {
+describe('drawer close linger', () => {
   afterEach(() => vi.useRealTimers())
 
   it('cancels the pending release when reopened', () => {
     vi.useFakeTimers()
     const { result, rerender } = renderHook(
-      ({ open }: { open: boolean }) => useWorkspaceKanbanDrawerLingering(open),
+      ({ open }: { open: boolean }) => useDrawerCloseLingering(open),
       { initialProps: { open: true } }
     )
     act(() => rerender({ open: false }))

@@ -22,6 +22,7 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { AppearanceUsageButtonSetting } from './AppearanceUsageButtonSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
@@ -310,6 +311,11 @@ export function AppearanceWindowSidebarSection({
                       }
                     />
                   </SearchableSetting>
+
+                  <AppearanceUsageButtonSetting
+                    settings={settings}
+                    updateSettings={updateSettings}
+                  />
 
                   <SearchableSetting
                     title={getShowPinnedWorktreesInGroupsEntry().title}

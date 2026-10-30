@@ -124,3 +124,104 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
     useAppStore.setState({ settings: original })
   }
 })
+
+it('writes the agent list instead of a primary agent and keeps linked prompts for post-create delivery', async () => {
+  const prepared: PreparedQuickSubmit = {
+    submitLinkedWorkItem: {
+      type: 'issue',
+      provider: 'github',
+      number: 12,
+      url: 'https://github.com/fixture/repo/issues/12',
+      title: 'Fix the flaky test'
+    },
+    agent: 'opencode',
+    submitLinkedIssueNumber: 12,
+    submitLinkedPR: null,
+    submitTitleName: null,
+    nameIsAutoManaged: false,
+    smartGitHubCreateNames: { workspaceName: 'fix', displayName: undefined },
+    workspaceName: 'fix',
+    nameWasGenerated: false,
+    smartSubmitBaseBranch: undefined,
+    submitCompareBaseRef: undefined,
+    submitPushTarget: undefined,
+    submitBranchNameOverride: undefined,
+    effectiveSetupDecision: 'skip',
+    hookPreparation: undefined,
+    linkedLinearIssue: undefined,
+    linkedLinearIssueWorkspaceId: undefined,
+    linkedLinearIssueOrganizationUrlKey: undefined,
+    effectiveBranchNameOverride: undefined,
+    branchIntent: undefined,
+    submitBaseBranch: undefined,
+    createDisplayName: undefined,
+    pendingFirstAgentMessageRename: false,
+    trimmedNote: 'Address the linked issue'
+  }
+  const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
+  const original = useAppStore.getState().settings
+  const { result } = renderHook(() =>
+    useQuickCreationExecution({
+      clearNewWorkspaceDraft: vi.fn(),
+      createMultiple: false,
+      effectivePresetId: null,
+      ephemeralVmRecipes: [],
+      ephemeralVmsEnabled: false,
+      isSubmissionCancelled: () => false,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null,
+      normalizedSparseDirectories: [],
+      onCreated: vi.fn(),
+      parentWorktreeId: null,
+      persistDraft: false,
+      persistSetupAgentStartupPolicy: async () => true,
+      prepareQuickSubmit: async () => prepared,
+      resetForNextCreate: vi.fn(),
+      resolvedInitialWorkspaceStatus: undefined,
+      selectedEphemeralVmRecipeId: null,
+      selectedRepoAgentLaunchFact: { kind: 'known', platform: 'darwin', hostKind: 'local' },
+      selectedRepoExecutionHostId: 'local',
+      selectedRepoIsGit: true,
+      selectedRepoIsRemote: false,
+      selectedRepoTarget: { kind: 'local' },
+      selectedRepoStartupShell: 'posix',
+      selectedWorkspaceTarget: { status: 'unavailable', reason: 'no-eligible-repo' },
+      settings,
+      sparseEnabled: false,
+      taskSourceContext: null,
+      telemetrySource: undefined
+    })
+  )
+  const launches = [
+    { agent: 'codex' as const, agentArgs: '--profile fast', requestedSurface: 'terminal' as const },
+    { agent: 'codex' as const, requestedSurface: 'chat' as const, displayName: 'reviewer' }
+  ]
+  try {
+    await act(async () => {
+      await result.current.executeQuickCreation(
+        { kind: 'none' },
+        'opencode',
+        'fix',
+        null,
+        'repo-1',
+        {},
+        undefined,
+        launches
+      )
+    })
+    const request = background.mock.calls.at(-1)?.[0]
+    expect(request).toMatchObject({
+      agent: null,
+      agentLaunches: launches,
+      agentLaunchRoute: 'terminal-tui',
+      startupPlan: null,
+      quickPrompt: '',
+      launchDraftPrompt: 'Address the linked issue\n\nhttps://github.com/fixture/repo/issues/12',
+      promptDelivery: 'draft',
+      quickTelemetry: null
+    })
+    expect(request.startup).toBeUndefined()
+  } finally {
+    useAppStore.setState({ settings: original })
+  }
+})

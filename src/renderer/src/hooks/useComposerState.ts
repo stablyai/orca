@@ -1,6 +1,13 @@
 import type { RefObject } from 'react'
+import { useCallback, useState } from 'react'
 import '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { pickQuickWorkspaceAgent } from '@/lib/quick-workspace-agent-selection'
+import { MAX_COMPOSER_AGENT_ROWS } from '@/components/new-workspace/new-workspace-composer-card-props'
+import {
+  createComposerAgentEntry,
+  type ComposerAgentEntry
+} from './composer-state/composer-agent-entries'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { QuickSubmitOptions } from './composer-state/quick-creation-request'
@@ -63,7 +70,18 @@ export type UseComposerStateOptions = {
   enableIssueAutomation?: boolean
 }
 
-export type ComposerCardProps = ComposerCardSourceProps & ComposerCardActionProps
+export type ComposerCardProps = ComposerCardSourceProps &
+  ComposerCardActionProps &
+  ComposerAgentEntryCardProps
+
+/** Multi-agent rows live beside the composer's source/action props; submit stays on `submitQuick`. */
+export type ComposerAgentEntryCardProps = {
+  agentEntries: ComposerAgentEntry[]
+  onAgentEntryChange: (id: string, patch: Partial<ComposerAgentEntry>) => void
+  onAddAgentEntry: () => void
+  onRemoveAgentEntry: (id: string) => void
+  agentEntriesLocked: boolean
+}
 
 export type UseComposerStateResult = {
   cardProps: ComposerCardProps
@@ -90,20 +108,71 @@ const COMPOSER_DECISIONS: ComposerDecisions = {
 
 export function useComposerState(options: UseComposerStateOptions): UseComposerStateResult {
   const target = useComposerTargetState(options, COMPOSER_DECISIONS)
+  // Row 0 starts on the default the modal's quick pick resolves before detection settles.
+  const [agentEntries, setAgentEntries] = useState<ComposerAgentEntry[]>(() => {
+    const { detectedAgentIds, disabledTuiAgents, tuiAgent } = target.workspaceIdentityState
+    const agent = pickQuickWorkspaceAgent(tuiAgent, detectedAgentIds, disabledTuiAgents) ?? tuiAgent
+    return [createComposerAgentEntry(agent)]
+  })
+  const onAgentEntryChange = useCallback((id: string, patch: Partial<ComposerAgentEntry>): void => {
+    setAgentEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry))
+    )
+  }, [])
+  const onAddAgentEntry = useCallback((): void => {
+    setAgentEntries((current) => {
+      // Added rows repeat row 0's harness; repeated harnesses stay distinct through their ids.
+      const agent = current[0]?.draft.agent ?? target.workspaceIdentityState.tuiAgent
+      return current.length >= MAX_COMPOSER_AGENT_ROWS
+        ? current
+        : [...current, createComposerAgentEntry(agent)]
+    })
+  }, [target.workspaceIdentityState.tuiAgent])
+  const onRemoveAgentEntry = useCallback((id: string): void => {
+    // The list always keeps at least one row; the UI only offers removal while another row exists.
+    setAgentEntries((current) =>
+      current.length <= 1 ? current : current.filter((entry) => entry.id !== id)
+    )
+  }, [])
+  // Multi-agent creation is local-git-worktree only (resolution 2), so the rows follow the target
+  // KIND. A `ready` resolution is the normal local-git state and must not lock them.
+  const agentEntriesLocked =
+    target.runtimeTargetSelection.isProjectGroupTarget ||
+    !target.runtimeTargetSelection.selectedRepoIsGit ||
+    target.runtimeTargetSelection.selectedEphemeralVmRecipeId !== null ||
+    target.runtimeTargetSelection.selectedRepoIsRemote
   const external = useComposerExternalSync(target)
   const source = useComposerSourceState(target, external)
   const submit = useComposerSubmitOrchestration(target, external, source)
   const model = assembleComposerModel(target, external, source, submit)
   const builtCard = buildComposerCardProps(model)
-  const cardProps: ComposerCardProps = builtCard.cardProps
+  const cardProps: ComposerCardProps = {
+    ...builtCard.cardProps,
+    agentEntries,
+    onAgentEntryChange,
+    onAddAgentEntry,
+    onRemoveAgentEntry,
+    agentEntriesLocked
+  }
   const { createDisabled } = builtCard
+  const modelSubmitQuick = model.submitQuick
+  // The rows live beside the model, so submit must read them at call time rather than at assembly.
+  const submitQuick = useCallback(
+    (agent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> =>
+      modelSubmitQuick(agent, options, {
+        entries: agentEntries,
+        locked: agentEntriesLocked,
+        rowZeroAgent: agent
+      }),
+    [agentEntries, agentEntriesLocked, modelSubmitQuick]
+  )
   return {
     cardProps,
     composerRef: model.composerRef,
     onComposerNodeChange: model.handleComposerNodeChange,
     promptTextareaRef: model.promptTextareaRef,
     nameInputRef: model.nameInputRef,
-    submitQuick: model.submitQuick,
+    submitQuick,
     createDisabled,
     selectAddedProjectRepo: model.selectAddedProjectRepo,
     selectAddedProjectGroup: model.selectAddedProjectGroup

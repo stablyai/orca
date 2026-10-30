@@ -5329,7 +5329,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Обзор",
           "grokUsageTab": "Grok",
-          "trackingSince": "Учёт с {{value0}}"
+          "trackingSince": "Учёт с {{value0}}",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Провайдеры",
@@ -5390,7 +5391,8 @@
             "d6e9f0a1b2": "кредиты",
             "a3b6c7d8e9": "использование Grok",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -5462,6 +5464,27 @@
           "emptyMessage": "В выбранной области пока нет локальных данных использования Muse.",
           "noCostNote": "Журналы сессий Muse содержат токены, но не стоимость, поэтому оценка стоимости не показана.",
           "recentSessionsDescription": "Последние локальные сессии Muse в выбранной области."
+        },
+        "OmpUsagePane": {
+          "title": "Учёт использования omp",
+          "enableLabel": "Включить аналитику использования omp",
+          "disabledDescription": "Читает локальные журналы сессий omp для статистики токенов, моделей и сессий.",
+          "scopeAll": "Всё локальное использование omp",
+          "optionsLabel": "Параметры использования omp",
+          "refreshAriaLabel": "Обновить данные omp",
+          "emptyMessage": "В выбранной области пока нет локальных данных использования omp.",
+          "notAvailable": "нет данных",
+          "sessions": "Сессии",
+          "cost": "Стоимость",
+          "lastActive": "Последняя активность",
+          "recentSessions": "Недавние сессии",
+          "recentSessionsDescription": "Последние локальные сессии omp в выбранной области.",
+          "sessionCount_one": "{{count}} сессия",
+          "sessionCount_few": "{{count}} сессии",
+          "sessionCount_many": "{{count}} сессий",
+          "sessionCount_other": "{{count}} сессий",
+          "tokenAccountingNote": "Токены рассуждений показываются отдельно и никогда не входят в итоги вывода. Запись в кеш учитывается отдельно от чтения из кеша.",
+          "dailyScopeCaption": "Итоги по дням охватывают всё локальное использование omp; область применяется к сессиям, разбивкам и недавним сессиям."
         },
         "usageFormatters": {
           "notScannedYet": "Сканирование ещё не выполнялось",

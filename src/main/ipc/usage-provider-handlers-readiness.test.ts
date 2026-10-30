@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from '../claude-usage/types'
+import type { UsageProviderId } from '../usage/usage-provider-contract'
+import type { UsageScanWorkerProviderId } from '../usage/usage-scan-worker-protocol'
 import type { UsageCacheSplitResult } from '../usage/usage-source-cache-file'
 
 const { handlers, getPathMock } = vi.hoisted(() => ({
@@ -24,6 +26,7 @@ vi.mock('../usage/usage-scan-worker-spawn', () => ({
   scanCodexUsageFilesViaWorker: vi.fn(),
   scanOpenCodeUsageDatabasesViaWorker: vi.fn(),
   scanMuseUsageFilesViaWorker: vi.fn(),
+  scanOmpUsageFilesViaWorker: vi.fn(),
   splitUsageCacheFileViaWorker: vi.fn()
 }))
 
@@ -31,6 +34,7 @@ import { ClaudeUsageStore, initClaudeUsagePath } from '../claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from '../codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from '../opencode-usage/store'
 import { MuseUsageStore, initMuseUsagePath } from '../muse-usage/store'
+import { OmpUsageStore, initOmpUsagePath } from '../omp-usage/store'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
@@ -79,7 +83,8 @@ function createProviders(): Parameters<typeof registerUsageProviderHandlers>[0] 
     claudeUsage: new ClaudeUsageStore(backingStore),
     codexUsage: new CodexUsageStore(backingStore),
     openCodeUsage: new OpenCodeUsageStore(backingStore),
-    museUsage: new MuseUsageStore(backingStore)
+    museUsage: new MuseUsageStore(backingStore),
+    ompUsage: new OmpUsageStore(backingStore)
   }
   stores.push(...Object.values(providers))
   registerUsageProviderHandlers(providers)
@@ -115,6 +120,7 @@ beforeEach(() => {
   initCodexUsagePath()
   initOpenCodeUsagePath()
   initMuseUsagePath()
+  initOmpUsagePath()
 })
 
 afterEach(async () => {
@@ -171,7 +177,7 @@ it('awaits loading before the first disabled cached snapshot and all historical 
   expect(scanClaudeUsageFilesViaWorker).not.toHaveBeenCalled()
 })
 
-it.each(['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage'] as const)(
+it.each(['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage', 'ompUsage'] as const)(
   'gates snapshot and scan state for %s until whenLoaded resolves',
   async (prefix) => {
     const providers = createProviders()
@@ -194,6 +200,39 @@ it.each(['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage'] as const)(
     expect(scanStateGetter).toHaveBeenCalled()
   }
 )
+
+it('registers the omp provider on the full channel set', async () => {
+  createProviders()
+  const channels = [
+    'getScanState',
+    'setEnabled',
+    'refresh',
+    'getSnapshot',
+    'getSummary',
+    'getDaily',
+    'getBreakdown',
+    'getRecentSessions'
+  ]
+  for (const query of channels) {
+    expect(handlers.has(`ompUsage:${query}`)).toBe(true)
+  }
+  await expect(Promise.resolve(invoke('ompUsage:getScanState'))).resolves.toMatchObject({
+    enabled: false,
+    isScanning: false,
+    hasAnyOmpData: false
+  })
+})
+
+it('types omp on both provider id aliases and the registrar store map', () => {
+  // Compile-time: both provider-id aliases accept 'omp'.
+  const providerIds: { usage: UsageProviderId; worker: UsageScanWorkerProviderId } = {
+    usage: 'omp',
+    worker: 'omp'
+  }
+  // Compile-time: the registrar's store map requires an OmpUsageStore under ompUsage.
+  const stores: Parameters<typeof registerUsageProviderHandlers>[0] = createProviders()
+  expect(stores.ompUsage.id).toBe(providerIds.usage)
+})
 
 it('keeps a loaded provider snapshot synchronous for direct callers', () => {
   const { codexUsage } = createProviders()

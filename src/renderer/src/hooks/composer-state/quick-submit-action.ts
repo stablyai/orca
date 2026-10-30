@@ -14,6 +14,10 @@ import { toast } from 'sonner'
 import { scheduleComposerCreateHandoff } from '@/lib/composer-create-handoff'
 
 import type { ComposerModel } from './composer-model'
+import {
+  resolveComposerAgentLaunchList,
+  type ComposerAgentSubmitSelection
+} from './composer-agent-entries'
 
 type QuickSubmitActionInput = Pick<
   ComposerModel,
@@ -31,6 +35,8 @@ type QuickSubmitActionInput = Pick<
   | 'requiresExplicitSetupChoice'
   | 'resolvePendingSmartGitHubSubmit'
   | 'selectedRepo'
+  | 'selectedRepoIsGit'
+  | 'selectedRepoIsRemote'
   | 'selectedRepoRequiresConnection'
   | 'selectedWorkspaceTarget'
   | 'setCreateError'
@@ -60,6 +66,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     requiresExplicitSetupChoice,
     resolvePendingSmartGitHubSubmit,
     selectedRepo,
+    selectedRepoIsGit,
+    selectedRepoIsRemote,
     selectedRepoRequiresConnection,
     selectedWorkspaceTarget,
     setCreateError,
@@ -74,11 +82,25 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   } = input
 
   const submitQuick = useCallback(
-    async (requestedAgent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> => {
+    async (
+      requestedAgent: TuiAgent | null,
+      options?: QuickSubmitOptions,
+      agents?: ComposerAgentSubmitSelection
+    ): Promise<void> => {
       if (isProjectGroupTarget) {
         await submitFolderTarget(requestedAgent, options)
         return
       }
+
+      const agentLaunches = resolveComposerAgentLaunchList({
+        selection: agents,
+        gitWorktree: selectedRepoIsGit,
+        remote: selectedRepoIsRemote
+      })
+      // List entries have no single quick pick; the first row still qualifies the prompt preflight.
+      const previewAgent = agentLaunches
+        ? (requestedAgent ?? agentLaunches[0]?.agent ?? null)
+        : requestedAgent
 
       const workspaceNameSeed = getWorkspaceSeedName({
         explicitName: name,
@@ -146,7 +168,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           ...(parsedLinkedIssueNumber != null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
           ...(effectiveLinkedPR != null ? { linkedPR: effectiveLinkedPR } : {}),
           setupDecision: setupDecision ?? 'inherit',
-          agent: requestedAgent,
+          agent: agentLaunches ? null : requestedAgent,
+          ...(agentLaunches ? { agentLaunches } : {}),
           pendingFirstAgentMessageRename: false,
           note: '',
           startupPlan: null,
@@ -175,12 +198,13 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         }
         await executeQuickCreation(
           smartGitHubSettlement.value,
-          requestedAgent,
+          previewAgent,
           workspaceNameSeed,
           workspaceRunContext,
           repoId,
           options,
-          handoff
+          handoff,
+          agentLaunches
         )
       } catch (error) {
         if (isSubmissionCancelled()) {
@@ -212,6 +236,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       requiresExplicitSetupChoice,
       resolvePendingSmartGitHubSubmit,
       selectedRepo,
+      selectedRepoIsGit,
+      selectedRepoIsRemote,
       selectedRepoRequiresConnection,
       selectedWorkspaceTarget,
       setCreateError,

@@ -34,7 +34,7 @@ type QuickCreationExecutionInput = Pick<
 
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { AgentLaunchListEntry, WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
 import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
@@ -87,7 +87,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
       repoId: string,
       options?: QuickSubmitOptions,
-      handoff?: ComposerCreateHandoff
+      handoff?: ComposerCreateHandoff,
+      agentLaunches?: AgentLaunchListEntry[] | null
     ): Promise<void> => {
       const prepared = await prepareQuickSubmit(
         smartGitHubResolution,
@@ -122,17 +123,18 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         trimmedNote
       } = prepared
 
-      const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
+      // List submits stay agent-less; the preview agent still qualifies linked-item prompts.
+      const launchList = agentLaunches?.length ? agentLaunches : null
 
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        resolveQuickCreateLinkedWorkItemPrompt(agent ? submitLinkedWorkItem : null, trimmedNote)
 
       const {
         startupPlan,
         backendStartup,
         telemetry: quickTelemetry
       } = buildQuickComposerStartup({
-        agent,
+        agent: launchList ? null : agent,
         prompt: quickPrompt,
         draftPrompt: quickDraftPrompt,
         settings,
@@ -176,25 +178,25 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         }
       }
 
-      const promptDelivery = quickDraftPrompt ? 'draft' : 'auto-submit'
       // Why: the verdict is persisted on the request as data and re-entered once the worktree exists.
-      const agentLaunchRoute = !agent
-        ? 'terminal-tui'
-        : (options?.launchChoice?.route ??
-          resolveAgentSessionLaunchRoute(useAppStore.getState(), {
-            agent,
-            workspace: {
-              kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
-              repoId,
-              executionHostId: ephemeralVmRecipe
-                ? 'runtime:pending-ephemeral-vm'
-                : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
-            },
-            prompt: quickDraftPrompt ?? quickPrompt,
-            promptDelivery
-          }))
+      // List entries pick their own surface at launch, so the request never books a chat.
+      const agentLaunchRoute =
+        launchList || !agent
+          ? 'terminal-tui'
+          : (options?.launchChoice?.route ??
+            resolveAgentSessionLaunchRoute(useAppStore.getState(), {
+              agent,
+              workspace: {
+                kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+                repoId,
+                executionHostId: ephemeralVmRecipe
+                  ? 'runtime:pending-ephemeral-vm'
+                  : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
+              },
+              prompt: quickDraftPrompt ?? quickPrompt,
+              promptDelivery: quickDraftPrompt ? 'draft' : 'auto-submit'
+            }))
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
-
       const request = buildQuickCreationRequest({
         repoId,
         ephemeralVmRecipe,
@@ -217,7 +219,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedIssue: submitLinkedIssueNumber,
         linkedPR: submitLinkedPR,
         pushTarget: submitPushTarget,
-        agent,
+        agent: launchList ? null : agent,
+        agentLaunches: launchList,
         agentLaunchRoute,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
@@ -255,7 +258,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         startupPlan,
         quickPrompt,
         launchDraftPrompt: quickDraftPrompt,
-        promptDelivery,
+        promptDelivery: quickDraftPrompt ? 'draft' : 'auto-submit',
         quickTelemetry,
         suppressTerminalFocusOnCompletion: createMultiple,
         setupOnly: options?.setupOnly === true

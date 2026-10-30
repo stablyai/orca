@@ -4722,7 +4722,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Resumen",
           "grokUsageTab": "Grok",
-          "trackingSince": "Seguimiento desde {{value0}}"
+          "trackingSince": "Seguimiento desde {{value0}}",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Proveedores",
@@ -4782,7 +4783,8 @@
             "d6e9f0a1b2": "créditos",
             "a3b6c7d8e9": "uso de grok",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -4851,6 +4853,26 @@
           "emptyMessage": "Aún no se encontró uso local de Muse para este ámbito.",
           "noCostNote": "Los registros de sesión de Muse registran tokens pero no el costo, por lo que no se muestra una estimación de costo.",
           "recentSessionsDescription": "Sesiones locales de Muse más recientes en este ámbito."
+        },
+        "OmpUsagePane": {
+          "title": "Seguimiento de uso de omp",
+          "enableLabel": "Activar el análisis de uso de omp",
+          "disabledDescription": "Lee los registros de sesiones locales de omp para mostrar estadísticas de tokens, modelos y sesiones.",
+          "scopeAll": "Todo el uso local de omp",
+          "optionsLabel": "Opciones de uso de omp",
+          "refreshAriaLabel": "Actualizar el uso de omp",
+          "emptyMessage": "Aún no se encontró uso local de omp en este ámbito.",
+          "notAvailable": "n/a",
+          "sessions": "Sesiones",
+          "cost": "Coste",
+          "lastActive": "Última actividad",
+          "recentSessions": "Sesiones recientes",
+          "recentSessionsDescription": "Sesiones locales de omp más recientes en este ámbito.",
+          "sessionCount_one": "{{count}} sesión",
+          "sessionCount_other": "{{count}} sesiones",
+          "sessionCount_many": "{{count}} sesiones",
+          "tokenAccountingNote": "Los tokens de razonamiento se muestran por separado y nunca cuentan para los totales de salida. Las escrituras de caché se registran aparte de las lecturas de caché.",
+          "dailyScopeCaption": "Los totales diarios abarcan todo el uso local de omp; el ámbito se aplica a sesiones, desgloses y sesiones recientes."
         },
         "usageFormatters": {
           "notScannedYet": "Aún no se ha escaneado",

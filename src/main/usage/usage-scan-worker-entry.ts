@@ -3,6 +3,7 @@ import { scanClaudeUsageFiles } from '../claude-usage/scanner'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
 import { scanMuseUsageFiles } from '../muse-usage/scanner'
+import { scanOmpUsageFiles } from '../omp-usage/scanner'
 import { normalizeMuseUsagePersistedFiles } from '../muse-usage/persisted-file-normalization'
 import { normalizeOpenCodeUsagePersistedDatabases } from '../opencode-usage/persisted-database-normalization'
 import {
@@ -137,6 +138,16 @@ async function runScan(
       return {
         operation: 'scan',
         providerId: 'muse',
+        sessions: result.sessions,
+        dailyAggregates: result.dailyAggregates
+      }
+    }
+    case 'omp': {
+      // omp session files are JSONL transcripts; the scanner owns its own source-cache persistence.
+      const result = await scanOmpUsageFiles(request.worktrees, request.sourceCache)
+      return {
+        operation: 'scan',
+        providerId: 'omp',
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }

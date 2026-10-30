@@ -130,6 +130,68 @@ describe('useComposerState integrated lifecycle', () => {
     composer.unmount()
   })
 
+  it('keeps multi-agent rows unlocked for a ready local git target and submits its launch list', async () => {
+    const original = useAppStore.getState()
+    const response = Promise.withResolvers<CreateWorktreeResult>()
+    const create = vi.fn<Window['api']['worktrees']['create']>().mockReturnValue(response.promise)
+    const gh = {
+      repoSlug: vi.fn<Window['api']['gh']['repoSlug']>().mockResolvedValue(null),
+      listWorkItems: vi.fn<Window['api']['gh']['listWorkItems']>().mockResolvedValue({
+        items: [],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      })
+    } satisfies Pick<Window['api']['gh'], 'repoSlug' | 'listWorkItems'>
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ...window.api, gh, worktrees: { ...window.api.worktrees, create } }
+    })
+    useAppStore.setState(useAppStore.getInitialState(), true)
+    const repo: Repo = {
+      id: 'local-git-repo',
+      path: '/local-git-repo',
+      displayName: 'Local git repo',
+      badgeColor: '',
+      addedAt: 0
+    }
+    const projection = projectHostSetupProjectionFromRepos([repo])
+    useAppStore.setState({
+      repos: [repo],
+      projects: [...projection.projects],
+      projectHostSetups: [...projection.setups],
+      sparsePresetsByRepo: { [repo.id]: [] }
+    })
+    const composer = renderHook(() =>
+      useComposerState({ initialRepoId: repo.id, persistDraft: false })
+    )
+    try {
+      // A ready target is the normal local-git resolution; only non-git/remote/VM kinds lock the rows.
+      expect(composer.result.current.cardProps.selectedRepo).toBe(repo)
+      expect(composer.result.current.cardProps.selectedRepoIsGit).toBe(true)
+      expect(composer.result.current.cardProps.selectedRepoIsRemote).toBe(false)
+      expect(composer.result.current.cardProps.agentEntriesLocked).toBe(false)
+
+      act(() => composer.result.current.cardProps.onAddAgentEntry())
+      expect(composer.result.current.cardProps.agentEntries).toHaveLength(2)
+
+      const rowAgent = composer.result.current.cardProps.agentEntries[0].draft.agent
+      await act(async () => composer.result.current.submitQuick(rowAgent))
+      // Pending creations retain the exact request Retry replays, agentLaunches included.
+      await waitFor(() =>
+        expect(Object.keys(useAppStore.getState().pendingWorktreeCreations)).toHaveLength(1)
+      )
+      const pendingRequest = Object.values(useAppStore.getState().pendingWorktreeCreations)[0]
+        .request
+      expect(pendingRequest.agentLaunches).toEqual([
+        { agent: rowAgent, requestedSurface: 'terminal' },
+        { agent: rowAgent, requestedSurface: 'terminal' }
+      ])
+      expect(pendingRequest.agent).toBeNull()
+    } finally {
+      composer.unmount()
+      useAppStore.setState(original, true)
+    }
+  })
+
   it('preserves new-branch intent through name edits and submission in the real composer', async () => {
     const original = useAppStore.getState()
     const response = Promise.withResolvers<CreateWorktreeResult>()

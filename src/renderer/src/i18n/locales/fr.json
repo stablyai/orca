@@ -4946,7 +4946,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Vue d'ensemble",
           "grokUsageTab": "Grok",
-          "trackingSince": "Suivi depuis {{value0}}"
+          "trackingSince": "Suivi depuis {{value0}}",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Fournisseurs",
@@ -5006,7 +5007,8 @@
             "d6e9f0a1b2": "crédits",
             "a3b6c7d8e9": "utilisation grok",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -5075,6 +5077,26 @@
           "emptyMessage": "Aucune utilisation locale de Muse trouvée pour l'instant dans cette portée.",
           "noCostNote": "Les journaux de session Muse enregistrent les tokens mais pas le coût, aucune estimation de coût n'est donc affichée.",
           "recentSessionsDescription": "Sessions Muse locales les plus récentes dans cette portée."
+        },
+        "OmpUsagePane": {
+          "title": "Suivi d’utilisation d’omp",
+          "enableLabel": "Activer l’analyse d’utilisation d’omp",
+          "disabledDescription": "Lit les journaux de session locaux d’omp pour afficher les statistiques de tokens, de modèles et de sessions.",
+          "scopeAll": "Toute l’utilisation locale d’omp",
+          "optionsLabel": "Options d’utilisation d’omp",
+          "refreshAriaLabel": "Actualiser l’utilisation d’omp",
+          "emptyMessage": "Aucune utilisation locale d’omp trouvée pour cette portée.",
+          "notAvailable": "n/d",
+          "sessions": "Sessions",
+          "cost": "Coût",
+          "lastActive": "Dernière activité",
+          "recentSessions": "Sessions récentes",
+          "recentSessionsDescription": "Sessions locales d’omp les plus récentes dans cette portée.",
+          "sessionCount_one": "{{count}} session",
+          "sessionCount_other": "{{count}} sessions",
+          "sessionCount_many": "{{count}} sessions",
+          "tokenAccountingNote": "Les tokens de raisonnement sont affichés séparément et ne sont jamais comptés dans les totaux de sortie. Les écritures de cache sont suivies séparément des lectures de cache.",
+          "dailyScopeCaption": "Les totaux quotidiens couvrent toute l’utilisation locale d’omp ; la portée s’applique aux sessions, aux répartitions et aux sessions récentes."
         },
         "usageFormatters": {
           "notScannedYet": "Pas encore analysé",

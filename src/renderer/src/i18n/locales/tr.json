@@ -5129,7 +5129,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Genel bakış",
           "grokUsageTab": "Grok",
-          "trackingSince": "{{value0}} tarihinden beri takip ediliyor"
+          "trackingSince": "{{value0}} tarihinden beri takip ediliyor",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Sağlayıcılar",
@@ -5188,7 +5189,8 @@
             "d6e9f0a1b2": "kredi",
             "a3b6c7d8e9": "grok kullanımı",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -5254,6 +5256,25 @@
           "emptyMessage": "Bu kapsam için henüz yerel Muse kullanımı bulunamadı.",
           "noCostNote": "Muse oturum günlükleri token'ları kaydeder ancak maliyeti kaydetmez; bu nedenle maliyet tahmini gösterilmez.",
           "recentSessionsDescription": "Bu kapsamdaki en son yerel Muse oturumları."
+        },
+        "OmpUsagePane": {
+          "title": "omp kullanım takibi",
+          "enableLabel": "omp kullanım analizini etkinleştir",
+          "disabledDescription": "Token, model ve oturum istatistiklerini göstermek için yerel omp oturum günlüklerini okur.",
+          "scopeAll": "Tüm yerel omp kullanımı",
+          "optionsLabel": "omp kullanım seçenekleri",
+          "refreshAriaLabel": "omp kullanımını yenile",
+          "emptyMessage": "Bu kapsamda henüz yerel omp kullanımı bulunamadı.",
+          "notAvailable": "yok",
+          "sessions": "Oturumlar",
+          "cost": "Maliyet",
+          "lastActive": "Son etkinlik",
+          "recentSessions": "Son oturumlar",
+          "recentSessionsDescription": "Bu kapsamdaki en son yerel omp oturumları.",
+          "sessionCount_one": "{{count}} oturum",
+          "sessionCount_other": "{{count}} oturum",
+          "tokenAccountingNote": "Akıl yürütme token'ları ayrı gösterilir ve çıktı toplamlarına hiçbir zaman eklenmez. Önbellek yazmaları, önbellek okumalarından ayrı izlenir.",
+          "dailyScopeCaption": "Günlük toplamlar tüm yerel omp kullanımını kapsar; kapsam oturumlara, dökümlere ve son oturumlara uygulanır."
         },
         "usageFormatters": {
           "notScannedYet": "Henüz taranmadı",

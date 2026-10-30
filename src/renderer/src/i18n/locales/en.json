@@ -5041,6 +5041,51 @@
           }
         }
       },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Token usage"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "Period",
+          "periodAria": "Usage period",
+          "periodDays": "{{days}} days",
+          "scope": "Scope",
+          "scopeAria": "Usage scope",
+          "scopeAll": "All local usage",
+          "refresh": "Refresh usage data",
+          "loading": "Loading usage…",
+          "loadFailed": "Could not load usage data.",
+          "empty": "No local usage found yet. Enable a usage provider in Settings → Stats & Usage.",
+          "totalTokens": "Total tokens",
+          "estimatedCost": "Est. cost",
+          "window": "Last {{days}} days",
+          "openFullStats": "Open full stats",
+          "estimatedCostWindow": "Est. cost · {{days}}d"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "Quotas",
+          "description": "Subscription windows reported by each provider. Scope does not change quotas.",
+          "empty": "No subscription quotas reported yet."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "Daily tokens",
+          "description": "Input, cached, and output tokens by day.",
+          "gridAria": "Daily token usage",
+          "cached": "Cached",
+          "reasoning": "Reasoning: {{tokens}} tokens",
+          "cost": "Est. cost: {{cost}}",
+          "empty": "No token usage in this period yet."
+        },
+        "UsageDashboardModelTable": {
+          "title": "Models",
+          "description": "Tokens and estimated cost by model in the last {{days}} days.",
+          "provider": "Provider",
+          "providerOmp": "omp",
+          "cache": "Cache",
+          "reasoning": "Reasoning",
+          "empty": "No model usage in this period yet."
+        }
+      },
       "stats": {
         "ClaudeUsageDailyChart": {
           "2a6360c7cb": "Cache write",
@@ -5214,7 +5259,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Providers",
@@ -5273,7 +5319,8 @@
             "d6e9f0a1b2": "credits",
             "a3b6c7d8e9": "grok usage",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -5339,6 +5386,25 @@
           "emptyMessage": "No local Muse usage found yet for this scope.",
           "noCostNote": "Muse session logs record tokens but not cost, so no cost estimate is shown.",
           "recentSessionsDescription": "Most recent local Muse sessions in this scope."
+        },
+        "OmpUsagePane": {
+          "title": "omp Usage Tracking",
+          "enableLabel": "Enable omp usage analytics",
+          "disabledDescription": "Reads local omp session logs to show token, model, and session stats.",
+          "scopeAll": "All local omp usage",
+          "optionsLabel": "omp usage options",
+          "refreshAriaLabel": "Refresh omp usage",
+          "emptyMessage": "No local omp usage found yet for this scope.",
+          "notAvailable": "n/a",
+          "sessions": "Sessions",
+          "cost": "Cost",
+          "lastActive": "Last active",
+          "recentSessions": "Recent sessions",
+          "recentSessionsDescription": "Most recent local omp sessions in this scope.",
+          "sessionCount_one": "{{count}} session",
+          "sessionCount_other": "{{count}} sessions",
+          "tokenAccountingNote": "Reasoning tokens are shown separately and never count toward output totals. Cache writes are tracked apart from cache reads.",
+          "dailyScopeCaption": "Daily totals cover all local omp usage; scope applies to sessions, breakdowns and recent sessions."
         },
         "usageFormatters": {
           "notScannedYet": "Not scanned yet",
@@ -6282,6 +6348,7 @@
           "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
+          "2e50e4df03": "Token usage",
           "87d0064026": "Workspace board moved to the bottom bar",
           "a30e34eb5c": "Close workspace board",
           "49f62c5665": "Workspace board"
@@ -9691,6 +9758,11 @@
         },
         "appearance": {
           "search": {
+            "showUsageButton": "Show Token Usage Button",
+            "showUsageButtonDescription": "Show the Token usage button in the sidebar toolbar.",
+            "usage": "usage",
+            "token": "token",
+            "tokens": "tokens",
             "9a115966d3": "Minimize to Tray on Close",
             "4d5b9427b5": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
             "468448bba4": "watercolor",
@@ -15142,6 +15214,13 @@
       },
       "new": {
         "workspace": {
+          "NewWorkspaceComposerAgentSection": {
+            "2b3158e96c": "Add agent",
+            "44216cf70c": "Remove agent",
+            "59552ca156": "Agent name",
+            "ea6ee390a8": "Multiple agents apply only to local git workspaces; later rows will be ignored",
+            "0af78c86a9": "You can add up to {{max}} agents per workspace."
+          },
           "SetProjectLocationDialog": {
             "title": "Set project location",
             "description": "Choose where {{project}} lives on {{host}}.",

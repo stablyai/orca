@@ -258,6 +258,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
+  /** Only toggles the sidebar toolbar shortcut; the Token usage drawer stays closed until re-enabled. */
+  showUsageButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */

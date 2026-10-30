@@ -6,6 +6,7 @@ export type UsageProviderId =
   | 'claude'
   | 'codex'
   | 'devin'
+  | 'omp'
   | 'opencode'
   | 'muse'
   | `plugin:${string}`

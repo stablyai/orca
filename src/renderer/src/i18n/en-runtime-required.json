@@ -1056,6 +1056,10 @@
         }
       },
       "stats": {
+        "OmpUsagePane": {
+          "sessionCount_one": "{{count}} session",
+          "sessionCount_other": "{{count}} sessions"
+        },
         "UsageOverviewPane": {
           "sessionCount_one": "{{formatted}} session",
           "sessionCount_other": "{{formatted}} sessions"

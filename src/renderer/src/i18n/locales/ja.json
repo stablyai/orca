@@ -4588,7 +4588,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "概要",
           "grokUsageTab": "Grok",
-          "trackingSince": "{{value0}} 以降の追跡"
+          "trackingSince": "{{value0}} 以降の追跡",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "プロバイダー",
@@ -4646,7 +4647,8 @@
             "d6e9f0a1b2": "クレジット",
             "a3b6c7d8e9": "grok の使用状況",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -4709,6 +4711,25 @@
           "emptyMessage": "このスコープではローカルの Muse 使用状況がまだ見つかりません。",
           "noCostNote": "Muse のセッションログにはトークンは記録されますがコストは記録されないため、コストの見積もりは表示されません。",
           "recentSessionsDescription": "このスコープ内の最新のローカル Muse セッション。"
+        },
+        "OmpUsagePane": {
+          "title": "omp 使用状況のトラッキング",
+          "enableLabel": "omp の使用状況分析を有効にする",
+          "disabledDescription": "ローカルの omp セッションログを読み取り、トークン、モデル、セッションの統計を表示します。",
+          "scopeAll": "ローカルの omp 使用状況すべて",
+          "optionsLabel": "omp 使用状況のオプション",
+          "refreshAriaLabel": "omp の使用状況を更新",
+          "emptyMessage": "このスコープではローカルの omp 使用状況がまだ見つかりません。",
+          "notAvailable": "該当なし",
+          "sessions": "セッション",
+          "cost": "コスト",
+          "lastActive": "最終アクティブ",
+          "recentSessions": "最近のセッション",
+          "recentSessionsDescription": "このスコープ内の最新のローカル omp セッション。",
+          "sessionCount_one": "{{count}} セッション",
+          "sessionCount_other": "{{count}} セッション",
+          "tokenAccountingNote": "推論トークンは別に表示され、出力の合計には含まれません。キャッシュ書き込みはキャッシュ読み取りとは別に記録されます。",
+          "dailyScopeCaption": "日別の合計はローカルの omp 使用状況全体を対象とします。スコープはセッション、内訳、最近のセッションに適用されます。"
         },
         "usageFormatters": {
           "notScannedYet": "未スキャン",

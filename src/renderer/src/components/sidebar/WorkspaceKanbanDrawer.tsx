@@ -19,7 +19,7 @@ import WorkspaceKanbanDrawerView from './WorkspaceKanbanDrawerView'
 import { useWorkspaceKanbanBoardProjection } from './use-workspace-kanban-board-projection'
 import { useWorkspaceKanbanNativeDrag } from './use-workspace-kanban-native-drag'
 import { useWorkspaceKanbanRenderLifecycle } from './use-workspace-kanban-render-lifecycle'
-import { useWorkspaceKanbanDrawerLingering } from './use-workspace-kanban-drawer-lingering'
+import { useDrawerCloseLingering } from '@/hooks/use-drawer-close-lingering'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import {
@@ -40,7 +40,7 @@ type WorkspaceKanbanDrawerProps = {
 export default function WorkspaceKanbanDrawer(
   props: WorkspaceKanbanDrawerProps
 ): React.JSX.Element | null {
-  const lingering = useWorkspaceKanbanDrawerLingering(props.open)
+  const lingering = useDrawerCloseLingering(props.open)
 
   if (!props.open && !lingering) {
     return null
