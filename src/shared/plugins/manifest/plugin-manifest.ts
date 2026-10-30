@@ -5,7 +5,7 @@ import {
   unsafePluginDisplayTextPaths
 } from './plugin-display-text'
 import { pluginCapabilitySchema } from '../capabilities/plugin-capabilities'
-import { orcaEngineRangeSchema } from './plugin-manifest-engine-range'
+import { orcaEngineRangeSchema, satisfiesOrcaEngineRange } from './plugin-manifest-engine-range'
 import {
   pluginContributesFields,
   pluginReservedContributesFields
@@ -27,6 +27,7 @@ import {
   pluginPathFieldDoc,
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_PANEL_PLACEMENT_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from './plugin-schema-field-docs'
 import {
@@ -200,7 +201,27 @@ function buildPluginManifestSchema(enforceEngineFloor: boolean) {
   return z.preprocess(
     upgradePluginManifestV1Names,
     z.discriminatedUnion('manifestVersion', [
-      pluginManifestV1Object.superRefine(validatePluginManifestContributions),
+      pluginManifestV1Object.superRefine((manifest, ctx) => {
+        validatePluginManifestContributions(manifest, ctx)
+        const panelIndex = manifest.contributes.panels.findIndex(
+          (panel) => panel.placement !== undefined
+        )
+        if (
+          enforceEngineFloor &&
+          panelIndex !== -1 &&
+          orcaEngineRangeSchema.safeParse(manifest.engines.orca).success &&
+          !satisfiesOrcaEngineRange(
+            manifest.engines.orca.slice(2),
+            `>=${PLUGIN_PANEL_PLACEMENT_SINCE}`
+          )
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['engines', 'orca'],
+            message: `must be at least >=${PLUGIN_PANEL_PLACEMENT_SINCE}, because contributes.panels[${panelIndex}].placement needs Orca ${PLUGIN_PANEL_PLACEMENT_SINCE}`
+          })
+        }
+      }),
       pluginManifestV2Object.superRefine((manifest, ctx) => {
         validatePluginManifestContributions(manifest, ctx)
         validatePluginExecutionProfile(manifest, ctx)
