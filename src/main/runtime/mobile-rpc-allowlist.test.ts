@@ -241,4 +241,11 @@ describe('mobile RPC allowlist', () => {
       'agentSessionAttachment.read'
     ])
   })
+
+  it('does not let mobile credentials mint access grants', () => {
+    // Why: mobile scope exists to keep repo/provisioning primitives out of reach;
+    // pairing.createOffer would escalate a phone token into new runtime grants.
+    const allowed = mobileRpcAllowlist()
+    expect(allowed.has('pairing.createOffer')).toBe(false)
+  })
 })

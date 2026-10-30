@@ -1,7 +1,7 @@
 import type { RuntimeMetadata } from '../../../shared/runtime-bootstrap'
 import { writeRuntimeMetadata } from '../runtime-metadata'
 import type { RpcMessageContext } from '../rpc/transport'
-import type { RpcRequest, RpcResponse } from '../rpc/core'
+import type { PairingRpcContext, RpcRequest, RpcResponse } from '../rpc/core'
 import { errorResponse } from '../rpc/errors'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
@@ -15,6 +15,10 @@ const DISCONNECT_FORWARDED_METHODS = new Set([
 ])
 
 export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
+  protected getPairingContext(): PairingRpcContext | undefined {
+    return undefined
+  }
+
   // One-shot Unix requests use shared tokens from mode-0600 metadata (design §3.1).
   protected async handleMessage(
     rawMessage: string,
@@ -51,7 +55,9 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
             ? context?.signal
             : undefined,
         connectionSignal: context?.signal,
-        callerScope
+        callerScope,
+        // Why: the Unix socket has the host auth token, so headless clients can mint grants without a WebSocket session.
+        pairing: this.getPairingContext()
       })
     } finally {
       this.releaseLongPoll(longPoll)

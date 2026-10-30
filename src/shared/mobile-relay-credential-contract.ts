@@ -84,8 +84,20 @@ export const PairingGetEndpointsResultSchema = z
   })
   .strict()
 
+// Why: local CLI / runtime-admin minting reuses the same host createPairingOffer path as Settings UI.
+// Address is encoded into pairing URLs / registry entries — cap well above real host/URL lengths.
+export const PairingCreateOfferParamsSchema = z
+  .object({
+    address: z.string().min(1).max(2048).optional(),
+    name: z.string().min(1).max(256).optional(),
+    rotate: z.boolean().optional(),
+    scope: z.enum(['mobile', 'runtime']).optional()
+  })
+  .strict()
+
 export type PairingProvisionRelayParams = z.infer<typeof PairingProvisionRelayParamsSchema>
 export type PairingGetEndpointsParams = z.infer<typeof PairingGetEndpointsParamsSchema>
+export type PairingCreateOfferParams = z.infer<typeof PairingCreateOfferParamsSchema>
 export type DeviceCredentialInstalled = z.infer<typeof DeviceCredentialInstalledSchema>
 export type DeviceCredentialInstallStatusResult = z.infer<
   typeof DeviceCredentialInstallStatusResultSchema

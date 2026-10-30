@@ -256,6 +256,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
   },
   {
+    name: 'pairing',
+    keys: ['pairing create'],
+    load: async () => (await import('./handlers/pairing.js')).PAIRING_HANDLERS
+  },
+  {
     name: 'managed-server',
     keys: [
       'environment status',
