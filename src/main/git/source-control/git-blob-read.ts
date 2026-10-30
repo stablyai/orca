@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isBinaryBuffer } from '../../../shared/binary-buffer'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { isMissingGitBlobPath } from '../../../shared/git-blob-absence'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
@@ -74,8 +75,10 @@ export async function readGitBlobAtOidPath(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBlobReadResult> {
-  // Git blob syntax requires forward slashes, including on Windows.
-  const gitPath = filePath.replace(/\\/g, '/')
+  const gitPath =
+    isWindowsAbsolutePathLike(worktreePath) || options.wslDistro
+      ? filePath.replace(/\\/g, '/')
+      : filePath
   try {
     const { stdout } = await gitExecFileAsyncBuffer(
       ['show', '--end-of-options', `${oid}:${gitPath}`],
