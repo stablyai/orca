@@ -2,6 +2,8 @@ import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import type { RpcCompatibleReader } from './rpc-operation-contract'
 import { normalizeSourceControlGroupOrder } from '../../../src/shared/source-control-group-order'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
+import { hostNewChatPermissionSettings } from '../../../src/shared/agent-chat-permission-host-support'
+import type { NewChatPermissionSettings } from '../../../src/shared/agent-chat-permission-mode'
 
 function settingsMember(raw: unknown): unknown {
   const boxed: { readonly settings?: unknown } | null | undefined = raw == null ? raw : Object(raw)
@@ -90,21 +92,21 @@ export const newTabSettingsRead = bindDeferredRpcOperation(
   })
 )
 
+// Older hosts omit these settings; absence inherits the desktop’s enabled default.
+function onByDefaultSetting(settings: unknown, key: string): boolean {
+  return (settings == null ? undefined : settingsField(settings, key)) !== false
+}
+
 function onByDefaultSettingReader<Variant extends string>(
   key: string,
   variant: Variant
 ): RpcCompatibleReader<unknown, Variant, boolean> {
-  return (raw) => {
-    const settings = raw == null ? undefined : settingsMember(raw)
-    const value: unknown = settings == null ? undefined : settingsField(settings, key)
-    return {
-      compatible: true,
-      variant,
-      // Older hosts omit these settings; absence inherits the desktop’s enabled default.
-      value: value !== false,
-      salvage: { droppedPaths: [], droppedCount: 0 }
-    }
-  }
+  return (raw) => ({
+    compatible: true,
+    variant,
+    value: onByDefaultSetting(raw == null ? undefined : settingsMember(raw), key),
+    salvage: { droppedPaths: [], droppedCount: 0 }
+  })
 }
 
 export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
@@ -117,13 +119,36 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
-export const nativeChatQueueFollowUpsRead = bindDeferredRpcOperation(
+export type NativeChatHostSettings = {
+  queueFollowUps: boolean
+  newChatPermission: NewChatPermissionSettings
+}
+
+// One read per chat for every host setting the composer follows.
+const nativeChatHostSettingsReader: RpcCompatibleReader<
+  unknown,
+  'native-chat-host-settings',
+  NativeChatHostSettings
+> = (raw) => {
+  const settings = raw == null ? undefined : settingsMember(raw)
+  return {
+    compatible: true,
+    variant: 'native-chat-host-settings',
+    value: {
+      queueFollowUps: onByDefaultSetting(settings, 'nativeChatQueueFollowUps'),
+      newChatPermission: hostNewChatPermissionSettings(settings)
+    },
+    salvage: { droppedPaths: [], droppedCount: 0 }
+  }
+}
+
+export const nativeChatHostSettingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'settings.native-chat-queue-follow-ups-or-skip',
+    name: 'settings.native-chat-host-settings-or-skip',
     method: 'settings.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: onByDefaultSettingReader('nativeChatQueueFollowUps', 'queue-follow-ups')
+    read: nativeChatHostSettingsReader
   })
 )
 

@@ -16,6 +16,7 @@ import { AccessibilityInfo, Platform } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { structuredAgentSessionPermissionDescriptor } from '../../../../../src/shared/structured-agent-session-permission-option'
 import { createStructuredAgentSessionOptionState } from '../../../../../src/shared/structured-agent-session-options'
+import type { AgentChatPermissionChoice } from '../../../../../src/shared/agent-chat-permission-mode'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice
@@ -110,7 +111,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   const setOption = vi.fn<MobileNativeChatSessionOptionsController['setOption']>()
   const invokeAction = vi.fn<MobileNativeChatSessionOptionsController['invokeAction']>()
 
-  const mount = (snapshot: SessionOptionDescriptor[], isWorking = false) => {
+  const mount = (
+    snapshot: SessionOptionDescriptor[],
+    isWorking = false,
+    permissionDefault: AgentChatPermissionChoice | null = null
+  ) => {
     const controller: MobileNativeChatSessionOptionsController = {
       snapshot,
       pendingId: null,
@@ -125,6 +130,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       return createElement(MobileNativeChatSessionOptionPickers, {
         controller,
         isWorking: working,
+        permissionDefault,
         presentation,
         onDrawerOpen: (page) => setPresentation({ page, refocus: false }),
         onNavigate: (page) => setPresentation((current) => current && { ...current, page })
@@ -436,6 +442,31 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(setOption).toHaveBeenCalledWith('permissionMode', 'ask')
     expect(rowByText('Sonnet 5').props.accessibilityRole).toBe('radio')
   })
+
+  it.each([
+    ['ask', true],
+    ['full-access', false],
+    ['own', true]
+  ] as const)(
+    'with a %s default, warns about Full access on the pill: %s',
+    (defaultMode, warns) => {
+      mount(
+        [
+          MODEL_DESCRIPTOR,
+          {
+            ...PERMISSION_DESCRIPTOR,
+            kind: { type: 'select', currentValue: 'full-access', choices: PERMISSION_CHOICES }
+          }
+        ],
+        false,
+        defaultMode
+      )
+      expect(findByHostType(renderer!.root, 'ShieldAlert').props.color).toBe(
+        warns ? colors.statusAmber : colors.textSecondary
+      )
+      expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5, full access')
+    }
+  )
 
   it.each([
     ['claude', 'accept-edits', 'Accept edits'],

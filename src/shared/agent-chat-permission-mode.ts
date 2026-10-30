@@ -104,6 +104,14 @@ export function newChatPermissionModeForSettings(
   return newChatPermissionMode(agent, settings?.nativeChatPermissionMode)
 }
 
+/** Full access warns unless new chats start in it; an Own default still warns, as the agent's own config granted it. */
+export function chatPermissionModeWarns(
+  mode: unknown,
+  newChatDefault: AgentChatPermissionChoice | null | undefined
+): boolean {
+  return mode === 'full-access' && mode !== newChatDefault
+}
+
 /** Pre-mode chats inherit argument bypass as Full access; agents without bypass use the new-chat setting. */
 export function preModeChatGetsFullAccess(
   agent: TuiAgent,

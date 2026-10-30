@@ -26,6 +26,7 @@ export function ModelPill({
   primary,
   secondary,
   warning,
+  fullAccess,
   icon: Icon,
   accessibleName,
   disabled,
@@ -34,13 +35,15 @@ export function ModelPill({
   primary: string
   secondary: string | null
   warning: boolean
+  /** Shows the Full access shield; `warning` alone decides whether it is amber. */
+  fullAccess: boolean
   icon?: LucideIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const PillIcon = Icon ?? (warning ? ShieldAlert : undefined)
+  const PillIcon = Icon ?? (fullAccess ? ShieldAlert : undefined)
   return (
     <Pressable
       accessibilityLabel={accessibleName}

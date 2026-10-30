@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_CHAT_PERMISSION_MODES,
   agentChatPermissionModes,
+  chatPermissionModeWarns,
   newChatPermissionMode,
   savedChatPermissionMode
 } from './agent-chat-permission-mode'
@@ -31,6 +32,16 @@ describe('agent chat permission modes', () => {
     expect(newChatPermissionMode('omp', 'full-access')).toBe('full-access')
     expect(newChatPermissionMode('omp', 'accept-edits')).toBe('ask')
     expect(newChatPermissionMode('pi', 'full-access')).toBeNull()
+  })
+})
+
+describe('the Full access warning', () => {
+  it('stays quiet only when new chats start in Full access; an Own default still warns', () => {
+    expect(chatPermissionModeWarns('full-access', 'ask')).toBe(true)
+    expect(chatPermissionModeWarns('full-access', 'own')).toBe(true)
+    expect(chatPermissionModeWarns('full-access', null)).toBe(true)
+    expect(chatPermissionModeWarns('full-access', 'full-access')).toBe(false)
+    expect(chatPermissionModeWarns('auto', 'ask')).toBe(false)
   })
 })
 

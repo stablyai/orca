@@ -214,7 +214,8 @@ export function useMobileNativeChatController(args: {
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
         setOption: structuredNativeChat.setStructuredOption,
-        invokeAction: structuredNativeChat.invokeStructuredOption
+        invokeAction: structuredNativeChat.invokeStructuredOption,
+        newChatPermission: structuredNativeChat.newChatPermission
       },
       toggleTabChatView,
       worktreeId

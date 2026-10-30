@@ -5,6 +5,10 @@ import {
   getAgentSessionOptionCatalog,
   type AgentSessionOptionCatalog
 } from '../../../../../src/shared/agent-session-option-catalog'
+import {
+  newChatPermissionModeForSettings,
+  type NewChatPermissionSettings
+} from '../../../../../src/shared/agent-chat-permission-mode'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
@@ -44,6 +48,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     pendingId: string | null
     setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
     invokeAction: (id: string) => Promise<boolean>
+    newChatPermission?: NewChatPermissionSettings | null
   }
   toggleTabChatView: (tabId: string) => void
   worktreeId: string
@@ -134,16 +139,19 @@ export function useMobileNativeChatSessionOptionController(args: {
       structured.optionSurface
     ]
   )
+  const newChatPermission = structured.newChatPermission
+  const permissionDefault =
+    agent && newChatPermission ? newChatPermissionModeForSettings(agent, newChatPermission) : null
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(
     () =>
       activeChatStructured
         ? structuredController
-          ? { controller: structuredController, isWorking }
+          ? { controller: structuredController, isWorking, permissionDefault }
           : null
         : sessionOptions.snapshot.length > 0
           ? { controller: sessionOptions, isWorking }
           : null,
-    [activeChatStructured, isWorking, sessionOptions, structuredController]
+    [activeChatStructured, isWorking, permissionDefault, sessionOptions, structuredController]
   )
 
   return { nativeChatSessionOptions, recordCommand: sessionOptions.recordCommand }

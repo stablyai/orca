@@ -45,7 +45,7 @@ import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
-import { useMobileNativeChatQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
+import { useMobileNativeChatHostSettings } from './use-mobile-native-chat-host-settings'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
 
@@ -67,7 +67,11 @@ export function useMobileStructuredAgentSession(
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
-  const queueFollowUps = useMobileNativeChatQueueFollowUps(client, connected && enabled, sessionId)
+  const { queueFollowUps, newChatPermission } = useMobileNativeChatHostSettings(
+    client,
+    connected && enabled,
+    sessionId
+  )
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const hostStopsConversation = hostSupport?.conversationStop ?? null
@@ -304,6 +308,7 @@ export function useMobileStructuredAgentSession(
     respondQuestion,
     queued,
     commandRefusalCauses,
-    backgroundTasks
+    backgroundTasks,
+    newChatPermission
   }
 }

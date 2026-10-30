@@ -18,6 +18,7 @@ import type {
 } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import type { MobileNativeChatHostSettings } from './use-mobile-native-chat-host-settings'
 
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
@@ -49,6 +50,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     backgroundTasks: MobileStructuredBackgroundTasks
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
+    /** The host settings that pick a new chat's permission. */
+    newChatPermission: MobileNativeChatHostSettings['newChatPermission']
   }
 
 export type MobileStructuredAgentSessionArgs = {
