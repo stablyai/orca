@@ -377,16 +377,16 @@ describe("a sender's name, from what Orca shows for it", () => {
       agentType: 'claude'
     }
     session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: '✳ PR rebase' }] }
-    expect(names().agentRowName(row)).toBe('PR rebase')
+    expect(names().agentRowNamer()(row)).toBe('PR rebase')
     session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: '✳ Claude Code' }] }
-    expect(names().agentRowName(row)).toBeNull()
+    expect(names().agentRowNamer()(row)).toBeNull()
   })
 
   it('names a worktree.ps chat row as its chat tab does', () => {
     const tabId = structuredAgentSessionTabId(CHAT)
     session.unifiedTabs = { [WORKTREE]: [chatTab('Login fix', 'Claude Chat')] }
     expect(
-      names().agentRowName({
+      names().agentRowNamer()({
         paneKey: `${tabId}:x`,
         tabId,
         worktreeId: WORKTREE,

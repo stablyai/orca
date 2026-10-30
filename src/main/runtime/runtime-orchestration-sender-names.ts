@@ -68,6 +68,13 @@ type MirroredTabs = {
   >
 }
 
+type SessionLookup = RuntimeSenderNameDeps['getWorkspaceSession']
+
+type AgentRowNamingSource = Pick<
+  RuntimeWorktreeAgentSource,
+  'paneKey' | 'tabId' | 'worktreeId' | 'ptyId' | 'agentType' | 'providerSessionId'
+>
+
 export class RuntimeOrchestrationSenderNames {
   constructor(private readonly deps: RuntimeSenderNameDeps) {}
 
@@ -95,43 +102,52 @@ export class RuntimeOrchestrationSenderNames {
     )
   }
 
-  /** Desktop's compact-row name for a worktree.ps row; null keeps the phone's message fallback. */
-  agentRowName(
-    source: Pick<
-      RuntimeWorktreeAgentSource,
-      'paneKey' | 'tabId' | 'worktreeId' | 'ptyId' | 'agentType' | 'providerSessionId'
-    >
-  ): string | null {
-    const { tabId, worktreeId } = source
-    if (!tabId || !worktreeId) {
-      return null
+  /** Names one worktree.ps pass's rows as desktop's compact row does; null keeps the phone's message fallback. */
+  agentRowNamer(): (source: AgentRowNamingSource) => string | null {
+    // A pass reads the setting and each worktree's session at most once, however many rows it lists.
+    let generatedTitlesEnabled: boolean | undefined
+    const sessions = new Map<string, MirroredTabs | null | undefined>()
+    const session: SessionLookup = (worktreeId) => {
+      if (!sessions.has(worktreeId)) {
+        sessions.set(worktreeId, this.deps.getWorkspaceSession(worktreeId))
+      }
+      return sessions.get(worktreeId)
     }
-    const chatSessionId = structuredAgentSessionIdFromTabId(tabId)
-    if (chatSessionId !== null) {
-      const chat = structuredChatNaming(chatSessionId, this.chatSources())
-      return chat ? chat.ownName || chat.fallback : null
+    const chatSources = this.chatSources(session)
+    return (source) => {
+      const { tabId, worktreeId } = source
+      if (!tabId || !worktreeId) {
+        return null
+      }
+      const chatSessionId = structuredAgentSessionIdFromTabId(tabId)
+      if (chatSessionId !== null) {
+        const chat = structuredChatNaming(chatSessionId, chatSources)
+        return chat ? chat.ownName || chat.fallback : null
+      }
+      const record = { worktreeId, tabId, ptyId: source.ptyId ?? null }
+      const pane = this.paneNaming(record, source.paneKey, session)
+      generatedTitlesEnabled ??= this.deps.getGeneratedTitlesEnabled()
+      return pane.tab
+        ? getAgentRowConversationName(
+            pane.tab,
+            source.agentType,
+            generatedTitlesEnabled,
+            pane.paneTitle,
+            source.providerSessionId
+          )
+        : null
     }
-    const pane = this.paneNaming({ worktreeId, tabId, ptyId: source.ptyId ?? null }, source.paneKey)
-    return pane.tab
-      ? getAgentRowConversationName(
-          pane.tab,
-          source.agentType,
-          this.deps.getGeneratedTitlesEnabled(),
-          pane.paneTitle,
-          source.providerSessionId
-        )
-      : null
   }
 
-  private chatSources(): Pick<SenderNamingSources, 'records' | 'chatTab'> {
+  private chatSources(
+    session: SessionLookup = this.deps.getWorkspaceSession
+  ): Pick<SenderNamingSources, 'records' | 'chatTab'> {
     return {
       records: readAgentSessionRecordStore(),
       chatTab: (worktreeId, sessionId) =>
-        this.deps
-          .getWorkspaceSession(worktreeId)
-          ?.unifiedTabs?.[worktreeId]?.find(
-            (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
-          ) ?? null
+        session(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
+          (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+        ) ?? null
     }
   }
 
@@ -165,9 +181,10 @@ export class RuntimeOrchestrationSenderNames {
   /** The pane's mirrored tab and its own live title. */
   private paneNaming(
     record: { worktreeId: string; tabId: string; ptyId: string | null },
-    paneKey: string | null
+    paneKey: string | null,
+    sessionOf: SessionLookup = this.deps.getWorkspaceSession
   ): Pick<TerminalSenderNaming, 'tab' | 'paneTitle'> {
-    const session = this.deps.getWorkspaceSession(record.worktreeId)
+    const session = sessionOf(record.worktreeId)
     const tab = session?.tabsByWorktree?.[record.worktreeId]?.find(
       (candidate) => candidate.id === record.tabId
     )
