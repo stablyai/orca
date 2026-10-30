@@ -60,18 +60,24 @@ function isBlankSeededTerminal(
 }
 
 /** Resolution 1: the multi-agent path owns every surface, so the blank terminal seeded for an
- * agent-less creation is redundant. Setup/issue/default tabs carry their own work and stay. */
+ * agent-less creation is redundant. Setup/issue/default tabs carry their own work and stay.
+ * The read happens per close: closing the worktree's last tab deactivates it mid-creation. */
 function closeSeededBlankTerminal(args: {
-  state: SeededTerminalState
+  getState: () => SeededTerminalState
   worktreeId: string
   seededTerminalTabId: string | null
 }): void {
   const candidateTabIds = args.seededTerminalTabId
     ? [args.seededTerminalTabId]
-    : (args.state.tabsByWorktree[args.worktreeId] ?? []).map((tab) => tab.id)
+    : (args.getState().tabsByWorktree[args.worktreeId] ?? []).map((tab) => tab.id)
   for (const tabId of candidateTabIds) {
-    if (isBlankSeededTerminal(args.state, args.worktreeId, tabId)) {
-      args.state.closeTab(tabId, { captureRecentlyClosed: false })
+    const state = args.getState()
+    // Why: an emptied worktree applies the landing patch, so a lone tab stays until an agent tab exists.
+    if ((state.tabsByWorktree[args.worktreeId] ?? []).length <= 1) {
+      return
+    }
+    if (isBlankSeededTerminal(state, args.worktreeId, tabId)) {
+      state.closeTab(tabId, { captureRecentlyClosed: false })
     }
   }
 }
@@ -121,13 +127,6 @@ export function runComposerAgentLaunchLoop(
     return { launched: 0, failed: 0 }
   }
 
-  const state = useAppStore.getState()
-  closeSeededBlankTerminal({
-    state,
-    worktreeId: args.worktreeId,
-    seededTerminalTabId: args.seededTerminalTabId ?? null
-  })
-
   const prompt = args.linkedItemPrompt ?? args.quickPrompt
   const promptDelivery =
     args.promptDelivery ?? (args.linkedItemPrompt !== null ? 'draft' : 'auto-submit')
@@ -155,6 +154,15 @@ export function runComposerAgentLaunchLoop(
       // Keep later rows launching; the launch stack already reports command/prompt failures.
       console.error('composer: agent launch failed', entry.agent, error)
       failed += 1
+    }
+    if (index === 0) {
+      // Resolution 1: absorb the seeded blank terminal once the first agent tab exists, so
+      // closing it never empties (and therefore deactivates) the freshly created worktree.
+      closeSeededBlankTerminal({
+        getState: () => useAppStore.getState(),
+        worktreeId: args.worktreeId,
+        seededTerminalTabId: args.seededTerminalTabId ?? null
+      })
     }
   }
 

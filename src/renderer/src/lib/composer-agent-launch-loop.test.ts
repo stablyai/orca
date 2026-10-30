@@ -68,9 +68,20 @@ beforeEach(() => {
   mocks.state.tabsByWorktree = {}
   mocks.state.pendingStartupByTabId = {}
   mocks.state.pendingIssueCommandSplitByTabId = {}
-  mocks.launch.mockReturnValue({
-    surface: { kind: 'local-terminal', tabId: 'agent-tab' },
-    pasteDraftAfterLaunch: false
+  // A real launch publishes its tab synchronously; the loop reads that count before closing.
+  mocks.launch.mockImplementation((args) => {
+    const tabs = (mocks.state.tabsByWorktree[args.worktreeId] ??= [])
+    const tabId = `agent-tab-${tabs.filter((tab) => tab.launchAgent).length + 1}`
+    tabs.push({ id: tabId, customTitle: null, launchAgent: args.agent })
+    return {
+      surface: { kind: 'local-terminal', tabId },
+      pasteDraftAfterLaunch: false
+    }
+  })
+  mocks.closeTab.mockImplementation((tabId: string) => {
+    for (const [worktreeId, tabs] of Object.entries(mocks.state.tabsByWorktree)) {
+      mocks.state.tabsByWorktree[worktreeId] = tabs.filter((tab) => tab.id !== tabId)
+    }
   })
 })
 
@@ -141,15 +152,25 @@ describe('runComposerAgentLaunchLoop', () => {
     })
   })
 
-  it('closes the seeded blank terminal before launching', () => {
+  it('absorbs the seeded blank terminal after the first agent tab exists', () => {
     mocks.state.tabsByWorktree['wt-1'] = [{ id: 'blank-tab', customTitle: null }]
 
     run(creationRequest())
 
     expect(mocks.closeTab).toHaveBeenCalledWith('blank-tab', { captureRecentlyClosed: false })
-    expect(mocks.closeTab.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.launch.mock.invocationCallOrder[0]
-    )
+    // Closing the worktree's ONLY tab lands on the empty-workspace view, so the first launch
+    // must publish its tab before the blank one goes away.
+    const closeOrder = mocks.closeTab.mock.invocationCallOrder[0]
+    expect(closeOrder).toBeGreaterThan(mocks.launch.mock.invocationCallOrder[0])
+    expect(closeOrder).toBeLessThan(mocks.launch.mock.invocationCallOrder[1])
+  })
+
+  it('keeps a lone seeded blank terminal when the first launch fails', () => {
+    mocks.launch.mockReturnValueOnce(null)
+    mocks.state.tabsByWorktree['wt-1'] = [{ id: 'blank-tab', customTitle: null }]
+
+    expect(run(creationRequest())).toEqual({ launched: 1, failed: 1 })
+    expect(mocks.closeTab).not.toHaveBeenCalled()
   })
 
   it('keeps a seeded terminal that already carries setup or issue work', () => {
