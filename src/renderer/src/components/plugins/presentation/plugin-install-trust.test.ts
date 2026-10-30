@@ -67,6 +67,11 @@ describe('catalogInstallTrustPrompt', () => {
     })
   })
 
+  it('shows the publisher Orca installs as, not the one the manifest declares', () => {
+    const claimed = { ...theme, manifest: { ...theme.manifest, publisher: 'stablyai' } }
+    expect(catalogInstallTrustPrompt(listing, claimed)?.publisher).toBe('acme')
+  })
+
   it('names other content and translations apart from themes', () => {
     const grammar = preview({
       syntaxes: [{ id: 'g', title: 'G', scopeName: 'source.g', path: 'g.json', extensions: ['.g'] }]
@@ -109,7 +114,12 @@ describe('sourceInstallTrustPrompt', () => {
         url: 'git@gitlab.com:team/tools/notes.git',
         ref: 'v1'
       })
-    ).toMatchObject({ kind: 'git', trustee: 'team', repository: 'gitlab.com/team/tools/notes' })
+    ).toMatchObject({
+      kind: 'git',
+      trustee: 'team',
+      publisher: 'team',
+      repository: 'gitlab.com/team/tools/notes'
+    })
   })
 
   it('calls a folder install and a development folder unverified local folders', () => {

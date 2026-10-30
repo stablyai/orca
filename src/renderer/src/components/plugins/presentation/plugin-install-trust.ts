@@ -4,7 +4,11 @@ import type {
   PluginMarketplaceHostListing
 } from '../../../../../preload/api-types'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
-import { parseGitRepositoryIdentity } from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import {
+  parseGitRepositoryIdentity,
+  splitQualifiedPluginKey
+} from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import { gitUrlPluginPublisher } from '../../../../../shared/plugins/installation/plugin-publisher-derivation'
 import { pluginPointsFromManifest, pluginTrust } from './plugin-access-profile'
 import { pluginTrustWarnings } from './plugin-consent-copy'
 import { pluginPublisherNotice } from './plugin-publisher-trust'
@@ -21,9 +25,9 @@ export type PluginInstallTrustKind =
 
 export type PluginInstallTrustPrompt = {
   kind: PluginInstallTrustKind
-  /** Who the reader must trust: the repository owner Orca parsed, else the declared publisher. */
+  /** Who the reader must trust: the repository owner Orca parsed, else the derived publisher. */
   trustee: string
-  /** The publisher the plugin declares about itself; shown beside what Orca derived. */
+  /** The publisher Orca derives from where it installs from, never the manifest's claim. */
   publisher: string | null
   /** `host/owner/repo`, parsed by Orca from the URL it installs from. */
   repository: string | null
@@ -64,6 +68,8 @@ export function catalogInstallTrustPrompt(
   const execution = listing.release?.execution ?? pluginExecutionProfile(manifest)
   const notice = pluginPublisherNotice({ official: false, execution, manifest, types: null })
   const origin = pluginRepositoryOrigin(listing.source.url, listing.source.path)
+  // Why the listing id: catalog installs are keyed by it, so it is the publisher Orca installs as.
+  const publisher = splitQualifiedPluginKey(listing.pluginKey)?.publisher ?? null
   const themed = THEME_POINTS.some((point) => manifest.contributes[point].length > 0)
   const kind: PluginInstallTrustKind =
     notice === 'code'
@@ -75,8 +81,8 @@ export function catalogInstallTrustPrompt(
           : 'content'
   return {
     kind,
-    trustee: origin?.owner ?? manifest.publisher,
-    publisher: manifest.publisher,
+    trustee: origin?.owner ?? publisher ?? listing.pluginKey,
+    publisher,
     repository: origin?.repository ?? listing.source.url,
     location: listing.marketplaceName || null,
     access:
@@ -99,7 +105,7 @@ export function sourceInstallTrustPrompt(
   return {
     kind: 'git',
     trustee: origin?.owner ?? source.url,
-    publisher: null,
+    publisher: gitUrlPluginPublisher(source.url),
     repository: origin?.repository ?? source.url,
     location: null,
     access: []
