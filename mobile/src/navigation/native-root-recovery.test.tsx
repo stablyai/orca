@@ -88,6 +88,9 @@ vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: () => null }))
 vi.mock('../layout/side-safe-area', () => ({
   SideSafeArea: ({ children }: { children: ReactNode }) => children
 }))
+vi.mock('../layout/side-rail', () => ({
+  SideRailProvider: ({ children }: { children: ReactNode }) => children
+}))
 vi.mock('../theme/mobile-appearance', () => ({ startMobileAppearance: async () => {} }))
 vi.mock('../i18n/use-follow-device-ui-locale', () => ({ useFollowDeviceUiLocale: () => {} }))
 vi.mock('../i18n/ui-language-preference', () => ({ startMobileUiLanguage: async () => {} }))

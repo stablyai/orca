@@ -7,11 +7,14 @@ session, and print one JSON response.
 """
 
 import base64
+from contextlib import contextmanager
+import ctypes
 import json
 import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -997,17 +1000,17 @@ def key_name(raw):
     return aliases.get(str(raw).lower(), str(raw))
 
 
-def press_key(raw):
+def press_key(raw, window=None):
     name = key_name(raw)
     if len(name) == 1:
-        Atspi.generate_keyboard_event(0, name, Atspi.KeySynthType.STRING)
+        type_text(name, window)
         return
     if Gdk is None:
         raise RuntimeError("GDK is required for non-character key synthesis")
     Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.SYM)
 
 
-def hotkey(raw):
+def hotkey(raw, window=None):
     key_spec = re.sub(r"(?i)commandorcontrol|cmdorctrl", "ctrl", str(raw))
     if "+" in key_spec:
         # xdotool treats an upper-case letter as its shifted keysym, so ctrl+A would press ctrl+shift+a.
@@ -1018,22 +1021,220 @@ def hotkey(raw):
         return
     if "+" in key_spec:
         raise RuntimeError("hotkey combinations require xdotool")
-    press_key(key_spec)
+    press_key(key_spec, window)
 
 
-def type_text(value):
-    Atspi.generate_keyboard_event(0, str(value), Atspi.KeySynthType.STRING)
+@contextmanager
+def temporary_x11_keymap(value, read_receipt):
+    import fcntl
+
+    if Gdk is None and not value.isascii():
+        raise RuntimeError("unsupported capability: synthetic Unicode text requires GDK on X11")
+    lock = open(os.path.join(os.environ["XDG_RUNTIME_DIR"], "orca-computer-keyboard.lock"), "a")
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError("unsupported capability: another keyboard operation is active; retry after it finishes") from error
+        with locked_x11_keymap(value, read_receipt) as receipt:
+            yield receipt
+    finally:
+        lock.close()
 
 
-def insert_focused_text(window, value):
-    # Why: EditableText needs no window focus and still works on Wayland, where key synthesis is a no-op.
-    node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED))
-    if node is None or not has_state(node, Atspi.StateType.EDITABLE):
+@contextmanager
+def locked_x11_keymap(value, read_receipt):
+    x = ctypes.CDLL("libX11.so.6")
+    pointer, integer, symbol = ctypes.c_void_p, ctypes.c_int, ctypes.c_ulong
+
+    class ModifierMap(ctypes.Structure):
+        _fields_ = [("width", integer), ("keys", ctypes.POINTER(ctypes.c_ubyte))]
+
+    for name, result, args in (
+        ("XOpenDisplay", pointer, [ctypes.c_char_p]),
+        ("XDisplayKeycodes", integer, [pointer, ctypes.POINTER(integer), ctypes.POINTER(integer)]),
+        ("XGetKeyboardMapping", ctypes.POINTER(symbol), [pointer, ctypes.c_ubyte, integer, ctypes.POINTER(integer)]),
+        ("XGetModifierMapping", ctypes.POINTER(ModifierMap), [pointer]),
+        ("XQueryKeymap", integer, [pointer, ctypes.POINTER(ctypes.c_char)]),
+        ("XChangeKeyboardMapping", integer, [pointer, integer, integer, ctypes.POINTER(symbol), integer]),
+        ("XFree", integer, [pointer]),
+        ("XFreeModifiermap", integer, [ctypes.POINTER(ModifierMap)]),
+        ("XSync", integer, [pointer, integer]),
+        ("XCloseDisplay", integer, [pointer]),
+    ):
+        fn = getattr(x, name)
+        fn.restype, fn.argtypes = result, args
+    display = x.XOpenDisplay(None)
+    if not display:
+        raise RuntimeError("unsupported capability: cannot open X11 display for synthetic Unicode text")
+    changed = []
+    held_before = None
+    completed = False
+
+    def held_keys():
+        keys = (ctypes.c_char * 32)()
+        x.XQueryKeymap(display, keys)
+        return bytes(keys)
+
+    def restore():
+        nonlocal display
+        if display is None:
+            return
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            if not completed and held_before is not None:
+                held_after = held_keys()
+                newly_down = [code for code in range(256)
+                              if held_after[code // 8] & (1 << (code % 8))
+                              and not held_before[code // 8] & (1 << (code % 8))]
+                if newly_down:
+                    xtest = ctypes.CDLL("libXtst.so.6")
+                    xtest.XTestFakeKeyEvent.argtypes = [pointer, ctypes.c_uint, integer, ctypes.c_ulong]
+                    for code in newly_down:
+                        xtest.XTestFakeKeyEvent(display, code, 0, 0)
+            for code in changed:
+                x.XChangeKeyboardMapping(display, code, width.value, (symbol * width.value)(*rows[code]), 1)
+            x.XSync(display, 0)
+            x.XCloseDisplay(display)
+            display = None
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+    try:
+        low, high, width = integer(), integer(), integer()
+        x.XDisplayKeycodes(display, ctypes.byref(low), ctypes.byref(high))
+        raw = x.XGetKeyboardMapping(display, low.value, high.value - low.value + 1, ctypes.byref(width))
+        if not raw:
+            raise RuntimeError("unsupported capability: cannot read X11 keyboard mapping")
+        try:
+            rows = {code: tuple(raw[(code - low.value) * width.value + i] for i in range(width.value))
+                    for code in range(low.value, high.value + 1)}
+        finally:
+            x.XFree(raw)
+        modifiers = x.XGetModifierMapping(display)
+        if not modifiers:
+            raise RuntimeError("unsupported capability: cannot read X11 modifier mapping")
+        try:
+            modifier_codes = set(modifiers.contents.keys[i] for i in range(modifiers.contents.width * 8))
+        finally:
+            x.XFreeModifiermap(modifiers)
+        available = {key for row in rows.values() for key in row}
+        needed = list(dict.fromkeys((ord(char) if ord(char) < 128 else Gdk.unicode_to_keyval(ord(char)))
+                                    for char in value if is_literal_text_character(char)))
+        missing = [key for key in needed if key not in available]
+        free = [code for code, row in rows.items() if not any(row) and code not in modifier_codes]
+        if len(missing) > len(free) or 0 in missing:
+            raise RuntimeError("unsupported capability: insufficient unused X11 keycodes; split the text or use paste_text")
+        receipt = read_receipt() if missing else None
+        if missing and receipt is None:
+            raise RuntimeError("unsupported capability: synthetic Unicode mapping requires readable focused text; use paste_text")
+        for code, key in zip(free, missing):
+            changed.append(code)
+            binding = (symbol * width.value)(key)
+            x.XChangeKeyboardMapping(display, code, width.value, binding, 1)
+        x.XSync(display, 0)
+        held_before = held_keys()
+        yield receipt
+        completed = True
+    finally:
+        try:
+            restore()
+        except SystemExit:
+            restore()
+            raise
+
+
+def is_literal_text_character(char):
+    return ord(char) >= 32 and ord(char) != 127
+
+
+def synthetic_text_receipt(window, value):
+    if not all(is_literal_text_character(char) for char in value):
         return None
-    editable = attempt(node.get_editable_text_iface)
+    node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED)) if window is not None else None
+    if node is None or is_secure_node(node) or not has_state(node, Atspi.StateType.EDITABLE):
+        return None
     text = text_iface(node)
-    if editable is None or text is None:
+    selection = text_selection(text) if text is not None else None
+    if selection is None:
         return None
+    start, end, count = selection
+    original = attempt(lambda: Atspi.Text.get_text(text, 0, count))
+    if original is None or len(original) != count or "\ufffc" in original:
+        return None
+    if start != end:
+        get_selections = getattr(getattr(Atspi, "Document", None), "get_text_selections", None)
+        selections = None
+        ancestor = node
+        if get_selections is not None:
+            for _ in range(MAX_DEPTH):
+                document = attempt(lambda: ancestor.get_document_iface())
+                if document is not None:
+                    selections = attempt(lambda: get_selections(document))
+                    break
+                ancestor = attempt(lambda: ancestor.get_parent())
+                if ancestor is None:
+                    break
+        if selections:
+            if len(selections) != 1:
+                return None
+            selected = selections[0]
+            if selected.start_object != node or selected.end_object != node:
+                return None
+            caret = attempt(lambda: Atspi.Text.get_caret_offset(text))
+            if caret != (selected.start_offset if selected.start_is_active else selected.end_offset):
+                return None
+            start, end = sorted((selected.start_offset, selected.end_offset))
+            if not 0 <= start < end <= count:
+                return None
+        elif any(ord(char) > 0xFFFF for char in original):
+            # Legacy ATK selection offsets can convert supplementary characters twice.
+            return None
+    return node, text, original[:start] + value + original[end:], start + len(value)
+
+
+def wait_for_typed_text(receipt):
+    node, text, expected, caret = receipt
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        attempt(node.clear_cache)
+        if (has_state(node, Atspi.StateType.FOCUSED)
+                and attempt(lambda: Atspi.Text.get_text(text, 0, -1)) == expected
+                and attempt(lambda: Atspi.Text.get_caret_offset(text)) == caret
+                and attempt(lambda: Atspi.Text.get_n_selections(text)) == 0):
+            return
+        time.sleep(0.02)
+    raise RuntimeError("text_input_incomplete: typed text or caret did not match; inspect state before retrying")
+
+
+def type_text(value, window=None):
+    text = str(value)
+    xdotool = shutil.which("xdotool")
+    if (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+            or (not xdotool and text.isascii())):
+        Atspi.generate_keyboard_event(0, text, Atspi.KeySynthType.STRING)
+        return
+    if not xdotool:
+        raise RuntimeError("unsupported capability: synthetic Unicode text requires xdotool on X11")
+    # Keep normal typing below both the child and provider watchdogs.
+    if len(text) > 600:
+        raise RuntimeError("unsupported capability: synthetic text is limited to 600 characters; split the text or use paste_text")
+    Atspi.set_timeout(ATSPI_METHOD_TIMEOUT_MS, ATSPI_STARTUP_TIMEOUT_MS)
+    with temporary_x11_keymap(text, lambda: synthetic_text_receipt(window, text)) as receipt:
+        try:
+            # A fresh xdotool reads the stable mappings, held until the target consumes its keys.
+            subprocess.run(
+                [xdotool, "type", "--clearmodifiers", "--delay", "12", "--file", "-"],
+                input=text, encoding="utf-8", env={**os.environ, "LC_ALL": "C.UTF-8"},
+                check=True, capture_output=True, timeout=10,
+            )
+        except (subprocess.SubprocessError, OSError) as error:
+            raise RuntimeError("text_input_incomplete: text may be partially typed and keyboard modifiers may have changed; inspect state before retrying") from error
+        if receipt is not None:
+            wait_for_typed_text(receipt)
+
+
+def text_selection(text):
     start = end = int(attempt(lambda: Atspi.Text.get_caret_offset(text), -1))
     selection_count = attempt(lambda: Atspi.Text.get_n_selections(text))
     if selection_count not in (0, 1):
@@ -1048,6 +1249,22 @@ def insert_focused_text(window, value):
     original_count = attempt(lambda: Atspi.Text.get_character_count(text))
     if original_count is None or original_count < 0 or end > original_count:
         return None
+    return start, end, original_count
+
+
+def insert_focused_text(window, value):
+    # Why: EditableText needs no window focus and still works on Wayland, where key synthesis is a no-op.
+    node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED))
+    if node is None or not has_state(node, Atspi.StateType.EDITABLE):
+        return None
+    editable = attempt(node.get_editable_text_iface)
+    text = text_iface(node)
+    if editable is None or text is None:
+        return None
+    selection = text_selection(text)
+    if selection is None:
+        return None
+    start, end, original_count = selection
     original = None
     if end > start:
         original = attempt(lambda: Atspi.Text.get_text(text, 0, original_count))
@@ -1236,13 +1453,13 @@ def run_operation(operation):
         action = insert_focused_text(window, text)
         if action is None:
             require_keyboard_focus(window, operation)
-            type_text(text)
+            type_text(text, window)
             action = {"path": "synthetic", "actionName": "typeText", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "press_key":
-        press_key(require_non_empty_string(operation.get("key"), "key"))
+        press_key(require_non_empty_string(operation.get("key"), "key"), window)
         action = {"path": "synthetic", "actionName": "pressKey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "hotkey":
-        hotkey(require_non_empty_string(operation.get("key"), "key"))
+        hotkey(require_non_empty_string(operation.get("key"), "key"), window)
         action = {"path": "synthetic", "actionName": "hotkey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "paste_text":
         text = require_non_empty_string(operation.get("text"), "text")
@@ -1274,7 +1491,13 @@ def run_operation(operation):
     return {"ok": True, "action": action, "snapshot": snapshot}
 
 
+def terminate_bridge(_signal, _frame):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    sys.exit(143)
+
+
 def main():
+    signal.signal(signal.SIGTERM, terminate_bridge)
     try:
         ensure_desktop_bus()
         with open(sys.argv[1], "r", encoding="utf-8") as handle:
