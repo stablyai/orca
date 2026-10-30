@@ -134,10 +134,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       current.length <= 1 ? current : current.filter((entry) => entry.id !== id)
     )
   }, [])
+  // Multi-agent creation is local-git-worktree only (resolution 2), so the rows follow the target
+  // KIND. A `ready` resolution is the normal local-git state and must not lock them.
   const agentEntriesLocked =
     target.runtimeTargetSelection.isProjectGroupTarget ||
-    target.runtimeTargetSelection.selectedWorkspaceTarget.status === 'ready' ||
-    target.runtimeTargetSelection.selectedEphemeralVmRecipeId !== null
+    !target.runtimeTargetSelection.selectedRepoIsGit ||
+    target.runtimeTargetSelection.selectedEphemeralVmRecipeId !== null ||
+    target.runtimeTargetSelection.selectedRepoIsRemote
   const external = useComposerExternalSync(target)
   const source = useComposerSourceState(target, external)
   const submit = useComposerSubmitOrchestration(target, external, source)
