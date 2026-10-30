@@ -26,6 +26,7 @@ type StagedSave = {
   totalBytes: number
   written: number
   committing: boolean
+  aborting: boolean
   // Every op on a save waits for the one before, so a temp is never removed or read mid-append.
   pending: Promise<void>
   idleTimer: ReturnType<typeof setTimeout>
@@ -83,6 +84,7 @@ export class StagedFileSaves {
       totalBytes,
       written: 0,
       committing: false,
+      aborting: false,
       pending: Promise.resolve(),
       idleTimer: this.idleTimer(owner, saveId)
     }
@@ -94,9 +96,15 @@ export class StagedFileSaves {
         await mkdir(dir, { recursive: true })
         await writeFile(tempPath, Buffer.alloc(0), { flag: 'wx' })
       })
+      // Abort owns the temp and the reservation until its removal finishes.
+      if (save.aborting) {
+        throw new Error('staged_save_unknown')
+      }
     } catch (error) {
-      this.release(saveId, save)
-      await rm(tempPath, { force: true }).catch(() => {})
+      if (!save.aborting) {
+        this.release(saveId, save)
+        await rm(tempPath, { force: true }).catch(() => {})
+      }
       throw error
     }
     return { saveId }
@@ -167,8 +175,20 @@ export class StagedFileSaves {
     if (save.committing) {
       return
     }
-    this.release(saveId, save)
-    await this.queue(save, () => rm(save.tempPath, { force: true })).catch(() => {})
+    // Setup may still be creating the temp. Keep the reservation until that file is gone.
+    if (save.aborting) {
+      await save.pending
+      return
+    }
+    save.aborting = true
+    clearTimeout(save.idleTimer)
+    await this.queue(save, async () => {
+      try {
+        await rm(save.tempPath, { force: true })
+      } finally {
+        this.release(saveId, save)
+      }
+    }).catch(() => {})
   }
 
   /** A closed socket can't finish its saves. */
@@ -222,7 +242,7 @@ export class StagedFileSaves {
   private require(owner: string, saveId: string): StagedSave {
     const save = this.saves.get(saveId)
     // Another connection's id reads as unknown, so ids can't be probed across clients.
-    if (!save || save.owner !== owner) {
+    if (!save || save.owner !== owner || save.aborting) {
       throw new Error('staged_save_unknown')
     }
     return save

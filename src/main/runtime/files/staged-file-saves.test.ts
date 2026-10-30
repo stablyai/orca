@@ -19,6 +19,10 @@ import { StagedFileSaves } from './staged-file-saves'
 
 // An append can be held open to put other ops beside it.
 const appendGate = vi.hoisted((): { hold: Promise<void> | null } => ({ hold: null }))
+const createGate = vi.hoisted((): { hold: Promise<void> | null; entered: boolean } => ({
+  hold: null,
+  entered: false
+}))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   return {
@@ -26,6 +30,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     appendFile: async (...args: Parameters<typeof actual.appendFile>) => {
       await appendGate.hold
       return actual.appendFile(...args)
+    },
+    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+      createGate.entered = true
+      await createGate.hold
+      return actual.writeFile(...args)
     }
   }
 })
@@ -38,6 +47,8 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-staged-save-'))
   staging = join(root, 'profile', 'staged-saves')
   appendGate.hold = null
+  createGate.hold = null
+  createGate.entered = false
 })
 afterEach(() => {
   vi.useRealTimers()
@@ -180,6 +191,30 @@ describe('a staged save', () => {
     await appended
     await expect(committed).resolves.toEqual({ ok: true })
     expect(readFileSync(target, 'utf8')).toBe('xyz')
+  })
+
+  it('keeps a save reserved until abort removes a temp still being created', async () => {
+    let release = () => {}
+    createGate.hold = new Promise((resolve) => {
+      release = resolve
+    })
+    const staged = saves({ maxSavesPerConnection: 1, maxSavesPerHost: 1 })
+    const starting = staged.begin('conn-1', at(join(root, 'a.txt')), 1)
+    await vi.waitFor(() => expect(createGate.entered).toBe(true))
+
+    const aborting = staged.abortConnection('conn-1')
+    await expect(staged.begin('conn-1', at(join(root, 'b.txt')), 1)).rejects.toThrow(
+      'staged_save_limit'
+    )
+
+    release()
+    await expect(starting).rejects.toThrow('staged_save_unknown')
+    await aborting
+    expect(temps()).toEqual([])
+    await expect(staged.begin('conn-1', at(join(root, 'b.txt')), 1)).resolves.toEqual(
+      expect.objectContaining({ saveId: expect.any(String) })
+    )
+    await staged.abortConnection('conn-1')
   })
 
   it('never lets another connection continue, commit or abort a save', async () => {
