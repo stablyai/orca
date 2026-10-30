@@ -16,6 +16,7 @@ import { TerminalCreationWork } from '../terminal-creation-work'
 import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../immediate-kill-reply-budget'
 import { createDaemonPtySubprocessHandle } from './subprocess-handle'
 import { spawnNativeDaemonPty } from './native-pty-spawn'
+import { Session } from '../session'
 import {
   _resetConptyStartupTrustForTest,
   CONPTY_NO_INPUT_READER_NOTICE,
@@ -41,6 +42,7 @@ const args = {
 }
 
 const CONPTY_PRELUDE = '\x1b[1t\x1b[c\x1b[?1004h\x1b[?9001h'
+const CAPACITY_MARKER = 'too many consoles in use, max consoles is 128'
 
 /** A pane that writes `chunks` on later ticks, as ConPTY's output socket does. */
 function fakePane(pid: number, chunks: string[], exitCode?: number) {
@@ -111,6 +113,131 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     Object.defineProperty(process, 'platform', platform)
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it.each([
+    {
+      name: 'marker survives pre-listener eviction',
+      startup: `\x1b[c${CAPACITY_MARKER}`,
+      pending: ['x'.repeat(512 * 1024)],
+      detected: true
+    },
+    {
+      name: 'eviction cannot move a late marker into the prefix',
+      startup: `\x1b[c${'x'.repeat(512 * 1024)}`,
+      pending: [CAPACITY_MARKER],
+      detected: false
+    },
+    {
+      name: 'DA1 removal cannot move a marker ending at raw offset 4099 into the prefix',
+      startup: `\x1b[c${'x'.repeat(4096 - CAPACITY_MARKER.length)}${CAPACITY_MARKER}`,
+      pending: [],
+      detected: false
+    },
+    {
+      name: 'marker ending at original offset 4096 qualifies',
+      startup: `\x1b[c${'x'.repeat(4096 - 3 - CAPACITY_MARKER.length)}${CAPACITY_MARKER}`,
+      pending: [],
+      detected: true
+    },
+    {
+      name: 'marker spans the ConPTY handover',
+      startup: `\x1b[c${CAPACITY_MARKER.slice(0, 20)}`,
+      pending: [CAPACITY_MARKER.slice(20)],
+      detected: true
+    },
+    {
+      name: 'WSL output remains unclassified',
+      shellPath: 'C:\\Windows\\System32\\wsl.exe',
+      startup: `\x1b[c${CAPACITY_MARKER}`,
+      pending: [],
+      detected: false
+    }
+  ])(
+    'classifies the original native prefix: $name',
+    async ({ startup, pending, detected, shellPath }) => {
+      const proc = fakePane(990020, [startup])
+      nodePty.spawn.mockReturnValueOnce(proc)
+      const spawned = await spawnNativeDaemonPty({
+        ...args,
+        ...(shellPath ? { shellPath, shellArgs: [] } : {})
+      })
+      const handle = createDaemonPtySubprocessHandle({
+        ...spawned,
+        env: {},
+        sessionId: 'raw-prefix',
+        startupCommandDeliveredInShellArgs: false,
+        startupAgentRecognition: null,
+        startupEvents: spawned.claimStartupEvents?.()
+      })
+      for (const chunk of pending) {
+        proc.emitData(chunk)
+      }
+      proc.emitExit(256)
+      const delivered: string[] = []
+      const onData = handle.onData
+      handle.onData = (callback) =>
+        onData((data) => {
+          delivered.push(data)
+          callback(data)
+        })
+      const exit = vi.fn()
+      const session = new Session({
+        sessionId: 'raw-prefix',
+        subprocess: handle,
+        cols: 80,
+        rows: 24,
+        ownerBackend: shellPath ? 'windows-wsl' : 'windows-conpty',
+        shellReadySupported: false,
+        onExit: exit
+      })
+      expect(exit).toHaveBeenCalledExactlyOnceWith(256)
+      expect(session.exitCause).toEqual({
+        kind: 'exited',
+        exitCode: 256,
+        ...(detected ? { initialOutputDiagnostic: 'git-bash-console-capacity' } : {})
+      })
+      expect(delivered.join('')).toBe(
+        startup.length + pending.join('').length - 3 > 512 * 1024
+          ? pending.join('')
+          : startup.slice(3) + pending.join('')
+      )
+      expect(proc.write).toHaveBeenCalledExactlyOnceWith('\x1b[?61;4c')
+      expect(nodePty.spawn).toHaveBeenCalledOnce()
+      session.dispose()
+      expect(proc.kill).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps operator-close precedence over the raw owner diagnostic', async () => {
+    const proc = fakePane(990021, [`\x1b[c${CAPACITY_MARKER}`])
+    nodePty.spawn.mockReturnValueOnce(proc)
+    const spawned = await spawnNativeDaemonPty(args)
+    const handle = createDaemonPtySubprocessHandle({
+      ...spawned,
+      env: {},
+      sessionId: 'operator-close',
+      startupCommandDeliveredInShellArgs: false,
+      startupAgentRecognition: null,
+      startupEvents: spawned.claimStartupEvents?.()
+    })
+    const report = vi.fn()
+    const session = new Session({
+      sessionId: 'operator-close',
+      subprocess: handle,
+      cols: 80,
+      rows: 24,
+      ownerBackend: 'windows-conpty',
+      shellReadySupported: false,
+      reportReadinessEvent: report
+    })
+    expect(session.beginTermination()).toBe(true)
+    proc.emitExit(256)
+    expect(session.exitCause).toEqual({ kind: 'operator_close' })
+    expect(
+      report.mock.calls.filter(([event]) => event === 'session-initial-output-diagnostic')
+    ).toEqual([])
+    session.dispose()
   })
 
   it('keeps a WSL pane out of a distro the internal allowlist excludes, falling back past it', async () => {

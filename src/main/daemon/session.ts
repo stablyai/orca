@@ -78,7 +78,6 @@ export class Session {
     try {
       this.subprocess.onData((data) => {
         if (!this._disposed) {
-          this.initialOutput.observe(data)
           this.shellReady.ingestSubprocessData(data)
         }
       })

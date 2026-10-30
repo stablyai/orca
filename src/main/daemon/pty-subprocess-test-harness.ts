@@ -52,10 +52,19 @@ const CONPTY_MOCK_PRELUDE = '\x1b[c'
 /** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
 export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
   let sent = false
+  const listeners = new Set<(data: string) => void>()
   return (cb) => {
     if (process.platform === 'win32' && !sent) {
-      sent = true
-      queueMicrotask(() => cb(CONPTY_MOCK_PRELUDE))
+      listeners.add(cb)
+      if (listeners.size === 1) {
+        queueMicrotask(() => {
+          sent = true
+          for (const listener of listeners) {
+            listener(CONPTY_MOCK_PRELUDE)
+          }
+          listeners.clear()
+        })
+      }
     }
   }
 }

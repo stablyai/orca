@@ -49,7 +49,11 @@ describe('process-owned terminal startup failure', () => {
   it('rejects constructor-time death through the real daemon error reply without publishing a phantom terminal', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const events = vi.fn()
-    const sub = subprocess({ kind: 'exited', exitCode: 256 })
+    const sub = subprocess({
+      kind: 'exited',
+      exitCode: 256,
+      initialOutputDiagnostic: 'git-bash-console-capacity'
+    })
     const host = new TerminalHost({ spawnSubprocess: () => sub, reportReadinessEvent: events })
     const socket = new Socket()
     const write = vi.spyOn(socket, 'write').mockReturnValue(true)
