@@ -42,12 +42,15 @@ export function AgentTerminalPreview({
   ptyId,
   terminalInput = null,
   className,
+  scrollbackRows,
   onRequestClose
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
   className?: string
+  /** History rows to replay and keep; a full terminal view passes the pane's scrollback. */
+  scrollbackRows?: number
   onRequestClose?: () => void
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -172,7 +175,7 @@ export function AgentTerminalPreview({
             themeMode: terminalMode,
             cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
             rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
-            scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
+            scrollback: scrollbackRows ?? PREVIEW_SCROLLBACK_BUFFER_ROWS
           }),
           kittyKeyboardModes,
           sessionKey: ptyId,
@@ -245,7 +248,7 @@ export function AgentTerminalPreview({
       refreshInFlight = true
       // Why: a failed or absent transport must show the unavailable message, not a blank dialog.
       const connection = await previewApi
-        .connect(ptyId, { scrollbackRows: PREVIEW_SCROLLBACK_ROWS })
+        .connect(ptyId, { scrollbackRows: scrollbackRows ?? PREVIEW_SCROLLBACK_ROWS })
         .catch(() => null)
       if (disposed) {
         return
@@ -289,6 +292,7 @@ export function AgentTerminalPreview({
     }
   }, [
     ptyId,
+    scrollbackRows,
     terminalTheme,
     terminalMode,
     terminalMinimumContrastRatio,

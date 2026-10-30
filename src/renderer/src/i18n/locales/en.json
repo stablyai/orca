@@ -20078,7 +20078,9 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continue with Terminal Agent",
-          "switchToChatView": "Continue in Chat UI"
+          "switchToChatView": "Continue in Chat UI",
+          "moveToNewWindow": "Move to New Window",
+          "showWindow": "Show Window"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",
@@ -20420,7 +20422,15 @@
         "underOneMinute": "<1m"
       }
     },
+    "detachedTerminal": {
+      "moveBackToMainWindow": "Move Back to Main Window"
+    },
     "terminalPane": {
+      "detachedPlaceholder": {
+        "message": "This terminal is open in another window",
+        "moveBack": "Move Back to Main Window",
+        "showWindow": "Show Window"
+      },
       "TerminalContextMenu": {
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
@@ -22369,6 +22379,7 @@
       "worktreeHistoryBack": "Worktree History Back",
       "worktreeHistoryForward": "Worktree History Forward",
       "tabNewTerminal": "New terminal tab",
+      "tabMoveToNewWindow": "Move terminal tab to new window",
       "tabNewAgent": "New agent tab (default agent)",
       "tabNewBrowser": "New browser tab",
       "tabNewSimulator": "New mobile emulator tab",

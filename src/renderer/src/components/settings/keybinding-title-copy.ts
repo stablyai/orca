@@ -64,6 +64,8 @@ const STATIC_TITLE_COPY = {
   'worktree.history.forward': () =>
     translate('keybindings.title.worktreeHistoryForward', 'Worktree History Forward'),
   'tab.newTerminal': () => translate('keybindings.title.tabNewTerminal', 'New terminal tab'),
+  'tab.moveToNewWindow': () =>
+    translate('keybindings.title.tabMoveToNewWindow', 'Move terminal tab to new window'),
   'tab.newAgent': () => translate('keybindings.title.tabNewAgent', 'New agent tab (default agent)'),
   'tab.newBrowser': () => translate('keybindings.title.tabNewBrowser', 'New browser tab'),
   'tab.newBrowserSplitRight': () =>

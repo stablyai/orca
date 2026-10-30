@@ -111,11 +111,17 @@ export function buildFullWorktreePurgeState(
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
   const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
+  for (const tabId of doomed.doomedTabIds) {
+    if (s.detachedTerminalByTabId && tabId in s.detachedTerminalByTabId) {
+      void window.api?.detachedTerminal?.close(tabId)
+    }
+  }
   const omitters = createWorktreePurgeOmitters(s, worktreeIdSet, doomed)
   const {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
     pruneRightSidebarTabByWorktree,
+    omitByTabId,
     omitByPaneKeyTabPrefix
   } = omitters
 
@@ -163,6 +169,7 @@ export function buildFullWorktreePurgeState(
       nextSleeping,
       changedPaneKeys
     ),
+    detachedTerminalByTabId: omitByTabId(s.detachedTerminalByTabId),
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
     deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(

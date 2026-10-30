@@ -17,6 +17,7 @@ import { registerBrowserTabActivateIpcBridge } from './browser-tab-activate-ipc-
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
+import { registerDetachedTerminalIpcBridge } from './detached-terminal-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
 import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
@@ -93,6 +94,7 @@ export function installAppLifetimeIpcEvents(): () => void {
     remountTerminalTabsAwaitingHostHydration
   )
   registerSettingsAndSidebarIpcBridge(unsubs)
+  registerDetachedTerminalIpcBridge(unsubs)
   registerQuitAndStopAllSessionsIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerPreflightWslRetryIpcBridge(unsubs)

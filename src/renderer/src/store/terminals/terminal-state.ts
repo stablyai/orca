@@ -47,6 +47,8 @@ export type TerminalState = {
   terminalPaneStartsByPaneKey: Record<string, TerminalPaneStart>
   /** Unsaved main-published agent resume outcome scoped to the named terminal. */
   terminalPaneResumeOutcomesByPaneKey: Record<string, TerminalPaneResumeOutcome>
+  /** Window-local view state. Deliberately excluded from WorkspaceSessionState. */
+  detachedTerminalByTabId: Record<string, { ptyId: string }>
   /** Local-only parked scrollback by tab/leaf; never upload, read via resolveLeafScrollbackBuffers (WorkspaceSessionState.localOnlyScrollbackByTabId). */
   localOnlyScrollbackByTabId: Record<string, Record<string, string>>
   recentQuickCommandIdByGroup: Record<string, string>

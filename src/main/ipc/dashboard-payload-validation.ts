@@ -276,7 +276,7 @@ function isDashboardCard(value: unknown): boolean {
   )
 }
 
-function isDashboardTerminalInput(value: unknown): boolean {
+export function isDashboardTerminalInput(value: unknown): boolean {
   if (value === undefined) {
     return true
   }
