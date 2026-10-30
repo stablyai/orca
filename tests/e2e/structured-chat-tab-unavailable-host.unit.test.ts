@@ -26,7 +26,7 @@ vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
 
 async function refusedRuntime(ids = [B, C]) {
   const rig = await authorityProfile(ids)
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   const path = journalDatabasePath(root),
     journal = readFileSync(path)
   writeFileSync(path, 'fixture: unreadable SQLite journal')

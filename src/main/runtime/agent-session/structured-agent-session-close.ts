@@ -54,6 +54,7 @@ export async function closeStructuredAgentSessionChild(
       : options.surface
   const admitClose = options.admitClose
   let admitted = admitClose === undefined
+  let closeFailure: string | undefined
   try {
     await host.close(
       sessionId,
@@ -66,24 +67,19 @@ export async function closeStructuredAgentSessionChild(
         : undefined
     )
   } catch (error) {
-    if (!structuredSessionCloseSettled(sessionId)) {
-      return {
-        stopped: false,
-        closeAttempted: true,
-        reason: error instanceof Error ? error.message : String(error)
-      }
-    }
+    closeFailure = error instanceof Error ? error.message : String(error)
   } finally {
     // A refused close leaves the live worker's ownership and retry edges intact.
     if (admitted) {
       options.afterClose?.()
     }
   }
-  if (!structuredSessionCloseSettled(sessionId)) {
+  if (!admitted || !structuredSessionCloseSettled(sessionId)) {
     return {
       stopped: false,
       closeAttempted: true,
       reason:
+        closeFailure ??
         observeStructuredSession(sessionId).reason ??
         'The structured session is still attached after close.'
     }
