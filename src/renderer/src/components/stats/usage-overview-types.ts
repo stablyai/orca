@@ -18,8 +18,13 @@ import type {
   MuseUsageScanState,
   MuseUsageSummary
 } from '../../../../shared/muse-usage-types'
+import type {
+  OmpUsageDailyPoint,
+  OmpUsageScanState,
+  OmpUsageSummary
+} from '../../../../shared/omp-usage-types'
 
-export type UsageProviderId = 'claude' | 'codex' | 'opencode' | 'muse'
+export type UsageProviderId = 'claude' | 'codex' | 'opencode' | 'muse' | 'omp'
 
 export type UsageProviderOverview = {
   id: UsageProviderId
@@ -30,7 +35,8 @@ export type UsageProviderOverview = {
   lastScanCompletedAt: number | null
   lastScanError: string | null
   sessions: number
-  activityLabel: 'turns' | 'events'
+  /** omp records sessions only, so its overview row reports no separate turns/events count. */
+  activityLabel: 'turns' | 'events' | 'sessions'
   activityCount: number
   totalTokens: number
   newInputTokens: number
@@ -52,6 +58,7 @@ export type UsageOverviewDailyPoint = {
   codexTokens: number
   openCodeTokens: number
   museTokens: number
+  ompTokens: number
   intensity: 0 | 1 | 2 | 3 | 4
 }
 
@@ -97,5 +104,14 @@ export type UsageOverviewInput = {
     scanState: MuseUsageScanState | null
     summary: MuseUsageSummary | null
     daily: MuseUsageDailyPoint[]
+  }
+  /**
+   * omp daily totals, merged into the combined series when supplied. The overview provider rows
+   * (`buildUsageOverview`) stay on the four turn/event providers until omp gains its own sessions row.
+   */
+  omp?: {
+    scanState: OmpUsageScanState | null
+    summary: OmpUsageSummary | null
+    daily: OmpUsageDailyPoint[]
   }
 }

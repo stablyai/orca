@@ -14,7 +14,7 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
-import { getRecentUsageDays } from './usage-overview-daily-series'
+import { buildDailyOverview, getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 
 function enabledClaudeScanState(): ClaudeUsageScanState {
@@ -308,6 +308,44 @@ describe('usage overview model', () => {
     expect(overview.hasPartialCost).toBe(false)
   })
 
+  it('merges omp daily totals into the combined series', () => {
+    const daily = buildDailyOverview({
+      claude: { scanState: null, summary: null, daily: [] },
+      codex: { scanState: null, summary: null, daily: [] },
+      opencode: { scanState: null, summary: null, daily: [] },
+      muse: { scanState: null, summary: null, daily: [] },
+      omp: {
+        scanState: null,
+        summary: null,
+        daily: [
+          {
+            day: '2026-05-14',
+            inputTokens: 10,
+            cacheReadTokens: 2,
+            cacheWriteTokens: 1,
+            outputTokens: 5,
+            reasoningTokens: 40,
+            totalTokens: 18,
+            costUsd: 0.2
+          }
+        ]
+      }
+    })
+
+    expect(daily).toEqual([
+      {
+        day: '2026-05-14',
+        totalTokens: 18,
+        claudeTokens: 0,
+        codexTokens: 0,
+        openCodeTokens: 0,
+        museTokens: 0,
+        ompTokens: 18,
+        intensity: 4
+      }
+    ])
+  })
+
   it('pads recent usage days with zero-token cells', () => {
     const recent = getRecentUsageDays(
       [
@@ -318,6 +356,7 @@ describe('usage overview model', () => {
           codexTokens: 2_000,
           openCodeTokens: 0,
           museTokens: 0,
+          ompTokens: 0,
           intensity: 4
         }
       ],
@@ -333,6 +372,7 @@ describe('usage overview model', () => {
         codexTokens: 0,
         openCodeTokens: 0,
         museTokens: 0,
+        ompTokens: 0,
         intensity: 0
       },
       {
@@ -342,6 +382,7 @@ describe('usage overview model', () => {
         codexTokens: 2_000,
         openCodeTokens: 0,
         museTokens: 0,
+        ompTokens: 0,
         intensity: 4
       },
       {
@@ -351,6 +392,7 @@ describe('usage overview model', () => {
         codexTokens: 0,
         openCodeTokens: 0,
         museTokens: 0,
+        ompTokens: 0,
         intensity: 0
       }
     ])

@@ -5043,6 +5043,50 @@
           }
         }
       },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Token usage"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "Period",
+          "periodAria": "Usage period",
+          "periodDays": "{{days}} days",
+          "scope": "Scope",
+          "scopeAria": "Usage scope",
+          "scopeAll": "All local usage",
+          "refresh": "Refresh usage data",
+          "loading": "Loading usage…",
+          "loadFailed": "Could not load usage data.",
+          "empty": "No local usage found yet. Enable a usage provider in Settings → Stats & Usage.",
+          "totalTokens": "Total tokens",
+          "estimatedCost": "Est. cost",
+          "window": "Last {{days}} days",
+          "openFullStats": "Open full stats"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "Quotas",
+          "description": "Subscription windows reported by each provider. Scope does not change quotas.",
+          "empty": "No subscription quotas reported yet."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "Daily tokens",
+          "description": "Input, cached, and output tokens by day.",
+          "gridAria": "Daily token usage",
+          "cached": "Cached",
+          "reasoning": "Reasoning: {{tokens}} tokens",
+          "cost": "Est. cost: {{cost}}",
+          "empty": "No token usage in this period yet."
+        },
+        "UsageDashboardModelTable": {
+          "title": "Models",
+          "description": "Tokens and estimated cost by model in the last {{days}} days.",
+          "provider": "Provider",
+          "providerOmp": "omp",
+          "cache": "Cache",
+          "reasoning": "Reasoning",
+          "empty": "No model usage in this period yet."
+        }
+      },
       "stats": {
         "ClaudeUsageDailyChart": {
           "2a6360c7cb": "Cache write",
@@ -6734,11 +6778,6 @@
                 "62e71f2d5d": "Create workspace for {{value0}}"
               }
             }
-          }
-        },
-        "usageDashboard": {
-          "UsageDashboardDrawer": {
-            "title": "Token usage"
           }
         },
         "sidebar": {

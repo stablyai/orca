@@ -33,7 +33,8 @@ function emptyDailyTotals(day: string): Omit<UsageOverviewDailyPoint, 'intensity
     claudeTokens: 0,
     codexTokens: 0,
     openCodeTokens: 0,
-    museTokens: 0
+    museTokens: 0,
+    ompTokens: 0
   }
 }
 
@@ -69,6 +70,14 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
     byDay.set(entry.day, current)
   }
 
+  // Resolution 8: omp reports reasoning beside output, so the combined total uses the reported sum.
+  for (const entry of input.omp?.daily ?? []) {
+    const current = byDay.get(entry.day) ?? emptyDailyTotals(entry.day)
+    current.totalTokens += entry.totalTokens
+    current.ompTokens += entry.totalTokens
+    byDay.set(entry.day, current)
+  }
+
   let maxTokens = 0
   // Iterate large histories instead of exceeding V8’s Math.max spread-argument limit.
   for (const entry of byDay.values()) {
@@ -82,7 +91,8 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
     }))
 }
 
-function formatLocalDay(date: Date): string {
+/** Local-midnight `YYYY-MM-DD` key shared by every day-windowed usage view. */
+export function formatLocalDay(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
