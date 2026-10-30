@@ -42,7 +42,7 @@ export function FlowDiagram({
   frame: Pick<ChatDemoFrame, 'nodes' | 'arrows'>
 }): JSX.Element {
   return (
-    <div className="flex items-end pt-[2px] pb-[10px]">
+    <div className="flex items-end pt-[5px] pb-[10px]">
       {flow.map((node, index) => (
         <div key={node.name} className="contents">
           <span
@@ -246,7 +246,7 @@ export function ChatUiHereFeatureTipVisual(): JSX.Element {
     >
       {/* Turning reduced motion on mid-loop jumps straight to the finished still. */}
       <div className="flex h-[22rem] w-full max-w-[22rem] flex-col overflow-hidden rounded-xl border border-border/80 bg-chat-canvas text-left tracking-[0.01em] shadow-xs motion-reduce:**:transition-none">
-        <div className="flex h-10 shrink-0 items-stretch border-b border-border bg-card">
+        <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-card">
           <span className="-mb-px flex max-w-[75%] items-center gap-1.5 border-r border-border bg-chat-canvas px-3 text-[11px] whitespace-nowrap text-foreground">
             <span className="shrink-0">
               <AgentIcon agent="claude" size={12} />
