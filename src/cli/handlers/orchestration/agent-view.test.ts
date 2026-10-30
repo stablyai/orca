@@ -292,4 +292,36 @@ describe('orchestration agent views', () => {
       cursor: undefined
     })
   })
+
+  it('says whether the worker was seen starting, and not to resend when it was not', async () => {
+    const flags: [string, string][] = [['task', 'task_1']]
+    const typedIn = await run(
+      'worker-start',
+      flags,
+      { ...OLDER_RUNTIME_START, turnStart: 'unsupported', next: 'End your turn.' },
+      true
+    )
+    expect(JSON.parse(typedIn.stdout).result).toMatchObject({
+      state: 'ready',
+      turnStart: 'unsupported',
+      next: 'Do not resend the task; check it with orca-dev orchestration worker-show --dispatch ctx_1. End your turn.'
+    })
+
+    const unobserved = await run('worker-start', flags, {
+      ...OLDER_RUNTIME_START,
+      state: 'outcome_unknown',
+      turnStart: 'unobserved',
+      lastError: 'The agent did not show that it started the task.'
+    })
+    expect(unobserved.stdout).toContain('Task typed in; its turn start was not observed yet.')
+    expect(unobserved.stdout).toContain(
+      'Next: Do not resend the task; check it with orca-dev orchestration worker-show --dispatch ctx_1.'
+    )
+
+    const started = await run('worker-start', flags, {
+      ...OLDER_RUNTIME_START,
+      prompt: { stages: ['input_accepted', 'turn_started'] }
+    })
+    expect(started.stdout).toContain('\nTurn started.\n')
+  })
 })

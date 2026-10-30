@@ -1,4 +1,8 @@
-import { resolveOrcaCommandsInText, type OrchestrationAgentView } from './agent-view'
+import {
+  renderOrchestrationArgv,
+  resolveOrcaCommandsInText,
+  type OrchestrationAgentView
+} from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 import { formatWorkerStart, type WorkerStartReceipt } from './worker-output'
 
@@ -13,7 +17,17 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   mode?: { mode?: string; preferred?: string; detail: string }
   launch?: { requested?: LaunchChoice; effective?: LaunchChoice }
   recovery?: string
+  turnStart?: string
+  prompt?: { stages?: string[] }
   next?: string
+}
+
+// "ready" only means the task was written; say whether the agent was seen picking it up.
+const TURN_START_TEXT: Record<string, string> = {
+  observed: 'Turn started.',
+  permission: 'Turn started; the agent is waiting on a permission prompt.',
+  unsupported: 'Task typed in; this agent cannot report that its turn started.',
+  unobserved: 'Task typed in; its turn start was not observed yet.'
 }
 
 type WorkerStartFields = {
@@ -23,6 +37,7 @@ type WorkerStartFields = {
   runCreated?: true
   objective?: string
   state: string
+  turnStart?: string
   agent?: string
   model?: string
   effort?: string
@@ -45,6 +60,18 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
       const requested = value.launch?.requested
       const fellBack = value.mode?.mode !== undefined && value.mode.mode !== value.mode.preferred
       const residual = (value.residualResources ?? []).map(describeEffect)
+      // Older runtimes record the observed start only as a prompt stage.
+      const turnStart =
+        value.turnStart ?? (value.prompt?.stages?.includes('turn_started') ? 'observed' : undefined)
+      const unconfirmed = turnStart === 'unsupported' || turnStart === 'unobserved'
+      const show = renderOrchestrationArgv([
+        'orca',
+        'orchestration',
+        'worker-show',
+        '--dispatch',
+        value.dispatchId
+      ])
+      const runtimeNext = value.next && resolveOrcaCommandsInText(value.next)
       return {
         dispatchId: value.dispatchId,
         taskId: value.taskId,
@@ -52,6 +79,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         runCreated: value.run?.created ? true : undefined,
         objective: value.run?.created ? value.run.objective : undefined,
         state: value.state,
+        turnStart,
         agent: effective?.agent ?? requested?.agent ?? undefined,
         // Null unless requested or chosen by a fallback.
         model: effective?.model ?? requested?.model ?? undefined,
@@ -68,7 +96,9 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         nextCommands: value.state === 'ready' ? undefined : value.nextCommands,
         next: value.recovery
           ? resolveOrcaCommandsInText(value.recovery)
-          : value.next && resolveOrcaCommandsInText(value.next)
+          : unconfirmed
+            ? `Do not resend the task; check it with ${show}.${runtimeNext ? ` ${runtimeNext}` : ''}`
+            : runtimeNext
       }
     },
     text: (fields) => {
@@ -86,6 +116,9 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
           `Worker ${fields.dispatchId} ${fields.state}${fields.failedStage ? ` at ${fields.failedStage}` : ''}${fields.lastError ? `: ${fields.lastError}` : ''}`,
           `Task ${fields.taskId}${where}`
         )
+      }
+      if (fields.turnStart && TURN_START_TEXT[fields.turnStart]) {
+        lines.push(TURN_START_TEXT[fields.turnStart])
       }
       if (fields.terminal || fields.workspace) {
         lines.push(
