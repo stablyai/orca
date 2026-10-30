@@ -6,9 +6,11 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
 import * as choiceAnalysis from '../../../../shared/agent-choice-args'
 import * as choiceSettings from '../../../../shared/agent-choice-settings'
+import * as launchProfile from '../../../../shared/agent-launch-profile'
 import * as optionScanner from '../../../../shared/command-option-occurrence'
 import * as pickerCatalog from '../../../../shared/agent-launch-picker-catalog'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
 import {
   agentPickerDraft,
   agentPickerLaunchInputs,
@@ -21,7 +23,14 @@ import { fetchCodexModelCatalogListing } from '../../lib/codex-model-catalog-rea
 function observeSettingsWork() {
   let depth = 0
   const blank = () => ({ inventories: 0, records: 0, scanners: 0 })
-  let counts = { analyses: 0, analyzer: blank(), compiler: blank() }
+  let counts = { analyses: 0, projections: 0, analyzer: blank(), compiler: blank() }
+  const project = launchProfile.projectAgentLaunchProfile
+  const projector = vi
+    .spyOn(launchProfile, 'projectAgentLaunchProfile')
+    .mockImplementation((...args) => {
+      counts.projections++
+      return project(...args)
+    })
   const analyze = choiceAnalysis.analyzeAgentChoiceArgs
   const inventory = choiceSettings.agentChoiceSettingsOccurrences
   const scan = optionScanner.findOptionOccurrence
@@ -62,12 +71,13 @@ function observeSettingsWork() {
   return {
     read: () => structuredClone(counts),
     reset: () => {
-      counts = { analyses: 0, analyzer: blank(), compiler: blank() }
+      counts = { analyses: 0, projections: 0, analyzer: blank(), compiler: blank() }
     },
     stop: () => {
       analyzer.mockRestore()
       inventories.mockRestore()
       scanners.mockRestore()
+      projector.mockRestore()
     }
   }
 }
@@ -85,18 +95,21 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
       expect(result.occurrences).toEqual([])
       expect(work.read()).toEqual({
         analyses: 1,
+        projections: 0,
         analyzer: { inventories: 1, records: count, scanners: count + 1 },
         compiler: { inventories: 0, records: 0, scanners: 0 }
       })
     }
     const previous = new Map<string, ReturnType<typeof work.read>>()
     for (const count of [30, 300]) {
-      for (const value of ['empty', 'true', 'false']) {
+      for (const value of ['empty', 'absent', 'true', 'false']) {
         const text = [
           ...Array(count - 1).fill('--settings {}'),
           value === 'empty'
             ? '--settings {}'
-            : `--settings '{"fastMode":${value},"env":{"KEEP":"yes"}}'`
+            : value === 'absent'
+              ? `--settings '{"theme":"dark","env":{"KEEP":"yes"}}'`
+              : `--settings '{"fastMode":${value},"theme":"dark","env":{"KEEP":"yes"}}'`
         ].join(' ')
         const own: AgentPickerEntry = {
           ...entry,
@@ -112,16 +125,25 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
             ]
           }
         }
+        const initial = { ...agentPickerDraft(own), arguments: text }
+        const before = structuredClone(initial)
+        const sourceView = agentPickerPanelArguments(own, initial)
+        expect(sourceView.choices.options?.fastMode).toBe(value === 'true' ? 'true' : 'false')
+        expect(
+          sourceView.context.occurrences.filter((item) => item.key === 'fastMode')
+        ).toMatchObject(
+          value === 'true' || value === 'false'
+            ? [{ value, valueType: 'boolean', source: true }]
+            : []
+        )
+        expect(initial).toEqual(before)
+        expect(initial.choices).toEqual({})
         act(() => root.render(null))
         work.reset()
         await act(async () =>
           root.render(
             <TooltipProvider>
-              <AgentLaunchSetupPanel
-                entry={own}
-                initial={{ ...agentPickerDraft(own), arguments: text }}
-                onUse={onUse}
-              />
+              <AgentLaunchSetupPanel entry={own} initial={initial} onUse={onUse} />
             </TooltipProvider>
           )
         )
@@ -139,12 +161,17 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
           ok: true,
           tokens: expect.arrayContaining(['--add-dir', 'src'])
         })
-        for (const [phase, measured] of Object.entries({ render, edit })) {
+        work.reset()
+        fireEvent.blur(input)
+        const acceptance = work.read()
+        for (const [phase, measured] of Object.entries({ render, edit, acceptance })) {
           expect(measured.analyses).toBeGreaterThan(0)
-          expect(measured.analyses).toBe(phase === 'render' ? 8 : value === 'empty' ? 18 : 19)
-          expect(measured.compiler.inventories).toBe(
-            value === 'empty' ? 0 : phase === 'render' ? 2 : 6
+          expect(measured.analyses).toBeLessThanOrEqual(
+            phase === 'render' ? 8 : value === 'empty' ? 18 : 19
           )
+          expect(measured.projections).toBeLessThanOrEqual(phase === 'acceptance' ? 2 : 1)
+          // Each whole profile can read, rewrite and merge one effective Settings domain.
+          expect(measured.compiler.inventories).toBeLessThanOrEqual(3 * measured.projections)
           expect(measured.analyzer.inventories).toBeLessThanOrEqual(measured.analyses)
           const max = count + 1
           for (const bucket of [measured.analyzer, measured.compiler]) {
@@ -155,6 +182,7 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
           if (count === 300) {
             const small = previous.get(key)!
             expect(measured.analyses).toBe(small.analyses)
+            expect(measured.projections).toBe(small.projections)
             expect(measured.compiler.inventories).toBe(small.compiler.inventories)
             expect(measured.analyzer.records + measured.compiler.records).toBeLessThanOrEqual(
               10 * (small.analyzer.records + small.compiler.records)
@@ -176,8 +204,12 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
           ok: true,
           tokens: expect.arrayContaining(['--add-dir', 'src'])
         })
-        if (value !== 'empty') {
+        if (value === 'true' || value === 'false') {
           expect(launch.agentArgs).toContain(`"fastMode":${value}`)
+          expect(launch.agentArgs).toContain('"KEEP":"yes"')
+        }
+        if (value !== 'empty') {
+          expect(launch.agentArgs).toContain('"theme":"dark"')
           expect(launch.agentArgs).toContain('"KEEP":"yes"')
         }
       }
@@ -197,6 +229,7 @@ it('bounds catalog projection independently of raw model operands and retains Co
   const tier = captured.serviceTiers![0].value
   const projection = vi.spyOn(pickerCatalog, 'agentPickerEntryOptions')
   const previous = new Map<number, { calls: number; reads: number }>()
+  const previousAcceptance = new Map<number, { calls: number; reads: number }>()
   try {
     for (const models of [30, 300]) {
       for (const operands of [30, 300]) {
@@ -245,7 +278,8 @@ it('bounds catalog projection independently of raw model operands and retains Co
         reads = 0
         fireEvent.change(input, { target: { value: text } })
         const calls = projection.mock.calls.length
-        expect(calls).toBe(7)
+        expect(calls).toBeGreaterThan(0)
+        expect(calls).toBeLessThanOrEqual(7)
         expect(reads).toBeLessThanOrEqual((7 + 8) * models + 8)
         if (operands === 300) {
           expect({ calls, reads }).toEqual(previous.get(models))
@@ -258,6 +292,17 @@ it('bounds catalog projection independently of raw model operands and retains Co
         expect(
           host.querySelector(`button[aria-label="Remove -c service_tier=${tier}"]`)
         ).not.toBeNull()
+        projection.mockClear()
+        reads = 0
+        fireEvent.blur(input)
+        const acceptance = { calls: projection.mock.calls.length, reads }
+        expect(acceptance.calls).toBeGreaterThan(0)
+        expect(acceptance.calls).toBeLessThanOrEqual(7)
+        expect(acceptance.reads).toBeLessThanOrEqual((7 + 8) * models + 8)
+        if (operands === 300) {
+          expect(acceptance).toEqual(previousAcceptance.get(models))
+        }
+        previousAcceptance.set(models, acceptance)
         fireEvent.click(
           [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
         )

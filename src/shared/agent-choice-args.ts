@@ -9,15 +9,17 @@ import { agentPermissionArgs } from './tui-agent-permission-choice'
 import { readAgentChoiceSettings, agentChoiceSettingsOccurrences } from './agent-choice-settings'
 import { quoteStartupArg, tokenizeStartupCommand } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
-import { agentChoiceConfigValue } from './agent-choice-cli-apply'
+import { agentChoiceConfigString, agentChoiceConfigValue } from './agent-choice-cli-apply'
 
-type ChoiceOccurrence = {
+export type ChoiceOccurrence = {
   key: string
   value: string
   start: number
   end: number
   lift: boolean
   owned: boolean
+  source?: boolean
+  valueType?: 'string' | 'boolean'
   replacement?: string
 }
 
@@ -92,6 +94,7 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
         let count = 1
         let value = ''
         let lift = false
+        let valueType: 'string' | 'boolean' | undefined = 'string'
         let replacement: string | undefined
         if (form.kind === 'recipe') {
           count = form.words.length
@@ -137,6 +140,7 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
             }
             const { [form.key]: _removed, ...remaining } = settings
             replacement = `${name} ${quoteStartupArg(JSON.stringify(remaining), 'posix')}`
+            valueType = typeof choice === 'boolean' ? 'boolean' : 'string'
             value = String(choice)
           }
           if (form.kind === 'config') {
@@ -144,15 +148,16 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
             if (configValue === undefined) {
               continue
             }
-            value = configValue
-            lift &&=
-              /^[A-Za-z_][A-Za-z0-9_./:-]*$/.test(value) && !/^(true|false|inf|nan)$/i.test(value)
+            const decoded = agentChoiceConfigString(configValue)
+            valueType = decoded === undefined ? undefined : 'string'
+            value = decoded ?? configValue
+            lift &&= decoded !== undefined
           }
         }
         const spans = first.parsed.spans.slice(index, index + count)
         const start = spans[0].start
         const end = spans.at(-1)?.end ?? start
-        const agreed = originals.every((original) => {
+        const sourceAgreed = originals.every((original, grammarIndex) => {
           if (!original) {
             return false
           }
@@ -162,7 +167,7 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
             original.parsed.spans[at + count - 1]?.end === end &&
             spans.every(
               (_, offset) =>
-                !original.parsed.spans[at + offset]?.divergesFromShell &&
+                (grammarIndex === 2 || !original.parsed.spans[at + offset]?.divergesFromShell) &&
                 original.parsed.tokens[at + offset] === first.parsed.tokens[index + offset]
             ) &&
             (original.analysis.optionIndices.has(at) || (key === 'permissionMode' && at === 0)) &&
@@ -172,6 +177,16 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
               ))
           )
         })
+        const agreed =
+          sourceAgreed &&
+          originals.every(
+            (original) =>
+              original &&
+              spans.every((span) => {
+                const at = original.offsets.get(span.start)
+                return at !== undefined && !original.parsed.spans[at].divergesFromShell
+              })
+          )
         if (!seen.has(`${key}:${start}`)) {
           seen.add(`${key}:${start}`)
           occurrences.push({
@@ -181,6 +196,8 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
             end,
             lift: lift && agreed,
             owned: agreed,
+            source: sourceAgreed && valueType !== undefined,
+            ...(valueType ? { valueType } : {}),
             ...(replacement !== undefined ? { replacement } : {})
           })
         }

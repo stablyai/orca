@@ -38,10 +38,12 @@ function configure(patch: Partial<GlobalSettings>) {
 }
 function Row({
   agent = 'claude',
-  actionId = 'fixChecks'
+  actionId = 'fixChecks',
+  dirty = false
 }: {
   agent?: TuiAgent
   actionId?: AiActionId
+  dirty?: boolean
 }) {
   const [draft, setDraft] = useState({ agentArgs: '--saved', commandInputTemplate: 'Do the work' })
   const [preferences, setPreferences] = useState<SourceControlActionLaunchPreferences | undefined>({
@@ -59,6 +61,7 @@ function Row({
         draftValue={draft}
         baseValue={draft}
         isSavingTemplate={false}
+        hasUnsavedChanges={dirty}
         launchPreferences={preferences}
         onLaunchPreferencesChange={(_id, value, agentArgs) => {
           setPreferences(value)
@@ -226,3 +229,51 @@ it.each(['', null, '--verbose', undefined])(
     expect(controls.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
   }
 )
+
+it('isolates equal-baseline row buffers and delegation, retains them on close, and invalidates both on Discard', async () => {
+  configure({ experimentalNativeChat: false })
+  render(
+    <>
+      <div data-testid="first-row">
+        <Row dirty />
+      </div>
+      <div data-testid="second-row">
+        <Row dirty />
+      </div>
+    </>
+  )
+  const first = within(screen.getByTestId('first-row'))
+  const second = within(screen.getByTestId('second-row'))
+  const open = async (row: typeof first) => {
+    const trigger = row.getByRole('button', { name: 'Select agent' })
+    await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('disabled', false)
+    )
+  }
+  const close = () => {
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+    expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+  }
+  await open(first)
+  fireEvent.click(screen.getByRole('button', { name: 'Remove --model sonnet' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+    target: { value: '--unaccepted' }
+  })
+  close()
+  await open(second)
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--saved')
+  expect(screen.getByRole('button', { name: 'Remove --model sonnet' })).toBeDefined()
+  close()
+  await open(first)
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--unaccepted')
+  expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
+  close()
+  fireEvent.click(first.getByRole('button', { name: 'Discard' }))
+  await open(first)
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--saved')
+  expect(screen.getByRole('button', { name: 'Remove --model sonnet' })).toBeDefined()
+})

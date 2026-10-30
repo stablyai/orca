@@ -1,9 +1,17 @@
+import { entry } from './source-control-agent-picker-test-fixture'
 import { readFileSync } from 'node:fs'
+
 import { z } from 'zod'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as reconciliation from '../../../../shared/agent-choice-reconciliation'
+import {
+  agentPickerEffectiveChoices,
+  agentPickerLaunchInputs
+} from '../../../../shared/agent-launch-picker'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import {
+  acceptAgentPickerArguments,
   applyAgentPickerEdit,
   type AgentPickerEdit
 } from '../../../../shared/agent-launch-picker-edits'
@@ -13,30 +21,14 @@ import {
   selectSourceControlActionRecipe
 } from '../../../../shared/source-control-action-selection'
 import { projectSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
+
 import {
   applySourceControlPickerDraft,
   sourceControlPickerDraft
 } from './source-control-agent-launch-picker'
 
-const entry: AgentPickerEntry = {
-  agent: 'claude',
-  label: 'Claude',
-  ownerKey: 'recipe-test',
-  rows: [{ agent: 'claude', kind: 'chat' }],
-  surfaces: ['chat', 'terminal'],
-  defaultSurface: 'chat',
-  terminal: { permissionMode: 'own' },
-  structured: { model: 'sonnet', permissionMode: 'ask' },
-  arguments: '--agents-default',
-  catalog: {
-    origin: 'probe',
-    fetchedAt: 1,
-    models: [
-      { id: 'opus', label: 'Opus', isDefault: true, efforts: [], supportsFastMode: true },
-      { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
-    ]
-  }
-}
 const captured = () =>
   captureSourceControlActionSelection({
     actionId: 'resolveConflicts',
@@ -255,7 +247,7 @@ it('preserves explicit raw replacement back to default/parent, empty, and raw-la
       }
       const saved = applySourceControlPickerDraft(selection, entry, draft)
       expect(saved.current.agentArgs).toBe(text)
-      expect(draft.recipeEdits?.argumentsAuthored).toBe(true)
+      expect(acceptAgentPickerArguments(entry, draft).recipeEdits?.argumentsAuthored).toBe(true)
       if (saved.source.scope === 'repo') {
         expect(saved.source.ownsArgs).toBe(true)
       }
@@ -317,7 +309,100 @@ it('keeps captured parent Args and independent permission/model sources on choic
   const rawSaved = applySourceControlPickerDraft(inheritedCarriers, entry, raw)
   expect(rawSaved.current.agentArgs).toBe('--debug')
   expect(rawSaved.source.authoredPreferences).toBeUndefined()
+  const accepted = acceptAgentPickerArguments(entry, raw)
+  expect(accepted.choices).toEqual({})
+  expect(agentPickerLaunchInputs(accepted, entry).sessionOptions).toBeUndefined()
+  expect(rawSaved.source.scope === 'repo' && rawSaved.source.parentPreferences).toEqual(
+    inheritedCarriers.source.scope === 'repo' && inheritedCarriers.source.parentPreferences
+  )
 })
+
+it.each(['global', 'own repo', 'inherited repo'] as const)(
+  'replaces only the residual and Settings siblings for an initial %s source',
+  (scope) => {
+    const raw = `--permission-mode plan --settings '{"fastMode":true,"theme":"light"}' --verbose`
+    const parent = captured()
+    const selection =
+      scope === 'global'
+        ? canonicalSourceControlActionSelection({ agentId: 'claude', agentArgs: raw })
+        : {
+            ...parent,
+            current: { ...parent.current, agentArgs: raw },
+            source: {
+              ...parent.source,
+              ownsArgs: scope === 'own repo',
+              authoredPreferences: undefined
+            }
+          }
+    for (const text of [
+      `--settings '{"theme":"dark"}' --debug`,
+      '--debug',
+      '',
+      `--settings '{"fastMode":false,"theme":"dark"}' --debug`
+    ]) {
+      const start = sourceControlPickerDraft(selection, entry, 'terminal')
+      expect(agentPickerPanelArguments(entry, start).text).toContain('"theme":"light"')
+      const draft = acceptAgentPickerArguments(
+        entry,
+        applyAgentPickerEdit(entry, start, { kind: 'arguments', text })
+      )
+      const saved = applySourceControlPickerDraft(selection, entry, draft)
+      const projection = projectSourceControlActionLaunch(
+        selectSourceControlActionRecipe(saved),
+        'claude',
+        { basePrompt: 'fix' }
+      )
+      expect(saved.source.authoredPreferences).toEqual(
+        text.includes('false')
+          ? {
+              agentId: 'claude',
+              modelSelection: {
+                base: 'default',
+                options: { fastMode: { agentId: 'claude', value: 'false' } }
+              }
+            }
+          : undefined
+      )
+      expect(projection.sessionOptions?.model).toBeUndefined()
+      expect(projection.sessionOptions?.effort).toBeUndefined()
+      expect(draft.choices.model).toBeUndefined()
+      expect(draft.choices.options?.effort).toBeUndefined()
+      const full = agentPickerLaunchInputs(draft, entry)
+      const parse = (value: string | undefined) => {
+        const parsed = tokenizeStartupCommand(value ?? '', 'posix')
+        if (!parsed.ok) {
+          throw new Error(parsed.error)
+        }
+        return parsed.tokens
+      }
+      expect(parse(full.agentArgs)).toEqual(parse(projection.agentArgs))
+      expect(projection.agentArgs).not.toContain('light')
+      expect(projection.agentArgs).not.toContain('--verbose')
+      if (text) {
+        expect(projection.agentArgs).toContain('--debug')
+      }
+      if (scope === 'inherited repo') {
+        expect(projection.agentArgs).toBe(text)
+        expect(draft.choices).toEqual(
+          text.includes('false') ? { options: { fastMode: 'false' } } : {}
+        )
+      } else {
+        expect(parse(projection.agentArgs)).toEqual(
+          expect.arrayContaining(['--permission-mode', 'plan'])
+        )
+        expect(projection.agentArgs).toContain(
+          `"fastMode":${text.includes('false') ? 'false' : 'true'}`
+        )
+        expect(draft.choices.options?.fastMode).toBe(text.includes('false') ? 'false' : 'true')
+      }
+      if (text.includes('dark')) {
+        expect(projection.agentArgs).toContain('"theme":"dark"')
+      } else {
+        expect(projection.agentArgs).not.toContain('theme')
+      }
+    }
+  }
+)
 
 it('folds chip removal, literal model changes and opaque settings without an edit-count journal', () => {
   const selection = canonicalSourceControlActionSelection({ agentId: 'claude' })
@@ -438,9 +523,9 @@ it('distinguishes identical complete projections with different authored ownersh
   let h2 = applyAgentPickerEdit(inventory, start, { kind: 'arguments', text: '--debug' })
   h2 = applyAgentPickerEdit(inventory, h2, { kind: 'arguments', text: '--verbose' })
   h2 = applyAgentPickerEdit(inventory, h2, permission)
-  const { recipeEdits: _receipt1, ...view1 } = h1
-  const { recipeEdits: _receipt2, ...view2 } = h2
-  expect(view1).toEqual(view2)
+  const { recipeEdits: _receipt1, ...view1 } = acceptAgentPickerArguments(inventory, h1)
+  const { recipeEdits: _receipt2, ...view2 } = acceptAgentPickerArguments(inventory, h2)
+  expect(view1.choices).toEqual(view2.choices)
   expect(applySourceControlPickerDraft(selection, inventory, h1).current.agentArgs).toBeUndefined()
   expect(applySourceControlPickerDraft(selection, inventory, h2).current.agentArgs).toBe(
     '--verbose'
@@ -475,3 +560,130 @@ it.each(['claude', 'codex'] as const)(
     ).toMatchObject({ [key]: agent === 'claude' ? 'false' : 'default' })
   }
 )
+
+it('replaces the full unaccepted extent, accepts once, and preserves promoted chips across residual edits', () => {
+  const selection = canonicalSourceControlActionSelection({ agentId: 'claude', agentArgs: '' })
+  let draft = sourceControlPickerDraft(selection, entry, 'terminal')
+  const checkpoint = draft.recipeEdits?.selection
+  for (const text of ['--model sonnet --effort high --verbose', '--verbose', '']) {
+    draft = applyAgentPickerEdit(entry, draft, { kind: 'arguments', text })
+    expect(draft.recipeEdits?.selection).toBe(checkpoint)
+    expect(draft.recipeEdits?.changed).toBe(false)
+  }
+  draft = acceptAgentPickerArguments(entry, draft)
+  expect(project(applySourceControlPickerDraft(selection, entry, draft))).toMatchObject({
+    agentArgs: ''
+  })
+  expect(draft.recipeEdits?.selection.current.argumentChoices).toBeUndefined()
+  for (let length = 1; length <= '--model sonnet'.length; length++) {
+    draft = applyAgentPickerEdit(entry, draft, {
+      kind: 'arguments',
+      text: '--model sonnet'.slice(0, length)
+    })
+    expect(draft.choices.model).not.toBe('s')
+    expect(draft.recipeEdits?.selection.current.argumentChoices).toBeUndefined()
+  }
+  draft = acceptAgentPickerArguments(entry, draft)
+  expect(draft.choices.model).toBe('sonnet')
+  expect(acceptAgentPickerArguments(entry, draft)).toBe(draft)
+  draft = applyAgentPickerEdit(entry, draft, { kind: 'arguments', text: '--debug' })
+  draft = applyAgentPickerEdit(entry, draft, {
+    kind: 'choice',
+    patch: { options: { effort: 'high' } }
+  })
+  const promoted = applySourceControlPickerDraft(selection, entry, draft)
+  expect(project(promoted)).toMatchObject({
+    agentArgs: '--debug',
+    sessionOptions: { model: 'sonnet', effort: 'high' }
+  })
+  expect(promoted.current.argumentChoices?.nodes.map((node) => node.text)).toEqual([
+    '--model sonnet'
+  ])
+  for (const key of ['effort', 'model']) {
+    draft = applyAgentPickerEdit(entry, draft, { kind: 'remove-chip', key })
+    expect(agentPickerEffectiveChoices(entry, draft)).not.toHaveProperty(
+      key === 'model' ? 'model' : 'options.effort'
+    )
+  }
+  const removed = applySourceControlPickerDraft(selection, entry, draft)
+  expect(removed.current.argumentChoices).toBeUndefined()
+  expect(removed.source.authoredPreferences?.modelSelection).toMatchObject({
+    model: { agentId: 'claude', value: null },
+    options: { effort: { agentId: 'claude', value: null } }
+  })
+  const reopened = sourceControlPickerDraft(removed, entry)
+  expect(reopened.delegated).toEqual(expect.arrayContaining(['model', 'effort']))
+  expect(agentPickerEffectiveChoices(entry, reopened).model).toBeUndefined()
+})
+
+it('orders raw and control picks once and gives one-shot and sparse consumers the same choices', () => {
+  const selection = canonicalSourceControlActionSelection({ agentId: 'claude', agentArgs: '' })
+  for (const edits of [
+    [
+      { kind: 'arguments', text: '--model sonnet --effort high --debug' },
+      { kind: 'choice', patch: { model: 'opus' } }
+    ],
+    [
+      { kind: 'choice', patch: { model: 'opus' } },
+      { kind: 'arguments', text: '--model sonnet --effort high --debug' }
+    ]
+  ] satisfies AgentPickerEdit[][]) {
+    const draft = acceptAgentPickerArguments(
+      entry,
+      edits.reduce(
+        (value, edit) => applyAgentPickerEdit(entry, value, edit),
+        sourceControlPickerDraft(selection, entry, 'terminal')
+      )
+    )
+    const saved = project(applySourceControlPickerDraft(selection, entry, draft))
+    const chat = agentPickerLaunchInputs({ ...draft, surface: 'chat' }, entry)
+    expect(saved.sessionOptions?.model).toBe(chat.sessionOptions?.model)
+    expect(saved.sessionOptions?.effort).toBe(chat.sessionOptions?.effort)
+    expect(saved.agentArgs).toBe('--debug')
+    expect(agentPickerLaunchInputs(draft, entry).agentArgs).toContain('--debug')
+    expect(draft.pendingArguments).toBeUndefined()
+  }
+})
+
+it('bounds actual acceptance work and retained source independently of edit history', () => {
+  const reconcile = vi.spyOn(reconciliation, 'reconcileAgentChoiceArgsDetailed')
+  try {
+    const results = []
+    for (const count of [10, 100]) {
+      const selection = canonicalSourceControlActionSelection({ agentId: 'claude', agentArgs: '' })
+      let draft = sourceControlPickerDraft(selection, entry, 'terminal')
+      const acceptedSource = draft.recipeEdits?.selection
+      reconcile.mockClear()
+      const pendingSizes = []
+      for (let index = 0; index < count; index++) {
+        draft = applyAgentPickerEdit(entry, draft, {
+          kind: 'arguments',
+          text: '--model sonnet --effort high --verbose'
+        })
+        draft = applyAgentPickerEdit(entry, draft, { kind: 'arguments', text: '--debug' })
+        pendingSizes.push(JSON.stringify(draft).length)
+      }
+      expect(reconcile).not.toHaveBeenCalled()
+      expect(new Set(pendingSizes).size).toBe(1)
+      expect(draft.recipeEdits?.selection).toBe(acceptedSource)
+      expect(draft.pendingArguments).toBe('--debug')
+      for (let index = 0; index < count; index++) {
+        draft = applyAgentPickerEdit(entry, draft, {
+          kind: 'arguments',
+          text: '--model sonnet --effort high --verbose'
+        })
+        draft = applyAgentPickerEdit(entry, draft, { kind: 'arguments', text: '--debug' })
+        draft = acceptAgentPickerArguments(entry, draft)
+      }
+      results.push({ calls: reconcile.mock.calls.length, size: JSON.stringify(draft).length })
+      expect(draft.pendingArguments).toBeUndefined()
+      expect(draft.recipeEdits?.selection.current.argumentChoices).toBeUndefined()
+      expect(draft.recipeEdits?.selection.current.agentArgs).toBe('--debug')
+    }
+    expect(results[1].calls).toBe(results[0].calls * 10)
+    expect(results[1].size).toBe(results[0].size)
+    expect(results[0].calls).toBeLessThanOrEqual(30)
+  } finally {
+    reconcile.mockRestore()
+  }
+})

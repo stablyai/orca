@@ -88,6 +88,11 @@ describe.each(POWERSHELLS)(
           'look in C:\\dir\\\n',
           'C:\\no-space\\',
           'C:\\no-space\\\n',
+          'model_reasoning_effort="high"',
+          'model="true"',
+          'model="42"',
+          'model="a\\"b"',
+          '{"fastMode":false,"theme":"light","env":{"KEEP":"yes"}}',
           'Fix " --dangerously-bypass-approvals-and-sandbox " thanks'
         ]) {
           // Why assign then splat: the agent wrappers hand their $args to the program this way.
@@ -108,49 +113,50 @@ describe.each(POWERSHELLS)(
   }
 )
 
-describe.each(POWERSHELLS.slice(0, 2))(
-  'agent wrappers under $name',
-  ({ powershell, available }) => {
-    it.skipIf(!available)(
-      'hand a quoted prompt to a .cmd shim intact, without cmd running any of it',
-      async () => {
-        const root = await mkdtemp(join(tmpdir(), 'orca-ps-agent-wrappers-'))
-        try {
-          await writeFile(
-            join(root, 'capture.js'),
-            'console.log(JSON.stringify([require("node:path").parse(process.argv[2]).name, ...process.argv.slice(3)]))'
-          )
-          for (const agent of ['codex', 'claude']) {
-            await writeFile(join(root, `${agent}.cmd`), `@node "%~dp0capture.js" "%~f0" %*\r\n`)
-          }
-          // Why this shape: escaping it as `\"` makes pwsh's .cmd quoting expose `&` to cmd.
-          const prompt = 'a"b & echo INJECTED'
-          const result = await runProcess({
-            program: powershell,
-            args: [
-              '-NoProfile',
-              '-NonInteractive',
-              '-Command',
-              `${getPowerShellAgentWrappers()}\ncodex ${quotePowerShellLiteral(prompt)}\nclaude ${quotePowerShellLiteral(prompt)}`
-            ],
-            cwd: root,
-            env: {
-              ...process.env,
-              PATH: `${root};${process.env.PATH ?? ''}`,
-              ORCA_CODEX_ISOLATE: '0',
-              ORCA_CLAUDE_PROFILE_POINTER: join(root, 'no-pointer')
-            }
-          })
-
-          expect(result.code, JSON.stringify(result)).toBe(0)
-          expect(result.stdout.trim().split(/\r?\n/)).toEqual([
-            JSON.stringify(['codex', prompt]),
-            JSON.stringify(['claude', prompt])
-          ])
-        } finally {
-          await rm(root, { recursive: true, force: true })
+describe.each(POWERSHELLS)('agent wrappers under $name', ({ powershell, prelude, available }) => {
+  it.skipIf(!available)(
+    'hand a quoted prompt to a .cmd shim intact, without cmd running any of it',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ps-agent-wrappers-'))
+      try {
+        await writeFile(
+          join(root, 'capture.js'),
+          'console.log(JSON.stringify([require("node:path").parse(process.argv[2]).name, ...process.argv.slice(3)]))'
+        )
+        for (const agent of ['codex', 'claude']) {
+          await writeFile(join(root, `${agent}.cmd`), `@node "%~dp0capture.js" "%~f0" %*\r\n`)
         }
+        // Why this shape: escaping it as `\"` makes pwsh's .cmd quoting expose `&` to cmd.
+        const prompt = 'a"b & echo INJECTED'
+        const codexArgs = ['-c', 'model_reasoning_effort="high"', '-c', 'model="true"']
+        const claudeArgs = ['--settings', '{"fastMode":false,"theme":"light"}']
+        const result = await runProcess({
+          program: powershell,
+          args: [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `${prelude}\n${getPowerShellAgentWrappers()}\n` +
+              `codex ${[prompt, ...codexArgs].map(quotePowerShellLiteral).join(' ')}\n` +
+              `claude ${[prompt, ...claudeArgs].map(quotePowerShellLiteral).join(' ')}`
+          ],
+          cwd: root,
+          env: {
+            ...process.env,
+            PATH: `${root};${process.env.PATH ?? ''}`,
+            ORCA_CODEX_ISOLATE: '0',
+            ORCA_CLAUDE_PROFILE_POINTER: join(root, 'no-pointer')
+          }
+        })
+
+        expect(result.code, JSON.stringify(result)).toBe(0)
+        expect(result.stdout.trim().split(/\r?\n/)).toEqual([
+          JSON.stringify(['codex', prompt, ...codexArgs]),
+          JSON.stringify(['claude', prompt, ...claudeArgs])
+        ])
+      } finally {
+        await rm(root, { recursive: true, force: true })
       }
-    )
-  }
-)
+    }
+  )
+})

@@ -23,10 +23,11 @@ type RetainedSetup = {
   acceptedBaseline?: string
   draft: AgentPickerDraft
 }
-const appSession = {}
-const sessionDrafts = new WeakMap<object, Map<string, RetainedSetup>>()
+type AgentPickerDraftOwner = object
+const appSession: AgentPickerDraftOwner = {}
+const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()
 
-export function invalidateAgentPickerDrafts(scope: object) {
+export function invalidateAgentPickerDrafts(scope: AgentPickerDraftOwner) {
   sessionDrafts.delete(scope)
 }
 
@@ -80,7 +81,7 @@ export function AgentLaunchSetupButton({
   onUse
 }: {
   entry: AgentPickerEntry
-  draftScope?: object
+  draftScope?: AgentPickerDraftOwner
   draftId?: string
   initial?: AgentPickerDraft
   mode?: 'launch' | 'select'

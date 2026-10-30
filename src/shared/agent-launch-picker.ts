@@ -20,7 +20,10 @@ export {
 } from './agent-launch-picker-catalog'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
-import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
+import {
+  reconcileAgentChoiceArgs,
+  reconcileAgentChoiceArgsDetailed
+} from './agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import type { AgentSessionModelCatalogResult, AgentSessionModelOption } from './agent-session-wire'
 import type { NewTabAgentMenuRow } from './agent-launch-picker-rows'
@@ -50,6 +53,9 @@ export type AgentPickerDraft = {
   choices: AgentDedicatedChoices
   argumentsOwner?: string
   arguments?: string | null
+  pendingArguments?: string
+  delegated?: readonly string[]
+  literalKeys?: readonly string[]
   /** A folded sparse edit receipt; never part of a launch or persisted recipe. */
   recipeEdits?: {
     selection: CurrentActionSelection
@@ -93,7 +99,7 @@ export function agentPickerEffectiveChoices(
               )
             ])
           }).choices
-  return resolveAgentChoiceLayers({
+  const resolved = resolveAgentChoiceLayers({
     agent: entry.agent,
     defaults,
     explicit: agentPickerLaunchChoices(draft).choices,
@@ -105,6 +111,15 @@ export function agentPickerEffectiveChoices(
           : draft.arguments,
     argumentOwner: draft.arguments === undefined ? 'defaults' : 'launch'
   })
+  if (draft.delegated?.includes('model')) {
+    delete resolved.model
+  }
+  for (const key of draft.delegated ?? []) {
+    if (resolved.options) {
+      delete resolved.options[key]
+    }
+  }
+  return resolved
 }
 
 export function editAgentPickerDraft(
@@ -150,7 +165,7 @@ function agentPickerLaunchChoices(draft: AgentPickerDraft) {
   if (draft.surface !== 'terminal' || draft.arguments === undefined) {
     return { choices: draft.choices, userArgs: draft.arguments }
   }
-  const result = reconcileAgentChoiceArgs({
+  const result = reconcileAgentChoiceArgsDetailed({
     agent: draft.agent,
     userArgs: draft.arguments ?? '',
     choices: draft.choices,
@@ -161,6 +176,34 @@ function agentPickerLaunchChoices(draft: AgentPickerDraft) {
       ...Object.keys(draft.choices.options ?? {}),
       ...agentPickerOptions(draft.agent, draft.choices.model, 'terminal').map((option) => option.id)
     ])
+  })
+  const literal = new Set(draft.literalKeys)
+  // Inline boolean Settings keep their existing typed domain projection and JSON siblings.
+  for (const occurrence of result.recognized) {
+    if (occurrence.valueType === 'boolean') {
+      literal.delete(occurrence.key)
+    }
+  }
+  const sourced = {
+    ...(literal.has('model') ? { model: result.choices.model } : {}),
+    ...(literal.has('permissionMode') ? { permissionMode: result.choices.permissionMode } : {}),
+    options: Object.fromEntries(
+      Object.entries(result.choices.options ?? {}).filter(([key]) => literal.has(key))
+    )
+  }
+  const explicit = {
+    ...(!literal.has('model') ? { model: result.choices.model } : {}),
+    ...(!literal.has('permissionMode') ? { permissionMode: result.choices.permissionMode } : {}),
+    options: Object.fromEntries(
+      Object.entries(result.choices.options ?? {}).filter(([key]) => !literal.has(key))
+    )
+  }
+  result.choices = resolveAgentChoiceLayers({
+    agent: draft.agent,
+    defaults: sourced,
+    explicit,
+    userArgs: result.userArgs,
+    argumentOwner: 'launch'
   })
   return result
 }

@@ -1,5 +1,5 @@
 import { composeAgentLaunchModel } from './agent-session-option-launch'
-import { analyzeAgentChoiceArgs } from './agent-choice-args'
+import { analyzeAgentChoiceArgs, type ChoiceOccurrence } from './agent-choice-args'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
@@ -19,6 +19,11 @@ export type AgentChoiceArgsInput = {
   mode: 'load' | 'arguments-edit' | 'choice-edit'
   keys: ReadonlySet<string>
   patch?: AgentChoicePatch
+  /** Prefix carriers belong to the accepted source, outside this residual replacement. */
+  retainedPrefixLength?: number
+  retainedKeys?: ReadonlySet<string>
+  permissionRanges?: readonly ChoiceOccurrence[]
+  sourceEdit?: boolean
 }
 
 export function reconcileAgentChoiceArgs(input: AgentChoiceArgsInput): {
@@ -34,6 +39,7 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
   const analysis = analyzeAgentChoiceArgs(agent, userArgs)
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   const choices = { ...input.choices, options: { ...input.choices.options } }
+  const effects: AgentChoicePatch = {}
   const patched = (key: string) =>
     key === 'model'
       ? patch?.model
@@ -46,25 +52,42 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
       : key === 'permissionMode'
         ? choices.permissionMode
         : choices.options[key]
-  const write = (key: string, value: string | null) => {
+  const write = (key: string, value: string | null, explicit = true, target = choices) => {
+    const publish = mode !== 'load' && explicit
     if (key === 'model') {
-      if (value !== choices.model) {
+      if (value !== target.model) {
         const independent = getAgentSessionOptionLaunchCatalog(agent)?.unknownModelOptions ?? []
-        choices.options = Object.fromEntries(
-          Object.entries(choices.options).filter(
-            ([id]) =>
-              (value === null || choices.model === undefined) &&
+        target.options = Object.fromEntries(
+          Object.entries(target.options).filter(([id]) => {
+            const retain =
+              (value === null || target.model === undefined) &&
               independent.some((option) => option.id === id && option.apply.launchArgs)
-          )
+            if (!retain && publish) {
+              effects.options = { ...effects.options, [id]: null }
+            }
+            return retain
+          })
         )
       }
-      choices.model = value ?? undefined
+      target.model = value ?? undefined
+      if (publish) {
+        effects.model = value
+      }
     } else if (key === 'permissionMode') {
-      choices.permissionMode = agentPermissionChoices(agent).find((choice) => choice === value)
+      target.permissionMode = agentPermissionChoices(agent).find((choice) => choice === value)
+      if (publish) {
+        effects.permissionMode = target.permissionMode ?? 'default'
+      }
     } else if (value === null) {
-      delete choices.options[key]
+      delete target.options[key]
+      if (publish) {
+        effects.options = { ...effects.options, [key]: null }
+      }
     } else {
-      choices.options[key] = value
+      target.options[key] = value
+      if (publish) {
+        effects.options = { ...effects.options, [key]: value }
+      }
     }
   }
   const composedModel = composeAgentLaunchModel(agent, {
@@ -84,14 +107,21 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
   const counts = new Map<string, number>()
   occurrences.forEach((entry) => counts.set(entry.key, (counts.get(entry.key) ?? 0) + 1))
   const selected = occurrences.filter((entry, _, all) => {
-    if (!keys.has(entry.key)) {
+    if (
+      !keys.has(entry.key) ||
+      input.retainedKeys?.has(entry.key) ||
+      entry.start < (input.retainedPrefixLength ?? 0)
+    ) {
       return false
     }
     const next = mode === 'choice-edit' ? patched(entry.key) : undefined
     if (next !== undefined) {
       const removing =
         next === null || next === 'default' || (entry.key === 'permissionMode' && next === 'own')
-      return entry.owned && (!removing || entry.value === read(entry.key))
+      return (
+        (entry.owned || (input.sourceEdit && entry.source)) &&
+        (!removing || entry.value === read(entry.key))
+      )
     }
     if (entry.composed && composedPatch) {
       return entry.owned
@@ -113,10 +143,7 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
         catalog?.unknownModelOptions?.find((option) => option.id === entry.key)
       if (
         !option?.apply.launchArgs ||
-        (option.kind.type === 'boolean'
-          ? entry.value !== 'true' && entry.value !== 'false'
-          : option.kind.choices.length > 0 &&
-            !option.kind.choices.some((choice) => choice.value === entry.value))
+        (option.kind.type === 'boolean' ? entry.value !== 'true' && entry.value !== 'false' : false)
       ) {
         return false
       }
@@ -130,28 +157,77 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
     const previous = read(entry.key)
     return mode !== 'load' || previous === undefined || previous === entry.value
   })
-  const cut = analysis.cut(selected)
+  const declaredOptions = new Map(
+    (catalog?.unknownModelOptions ?? []).map((option) => [option.id, option])
+  )
+  for (const model of catalog?.models ?? []) {
+    for (const option of model.options) {
+      declaredOptions.set(option.id, option)
+    }
+  }
+  const recognized = occurrences.filter(
+    (entry) =>
+      keys.has(entry.key) &&
+      entry.source &&
+      (declaredOptions.get(entry.key)?.kind.type !== 'boolean' || entry.valueType === 'boolean') &&
+      counts.get(entry.key) === 1
+  )
+  const cuts = input.permissionRanges
+    ? [...selected.filter((entry) => entry.key !== 'permissionMode'), ...input.permissionRanges]
+    : selected
+  const cut = analysis.cut(cuts)
   const lifted =
     cut === null
       ? []
       : selected.filter((entry) => mode !== 'choice-edit' || patched(entry.key) === undefined)
   const model = lifted.find((entry) => entry.key === 'model')
   if (model) {
-    write('model', model.value)
+    write('model', model.value, mode === 'arguments-edit')
   }
   if (mode === 'choice-edit' && patch?.model !== undefined) {
     write('model', patch.model)
   }
-  lifted.filter((entry) => entry.key !== 'model').forEach((entry) => write(entry.key, entry.value))
+  lifted
+    .filter((entry) => entry.key !== 'model')
+    .forEach((entry) => write(entry.key, entry.value, mode === 'arguments-edit'))
   if (patch && mode === 'choice-edit') {
     Object.entries(patch.options ?? {}).forEach(([key, value]) => write(key, value))
     if (patch.permissionMode !== undefined) {
       write('permissionMode', patch.permissionMode === 'default' ? null : patch.permissionMode)
     }
   }
+  const sourceChoices = {
+    ...choices,
+    options: { ...choices.options }
+  }
+  for (const entry of recognized) {
+    if (mode === 'choice-edit' && patched(entry.key) !== undefined) {
+      continue
+    }
+    const publish =
+      mode === 'arguments-edit' &&
+      !input.retainedKeys?.has(entry.key) &&
+      entry.start >= (input.retainedPrefixLength ?? 0) &&
+      Boolean(normalizeAgentModelOptionChoices({ model: entry.value })) &&
+      entry.value.trim() === entry.value
+    if (entry.key === 'model' && !publish) {
+      sourceChoices.model = entry.value
+    } else {
+      write(entry.key, entry.value, publish, sourceChoices)
+    }
+  }
   const normalized: AgentDedicatedChoices = {
     ...normalizeAgentModelOptionChoices(choices),
     ...(choices.permissionMode ? { permissionMode: choices.permissionMode } : {})
   }
-  return { userArgs: cut ?? userArgs, choices: normalized, selected: cut === null ? [] : selected }
+  return {
+    userArgs: cut ?? userArgs,
+    choices: normalized,
+    selected: cut === null ? [] : cuts,
+    effects,
+    sourceChoices,
+    recognized,
+    analysis,
+    source: userArgs
+  }
 }

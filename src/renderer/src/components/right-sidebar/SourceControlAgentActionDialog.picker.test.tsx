@@ -8,8 +8,12 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
-import { mountSourceDialog } from './source-control-action-dialog.test-fixture'
+import {
+  mountSourceDialog,
+  submittedActionStartupPlan
+} from './source-control-action-dialog.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
 
 vi.mock('../agent/use-agent-launch-picker-inventory', () => ({
   useAgentLaunchPickerInventory: (_id: string | undefined, model: NewTabAgentMenuModel) =>
@@ -133,5 +137,92 @@ it.each(['global', 'repo'] as const)(
         : useAppStore.getState().repos[0].sourceControlAi?.actionOverrides?.resolveConflicts
     expect(saved?.agentArgs).toBeUndefined()
     expect(saved?.launchPreferences?.permissionMode).toBe('ask')
+  }
+)
+
+it.each(['global', 'repo'] as const)(
+  'accepts only the latest %s Customize buffer through Save, reopen and terminal startup',
+  async (scope) => {
+    const parent = {
+      agentId: 'claude' as const,
+      surface: 'terminal' as const,
+      agentArgs: '--verbose',
+      launchPreferences: { agentId: 'claude' as const, permissionMode: 'ask' as const }
+    }
+    const f = mountSourceDialog(
+      parent,
+      { commandInputTemplate: '{basePrompt}' },
+      undefined,
+      undefined,
+      scope
+    )
+    const user = userEvent.setup()
+    const configure = async () => {
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Select agent' })).toHaveProperty(
+          'disabled',
+          false
+        )
+      )
+      await user.click(screen.getByRole('button', { name: 'Select agent' }))
+      await user.click(screen.getByRole('button', { name: 'Configure Claude' }))
+      if (!screen.queryByRole('textbox', { name: 'Arguments' })) {
+        await user.click(screen.getByRole('button', { name: 'Toggle Arguments' }))
+      }
+    }
+    await configure()
+    const input = screen.getByRole('textbox', { name: 'Arguments' })
+    for (const value of ['--model s', '--model sonnet --effort high', '--add-dir docs']) {
+      fireEvent.change(input, { target: { value } })
+    }
+    await user.click(screen.getByRole('button', { name: 'Use' }))
+    act(() => f.controller.onSaveAgentDefaultChange(scope))
+    await user.click(screen.getByRole('button', { name: 'Save & start agent' }))
+    await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
+    const state = useAppStore.getState()
+    const saved =
+      scope === 'global'
+        ? state.settings?.sourceControlAi?.actions?.resolveConflicts
+        : state.repos[0].sourceControlAi?.actionOverrides?.resolveConflicts
+    expect(saved?.agentArgs).toBe('--add-dir docs')
+    expect(saved?.launchPreferences?.model).toBeUndefined()
+    expect(saved?.launchPreferences?.options?.effort).toBeUndefined()
+    if (scope === 'repo') {
+      expect(state.settings?.sourceControlAi?.actions?.resolveConflicts).toEqual(parent)
+    }
+    const submitted = f.onStart.mock.calls[0][0]
+    expect(submitted.agentArgs).toContain('--add-dir docs')
+    expect(submitted.sessionOptions?.model).toBeUndefined()
+    expect(submitted.sessionOptions?.effort).toBeUndefined()
+    const startup = submittedActionStartupPlan(submitted)
+    expect(startup).not.toBeNull()
+    if (!startup) {
+      throw new Error('Expected terminal startup')
+    }
+    const command = tokenizeStartupCommand(startup.launchCommand, 'posix')
+    expect(command.ok).toBe(true)
+    if (!command.ok) {
+      throw new Error(command.error)
+    }
+    expect(command.tokens).toEqual([
+      'claude',
+      '--add-dir',
+      'docs',
+      '--permission-mode',
+      'default',
+      'fix'
+    ])
+
+    f.view.unmount()
+    const reopened = f.mount()
+    await configure()
+    expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(
+      'value',
+      '--add-dir docs'
+    )
+    expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Use' }))
+    expect(f.persist).toHaveBeenCalledOnce()
+    reopened.unmount()
   }
 )

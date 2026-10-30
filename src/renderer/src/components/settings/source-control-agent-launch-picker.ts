@@ -1,3 +1,4 @@
+import { acceptAgentPickerArguments } from '../../../../shared/agent-launch-picker-edits'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import {
   selectSourceControlActionRecipe,
@@ -18,9 +19,19 @@ export function sourceControlPickerDraft(
   const bound = pickSourceControlActionAgent(selection, entry.agent, observedAgent, surface)
   const recipe = selectSourceControlActionRecipe(bound)
   const preferences = selectedSourceControlActionPreferences(recipe, entry.agent)
+  const modelSelection = recipe.resolvedChoiceSources.model
+  const delegated = [
+    ...(modelSelection?.model?.agentId === entry.agent && modelSelection.model.value === null
+      ? ['model']
+      : []),
+    ...Object.entries(modelSelection?.options ?? {}).flatMap(([key, value]) =>
+      value.agentId === entry.agent && value.value === null ? [key] : []
+    )
+  ]
   return {
     agent: entry.agent,
     surface,
+    delegated,
     choices: {
       ...(preferences?.model ? { model: preferences.model } : {}),
       ...(preferences?.options ? { options: preferences.options } : {}),
@@ -38,6 +49,7 @@ export function applySourceControlPickerDraft(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft
 ): CurrentActionSelection {
+  draft = acceptAgentPickerArguments(entry, draft)
   const receipt = draft.recipeEdits
   if (!receipt?.changed || draft.agent !== entry.agent) {
     return selection

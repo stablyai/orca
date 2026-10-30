@@ -27,12 +27,16 @@ import { SourceControlAiActionRecipeDefaults } from '../../SourceControlAiAction
 import { useAppStore } from '../../../../store/index'
 import { TooltipProvider } from '../../../ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { clearHostAgentMenuSettingsForTests } from '../../use-host-agent-launch-preferences'
 import { mutateHostAgentLaunchSettings } from '../../agent-launch-settings-transport'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../../../../shared/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../../../../../shared/tui-agent-startup-shell'
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: rpc,
@@ -281,6 +285,136 @@ it.each(['', '--model raw'])(
   }
 )
 
+it.each(['own', 'parent'] as const)(
+  'removes the %s action model through the repository writer and delegates startup without owning Arguments',
+  async (owner) => {
+    rpc.mockReset().mockResolvedValue(undefined)
+    setLocalRuntimeCapabilitiesForTests([])
+    const base = useAppStore.getState().settings!
+    const model = { agentId: 'claude' as const, model: 'sonnet' }
+    const source = {
+      ...base.sourceControlAi!,
+      actions: {
+        resolveConflicts: {
+          agentId: 'claude' as const,
+          ...(owner === 'parent' ? { launchPreferences: model } : {})
+        }
+      }
+    }
+    const own: RepoSourceControlAiOverrides = {
+      actionOverrides: {
+        resolveConflicts: {
+          commandInputTemplate: '{basePrompt}',
+          ...(owner === 'own' ? { launchPreferences: model } : {})
+        }
+      }
+    }
+    const settings = {
+      ...base,
+      experimentalNativeChat: false,
+      agentPermissionDefault: 'own' as const,
+      agentDefaultArgs: { claude: '--model opus --verbose' },
+      sourceControlAi: source
+    }
+    useAppStore.setState({
+      settings,
+      repos: [TEST_REPO],
+      localDetectedAgentIdsByContext: { host: ['claude'] }
+    })
+    const change = vi.fn()
+    const tree = (repoAi: RepoSourceControlAiOverrides) =>
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositorySourceControlAiActionRows, {
+          repoId: TEST_REPO.id,
+          repoAi,
+          source,
+          defaultTuiAgent: 'claude',
+          savingActionIds: {},
+          actionDirtyById: computeActionDirtyById({}, {}, {}),
+          onActionModeChange: vi.fn(),
+          onActionAgentChange: vi.fn(),
+          onActionLaunchPreferencesChange: change,
+          onActionTemplateChange: vi.fn(),
+          onActionAgentArgsChange: vi.fn(),
+          onAppendVariable: vi.fn(),
+          onActionDiscard: vi.fn(),
+          onActionSave: vi.fn()
+        })
+      )
+    const view = render(tree(own))
+    const configure = async () => {
+      const row = within(screen.getByText('Conflict resolution').closest<HTMLElement>('[id]')!)
+      const trigger = row.getByRole('button', { name: 'Select agent' })
+      await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+      fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    }
+    await configure()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove --model sonnet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(change).toHaveBeenCalledOnce()
+    const [actionId, preferences, args, nodes] = change.mock.calls[0]
+    expect(args).toBeUndefined()
+    expect(preferences.modelSelection.model).toEqual({ agentId: 'claude', value: null })
+    let drafts: Parameters<typeof withRepoAiActionRecipeText>[3] | undefined
+    const writers = createRepoActionTextDraftEditors(
+      (update) => {
+        const next = typeof update === 'function' ? update({}) : update
+        drafts = next.resolveConflicts
+      },
+      { current: own },
+      source
+    )
+    writers.updateActionLaunchPreferences(actionId, preferences, args, nodes)
+    if (!drafts) {
+      throw new Error('Expected authored recipe draft')
+    }
+    const saved = withRepoAiActionRecipeText(own, settings, actionId, drafts)
+    expect(saved.actionOverrides?.resolveConflicts?.agentArgs).toBeUndefined()
+    expect(source.actions.resolveConflicts).toEqual({
+      agentId: 'claude',
+      ...(owner === 'parent' ? { launchPreferences: model } : {})
+    })
+    const reopened = resolveSourceControlActionRecipe({
+      settings,
+      repo: { sourceControlAi: saved },
+      actionId
+    })
+    const launch = projectSourceControlActionLaunch(reopened, 'claude', { basePrompt: 'fix' })
+    expect(launch.sessionOptions?.model).toBeUndefined()
+    expect(launch.agentArgs).toBeUndefined()
+    const startup = buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent: 'claude',
+        settings,
+        platform: 'darwin',
+        isRemote: false,
+        shell: 'posix',
+        agentArgs: launch.agentArgs,
+        sessionOptions: launch.sessionOptions
+      }),
+      prompt: 'fix'
+    })
+    if (!startup) {
+      throw new Error('Expected terminal startup')
+    }
+    const command = tokenizeStartupCommand(startup.launchCommand, 'posix')
+    expect(command.ok).toBe(true)
+    if (!command.ok) {
+      throw new Error(command.error)
+    }
+    expect(command.tokens).toEqual(['claude', '--model', 'opus', '--verbose', 'fix'])
+    fireEvent.keyDown(document, { key: 'Escape' })
+    view.rerender(tree(saved))
+    await configure()
+    expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove --model opus' })).toBeNull()
+    expect(document.querySelector('[cmdk-item][data-current="true"]')).toBeNull()
+  }
+)
+
 it('keeps default and missing-agent editors disabled only until the host inventory settles', async () => {
   const settings = useAppStore.getState().settings!
   useAppStore.setState({
@@ -440,85 +574,150 @@ it.each([1, 10])(
   }
 )
 
-it('passes deliberate equal-parent Args through the real repository row, sparse writer and saved recipe', async () => {
-  rpc.mockReset().mockResolvedValue(undefined)
-  setLocalRuntimeCapabilitiesForTests([])
-  const base = useAppStore.getState().settings!
-  const source = {
-    ...base.sourceControlAi!,
-    actions: { resolveConflicts: { agentId: 'claude' as const, agentArgs: '--verbose' } }
+it.each([
+  {
+    name: 'equal parent',
+    inputs: ['--debug', '--verbose'],
+    args: '--verbose',
+    permission: undefined
+  },
+  { name: 'explicit empty', inputs: ['--debug', ''], args: '', permission: undefined },
+  {
+    name: 'own raw permission',
+    inputs: ['--permission-mode acceptEdits --debug'],
+    args: '--debug',
+    permission: 'accept-edits'
+  },
+  {
+    name: 'full pending replacement',
+    inputs: ['--model sonnet --effort high --verbose', '--debug'],
+    args: '--debug',
+    permission: undefined
+  },
+  {
+    name: 'initial inherited permission and Settings',
+    inputs: ['--debug'],
+    args: '--debug',
+    permission: undefined,
+    parentArgs: `--permission-mode default --settings '{"fastMode":true,"theme":"light"}' --verbose`
   }
-  const own = { actionOverrides: { resolveConflicts: {} } }
-  useAppStore.setState({
-    settings: { ...base, experimentalNativeChat: false, sourceControlAi: source },
-    repos: [TEST_REPO],
-    localDetectedAgentIdsByContext: { host: ['claude', 'codex'] }
-  })
-  const change = vi.fn()
-  render(
-    React.createElement(
-      TooltipProvider,
-      null,
-      React.createElement(RepositorySourceControlAiActionRows, {
-        repoId: TEST_REPO.id,
-        repoAi: own,
-        source,
-        defaultTuiAgent: 'claude',
-        savingActionIds: {},
-        actionDirtyById: computeActionDirtyById({}, {}, {}),
-        onActionModeChange: vi.fn(),
-        onActionAgentChange: vi.fn(),
-        onActionLaunchPreferencesChange: change,
-        onActionTemplateChange: vi.fn(),
-        onActionAgentArgsChange: vi.fn(),
-        onAppendVariable: vi.fn(),
-        onActionDiscard: vi.fn(),
-        onActionSave: vi.fn()
-      })
-    )
-  )
-  const row = within(screen.getByText('Conflict resolution').closest<HTMLElement>('[id]')!)
-  const trigger = row.getByRole('button', { name: 'Select agent' })
-  await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
-  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
-  fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
-  const input = screen.getByRole('textbox', { name: 'Arguments' })
-  await waitFor(() => expect(input).toHaveProperty('disabled', false))
-  fireEvent.change(input, { target: { value: '--debug' } })
-  fireEvent.change(input, { target: { value: '--verbose' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
-  expect(change).toHaveBeenCalledWith('resolveConflicts', undefined, '--verbose', undefined)
-  let drafts: Parameters<typeof createRepoActionTextDraftEditors>[0] extends React.Dispatch<
-    React.SetStateAction<infer State>
-  >
-    ? State
-    : never = {}
-  const writers = createRepoActionTextDraftEditors(
-    (update) => {
-      drafts = typeof update === 'function' ? update(drafts) : update
-    },
-    { current: own },
-    source
-  )
-  const [actionId, preferences, args, nodes] = change.mock.calls[0]
-  writers.updateActionLaunchPreferences(actionId, preferences, args, nodes)
-  const saved = withRepoAiActionRecipeText(
-    own,
-    { ...base, sourceControlAi: source },
-    'resolveConflicts',
-    drafts.resolveConflicts!
-  )
-  expect(saved.actionOverrides?.resolveConflicts?.agentArgs).toBe('--verbose')
-  expect(
-    resolveSourceControlActionRecipe({
-      settings: {
-        sourceControlAi: {
-          ...source,
-          actions: { resolveConflicts: { agentId: 'claude', agentArgs: '--new-parent' } }
+] as const)(
+  'passes $name through the real repository row, sparse writer and saved recipe',
+  async (fixture) => {
+    const { inputs, args: expectedArgs, permission } = fixture
+    rpc.mockReset().mockResolvedValue(undefined)
+    setLocalRuntimeCapabilitiesForTests([])
+    const base = useAppStore.getState().settings!
+    const source = {
+      ...base.sourceControlAi!,
+      actions: {
+        resolveConflicts: {
+          agentId: 'claude' as const,
+          agentArgs: 'parentArgs' in fixture ? fixture.parentArgs : '--verbose',
+          launchPreferences: {
+            agentId: 'claude' as const,
+            permissionMode: 'ask' as const,
+            ...('parentArgs' in fixture ? { model: 'opus', options: { effort: 'high' } } : {})
+          }
         }
+      }
+    }
+    const own = { actionOverrides: { resolveConflicts: { commandInputTemplate: '{basePrompt}' } } }
+    const parentBefore = structuredClone(source.actions.resolveConflicts)
+    useAppStore.setState({
+      settings: { ...base, experimentalNativeChat: false, sourceControlAi: source },
+      repos: [TEST_REPO],
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] }
+    })
+    const change = vi.fn()
+    render(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositorySourceControlAiActionRows, {
+          repoId: TEST_REPO.id,
+          repoAi: own,
+          source,
+          defaultTuiAgent: 'claude',
+          savingActionIds: {},
+          actionDirtyById: computeActionDirtyById({}, {}, {}),
+          onActionModeChange: vi.fn(),
+          onActionAgentChange: vi.fn(),
+          onActionLaunchPreferencesChange: change,
+          onActionTemplateChange: vi.fn(),
+          onActionAgentArgsChange: vi.fn(),
+          onAppendVariable: vi.fn(),
+          onActionDiscard: vi.fn(),
+          onActionSave: vi.fn()
+        })
+      )
+    )
+    const row = within(screen.getByText('Conflict resolution').closest<HTMLElement>('[id]')!)
+    const trigger = row.getByRole('button', { name: 'Select agent' })
+    await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    const input = screen.getByRole('textbox', { name: 'Arguments' })
+    await waitFor(() => expect(input).toHaveProperty('disabled', false))
+    for (const text of inputs) {
+      fireEvent.change(input, { target: { value: text } })
+    }
+    if ('parentArgs' in fixture) {
+      fireEvent.blur(input)
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(change).toHaveBeenCalledExactlyOnceWith(
+      'resolveConflicts',
+      permission ? { agentId: 'claude', permissionMode: permission } : undefined,
+      expectedArgs,
+      undefined
+    )
+    let drafts: Parameters<typeof createRepoActionTextDraftEditors>[0] extends React.Dispatch<
+      React.SetStateAction<infer State>
+    >
+      ? State
+      : never = {}
+    const writers = createRepoActionTextDraftEditors(
+      (update) => {
+        drafts = typeof update === 'function' ? update(drafts) : update
       },
+      { current: own },
+      source
+    )
+    const [actionId, preferences, args, nodes] = change.mock.calls[0]
+    writers.updateActionLaunchPreferences(actionId, preferences, args, nodes)
+    const saved = withRepoAiActionRecipeText(
+      own,
+      { ...base, sourceControlAi: source },
+      'resolveConflicts',
+      drafts.resolveConflicts!
+    )
+    expect(saved.actionOverrides?.resolveConflicts?.agentArgs).toBe(expectedArgs)
+    expect(saved.actionOverrides?.resolveConflicts?.launchPreferences?.permissionMode).toBe(
+      permission
+    )
+    expect(source.actions.resolveConflicts).toEqual(parentBefore)
+    const reopened = resolveSourceControlActionRecipe({
+      settings: { sourceControlAi: source },
       repo: { sourceControlAi: saved },
       actionId: 'resolveConflicts'
-    }).agentArgs
-  ).toBe('--verbose')
-})
+    })
+    const launch = projectSourceControlActionLaunch(reopened, 'claude', { basePrompt: 'fix' })
+    expect(launch.agentArgs).toBe(expectedArgs)
+    expect(launch.sessionOptions?.permissionMode).toBe(permission ?? 'ask')
+    expect(launch.sessionOptions?.model).toBeUndefined()
+    expect(launch.sessionOptions?.effort).toBeUndefined()
+    expect(
+      resolveSourceControlActionRecipe({
+        settings: {
+          sourceControlAi: {
+            ...source,
+            actions: { resolveConflicts: { agentId: 'claude', agentArgs: '--new-parent' } }
+          }
+        },
+        repo: { sourceControlAi: saved },
+        actionId: 'resolveConflicts'
+      }).agentArgs
+    ).toBe(expectedArgs)
+  }
+)
