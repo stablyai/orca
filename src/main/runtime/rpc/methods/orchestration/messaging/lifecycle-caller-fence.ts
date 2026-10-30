@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
+import { evidenceCallerTerminal } from './evidence-caller-terminal'
 
 /** Refuse reports/questions from a different live orchestration party; absent/stale/foreign/scrubbed env proves nothing.
  * Accepted limit: tmux inherits its starting pane's env, so a worker in a coordinator/worker-owned tmux server is refused. */
@@ -14,19 +15,11 @@ export function assertLifecycleCallerIsNotAnotherParty(
     evidence: OrchestrationCompatibilityEvidence | undefined
   }
 ): void {
-  const { evidence } = args
-  // Prefer pane key because remint invalidates env handles.
-  const callerHandle = evidence?.paneKey
-    ? runtime.getTerminalHandleForPaneKey(evidence.paneKey)
-    : evidence?.terminalHandle
-  const callerPaneKey = callerHandle ? runtime.getLiveTerminalPaneKey(callerHandle) : null
-  if (
-    !callerHandle ||
-    !callerPaneKey ||
-    (args.fromPaneKey && isEquivalentPaneKey(callerPaneKey, args.fromPaneKey))
-  ) {
+  const caller = evidenceCallerTerminal(runtime, args.evidence)
+  if (!caller || (args.fromPaneKey && isEquivalentPaneKey(caller.paneKey, args.fromPaneKey))) {
     return
   }
+  const { handle: callerHandle, paneKey: callerPaneKey } = caller
   const db = runtime.getOrchestrationDb()
   const callerDispatchId = ownedDispatchId(db, callerHandle, callerPaneKey)
   // A stale from handle may hide the same worker; refuse only a different party.

@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { chatAssigneeSessionId, observeChatAssignee } from '../../../orchestration/chat-assignee'
+import { observeChatAssignee } from '../../../orchestration/chat-assignee'
+import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
 import type { OrchestrationDb } from '../../../orchestration/db'
 import { exposeUtcTimestamp } from '../../../orchestration/db/utc-timestamp'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
@@ -31,20 +32,20 @@ export function chatTaskOperationId(
   return `${String(createdAt).padStart(13, '0')}-${digest}`
 }
 
-/** Sends the task into the chat's live session. Throws when nothing was handed over. */
+/** Sends the task into the live session of a chat or a structured worker. Throws when nothing was handed over. */
 export async function sendChatTask(args: {
   db: OrchestrationDb
   dispatch: ChatTaskDispatch
+  /** A chat's or a structured worker's Orca session ID. */
+  sessionId: OrcaSessionId
   /** Who the task is from (`dispatchTaskSource`), shown on the chat's card or turn. */
   from: AgentMessageSource
   preamble: string
 }): Promise<ChatTaskDelivery> {
-  const sessionId = chatAssigneeSessionId(args.dispatch.assignee_handle)
   const host = getStructuredAgentSessionHost()
-  const observed =
-    sessionId && host
-      ? observeChatAssignee(sessionId, args.db, conversationRecordReader(host.deps.store))
-      : null
+  const observed = host
+    ? observeChatAssignee(args.sessionId, args.db, conversationRecordReader(host.deps.store))
+    : null
   if (!host || observed?.status !== 'live') {
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',

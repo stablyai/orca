@@ -1,9 +1,10 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 // worker-start adopts a chat through its queued send; Stop and failed start must leave the chat intact.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
+import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -23,6 +24,12 @@ import {
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
 import type { placeWorkerAgent } from './rpc/methods/orchestration/worker/worker-start-agent-placement'
+import {
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey,
+  structuredWorkerIdentities,
+  structuredWorkerProcessIncarnation
+} from './structured-worker-identity'
 
 type WorkspaceLookup = {
   showManagedTerminalWorkspace: (
@@ -101,7 +108,7 @@ describe('worker-start --terminal names a chat', () => {
       state: 'ready',
       turnStart: 'observed',
       mode: {
-        detail: `--terminal names the chat ${WORKER}; its task goes to that chat and no agent is launched.`
+        detail: `--terminal names the agent session ${WORKER}; its task goes to that session and no agent is launched.`
       }
     })
     const dispatchId = String(receipt.dispatchId)
@@ -197,6 +204,110 @@ describe('worker-start --terminal names a chat', () => {
       processAction: 'none'
     })
     expectChatOpen()
+  })
+})
+
+describe('a settled structured worker reused by worker-start --terminal', () => {
+  beforeEach(() => {
+    // The structured-worker registry answers pane and incarnation, as in production.
+    vi.mocked(runtime.getTerminalPaneKey).mockRestore()
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockRestore()
+  })
+  afterEach(() => structuredWorkerIdentities.clear())
+
+  /** PEER_CHAT as a structured worker whose owned first Dispatch has reported done. */
+  async function settledStructuredWorker() {
+    await openChat(COORDINATOR)
+    const worker = await openChat(PEER_CHAT)
+    const identity = structuredWorkerIdentities.register({
+      handle: mintStructuredWorkerHandle(),
+      sessionId: PEER_CHAT,
+      agent: 'codex',
+      paneKey: mintStructuredWorkerPaneKey(PEER_CHAT),
+      processIncarnation: structuredWorkerProcessIncarnation(PEER_CHAT),
+      worktreeId: host.deps.store.getRecord(PEER_CHAT)!.location.workspaceId,
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    const { runId, taskId } = await coordinatorRunAndTask()
+    const { dispatch: first } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 10,
+      taskId,
+      startOptions: {}
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: first.id,
+      handle: identity.handle,
+      paneKey: identity.paneKey,
+      processIncarnation: identity.processIncarnation,
+      worktreeId: identity.worktreeId,
+      hostScope: JSON.stringify(identity.hostScope),
+      effects: [],
+      setupState: 'not_applicable',
+      terminalOwnership: 'created'
+    })
+    db.markWorkerDispatchReady(first.id)
+    await reportDone(taskId, first.id)
+    expect(db.getDispatchContextById(first.id)?.status).toBe('completed')
+    return { identity, worker, first, runId }
+  }
+
+  function reportDone(taskId: string, dispatchId: string) {
+    return dispatcher.dispatch(
+      request(
+        'orchestration.send',
+        {
+          subject: 'done',
+          type: 'worker_done',
+          payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
+        },
+        { sessionId: PEER_CHAT }
+      )
+    )
+  }
+
+  it('takes the next task in its session, keeps its identity, and only that task settles it', async () => {
+    const { identity, worker, first, runId } = await settledStructuredWorker()
+    const next = await call(
+      'orchestration.taskCreate',
+      { spec: 'next' },
+      { sessionId: COORDINATOR }
+    )
+    const taskId = idOf(next.task)
+
+    const started = startWorker({ task: taskId, terminal: identity.handle })
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+    await settleTurn(PEER_CHAT, 0)
+    expect(await started).toMatchObject({ state: 'ready', turnStart: 'observed' })
+
+    const second = db.getDispatchContext(taskId)!
+    expect(second).toMatchObject({
+      assignee_handle: identity.handle,
+      assignee_pane_key: identity.paneKey,
+      process_incarnation: identity.processIncarnation,
+      status: 'dispatched'
+    })
+    expect(db.getWorkerTerminalResourceByOwner(second.id)).toMatchObject({
+      ownership_state: 'owned',
+      origin_dispatch_id: first.id
+    })
+    expect(turnText(worker.turns[0]!)).toContain(`Your Orca session ID is: ${WORKER}`)
+
+    const mail = db.insertMessage({
+      from: 'coordinator',
+      to: `dispatch:${second.id}`,
+      runId,
+      subject: 'for next'
+    })
+    const checked = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
+    expect(checked).toMatchObject({ dispatchId: second.id, messages: [{ id: mail.id }] })
+    await call('orchestration.check', { ack: checked.deliveryId }, { sessionId: PEER_CHAT })
+    expect(db.getMessageById(mail.id)?.read).toBe(1)
+
+    await reportDone(first.task_id, first.id)
+    expect(db.getDispatchContextById(second.id)?.status).toBe('dispatched')
+    await reportDone(taskId, second.id)
+    expect(db.getDispatchContextById(second.id)?.status).toBe('completed')
   })
 })
 

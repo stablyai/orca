@@ -3,7 +3,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   formatOrcaSessionAddress,
-  isOrcaSessionId
+  isOrcaSessionId,
+  type OrcaSessionId
 } from '../../../../../../shared/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
 import { orcaSessionIdOrHandle } from '../../../../orchestration/orchestration-party'
@@ -11,7 +12,6 @@ import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
-import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
@@ -28,6 +28,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   structuredSession: StructuredSession
+  /** The agent session a reused `--terminal` worker takes its task through: a chat or a structured worker. */
+  session: OrcaSessionId | null
   terminalHandle: string
   dispatchId: string
   dispatchDepth: number
@@ -57,11 +59,13 @@ export async function deliverWorkerDispatchPreamble(args: {
     workerHandle:
       structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)
         ? formatOrcaSessionAddress(canonicalOrcaSessionId(structuredSession.identity.sessionId))
-        : terminalHandle,
+        : args.session
+          ? formatOrcaSessionAddress(args.session)
+          : terminalHandle,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
   })
-  if (chatAssigneeSessionId(terminalHandle)) {
+  if (args.session) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)
     if (!dispatch) {
       throw new OrchestrationError(
@@ -70,7 +74,13 @@ export async function deliverWorkerDispatchPreamble(args: {
       )
     }
     const from = workerTaskSource(args)
-    const delivery = await sendChatTask({ db: args.db, dispatch, from, preamble })
+    const delivery = await sendChatTask({
+      db: args.db,
+      dispatch,
+      sessionId: args.session,
+      from,
+      preamble
+    })
     return { structuredTurnStart: chatTaskTurnStart(delivery) }
   }
   if (structuredSession) {

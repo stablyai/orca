@@ -28,7 +28,7 @@ import {
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { assertExplicitWorkerUsable } from './explicit-worker-terminal-validation'
 import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
-import { CHAT_WORKER_AUTHORITY, chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
+import { CHAT_WORKER_AUTHORITY, chatWorkerMode } from '../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
@@ -58,7 +58,8 @@ export async function startLocalWorker(args: {
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
   const params = terminal ? { ...args.params, terminal: terminal.address } : args.params
-  const chat = terminal ? chatAssigneeOf(terminal) : null
+  // A chat or a structured worker takes its task as a structured send, never as terminal input.
+  const session = terminal ? terminal.orcaSessionId : null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const creationTargetFor = (callerWorktreeId: string) =>
@@ -133,7 +134,7 @@ export async function startLocalWorker(args: {
     })
   }
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
-  let mode = chatWorkerMode(await hostMode, chat)
+  let mode = chatWorkerMode(await hostMode, session)
 
   const run = args.bindRun()
   const started = createLocalWorkerStartDispatch(args, {
@@ -209,8 +210,8 @@ export async function startLocalWorker(args: {
           effects,
           timeoutMs: Math.max(0, readinessDeadline - Date.now())
         })
-      : chat
-        ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
+      : session
+        ? // An agent session takes its task as a queued send whatever it is doing, so nothing is waited on.
           null
         : await waitForWorkerAgentReady(runtime, terminalHandle, {
             agent,
@@ -233,9 +234,10 @@ export async function startLocalWorker(args: {
       }
     }
     // A chat has no pane or process; its Dispatch names it by its Orca session ID alone.
-    const terminalAuthority = chat
-      ? CHAT_WORKER_AUTHORITY
-      : requireWorkerAuthority(runtime, terminalHandle)
+    const terminalAuthority =
+      terminal && terminal.terminalHandle === null
+        ? CHAT_WORKER_AUTHORITY
+        : requireWorkerAuthority(runtime, terminalHandle)
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,
@@ -254,6 +256,7 @@ export async function startLocalWorker(args: {
       dispatchId: started.dispatch.id,
       dispatchDepth: started.dispatch.depth,
       structuredSession,
+      session,
       terminalHandle,
       coordinatorHandle: params.from,
       devMode: params.devMode,

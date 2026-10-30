@@ -169,7 +169,14 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     const dispatch = db.getDispatchContextById(idOf(result.dispatch))!
 
     const from = { kind: 'agent' as const, senders: [], orchestration: null }
-    const send = () => sendChatTask({ db, dispatch, from, preamble: 'the task' })
+    const send = () =>
+      sendChatTask({
+        db,
+        dispatch,
+        sessionId: testOrcaSessionId(PEER_CHAT),
+        from,
+        preamble: 'the task'
+      })
     expect(await send()).toBe('queued')
     expect(await send()).toBe('queued')
 

@@ -182,7 +182,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
               senderName: (party, reported) =>
                 runtime.orchestrationSenderNames.nameOf(party, reported)
             })
-            await sendChatTask({ db, dispatch: ctx, from, preamble })
+            await sendChatTask({ db, dispatch: ctx, sessionId: chatAssignee, from, preamble })
           } else {
             prompt = await sendAgentTurn({
               kind: 'terminal',

@@ -94,6 +94,7 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
     runtime: runtime(prompts),
     db,
     structuredSession: worker === 'chat' ? structuredSession() : null,
+    session: null,
     terminalHandle: worker === 'chat' ? CHAT_WORKER_HANDLE : TERMINAL_HANDLE,
     dispatchId: 'ctx_1',
     dispatchDepth: 1,

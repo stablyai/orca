@@ -83,6 +83,7 @@ async function createWorker() {
       runtime,
       db,
       structuredSession: created,
+      session: null,
       terminalHandle: created.identity.handle,
       dispatchId: 'dispatch-retry',
       dispatchDepth: 1,
