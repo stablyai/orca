@@ -8,6 +8,7 @@ import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { ClaudeHelperKillPoller } from '../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
+import { ClaudeTranscriptDecoder } from '../../shared/agent-hook-listener/providers/claude-transcript-decoder'
 import * as cursor from '../../shared/agent-hook-listener/providers/claude-transcript-cursor'
 import { AgentTranscriptPollScheduler } from '../../shared/agent-transcript-poll-scheduler'
 
@@ -68,7 +69,7 @@ async function setup(
     throwOnce?: boolean
     disabled?: boolean
     paneCount?: number
-    beforeStart?: () => void
+    beforeStart?: (transcript: string) => void
     admitted?: () => void
     retryBind?: boolean
     busyPort?: number
@@ -143,7 +144,7 @@ async function setup(
     // ast-grep-ignore: test-no-real-time-wait -- Restart S must follow provider K without mocking host time.
     await pause(20)
   }
-  options.beforeStart?.()
+  options.beforeStart?.(transcript)
   const desktop = new AgentHookServer()
   servers.push(desktop)
   if (options.retired) {
@@ -406,8 +407,25 @@ it.each(['relay-spool', 'desktop-spool'])(
       activations: number
       reads: number
       parentBytes: number
+      tokens: number
+      batches: number
+      head: number
     }[] = []
     for (const N of [10, 100]) {
+      let tokens = 0,
+        batches = 0,
+        head = 0
+      const write = ClaudeTranscriptDecoder.prototype.write
+      const decoding = vi
+        .spyOn(ClaudeTranscriptDecoder.prototype, 'write')
+        .mockImplementation(function (this: ClaudeTranscriptDecoder, text) {
+          const before = this['tokens']
+          write.call(this, text)
+          tokens += this['tokens'] - before
+          batches++
+          head = Math.max(head, this['head'].length)
+          expect(text.length).toBeLessThanOrEqual(64 * 1024)
+        })
       const read = vi.spyOn(cursor, 'readClaudeTranscriptChunk')
       const capture = vi.spyOn(ClaudeHelperKillPoller.prototype, 'schedule')
       const activate = vi.spyOn(ClaudeHelperKillPoller.prototype, 'activate')
@@ -415,7 +433,11 @@ it.each(['relay-spool', 'desktop-spool'])(
       let accepted = 0
       const p = await setup(kind, 'accepted-before-bind', {
         paneCount: N,
-        beforeStart: () => {
+        beforeStart: (transcript) => {
+          // Valid oversized ordinary input follows the same uniform decoder on every admitted owner.
+          appendFileSync(transcript, lines([{ type: 'attachment', content: 'x'.repeat(300_000) }]))
+          tokens = batches = head = 0
+          decoding.mockClear()
           read.mockClear()
           capture.mockClear()
           activate.mockClear()
@@ -425,6 +447,7 @@ it.each(['relay-spool', 'desktop-spool'])(
           accepted++
           // These are spies over real methods, never substitutes for a production loop step.
           expect(read).not.toHaveBeenCalled()
+          expect(decoding).not.toHaveBeenCalled()
           expect(arm).not.toHaveBeenCalled()
         }
       })
@@ -452,18 +475,24 @@ it.each(['relay-spool', 'desktop-spool'])(
       expect(read.mock.calls.length).toBeLessThanOrEqual(3 * N)
       const offsets = [...p.entries.values()].reduce((sum, e) => sum + e.parent.offset, 0)
       for (const entry of p.entries.values()) {
-        expect(entry.parent.carry.length).toBeLessThanOrEqual(256 * 1024)
+        expect(entry.parent.decoder['head'].length).toBeLessThanOrEqual(320)
       }
       measurements.push({
         N,
         captures: capture.mock.calls.length,
         activations: activate.mock.calls.length,
         reads: read.mock.calls.length,
-        parentBytes: offsets
+        parentBytes: offsets,
+        tokens,
+        batches,
+        head
       })
+      expect(tokens).toBeGreaterThan(0)
+      expect(head).toBeLessThanOrEqual(320)
       p.desktop.stop()
       p.relay.stop()
       expect(p.entries.size).toBe(0)
+      decoding.mockRestore()
       read.mockRestore()
       capture.mockRestore()
       activate.mockRestore()
@@ -471,6 +500,8 @@ it.each(['relay-spool', 'desktop-spool'])(
     }
     expect(measurements[1].captures).toBe(10 * measurements[0].captures)
     expect(measurements[1].parentBytes).toBe(10 * measurements[0].parentBytes)
+    expect(measurements[1].tokens).toBe(10 * measurements[0].tokens)
+    expect(measurements[1].batches).toBe(10 * measurements[0].batches)
     process.stdout.write(`admitted owner contract ${kind} ${JSON.stringify(measurements)}\n`)
   }
 )

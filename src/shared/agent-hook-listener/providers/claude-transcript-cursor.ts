@@ -1,30 +1,47 @@
 import { open, type FileHandle } from 'node:fs/promises'
+import { StringDecoder } from 'node:string_decoder'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
+import { ClaudeTranscriptDecoder } from './claude-transcript-decoder'
 
 const CHUNK_BYTES = 1024 * 1024
-const LINE_BYTES = 256 * 1024
+const TOKEN_BYTES = 64 * 1024
 
 export type ClaudeTranscriptCursor = {
   path: string
   offset: number
   identity?: string
-  carry: Buffer
-  skipping: boolean
+  decoder: ClaudeTranscriptDecoder
+  utf8: StringDecoder
+}
+export type ClaudeTranscriptConsumer = {
+  current: () => boolean
+  reset: () => void
+  consume: (record: Record<string, unknown>) => Promise<void>
 }
 
 export function createClaudeTranscriptCursor(path: string): ClaudeTranscriptCursor {
-  return { path, offset: 0, carry: Buffer.alloc(0), skipping: false }
+  return {
+    path,
+    offset: 0,
+    decoder: new ClaudeTranscriptDecoder(),
+    utf8: new StringDecoder('utf8')
+  }
 }
 
-/** Forward progress never drops older terminal evidence to catch up with a growing transcript. */
+/** Physical position advances with decoding; semantic coverage also waits for ordered application. */
 export async function readClaudeTranscriptChunk(
   cursor: ClaudeTranscriptCursor,
-  limit = CHUNK_BYTES
+  limit = CHUNK_BYTES,
+  consumer?: ClaudeTranscriptConsumer
 ) {
   let file: FileHandle | undefined
   try {
-    file = await open(cursor.path, 'r')
-    const stats = await file.stat()
-    if (!stats.isFile()) {
+    file = await open(cursor.path, 'r').catch(() => undefined)
+    if (!file) {
+      return undefined
+    }
+    const stats = await file.stat().catch(() => undefined)
+    if (!stats?.isFile()) {
       return undefined
     }
     let reset = false
@@ -35,42 +52,58 @@ export async function readClaudeTranscriptChunk(
     ) {
       reset = true
       cursor.offset = stats.size
-      cursor.carry = Buffer.alloc(0)
-      cursor.skipping = false
+      cursor.decoder = new ClaudeTranscriptDecoder()
+      cursor.utf8 = new StringDecoder('utf8')
+      consumer?.reset()
     }
     cursor.identity = identity
-    const bytes = Buffer.alloc(Math.min(limit, Math.max(0, stats.size - cursor.offset)))
-    const { bytesRead } = bytes.length
-      ? await file.read(bytes, 0, bytes.length, cursor.offset)
+    const bytes = Buffer.alloc(
+      Math.min(limit, CHUNK_BYTES, Math.max(0, stats.size - cursor.offset))
+    )
+    const read = bytes.length
+      ? await file.read(bytes, 0, bytes.length, cursor.offset).catch(() => undefined)
       : { bytesRead: 0 }
-    const content = Buffer.concat([cursor.carry, bytes.subarray(0, bytesRead)])
+    if (!read) {
+      return undefined
+    }
+    const { bytesRead } = read
     const records: Record<string, unknown>[] = []
     let start = 0
-    for (let end = content.indexOf(10); end !== -1; end = content.indexOf(10, start)) {
-      if (!cursor.skipping && end - start <= LINE_BYTES) {
-        try {
-          const value: unknown = JSON.parse(content.toString('utf8', start, end))
-          if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            records.push({ ...value })
+    let yieldedAt = 0
+    let tokenWork = 0
+    while (start < bytesRead) {
+      if (consumer && !consumer.current()) {
+        return undefined
+      }
+      const lf = bytes.indexOf(10, start)
+      const end = Math.min(start + TOKEN_BYTES, lf === -1 ? bytesRead : lf, bytesRead)
+      const before = cursor.decoder.work
+      cursor.decoder.write(cursor.utf8.write(bytes.subarray(start, end)))
+      tokenWork += cursor.decoder.work - before
+      cursor.offset += end - start
+      start = end
+      if (lf === end) {
+        cursor.decoder.write(cursor.utf8.end())
+        const record = cursor.decoder.end()
+        cursor.decoder = new ClaudeTranscriptDecoder()
+        cursor.utf8 = new StringDecoder('utf8')
+        cursor.offset++
+        start++
+        if (record) {
+          if (consumer) {
+            await consumer.consume(record)
+          } else {
+            records.push(record)
           }
-        } catch {
-          /* A malformed line supplies no lifecycle evidence. */
         }
       }
-      cursor.skipping = false
-      start = end + 1
+      if (start - yieldedAt >= TOKEN_BYTES || tokenWork >= TOKEN_BYTES) {
+        yieldedAt = start
+        tokenWork = 0
+        await yieldToEventLoop()
+      }
     }
-    const tail = content.subarray(start)
-    cursor.skipping ||= tail.length > LINE_BYTES
-    cursor.carry = cursor.skipping ? Buffer.alloc(0) : Buffer.from(tail)
-    cursor.offset += bytesRead
-    return {
-      records,
-      reset,
-      caughtUp: cursor.offset >= stats.size && cursor.carry.length === 0 && !cursor.skipping
-    }
-  } catch {
-    return undefined
+    return { records, reset, caughtUp: cursor.offset >= stats.size && !cursor.decoder.unfinished }
   } finally {
     await file?.close().catch(() => {})
   }

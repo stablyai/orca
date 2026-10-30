@@ -16,8 +16,8 @@ import {
   type ClaudeTranscriptCursor
 } from './claude-transcript-cursor'
 import {
-  readClaudeHelperEvidence,
-  readClaudeChildPrompts,
+  applyClaudeHelperEvidence,
+  applyClaudeChildPrompt,
   type ClaudeChildTranscript,
   type ClaudeHelperTranscriptEvidence
 } from './claude-helper-transcript-evidence'
@@ -155,17 +155,20 @@ export class ClaudeHelperKillPoller {
     if (!original) {
       return
     }
-    const parent = await this.readChunk(entry.parent)
+    const current = () => this.current(paneKey, entry) !== undefined
+    const parent = await this.readChunk(entry.parent, undefined, {
+      current,
+      reset: () => {
+        entry.killedAt = undefined
+        entry.resumedAt.clear()
+        entry.launches.clear()
+        entry.children.clear()
+      },
+      consume: (record) => applyClaudeHelperEvidence(entry, record, current)
+    })
     if (!parent || !this.current(paneKey, entry)) {
       return
     }
-    if (parent.reset) {
-      entry.killedAt = undefined
-      entry.resumedAt.clear()
-      entry.launches.clear()
-      entry.children.clear()
-    }
-    readClaudeHelperEvidence(entry, parent.records)
     if (!parent.caughtUp || entry.killedAt === undefined) {
       return
     }
@@ -197,15 +200,15 @@ export class ClaudeHelperKillPoller {
         }
         entry.children.set(id, child)
       }
-      const result = await this.readChunk(child.cursor)
+      const result = await this.readChunk(child.cursor, undefined, {
+        current,
+        reset: () => {
+          child.promptedAt = undefined
+        },
+        consume: (record) => applyClaudeChildPrompt(child, record, current)
+      })
       if (!this.current(paneKey, entry)) {
         return
-      }
-      if (result?.reset) {
-        child.promptedAt = undefined
-      }
-      if (result) {
-        readClaudeChildPrompts(child, result.records)
       }
       if (!result?.caughtUp || child.promptedAt === undefined) {
         continue
