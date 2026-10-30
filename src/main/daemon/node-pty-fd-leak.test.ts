@@ -48,6 +48,7 @@ async function spawnExitingPty(index: number): Promise<void> {
 const describeOnDarwin = process.platform === 'darwin' ? describe : describe.skip
 
 describeOnDarwin('node-pty macOS spawn fd handling', () => {
+  // Forty serial real shell launches need a 15-second budget.
   it('releases the child-exit kqueue fd across repeated pty churn', async () => {
     const before = currentKqueueFdCount()
 
@@ -55,7 +56,6 @@ describeOnDarwin('node-pty macOS spawn fd handling', () => {
       await spawnExitingPty(i)
     }
 
-    await delay(500)
     const after = currentKqueueFdCount()
 
     expect(after - before).toBe(0)
