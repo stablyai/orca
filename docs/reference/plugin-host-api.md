@@ -22,7 +22,7 @@ Every call is checked against the capabilities the user approved, and params are
 | [`secrets.delete`](#secretsdelete) | `secrets:own` | worker | yes | 1.0 | Removes a secret from the plugin's encrypted secrets file. |
 | [`settings.get`](#settingsget) | `settings:own` | worker | no | 1.0 | Reads every setting the plugin owns. |
 | [`settings.set`](#settingsset) | `settings:own` | worker | yes | 1.0 | Writes one setting the plugin owns. |
-| [`panel.post`](#panelpost) | `panel:own` | worker | no | 1.1 | Sends a JSON message to one of the plugin's own panels; `delivered` is false when no window currently hosts that panel. |
+| [`panel.post`](#panelpost) | `panel:own` | worker | no | 1.1 | Sends a JSON message to one of the plugin's own panels, at most 30 per 10 s per plugin; `delivered` is false when no window currently hosts that panel. |
 | [`panel.action`](#panelaction) | `panel:own` | panel | no | 1.1 | Sends an action from a panel to the plugin's worker, delivered as a `panel.action` event. |
 
 ### `workspace.readContext`
@@ -123,7 +123,7 @@ Writes one setting the plugin owns.
 
 ### `panel.post`
 
-Sends a JSON message to one of the plugin's own panels; `delivered` is false when no window currently hosts that panel.
+Sends a JSON message to one of the plugin's own panels, at most 30 per 10 s per plugin; `delivered` is false when no window currently hosts that panel.
 
 ```ts
 (params: { panelId: string; payload: JSON }) => { delivered: boolean }

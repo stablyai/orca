@@ -102,6 +102,14 @@ export class PluginPanelController {
     ) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
     }
+    // Why here: the method schema accepts any panelId; only the session knows which panel is calling,
+    // and a panel may speak for itself alone.
+    if (
+      parsed.data.action === 'panel.action' &&
+      !namesCallingPanel(parsed.data.params, binding.contributionId)
+    ) {
+      return { ok: false, code: 'invalid_params', error: 'panelId must name the calling panel' }
+    }
     return this.options.executeHostCall(
       binding.pluginKey,
       parsed.data.action,
@@ -219,6 +227,14 @@ export class PluginPanelController {
       return null
     }
   }
+}
+
+function namesCallingPanel(params: unknown, contributionId: string): boolean {
+  return (
+    typeof params === 'object' &&
+    params !== null &&
+    (params as { panelId?: unknown }).panelId === contributionId
+  )
 }
 
 function findFrameContribution(

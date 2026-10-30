@@ -70,6 +70,33 @@ describe('panel.post', () => {
     await expect(api.post('samples.board', 'board', 1)).resolves.toEqual({ delivered: false })
   })
 
+  it('refuses the 31st post in a 10 s window with rate_limited and a retry hint, then admits again', async () => {
+    let clock = 1_000
+    const { api, sink } = messaging({ now: () => clock })
+    for (let index = 0; index < 30; index += 1) {
+      await expect(api.post('samples.board', 'board', index)).resolves.toEqual({ delivered: true })
+    }
+    await expect(api.post('samples.board', 'board', 'one more')).rejects.toMatchObject({
+      name: 'PluginHostMethodError',
+      code: 'rate_limited',
+      retryAfterMs: 10_000
+    })
+    expect(sink).toHaveBeenCalledTimes(30)
+    clock += 10_000
+    await expect(api.post('samples.board', 'board', 'later')).resolves.toEqual({ delivered: true })
+  })
+
+  it('spends budget on posts no window receives', async () => {
+    const { api, sink } = messaging({ hasOpenFrame: () => false, now: () => 0 })
+    for (let index = 0; index < 30; index += 1) {
+      await expect(api.post('samples.board', 'board', index)).resolves.toEqual({ delivered: false })
+    }
+    await expect(api.post('samples.board', 'board', 'probe')).rejects.toMatchObject({
+      code: 'rate_limited'
+    })
+    expect(sink).not.toHaveBeenCalled()
+  })
+
   it('refuses a panel the manifest does not list and a plugin that is not enabled', async () => {
     const { api } = messaging()
     await expect(api.post('samples.board', 'nope', 1)).rejects.toThrow('no panel nope')

@@ -8,6 +8,7 @@ import type {
   PluginSurface
 } from '../../../shared/plugins/frames/plugin-protocol'
 import type { PluginAuditLog } from '../plugin-audit-log'
+import { PluginHostMethodError } from './plugin-host-method-error'
 
 /**
  * Host API 1 handler bindings — the one place plugin-originated calls
@@ -101,6 +102,14 @@ export async function executePluginHostCall(
     return { ok: true, value: validated.value }
   } catch (error) {
     await auditMutation('error').catch(() => undefined)
+    if (error instanceof PluginHostMethodError) {
+      return {
+        ok: false,
+        code: error.code,
+        error: error.message,
+        ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs })
+      }
+    }
     return {
       ok: false,
       code: 'action_failed',

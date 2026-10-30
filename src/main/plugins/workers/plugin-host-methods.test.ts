@@ -5,6 +5,7 @@ import { PANEL_MESSAGE_MAX_BYTES } from '../../../shared/plugins/frames/plugin-f
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
+import { PluginHostMethodError } from './plugin-host-method-error'
 
 function fakePanels(): PluginHostServices['panels'] {
   return {
@@ -353,6 +354,29 @@ describe('executePluginHostCall panel messaging', () => {
     await expect(
       run('panel.post', { panelId: 'board', payload: 1 }, 'worker', ['storage:own']).outcome
     ).resolves.toMatchObject({ ok: false, code: 'capability_denied' })
+  })
+
+  it('answers with the code and retry hint a handler throws instead of action_failed', async () => {
+    const services = createServices(vi.fn().mockReturnValue({ ok: true }))
+    vi.mocked(services.panels.post).mockRejectedValueOnce(
+      new PluginHostMethodError('rate_limited', 'too many panel.post calls', 4_200)
+    )
+    await expect(
+      executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'panel.post',
+        params: { panelId: 'board', payload: 1 },
+        surface: 'worker',
+        grantedCapabilities: ['panel:own'],
+        services,
+        audit: { record: vi.fn().mockResolvedValue(undefined) }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'rate_limited',
+      error: 'too many panel.post calls',
+      retryAfterMs: 4_200
+    })
   })
 
   it('refuses a payload larger than one panel message', async () => {

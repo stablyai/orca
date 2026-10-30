@@ -1,8 +1,13 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../../shared/plugins/events/plugin-events'
 import type { PluginPanelMessage } from '../../../shared/plugins/frames/plugin-frame-bridge'
+import {
+  createPanelMessageBudget,
+  type PanelMessageBudget
+} from '../../../shared/plugins/frames/plugin-panel-message-budget'
 import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import { PluginHostMethodError } from '../workers/plugin-host-method-error'
 import type { PluginHostServices } from '../workers/plugin-host-method-bindings'
 
 export type PluginPanelMessageSink = (message: PluginPanelMessage) => boolean
@@ -20,16 +25,38 @@ export type PluginPanelMessagingOptions = {
     event: PluginEventName,
     payload: unknown
   ) => Promise<void>
+  now?: () => number
 }
 
 /**
  * The `panel.post` and `panel.action` handlers behind the host API. Plugin-private: a plugin can
  * only name panels its own manifest lists, and an action only reaches a worker that subscribed.
  * `delivered` means some window hosts the panel, not that a frame rendered the message.
+ * Posts share the panel bridge's budget (30 per 10 s per plugin): the bridge meters what panels
+ * send, and nothing else meters what a worker sends, so an approved worker could otherwise flood
+ * every window with IPC. Size is already bounded by the method schema.
  */
 export function createPluginPanelMessaging(
   options: PluginPanelMessagingOptions
 ): PluginHostServices['panels'] {
+  const now = options.now ?? (() => Date.now())
+  const postBudgets = new Map<string, PanelMessageBudget>()
+  const admitPost = (pluginKey: string): void => {
+    let budget = postBudgets.get(pluginKey)
+    if (!budget) {
+      budget = createPanelMessageBudget()
+      postBudgets.set(pluginKey, budget)
+    }
+    const at = now()
+    // Count only: every call spends budget, delivered or not, so an unopened panel cannot be used to probe for free.
+    if (budget.admit(at, 0) === 'rate_limited') {
+      throw new PluginHostMethodError(
+        'rate_limited',
+        'too many panel.post calls',
+        budget.retryAfterMs?.(at)
+      )
+    }
+  }
   const ownPanel = (pluginKey: string, panelId: string): ValidDiscoveredPlugin => {
     const plugin = options.resolveApprovedPlugin(pluginKey)
     if (!plugin) {
@@ -43,6 +70,7 @@ export function createPluginPanelMessaging(
   return {
     async post(pluginKey, panelId, payload) {
       ownPanel(pluginKey, panelId)
+      admitPost(pluginKey)
       if (!options.hasOpenFrame(pluginKey, panelId)) {
         return { delivered: false }
       }

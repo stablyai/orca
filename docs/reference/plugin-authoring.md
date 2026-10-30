@@ -100,7 +100,9 @@ currently holds a session for that panel, not proof that a frame rendered the me
 clients are not reached yet. A panel calls `panel.action` with `{ panelId, action, params }`; the
 worker receives the same object through `orca.events.on('panel.action', handler)`, which the
 manifest must list under `contributes.events`. Payloads are JSON and must fit one panel message
-(64 KiB). Older Orcas lack these methods, so the worker checks `orca.host.has('panel.post')` and a
+(64 KiB), and each direction admits 30 calls per 10 s per plugin; a refused call fails with
+`rate_limited` and a `retryAfterMs` to wait. A panel's `panelId` must be its own: the host refuses
+a `panel.action` that names another panel. Older Orcas lack these methods, so the worker checks `orca.host.has('panel.post')` and a
 panel checks `orca.host.has('panel.action')` before relying on them; a panel opened before its
 worker starts should send one action first so the worker knows to post its current state.
 

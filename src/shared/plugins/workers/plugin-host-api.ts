@@ -269,7 +269,7 @@ export const PLUGIN_HOST_API = {
   }),
   'panel.post': spec({
     summary:
-      "Sends a JSON message to one of the plugin's own panels; `delivered` is false when no window currently hosts that panel.",
+      "Sends a JSON message to one of the plugin's own panels, at most 30 per 10 s per plugin; `delivered` is false when no window currently hosts that panel.",
     since: 1,
     scope: 'plugin-private',
     capability: 'panel:own',
