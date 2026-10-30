@@ -94,7 +94,7 @@ async function createPolicy(ptyId: string) {
   return { ...policy.commandCode, dispose: () => policy.dispose() }
 }
 
-async function createPresentedExecution() {
+async function createPresentedExecution(incarnationId = 'command-code-execution') {
   const {
     admitLegacyTerminalSemanticResident,
     getTerminalSemanticResident,
@@ -102,7 +102,7 @@ async function createPresentedExecution() {
   } = await import('./terminal-side-effect-facts-handler')
   const resident = admitLegacyTerminalSemanticResident({
     ptyId: PTY_ID_LOCAL,
-    incarnationId: 'command-code-execution',
+    incarnationId,
     byteSource: false,
     binding: {
       paneKey: PANE_KEY,
@@ -405,6 +405,84 @@ describe('terminal Command Code status policy', () => {
         undefined,
         ROUTING
       )
+    } finally {
+      detach()
+      execution.retire()
+    }
+  })
+
+  it('releases a pending Done timer and executor when its admitted execution ends', async () => {
+    const working = makeStatusEntry({
+      state: 'working',
+      prompt: 'Fix the spinner',
+      agentType: 'command-code'
+    })
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = working
+    const execution = await createPresentedExecution()
+    const detach = execution.attach()
+    const ended = vi.fn()
+    execution.resident.onEnd(ended)
+    try {
+      const timersBeforeSettle = vi.getTimerCount()
+      execution.policy.commandCode.onCommandCodeDone(working.prompt)
+      expect(vi.getTimerCount()).toBe(timersBeforeSettle + 1)
+      vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(execution.current()).toBe(execution.resident)
+      expect(execution.resident.isLive).toBe(true)
+
+      execution.retire()
+      expect(execution.resident.isLive).toBe(false)
+      expect(execution.policy.isLive()).toBe(false)
+      expect(execution.current()).toBeUndefined()
+      expect(ended).toHaveBeenCalledExactlyOnceWith(execution.resident)
+      expect(vi.getTimerCount()).toBe(0)
+      vi.advanceTimersByTime(DONE_SETTLE_MS + 1)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(mockStoreState.agentStatusByPaneKey[PANE_KEY]).toBe(working)
+      expect(vi.getTimerCount()).toBe(0)
+
+      // A matching row and unqualified public deadline would expose a retained executor.
+      const { openCommandCodeDoneSettle } = await import('./command-code-done-settle')
+      openCommandCodeDoneSettle(PANE_KEY, working.prompt)
+      expect(vi.getTimerCount()).toBe(1)
+      vi.advanceTimersByTime(DONE_SETTLE_MS)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+
+      const successor = await createPresentedExecution('command-code-successor')
+      const nextWorking = makeStatusEntry({
+        state: 'working',
+        prompt: 'Fix the next spinner',
+        agentType: 'command-code',
+        updatedAt: 1001
+      })
+      mockStoreState.agentStatusByPaneKey[PANE_KEY] = nextWorking
+      try {
+        expect(successor.resident).not.toBe(execution.resident)
+        execution.retire()
+        expect(successor.current()).toBe(successor.resident)
+        expect(successor.resident.isLive).toBe(true)
+        successor.policy.commandCode.onCommandCodeDone(nextWorking.prompt)
+        vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+        expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(1)
+        expect(mockStoreState.setAgentStatus).toHaveBeenCalledExactlyOnceWith(
+          PANE_KEY,
+          expect.objectContaining({
+            state: 'done',
+            prompt: nextWorking.prompt,
+            agentType: 'command-code'
+          }),
+          expect.anything(),
+          undefined,
+          ROUTING
+        )
+        expect(ended).toHaveBeenCalledTimes(1)
+      } finally {
+        successor.retire()
+      }
+      expect(vi.getTimerCount()).toBe(0)
     } finally {
       detach()
       execution.retire()
