@@ -2,7 +2,11 @@ import type { TaskPageRepoSelectionModel } from './use-task-page-repo-selection'
 import { normalizeGitHubTaskPreset } from '../../../../shared/task-github-search'
 import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { type TaskProvider, resolveVisibleTaskProvider } from '../../../../shared/task-providers'
+import {
+  type TaskProvider,
+  isRepoBackedTaskProvider,
+  resolveVisibleTaskProvider
+} from '../../../../shared/task-providers'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { RuntimeProviderPreflightStatus } from '@/components/task-source-provider-availability'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
@@ -45,7 +49,7 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
   )
   const taskSourceRepoContexts = useMemo(
     () =>
-      taskSource === 'github' || taskSource === 'gitlab'
+      isRepoBackedTaskProvider(taskSource)
         ? selectedRepos
             .map((repo) => getTaskPageRepoSourceContext(repo, taskSource))
             .filter((context): context is TaskSourceContext => context !== null)

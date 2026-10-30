@@ -188,6 +188,11 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
       return identity.siteUrl && identifier
         ? `${identity.siteUrl.replace(/\/+$/, '')}/browse/${identifier}`
         : undefined
+    case 'azure-devops':
+      // The identity carries no host, so only hosted dev.azure.com URLs are derivable.
+      return identity.organization && identity.project
+        ? `https://dev.azure.com/${encodeURIComponent(identity.organization)}/${encodeURIComponent(identity.project)}/_workitems/edit/${item.number}`
+        : undefined
     case 'linear':
       return undefined
   }

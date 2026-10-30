@@ -1,15 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAzureDevOpsPullRequest } from './pull-request-creation'
+import {
+  createAzureDevOpsPullRequest,
+  isAzureDevOpsReviewCreationAuthenticated
+} from './pull-request-creation'
 import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
+import { _resetAzCliAccessTokenCacheForTests } from './az-cli-access-token'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn()
+const { gitExecFileAsyncMock, runAzAccessTokenCommandMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  runAzAccessTokenCommandMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('./az-cli-invocation', () => ({
+  runAzAccessTokenCommand: runAzAccessTokenCommandMock
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -27,14 +36,45 @@ describe('Azure DevOps pull request creation', () => {
       stdout: 'https://dev.azure.com/acme/Project/_git/repo\n',
       stderr: ''
     })
+    runAzAccessTokenCommandMock.mockReset()
+    runAzAccessTokenCommandMock.mockRejectedValue(new Error('az not available'))
     _resetAzureDevOpsRepoRefCache()
     _resetAzureDevOpsPreviewApiVersionCache()
+    _resetAzCliAccessTokenCacheForTests()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
     _resetAzureDevOpsRepoRefCache()
+  })
+
+  it('treats a configured token as sufficient authentication', async () => {
+    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+    await expect(isAzureDevOpsReviewCreationAuthenticated('/repo')).resolves.toBe(true)
+  })
+
+  it('recognizes an az CLI login as authentication for hosted Azure DevOps repos', async () => {
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    runAzAccessTokenCommandMock.mockResolvedValue(
+      JSON.stringify({ accessToken: 'entra-jwt', expires_on: 32472144000 })
+    )
+
+    await expect(isAzureDevOpsReviewCreationAuthenticated('/repo')).resolves.toBe(true)
+  })
+
+  it('stays unauthenticated without a token when az has no login', async () => {
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+
+    await expect(isAzureDevOpsReviewCreationAuthenticated('/repo')).resolves.toBe(false)
+  })
+
+  it('requires a token for on-prem base URLs instead of consulting az', async () => {
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = 'https://tfs.corp.example/tfs/Collection'
+
+    await expect(isAzureDevOpsReviewCreationAuthenticated('/repo')).resolves.toBe(false)
+    expect(runAzAccessTokenCommandMock).not.toHaveBeenCalled()
   })
 
   it('posts a pull request create body to the repository REST endpoint', async () => {

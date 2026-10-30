@@ -1291,7 +1291,8 @@
           },
           "createdWithoutParentNesting": "Created without nesting under \"{{value0}}\"",
           "createdWithoutParentNestingUnnamed": "Created without nesting under the selected parent",
-          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu."
+          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu.",
+          "create": {}
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -1374,6 +1375,9 @@
       },
       "pluginInstallLink": {
         "invalid": "That plugin link isn’t valid."
+      },
+      "folderWorkspaces": {
+        "mutations": {}
       }
     },
     "lib": {
@@ -3141,7 +3145,96 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "azureDevOps": {
+          "collapse": "Collapse",
+          "expand": "Expand",
+          "useItem": "Use",
+          "columnOrder": "Order",
+          "emptyBacklog": "No work items match.",
+          "unauthenticated": "Azure DevOps is not authenticated. Run az login, or set ORCA_AZURE_DEVOPS_TOKEN, then refresh.",
+          "notAzureRemote": "The selected repository does not have an Azure DevOps remote.",
+          "hostUnreachable": "Couldn’t reach the host that owns this repository, so its remote couldn’t be checked. Reconnect and refresh.",
+          "loadFailed": "Couldn’t load the Azure DevOps backlog: {{value0}}",
+          "unassigned": "Unassigned",
+          "iterationPast": "past",
+          "iterationCurrent": "current",
+          "iterationFuture": "future",
+          "filterKeyword": "Filter by keyword",
+          "filterType": "Type",
+          "filterAssignedTo": "Assigned to",
+          "filterStates": "States",
+          "filterArea": "Area",
+          "filterIteration": "Iteration",
+          "currentIteration": "Current iteration",
+          "clearIteration": "Any iteration",
+          "filterTags": "Tags",
+          "clearFilters": "Clear",
+          "pickTeam": "Pick a team",
+          "defaultTeam": "default",
+          "pickLevel": "Pick a level",
+          "showParents": "Show parents",
+          "backlogView": "Backlog",
+          "boardView": "Board",
+          "viewOptions": "View options",
+          "inProgressItems": "In progress items",
+          "resetColumnWidths": "Reset column widths",
+          "refresh": "Refresh",
+          "openInAzure": "Open in Azure DevOps",
+          "loadingItem": "Loading work item…",
+          "fieldState": "State",
+          "fieldAssignedTo": "Assigned to",
+          "fieldArea": "Area",
+          "fieldIteration": "Iteration",
+          "description": "Description",
+          "acceptanceCriteria": "Acceptance criteria",
+          "parent": "Parent",
+          "children": "Children",
+          "pullRequests": "Pull requests",
+          "pullRequestLabel": "PR #{{value0}}",
+          "useInWorktree": "Use in a worktree",
+          "providerLabel": "Azure DevOps",
+          "columnTitle": "Title",
+          "columnState": "State",
+          "teamSelectionSaveFailed": "Couldn’t save the team selection: {{value0}}",
+          "columnWidthsSaveFailed": "Couldn’t save the column widths: {{value0}}",
+          "noTeams": "No teams were found in this Azure DevOps project.",
+          "noLevels": "This team has no visible backlog levels.",
+          "itemMissing": "Work item not found.",
+          "unparented": "Unparented {{value0}}",
+          "linkUnavailable": "Couldn’t link this work item. Reload the backlog and try again.",
+          "board": {
+            "defaultLane": "Default",
+            "expandLane": "Expand swimlane",
+            "collapseLane": "Collapse swimlane",
+            "wipLimit": "Work in progress limit",
+            "done": "Done",
+            "doing": "Doing",
+            "loadFailed": "Couldn’t load the Azure DevOps board: {{value0}}",
+            "viewSelectionSaveFailed": "Couldn’t save the view selection: {{value0}}",
+            "noBoardForLevel": "This backlog level has no board, so the backlog is shown instead.",
+            "unmappedCard": "This card is not mapped to a column on this board.",
+            "unmappedCards_one": "{{count}} card is not mapped to a column, so it is shown in the first in-progress column.",
+            "unmappedCards_other": "{{count}} cards are not mapped to a column, so they are shown in the first in-progress column.",
+            "unhydratedCards_one": "{{count}} card couldn’t be loaded and is missing from the board. Refresh to try again.",
+            "unhydratedCards_other": "{{count}} cards couldn’t be loaded and are missing from the board. Refresh to try again.",
+            "unhydratedParents_one": "{{count}} parent work item couldn’t be loaded, so some cards show no parent.",
+            "unhydratedParents_other": "{{count}} parent work items couldn’t be loaded, so some cards show no parent."
+          },
+          "backlog": {
+            "unhydratedItems_one": "{{count}} work item couldn’t be loaded and is missing from this list. Refresh to try again.",
+            "unhydratedItems_other": "{{count}} work items couldn’t be loaded and are missing from this list. Refresh to try again."
+          },
+          "workItems": {
+            "loadFailed": "Couldn’t load your Azure DevOps work items: {{value0}}",
+            "empty": "No work items in this project are assigned to you.",
+            "queryLimit": "Only the {{value0}} most recently changed work items are shown, so the filters above cannot reach the rest. Narrow the list in Azure DevOps."
+          },
+          "workItemsView": "Work items",
+          "columnAreaPath": "Area Path",
+          "columnChangedDate": "Changed Date",
+          "columnId": "ID"
+        }
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -6249,7 +6342,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "openAzureDevOpsTasks": "Open Azure DevOps tasks"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -9195,7 +9289,11 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "azureDevOps": {
+            "label": "Azure DevOps"
+          },
+          "azureDevOpsDescription": "Connect Azure DevOps Boards and show it in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -10992,7 +11090,9 @@
             "setup": "setup",
             "apiKey": "api key",
             "skill": "skill",
-            "connect": "connect"
+            "connect": "connect",
+            "azure": "azure",
+            "azureDevops": "azure devops"
           }
         },
         "terminal": {
@@ -11452,9 +11552,7 @@
                   "fbfd237f5e": "ORCA_AZURE_DEVOPS_ACCESS_TOKEN",
                   "087feb92f1": ", or set",
                   "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
-                  "7bbc9c64f0": "Set",
                   "f3f47dc7de": "Azure DevOps status is not available in this runtime yet.",
-                  "0eb50d5593": "Pull requests and build statuses via Azure DevOps REST API tokens.",
                   "54636c65d4": "Pull requests and build statuses for detected Azure Repos",
                   "ea204f5e03": "{{value0}} · Pull requests and build statuses",
                   "6154b02093": "Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart Orca if environment variables changed.",
@@ -11465,7 +11563,15 @@
                   "statusNotConfigured": "Not configured",
                   "statusAuthFailed": "Auth failed",
                   "statusConfigured": "Configured",
-                  "statusOptionalSetup": "Optional setup"
+                  "statusOptionalSetup": "Optional setup",
+                  "az": {
+                    "description": "Pull requests and build statuses via the az CLI or Azure DevOps REST API tokens.",
+                    "run": "Run",
+                    "login": "az login",
+                    "or": {
+                      "set": " (Azure CLI), set"
+                    }
+                  }
                 }
               }
             }
@@ -19043,6 +19149,9 @@
             "detail": "Diagnostic ID: {{id}}\nDiagnostic records: {{records}}\nSize: {{sizeKb}} KB"
           }
         }
+      },
+      "folderWorkspaces": {
+        "mutations": {}
       }
     },
     "startup": {
@@ -20855,7 +20964,9 @@
         "stackRegistrationUnavailable": "The pull request was created, but GitHub stacks are not available for this repository.",
         "stackRegistrationFailed": "The pull request was created, but GitHub could not add it to the stack. Retry to finish stack registration."
       },
-      "baseHeadTitleRequired": "base branch, head branch, and title are required."
+      "baseHeadTitleRequired": "base branch, head branch, and title are required.",
+      "authRequiredAzureDevOps": "{{providerName}} is not authenticated. Next step: run az login, or set {{variable}} in this environment.",
+      "signInHintAzureDevOps": "Run az login or set {{variable}} in this environment"
     },
     "variables": {
       "basePrompt": "Orca’s built-in prompt for this action, including the context Orca knows how to gather safely.",

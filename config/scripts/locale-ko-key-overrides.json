@@ -3290,9 +3290,6 @@
   "auto.components.settings.token.source.control.integration.cards.0b5242f8a2": {
     "ko": "{{value0}} · PR 및 commit 상태"
   },
-  "auto.components.settings.token.source.control.integration.cards.0eb50d5593": {
-    "ko": "Azure DevOps REST API 토큰을 통한 PR 및 빌드 상태입니다."
-  },
   "auto.components.settings.token.source.control.integration.cards.0fa5629dad": {
     "ko": "PR 및 빌드 상태"
   },

@@ -1,8 +1,23 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'azure-devops'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'azure-devops'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
+
+export type RepoBackedTaskProvider = Extract<TaskProvider, 'github' | 'gitlab' | 'azure-devops'>
+
+/** Providers resolved from the selected repo's git remote rather than a signed-in account. */
+export function isRepoBackedTaskProvider(
+  provider: TaskProvider
+): provider is RepoBackedTaskProvider {
+  return provider === 'github' || provider === 'gitlab' || provider === 'azure-devops'
+}
 
 export function isTaskProvider(value: unknown): value is TaskProvider {
   return TASK_PROVIDER_SET.has(value as TaskProvider)
@@ -98,6 +113,10 @@ function isTaskProviderAvailable(
   }
   // Disconnected Jira must remain visible as its own first-time setup entry point.
   if (provider === 'jira') {
+    return true
+  }
+  // Why: like Jira, the Azure DevOps surface carries its own empty state with the auth next step.
+  if (provider === 'azure-devops') {
     return true
   }
   return availability.linearConnected

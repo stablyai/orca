@@ -100,6 +100,20 @@
         "filesFound_other": "{{count}} files found"
       },
       "TaskPage": {
+        "azureDevOps": {
+          "backlog": {
+            "unhydratedItems_one": "{{count}} work item couldn’t be loaded and is missing from this list. Refresh to try again.",
+            "unhydratedItems_other": "{{count}} work items couldn’t be loaded and are missing from this list. Refresh to try again."
+          },
+          "board": {
+            "unhydratedCards_one": "{{count}} card couldn’t be loaded and is missing from the board. Refresh to try again.",
+            "unhydratedCards_other": "{{count}} cards couldn’t be loaded and are missing from the board. Refresh to try again.",
+            "unhydratedParents_one": "{{count}} parent work item couldn’t be loaded, so some cards show no parent.",
+            "unhydratedParents_other": "{{count}} parent work items couldn’t be loaded, so some cards show no parent.",
+            "unmappedCards_one": "{{count}} card is not mapped to a column, so it is shown in the first in-progress column.",
+            "unmappedCards_other": "{{count}} cards are not mapped to a column, so they are shown in the first in-progress column."
+          }
+        },
         "changedFileCount_one": "{{count}} file",
         "changedFileCount_other": "{{count}} files",
         "labelCount_one": "{{count}} label",

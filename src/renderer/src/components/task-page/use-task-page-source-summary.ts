@@ -33,8 +33,10 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     hostLabelById,
     taskSourceHostAvailability,
     accountBackedTaskSourceHostId,
-    accountBackedTaskSourceHostAvailability
+    accountBackedTaskSourceHostAvailability,
+    azureDevOpsViews
   } = model
+  const azureDevOpsProjectName = azureDevOpsViews.projectLabel
   const taskSourceAvailabilityNoticeByProvider = useMemo<
     Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
   >(() => {
@@ -102,6 +104,21 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      // Why: repo-backed like GitHub, but served over HTTP from main — no CLI preflight to fold in.
+      'azure-devops':
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('azure-devops'),
+          sourceCount: selectedRepos.length,
+          hostLabelById,
+          hostAvailability: selectedRepos.flatMap((repo) => {
+            const context = getTaskPageRepoSourceContext(repo, 'azure-devops')
+            const host = context ? hostRegistryById.get(context.hostId) : undefined
+            const availability = context
+              ? getTaskSourceHostAvailabilityForHost(host, context.hostId)
+              : null
+            return availability ? [availability] : []
+          })
         }) ?? undefined
     }
   }, [
@@ -132,9 +149,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null,
+      azureDevOpsProjectName
     })
   }, [
+    azureDevOpsProjectName,
     selectedJiraSite,
     selectedLinearWorkspace,
     selectedRepos.length,

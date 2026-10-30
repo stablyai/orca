@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterAvailableTaskProviders,
+  isTaskProvider,
   normalizeTaskProviderSettings,
+  normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider
 } from './task-providers'
 
@@ -98,5 +100,19 @@ describe('task providers', () => {
         linearConnected: false
       })
     ).toEqual(['github'])
+  })
+
+  it('accepts azure-devops as a visible and always-available provider', () => {
+    expect(isTaskProvider('azure-devops')).toBe(true)
+    expect(normalizeVisibleTaskProviders(['azure-devops', 'github'])).toEqual([
+      'azure-devops',
+      'github'
+    ])
+    expect(
+      filterAvailableTaskProviders(['azure-devops'], {
+        gitlabInstalled: false,
+        linearConnected: false
+      })
+    ).toEqual(['azure-devops'])
   })
 })

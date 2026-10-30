@@ -76,7 +76,14 @@ beforeEach(() => {
     settings: {},
     preflightStatus: {
       gh: { installed: true, authenticated: true },
-      glab: { installed: true, authenticated: true }
+      glab: { installed: true, authenticated: true },
+      azureDevOps: {
+        configured: true,
+        authenticated: true,
+        account: null,
+        baseUrl: null,
+        tokenConfigured: true
+      }
     },
     preflightStatusChecked: true,
     preflightStatusContextKey: 'local',
@@ -119,6 +126,7 @@ describe('useTaskSourceProviderReadiness', () => {
 
     expect(latest?.github).toMatchObject({ connected: true, checking: false })
     expect(latest?.gitlab).toMatchObject({ connected: true, checking: false })
+    expect(latest?.['azure-devops']).toMatchObject({ connected: true, checking: false })
     expect(latest?.jira).toMatchObject({ connected: true, checking: false })
     expect(latest?.linear).toMatchObject({
       connected: true,
@@ -135,8 +143,10 @@ describe('useTaskSourceProviderReadiness', () => {
 
     expect(latest?.github.connected).toBe(false)
     expect(latest?.gitlab.connected).toBe(false)
+    expect(latest?.['azure-devops'].connected).toBe(false)
     expect(latest?.github.unavailable).toBe(true)
     expect(latest?.gitlab.unavailable).toBe(true)
+    expect(latest?.['azure-devops'].unavailable).toBe(true)
   })
 
   it('keeps the known skill result while a focus-triggered rescan is in flight', async () => {
