@@ -40,17 +40,13 @@ export function sendFederatedControlMail(args: {
   if (!federatedTarget || !dispatchId) {
     return undefined
   }
-  if (federatedTarget.protocol_version < ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION) {
-    throw new OrchestrationError(
-      'capability_unsupported',
-      `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
-    )
-  }
-  if (db.getWorkerDispatch(dispatchId)?.state !== 'ready') {
-    throw new OrchestrationError(
-      'dispatch_inactive',
-      `Federated Dispatch ${dispatchId} is not active.`
-    )
+  const refusal = federatedControlMailRefusal(
+    dispatchId,
+    federatedTarget.protocol_version,
+    () => db.getWorkerDispatch(dispatchId)?.state
+  )
+  if (refusal) {
+    throw new OrchestrationError(refusal.code, refusal.message)
   }
   if (params.type === 'worker_done' || params.type === 'heartbeat') {
     throw new OrchestrationError(
@@ -88,4 +84,21 @@ export function sendFederatedControlMail(args: {
     () => runtime.ensureOrchestrationFederationRelay(messageRunId),
     { kind: 'federation', ...(messageRunId ? { runId: messageRunId } : {}) }
   )
+}
+
+export function federatedControlMailRefusal(
+  dispatchId: string,
+  protocolVersion: number,
+  workerState: () => string | undefined
+): { code: 'capability_unsupported' | 'dispatch_inactive'; message: string } | undefined {
+  if (protocolVersion < ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION) {
+    return {
+      code: 'capability_unsupported',
+      message: `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
+    }
+  }
+  if (workerState() !== 'ready') {
+    return { code: 'dispatch_inactive', message: `Federated Dispatch ${dispatchId} is not active.` }
+  }
+  return undefined
 }

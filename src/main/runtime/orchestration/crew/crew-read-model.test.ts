@@ -12,6 +12,8 @@ import { agentSessionRecordFixture } from '../../../native-chat/agent-session-re
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
+import { resolveOrcaSessionParty } from '../orchestration-party'
+import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 
 describe('public crew read and stream', () => {
   it('derives direct roles and two-sided latest mail without consuming questions or leaking authority', async () => {
@@ -439,7 +441,14 @@ it('hydrates expired peer provenance identically in reversed read orders without
   const fresh = buildCrewSnapshot('term_peer', deps)
   const before = model.read('term_peer')
   expect(before).toEqual(fresh)
-  expect(before.sections.talkingWith[0].sendAddress).toBe('orca_session_id:chat-history')
+  expect(() =>
+    resolveOrcaSessionParty(testOrcaSessionId('chat-history'), db, deps.records)
+  ).toThrow('worker identity')
+  expect(before.sections.talkingWith[0]).not.toHaveProperty('sendAddress')
+  expect(before.sections.talkingWith[0]).toMatchObject({
+    openTarget: { kind: 'chat', sessionId: 'chat-history' },
+    latest: { preview: 'retained alias' }
+  })
   model.read('orca_session_id:chat-history')
   expect(model.read('term_peer')).toEqual(before)
   stop()

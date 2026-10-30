@@ -21,6 +21,8 @@ export function captureCrewIdentityInputs(deps: CrewReadDependencies): CrewReadD
     liveHandle: capture(deps.liveHandle),
     handleForPane: capture(deps.handleForPane),
     paneForHandle: capture(deps.paneForHandle),
+    callerPaneForHandle: deps.callerPaneForHandle ? capture(deps.callerPaneForHandle) : undefined,
+    livePaneForHandle: deps.livePaneForHandle ? capture(deps.livePaneForHandle) : undefined,
     processForHandle: capture((handle) => deps.processForHandle?.(handle) ?? null)
   }
 }

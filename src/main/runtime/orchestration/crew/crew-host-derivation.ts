@@ -1,3 +1,4 @@
+import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { captureCrewIdentityInputs } from './crew-identity-inputs'
 import type { FleetDurableWorker } from '../../../../shared/orchestration-fleet-projection'
 import { createFleetStatusIndex } from '../../../../shared/orchestration-fleet-status-index'
@@ -144,10 +145,19 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, now: number
       }
     }
   }
+  const sourceInputs = createCrewSourceInputs(deps.db)
   return refreshCrewStatuses(
     {
       registry,
-      sourceInputs: createCrewSourceInputs(deps.db),
+      sourceInputs,
+      recipientInputs: deps.db
+        ? createCrewRecipientInputs(
+            deps.db,
+            registry.records,
+            registry.commandCanonical,
+            sourceInputs.legacyOwner
+          )
+        : null,
       deps: { ...sources, statuses, records: registry.records },
       now,
       expiresAt,
