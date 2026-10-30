@@ -272,6 +272,8 @@ export type PtyTransport = {
 }
 
 export type IpcPtyTransportOptions = {
+  /** Renderer-local observation before admission; never controls dispatch. */
+  onDrivingInputAttempt?: (ptyId: string | null) => void
   cwd?: string
   /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean

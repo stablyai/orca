@@ -77,7 +77,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
-    if (wasUserInput || !isPassiveTerminalInputReport(data)) {
+    if (!wasUserInput && !isPassiveTerminalInputReport(data)) {
       session.noteTerminalInputForPty(currentPtyId)
     }
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
