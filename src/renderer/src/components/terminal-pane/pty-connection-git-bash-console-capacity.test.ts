@@ -1,5 +1,5 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createMockTransport,
   createPane,
@@ -30,6 +30,9 @@ import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-se
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { PtyTransport } from './pty-transport-types'
 import type { PtyPaneStartup } from './pty-connection-types'
+import type * as PtyTransportModule from './pty-transport'
+import type * as PtyPreHandlerBufferModule from './pty-pre-handler-buffer'
+import type * as PtyDispatcherModule from './pty-dispatcher'
 
 const MARKER = 'too many consoles in use, max consoles is 128'
 let state: StoreState
@@ -37,6 +40,9 @@ let queue: MockTransport[] = []
 let options: Record<string, unknown>[] = []
 let subscribers: ((state: StoreState) => void)[] = []
 let restoreUserAgent: (() => void) | undefined
+let realTransport: typeof PtyTransportModule
+let transportBuffers: typeof PtyPreHandlerBufferModule
+let transportDispatcher: typeof PtyDispatcherModule
 
 async function startPane({
   windows = true,
@@ -101,12 +107,14 @@ async function heldLaunch({
     }
   })
   window.api.pty.claimViewport = vi.fn().mockResolvedValue(undefined)
+  transportBuffers.clearPreHandlerPtyState('pty-1')
+  transportDispatcher.ensurePtyDispatcher()
+  transportDispatcher.reattachPtyDispatcherPushListeners()
   const handoffs = await import('./deferred-split-pane-handoff')
   const transportModule = await import('./pty-transport')
-  const actual = await vi.importActual<typeof transportModule>('./pty-transport')
   const transports: PtyTransport[] = []
   vi.mocked(transportModule.createIpcPtyTransport).mockImplementation((opts) => {
-    const transport = actual.createIpcPtyTransport(opts)
+    const transport = realTransport.createIpcPtyTransport(opts)
     transports.push(transport)
     return transport
   })
@@ -246,10 +254,9 @@ async function heldLaunch({
     }
   }
   async function die() {
-    const buffers = await import('./pty-pre-handler-buffer')
     vi.mocked(window.api.pty.spawn).mockImplementation(async () => {
-      buffers.bufferPreHandlerPtyData('pty-1', MARKER)
-      buffers.bufferPreHandlerPtyExit('pty-1', 1)
+      transportBuffers.bufferPreHandlerPtyData('pty-1', MARKER)
+      transportBuffers.bufferPreHandlerPtyExit('pty-1', 1)
       return { id: 'pty-1' }
     })
     cwd.resolve('C:\\repo')
@@ -276,6 +283,12 @@ async function heldLaunch({
 }
 
 describe('Git Bash console-capacity pane retention', () => {
+  beforeAll(async () => {
+    // Keep the suite-loaded transport and its buffer/dispatcher on the same module graph.
+    realTransport = await vi.importActual<typeof PtyTransportModule>('./pty-transport')
+    transportBuffers = await import('./pty-pre-handler-buffer')
+    transportDispatcher = await import('./pty-dispatcher')
+  })
   beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
