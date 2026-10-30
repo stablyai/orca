@@ -115,11 +115,14 @@ it('uses stamped Run and complete remembered owners before a missing or closed n
     coordinatorOrcaSessionId: IMPORTED
   })
   expect(f.available([IMPORTED])(IMPORTED)).toBe(true)
-  f.db.unbindOtherRunsForCoordinator({
-    terminalHandle: null,
-    orcaSessionId: IMPORTED,
-    paneKey: null
-  })
+  f.db.unbindOtherRunsForCoordinator(
+    {
+      terminalHandle: null,
+      orcaSessionId: IMPORTED,
+      paneKey: null
+    },
+    f.run.id
+  )
   expect(f.db.getRunMailboxOwnerIdsForHandle(address)).toEqual([first.id])
   expect(f.available([IMPORTED])(IMPORTED)).toBe(true)
   const second = f.db.createRun({
@@ -128,11 +131,14 @@ it('uses stamped Run and complete remembered owners before a missing or closed n
     coordinatorPaneKey: null,
     coordinatorOrcaSessionId: IMPORTED
   })
-  f.db.unbindOtherRunsForCoordinator({
-    terminalHandle: null,
-    orcaSessionId: IMPORTED,
-    paneKey: null
-  })
+  f.db.unbindOtherRunsForCoordinator(
+    {
+      terminalHandle: null,
+      orcaSessionId: IMPORTED,
+      paneKey: null
+    },
+    f.run.id
+  )
   expect(f.available([IMPORTED])(IMPORTED)).toBe(false)
   expect(f.available([IMPORTED], first.id)(IMPORTED)).toBe(true)
   expect(f.available([IMPORTED], second.id)(IMPORTED)).toBe(true)
