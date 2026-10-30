@@ -109,12 +109,16 @@ async function readGrid(page: Page) {
       throw new Error('Active terminal geometry is unavailable')
     }
     const buffer = pane.terminal.buffer.active
+    const proposed = pane.fitAddon.proposeDimensions()
     return {
       worktree,
       tab,
       pty: pane.container.dataset.ptyId,
       cols: pane.terminal.cols,
       rows: pane.terminal.rows,
+      proposedCols: proposed?.cols,
+      proposedRows: proposed?.rows,
+      localShared: viewport.dataset.localSharedGrid === 'true',
       viewportWidth: viewport.clientWidth,
       viewportHeight: viewport.clientHeight,
       screenWidth: screen.getBoundingClientRect().width,
@@ -148,10 +152,26 @@ async function emulateVisibleHiddenWindow(app: ElectronApplication, page: Page):
 
 async function resizeWindow(app: ElectronApplication, page: Page, width: number, height: number) {
   const window = await app.browserWindow(page)
-  await window.evaluate((window, size) => window.setSize(size.width, size.height), {
-    width,
-    height
-  })
+  const contentSize = await window.evaluate(
+    (window, size) => {
+      window.setSize(size.width, size.height)
+      return window.getContentSize()
+    },
+    {
+      width,
+      height
+    }
+  )
+  await expect.poll(() => page.evaluate(() => [innerWidth, innerHeight])).toEqual(contentSize)
+}
+
+async function expectLocalFit(page: Page): Promise<void> {
+  await expect
+    .poll(async () => {
+      const grid = await readGrid(page)
+      return !grid.localShared && grid.cols === grid.proposedCols && grid.rows === grid.proposedRows
+    })
+    .toBe(true)
 }
 
 async function openWorker(app: ElectronApplication): Promise<Page> {
@@ -382,10 +402,12 @@ test('pins a mirrored PTY through resize and focus, then releases it on navigati
 
     // The host is the sole visible viewer of its PTY after navigation away.
     await resizeWindow(electronApp, orcaPage, 1200, 800)
-    await expect.poll(async () => (await readGrid(orcaPage)).cols).not.toBe(canonical.cols)
+    await expectLocalFit(orcaPage)
     await typeToken(orcaPage, shared, 'NAVIGATION_RELEASED')
     const released = await readGrid(orcaPage)
-    expect(shared.read()).toMatchObject({ cols: released.cols, rows: released.rows })
+    await expect
+      .poll(() => shared.read())
+      .toMatchObject({ cols: released.cols, rows: released.rows })
     await selectWorktree(worker, worktrees[0])
     await expectCanonicalFrame(worker, shared, { cols: released.cols, rows: released.rows })
     await selectWorktree(orcaPage, worktrees[1])
@@ -398,6 +420,7 @@ test('pins a mirrored PTY through resize and focus, then releases it on navigati
     await workerFocus.detach()
     await worker.close()
     await resizeWindow(electronApp, orcaPage, 1800, 1000)
+    await expectLocalFit(orcaPage)
     await expect.poll(async () => (await readGrid(orcaPage)).cols).toBeGreaterThan(released.cols)
     await typeToken(orcaPage, shared, 'CLOSE_RELEASED')
     const final = await readGrid(orcaPage)
