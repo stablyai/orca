@@ -7,6 +7,7 @@ import { ZSH_WRAPPER_DIR_MARKER_CONTENT, ZSH_WRAPPER_DIR_MARKER_FILE } from '../
 import type { ShellWrapperFile } from '../shell-wrapper-file-writer'
 import { buildZshStartupHook, type ZshStartupHookSpec } from '../zsh-startup-wrapper-builder'
 import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
+import { SH_WSL_ENV_FILE } from '../wsl-shell-cwd-report'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
 /** Paths in the generated tree, kept separate so existence checks do not rebuild wrapper bytes. */
@@ -16,7 +17,8 @@ export function getLocalShellReadyWrapperPaths(root: string): readonly string[] 
     `${zshDir}/.zshenv`,
     `${zshDir}/${ZSH_WRAPPER_DIR_MARKER_FILE}`,
     `${root}/bash/rcfile`,
-    getFishVendorConfSnippetPath(root)
+    getFishVendorConfSnippetPath(root),
+    `${root}/sh/env`
   ]
 }
 
@@ -41,11 +43,14 @@ export function getLocalZshWrapperSpec(): ZshStartupHookSpec {
 // Use slash paths in shell literals; path.join would introduce Windows backslash escapes and diverge from launch args.
 // Only .zshenv is wrapped: it restores user ZDOTDIR before zsh reads the remaining startup files.
 export function buildLocalShellReadyWrapperFiles(root: string): readonly ShellWrapperFile[] {
-  const [zshEnvPath, zshMarkerPath, bashRcfilePath] = getLocalShellReadyWrapperPaths(root)
+  const [zshEnvPath, zshMarkerPath, bashRcfilePath, , shEnvPath] =
+    getLocalShellReadyWrapperPaths(root)
   return [
     [zshEnvPath, buildZshStartupHook(getLocalZshWrapperSpec())],
     [zshMarkerPath, ZSH_WRAPPER_DIR_MARKER_CONTENT],
     [bashRcfilePath, getBashShellReadyRcfileContent()],
-    buildFishVendorConfWrapperFile(root)
+    buildFishVendorConfWrapperFile(root),
+    // Only a WSL bridge sh/dash/ash pane points ENV here.
+    [shEnvPath, SH_WSL_ENV_FILE]
   ]
 }

@@ -71,6 +71,8 @@ describe('TooManyChangesBanner', () => {
       isRecoveryBusy: false,
       isAbortingOperation: false,
       onAbortOperation: vi.fn(),
+      isCompletingMerge: false,
+      onCompleteMerge: vi.fn(),
       onResolveWithAi: vi.fn(),
       onReviewConflicts: vi.fn(),
       worktreeId: 'wt-1',

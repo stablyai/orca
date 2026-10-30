@@ -10,6 +10,7 @@ import {
   MobileFilePreviewTruncatedNote
 } from './MobileFilePreviewSourceText'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   relativePath: string
@@ -39,6 +40,7 @@ export function MobileFileMarkdownPreview({
   onOpenFile
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
   const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
@@ -59,7 +61,11 @@ export function MobileFileMarkdownPreview({
         onToggleLineNumbers={onToggleLineNumbers}
         content={content}
         truncated={truncated}
-        copyAccessibilityLabel={truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'}
+        copyAccessibilityLabel={
+          truncated
+            ? t('files.fileMarkdownPreview.copyLoadedSource', 'Copy loaded Markdown source')
+            : t('files.fileMarkdownPreview.copySource', 'Copy Markdown source')
+        }
       />
       {mode === 'preview' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>

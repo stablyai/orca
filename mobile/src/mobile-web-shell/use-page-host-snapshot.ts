@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadHosts } from '../transport/host-store'
 import type { BridgeInitHost } from './bridge/bridge-envelope'
 import {
   hydrateMirroredStorage,
+  retainMirroredStorage,
   readMirroredKeyOrStore,
   readMirroredStorage,
   writeMirroredStorage
@@ -21,7 +22,7 @@ export type PageHostSnapshot = {
 
 export type PageHostSnapshotView = {
   snapshot: PageHostSnapshot | null
-  // Report rejected profile reads; no host can answer ready and nothing retries this read automatically.
+  // Report rejected native-store reads; no host can answer ready and nothing retries this read automatically.
   unreadable: boolean
   retry: () => void
   // Keep init synchronous from a mirror updated by native writers and refreshed from the store.
@@ -40,21 +41,30 @@ export function usePageHostSnapshot(
   const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(null)
   const [unreadable, setUnreadable] = useState(false)
   const [readAttempt, setReadAttempt] = useState(0)
+  const releaseStorageRef = useRef<(() => void) | null>(null)
 
   // Apply the shell allowlist on every read/refresh; unrelated mirrored app state must never cross.
-  const refreshStorage = useCallback(
-    (): Promise<void> => hydrateMirroredStorage(pageStorageKeysForRoute(hostId, routePathname)),
-    [hostId, routePathname]
-  )
+  const refreshStorage = useCallback(async (): Promise<void> => {
+    await hydrateMirroredStorage(pageStorageKeysForRoute(hostId, routePathname))
+  }, [hostId, routePathname])
 
   useEffect(() => {
     let stale = false
+    const keys = pageStorageKeysForRoute(hostId, routePathname)
+    // Retain the next route before releasing the last so shared host-wide keys stay mirrored across route changes.
+    const releaseStorage = retainMirroredStorage(keys)
+    releaseStorageRef.current?.()
+    releaseStorageRef.current = releaseStorage
     setSnapshot(null)
     setUnreadable(false)
     // Wait for profile and storage together; a fast profile would otherwise build a host that primes empty preferences.
-    void Promise.all([refreshStorage(), loadHosts()]).then(
-      ([, hosts]) => {
+    void Promise.all([hydrateMirroredStorage(keys), loadHosts()]).then(
+      ([storageLoaded, hosts]) => {
         if (stale) {
+          return
+        }
+        if (!storageLoaded) {
+          setUnreadable(true)
           return
         }
         const found = hosts.find((profile) => profile.id === hostId)
@@ -88,7 +98,15 @@ export function usePageHostSnapshot(
     return () => {
       stale = true
     }
-  }, [hostId, readAttempt, refreshStorage])
+  }, [hostId, routePathname, readAttempt])
+
+  useEffect(
+    () => () => {
+      releaseStorageRef.current?.()
+      releaseStorageRef.current = null
+    },
+    []
+  )
 
   const writeStorage = useCallback(
     (key: string, value: string | null): void => {

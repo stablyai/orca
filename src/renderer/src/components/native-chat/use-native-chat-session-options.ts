@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  getAgentSessionOptionCatalog,
-  type CatalogModel
-} from '../../../../shared/agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat/input/native-chat-session-option-state'
-import { retireMissingModelMutation } from '../../../../shared/native-chat-discovered-catalog-models'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { useAppStore } from '../../store'
 import { sayNativeChatSessionOptionTranslated } from './native-chat-session-option-labels-text'
@@ -32,16 +28,6 @@ const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
-
-export async function retirePersistedModelMissingFromDiscovery(
-  agent: AgentType,
-  models: readonly CatalogModel[]
-): Promise<void> {
-  const mutation = retireMissingModelMutation(agent, models)
-  if (mutation) {
-    await enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, mutation)
-  }
-}
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -218,14 +204,8 @@ export function useNativeChatSessionOptions(args: {
         if (reportedValues) {
           surface.reportSessionOptions(reportedValues)
         }
-        void retirePersistedModelMissingFromDiscovery(agent, models).catch(() => undefined)
       }
     )
-    // Subscriptions do not replay; inspect cached discovery so pre-mount probes can retire stale defaults.
-    const cached = readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
-    if (cached) {
-      void retirePersistedModelMissingFromDiscovery(agent, cached).catch(() => undefined)
-    }
     ensureNativeChatModelEnrichment({
       agent,
       hostKey: discoveryContext.hostKey,

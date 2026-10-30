@@ -140,18 +140,14 @@ export function useWorkspaceSpaceManagerPanel() {
               'Workspaces deleted'
             ),
         {
-          description:
-            deletedTargets.length === 1
-              ? translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace_one',
-                  '{{count}} workspace removed from Space.',
-                  { count: deletedTargets.length }
-                )
-              : translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace_other',
-                  '{{count}} workspaces removed from Space.',
-                  { count: deletedTargets.length }
-                )
+          description: translate(
+            'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace',
+            '{{count}} workspaces removed from Space.',
+            {
+              count: deletedTargets.length,
+              defaultValue_one: '{{count}} workspace removed from Space.'
+            }
+          )
         }
       )
     },

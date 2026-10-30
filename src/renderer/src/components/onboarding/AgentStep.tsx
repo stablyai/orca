@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Switch } from '@/components/ui/switch'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { i18n, translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type AgentStepProps = {
   selectedAgent: TuiAgent | null
@@ -51,17 +52,11 @@ export function AgentStep({
   }
   const fallbackRestLabel = openState
     ? translate('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
-    : fallbackRest.length === 1
-      ? translate(
-          'auto.components.onboarding.AgentStep.showMoreAgents_one',
-          'Show {{count}} more agent →',
-          { count: fallbackRest.length }
-        )
-      : translate(
-          'auto.components.onboarding.AgentStep.showMoreAgents_other',
-          'Show {{count}} more agents →',
-          { count: fallbackRest.length }
-        )
+    : translate(
+        'auto.components.onboarding.AgentStep.showMoreAgents',
+        'Show {{count}} more agents →',
+        { count: fallbackRest.length, defaultValue_one: 'Show {{count}} more agent →' }
+      )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
@@ -91,7 +86,7 @@ export function AgentStep({
             variant="outline"
             size="xs"
             className="shrink-0"
-            onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl)}
+            onClick={(event) => openAppHttpLink(selectedEntry.homepageUrl, { event })}
           >
             {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
             <ExternalLink className="size-3" />

@@ -25,6 +25,7 @@ vi.mock('expo-router', () => ({
   }
 }))
 vi.mock('react-native', () => ({
+  StyleSheet: { create: <T,>(styles: T) => styles },
   Animated: { Value: class {} },
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
@@ -38,7 +39,11 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ ImagePlus: 'ImagePlus', Mic: 'Mic' }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
-vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))
+vi.mock('../platform/haptics', () => ({
+  triggerError: () => {},
+  triggerEdgeBump: () => {},
+  triggerSelection: () => {}
+}))
 vi.mock('./use-terminal-live-input-mode-preference', () => ({
   useTerminalLiveInputModePreference: () => ({ liveInputTerminalHandles: new Set<string>() })
 }))
@@ -127,6 +132,7 @@ function Probe() {
   } as never)
   const activeHandleRef = useRef('terminal')
   const dictationRouteContextRef = useRef(null)
+  const commandFieldAnchorRef = useRef(null)
   const deviceTokenRef = useRef('device')
   const scope = {
     ...screen,
@@ -139,6 +145,7 @@ function Probe() {
     activeSessionTab: null,
     activeHandleRef,
     dictationRouteContextRef,
+    commandFieldAnchorRef,
     deviceTokenRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: env.connected,

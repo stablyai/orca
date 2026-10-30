@@ -4,14 +4,15 @@ import type { AgentSessionExecutionLocation } from '../../shared/agent-session-r
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
   type AgentSessionAcquisition,
-  type AgentSessionDispatchOutcome,
+  type AgentSessionDispatchOutcome as DispatchOutcome,
   type StructuredAgentSessionAcquireInput,
-  type StructuredAgentSessionAdapter,
-  type StructuredAgentSessionSetOptionInput
+  type StructuredAgentSessionAdapter as SessionAdapter,
+  type StructuredAgentSessionSetOptionInput as SetOptionInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { acpAgentName } from './acp-structured-agent-definitions'
@@ -32,22 +33,28 @@ import {
 import { readAcpLiveOptions } from './acp-structured-options'
 import { writeAcpSessionOption } from './acp-session-option-write'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
-import { acpStartupFailure, isAcpReadySession } from './acp-structured-child'
+import * as childState from './acp-structured-child'
 import { AcpStructuredChildren } from './acp-structured-child-lifecycle'
 import { AcpConversationCopies } from './acp-conversation-copies'
+import { AcpTextTasks } from './acp-text-task'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
 
-export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
+export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
   private readonly children: AcpStructuredChildren
   private readonly copies: AcpConversationCopies
+  private readonly textTasks: AcpTextTasks
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {
     this.atRestCommands = deps.atRestCommands
     this.children = new AcpStructuredChildren(deps)
     this.copies = new AcpConversationCopies(deps)
+    this.textTasks = new AcpTextTasks(deps)
   }
 
-  copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) =>
+  generateText: NonNullable<SessionAdapter['generateText']> = (input) =>
+    this.textTasks.generate(input)
+
+  copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     this.copies.copy(input)
 
   supportsLocation = (location: AgentSessionExecutionLocation): boolean => {
@@ -97,7 +104,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
         },
         onConnectionLost: (session, error) => this.children.connectionLost(session, error),
         onSettled: (settlement) => this.deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
-        forceClose: (id) => void this.forceCloseSession(id)
+        forceClose: (id) => this.children.stopAfterFailure(id)
       })
       if (attempt.signal.aborted) {
         session.dispose()
@@ -118,6 +125,9 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
         this.children.starts.retainFailed(sessionId, connection)
         throw new AgentSessionAcquisitionExitUnprovenError(error)
       }
+      if (connection?.lastCloseResult?.killDelivered && !connection.exited) {
+        throw new AgentSessionAcquisitionRootExitObservedError(error, 'kill-delivered')
+      }
       if (attempt.signal.aborted) {
         const closed = new Error(
           `${acpAgentName(this.deps.spec.agent)} was closed while starting`,
@@ -136,7 +146,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
   }
 
-  open: NonNullable<StructuredAgentSessionAdapter['open']> = async (input) => {
+  open: NonNullable<SessionAdapter['open']> = async (input) => {
     const child = this.children.sessions.get(input.sessionId)
     if (
       !child ||
@@ -149,7 +159,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     try {
       return await child.open(input.signal)
     } catch (error) {
-      const failure = acpStartupFailure(child, error)
+      const failure = childState.acpStartupFailure(child, error)
       if (failure) {
         const refusal = new AgentSessionAcquisitionRefusal(
           `${acpAgentName(child.spec.agent)} requires sign-in`,
@@ -161,9 +171,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
   }
 
-  async dispatch(
-    input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
-  ): Promise<AgentSessionDispatchOutcome> {
+  async dispatch(input: Parameters<SessionAdapter['dispatch']>[0]): Promise<DispatchOutcome> {
     const lost = this.children.sessions.get(input.sessionId)
     if (lost && lost.journalClosed !== null) {
       // Protocol loss prevents dispatch even before exit is proven.
@@ -204,10 +212,10 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     return { state: 'admitted' }
   }
 
-  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) =>
+  compact: NonNullable<SessionAdapter['compact']> = async (input) =>
     this.live(input.sessionId).turns.compact(input.command)
 
-  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
+  cancelTurn: SessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)
     // Refuse a stale named turn; a handover with no journal turn can stop the in-flight prompt.
     const liveTurnId = input.resolveLiveTurnId?.() ?? session.lane.openTurnId
@@ -224,17 +232,15 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number): Promise<void> => {
     const session = this.children.sessions.get(sessionId)
-    if (session && isAcpReadySession(session)) {
+    if (session && childState.isAcpReadySession(session)) {
       await awaitAcpTurnEnd(session, stoppedAt, this.stopGraceMs())
     }
   }
 
-  answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
+  answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
     this.live(input.sessionId).prompts.answer(input)
 
-  async setOption(
-    input: StructuredAgentSessionSetOptionInput
-  ): Promise<Readonly<Record<string, string>>> {
+  async setOption(input: SetOptionInput) {
     const session = this.live(input.sessionId)
     const write = session.options.write(input.key, input.value)
     if (!write) {
@@ -249,27 +255,31 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       value: input.value,
       agent: session.spec.agent,
       timeoutMs: this.deps.optionWriteTimeoutMs ?? ACP_OPTION_WRITE_TIMEOUT_MS,
-      ...(input.signal ? { signal: input.signal } : {})
+      ...(input.signal ? { signal: input.signal } : {}),
+      onUncertain: (error) => this.children.connectionLost(session, error)
     })
     return session.options.reported()
   }
 
-  readOptions = async (input: { sessionId: string; fence: number }) => {
-    const session = this.live(input.sessionId)
-    return readAcpLiveOptions(session, session.spec.permissionModeConfig?.values)
-  }
+  canSetOptionWhileIdle = (input: SetOptionInput): boolean =>
+    childState.canSetAcpOptionWhileIdle(this.children.sessions.get(input.sessionId), input)
+
+  readOptions = async (input: { sessionId: string; fence: number }) =>
+    readAcpLiveOptions(this.live(input.sessionId), this.deps.spec.permissionModeConfig?.values)
 
   readCommands = (sessionId: string) => {
     const session = this.children.sessions.get(sessionId)
-    return session && isAcpReadySession(session) ? session.options.readCommands() : undefined
+    return session && childState.isAcpReadySession(session)
+      ? session.options.readCommands()
+      : undefined
   }
 
-  capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) =>
+  capturePendingOutput: SessionAdapter['capturePendingOutput'] = (input) =>
     this.children.capturePendingOutput?.(input)
 
   holdsDispatch = (sessionId: string): boolean => {
     const session = this.children.sessions.get(sessionId)
-    return session ? isAcpReadySession(session) && session.turns.running : false
+    return session ? childState.isAcpReadySession(session) && session.turns.running : false
   }
 
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {
@@ -288,9 +298,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
     this.children.sessions.get(sessionId)?.turns?.heldSends
 
-  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
-    input
-  ) => stopAcpChildren(this.live(input.sessionId), input.fence, input.taskIds, input.acknowledge)
+  stopBackgroundTasks: NonNullable<SessionAdapter['stopBackgroundTasks']> = (input) =>
+    stopAcpChildren(this.live(input.sessionId), input.fence, input.taskIds, input.acknowledge)
 
   backgroundTaskStops = (sessionId: string) =>
     acpChildStopCapabilities(this.children.sessions.get(sessionId))
@@ -301,31 +310,19 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.children.sessions.has(sessionId) ||
     this.children.starts.failedSessionIds().includes(sessionId)
-  forceCloseSession = (sessionId: string): Promise<boolean> => this.children.stop(sessionId, false)
+  forceCloseSession = (sessionId: string): Promise<boolean> => this.children.close(sessionId, false)
 
   async closeAll(): Promise<void> {
-    const commands = this.atRestCommands?.closeAll?.()
-    const copiedChildren = this.copies.closeAll()
-    const { children } = this
-    const ids = new Set([...children.sessions.keys(), ...children.starts.failedSessionIds()])
-    // The host aborts in-progress starts before this teardown.
-    const results = await Promise.allSettled([
-      ...[...ids].map((sessionId) => children.stop(sessionId, true)),
-      copiedChildren,
-      commands
+    await this.children.closeAll([
+      this.atRestCommands?.closeAll?.(),
+      this.copies.closeAll(),
+      this.textTasks.closeAll()
     ])
-    const failure = results.find((result) => result.status === 'rejected')
-    if (failure?.status === 'rejected') {
-      throw failure.reason
-    }
-    if (results.some((result) => result.status === 'fulfilled' && result.value === false)) {
-      throw new Error('an ACP agent child could not be proven stopped')
-    }
   }
 
   private live(sessionId: string): AcpStructuredSession {
     const session = this.children.sessions.get(sessionId)
-    if (!session || !isAcpReadySession(session) || session.journalClosed !== null) {
+    if (!session || !childState.isAcpReadySession(session) || session.journalClosed !== null) {
       throw new Error(`no live ${this.deps.spec.agent} child owns ${sessionId}`)
     }
     return session

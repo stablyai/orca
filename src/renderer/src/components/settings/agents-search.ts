@@ -30,6 +30,11 @@ import {
   getCodexTerminalServerIsolationSearchKeywords,
   getCodexTerminalServerIsolationTitle
 } from './codex-terminal-server-isolation-copy'
+import {
+  getCodexHistorySharingDescription,
+  getCodexHistorySharingSearchKeywords,
+  getCodexHistorySharingTitle
+} from './codex-history-sharing-copy'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -50,7 +55,8 @@ function buildAgentSettingsKeywords(): string[] {
     { key: 'auto.components.settings.agents.search.permissions', fallback: 'permissions' },
     { key: 'auto.components.settings.agents.search.yolo', fallback: 'yolo', englishOnly: true },
     { key: 'auto.components.settings.agents.search.manual', fallback: 'manual' },
-    { key: 'settings.agents.autoPermissions', fallback: 'Auto' },
+    { key: 'settings.agents.permissionEachOwn', fallback: "Each agent's own settings" },
+    { key: 'components.native-chat.composer.permissionFullAccess', fallback: 'Full access' },
     { key: 'settings.agents.approveForMe', fallback: 'approve for me' },
     {
       key: 'auto.components.settings.agents.search.e2b7c0dcd7',
@@ -142,6 +148,11 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentWorkspaceTrustSearchKeywords()
   },
   {
+    title: getCodexHistorySharingTitle(),
+    description: getCodexHistorySharingDescription(),
+    keywords: getCodexHistorySharingSearchKeywords()
+  },
+  {
     title: getCodexTerminalServerIsolationTitle(),
     id: CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID,
     description: getCodexTerminalServerIsolationDescription(),
@@ -165,7 +176,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'settings.agents.permissionsSearchDescription',
-      'Launch agents with Manual, Auto, or Yolo permissions.'
+      'Choose Approve for me, Full access, or each agent’s own permission settings.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.agents.search.permission', 'permission'),
@@ -175,7 +186,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.agents.search.yolo', 'yolo'),
       ...translateSearchKeyword('auto.components.settings.agents.search.manual', 'manual'),
-      ...translateSearchKeyword('settings.agents.autoPermissions', 'Auto'),
+      ...translateSearchKeyword('settings.agents.permissionEachOwn', "Each agent's own settings"),
+      ...translateSearchKeyword('settings.agents.approveForMe', 'approve for me'),
+      ...translateSearchKeyword(
+        'components.native-chat.composer.permissionFullAccess',
+        'Full access'
+      ),
       ...translateSearchKeyword('auto.components.settings.agents.search.skip', 'skip'),
       ...translateSearchKeyword('auto.components.settings.agents.search.checks', 'checks')
     ]

@@ -12,6 +12,7 @@ import { getProjectProviderIdentity } from '../shared/project-host-setup-project
 import { getStoredRepoExecutionHostId } from './repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import { getProjectRuntimeReadGitOptions } from './project-runtime-git-options'
+import { isLocalGitRuntimeRouterInstalled } from './git/command-runner/local-git-runtime-route'
 import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
 import { isWslMoveRepoBlocked } from './persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from './wsl/wsl-unc-access-gate'
@@ -174,6 +175,8 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
     }
     const result = await probeGitRemoteIdentity(repo.path, hostId, {
       signal: controller.signal,
+      // Only the D1c router reads it, to wait for a stopped distro; main's sweep keeps its tier.
+      ...(isLocalGitRuntimeRouterInstalled() ? { admissionTier: 'background' as const } : {}),
       ...git
     })
     // Aborted probes resolve as unavailable; prevent retired probes from re-seeding deadlines.

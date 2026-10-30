@@ -8,6 +8,8 @@ import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
 import { cn } from '@/lib/utils'
 import {
   getExecutionHostLabel,
@@ -97,7 +99,12 @@ export function ActivityThreadHoverCardSummary({
       return
     }
     try {
-      await window.api.ui.writeClipboardText(worktree.path)
+      const owner = getWorktreeRowLocalPathOpenOwner(
+        useAppStore.getState(),
+        worktree,
+        repo?.connectionId
+      )
+      await window.api.ui.writeClipboardText(formatClipboardFilePath(worktree.path, owner))
       toast.success(
         translate(
           'auto.components.activity.ActivityThreadHoverCard.pathCopied',
@@ -112,7 +119,7 @@ export function ActivityThreadHoverCardSummary({
         )
       )
     }
-  }, [worktree.path])
+  }, [repo?.connectionId, worktree])
 
   return (
     <>

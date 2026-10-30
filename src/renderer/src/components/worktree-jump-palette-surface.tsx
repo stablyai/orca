@@ -177,33 +177,26 @@ export function WorktreeJumpPaletteSurface({
       </div>
       <div aria-live="polite" className="sr-only">
         {controller.filterActive
-          ? `${translate('worktreeJumpPalette.filter.ariaActive', 'Filter: {{value0}} active.', {
-              value0: getPaletteFilterSelectionCount(controller.filter)
-            })} `
+          ? `${translate(
+              'worktreeJumpPalette.filter.ariaActiveCount',
+              'Filter: {{count}} active.',
+              {
+                count: getPaletteFilterSelectionCount(controller.filter),
+                defaultValue_one: 'Filter: {{count}} active.'
+              }
+            )} `
           : ''}
         {controller.deferredQuery.trim()
-          ? resultCount === 1
-            ? translate(
-                'auto.components.WorktreeJumpPalette.resultsFound_one',
-                '{{count}} result found.',
-                { count: resultCount }
-              )
-            : translate(
-                'auto.components.WorktreeJumpPalette.resultsFound_other',
-                '{{count}} results found.',
-                { count: resultCount }
-              )
-          : resultCount === 1
-            ? translate(
-                'auto.components.WorktreeJumpPalette.itemsAvailable_one',
-                '{{count}} item available.',
-                { count: resultCount }
-              )
-            : translate(
-                'auto.components.WorktreeJumpPalette.itemsAvailable_other',
-                '{{count}} items available.',
-                { count: resultCount }
-              )}
+          ? translate(
+              'auto.components.WorktreeJumpPalette.resultsFound',
+              '{{count}} results found.',
+              { count: resultCount, defaultValue_one: '{{count}} result found.' }
+            )
+          : translate(
+              'auto.components.WorktreeJumpPalette.itemsAvailable',
+              '{{count}} items available.',
+              { count: resultCount, defaultValue_one: '{{count}} item available.' }
+            )}
         {controller.showCreateAction
           ? ` ${translate('auto.components.WorktreeJumpPalette.createActionAvailable', 'Create worktree action available.')}`
           : ''}

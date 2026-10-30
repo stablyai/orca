@@ -1,4 +1,7 @@
-import { forgetVisibleTabPicksForEnvironment } from '../web-session-visible-tab-pick-report'
+import {
+  forgetVisibleTabPicksForEnvironment,
+  forgetVisibleTabPicksForWorktree
+} from '../web-session-visible-tab-pick-report'
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
@@ -154,6 +157,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
   clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
   forgetMirroredTerminalHandles(environmentId, worktreeId)
+  forgetVisibleTabPicksForWorktree(environmentId, worktreeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {

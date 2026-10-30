@@ -20,10 +20,14 @@ import {
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
 // Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
 const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
+const subscribeAppLog = (listener: () => void) =>
+  connectionLogStore.subscribe(NATIVE_APP_LOG_ID, listener)
+const getAppLog = () => connectionLogStore.get(NATIVE_APP_LOG_ID)
 
 // Acquire client here so opening logs during host failure starts dialing and live logging.
 export default function NativeConnectionLogRoute() {
@@ -59,6 +63,7 @@ export default function NativeConnectionLogRoute() {
   const { activePath, pendingPath } = useConnectionPathStatus(selected?.id)
 
   useEffect(() => {
+    void readHydratedConnectionLog(connectionLogStore, NATIVE_APP_LOG_ID)
     if (selectedId) {
       void readHydratedConnectionLog(connectionLogStore, selectedId)
     }
@@ -73,16 +78,19 @@ export default function NativeConnectionLogRoute() {
     () => (selectedId ? connectionLogStore.get(selectedId) : EMPTY_ENTRIES),
     [selectedId]
   )
-  const entries = useSyncExternalStore(subscribe, getSnapshot)
+  const hostEntries = useSyncExternalStore(subscribe, getSnapshot)
+  const appEntries = useSyncExternalStore(subscribeAppLog, getAppLog)
+  const entries = useMemo(
+    () => [...hostEntries, ...appEntries].sort((a, b) => a.ts - b.ts),
+    [hostEntries, appEntries]
+  )
   const device = useMemo(
     () =>
-      selected
-        ? createNativeDiagnosticsOperations(
-            selected,
-            clientContext,
-            statusPending ? null : desktopAppVersion
-          )
-        : null,
+      createNativeDiagnosticsOperations(
+        selected,
+        clientContext,
+        statusPending ? null : desktopAppVersion
+      ),
     [selected, clientContext, desktopAppVersion, statusPending]
   )
 

@@ -137,6 +137,9 @@ export function endAcpStructuredSession(
   const detail = providerDiagnostic([how, stderr].filter(Boolean).join('\n'), 'log')
   onEvent?.({
     type: 'ended',
+    ...(session.connection.lastCloseResult?.killDelivered && !session.connection.exited
+      ? { deathEvidenceKind: 'kill-delivered' as const }
+      : {}),
     sessionId: session.sessionId,
     reason,
     failure: session.closeRequested

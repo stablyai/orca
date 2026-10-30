@@ -13,22 +13,18 @@ import {
 } from './structured-agent-session-option-state'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
 
-function catalogListsSeedModel(
-  state: StructuredAgentSessionOptionState,
-  seed: Readonly<Record<string, string>>
-): boolean {
-  const model = seed.model
-  return model === undefined || Boolean(state.catalog?.models.some((entry) => entry.id === model))
-}
-
-/** Derive held picks, host values and launch seeds without mutating the record; retain unlisted models.
- * Permission mode uses held, host, explicit launch mode, then seed. */
+/** Query base or immutable launch seed, with finite controller operations above it.
+ *  Display provenance stays separate from accepted input while catalog labels load. */
 export function structuredAgentSessionOptionView(
   state: StructuredAgentSessionOptionState,
   seed: Readonly<Record<string, string>> | undefined,
   held: Readonly<Record<string, string>>,
   explicit?: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
+  if (state.optionsAnswerPresent) {
+    seed = undefined
+    explicit = undefined
+  }
   const requested = structuredLaunchRequestedOptions({ explicit, seed, held })
   // Only a requested model replaces the shown selection; a permission mode alone overlays it.
   if (requested?.model !== undefined) {
@@ -64,29 +60,31 @@ function modelOptionView(
   const unconfirmedSeed =
     seed !== undefined && structuredAgentSessionModelId(state.record, 'own') === null
   const hasHeld = Object.keys(held).length > 0
-  // A saved pick the host's list does not name would show its raw id or another model's label.
-  if (
-    unconfirmedSeed &&
-    state.catalogSource === 'host' &&
-    !hasHeld &&
-    !catalogListsSeedModel(state, seed)
-  ) {
-    return { ...state, catalogSource: 'seed' }
-  }
-  // Only a host's or the session's list names a saved pick: a built-in label may be replaced.
   const seeded =
     unconfirmedSeed &&
     (state.catalogSource === 'host' || state.catalogSource === 'live') &&
-    catalogListsSeedModel(state, seed)
-  if (!state.catalog || (!seeded && !hasHeld)) {
+    (held.model === undefined || held.model === seed.model)
+  if (!state.catalog || (!unconfirmedSeed && !hasHeld)) {
     return state
   }
   let view: StructuredAgentSessionOptionState = {
     ...state,
     record: cloneStructuredAgentSessionOptionRecord(state.record)
   }
-  if (seeded) {
-    view = commitStructuredAgentSessionOptionValues(view, seed)
+  if (unconfirmedSeed) {
+    view = commitStructuredAgentSessionOptionValues(view, seed, 'seeded')
+    if (!seeded) {
+      // The immutable input remains capturable before a host list can label it.
+      for (const id of Object.keys(seed)) {
+        const tracked = view.record.values[id]
+        if (tracked) {
+          tracked.source = 'default'
+        }
+      }
+      if (state.catalogSource === 'host' && !hasHeld) {
+        view = { ...view, catalogSource: 'seed' }
+      }
+    }
   }
   return { ...commitStructuredAgentSessionOptionValues(view, held), pendingId: state.pendingId }
 }
@@ -111,4 +109,38 @@ export function structuredAgentSessionSendSelection(
   return model || effort
     ? { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
     : undefined
+}
+
+/** Exact capture uses accepted origins; absent metadata keeps the older host contract. */
+export function structuredAgentSessionMessageSelection(
+  view: StructuredAgentSessionOptionState
+): Record<string, string> {
+  const selection: Record<string, string> = {}
+  const snapshot = structuredAgentSessionOptionSnapshot(view)
+  for (const id of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
+    const descriptor = snapshot.find((entry) => entry.id === id)
+    if (view.acceptedInputSources !== undefined) {
+      if (!view.acceptedInputSources[id]) {
+        continue
+      }
+    } else if (
+      (id === 'model' || id === 'effort') &&
+      view.defaultsUnsent &&
+      descriptor?.valueSource === 'default'
+    ) {
+      continue
+    }
+    const raw =
+      view.record.agent === 'pi' && (id === 'model' || id === 'effort')
+        ? view.record.values[id]?.value
+        : undefined
+    const value =
+      raw ??
+      descriptor?.kind.currentValue ??
+      (view.acceptedInputSources !== undefined ? view.record.values[id]?.value : undefined)
+    if (value !== undefined) {
+      selection[id] = String(value)
+    }
+  }
+  return selection
 }

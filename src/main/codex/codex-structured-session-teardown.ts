@@ -39,6 +39,16 @@ export class CodexStructuredSessionTeardown {
           true
         )
       )
+      if (
+        closed &&
+        connection?.closeResult?.killDelivered &&
+        connection.closeResult.root !== 'exited'
+      ) {
+        throw new AgentSessionAcquisitionRootExitObservedError(
+          new Error('codex writer killed'),
+          'kill-delivered'
+        )
+      }
       if (closed && connection?.processTreeUnproven) {
         // Root exit settles the close; report unproven descendants separately.
         throw new AgentSessionAcquisitionRootExitObservedError(
@@ -55,6 +65,9 @@ export class CodexStructuredSessionTeardown {
   }
 
   forceClose = async (sessionId: string): Promise<boolean> => {
+    const connection =
+      this.deps.sessions.get(sessionId)?.connection ??
+      this.deps.acquisitions.get(sessionId)?.window.connection
     const closed = await closeCodexSession(
       sessionId,
       this.deps.sessions,
@@ -63,7 +76,18 @@ export class CodexStructuredSessionTeardown {
       this.deps.logger,
       false
     )
-    return this.settled(sessionId, closed)
+    this.settled(sessionId, closed)
+    if (
+      closed &&
+      connection?.closeResult?.killDelivered &&
+      connection.closeResult.root !== 'exited'
+    ) {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('codex writer killed'),
+        'kill-delivered'
+      )
+    }
+    return closed
   }
 
   /** Ownership checks prevent stale callers from killing replacement children. */

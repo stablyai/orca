@@ -7,6 +7,7 @@ import { estimateScrollOffsetForLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function splitSyntaxSegmentsIntoLines(
   segments: readonly MobileSyntaxSegment[]
@@ -49,6 +50,7 @@ export function MobileFilePreviewSourceText({
   onScrollRatioChange?: (ratio: number) => void
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const scrollRef = useRef<ScrollView>(null)
   const contentHeightRef = useRef(0)
   const layoutHeightRef = useRef(0)
@@ -199,7 +201,7 @@ export function MobileFilePreviewSourceText({
       {lines ? (
         <View
           style={styles.sourceLinesContainer}
-          accessibilityLabel="File preview"
+          accessibilityLabel={t('files.filePreviewSourceText.previewLabel', 'File preview')}
           onLayout={(event) => {
             containerTopRef.current = event.nativeEvent.layout.y
           }}
@@ -239,7 +241,11 @@ export function MobileFilePreviewSourceText({
           })}
         </View>
       ) : (
-        <Text selectable style={styles.textPreview} accessibilityLabel="File preview">
+        <Text
+          selectable
+          style={styles.textPreview}
+          accessibilityLabel={t('files.filePreviewSourceText.previewLabel', 'File preview')}
+        >
           <MobileSyntaxSegments segments={syntax.segments} />
         </Text>
       )}
@@ -249,9 +255,12 @@ export function MobileFilePreviewSourceText({
 
 export function MobileFilePreviewTruncatedNote({ byteLength }: { byteLength: number }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <Text style={styles.truncatedNote}>
-      Preview truncated. File size: {formatPreviewByteLength(byteLength)}.
+      {t('files.filePreviewSourceText.truncatedNote', 'Preview truncated. File size: {{size}}.', {
+        size: formatPreviewByteLength(byteLength)
+      })}
     </Text>
   )
 }

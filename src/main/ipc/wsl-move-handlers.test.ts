@@ -122,6 +122,29 @@ describe('WSL move IPC', () => {
     }
   })
 
+  it('under a remote policy block keeps the way back and unfinished moves, and refuses a new move', async () => {
+    const unfinished = invoke('wslMove:listUnfinished')
+    configureWslHostsGate({
+      hasSavedWslHost: () => false,
+      hasWslMoveCutover: () => true,
+      policy: () => 'block'
+    })
+    try {
+      expect(invoke('wslMove:listUnfinished')).toEqual(unfinished)
+      expect(invoke('wslMove:listPendingRendererRewrites')).toMatchObject([
+        { migrationId: 'move-1' }
+      ])
+      expect(
+        await invoke('wslMove:useProjectHereAgain', { kind: 'repo', id: 'not-moved-repo' })
+      ).not.toMatchObject({ reason: 'gated-off' })
+      expect(
+        await invoke('wslMove:start', { distro: 'Ubuntu', repoIds: ['repo-1'] })
+      ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+    } finally {
+      resetWslHostsGateForTests()
+    }
+  })
+
   it('writes the window storage to disk before the ledger entry', () => {
     flushStorageData.mockImplementation(() => {
       expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([])

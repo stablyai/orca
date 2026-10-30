@@ -143,17 +143,14 @@ export function CodexSwitcherMenu({
         <>
           <DropdownMenuLabel className="space-y-0.5">
             <div>
-              {resetCreditCount === 1
-                ? translate(
-                    'auto.components.status.bar.StatusBar.rateLimitResetsAvailable_one',
-                    '{{count}} rate-limit reset available',
-                    { count: resetCreditCount }
-                  )
-                : translate(
-                    'auto.components.status.bar.StatusBar.rateLimitResetsAvailable_other',
-                    '{{count}} rate-limit resets available',
-                    { count: resetCreditCount }
-                  )}
+              {translate(
+                'auto.components.status.bar.StatusBar.rateLimitResetsAvailable',
+                '{{count}} rate-limit resets available',
+                {
+                  count: resetCreditCount,
+                  defaultValue_one: '{{count}} rate-limit reset available'
+                }
+              )}
             </div>
             {resetCreditExpiry ? (
               <div className="text-[11px] font-normal text-muted-foreground">

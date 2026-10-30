@@ -23,13 +23,13 @@ function getProjectFilterVisibilityLabel({
       'All projects'
     )
   }
-  if (selectedCount === 1) {
-    return selectedRepos[0]?.displayName ?? 'Projects'
+  if (selectedCount === 1 && selectedRepos[0]) {
+    return selectedRepos[0].displayName
   }
   return translate(
-    'auto.components.sidebar.SidebarRepositoryFilterSection.selectedProjectsCount',
-    '{{value0}} projects',
-    { value0: selectedCount }
+    'auto.components.sidebar.SidebarRepositoryFilterSection.selectedProjects',
+    '{{count}} projects',
+    { count: selectedCount, defaultValue_one: '{{count}} project' }
   )
 }
 

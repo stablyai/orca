@@ -218,8 +218,10 @@ export function registerPtyHandlers(
   const assertWorkspaceAcceptsNewPty = (
     worktreeId: string | undefined,
     sessionId?: string,
-    cwd?: string
-  ): Promise<void> | void => assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId, cwd)
+    cwd?: string,
+    passiveWslRestore?: boolean
+  ): Promise<void> | void =>
+    assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId, cwd, passiveWslRestore)
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,

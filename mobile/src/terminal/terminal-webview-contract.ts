@@ -118,6 +118,7 @@ export type TerminalWebViewHandle = {
   // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.
   reflow: (cols: number, rows: number, frame: TerminalFrame | null) => void
   clear: () => void
+  scrollToBottom: () => void
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
   resetZoom: () => void
   cancelSelect: () => void

@@ -225,6 +225,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         message
       })
     },
+    completeMerge: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.completeMerge', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
     generateCommitMessage: async () => ({
       success: false,
       error: translate(

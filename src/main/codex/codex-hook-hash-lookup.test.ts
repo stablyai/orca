@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
-  resolveCodexCommand: () => mocks.codexPath
+  resolveCodexCommand: () => mocks.codexPath,
+  resolveCodexCommandForSpawn: async () => mocks.codexPath
 }))
 vi.mock('./codex-hook-trust-derivation', async (importOriginal) => ({
   ...(await importOriginal<typeof TrustDerivation>()),

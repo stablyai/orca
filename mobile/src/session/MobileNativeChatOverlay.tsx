@@ -19,9 +19,11 @@ import { MobileNativeChatRowOverlaysHost } from './native-chat/transcript/Mobile
 import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-context'
+import type { MobileNativeChatImageSource } from './native-chat/visual/mobile-native-chat-image-preview'
 
 type Props = {
   controller: MobileNativeChatController
+  imageSource?: MobileNativeChatImageSource
   activeSessionTabId?: string | null
   onOpenFile: (pathText: string) => void
   images: MobileNativeChatImageAttachments
@@ -48,6 +50,7 @@ type Props = {
 // Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
 export function MobileNativeChatOverlay({
   controller,
+  imageSource,
   activeSessionTabId,
   onOpenFile,
   images,
@@ -170,7 +173,7 @@ export function MobileNativeChatOverlay({
   return (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
-      imageClient={controller.nativeChatVisualSource?.client}
+      imageSource={imageSource}
     >
       <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
         <View style={styles.overlay}>

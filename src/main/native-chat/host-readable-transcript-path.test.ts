@@ -6,6 +6,15 @@ const wslMocks = vi.hoisted(() => ({
   resolveWslGuestRealDirAsync: vi.fn()
 }))
 
+// These cases cover root and path policy; the E9 gate has its own suite.
+vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
+vi.mock('../wsl/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl')
+  return {
+    wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
+    listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
+  }
+})
 vi.mock('../wsl', () => ({
   listRunningWslHomeDirsAsync: wslMocks.listRunningWslHomeDirsAsync,
   resolveWslGuestRealDirAsync: wslMocks.resolveWslGuestRealDirAsync

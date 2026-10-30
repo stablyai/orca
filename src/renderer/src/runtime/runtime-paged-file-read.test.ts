@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { readRuntimeFileContent } from './runtime-file-read-client'
 import { writeRuntimeFile } from './runtime-file-mutation-client'
 import {
+  fsReadFileChunk,
+  fsStat,
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
   type RuntimeRpcRequest
 } from './runtime-file-client-test-harness'
-import { REMOTE_FILE_CHANGED_DURING_READ_MESSAGE } from './runtime-paged-file-read'
+import {
+  readRuntimeFileBytes,
+  REMOTE_FILE_CHANGED_DURING_READ_MESSAGE
+} from './runtime-paged-file-read'
 
 installRuntimeFileClientEnvironment()
 
@@ -278,6 +283,58 @@ describe('remote saves larger than one request frame', () => {
     await expect(
       writeRuntimeFile(context, '/remote/repo/quotes.txt', '"'.repeat(400 * 1024))
     ).rejects.toThrow('File is too large to save to a remote Orca server')
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+})
+
+describe('whole-file bytes for a bytes custom editor', () => {
+  it('pages a remote workbook within the local chunk cap and returns its exact bytes', async () => {
+    const bytes = patternedBytes(MB + 17)
+    serveRemoteFile('book.xlsx', { bytes })
+
+    const result = await readRuntimeFileBytes(remote('book.xlsx'), 16 * MB)
+
+    expect(result.kind).toBe('ok')
+    expect(result.kind === 'ok' && Buffer.from(result.bytes).equals(bytes)).toBe(true)
+    for (const call of methodCalls('files.readChunk')) {
+      expect(isChunkParams(call.params) && call.params.length).toBeLessThanOrEqual(256 * 1024)
+    }
+  })
+
+  it('refuses a file past the editor cap without reading it', async () => {
+    serveRemoteFile('book.xlsx', {
+      bytes: Buffer.alloc(0),
+      stats: [{ size: 17 * MB, mtime: 1 }]
+    })
+
+    await expect(readRuntimeFileBytes(remote('book.xlsx'), 16 * MB)).resolves.toEqual({
+      kind: 'too_large',
+      size: 17 * MB
+    })
+    expect(methodCalls('files.readChunk')).toEqual([])
+  })
+
+  it('reports an older host without ranged reads as unsupported', async () => {
+    serveRemoteFile('book.xlsx', { bytes: Buffer.alloc(4), missingMethods: ['files.stat'] })
+
+    await expect(readRuntimeFileBytes(remote('book.xlsx'), 16 * MB)).resolves.toEqual({
+      kind: 'unsupported'
+    })
+  })
+
+  it('reads a local file through the local stat and chunk IPC', async () => {
+    const bytes = patternedBytes(300 * 1024)
+    fsStat.mockResolvedValue({ size: bytes.length, isDirectory: false, mtime: 5 })
+    fsReadFileChunk.mockImplementation((args: ChunkParams) =>
+      Promise.resolve(sliceChunk(args, bytes))
+    )
+
+    const result = await readRuntimeFileBytes(
+      { target: { kind: 'local' }, filePath: '/repo/book.xlsx' },
+      16 * MB
+    )
+
+    expect(result.kind === 'ok' && Buffer.from(result.bytes).equals(bytes)).toBe(true)
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

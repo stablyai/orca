@@ -13,13 +13,17 @@ import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 import { beginClaudeOptionMutation } from './claude-structured-execution-observations'
+import {
+  CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
+  CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS
+} from './claude-cli-flag-support'
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
 const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
 
-/** Approval mode is fixed at startup: a fallback mode is dropped only by reopening for a newly picked model.
- *  Compares with what Orca itself launched, so the reopened child never matches again. */
+/** A fallback approval mode is dropped only by reopening for a newly picked model (only an approved plan
+ *  changes the live mode). Compares with what Orca itself launched, so the reopened child never matches again. */
 export function claudeModelTransitionRestart(
   sessions: ReadonlyMap<string, ClaudeSession>
 ): NonNullable<StructuredAgentSessionAdapter['requiresModelTransitionRestart']> {
@@ -80,6 +84,20 @@ export function finishClaudeInputWrite(session: ClaudeSession, sequence: number)
   }
 }
 
+/** False only once the CLI's version proves it never answers the control; unknown CLIs are tried. */
+export async function claudeTakesFlagSettings(
+  session: Pick<ClaudeSession, 'cliFlag' | 'flagSettingsControl'>
+): Promise<boolean> {
+  if (session.cliFlag && (session.flagSettingsControl ?? 'unknown') === 'unknown') {
+    session.flagSettingsControl = await session.cliFlag(
+      CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
+      CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
+      false
+    )
+  }
+  return session.flagSettingsControl !== 'unsupported'
+}
+
 /** A client's write to a live session. */
 export function setClaudeStructuredSessionOption(
   session: ClaudeSession,
@@ -101,6 +119,14 @@ export async function setClaudeStructuredOption(
   const effort = EFFORT_LEVELS.find((value) => value === input.value)
   if (input.key === 'effort' && effort === undefined) {
     throw new ClaudeEffortValidationError()
+  }
+  if (
+    (input.key === 'effort' || input.key === 'fastMode') &&
+    !(await claudeTakesFlagSettings(session))
+  ) {
+    throw new AgentSessionOptionRejectedError(
+      'this Claude Code version cannot change effort or Fast mode in a running chat; update Claude Code'
+    )
   }
   const apply =
     input.key === 'model'

@@ -13,6 +13,7 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
+  findCommandsOnLocalPathMock,
   isCommandOnLocalPathMock,
   listLocalCommandPathsMock,
   mergePersistedWindowsPathAsyncMock,
@@ -28,10 +29,17 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
+  findCommandsOnLocalPathMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
   listLocalCommandPathsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
+}))
+
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
 }))
 
 vi.mock('electron', () => ({
@@ -77,6 +85,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 // Route filesystem PATH resolution through the existing command-lookup mock.
 vi.mock('./command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
+  findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
@@ -124,6 +133,7 @@ describe('preflight', () => {
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
+        findCommandsOnLocalPathMock,
         isCommandOnLocalPathMock,
         listLocalCommandPathsMock,
         mergePersistedWindowsPathAsyncMock,
@@ -510,6 +520,8 @@ describe('preflight', () => {
       })
 
       const stalePending = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      // The running-distro gate resolves first; hold the stale git/gh/glab probes before refreshing.
+      await expect.poll(() => runWslProcessMock.mock.calls.length).toBe(3)
       phase = 'fresh'
       const fresh = await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
       expect(fresh.git).toEqual({ installed: true })

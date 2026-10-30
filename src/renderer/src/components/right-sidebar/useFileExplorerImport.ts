@@ -132,40 +132,20 @@ export function useFileExplorerImport({
 
         if (failed.length > 0) {
           toast.error(
-            failed.length === 1
-              ? translate(
-                  'auto.components.right.sidebar.useFileExplorerImport.importFailedCount_one',
-                  'Failed to import {{count}} file.',
-                  {
-                    count: failed.length
-                  }
-                )
-              : translate(
-                  'auto.components.right.sidebar.useFileExplorerImport.importFailedCount_other',
-                  'Failed to import {{count}} files.',
-                  {
-                    count: failed.length
-                  }
-                ),
+            translate(
+              'auto.components.right.sidebar.useFileExplorerImport.importFailedCount',
+              'Failed to import {{count}} files.',
+              { count: failed.length, defaultValue_one: 'Failed to import {{count}} file.' }
+            ),
             { description: describeSharedDropFailureReason(failed) }
           )
         } else if (skipped.length > 0 && imported.length === 0) {
           toast.error(
-            skipped.length === 1
-              ? translate(
-                  'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount_one',
-                  'Skipped {{count}} file.',
-                  {
-                    count: skipped.length
-                  }
-                )
-              : translate(
-                  'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount_other',
-                  'Skipped {{count}} files.',
-                  {
-                    count: skipped.length
-                  }
-                ),
+            translate(
+              'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount',
+              'Skipped {{count}} files.',
+              { count: skipped.length, defaultValue_one: 'Skipped {{count}} file.' }
+            ),
             { description: describeSharedDropSkipReason(skipped) }
           )
         }

@@ -56,8 +56,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       contentRef,
       lastSyncedContentRef,
       contentSyncModeRef,
-      isApplyingProgrammaticContentRef,
-      isApplyingLargePasteRef
+      isApplyingProgrammaticContentRef
     },
     decorations: {
       markdownDocLinkDecorationsRef,
@@ -119,7 +118,8 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       if (!staleCache) {
         settleStaleCacheReload(fileIdRef.current)
       }
-      const liveTextDiffers = editorInstance.getModel()?.getValue() !== contentRef.current
+      const currentContentSnapshot = editorInstance.getModel()?.getValue()
+      const liveTextDiffers = currentContentSnapshot !== contentRef.current
       if (
         (staleCache && liveTextDiffers) ||
         (liveTextDiffers && !mayPushTabTextIntoModel(fileIdRef.current))
@@ -133,7 +133,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         beginProgrammaticContentSync(modelKey)
         isApplyingProgrammaticContentRef.current = true
         try {
-          if (syncContentOnMount(editorInstance, contentRef.current, contentSyncModeRef.current)) {
+          if (
+            syncContentOnMount(
+              editorInstance,
+              contentRef.current,
+              contentSyncModeRef.current,
+              currentContentSnapshot
+            )
+          ) {
             lastSyncedContentRef.current = contentRef.current
           }
         } finally {
@@ -163,8 +170,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         editorContainerRef,
         propsRef,
         readOnlyRef,
-        lastSyncedContentRef,
-        isApplyingLargePasteRef,
         commentPopoverRef,
         shouldShowMarkdownAnnotationsRef,
         setCommentPopover,
@@ -288,7 +293,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       lastSyncedContentRef,
       contentSyncModeRef,
       isApplyingProgrammaticContentRef,
-      isApplyingLargePasteRef,
       markdownDocLinkDecorationsRef,
       conflictDecorationsRef,
       commentPopoverRef,

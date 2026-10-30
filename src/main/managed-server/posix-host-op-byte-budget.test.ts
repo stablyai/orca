@@ -73,6 +73,7 @@ import {
   recordedRemoteNodeRuntimeProbeCommand
 } from './install/orcad-remote-node-runtime-recorded-probe'
 import { runtimeStoreInventoryCommand } from './install/remote-node-runtime-store-inventory'
+import { cachedOrcadSlotProbeCommand } from './install/orcad-remote-install-cached-probe'
 import { posixReleaseOwnedLockCommand } from './install/remote-node-runtime-store-lock'
 import { ORCAD_INSTALL_MODEL } from './install/remote-install-model'
 import { stopOrcadCommand } from './install/orcad-remote-process-control'
@@ -101,7 +102,9 @@ const OVER_BUDGET_CEILINGS: Readonly<Record<string, number>> = {
   tryStealInstallLockCommand: 9_022,
   orcadLaunchCommand: 6_896,
   // WSL-only: wsl.exe argv, never SSH-framed; carries the Node bridge as its fallback.
-  orcadBashStdioBridgeCommand: 6_300
+  orcadBashStdioBridgeCommand: 6_300,
+  // WSL-only (sent only under recordedNodeRuntimeProbe): wsl.exe argv, never SSH-framed.
+  cachedOrcadSlotProbeCommand: 7_069
 }
 
 type HostCase = { host: RemoteHostPlatform; target: NodeRuntimeTarget; nodePath: string }
@@ -257,6 +260,8 @@ const BUILDERS: Readonly<Record<string, (c: HostCase) => string>> = {
       ...ORCAD_INSTALL_MODEL.requiredArtifacts(host),
       ORCAD_INSTALL_MODEL.installCompleteFilename
     ]),
+  cachedOrcadSlotProbeCommand: ({ host, target }) =>
+    cachedOrcadSlotProbeCommand(host, slotDir, target),
   listRemoteInstallBaseDirsCommand: ({ host }) =>
     listRemoteInstallBaseDirsCommand(host, baseDir, ORCAD_INSTALL_MODEL),
   probeFileExistsCommand: ({ host }) => probeFileExistsCommand(host, `${slotDir}/.complete`),

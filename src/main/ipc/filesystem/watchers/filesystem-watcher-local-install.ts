@@ -23,6 +23,10 @@ import {
   blockedWslDistroForPath
 } from '../../../wsl/wsl-unc-access-gate'
 import { deferUntilWslDistroRunning } from '../../../wsl-background-distro-gate'
+import {
+  clearWslRootStatRetry,
+  nextWslRootStatRetry
+} from './filesystem-watcher-wsl-root-stat-retry'
 
 function isCrashFuseFailure(error: unknown): boolean {
   return (
@@ -55,12 +59,19 @@ export async function installLocalWatcher(
     }
     try {
       const s = await stat(rootPath)
+      clearWslRootStatRetry(rootKey)
       if (!s.isDirectory()) {
         console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
         rememberUnwatchableRoot(rootKey)
         return 'unavailable'
       }
     } catch {
+      // A distro just started may not serve its share yet: retry a few times before giving up.
+      const retryWslRoot = isWslPath(worktreePath) ? nextWslRootStatRetry(rootKey) : null
+      if (retryWslRoot) {
+        scheduleRetry(cancelToken.listeners, retryWslRoot)
+        return 'capacity'
+      }
       console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
       rememberUnwatchableRoot(rootKey)
       return 'unavailable'

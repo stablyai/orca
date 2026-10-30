@@ -62,7 +62,9 @@ describe('rich markdown annotation block reuse', () => {
     }))
     const doc = {
       forEach(callback: (node: unknown, offset: number, index: number) => void): void {
-        content.forEach((node, index) => callback(node, index * 10, index))
+        content.forEach((node, index) =>
+          callback({ ...node, toJSON: () => node }, index * 10, index)
+        )
       },
       // These fixtures never match selected text; traversal only needs to be supported.
       nodesBetween(): void {},

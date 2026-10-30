@@ -1,3 +1,4 @@
+import { mobileNativeChatDraftDestination } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -167,6 +168,7 @@ const sendWithOutcome = vi.mocked(NativeChatSend.sendMobileNativeChatMessageWith
 
 const ORIGIN = {
   draftKey: 'h\0w\0tab-1',
+  draftDestination: mobileNativeChatDraftDestination('h\0w\0tab-1'),
   draftEditGeneration: 0,
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',

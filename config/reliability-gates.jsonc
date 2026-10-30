@@ -9481,7 +9481,7 @@
       "invariant": "Reconnect, replay, or lifecycle observations from a viewer that negotiated explicit close intent must never kill a live PTY. A capable reasonless close must keep and republish; a legacy paired viewer must retain current-main behavior because its intentional close and cleanup echo are wire-identical. Lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Legacy daemon hello and warm reattachment remain non-destructive.",
       "oracle": "Start isolated v25 and v26 daemon generations with one capable-viewer PTY and one legacy-viewer PTY per generation in four target worktrees plus an unaddressed control PTY in a fifth worktree. Route them through the production desktop scanner, runtime, RPC dispatcher, renderer-close relay, and daemon router. First issue sequential reasonless closes from an authenticated capable connection and require refusal, snapshot republish, zero shutdown calls, exact process survival, and post-close I/O. Then issue the byte-identical requests without the negotiated capability and require current-main behavior: two ordered immediate shutdowns, session-killed events, and exact root/descendant death, while capable and control PTYs survive. An observer lists all targets before, between, and after while issuing zero closes. Unit contracts also require in-process reasonless refusal, legacy runtime/mobile compatibility, explicit user closes, encrypted client-auth advertisement, and old-server lifecycle calls never to fall back.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-server-kill-attribution.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-server-kill-attribution.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
         "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -9491,7 +9491,6 @@
         "src/main/runtime/remote-runtime-request-connection.integration.test.ts",
         "src/main/runtime/rpc/runtime-close-attribution-topology.test.ts",
         "src/main/runtime/rpc/methods/session-tabs.test.ts",
-        "src/main/runtime/rpc/methods/session-tabs-schemas.test.ts",
         "src/main/runtime/rpc/e2ee-channel.test.ts",
         "src/main/runtime/rpc/e2ee-channel-v2.test.ts",
         "src/main/runtime/rpc/mobile-socket-wiring.test.ts",
@@ -9701,7 +9700,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Real Bash and Zsh node-pty tests replace the active cwd inode and exercise the shared POSIX OMP wrapper; generated-file snapshots pin identical local, daemon/SSH, and relay wrappers. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the spawn probe and lack a live run; native PowerShell is unaffected; Linux/Windows and mobile/API strictness remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Real Bash and Zsh node-pty tests replace the active cwd inode and exercise the shared POSIX OMP wrapper; audit829 removes generated-file snapshots and their current byte-parity claim. No equivalent replacement for generated-script byte checks is claimed. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the spawn probe and lack a live run; native PowerShell is unaffected; Linux/Windows and mobile/API strictness remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7239",
         "https://github.com/stablyai/orca/pull/7750",
@@ -9716,7 +9715,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-spawn-cwd-fallback.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts src/main/shell-wrapper-generated-file-snapshot.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts"
       ],
       "testFiles": [
         "src/shared/terminal-startup-cwd.test.ts",
@@ -9724,8 +9723,7 @@
         "src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts",
         "src/main/pty/omp-shell-wrapper.node-pty.test.ts",
-        "src/main/pty/omp-shell-wrapper-alias-safety.test.ts",
-        "src/main/shell-wrapper-generated-file-snapshot.test.ts"
+        "src/main/pty/omp-shell-wrapper-alias-safety.test.ts"
       ],
       "assertionRefs": [
         {
@@ -9780,12 +9778,6 @@
             "extension argv and a nonzero OMP exit status survive the recovery subshell",
             "a subsequently missing logical cwd prints an actionable error and does not invoke OMP again"
           ]
-        },
-        {
-          "file": "src/main/shell-wrapper-generated-file-snapshot.test.ts",
-          "assertions": [
-            "local, daemon/SSH, and relay Bash/Zsh files contain the byte-identical shared OMP wrapper"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -9832,6 +9824,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts src/main/shell-wrapper-generated-file-snapshot.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts",
           "result": "passed",
           "durationSeconds": 3,
           "summary": "3 test files passed; real Bash and Zsh PTYs covered usable physical cwd authority, stale-inode recovery with set and unset PWD, extension-enabled and extension-skipping argv, parent-shell isolation, exit status, missing-path visibility, alias safety, and generated local/daemon/relay parity."
@@ -9839,7 +9832,7 @@
       ],
       "runtimeBudget": {
         "p95Seconds": 40,
-        "scope": "focused unit, IPC, generated-wrapper, and real Bash/Zsh PTY contracts"
+        "scope": "focused unit, IPC, and real Bash/Zsh PTY contracts"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -9981,7 +9974,7 @@
         "https://github.com/stablyai/orca/pull/11353"
       ],
       "invariant": "PreCompact is never registered and may never move a pane, because it fires before the compact is validated and an aborted compact emits it alone. Only a manual PostCompact may mark done, and it does so as a session boundary so completion-reactive consumers stay out of it; an automatic PostCompact claims nothing and writes no compact-scoped state, since its turn resumes and emits its own Stop. A completion either CLEARS a row or publishes nothing at all: it never creates a row, so a retired pane cannot be resurrected, and it never restates one it cannot clear, because a restated row loses restoredUnconfirmed and restarts the staleness clock. A manual /compact only completes at an idle prompt, so it retires a subagent that exists ONLY as a disk snapshot; live evidence -- a child observed in this runtime, an unclassifiable running background task, a registered session cron -- still holds the pane at working. A completion requires a valid provider prompt UUID, matches the pane owner by connection and provider session -- except on a restored row, which carries the previous connection and may carry no session at all -- and is applied at most once per compact. Ownership is enforced by the client that owns pane identity; a relay forwards and defers, so a cold relay cache cannot swallow the clearing event. A relay predating this contract forwards its own mapping, so ingest drops automatic envelopes, stamps the boundary on manual ones, carries the summarized turn label onto a promptless completion with or without a trigger, and classifies a trigger-stripped replay by payload state while still enforcing ownership. Kimi and other Claude-compatible vendors remain fail-closed.",
-      "oracle": "Replay the measured Claude compact streams through a harness gated on the real CLAUDE_EVENTS, plus local HTTP, relay, SSH, and persisted-restore transports. Require the successful manual stream to end done with sessionBoundary set, and require the aborted stream (PreCompact alone) to leave both an idle and a working pane exactly as it found them. Drive the restart shape end to end over loopback HTTP from a hydrated row: a pane held only by a snapshot child must reach done with an empty roster, while a pane a runtime child still owns must emit NOTHING and keep its row object identical, so receivedAt and restoredUnconfirmed both survive. Deliver the restored-row cases with the hydrated row still cached at completion time and assert the summarizer published nothing, so the restored-row branch is the branch under test. Require rejection of an automatic completion, a completion with absent prompt UUID, a foreign provider session, a duplicate, and a completion for a pane with no cached row; require an automatic completion to leave the consumed-compact map untouched. Require a relay with a COLD cache to forward the completion while the client still refuses to mint a row it never had. Require ingest to drop legacy automatic envelopes, stamp the boundary on legacy manual ones, carry the summarized turn label onto a promptless completion with and without a trigger, and leave a FINISHED pane finished when a trigger-stripped working replay arrives. Require the consumed-compact map to be empty after each pane-scoped teardown route and to follow a pane move. Assert registration membership, emitted event order, and the authoritative lastStatusByPaneKey snapshot.",
+      "oracle": "Replay the measured Claude compact streams through a harness gated on the real CLAUDE_EVENTS, plus local HTTP, relay, SSH, and persisted-restore transports. Require the successful manual stream to end done with sessionBoundary set, and require PreCompact delivered directly past the registration gate to produce no normalized event. Drive the restart shape end to end over loopback HTTP from a hydrated row: a pane held only by a snapshot child must reach done with an empty roster, while a pane a runtime child still owns must emit NOTHING and keep its row object identical, so receivedAt and restoredUnconfirmed both survive. Deliver the restored-row cases with the hydrated row still cached at completion time and assert the summarizer published nothing, so the restored-row branch is the branch under test. Require rejection of an automatic completion, a completion with absent prompt UUID, a foreign provider session, a duplicate, and a completion for a pane with no cached row; require an automatic completion to leave the live turn working until its own Stop closes it. Require a relay with a COLD cache to forward the completion while the client still refuses to mint a row it never had. Require ingest to drop legacy automatic envelopes, stamp the boundary on legacy manual ones, carry the summarized turn label onto a promptless completion with and without a trigger, and leave a FINISHED pane finished when a trigger-stripped working replay arrives. Require pane, tab, and server cleanup to revoke compact completion authority. Assert managed hook settings, emitted event order, and the authoritative lastStatusByPaneKey snapshot.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts --reporter=dot",
         "Manual Claude Code interactive compact under a PTY: register every hook to a logging script, run one turn then /compact to observe the abort stream, then seven turns and /compact to observe the success stream; compare source, trigger, session_id, and prompt_id across both"
@@ -10001,14 +9994,13 @@
         {
           "file": "src/main/claude/compact-status-registration.test.ts",
           "assertions": [
-            "PostCompact is registered in CLAUDE_EVENTS and written into the settings Claude reads, and PreCompact is absent from both",
+            "PostCompact is written into the settings Claude reads, and PreCompact is absent from those settings",
             "the measured successful manual compact ends a stuck working row as a done with sessionBoundary",
-            "an aborted compact (PreCompact alone) leaves an idle pane idle and a working pane working",
-            "an automatic completion claims nothing, writes no compact-scoped state, and the turn's own Stop still closes it",
+            "PreCompact delivered directly past the registration gate produces no normalized event",
+            "an automatic completion emits nothing, leaves the live turn working, and the turn's own Stop still closes it",
             "a completion retires a child that exists only as a disk snapshot, but a runtime child or an active session cron still holds the pane and the completion then publishes nothing at all",
             "a completion clears a restored row -- delivered while that hydrated row is still the cached owner -- despite a stale connection id or a missing provider session, but never resurrects a retired pane",
-            "absent prompt UUID, foreign provider session, and duplicate delivery fail closed",
-            "the consumed-compact record is dropped by clearPaneCacheState and clearAllListenerCaches and follows movePaneCacheState"
+            "absent prompt UUID, foreign provider session, and duplicate delivery fail closed"
           ]
         },
         {
@@ -10073,7 +10065,8 @@
       "knownGaps": [
         "No live Linux, Windows, WSL, paired-runtime, or real-SSH manual compact journey was run.",
         "Claude versions before prompt_id support intentionally cannot complete a manual compact row through PostCompact.",
-        "Automatic Claude and Kimi completion remain intentionally fail-closed because their hooks do not prove an exact compact generation."
+        "Automatic Claude and Kimi completion remain intentionally fail-closed because their hooks do not prove an exact compact generation.",
+        "The compact-registration source does not assert private consumed-compact map contents after automatic completion or cache teardown/move, or assert unchanged state after PreCompact is filtered by the test-owned registration gate; direct normalization and observable completion/ownership behavior remain covered."
       ],
       "demotionRule": "Demote or quarantine if identity-mismatched completion can retire newer work, cleanup retains compact authority, or the focused gate flakes without a product or harness bug."
     },
@@ -19060,12 +19053,12 @@
       "invariant": "terminal.sendText accepts only an explicit provider-owned terminal id present in one bounded inventory of the worktree resolved immediately before the send; an absent id causes zero send calls, and relay callers cannot supply their own capability grants or transport classification.",
       "oracle": "Resolve the active worktree once, list that worktree with the v0 terminal cap once, and assert zero sendTerminal calls for a mismatched opaque id versus exactly one send for matching local- and SSH-shaped ids; then run the same permission and schema cases through desktop-main and registered relay panel/worker adapters and compare error codes.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/workers/plugin-host-methods.test.ts"
       ],
-      "testFiles": ["src/main/plugins/plugin-host-methods.test.ts"],
+      "testFiles": ["src/main/plugins/workers/plugin-host-methods.test.ts"],
       "assertionRefs": [
         {
-          "file": "src/main/plugins/plugin-host-methods.test.ts",
+          "file": "src/main/plugins/workers/plugin-host-methods.test.ts",
           "assertions": [
             "a terminal outside the freshly resolved worktree performs one capped list and zero sends",
             "matching local- and SSH-shaped opaque ids each perform one capped list and one exact send",
@@ -19078,7 +19071,7 @@
           "date": "2026-07-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/workers/plugin-host-methods.test.ts",
           "result": "passed",
           "durationSeconds": 0.18,
           "summary": "2 files and 17 tests passed, covering the 13-method main/relay conformance matrix and exact terminal routing call counts."

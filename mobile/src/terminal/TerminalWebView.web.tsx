@@ -1,5 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { View } from 'react-native'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
@@ -9,11 +11,22 @@ import { useTerminalWebViewController } from './use-terminal-webview-controller'
 
 type Props = TerminalWebViewProps
 
+function describeTerminalDocumentStartupError(error: unknown): string {
+  return translate(
+    'terminal.webView.documentStartFailed',
+    'terminal document failed to start - {{message}}',
+    {
+      message: error instanceof Error ? error.message : String(error)
+    }
+  )
+}
+
 export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
 // react-native-webview has no rendered web implementation; mount the same document factory with the native controller contract.
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
+    useMobileTranslation()
     const hostRef = useRef<View>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
     // Readiness fires inside mount before a handle exists; buffer its synchronous controller flush until the handle returns.
@@ -62,9 +75,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
         receiveRef.current?.({
           type: 'error',
           fatal: true,
-          message: `terminal document failed to start - ${
-            error instanceof Error ? error.message : String(error)
-          }`
+          message: describeTerminalDocumentStartupError(error)
         })
         return
       }

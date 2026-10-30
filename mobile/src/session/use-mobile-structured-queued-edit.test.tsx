@@ -26,6 +26,10 @@ import {
   withText,
   readOrHoldReply
 } from './mobile-queued-edit-hook.test-fixture'
+import { insertDictationText } from '../dictation/mobile-dictation-text-insertion'
+
+// What the composer hands the editor for words said into a field that was never focused.
+const spoken = (text: string) => (draft: string) => insertDictationText(draft, text, null).text
 
 describe('mobile in-place queued Edit', () => {
   const {
@@ -52,6 +56,74 @@ describe('mobile in-place queued Edit', () => {
     ).toBe(false)
     await act(async () => state.renderer?.update(createElement(Harness, { editSupport: false })))
     expect(state.hook!.queued.edit).toEqual(expect.any(Function))
+  })
+
+  it('opens full canonical task input and publishes a changed Save as user-authored raw input', async () => {
+    const prefix = 'You are working inside Orca, a multi-agent IDE.\n=== TASK ===\n'
+    const message = queuedDraft({
+      messageId: 'task',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: `${prefix}  Task 🐋 [Image #1]  ` },
+          { type: 'image-ref', path: '/host/shot.png' }
+        ],
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_coord', terminalHandle: 'term_coord', orcaSessionId: null },
+              name: 'Coordinator',
+              relation: 'coordinator'
+            }
+          ],
+          orchestration: { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
+        }
+      }
+    })
+    await mount(message)
+    expect(state.hook!.queued.cards[0]).toMatchObject({
+      line: '  Task 🐋',
+      attribution: 'From Coordinator'
+    })
+    expect(state.hook!.queued.cards[0].images).toHaveLength(1)
+    expect(state.hook!.queued.editor!.text).toBe(`${prefix}  Task 🐋 [Image #1]  `)
+    await act(async () => {
+      expect(await state.hook!.queued.editor!.save()).toBe(true)
+    })
+    expect(
+      sendRequest.mock.calls.some(([method]) => method === 'agentSession.queuedMessageUpdate')
+    ).toBe(false)
+    expect(state.hook!.queued.cards[0]).toMatchObject({
+      line: '  Task 🐋',
+      attribution: 'From Coordinator'
+    })
+    await act(async () => {
+      await state.hook!.queued.edit!('task')
+    })
+    act(() => state.hook!.queued.editor!.change(`${prefix}Edited`))
+    await act(async () => {
+      expect(await state.hook!.queued.editor!.save()).toBe(true)
+    })
+    const update = sendRequest.mock.calls.find(
+      ([method]) => method === 'agentSession.queuedMessageUpdate'
+    )
+    expect(fieldsOf(update?.[1]).text).toBe(`${prefix}Edited`)
+    // The current host commits changed content without the original agent attribution.
+    const { from: _sender, ...userBody } = withText(message.body, `${prefix}Edited`)
+    const saved: typeof message = { ...message, body: userBody }
+    act(() => state.listener?.(batchEvent([saved])))
+    const [savedCard] = state.hook!.queued.cards
+    expect(savedCard).toMatchObject({
+      line: `${prefix}Edited`,
+      attribution: null
+    })
+    await act(async () => {
+      await state.hook!.queued.edit!('task')
+    })
+    expect(state.hook!.queued.editor!.text).toBe(`${prefix}Edited`)
+    await act(async () => state.hook!.queued.editor!.cancel())
   })
 
   it.each([
@@ -147,7 +219,7 @@ describe('mobile in-place queued Edit', () => {
         )
       }
       act(() => setMobileNativeChatDraftText('original-bottom', 'bottom'))
-      act(() => expect(insert('later')).toBe(!cancel))
+      act(() => expect(insert(spoken('later'))).toBe(!cancel))
       expect(state.bottomText).toBe(cancel ? 'bottom' : 'bottom later')
     }
   )
@@ -304,7 +376,7 @@ describe('mobile in-place queued Edit', () => {
         saving = state.hook!.queued.editor!.save()
       })
       act(() => {
-        expect(insert('speech')).toBe(true)
+        expect(insert(spoken('speech'))).toBe(true)
       })
       await act(async () => {
         reply!(mutationOk({ status, messageId: message.messageId }))
@@ -314,7 +386,7 @@ describe('mobile in-place queued Edit', () => {
         expect(state.bottomText).toBe('')
         expect(state.hook!.queued.editor!.text).toBe('submitted speech')
         act(() => {
-          expect(insert('later')).toBe(true)
+          expect(insert(spoken('later'))).toBe(true)
         })
         expect(state.bottomText).toBe('')
         expect(state.hook!.queued.editor!.text).toBe('submitted speech later')

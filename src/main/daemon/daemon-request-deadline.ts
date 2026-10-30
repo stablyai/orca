@@ -16,13 +16,23 @@ export async function awaitDaemonWorkWithinCallerDeadline(
   work: Promise<void>,
   deadlineMs: number
 ): Promise<boolean> {
+  return (await awaitDaemonValueWithinCallerDeadline(work, deadlineMs)).completed
+}
+
+export async function awaitDaemonValueWithinCallerDeadline<T>(
+  work: Promise<T>,
+  deadlineMs: number
+): Promise<{ completed: true; value: T } | { completed: false }> {
   void work.catch(() => {})
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      work.then(() => true),
-      new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), Math.max(1, deadlineMs - Date.now()))
+      work.then((value) => ({ completed: true as const, value })),
+      new Promise<{ completed: false }>((resolve) => {
+        timer = setTimeout(
+          () => resolve({ completed: false }),
+          Math.max(1, deadlineMs - Date.now())
+        )
         timer.unref?.()
       })
     ])

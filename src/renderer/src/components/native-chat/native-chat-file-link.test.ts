@@ -3,7 +3,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
-import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
+import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import {
   createNativeChatFileLinkContextSelector,
   findNativeChatTabOwnerWorktreeId,

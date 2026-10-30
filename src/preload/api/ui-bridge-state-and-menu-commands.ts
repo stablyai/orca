@@ -45,6 +45,13 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingSkillShare: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingSkillShare'),
+  onOpenPluginInstallLink: (callback: (link: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
+    ipcRenderer.on('ui:openPluginInstallLink', listener)
+    return () => ipcRenderer.removeListener('ui:openPluginInstallLink', listener)
+  },
+  consumePendingPluginInstallLink: (): Promise<string | null> =>
+    ipcRenderer.invoke('ui:consumePendingPluginInstallLink'),
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, documents: MarkdownDocument[]): void =>
       callback(documents)

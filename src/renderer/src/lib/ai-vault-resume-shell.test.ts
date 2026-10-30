@@ -14,6 +14,10 @@ function makeState(worktreeHostId?: `ssh:${string}`): ResumeShellState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     repos: [{ ...TEST_REPO, id: 'repo-1', path: '/home/alice/repo' }],

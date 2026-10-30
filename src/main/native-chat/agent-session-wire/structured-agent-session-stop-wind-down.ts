@@ -69,12 +69,14 @@ export async function endStoppedStructuredAgentSession(
     windDown.settled?.(failedOn)
   }
   const outcome = windDown.outcome
+  const writerStopped =
+    outcome?.root === 'exited' || outcome?.deathEvidenceKind === 'kill-delivered'
   if (
     outcome &&
     (outcome.errors.length > 0 ||
       outcome.pause === 'unconfirmed' ||
       outcome.interrupt === 'unconfirmed' ||
-      outcome.root !== 'exited' ||
+      !writerStopped ||
       outcome.workload !== 'exited')
   ) {
     // Thread-scoped operation feedback survives generic turn-end rekeying and turnless shutdown.
@@ -100,7 +102,7 @@ export async function endStoppedStructuredAgentSession(
               stopNotice:
                 outcome.pause === 'unconfirmed' &&
                 outcome.interrupt !== 'unconfirmed' &&
-                outcome.root === 'exited' &&
+                writerStopped &&
                 outcome.workload === 'exited'
                   ? 'pauseUnconfirmed'
                   : 'stopUnconfirmed'

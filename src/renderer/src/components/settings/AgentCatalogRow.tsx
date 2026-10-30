@@ -26,6 +26,7 @@ import {
   AgentPermissionMenu,
   type AgentPermissionChoiceRow
 } from './AgentPermissionChoiceControls'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -232,6 +233,7 @@ export function AgentCatalogRow({
             <a
               href={homepageUrl}
               target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
               rel="noopener noreferrer"
               title={
                 isDetected
@@ -297,17 +299,20 @@ export function AgentCatalogRow({
                   defaultArgs={defaultArgs}
                   argsOverride={argsOverride}
                   onSaveArgs={onSaveArgs}
-                  permissionChip={
+                  choiceChips={
                     permissionChoice?.flag && !permissionChoice.argsSetPermission
-                      ? {
-                          label,
-                          flag: permissionChoice.flag,
-                          removeRecipe: (text) => {
-                            const lifted = liftAgentPermissionArgs(agentId, text)
-                            return lifted.choice !== null ? lifted.args : null
-                          },
-                          onRemove: () => permissionChoice.onSelect('own')
-                        }
+                      ? [
+                          {
+                            key: 'permissionMode',
+                            label,
+                            flag: permissionChoice.flag,
+                            onRemove: (text) => {
+                              const lifted = liftAgentPermissionArgs(agentId, text)
+                              permissionChoice.onSelect('own')
+                              return lifted.choice !== null ? lifted.args : text
+                            }
+                          }
+                        ]
                       : undefined
                   }
                   note={

@@ -800,9 +800,9 @@ describe('cross-version structured agent sessions', () => {
       const held = first.cursor
 
       const restarted = await bootHost('b')
-      await restarted.restoreReadableSessions()
-      // Restart restores the session for READING. The chat the client still has open takes its
-      // hold, and that is what gives the session a provider child again.
+      await restarted.seedSessionTabs([SESSION])
+      await restarted.revealSession(SESSION)
+      // Demand-open restores reading; the retained chat's hold starts its provider child again.
       await answer('agentSession.hold', {
         sessionId: SESSION,
         holderId: 'surface-1'

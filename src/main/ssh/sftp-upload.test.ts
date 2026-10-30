@@ -7,13 +7,7 @@ import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper, WriteStreamOptions } from 'ssh2'
 import { SFTP } from 'ssh2/lib/protocol/SFTP.js'
-import {
-  removeDirectorySftp,
-  SFTP_UPLOAD_IN_FLIGHT_BYTES,
-  uploadBuffer,
-  uploadDirectory,
-  uploadFile
-} from './sftp-upload'
+import { removeDirectorySftp, uploadBuffer, uploadDirectory, uploadFile } from './sftp-upload'
 
 function createWritable(): Writable {
   return new Writable({
@@ -24,8 +18,10 @@ function createWritable(): Writable {
 }
 
 function createSftpMock(): SFTPWrapper {
+  const session = new EventEmitter()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these tests call only the methods stubbed here and the session's events.
-  return Object.assign(new EventEmitter(), {
+  return Object.assign(session, {
+    end: () => session.emit('close'),
     mkdir: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null)),
     createWriteStream: vi.fn(() => createWritable()),
     readdir: vi.fn((_path: string, cb: (err?: Error | null, entries?: unknown[]) => void) =>
@@ -66,7 +62,7 @@ describe('sftp-upload', () => {
     expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/nested', expect.any(Function))
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/nested/asset.txt', {
       flags: 'wx',
-      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
+      highWaterMark: 64 * 1024
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
@@ -87,7 +83,7 @@ describe('sftp-upload', () => {
     expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/..fixtures', expect.any(Function))
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/..fixtures/asset.txt', {
       flags: 'wx',
-      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
+      highWaterMark: 64 * 1024
     })
   })
 
@@ -103,7 +99,7 @@ describe('sftp-upload', () => {
 
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
       flags: 'w',
-      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
+      highWaterMark: 64 * 1024
     })
     await rm(aliasDir, { force: true })
     await rm(realDir, { recursive: true, force: true })
@@ -125,7 +121,7 @@ describe('sftp-upload', () => {
 
         expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
           flags: 'w',
-          highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
+          highWaterMark: 64 * 1024
         })
       } finally {
         await rm(linkedParent, { force: true })

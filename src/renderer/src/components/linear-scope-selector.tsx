@@ -111,13 +111,10 @@ function summarizeTeamKeys(
     const keys = selectedTeams.map((team) => team.key)
     const keyCount = new Set(keys).size
     if (workspaceIds.size > 1 || keyCount < keys.length) {
-      return selectedTeams.length === 1
-        ? translate('auto.components.linear.scope.selector.teamCount_one', '{{count}} team', {
-            count: selectedTeams.length
-          })
-        : translate('auto.components.linear.scope.selector.teamCount_other', '{{count}} teams', {
-            count: selectedTeams.length
-          })
+      return translate('auto.components.linear.scope.selector.teamCount', '{{count}} teams', {
+        count: selectedTeams.length,
+        defaultValue_one: '{{count}} team'
+      })
     }
   }
 

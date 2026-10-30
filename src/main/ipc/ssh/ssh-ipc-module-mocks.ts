@@ -14,7 +14,9 @@ export function createSshIpcMocks(): SshIpcMocks {
       addTarget: vi.fn(),
       updateTarget: vi.fn(),
       removeTarget: vi.fn(),
-      importFromSshConfig: vi.fn().mockReturnValue([]),
+      importFromSshConfig: vi.fn().mockResolvedValue({ targets: [], repoReadoptions: [] }),
+      currentSshRouteSnapshot: vi.fn().mockReturnValue(null),
+      refreshSshRouteSnapshot: vi.fn().mockResolvedValue(null),
       lastRepoReadoptions: [] as {
         oldTargetId: string
         newTargetId: string

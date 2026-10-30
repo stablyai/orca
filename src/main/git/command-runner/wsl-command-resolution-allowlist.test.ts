@@ -13,7 +13,7 @@ vi.mock('node:child_process', async (original) => ({
 vi.mock('../../wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
 
 import { resolveCommand } from './wsl-command-resolution'
-import { gitExecFileSync } from './git-exec-file'
+import { gitExecFileSync } from './git-exec-file-sync'
 import { gitSpawn } from './git-spawn'
 import { wslAwareSpawn } from './wsl-aware-spawn'
 
@@ -70,7 +70,7 @@ describe('resolveCommand under the internal WSL distro allowlist', () => {
   it('refuses through every direct child_process git spawn path before a child starts', () => {
     vi.stubEnv(ALLOWLIST, 'orca-test-a')
 
-    expect(() => gitExecFileSync(['status'], { cwd: UBUNTU_REPO })).toThrow(
+    expect(() => gitExecFileSync(['status'], { cwd: UBUNTU_REPO, hostGit: true })).toThrow(
       expect.objectContaining(REFUSED)
     )
     expect(() => gitSpawn(['status'], { cwd: UBUNTU_REPO })).toThrow(

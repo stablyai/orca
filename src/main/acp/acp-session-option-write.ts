@@ -7,7 +7,14 @@ export function writeAcpSessionOption(
   connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  bound: { agent: string; timeoutMs: number; signal?: AbortSignal; key: string; value: string }
+  bound: {
+    agent: string
+    timeoutMs: number
+    signal?: AbortSignal
+    key: string
+    value: string
+    onUncertain?: (error: Error) => void
+  }
 ): Promise<void> {
   const { agent, timeoutMs, signal } = bound
   if (signal?.aborted) {
@@ -22,20 +29,30 @@ export function writeAcpSessionOption(
     apply()
     options.appliedInput.set(bound.key, write.method === 'config' ? write.value : write.modelId)
   }
+  let completed = false
   const applied =
     write.method === 'config'
-      ? connection
-          .setConfigOption(write.configId, write.value)
-          .then((result) => adopt(() => options.adoptConfigOptions(result.configOptions)))
-      : connection
-          .setModel(write.modelId)
-          .then(() => adopt(() => options.adoptModel(write.modelId)))
+      ? connection.setConfigOption(write.configId, write.value).then((result) => {
+          completed = true
+          adopt(() => options.adoptConfigOptions(result.configOptions))
+        })
+      : connection.setModel(write.modelId).then(() => {
+          completed = true
+          adopt(() => options.adoptModel(write.modelId))
+        })
+  void applied.catch(() => {
+    completed = true
+  })
   return new Promise<void>((resolve, reject) => {
     const fail = (error: Error): void => {
       if (options.writeRevision === revision) {
         options.writeRevision += 1
       }
       settle()
+      // A local deadline/abort cannot cancel an already-sent native control.
+      if (!completed) {
+        bound.onUncertain?.(error)
+      }
       reject(error)
     }
     const onAbort = (): void => {

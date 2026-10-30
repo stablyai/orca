@@ -7,8 +7,21 @@ import {
 
 type PluginThemeSettings = Pick<
   GlobalSettings,
-  'pluginAppTheme' | 'themeBeforePlugin' | 'terminalPluginPalettes'
+  | 'pluginAppTheme'
+  | 'pluginAppThemeLight'
+  | 'pluginAppThemeDark'
+  | 'pluginIconTheme'
+  | 'themeBeforePlugin'
+  | 'terminalPluginPalettes'
 >
+
+/** The setting that holds the plugin app theme for one light/dark mode. */
+export function pluginAppThemeSlotUpdate(
+  base: 'light' | 'dark',
+  id: `plugin:${string}` | null
+): Pick<GlobalSettings, 'pluginAppThemeLight'> | Pick<GlobalSettings, 'pluginAppThemeDark'> {
+  return base === 'dark' ? { pluginAppThemeDark: id } : { pluginAppThemeLight: id }
+}
 
 // Two terminal slots (dark, light) can each hold one plugin palette.
 const MAX_TERMINAL_PLUGIN_PALETTES = 2
@@ -50,6 +63,15 @@ export function normalizePluginThemeSettings(
   if ('pluginAppTheme' in input) {
     result.pluginAppTheme = contentId(input.pluginAppTheme)
   }
+  if ('pluginAppThemeLight' in input) {
+    result.pluginAppThemeLight = contentId(input.pluginAppThemeLight)
+  }
+  if ('pluginAppThemeDark' in input) {
+    result.pluginAppThemeDark = contentId(input.pluginAppThemeDark)
+  }
+  if ('pluginIconTheme' in input) {
+    result.pluginIconTheme = contentId(input.pluginIconTheme)
+  }
   if ('themeBeforePlugin' in input) {
     const theme = input.themeBeforePlugin
     result.themeBeforePlugin =
@@ -73,6 +95,9 @@ export function pluginThemeSettingsAfterRemoval(
     | 'terminalThemeDark'
     | 'terminalThemeLight'
     | 'pluginAppTheme'
+    | 'pluginAppThemeLight'
+    | 'pluginAppThemeDark'
+    | 'pluginIconTheme'
     | 'themeBeforePlugin'
     | 'terminalPluginPalettes'
   >,
@@ -83,6 +108,15 @@ export function pluginThemeSettingsAfterRemoval(
     update.pluginAppTheme = null
     update.themeBeforePlugin = null
     update.theme = settings.themeBeforePlugin ?? settings.theme
+  }
+  if (ownedBy(settings.pluginAppThemeLight, pluginKey)) {
+    update.pluginAppThemeLight = null
+  }
+  if (ownedBy(settings.pluginAppThemeDark, pluginKey)) {
+    update.pluginAppThemeDark = null
+  }
+  if (ownedBy(settings.pluginIconTheme, pluginKey)) {
+    update.pluginIconTheme = null
   }
   if (ownedBy(settings.terminalThemeDark, pluginKey)) {
     update.terminalThemeDark = ''

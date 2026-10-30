@@ -5,6 +5,8 @@
 import { join } from 'node:path'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktree-prune-guard'
 import { resolveLocalProjectRuntimeForProject } from '../local-project-runtime-resolution'
@@ -20,10 +22,11 @@ export const WSL_DRIVE_PROJECT_HANDLER_CHANNELS = [
   'wslDriveProject:convert'
 ] as const
 
-export function registerWslDriveProjectHandlers(store: Store): void {
+export function registerWslDriveProjectHandlers(store: Store, runtime: OrcaRuntimeService): void {
   for (const channel of WSL_DRIVE_PROJECT_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
+  registerWslDriveUncConversionHandlers(store, runtime)
   ipcMain.handle('wslDriveProject:preview', async (_event, projectId: unknown) =>
     previewWslDriveProjectWindowsGit(gatedDeps(store), requireId(projectId))
   )
@@ -59,8 +62,9 @@ function gatedDeps(store: Store): WslDriveProjectDeps {
       }
       return runtime
     },
-    // No wslDistro: this runs the host's Git even for a WSL-runtime project.
-    runWindowsGit: async (args, cwd) => (await gitExecFileAsync(args, { cwd })).stdout,
+    // Host Git on purpose: this checks whether Git for Windows can take the project over.
+    runWindowsGit: async (args, cwd) =>
+      (await gitExecFileAsync(args, { cwd, hostGit: true })).stdout,
     readWorktreeLinks
   }
 }

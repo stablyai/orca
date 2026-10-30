@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { worktreeRemovalReplyTimeoutMs } from '../shared/worktree/archive-hook-removal-gate'
 
 const {
   callMock,
@@ -98,7 +99,8 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'local', force: true })
+      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'local', force: true }),
+      expect.anything()
     )
   })
 
@@ -114,11 +116,30 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'runtime:env-1' })
+      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'runtime:env-1' }),
+      expect.anything()
     )
   })
 
-  it('says the checkout is still being deleted when the host accepted a background removal', async () => {
+  it('asks the host to reply with the delete outcome and waits past Git deletion (#35135)', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true })
+    )
+
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--run-hooks'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.rm',
+      expect.objectContaining({ waitForBackgroundRemoval: true }),
+      { timeoutMs: worktreeRemovalReplyTimeoutMs(true) }
+    )
+    expect(logSpy).toHaveBeenCalledWith('removed: true')
+  })
+
+  it('does not say removed when an older host only accepted a background removal', async () => {
     queueFixtures(
       callMock,
       okFixture('req_show', { worktree: { hostId: 'local' } }),
@@ -128,7 +149,7 @@ describe('command aliases dispatch to the canonical handler', () => {
     await main(['worktree', 'rm', '--worktree', 'id:wt-1'], '/tmp/repo')
 
     expect(logSpy).toHaveBeenCalledWith(
-      'removed: true\nOrca is still deleting the checkout in the background.'
+      'removed: false\nOrca is still deleting the checkout in the background.'
     )
   })
 
@@ -180,7 +201,8 @@ describe('command aliases dispatch to the canonical handler', () => {
         expect.objectContaining({
           runHooks: true,
           allowFailedArchiveHook: false
-        })
+        }),
+        expect.anything()
       )
       expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
         id: 'req_archive',
@@ -240,7 +262,8 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.rm',
-      expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true })
+      expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true }),
+      expect.anything()
     )
   })
 

@@ -135,6 +135,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         reason: 'hostUnsupported'
       })
     }
+    // A read, not a launch: only the account push is awaited, never a folder refresh.
+    await this.accounts.prepareHostAgentLaunch(null)
     const launchEnv = this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
     return resolveAccountHome({ launchEnv, location: null })
   }
@@ -160,6 +162,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         reason: 'hostUnsupported'
       })
     }
+    await this.accounts.prepareHostAgentLaunch(input.agent)
     const settings = this.requireStore().getSettings()
     const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
     const options = this.structuredAgentSessionLaunchSeedOptions(input.agent)

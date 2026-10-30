@@ -14,7 +14,14 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { resolveWorktreeAddTimeoutMs, WORKTREE_ADD_TIMEOUT_MS } from './worktree-operation-options'
+import { GitCommandTimeoutError } from '../../shared/git-command-timeout'
+import { addWorktree } from './worktree'
+import {
+  resolveWorktreeAddTimeoutMs,
+  WORKTREE_ADD_TIMEOUT_MAX_MS,
+  WORKTREE_ADD_TIMEOUT_MS,
+  worktreeAddTimeoutMessage
+} from './worktree-operation-options'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 
 registerWorktreeSuiteHooks()
@@ -98,6 +105,29 @@ describe('resolveWorktreeAddTimeoutMs', () => {
     )
     expect(resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: '-1' })).toBe(
       WORKTREE_ADD_TIMEOUT_MS
+    )
+  })
+})
+
+describe('addWorktree timeout', () => {
+  it('names the limit and the override when git worktree add times out', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('worktree')) {
+        throw new GitCommandTimeoutError(WORKTREE_ADD_TIMEOUT_MS)
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const error = await addWorktree('/repo', '/repo-feature', 'feature').catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(GitCommandTimeoutError)
+    expect(String(error)).toContain('180 seconds')
+    expect(String(error)).toContain('ORCA_WORKTREE_ADD_TIMEOUT_MS')
+  })
+
+  it('drops the override advice once the limit is already at the maximum', () => {
+    expect(worktreeAddTimeoutMessage(WORKTREE_ADD_TIMEOUT_MAX_MS)).not.toContain(
+      'ORCA_WORKTREE_ADD_TIMEOUT_MS'
     )
   })
 })

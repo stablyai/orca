@@ -37,6 +37,8 @@ import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -47,6 +49,7 @@ export function MobileFileExplorerPanel(props: {
   onOpenFile?: (relativePath: string) => void
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { hostId, worktreeId, name, embedded, onRequestClose, onOpenFile } = props
   const router = useWorkspaceRouteHandoff()
   const executionHost = useWorkspaceExecutionHost()
@@ -74,7 +77,9 @@ export function MobileFileExplorerPanel(props: {
 
       if (!client || connState !== 'connected') {
         const message =
-          connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
+          connState === 'connected'
+            ? translate('files.fileExplorerPanel.connecting', 'Connecting to desktop...')
+            : translate('files.fileExplorerPanel.waiting', 'Waiting for desktop...')
         if (rootLoad) {
           const hasLoadedRoot =
             (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
@@ -142,10 +147,13 @@ export function MobileFileExplorerPanel(props: {
             throw new Error(
               (legacyReply.ok ? undefined : legacyReply.error)?.message ||
                 refusal?.message ||
-                'Unable to load files'
+                translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
             )
           }
-          throw new Error(refusal?.message || 'Unable to load files')
+          throw new Error(
+            refusal?.message ||
+              translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
+          )
         }
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
@@ -167,7 +175,10 @@ export function MobileFileExplorerPanel(props: {
         ) {
           return
         }
-        const message = err instanceof Error ? err.message : 'Unable to load files'
+        const message =
+          err instanceof Error
+            ? err.message
+            : translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
         if (rootLoad) {
           // Only cold loads show full-screen errors; failed background refreshes retain the cached tree.
           setError(hadLoadedRoot ? null : message)
@@ -228,7 +239,15 @@ export function MobileFileExplorerPanel(props: {
       Object.fromEntries(
         Object.entries(previous).map(([path, state]) => [
           path,
-          state?.loading ? { entries: state.entries, error: 'Folder load interrupted' } : state
+          state?.loading
+            ? {
+                entries: state.entries,
+                error: translate(
+                  'files.fileExplorerPanel.loadInterrupted',
+                  'Folder load interrupted'
+                )
+              }
+            : state
         ])
       )
     )
@@ -332,7 +351,7 @@ export function MobileFileExplorerPanel(props: {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={() => onRequestClose?.()}
           hitSlop={8}
-          accessibilityLabel="Close files"
+          accessibilityLabel={t('files.fileExplorerPanel.closeFiles', 'Close files')}
         >
           <X size={20} color={colors.textSecondary} strokeWidth={2.2} />
         </Pressable>
@@ -342,18 +361,21 @@ export function MobileFileExplorerPanel(props: {
           onPress={() => router.back()}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Back to session"
+          accessibilityLabel={t('files.fileExplorerPanel.backToSession', 'Back to session')}
         >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
         </Pressable>
       )}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
-          Files
+          {t('files.fileExplorerPanel.title', 'Files')}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
-          {worktreeLabel}
-          {legacyListTruncated ? ' - Showing first 5000' : ''}
+          {legacyListTruncated
+            ? t('files.fileExplorerPanel.truncatedList', '{{worktreeLabel}} - Showing first 5000', {
+                worktreeLabel
+              })
+            : worktreeLabel}
         </Text>
       </View>
     </View>
@@ -374,7 +396,9 @@ export function MobileFileExplorerPanel(props: {
     <MobileLoadErrorState message={error} onRetry={rootRetry} />
   ) : rows.length === 0 ? (
     <View style={styles.state}>
-      <Text style={styles.emptyText}>No files found</Text>
+      <Text style={styles.emptyText}>
+        {t('files.fileExplorerPanel.emptyState', 'No files found')}
+      </Text>
     </View>
   ) : (
     <FlatList

@@ -16,6 +16,8 @@ export type TreeNode = {
   /** Inferred from an opened link, not the parent's latest host listing. */
   isDirectoryFromOpenedLink?: boolean
   depth: number
+  /** Listed through a folder link that leads out of the project, so it opens by absolute path. */
+  outsideProject?: true
   /** Host snapshot that produced this node. Destructive actions fail closed without it. */
   operationOwner?: FileExplorerOperationOwner
 }
@@ -32,6 +34,8 @@ export type DirCache = {
   more?: FileExplorerDirMore
   /** Listed in pages because it is too big for one remote reply; a refresh pages straight away. */
   paged?: true
+  /** Listed through a project folder link that leads out of the project. */
+  outsideProject?: true
 }
 
 /** Retry covered dir reads after supersession, but not unreadable roots, which would add one dead transport timeout per dir. */

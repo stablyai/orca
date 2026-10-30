@@ -9,6 +9,7 @@ import {
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
@@ -69,6 +70,7 @@ export function MobileWebShellScreen({
   runtime
 }: MobileWebShellScreenProps) {
   const colorScheme = useMobileColorScheme()
+  const uiLocale = useMobileUiLocale()
   const insets = useSafeAreaInsets()
   const overlay = onOverlayLoad !== undefined
   const router = useRouter()
@@ -174,6 +176,7 @@ export function MobileWebShellScreen({
     safeAreaInsets: pageInsets,
     keyboardInset,
     colorScheme,
+    uiLocale,
     pageRoutes,
     pageRouteGrants,
     routeGrants,

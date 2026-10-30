@@ -325,17 +325,11 @@ export function ProviderPanel({
         <div className={faintClass}>{updatedAgo}</div>
         {resetCreditCount !== null && resetCreditCount !== undefined ? (
           <div className={mutedClass}>
-            {resetCreditCount === 1
-              ? translate(
-                  'auto.components.status.bar.tooltip.rateLimitResetsAvailable_one',
-                  '{{count}} rate-limit reset available',
-                  { count: resetCreditCount }
-                )
-              : translate(
-                  'auto.components.status.bar.tooltip.rateLimitResetsAvailable_other',
-                  '{{count}} rate-limit resets available',
-                  { count: resetCreditCount }
-                )}
+            {translate(
+              'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
+              '{{count}} rate-limit resets available',
+              { count: resetCreditCount, defaultValue_one: '{{count}} rate-limit reset available' }
+            )}
           </div>
         ) : null}
         {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}

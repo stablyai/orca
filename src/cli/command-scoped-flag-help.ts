@@ -11,6 +11,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     url: '--url <url>            Full review or issue URL; pass all URLs positionally or all as repeated --url',
     key: '--key <key>            Opaque key from reference list; repeat for several'
   },
+  'computer get-app-state': {
+    query:
+      '--query <text>        Show only elements whose line contains this text, with their ancestors'
+  },
   'reference find': {
     query: '--query <url-or-key>   Full URL or native issue key such as STA-1234',
     repo: '--repo <selector>      Filter by workspace repository membership',

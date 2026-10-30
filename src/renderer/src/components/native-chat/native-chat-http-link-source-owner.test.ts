@@ -18,7 +18,7 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))
-vi.mock('@/lib/workspace-browser-tab-open', () => ({
+vi.mock('@/lib/workspace-browser-route-eligibility', () => ({
   canOpenWorkspaceBrowserTabOnRuntime: mocks.canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh: mocks.canOpenWorkspaceBrowserTabOnSsh
 }))

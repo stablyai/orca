@@ -17,7 +17,11 @@ type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
 export function useNativeChatComposerCommandPicker(
   args: Omit<
     PickerArgs,
-    'agentCommands' | 'sessionSkills' | 'onPickerOpened' | keyof ResumeArgs['editor']
+    | 'agentCommands'
+    | 'sessionSkills'
+    | 'onPickerOpened'
+    | 'onPickerDemand'
+    | keyof ResumeArgs['editor']
   > &
     Pick<ResumeArgs, 'editor' | 'setNotice'> & {
       structuredTransport: NativeChatStructuredComposerTransport | undefined
@@ -43,7 +47,8 @@ export function useNativeChatComposerCommandPicker(
     agentCommands,
     commandAvailable,
     sessionSkills,
-    ...(structuredTransport?.refreshCommands
+    onPickerDemand: structuredTransport?.setCommandsMenuOpen,
+    ...(!structuredTransport?.setCommandsMenuOpen && structuredTransport?.refreshCommands
       ? { onPickerOpened: structuredTransport.refreshCommands }
       : {})
   })
