@@ -15,7 +15,10 @@ import {
 import type { RpcResponse } from '../transport/types'
 import { useMobileFileTapHandlers } from '../session/use-mobile-file-tap-handlers'
 import { MobileNativeChatComposerAttachments } from '../session/native-chat/composer/MobileNativeChatComposerAttachments'
-import { normalizeMobileFilePreviewRouteParams } from './mobile-file-preview-route'
+import {
+  normalizeMobileFilePreviewRouteParams,
+  type MobileFilePreviewParamValue
+} from './mobile-file-preview-route'
 import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
 
 const subscriptions = vi.hoisted(() => ({ registered: 0, live: 0, notifications: 0, removed: 0 }))
@@ -241,6 +244,15 @@ it('refuses escaped full Copy that exceeds the phone frame and never copies the 
   expect(mocks.write).not.toHaveBeenCalled()
 })
 
+function attachmentRoute(absolutePath: MobileFilePreviewParamValue) {
+  return normalizeMobileFilePreviewRouteParams({
+    hostId: 'owner',
+    worktreeId: 'work',
+    source: 'chatAttachment',
+    absolutePath
+  })
+}
+
 it.each([1, 10])(
   'bounds real mobile locale publications at %i mounted preview routes and retires on Back until unmount',
   async (count) => {
@@ -255,12 +267,7 @@ it.each([1, 10])(
       snapshots: number
     }[] = []
     const baseLive = subscriptions.live
-    const route = normalizeMobileFilePreviewRouteParams({
-      hostId: 'owner',
-      worktreeId: 'work',
-      source: 'chatAttachment',
-      absolutePath: path.replace('report.txt', 'orca-paste-35636.txt')
-    })
+    const route = attachmentRoute(path.replace('report.txt', 'orca-paste-35636.txt'))
     const composer = createElement(MobileNativeChatComposerAttachments, {
       images: [],
       files: [
@@ -449,24 +456,18 @@ it.each([1, 10])(
   }
 )
 
-it.each([undefined, [], ''])(
-  'renders a translated missing/malformed chat route through the actual error surface (%s)',
-  async (absolutePath) => {
-    mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
-      files: {
-        filePreviewResponse: { loadFailed: 'Impossible de charger l’aperçu' },
-        filePreviewScreen: { loadFailed: 'Impossible de charger l’aperçu' }
-      }
-    })
-    await act(async () => {
-      await mobileLanguage.activateMobileUiLocale('fr')
-    })
-    const route = normalizeMobileFilePreviewRouteParams({
-      hostId: 'owner',
-      worktreeId: 'work',
-      source: 'chatAttachment',
-      absolutePath
-    })
+it('renders translated missing, array and empty chat routes through the actual error surface', async () => {
+  mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+    files: {
+      filePreviewResponse: { loadFailed: 'Impossible de charger l’aperçu' },
+      filePreviewScreen: { loadFailed: 'Impossible de charger l’aperçu' }
+    }
+  })
+  await act(async () => {
+    await mobileLanguage.activateMobileUiLocale('fr')
+  })
+  for (const absolutePath of [undefined, [], '']) {
+    const route = attachmentRoute(absolutePath)
     expect(route.ok).toBe(false)
     await act(async () => {
       tree = create(createElement(MobileFilePreviewScreen, { route }))
@@ -475,8 +476,10 @@ it.each([undefined, [], ''])(
       'Impossible de charger l’aperçu'
     )
     expect(mocks.send).not.toHaveBeenCalled()
+    act(() => tree!.unmount())
+    tree = null
   }
-)
+})
 
 it('keeps the M5 invalid terminal document, Back, and registrations through locale activation and route reevaluation', async () => {
   const params = {
@@ -573,12 +576,7 @@ it('translates retained reader and hook refusals without restarting the source, 
       }
     }
   })
-  const route = normalizeMobileFilePreviewRouteParams({
-    hostId: 'owner',
-    worktreeId: 'work',
-    source: 'chatAttachment',
-    absolutePath: path
-  })
+  const route = attachmentRoute(path)
   mocks.send.mockResolvedValue({ id: 's', ok: true, result: { capabilities: [] } })
   await act(async () => {
     tree = create(createElement(MobileFilePreviewScreen, { route }))
@@ -614,12 +612,7 @@ it('keeps large full Copy and Save disabled with the same localized F2 explanati
   await act(async () => {
     await mobileLanguage.activateMobileUiLocale('fr')
   })
-  const route = normalizeMobileFilePreviewRouteParams({
-    hostId: 'owner',
-    worktreeId: 'work',
-    source: 'chatAttachment',
-    absolutePath: path
-  })
+  const route = attachmentRoute(path)
   await act(async () => {
     tree = create(createElement(MobileFilePreviewScreen, { route }))
   })
@@ -653,12 +646,7 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
       return normal(method, request)
     }
   )
-  const route = normalizeMobileFilePreviewRouteParams({
-    hostId: 'owner',
-    worktreeId: 'work',
-    source: 'chatAttachment',
-    absolutePath: path
-  })
+  const route = attachmentRoute(path)
   const ui = () => createElement(MobileFilePreviewScreen, { route })
   const input = () => tree!.root.find((node) => String(node.type) === 'TextInput')
   const scroll = () => tree!.root.find((node) => String(node.type) === 'ScrollView')

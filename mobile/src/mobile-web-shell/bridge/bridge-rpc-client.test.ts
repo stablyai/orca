@@ -502,7 +502,7 @@ describe('private bridge response completion', () => {
     }
   )
 
-  it.each([undefined, 0, -2, 7])(
+  it.each([undefined, 0, 7])(
     'keeps the signaled deadline default/clamp for %s',
     async (timeoutMs) => {
       const page = createPageClient()

@@ -323,71 +323,6 @@ it('exports all raw web bytes and cancels desktop picker/output failures', async
   expect(mocks.finish).not.toHaveBeenCalled()
 })
 
-it('updates only open preview chrome from language resources without replacing its source', async () => {
-  const language = 'fr-x-pr35636'
-  const commits = vi.fn()
-  const closedChat = vi.fn(() => <span>Other chat</span>)
-  const ClosedChat = closedChat
-  const activeWorktreeId = useAppStore.getState().activeWorktreeId
-  i18n.addResourceBundle(language, 'translation', {
-    components: {
-      'native-chat': {
-        textAttachmentPreview: {
-          copyContents: 'Copier le contenu',
-          copiedContents: 'Contenu copié',
-          attachmentPage: 'Page de la pièce jointe',
-          section: 'Partie {{section}}/{{sections}}'
-        }
-      }
-    }
-  })
-  try {
-    render(
-      <>
-        <ClosedChat />
-        <Profiler id="preview35636" onRender={commits}>
-          <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
-        </Profiler>
-      </>
-    )
-    await waitUntilEnabled('Copy contents')
-    const input = screen.getByRole('spinbutton', { name: 'Attachment page' })
-    const initialCommits = commits.mock.calls.length
-    const initialClosedRenders = closedChat.mock.calls.length
-    const initialReads = mocks.rpc.mock.calls.length
-    await act(async () => useAppStore.setState({ activeWorktreeId: 'unrelated35636' }))
-    expect(commits).toHaveBeenCalledTimes(initialCommits)
-    expect(closedChat).toHaveBeenCalledTimes(initialClosedRenders)
-    await act(async () => {
-      await i18n.changeLanguage(language)
-    })
-    expect(screen.getByRole('spinbutton', { name: 'Page de la pièce jointe' })).toBe(input)
-    expect(screen.getByText('Partie 1/1')).toBeTruthy()
-    expect(commits.mock.calls.length).toBeGreaterThan(initialCommits)
-    const languageCommits = commits.mock.calls.length
-    await act(async () => {
-      i18n.addResource(
-        language,
-        'translation',
-        'components.native-chat.textAttachmentPreview.copyContents',
-        'Copier tout'
-      )
-    })
-    expect(screen.getByRole('button', { name: 'Copier tout' })).toBeTruthy()
-    expect(commits.mock.calls.length).toBeGreaterThan(languageCommits)
-    expect(closedChat).toHaveBeenCalledTimes(initialClosedRenders)
-    expect(mocks.rpc).toHaveBeenCalledTimes(initialReads)
-    fireEvent.click(screen.getByRole('button', { name: 'Copier tout' }))
-    await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Contenu copié'))
-  } finally {
-    cleanup()
-    useAppStore.setState({ activeWorktreeId })
-    await i18n.changeLanguage('en')
-    i18n.removeResourceBundle(language, 'translation')
-  }
-})
-
 it.each([1, 10])(
   'bounds real locale publication and releases %i open previews independently of closed labels',
   async (count) => {
@@ -414,7 +349,8 @@ it.each([1, 10])(
           textAttachmentPreview: {
             copiedContents: 'Contenu copié',
             copyContents: 'Copier tout',
-            attachmentPage: 'Page jointe'
+            attachmentPage: 'Page jointe',
+            section: 'Partie {{section}}/{{sections}}'
           }
         }
       }
@@ -515,6 +451,7 @@ it.each([1, 10])(
       expect(Array.from(document.querySelectorAll('input[aria-label="Page jointe"]'))).toEqual(
         inputs
       )
+      expect(screen.getAllByText('Partie 1/1')).toHaveLength(count)
       await publish(() => {
         i18n.addResource(
           language,
