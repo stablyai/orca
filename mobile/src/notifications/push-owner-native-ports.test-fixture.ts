@@ -32,6 +32,9 @@ const ports = vi.hoisted((): Ports => ({
   metadataWrites: 0,
   native: { platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'production' }
 }))
+vi.mock('expo/fetch', () => ({
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: async (key: string) => {

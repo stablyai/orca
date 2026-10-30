@@ -102,7 +102,6 @@ const deleteUnpairedHostCredentials = createUnpairedHostCredentialDeletion({
   hasStoredHost: async (hostId) =>
     (await readStoredHostProfilesForMutation()).some(({ id }) => id === hostId),
   onDeleted: (hostId) => {
-    refreshPushRoutes()
     tokenCache.delete(hostId)
     hostListLoads.dropSharedHostListLoad()
   }
@@ -207,7 +206,7 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
         tokenCommittedBeforeMetadata = true
       }
       return next
-    })
+    }, refreshPushRoutes)
   } catch (error) {
     await cancelCleanupForDurablyStoredHosts(duplicateHostIds)
     if (cleanupIntentRecordedBeforeMetadata) {
@@ -238,7 +237,6 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
     await removeMobileRelayHostRoutings(overlayRemovalIds)
     hostListLoads.dropSharedHostListLoad()
   }
-  refreshPushRoutes()
   for (const duplicateHostId of duplicateHostIds) {
     try {
       await scheduleUnpairedHostCredentialCleanup(duplicateHostId)
@@ -259,14 +257,13 @@ export async function removeHost(hostId: string): Promise<void> {
         // Removal remains authoritative when cleanup intent storage is unavailable.
       }
       return hosts.filter((h) => h.id !== hostId)
-    })
+    }, refreshPushRoutes)
   } catch (error) {
     if (cleanupIntentRecorded) {
       await cancelCleanupForDurablyStoredHosts([hostId])
     }
     throw error
   }
-  refreshPushRoutes()
   tokenCache.delete(hostId)
   try {
     await removeMobileRelayHostRouting(hostId)

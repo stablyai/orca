@@ -4,6 +4,7 @@ import {
   requests,
   settle
 } from './push-route-declaration-ports.test-fixture'
+import { PushRouteDeclarationSchema } from '../../../cloud/packages/push-contract/src/route-declaration'
 import * as SecureStore from 'expo-secure-store'
 import { expect, it, vi } from 'vitest'
 
@@ -200,7 +201,10 @@ it.each(['saved', 'missing'] as const)(
       expect(SecureStore.setItemAsync, context).toHaveBeenCalledTimes(
         kind === 'missing' && !absent ? 1 : 0
       )
-      expect(send, context).toHaveBeenCalledTimes(absent ? 0 : 1)
+      const publisherLive = kind === 'saved' && (action === 'background' || action === 'remove')
+      expect(send, `${context}: independent authenticated publisher`).toHaveBeenCalledTimes(
+        publisherLive || !absent ? 2 : 0
+      )
       if (action === 'remove') {
         recover?.()
         await settle()
@@ -224,7 +228,14 @@ it.each(['saved', 'missing'] as const)(
   }
 )
 
-it.each(['version-read', 'barrier', 'catalog', 'version-save'] as const)(
+it.each([
+  'version-read',
+  'barrier',
+  'catalog',
+  'version-save',
+  'route-read',
+  'route-replace'
+] as const)(
   'retires complete publisher interests across root replacement while %s is held',
   async (stage) => {
     const storage = (await import('@react-native-async-storage/async-storage')).default
@@ -262,15 +273,15 @@ it.each(['version-read', 'barrier', 'catalog', 'version-save'] as const)(
         await gate.promise
       })
     }
-    const build = source.buildPushRouteDeclaration
+    const build = source.preparePushRouteReconciliation
     const interests: {
       retired: boolean
       calls: number
       predicate: ReturnType<typeof vi.fn<() => boolean>>
     }[] = []
-    vi.spyOn(source, 'buildPushRouteDeclaration').mockImplementation((value, enrolled, current) => {
+    vi.spyOn(source, 'preparePushRouteReconciliation').mockImplementation((value, current) => {
       const predicate = vi.fn(current)
-      const handle = build(value, enrolled, predicate)
+      const handle = build(value, predicate)
       const interest = { predicate, retired: false, calls: 0 }
       interests.push(interest)
       void handle.result.then((result) => {
@@ -281,7 +292,17 @@ it.each(['version-read', 'barrier', 'catalog', 'version-save'] as const)(
       })
       return handle
     })
-    const { bodies, send } = requests()
+    const { bodies, send, respond } = requests()
+    if (stage === 'route-read' || stage === 'route-replace') {
+      send.mockImplementation(async (_url, init) => {
+        const action = PushRouteDeclarationSchema.parse(JSON.parse(String(init?.body))).action
+        if (!held && action === (stage === 'route-read' ? 'read' : 'replace')) {
+          held = true
+          await gate.promise
+        }
+        return respond(init)
+      })
+    }
     try {
       for (const changes of [10, 100]) {
         for (let i = 0; i < changes; i++) {
@@ -294,7 +315,13 @@ it.each(['version-read', 'barrier', 'catalog', 'version-save'] as const)(
           })
           await settle()
           expect(held).toBe(true)
-          expect(send).not.toHaveBeenCalled()
+          expect(send).toHaveBeenCalledTimes(
+            stage === 'route-replace'
+              ? 2
+              : stage === 'version-save' || stage === 'route-read'
+                ? 1
+                : 0
+          )
           expect(source.pushRoutePreparationSnapshotForTests()).toMatchObject({
             keyTask: 0,
             keyEntries: 0,
@@ -322,10 +349,12 @@ it.each(['version-read', 'barrier', 'catalog', 'version-save'] as const)(
       await register()
       gate.resolve()
       await settle()
-      expect(send).toHaveBeenCalledOnce()
-      expect(bodies[0]).toMatchObject({ token: token.token })
+      expect(send).toHaveBeenCalledTimes(
+        stage === 'route-replace' ? 4 : stage === 'version-save' || stage === 'route-read' ? 3 : 2
+      )
+      expect(bodies.at(-1)).toMatchObject({ token: token.token })
       if (issuedVersion !== undefined) {
-        expect(bodies[0]?.version).toBeGreaterThan(issuedVersion)
+        expect(bodies.at(-1)?.version).toBeGreaterThan(issuedVersion)
       }
       for (const interest of interests.filter((interest) => interest.retired)) {
         expect(interest.predicate).toHaveBeenCalledTimes(interest.calls)

@@ -62,6 +62,8 @@ async function setup() {
   const b = required(maybeB)
   const declare = async (hosts: string[], version = 1, signingKey = key) => {
     const body = {
+      action: 'replace' as const,
+      expectedVersion: version === 1 ? null : version - 1,
       v: 1 as const,
       platform: 'ios' as const,
       token: a.token,
@@ -70,15 +72,22 @@ async function setup() {
       version,
       hosts
     }
-    return declarePushRoutes(
-      f.db,
-      {
-        ...body,
-        signature: Buffer.from(
-          nacl.sign.detached(Buffer.from(pushRouteDeclarationContent(body)), signingKey.secretKey)
-        ).toString('base64url')
-      },
-      f.clock()
+    return (
+      (
+        await declarePushRoutes(
+          f.db,
+          {
+            ...body,
+            signature: Buffer.from(
+              nacl.sign.detached(
+                Buffer.from(pushRouteDeclarationContent(body)),
+                signingKey.secretKey
+              )
+            ).toString('base64url')
+          },
+          f.clock()
+        )
+      ).status === 200
     )
   }
   expect(await declare([A, B])).toBe(true)
@@ -487,7 +496,8 @@ describe('occurrence admission', () => {
     expect(await f.declare([B, A], 1)).toBe(true)
     expect(await f.declare([B], 1)).toBe(false)
     expect(await f.declare([B], 2, nacl.sign.keyPair())).toBe(false)
-    await Promise.all([f.declare([A], 2), f.declare([B], 3)])
+    expect(await f.declare([A], 2)).toBe(true)
+    expect(await f.declare([B], 3)).toBe(true)
     expect(await f.declare([A, B], 2)).toBe(false)
     expect(
       required((await f.db.query('SELECT hosts_json FROM push_route_declarations'))[0]).hosts_json
@@ -528,3 +538,129 @@ function provider(
     now
   })
 }
+
+it.skipIf(!durablePushTestDatabaseUrl)(
+  'serializes real signed route replacement against PG pruning without renewing replay or read',
+  async () => {
+    const f = await setup()
+    const { createPushServer } = await import('./push-server.js')
+    const { testPushConfig } = await import('./push-server-harness.test-fixture.js')
+    const key = nacl.sign.keyPair()
+    const routeKey = Buffer.from(key.publicKey).toString('base64url')
+    await f.devices.upsert({
+      hostFingerprint: A,
+      deviceId: 'cap-race',
+      platform: 'ios',
+      token: f.a.token,
+      apnsEnvironment: 'production',
+      routeKey
+    })
+    const entered = Promise.withResolvers<void>()
+    const held = Promise.withResolvers<void>()
+    let hold = false
+    const server = createPushServer(
+      testPushConfig(),
+      {
+        ...f.db,
+        transaction: (run) =>
+          f.db.transaction((tx) =>
+            run({
+              ...tx,
+              query: async (sql, params) => {
+                const rows = await tx.query(sql, params)
+                if (
+                  hold &&
+                  sql.includes('FROM push_route_declarations') &&
+                  sql.endsWith(' FOR UPDATE')
+                ) {
+                  hold = false
+                  entered.resolve()
+                  await held.promise
+                }
+                return rows
+              }
+            })
+          )
+      },
+      { now: f.clock }
+    )
+    const request = (
+      operation:
+        | { action: 'read' }
+        | { action: 'replace'; version: number; expectedVersion: number | null; hosts: string[] }
+    ) => {
+      const body = {
+        v: 1 as const,
+        platform: 'ios' as const,
+        apnsEnvironment: 'production' as const,
+        token: f.a.token,
+        routeKey,
+        ...operation
+      }
+      return server.app.request('/v1/routes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...body,
+          signature: Buffer.from(
+            nacl.sign.detached(Buffer.from(pushRouteDeclarationContent(body)), key.secretKey)
+          ).toString('base64url')
+        })
+      })
+    }
+    let pending: Promise<Response> | undefined
+    let primary: { failed: true; error: unknown } | undefined
+    try {
+      expect(
+        (await request({ action: 'replace', version: 1, expectedVersion: null, hosts: [A, B] }))
+          .status
+      ).toBe(200)
+      f.advance(31 * 24 * 60 * 60_000)
+      // Actual physical deletion has not run yet: reads must not invent a TTL absence.
+      expect(await (await request({ action: 'read' })).json()).toEqual({
+        status: 'current',
+        version: 1,
+        hosts: [A, B]
+      })
+      hold = true
+      pending = request({ action: 'replace', version: 2, expectedVersion: 1, hosts: [B] })
+      await within(entered.promise)
+      await f.store.prune() // SKIP LOCKED cannot delete the held current row
+      held.resolve()
+      expect((await pending).status).toBe(200)
+      const rows = await f.db.query(
+        'SELECT updated_at FROM push_route_declarations WHERE route_key = ?',
+        [routeKey]
+      )
+      expect(Number(required(rows[0]).updated_at)).toBe(f.clock())
+      f.advance(1000)
+      expect(
+        (await request({ action: 'replace', version: 2, expectedVersion: 1, hosts: [B] })).status
+      ).toBe(200)
+      expect(
+        await f.db.query('SELECT updated_at FROM push_route_declarations WHERE route_key = ?', [
+          routeKey
+        ])
+      ).toEqual(rows)
+      f.advance(31 * 24 * 60 * 60_000)
+      await f.store.prune()
+      expect(await (await request({ action: 'read' })).json()).toEqual({
+        status: 'current',
+        version: null,
+        hosts: []
+      })
+      expect(
+        (await request({ action: 'replace', version: 3, expectedVersion: 2, hosts: [A] })).status
+      ).toBe(409)
+    } catch (error) {
+      primary = { failed: true, error }
+    }
+    const { ownerCleanup } = await import('./push-owner-integration.test-fixture.js')
+    const cleanup = ownerCleanup(primary)
+    await cleanup.run(() => held.resolve())
+    await cleanup.run(() => pending)
+    await cleanup.run(() => server.worker.stop())
+    await cleanup.run(() => server.closeTransports())
+    cleanup.finish()
+  }
+)

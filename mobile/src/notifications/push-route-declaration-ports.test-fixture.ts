@@ -1,7 +1,10 @@
 import type * as PushRoutePublication from './push-route-declaration'
 import type { MobilePushToken } from './push-token'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import type { PushRouteDeclaration } from '../../../cloud/packages/push-contract/src/route-declaration'
+import {
+  PushRouteDeclarationSchema,
+  type PushRouteDeclaration
+} from '../../../cloud/packages/push-contract/src/route-declaration'
 
 const state = vi.hoisted(() => {
   const callbacks: {
@@ -23,6 +26,9 @@ const state = vi.hoisted(() => {
     }
   }
 })
+vi.mock('expo/fetch', () => ({
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: async (key: string) => {
@@ -89,7 +95,8 @@ vi.mock('../transport/host-credential-cleanup', () => ({
   retryPendingHostCredentialCleanups: async () => {}
 }))
 vi.mock('../transport/mobile-relay-host-overlay-store', () => ({
-  removeMobileRelayHostRouting: async () => {}
+  removeMobileRelayHostRouting: async () => {},
+  removeMobileRelayHostRoutings: async () => {}
 }))
 vi.mock('../mobile-web-shell/removed-host-shell-cache', () => ({
   deleteHostPageCache: async () => {},
@@ -109,20 +116,72 @@ export function hosts(count: number): void {
         name: `Host ${i}`,
         endpoint: 'ws://127.0.0.1:1',
         lastConnected: 0,
-        publicKeyB64: Buffer.alloc(32, i + 1).toString('base64')
+        publicKeyB64: (() => {
+          const key = Buffer.alloc(32)
+          key.writeUInt32BE(i + 1)
+          return key.toString('base64')
+        })()
       }))
     )
   )
 }
 export const settle = () => vi.advanceTimersByTimeAsync(0)
 export function requests(status = 200) {
-  const bodies: PushRouteDeclaration[] = []
-  const send = vi.fn(async (_url: string, init: RequestInit) => {
-    bodies.push(JSON.parse(String(init.body)))
-    return new Response('{}', { status })
-  })
+  const bodies: Extract<PushRouteDeclaration, { action: 'replace' }>[] = []
+  const operations: PushRouteDeclaration[] = []
+  const current = new Map<string, { version: number; hosts: string[] }>()
+  const respond = (init?: RequestInit, code = status) => {
+    const request = PushRouteDeclarationSchema.parse(JSON.parse(String(init?.body)))
+    operations.push(request)
+    const q = JSON.stringify([
+      request.platform,
+      request.apnsEnvironment,
+      request.token,
+      request.routeKey
+    ])
+    const previous = current.get(q)
+    if (request.action === 'read') {
+      return new Response(
+        JSON.stringify(
+          code === 200
+            ? {
+                status: 'current',
+                version: previous?.version ?? null,
+                hosts: previous?.hosts ?? []
+              }
+            : { error: 'refused' }
+        ),
+        { status: code }
+      )
+    }
+    bodies.push(request)
+    if (code !== 200) {
+      return new Response('{"error":"refused"}', { status: code })
+    }
+    const hosts = [...new Set(request.hosts)].sort()
+    if (
+      !(
+        previous?.version === request.version &&
+        JSON.stringify(previous.hosts) === JSON.stringify(hosts)
+      ) &&
+      request.expectedVersion !== (previous?.version ?? null)
+    ) {
+      return new Response('{"error":"conflict"}', { status: 409 })
+    }
+    current.set(q, { version: request.version, hosts })
+    return new Response(JSON.stringify({ status: 'accepted', version: request.version }))
+  }
+  const send = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => respond(init))
   vi.stubGlobal('fetch', send)
-  return { bodies, send }
+  return { bodies, operations, send, respond, current }
+}
+
+export async function notifyCatalog(): Promise<void> {
+  const profiles = await import('../transport/host-metadata-store').then((module) =>
+    module.readStoredHostProfilesForMutation()
+  )
+  const publication = await import('./push-route-declaration')
+  publication.refreshPushRoutes({ status: 'committed', revision: 1, profiles })
 }
 
 export function createRouteDeclarationFixture() {

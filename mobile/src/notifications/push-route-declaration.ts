@@ -1,31 +1,41 @@
 import type { MobilePushToken } from './push-token'
 import {
-  buildPushRouteDeclaration,
-  type RouteDeclarationPreparation
+  preparePushRouteReconciliation,
+  wakeRouteReconciliation,
+  type RouteReconciliation
 } from './push-route-declaration-build'
+import {
+  clearRouteCatalog,
+  commitRouteCatalog,
+  freshRouteCatalog,
+  routeCatalogIdentity,
+  type RouteCatalogCommit
+} from './push-route-catalog'
+import { PUSH_ROUTE_GATEWAY } from './push-route-http'
 export { mobilePushRouteKey } from './push-route-declaration-build'
 
-const GATEWAY_ORIGIN = process.env.EXPO_PUBLIC_PUSH_GATEWAY_ORIGIN ?? 'https://push.onorca.dev'
 type Desired = { token: MobilePushToken; intent: number }
 type Wake = 'input' | 'catalog' | 'renewal' | 'registration'
-type Publication = {
-  body: string
-  generation: number
-  acknowledged: boolean
-  sending: boolean
-  attempt: number
-}
 export type PushRoutePublication = {
   wake(reason: Wake): void
   registered(gatewayOrigin?: string): void
   stop(): void
 }
 let attached: PushRoutePublication | undefined
-
-export function refreshPushRoutes(): void {
-  attached?.wake('catalog')
+let catalogNotification = false
+export function refreshPushRoutes(value: RouteCatalogCommit): void {
+  if (!attached) {
+    return
+  }
+  commitRouteCatalog(value)
+  if (!catalogNotification) {
+    catalogNotification = true
+    queueMicrotask(() => {
+      catalogNotification = false
+      attached?.wake('catalog')
+    })
+  }
 }
-
 export function startPushRoutePublication(
   readDesired: () => Desired | undefined
 ): PushRoutePublication {
@@ -33,147 +43,49 @@ export function startPushRoutePublication(
   let active = true
   let identity: string | undefined
   let generation = 0
-  let enrolled = false
-  let wakeSerial = 0
+  let accepted = false
   let due = false
-  let publication: Publication | undefined
-  let transportTimer: ReturnType<typeof setTimeout> | undefined
-  let build:
-    | {
-        generation: number
-        remaining: number
-        running: boolean
-        pendingWake: boolean
-        preparation?: RouteDeclarationPreparation
-        timer?: ReturnType<typeof setTimeout>
-      }
-    | undefined
+  let preparation: RouteReconciliation | undefined
+  let membership: Set<string> | undefined
   const currentIdentity = () => JSON.stringify(readDesired())
   const valid = (candidate: number) =>
     active &&
     candidate === generation &&
     identity === currentIdentity() &&
     readDesired() !== undefined
-  function clearTransport() {
-    clearTimeout(transportTimer)
-    transportTimer = undefined
-  }
-  function retire() {
+  function retire(): void {
     generation++
-    build?.preparation?.release()
-    clearTimeout(build?.timer)
-    clearTransport()
-    build = undefined
-    publication = undefined
+    preparation?.release()
+    preparation = undefined
+    accepted = false
     due = false
   }
-  async function send(current: Publication): Promise<void> {
-    if (!valid(current.generation) || current.acknowledged || current.sending) {
+  function start(): void {
+    preparation?.release()
+    accepted = false
+    const desired = readDesired()
+    if (!desired) {
       return
     }
-    clearTransport()
-    current.sending = true
-    const wake = wakeSerial
-    let status: number | undefined
-    try {
-      const response = await fetch(`${GATEWAY_ORIGIN}/v1/routes`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        redirect: 'error',
-        signal: AbortSignal.timeout(15_000),
-        body: current.body
-      })
-      status = response.status
-      if (valid(current.generation) && response.ok) {
-        current.acknowledged = true
+    const candidate = ++generation
+    const handle = preparePushRouteReconciliation(desired.token, () => valid(candidate))
+    preparation = handle
+    void handle.result.then((result) => {
+      if (!valid(candidate) || preparation !== handle) {
+        return
       }
-    } catch {}
-    current.sending = false
-    if (!valid(current.generation)) {
-      return
-    }
-    if (current.acknowledged) {
+      preparation = undefined
+      membership = routeCatalogIdentity()
+      accepted = result.status === 'accepted'
       if (due) {
         due = false
-        startBuild()
+        freshRouteCatalog()
+        start()
       }
-      return
-    }
-    const permanent = status !== undefined && status >= 400 && status < 500 && status !== 429
-    if (permanent && (status !== 400 || current.attempt > 0) && wake === wakeSerial) {
-      due = false
-      return
-    }
-    const delay =
-      wake !== wakeSerial ? 0 : Math.min(60_000, 1000 * 2 ** Math.min(current.attempt, 6))
-    current.attempt++
-    transportTimer = setTimeout(() => {
-      void send(current)
-    }, delay)
-  }
-  function startBuild() {
-    build?.preparation?.release()
-    clearTimeout(build?.timer)
-    clearTransport()
-    publication = undefined
-    const slot: NonNullable<typeof build> = {
-      generation: ++generation,
-      remaining: 2,
-      running: false,
-      pendingWake: false
-    }
-    build = slot
-    void attemptBuild(slot)
-  }
-  async function attemptBuild(slot: NonNullable<typeof build>): Promise<void> {
-    const desired = readDesired()
-    if (!desired || !valid(slot.generation) || slot.running) {
-      return
-    }
-    slot.running = true
-    try {
-      slot.preparation = buildPushRouteDeclaration(desired.token, enrolled, () =>
-        valid(slot.generation)
-      )
-      const result = await slot.preparation.result
-      if (!valid(slot.generation)) {
-        return
-      }
-      if (result.status === 'ready') {
-        publication = {
-          body: result.body,
-          generation: slot.generation,
-          acknowledged: false,
-          sending: false,
-          attempt: 0
-        }
-        build = undefined
-        void send(publication)
-      } else if (result.status === 'unavailable' && slot.pendingWake) {
-        startBuild()
-      }
-    } catch {
-      if (!valid(slot.generation)) {
-        return
-      }
-      if (slot.remaining > 0) {
-        slot.remaining--
-        slot.timer = setTimeout(() => {
-          slot.timer = undefined
-          void attemptBuild(slot)
-        }, 5000)
-      } else if (slot.pendingWake) {
-        slot.pendingWake = false
-        startBuild()
-      }
-    } finally {
-      slot.preparation?.release()
-      slot.preparation = undefined
-      slot.running = false
-    }
+    })
   }
   const handle: PushRoutePublication = {
-    wake(reason: Wake): void {
+    wake(reason): void {
       if (!active) {
         return
       }
@@ -182,53 +94,41 @@ export function startPushRoutePublication(
       if (!desired) {
         retire()
         identity = undefined
+        clearRouteCatalog()
         return
       }
-      if (identity !== next || reason === 'catalog') {
+      const catalog = reason === 'catalog' ? routeCatalogIdentity() : membership
+      if (identity !== next || (reason === 'catalog' && catalog !== membership)) {
         retire()
         identity = next
-        startBuild()
-        return
-      }
-      if (reason === 'input') {
-        return
-      }
-      if (reason === 'registration' || reason === 'renewal') {
-        wakeSerial++
-      }
-      if (publication) {
-        if (publication.acknowledged) {
-          if (reason === 'renewal') {
-            startBuild()
-          }
-        } else if (reason === 'renewal') {
-          if (!publication.sending && !transportTimer) {
-            startBuild()
-          } else {
-            due = true
-          }
-        } else if (!publication.sending) {
-          publication.attempt = 0
-          void send(publication)
+        membership = catalog
+        start()
+      } else if (reason === 'renewal') {
+        if (preparation) {
+          due = true
+        } else {
+          freshRouteCatalog()
+          start()
         }
-      } else if (build?.running || build?.timer) {
-        build.pendingWake = true
-      } else {
-        startBuild()
+      } else if (reason === 'registration' && !accepted) {
+        if (preparation) {
+          wakeRouteReconciliation()
+        } else {
+          start()
+        }
       }
     },
-    registered(gatewayOrigin?: string): void {
-      if (!active || !readDesired() || gatewayOrigin !== GATEWAY_ORIGIN) {
-        return
+    registered(gatewayOrigin): void {
+      if (gatewayOrigin === PUSH_ROUTE_GATEWAY) {
+        handle.wake('registration')
       }
-      enrolled = true
-      handle.wake('registration')
     },
     stop(): void {
       active = false
       retire()
       if (attached === handle) {
         attached = undefined
+        clearRouteCatalog()
       }
     }
   }

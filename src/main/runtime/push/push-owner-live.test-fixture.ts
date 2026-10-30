@@ -7,6 +7,7 @@ import { expect, it, vi } from 'vitest'
 import {
   createOwnerBridge,
   ownerCleanup,
+  integrationRows as rows,
   integrationDeadline as deadline
 } from './push-owner-bridge.test-fixture'
 import {
@@ -29,6 +30,8 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
   const closed = new Set<string>()
   let clock = 1_700_000_000_000
   vi.spyOn(Date, 'now').mockImplementation(() => clock)
+  const heldCap = Promise.withResolvers<void>()
+  let capPending = false
   const heldRoute = Promise.withResolvers<void>()
   const heldA = Promise.withResolvers<void>()
   const droppedA = Promise.withResolvers<void>()
@@ -50,11 +53,27 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
     if (text(value.url).endsWith('/v1/routes')) {
       routeAttempts++
     }
+    if (
+      capPending &&
+      text(value.url).endsWith('/v1/routes') &&
+      record(JSON.parse(text(value.body))).action === 'replace'
+    ) {
+      bridge.event('cap replace pending before commit')
+      await heldCap.promise
+    }
     const result = await cloud('http', value)
     const response = httpResult(result)
     const url = text(value.url)
-    if (url.endsWith('/v1/routes') && response.ok) {
+    if (
+      url.endsWith('/v1/routes') &&
+      response.ok &&
+      record(JSON.parse(text(value.body))).action === 'replace'
+    ) {
+      expect(record(await response.clone().json()).status).toBe('accepted')
       const declaration = record(JSON.parse(text(value.body)))
+      if (Array.isArray(declaration.hosts)) {
+        bridge.event(`capacity:${declaration.hosts.length}`, declaration)
+      }
       if (declaration.token === T1 && !t1RouteHeld) {
         t1RouteHeld = true
         bridge.event('T1 route committed')
@@ -63,7 +82,7 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
         bridge.event(`accepted:${++accepted}`, declaration)
       }
     }
-    if (url.endsWith('/v1/routes') && refusalRace && response.status === 400) {
+    if (url.endsWith('/v1/routes') && refusalRace && response.status === 403) {
       bridge.event('real route refusal')
       await refusalResponse.promise
     }
@@ -247,11 +266,49 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
     const prior = accepted
     await mobile('restart')
     await deadline(bridge.wait(`accepted:${prior + 1}`), 'saved-state disconnected restart')
+    await mobile('restore-cap-catalog')
+    const prior100 = record(await deadline(bridge.wait('capacity:100'), 'actual signed prior P100'))
+    if (!Array.isArray(prior100.hosts)) {
+      throw new Error('Missing actual P100')
+    }
+    expect(new Set(prior100.hosts).size).toBe(100)
+    capPending = true
+    const mutations = mobile('mutate-cap-catalog')
+    await deadline(
+      bridge.wait('cap replace pending before commit'),
+      'issued older capacity proposal'
+    )
+    await mutations // local metadata actions never await route acknowledgement
+    heldCap.resolve()
+    capPending = false
+    const retained99 = record(
+      await deadline(bridge.wait('capacity:99'), 'actual current retained99 replacement')
+    )
+    const members = retained99.hosts
+    if (!Array.isArray(members)) {
+      throw new Error('Missing actual retained set')
+    }
+    expect(actors.fingerprints.every((host) => members.includes(host))).toBe(true)
+    const capState = record(await cloud('snapshot'))
+    expect(
+      rows(capState.declarations).some(
+        (row) =>
+          row.version === retained99.version && JSON.parse(text(row.hosts_json)).length === 99
+      )
+    ).toBe(true)
+    await settle('cap-retained-provider', 9)
   } catch (error) {
     primary = { failed: true, error }
   }
   const cleanup = ownerCleanup(primary)
-  for (const barrier of [heldA, heldRoute, droppedA, refusalResponse, registrationCommit]) {
+  for (const barrier of [
+    heldCap,
+    heldA,
+    heldRoute,
+    droppedA,
+    refusalResponse,
+    registrationCommit
+  ]) {
     await cleanup.run(() => barrier.resolve())
   }
   await cleanup.run(() => actors.stop())

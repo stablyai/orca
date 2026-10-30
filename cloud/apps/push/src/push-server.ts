@@ -4,7 +4,7 @@ import { PushAuthAdmission } from './push-auth-admission.js'
 import { createAdaptorServer } from '@hono/node-server'
 import {
   PUSH_LIMITS,
-  PushRouteDeclarationSchema,
+  PushRouteDeclarationInputSchema,
   PushDeviceRegistrationRequestSchema,
   PushHostChallengeRequestSchema,
   PushHostSessionRequestSchema,
@@ -224,16 +224,21 @@ export function createPushServer(
   })
   const routeDestinations = new ClientIpRateLimiter({ now })
   app.post('/v1/routes', routeIps, limitBody, async (context) => {
-    const body = PushRouteDeclarationSchema.safeParse(await context.req.json().catch(() => null))
+    context.header('Cache-Control', 'no-store')
+    const body = PushRouteDeclarationInputSchema.safeParse(
+      await context.req.json().catch(() => null)
+    )
     if (!body.success) {
       return context.json({ error: 'invalid_request' }, 400)
     }
     if (!routeDestinations.allow(pushDestination(body.data))) {
       return context.json({ error: 'rate_limited' }, 429)
     }
-    return (await declarePushRoutes(database, body.data, now()))
-      ? context.json({ ok: true })
-      : context.json({ error: 'invalid_declaration' }, 400)
+    if (body.data.action === 'replace' && body.data.hosts.length > PUSH_LIMITS.maxRouteHosts) {
+      return context.json({ error: 'too_many_hosts', limit: PUSH_LIMITS.maxRouteHosts }, 422)
+    }
+    const result = await declarePushRoutes(database, body.data, now())
+    return context.json(result.body, result.status)
   })
 
   app.post('/v1/devices', limitBody, async (context) => {

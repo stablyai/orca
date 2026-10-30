@@ -1,4 +1,5 @@
 export const PUSH_LIMITS = {
+  maxRouteHosts: 100,
   titleMaxChars: 80,
   bodyMaxChars: 180,
   maxRegistrationIdsPerSend: 20,

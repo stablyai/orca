@@ -115,7 +115,7 @@ export async function runRfp1Observation() {
     const url = request.url
     const body = await request.text()
     const parsed = body ? record(JSON.parse(body)) : {}
-    if (url.endsWith('/v1/routes') && removalPending) {
+    if (url.endsWith('/v1/routes') && parsed.action === 'replace' && removalPending) {
       capture({ boundary: 'replacement-before-gateway-commit', declaration: parsed })
       bridge.event(`replacement-pending:${leg}`)
       await replacement.promise
@@ -135,7 +135,13 @@ export async function runRfp1Observation() {
       body: parsed,
       status: response.status
     })
-    if (url.endsWith('/v1/routes') && response.ok && !removalPending) {
+    if (
+      url.endsWith('/v1/routes') &&
+      parsed.action === 'replace' &&
+      response.ok &&
+      !removalPending
+    ) {
+      expect(record(await response.clone().json()).status).toBe('accepted')
       bridge.event(`initial-route:${leg}`, parsed)
     }
     return response

@@ -12,6 +12,8 @@ import {
 } from '../../../cloud/apps/push/src/push-owner-integration.test-fixture'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { AppState } from 'react-native'
+import { readStoredHostProfilesForMutation } from '../transport/host-metadata-store'
+import { savePairedHost, removeHost } from '../transport/host-store'
 import * as publication from './push-route-declaration'
 import { pushRoutePreparationSnapshotForTests } from './push-route-declaration-build'
 import {
@@ -187,6 +189,33 @@ it('runs the actual current-owner, prepared sender and signed publisher against 
         ports.foreground('active')
       } else if (op === 'release-failure') {
         ports.finalFailure?.resolve()
+      } else if (op === 'restore-cap-catalog') {
+        const original = await readStoredHostProfilesForMutation()
+        const extra = Array.from({ length: 98 }, (_, index) => ({
+          id: `offline-${index}`,
+          name: `Offline ${index}`,
+          endpoint: 'ws://127.0.0.1:1',
+          lastConnected: 0,
+          publicKeyB64: Buffer.from(
+            nacl.sign.keyPair.fromSeed(new Uint8Array(32).fill(index + 1)).publicKey
+          ).toString('base64')
+        }))
+        ports.storage.set('orca:hosts', JSON.stringify([...original, ...extra]))
+        ports.foreground?.('active')
+      } else if (op === 'mutate-cap-catalog') {
+        for (const index of [201, 202]) {
+          await savePairedHost({
+            id: `new-${index}`,
+            name: 'New pairing',
+            endpoint: 'ws://127.0.0.1:1',
+            lastConnected: 0,
+            publicKeyB64: Buffer.from(
+              nacl.sign.keyPair.fromSeed(new Uint8Array(32).fill(index)).publicKey
+            ).toString('base64'),
+            deviceToken: 'controlled-fixture-pairing-token'
+          })
+        }
+        await removeHost('offline-0')
       } else if (op === 'restart') {
         stop?.()
         stop = startPushTokenSync()

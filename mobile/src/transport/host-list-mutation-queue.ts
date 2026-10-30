@@ -20,8 +20,20 @@ export function enqueueHostListMutation<T>(operation: () => Promise<T>): Promise
 }
 
 export async function mutateStoredHosts(
-  update: (hosts: StoredHostProfile[]) => StoredHostProfile[] | Promise<StoredHostProfile[]>
+  update: (hosts: StoredHostProfile[]) => StoredHostProfile[] | Promise<StoredHostProfile[]>,
+  observer?: (
+    value:
+      | { status: 'committed'; revision: number; profiles: readonly StoredHostProfile[] }
+      | { status: 'unavailable' }
+  ) => void
 ): Promise<void> {
+  const notify: NonNullable<typeof observer> = (value) => {
+    try {
+      observer?.(value)
+    } catch {
+      /* Bookkeeping cannot fail a committed host action. */
+    }
+  }
   return enqueueHostListMutation(async () => {
     const current = await readStoredHostProfilesForMutation()
     const next = await update(current)
@@ -31,6 +43,14 @@ export async function mutateStoredHosts(
     }
     await writeStoredHostProfiles(next)
     hostListLoads.dropSharedHostListLoad()
+    notify({
+      status: 'committed',
+      revision: hostListLoads.getHostListLoadRevision(),
+      profiles: next
+    })
+  }).catch((error) => {
+    notify({ status: 'unavailable' })
+    throw error
   })
 }
 

@@ -1,19 +1,31 @@
-export function pushRouteDeclarationContent(value: {
+type RouteIdentity = {
   v: 1
   platform: 'ios' | 'android'
   apnsEnvironment?: 'sandbox' | 'production'
   token: string
   routeKey: string
-  version: number
-  hosts: readonly string[]
-}): string {
+}
+export type PushRouteContent = RouteIdentity &
+  (
+    | { action: 'read' }
+    | {
+        action: 'replace'
+        version: number
+        expectedVersion: number | null
+        hosts: readonly string[]
+      }
+  )
+export function pushRouteDeclarationContent(value: PushRouteContent): string {
   return JSON.stringify({
+    action: value.action,
     ...(value.apnsEnvironment ? { apnsEnvironment: value.apnsEnvironment } : {}),
-    hosts: [...new Set(value.hosts)].sort(),
+    ...(value.action === 'replace'
+      ? { expectedVersion: value.expectedVersion, hosts: [...new Set(value.hosts)].sort() }
+      : {}),
     platform: value.platform,
     routeKey: value.routeKey,
     token: value.token,
     v: value.v,
-    version: value.version
+    ...(value.action === 'replace' ? { version: value.version } : {})
   })
 }
