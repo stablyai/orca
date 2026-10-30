@@ -51,6 +51,7 @@ beforeEach(async () => {
   await restart()
 })
 afterEach(() => {
+  vi.restoreAllMocks()
   clearMainWindowAgentStatusListeners()
   server.stop()
   rmSync(dir, { recursive: true, force: true })
@@ -266,7 +267,7 @@ it('retires the binding on an actual host clear, including through a later forei
     worktreeId: 'wt-1',
     agentType: 'hermes',
     providerSession: { key: 'session_id', id: 'explicit-seed' },
-    launchedAt: Date.now() + 1
+    launchedAt: frame().receivedAt + 1
   })
   await tool('explicit-seed')
   expectReturned('explicit-seed')
@@ -377,12 +378,14 @@ it('forwards a cold host comparison to the retained canonical binding without cr
 })
 
 it('rejects before mutating provider folds and validates scoped IDs with the locator parser', () => {
+  const now = 1_700_000_000_000
+  vi.spyOn(Date, 'now').mockReturnValue(now)
   const state = createHookListenerState()
   const previous = {
     paneKey: PANE,
     worktreeId: 'wt-1',
     connectionId: null,
-    hostEvidenceObservedAt: Date.now(),
+    hostEvidenceObservedAt: now,
     agentPresence: { agent: 'hermes', session: ROOT },
     payload: { agentType: 'codex', state: 'working' as const, prompt: 'review' }
   }
