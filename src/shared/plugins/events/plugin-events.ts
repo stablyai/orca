@@ -2,7 +2,11 @@ import { z } from 'zod'
 import { AGENT_STATUS_STATES } from '../../agent-status-types'
 import { AGENT_TURN_OUTCOMES } from '../../agent-turn-outcome'
 import type { PluginEventName } from '../manifest/plugin-manifest'
-import { pluginJsonValueSchema } from '../workers/plugin-host-api'
+import {
+  PLUGIN_PANEL_ACTION_MAX_LENGTH,
+  PLUGIN_PANEL_ID_MAX_LENGTH,
+  pluginJsonValueSchema
+} from '../workers/plugin-host-api'
 
 /**
  * Payload contracts for the plugin event set (workspace lifecycle, agent
@@ -64,8 +68,8 @@ export const agentStatusChangedPayloadSchema = z.object({
 /** What a panel sent through `panel.action`; `params` is whatever JSON the panel chose.
  *  The byte bound is enforced at the host call, not here. */
 export const panelActionPayloadSchema = z.object({
-  panelId: z.string().min(1).max(256),
-  action: z.string().min(1).max(128),
+  panelId: z.string().min(1).max(PLUGIN_PANEL_ID_MAX_LENGTH),
+  action: z.string().min(1).max(PLUGIN_PANEL_ACTION_MAX_LENGTH),
   params: pluginJsonValueSchema.optional()
 })
 

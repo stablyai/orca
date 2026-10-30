@@ -93,7 +93,7 @@ describe('createPluginFrameMessageHandler', () => {
       payload: {
         protocol: 1,
         surface: 'editor',
-        api: { major: 1, minor: 0 },
+        api: { major: 1, minor: 1 },
         theme: { colorScheme: 'dark', tokens: '--orca-background:#000' }
       }
     })
