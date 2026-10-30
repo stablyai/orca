@@ -13,7 +13,9 @@ import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/h
 import { readString } from './tool-input-preview'
 import { readFirstTranscriptRecord } from './transcript-reader'
 
-export function hasSeparateHookSessionAdmission(source: string | undefined): boolean {
+export function hasSeparateHookSessionAdmission(
+  source: string | undefined
+): source is 'hermes' | 'antigravity' {
   return source === 'hermes' || source === 'antigravity'
 }
 

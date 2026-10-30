@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { HookSessionBindingRendererFixture } from '../../shared/agent-hook-session-binding.test-fixture'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import {
   createHookListenerState,
@@ -11,20 +12,15 @@ import {
 } from '../../shared/agent-hook-listener/listener-state'
 import { readAgentProcessPresence } from '../../shared/agent-process-presence'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../shared/agent-status-legacy-adapter'
-import { getAgentResumeArgv } from '../../shared/agent-session-resume'
-import { resumeRecordFromStatus } from '../../shared/agent-resume-record-from-status'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { buildRelayHookEnvelope } from '../../wsl-guest/agent-hook-envelope-build'
 import { RelayProviderHookNormalization } from '../../wsl-guest/agent-hook-provider-normalization'
-import { createTestStore, makeTab } from '../../renderer/src/store/slices/store-test-helpers'
-import { sleepingRecordFromEntry } from '../../renderer/src/store/slices/agent-status/agent-status-sleeping-records'
 import { hookRowPaneResumeRecord } from '../runtime/session-lifecycle/projection/hook-row-pane-resume-record'
 import {
   hookStatusResumeCommand,
   quitResumeRecords,
   resumeStatusFromHookRow
 } from '../runtime/terminal/stop/hook-status-resume-records'
-import { isInheritedFromActivePane } from '../../renderer/src/hooks/ipc-events/agent-status-routing'
 import {
   installMainWindowAgentStatusListeners,
   clearMainWindowAgentStatusListeners
@@ -40,6 +36,22 @@ vi.mock('../startup/main-process-state', () => ({
 }))
 vi.mock('../window/dashboard-popout-window', () => ({ getDashboardPopoutWindow: () => null }))
 vi.mock('../startup/synthetic-title-runtime', () => ({ stopSyntheticTitleSpinnerTimer: () => {} }))
+
+const rendererFixture: unknown = await vi.importActual(
+  '../../renderer/src/store/slices/agent-status/hook-session-binding-renderer.test-fixture'
+)
+function isRendererFixture(value: unknown): value is HookSessionBindingRendererFixture {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'expectReturnedRenderer' in value &&
+    typeof value.expectReturnedRenderer === 'function'
+  )
+}
+if (!isRendererFixture(rendererFixture)) {
+  throw new Error('Missing renderer hook binding assertion fixture')
+}
+const { expectReturnedRenderer } = rendererFixture
 
 const ROOT = 'ordinary-root-B'
 const CHILD = 'delegated-child-A'
@@ -115,50 +127,7 @@ function expectReturned(id = ROOT, agent: 'hermes' | 'antigravity' = 'hermes') {
     paneOwner: { agent, session: id }
   })
   expect(server.getStatusSnapshot()[0]?.providerSession?.id).toBe(id)
-  // Both renderer admission paths consume the actual main-window publication over a foreign live row.
-  const store = createTestStore()
-  const tab = makeTab({ id: 'tab-1', worktreeId: 'wt-1' })
-  store.setState({ tabsByWorktree: { 'wt-1': [tab] } })
-  store
-    .getState()
-    .setAgentStatus(PANE, { agentType: 'codex', state: 'working', prompt: 'review' }, undefined, {
-      updatedAt: data.receivedAt - 1
-    })
-  expect(
-    isInheritedFromActivePane(store.getState().agentStatusByPaneKey[PANE], data, agent, {
-      connectionId: data.connectionId,
-      worktreeId: data.worktreeId
-    })
-  ).toBe(false)
-  store
-    .getState()
-    .setAgentStatus(
-      PANE,
-      data,
-      undefined,
-      { updatedAt: data.receivedAt },
-      { connectionId: data.connectionId, worktreeId: data.worktreeId },
-      { providerSession: data.providerSession, paneOwner: data.paneOwner }
-    )
-  const entry = store.getState().agentStatusByPaneKey[PANE]
-  expect(entry).toMatchObject({ agentType: agent, providerSession: { id } })
-  const record = resumeRecordFromStatus({ entry, worktreeId: 'wt-1', capturedAt: data.receivedAt })
-  expect(record?.providerSession.id).toBe(id)
-  if (!record) {
-    throw new Error('No actual renderer resume record')
-  }
-  expect(getAgentResumeArgv(agent, record.providerSession)).toEqual(
-    agent === 'hermes' ? ['hermes', '--resume', id] : ['agy', '--conversation', id]
-  )
-  expect(store.getState().sleepingAgentSessionsByPaneKey[PANE]?.providerSession.id).toBe(id)
-  expect(
-    sleepingRecordFromEntry({
-      state: store.getState(),
-      entry,
-      worktreeId: 'wt-1',
-      capturedAt: data.receivedAt
-    })?.providerSession.id
-  ).toBe(id)
+  const tab = expectReturnedRenderer(data, id, agent, PANE, 'wt-1')
   const status = resumeStatusFromHookRow(data, undefined)
   if (!status) {
     throw new Error('No host resume status')

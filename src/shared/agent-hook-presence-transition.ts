@@ -48,14 +48,15 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
     previous = undefined
   }
   const recorded = previous?.agentPresence
-  const scoped = hasSeparateHookSessionAdmission(recorded?.agent)
+  const recordedAgent = recorded?.agent
+  const scopedSource = hasSeparateHookSessionAdmission(recordedAgent) ? recordedAgent : undefined
   let owner = recorded
   let statusAdmissionSession = context.statusAdmissionSession
-  if (scoped && retireBinding && recorded) {
+  if (scopedSource && retireBinding && recorded) {
     owner = { ...recorded, session: undefined }
   } else if (
     fromHook &&
-    scoped &&
+    scopedSource &&
     recorded &&
     !recorded.ended &&
     !recorded.process &&
@@ -69,7 +70,7 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
     previous && owner !== recorded ? { ...previous, agentPresence: owner } : previous
   const matched = Boolean(
     fromHook &&
-    scoped &&
+    scopedSource &&
     owner?.session &&
     !owner.ended &&
     owner.agent === incoming.payload.agentType &&
@@ -84,8 +85,8 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
     statusAdmissionSession,
     transitioned: transitionHookPresence(context.event, previousBinding),
     returningProviderSession:
-      matched && owner
-        ? (extractAgentProviderSession(owner.agent, {
+      matched && owner && scopedSource
+        ? (extractAgentProviderSession(scopedSource, {
             session_id: owner.session,
             conversationId: owner.session
           }) ?? undefined)
