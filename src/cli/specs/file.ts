@@ -13,7 +13,7 @@ export const FILE_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       '--line and --column use 1-based positions; --column requires --line. Without --focus, the position is applied when you select the file. Markdown opens in source view for positioning. Older hosts open the file without positioning.',
       'The file opens as a tab in that worktree without changing what you are looking at, even in the worktree on screen. --focus brings you to it; agents should pass --focus only when the user asked to see the file.',
-      '--preview opens HTML (.html, .htm) rendered in a browser tab and Markdown in preview mode instead of the source. Other files, previews the workspace cannot show, and older hosts open the source.',
+      '--preview opens HTML (.html, .htm) rendered in a browser tab and Markdown in a read-only preview tab instead of the source. Other files, previews the workspace cannot show, and older hosts open the source.',
       'The path may be relative to the selected worktree or an absolute path inside that worktree. When --worktree is omitted, local CLI calls infer the current Orca worktree from cwd.',
       'A server with no app window (`orca serve`, orcad) cannot open tabs, so this fails with renderer_unavailable and opens nothing.'
     ],
