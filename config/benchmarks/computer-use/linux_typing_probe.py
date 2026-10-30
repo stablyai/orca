@@ -32,7 +32,7 @@ def main():
         ("oversized", "éΩ" * 300 + "é", "limited to 600"),
         ("slots", "".join(chr(0x4E00 + i) for i in range(256)), "insufficient unused X11 keycodes"),
         ("identical", mixed, None),
-        ("caret", mixed, None),
+        ("append", mixed, None),
     ]
     replacement = trial_contract.TASKS["replace_submit"]
 
@@ -57,11 +57,14 @@ def main():
 
     with (args.out / "engines.log").open("ab") as log:
         for name, marker, refusal in cases:
-            bench.MARKER = trial_contract.MARKER = marker
-            task = "type_submit" if name == "caret" else "replace_submit"
+            bench.MARKER = marker
+            trial_contract.MARKER = "hello" + marker if name == "append" else marker
+            task = "replace_submit"
             trial_contract.TASKS["replace_submit"] = replacement
             if name == "identical":
                 trial_contract.TASKS["replace_submit"] = replacement[:-1] + replacement[1:]
+            if name == "append":
+                trial_contract.TASKS["replace_submit"] = [step for step in replacement if step[0] != "ctrl_a"]
             cell = {"engine": "candidate", "task": task, "profile": "foreground", "round": 0, "case": name}
             trial = TypingTrial(args, args.out / f"trial-{len(evidence['rows'])}", log)
             before = keymap()
@@ -84,6 +87,8 @@ def main():
                     raise AssertionError("unsupported synthetic typing mutated the fixture or was not refused")
             elif row["verdict"] != "completed" or row["api_errors"]:
                 raise AssertionError("Unicode text was not submitted exactly once")
+            elif any(step["result"].get("route") != "synthetic" for step in row["steps"] if step["action"] == "type"):
+                raise AssertionError("typing probe did not exercise synthetic input")
             if row.get("observation", {}).get("clipboard_changed"):
                 raise AssertionError("synthetic typing changed the clipboard")
             print(f"confirmed synthetic typing contract for {len(marker)} characters", flush=True)
