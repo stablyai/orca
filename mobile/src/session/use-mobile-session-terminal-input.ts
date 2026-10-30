@@ -225,7 +225,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         // A deliberate click must survive wheel limits and follow text queued for the old cursor.
         void (liveInputTerminalHandlesRef.current.has(handle)
           ? sendLiveInputClick(handle, bytes)
-          : sendLiveTerminalInputRef.current(handle, bytes))
+          : sendLiveTerminalInputRef.current(handle, bytes, 'pointer'))
         return
       }
       if (!allowTerminalGestureInput(handle, sequenceCount)) {

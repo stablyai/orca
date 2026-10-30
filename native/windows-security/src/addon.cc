@@ -564,6 +564,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("grantAccessAsync", Napi::Function::New(env, GrantAccessAsync));
   exports.Set("clearStdHandleInheritance", Napi::Function::New(env, ClearStdHandleInheritance));
   exports.Set("spawnDetachedIsolated", Napi::Function::New(env, SpawnDetachedIsolated));
+  exports.Set("isolatedSpawnBreaksAwayFromJob",
+              Napi::Function::New(env, IsolatedSpawnBreaksAwayFromJob));
   return exports;
 }
 

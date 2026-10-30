@@ -90,6 +90,11 @@ export function computerUseErrorRecoveryData(
         'Run `orca computer get-app-state --app <app> --json` before retrying so you know whether the UI changed.',
         'Retry with a simpler semantic action or `--no-screenshot` if observation is slow; do not repeat the same timed-out action blindly.'
       )
+    case 'verification_failed':
+      return recoverWith(
+        'Run `orca computer get-app-state --app <app> --json` and check which field holds the value; another field may have changed instead.',
+        'Do not retry the same `set-value` unchanged. For editable text, click the field and confirm focus, select all (`cmd+a` on macOS, `ctrl+a` on Windows/Linux), then use `type-text` and inspect the resulting value.'
+      )
     case 'screenshot_failed':
       return recoverWith(
         'If the accessibility tree is sufficient, rerun the command with `--no-screenshot` instead of retrying the same screenshot capture.',

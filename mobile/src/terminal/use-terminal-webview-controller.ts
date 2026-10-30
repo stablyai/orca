@@ -44,6 +44,7 @@ export function useTerminalWebViewController(
     onHaptic,
     onTerminalInput,
     onTerminalQueryReply,
+    onTerminalInteraction,
     onTerminalTap,
     onFileTap,
     onOpenUrl,
@@ -173,6 +174,7 @@ export function useTerminalWebViewController(
           onKeyboardAvoidanceMetrics,
           onHaptic,
           onTerminalInput: interactionActive ? onTerminalInput : undefined,
+          onTerminalInteraction: interactionActive ? onTerminalInteraction : undefined,
           onTerminalTap: interactionActive ? onTerminalTap : undefined,
           onFileTap: interactionActive ? onFileTap : undefined,
           onOpenUrl: interactionActive ? onOpenUrl : undefined,
@@ -194,6 +196,7 @@ export function useTerminalWebViewController(
       onHaptic,
       onTerminalInput,
       onTerminalQueryReply,
+      onTerminalInteraction,
       onTerminalTap,
       onFileTap,
       onOpenUrl,
@@ -278,6 +281,10 @@ export function useTerminalWebViewController(
         postMessage({ type: 'clear' })
       },
       fitDimensions,
+      scrollToBottom() {
+        writeCoalescer.flushNow()
+        postMessage({ type: 'scroll-to-bottom' })
+      },
       resetZoom() {
         postMessage({ type: 'reset-zoom' })
       },

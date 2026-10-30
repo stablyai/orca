@@ -1,7 +1,6 @@
-import { Platform } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { composerInputStyles, COMPOSER_TEXT_SIZE } from './composer-input/composer-input-styles'
 
 export const newWorktreeFormStyles = themedStyleSheet(() => ({
   header: {
@@ -34,19 +33,13 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     fontWeight: '400',
     color: colors.textMuted
   },
+  // Pickers sit beside text fields in these forms, so they wear the same field shell.
   fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+    ...composerInputStyles.field,
+    paddingVertical: spacing.sm
   },
   fieldButtonText: {
-    fontSize: typography.bodySize,
+    fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
   },
   fieldButtonPlaceholder: {
@@ -117,16 +110,6 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   errorInline: {
     color: colors.statusRed,
     fontSize: 12
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
   },
   error: {
     color: colors.statusRed,

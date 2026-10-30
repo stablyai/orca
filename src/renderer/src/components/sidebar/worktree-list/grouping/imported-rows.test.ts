@@ -6,6 +6,10 @@ import { renderRowContainsWorktree } from '../navigation/render-row-lookup'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+
+// Drag groups key members by host identity; these rows carry no host.
+const k = (id: string): string => composeWorktreeHostIdentity(undefined, id)
 
 const repo: Repo = {
   id: 'repo-1',
@@ -88,14 +92,14 @@ describe('imported worktree virtual rows', () => {
         makeImportedCardRow(),
         makeWorktreeRow('feature')
       ])
-    ).toEqual([{ key: 'repo:repo-1', worktreeIds: ['main', 'feature'] }])
+    ).toEqual([{ key: 'repo:repo-1', worktreeIds: [k('main'), k('feature')] }])
   })
 
   it('indexes pinned rows for sidebar drag when they are the only rendered copy', () => {
     const rows = [makeHeaderRow('pinned'), makePinnedWorktreeRow('main')]
     const { groupIndexByRowKey, groupKeyByRowKey } = getWorktreeDragIndexes(rows)
 
-    expect(getWorktreeDragGroups(rows)).toEqual([{ key: 'pinned', worktreeIds: ['main'] }])
+    expect(getWorktreeDragGroups(rows)).toEqual([{ key: 'pinned', worktreeIds: [k('main')] }])
     expect(groupKeyByRowKey.get('pinned:main')).toBe('pinned')
     expect(groupIndexByRowKey.get('pinned:main')).toBe(0)
   })
@@ -109,7 +113,7 @@ describe('imported worktree virtual rows', () => {
     ]
     const { groupKeyByRowKey } = getWorktreeDragIndexes(rows)
 
-    expect(getWorktreeDragGroups(rows)).toEqual([{ key: 'all', worktreeIds: ['main'] }])
+    expect(getWorktreeDragGroups(rows)).toEqual([{ key: 'all', worktreeIds: [k('main')] }])
     expect(groupKeyByRowKey.has('pinned:main')).toBe(false)
     expect(groupKeyByRowKey.get('all:main')).toBe('all')
   })

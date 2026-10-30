@@ -18,56 +18,56 @@ import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    // Snapshot before awaiting inventory so newly spawned IDs cannot be reconciled away.
-    const preRequestActiveIds = new Set(this.activeSessionIds)
     try {
       // Retry connect and inventory together; reconcile only once after both succeed.
       // Share the teardown deadline so handshake cannot consume a fresh budget before inventory.
-      const result = await this.withDaemonRetry(async () => {
+      return await this.withDaemonRetry(async () => {
         await this.ensureConnected(opts?.deadlineMs)
-        return this.client.request<ListSessionsResult>(
-          'listSessions',
-          undefined,
-          remainingDaemonRequestTimeoutMs(opts?.deadlineMs)
-        )
+        const inventory = this.ptyInventory.begin()
+        try {
+          const result = await this.client.request<ListSessionsResult>(
+            'listSessions',
+            undefined,
+            remainingDaemonRequestTimeoutMs(opts?.deadlineMs)
+          )
+          const admission = new PtyProcessListAdmission()
+          const processes: PtyProcessInfo[] = []
+          const aliveSessionIds = new Map<string, string | undefined>()
+          for (const session of result.sessions) {
+            if (!session.isAlive) {
+              continue
+            }
+            aliveSessionIds.set(session.sessionId, session.incarnationId)
+            const { worktreeId } = parsePtySessionId(session.sessionId)
+            processes.push(
+              admission.admit({
+                id: session.sessionId,
+                ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+                ...(session.pid ? { rootProcessId: session.pid } : {}),
+                // Spawn cwd remains authoritative until the daemon reports live cwd.
+                cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
+                title: 'shell',
+                ...(session.foregroundProcess
+                  ? { foregroundProcess: session.foregroundProcess }
+                  : {}),
+                ...(worktreeId ? { worktreeId } : {}),
+                ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+                ...(session.paneKey ? { paneKey: session.paneKey } : {}),
+                ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+                ...(session.state === 'exiting' ? { exiting: true as const } : {}),
+                ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+              })
+            )
+          }
+          this.ptyInventory.commit(inventory, aliveSessionIds)
+          this.publishAuditObservation(
+            recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)
+          )
+          return processes
+        } finally {
+          this.ptyInventory.end(inventory)
+        }
       })
-      const admission = new PtyProcessListAdmission()
-      const processes: PtyProcessInfo[] = []
-      const aliveSessionIds = new Set<string>()
-      for (const session of result.sessions) {
-        if (!session.isAlive) {
-          continue
-        }
-        aliveSessionIds.add(session.sessionId)
-        const { worktreeId } = parsePtySessionId(session.sessionId)
-        processes.push(
-          admission.admit({
-            id: session.sessionId,
-            ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
-            ...(session.pid ? { rootProcessId: session.pid } : {}),
-            // Spawn cwd remains authoritative until the daemon reports live cwd.
-            cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
-            title: 'shell',
-            ...(session.foregroundProcess ? { foregroundProcess: session.foregroundProcess } : {}),
-            ...(worktreeId ? { worktreeId } : {}),
-            ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
-            ...(session.paneKey ? { paneKey: session.paneKey } : {}),
-            ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
-            ...(session.state === 'exiting' ? { exiting: true as const } : {}),
-            ...this.validatedAgentSessionOwners(session.agentSessionOwners)
-          })
-        )
-      }
-      // Reconcile missed disconnect-time exits so hasPty cannot retain disproven owners forever.
-      for (const id of preRequestActiveIds) {
-        if (!aliveSessionIds.has(id)) {
-          this.activeSessionIds.delete(id)
-        }
-      }
-      this.publishAuditObservation(
-        recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)
-      )
-      return processes
     } catch (error) {
       const missingAuthenticatedToken = this.isRetiredEndpointTokenMissing()
       const missingNamedPipe = isMissingWindowsNamedPipeError(error)
@@ -124,6 +124,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   fanoutSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
+    this.ptyInventory.reset()
     this.sessionsAwaitingDaemonRecovery.clear()
     this.writeRecoveryAttempted = false
     this.dirtySessionVersions.clear()

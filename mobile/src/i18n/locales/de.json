@@ -97,6 +97,7 @@
       "connecting": "Verbindung wird hergestellt…",
       "invalidPairingCode": "Kein gültiger Kopplungscode – vom Computer kopieren und erneut einfügen",
       "invalidQrCode": "Kein gültiger Orca-QR-Code",
+      "downloadQrCode": "Das ist der Download-Code. Scanne den Kopplungscode in Schritt 2 auf deinem Computer.",
       "openDesktopStep": "Orca auf dem Computer öffnen",
       "openMobileSettingsStep": "Einstellungen → Mobil öffnen",
       "openSettings": "Einstellungen öffnen",
@@ -960,9 +961,7 @@
       "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
       "resetDefaults": "Auf Standard zurücksetzen",
-      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
-      "shortcutBar": "TASTENKÜRZELLEISTE",
-      "shortcutBarDescription": "Tasten ein- oder ausblenden. Zum Anordnen in der Terminal-Tastenkürzelleiste den Ziehgriff einer Taste gedrückt halten und die Taste an die gewünschte Position ziehen."
+      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",
@@ -1003,6 +1002,11 @@
       "folder": "Ordner",
       "project": "Projekt {{repo}}",
       "remoteHost": "Remote-Host"
+    },
+    "nativeScreenRecovery": {
+      "title": "Etwas ist schiefgelaufen",
+      "tryAgain": "Erneut versuchen",
+      "home": "Startseite"
     }
   },
   "connection": {
@@ -1096,7 +1100,8 @@
       "checkTailnet": "Prüfen, ob der Computer nicht im Ruhezustand ist und im Tailnet als verbunden angezeigt wird.",
       "desktopTitle": "Desktop-App läuft nicht",
       "disableVpn": "Dieses VPN deaktivieren oder Split-Tunneling / „Allow LAN“ aktivieren.",
-      "firewallTitle": "Firewall blockiert Port 6768",
+      "firewallTitle": "Firewall blockiert Port {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Host-Adressen wie 100.x.x.x oder *.ts.net nutzen Tailscale – Tailscale eingeschaltet lassen.",
       "macosFirewall": "macOS: System Settings → Network → Firewall – Orca zulassen.",
       "notificationNetwork": "Mobilfunk oder ein anderes WLAN ausprobieren. Treffen Benachrichtigungen nach dem Wechsel ein, verzögert das ursprüngliche Netzwerk möglicherweise die Zustellung.",
@@ -1386,14 +1391,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Arbeitsbereich wird erstellt…"
-    },
-    "hostRailActions": {
-      "accounts": "Konten",
-      "closeSearch": "Suche schließen",
-      "floatingWorkspace": "Schwebender Arbeitsbereich",
-      "newWorkspace": "Neuer Arbeitsbereich",
-      "searchWorkspaces": "Arbeitsbereiche durchsuchen",
-      "tasks": "Aufgaben"
     },
     "hostScreenHeader": {
       "accounts": "Konten",
@@ -1833,16 +1830,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen",
       "dismissKeyboard": "Tastatur ausblenden",
-      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
-      "paste": "Einfügen",
-      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
-      "sendKey": "{{label}} senden",
-      "switchToBufferedInput": "Zur gepufferten Befehlseingabe wechseln",
-      "switchToDesktopMode": "In den Desktop-Modus wechseln",
-      "switchToLiveInput": "Zur direkten Terminaleingabe wechseln",
-      "switchToPhoneMode": "In den Smartphone-Modus wechseln"
+      "sendKey": "{{label}} senden"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1952,21 +1941,12 @@
       "titleRight": "Tabs rechts schließen?"
     },
     "commandDock": {
-      "commandPlaceholder": "Befehl eingeben…",
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
       "liveInputLabel": "Live-Eingabe im Terminal",
       "sendCommand": "Befehl senden"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Notiz zu Zeile {{line}} hinzufügen",
-      "deleteNote": "Notiz zu Zeile {{line}} löschen",
-      "diffLine": "{{title}}: Diff-Zeile {{line}}",
-      "line": "Zeile {{line}}",
-      "placeholder": "Review-Notiz hinzufügen",
-      "saveNote": "Notiz speichern"
     },
     "diffLineRow": {
       "addNoteLabel": "Notiz zu Zeile {{line}} hinzufügen",
@@ -2345,9 +2325,6 @@
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen."
     },
-    "sideRail": {
-      "backToWorktrees": "Zurück zu den Worktrees"
-    },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
       "savedAgentUnavailable": "Der für diese Aktion gespeicherte Agent ist auf dem Host dieses Arbeitsbereichs nicht verfügbar."
@@ -2711,19 +2688,26 @@
     "notificationDisplayTest": {
       "accepted": "Vom Push-Dienst von Orca angenommen. Prüfen, ob die Benachrichtigung angekommen ist.",
       "connectDesktop": "Eine Verbindung zum Desktop herstellen und erneut versuchen.",
-      "description": "Eine Testbenachrichtigung über den Push-Dienst von Orca senden.",
+      "description": "Push-Zustellung oder eine lokale Benachrichtigung testen, wenn Push nicht verfügbar ist.",
       "desktopUnreachable": "Der Desktop konnte nicht erreicht werden. Erneut versuchen.",
       "loadFailed": "Die gekoppelten Desktops konnten nicht geladen werden.",
       "pairDesktop": "Einen Desktop koppeln und erneut versuchen.",
       "pushServiceFailed": "Die Benachrichtigung konnte nicht über den Push-Dienst von Orca gesendet werden. Erneut versuchen.",
       "rateLimited": "Zu viele Benachrichtigungen. Später erneut versuchen.",
-      "reconnectPhone": "Erneut verbinden, um dieses Smartphone für Benachrichtigungen zu registrieren.",
       "sendButton": "Testbenachrichtigung senden",
       "sendFailed": "Die Push-Testbenachrichtigung konnte nicht gesendet werden.",
       "sending": "Wird gesendet…",
       "troubleReceivingAlerts": "Probleme beim Empfang von Benachrichtigungen?",
       "troubleshooting": "Fehlerbehebung",
-      "updateDesktop": "Orca auf dem Desktop aktualisieren, um diesen Test auszuführen."
+      "localTitle": "Testbenachrichtigung",
+      "localBody": "Lokaler Benachrichtigungstest von diesem Telefon.",
+      "localScheduled": "{{reason}} Lokaler Test geplant. Prüfe, ob die Benachrichtigung erscheint. Dies prüft nur die Anzeige, nicht die Zustellung von Agentenmeldungen.",
+      "disabled": "Benachrichtigungen sind in Orca deaktiviert. Aktiviere sie und versuche es erneut.",
+      "osDisabled": "Benachrichtigungen sind in den Systemeinstellungen deaktiviert. Erlaube sie und versuche es erneut.",
+      "noToken": "Auf diesem Telefon ist kein Push-Token verfügbar.",
+      "unsupportedHost": "Dieser Desktop unterstützt keine Push-Benachrichtigungen. Aktualisiere ihn, um Push zu empfangen.",
+      "registrationPending": "Die Push-Registrierung ist auf diesem Desktop noch nicht bereit. Versuche es in Kürze erneut.",
+      "liveFallbackScheduled": "{{reason}} Lokaler Test geplant. Prüfe, ob die Benachrichtigung erscheint. Live-Meldungen sind verfügbar, solange Orca läuft und verbunden ist."
     },
     "notificationSettingsScreen": {
       "description": "Auf diesem Gerät Benachrichtigungen erhalten, wenn ein Agent eine Eingabe benötigt oder eine Aufgabe abschließt.",

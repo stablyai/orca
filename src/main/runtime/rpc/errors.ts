@@ -30,6 +30,7 @@ import {
   SKILL_INSTALL_RPC_ERROR_CODE,
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
+import { PLUGIN_CLI_ERROR_CODES } from '../../../shared/plugins/approval/plugin-cli-approval'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
@@ -177,6 +178,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
+  ...PLUGIN_CLI_ERROR_CODES,
   // Keep owner conflicts distinct so clients can choose reload, re-adopt or stop offering the action.
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
   ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)

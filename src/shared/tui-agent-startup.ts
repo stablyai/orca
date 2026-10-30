@@ -87,6 +87,10 @@ export function buildAgentStartupPlan(args: {
     ...args,
     ...(recordedCommand.ok ? recordedCommand.resumeLaunch : baseCommand.resumeLaunch)
   })
+  // Updater overrides belong to this launch, not the saved session's environment.
+  const agentEnv = baseCommand.startupEnv
+    ? { ...args.agentEnv, ...baseCommand.startupEnv }
+    : args.agentEnv
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -99,7 +103,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -118,7 +122,7 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -131,7 +135,7 @@ export function buildAgentStartupPlan(args: {
       shell,
       launchConfig,
       sessionOptions: baseCommand.appliedSessionOptions,
-      agentEnv: args.agentEnv
+      agentEnv
     })
   }
 
@@ -140,7 +144,7 @@ export function buildAgentStartupPlan(args: {
       baseCommand: baseCommand.command,
       agentArgs: args.agentArgs,
       prompt: trimmedPrompt,
-      agentEnv: args.agentEnv,
+      agentEnv,
       platform,
       shell,
       isRemote: args.isRemote
@@ -168,7 +172,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -180,7 +184,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -191,7 +195,7 @@ export function buildAgentStartupPlan(args: {
     followupPrompt: trimmedPrompt,
     launchConfig,
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    ...(agentEnv ? { env: { ...agentEnv } } : {})
   }
 }
 

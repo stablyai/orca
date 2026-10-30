@@ -267,6 +267,15 @@ describe('plugin list entries', () => {
     expect(bare.name).not.toBe('')
   })
 
+  it('strips characters that reorder or hide text, even from an older host', () => {
+    const spoofed = pluginListEntryFromListing(
+      listing('acme.dusk', { name: 'Dusk \u202elaiciffO', description: 'Quiet\n\u200btheme' })
+    )
+    expect(spoofed).toMatchObject({ name: 'Dusk laiciffO', description: 'Quiet theme' })
+    const entries = buildPluginListEntries([installed('acme.dusk', '\u200b\u2066')], [])
+    expect(entries.installed[0]?.name).toBe('Dusk')
+  })
+
   it('searches names, publishers, catalogs and categories', () => {
     const [entry] = buildPluginListEntries([], [listing('stablyai.orca-nord-theme')]).available
     expect(matchesPluginSearch(entry!, 'nord')).toBe(true)

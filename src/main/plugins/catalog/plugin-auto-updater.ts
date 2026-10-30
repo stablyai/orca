@@ -12,6 +12,7 @@ import {
   readPreviewAccessGrowth,
   type PluginCatalogInstallOutcome
 } from './plugin-update-approval'
+import type { PluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { PluginPolicySource } from '../plugin-activation-policy'
 import type { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import type { PluginReleaseFirstSeenStore } from './plugin-release-first-seen-store'
@@ -30,7 +31,7 @@ type AutoUpdatePluginService = {
 
 type AutoUpdateInstaller = Pick<
   PluginMarketplaceInstaller,
-  'findInstalledUpdateListing' | 'previewInstalledUpdate' | 'install'
+  'readInstallLockfile' | 'findInstalledUpdateListing' | 'previewInstalledUpdate' | 'install'
 >
 
 /**
@@ -104,6 +105,14 @@ export class PluginAutoUpdater {
     let killListFresh: Promise<void> | null = null
     const refreshKillList = (): Promise<void> =>
       (killListFresh ??= this.options.refreshKillList().then(() => undefined))
+    // Why per pass: installs only rewrite their own entry, and preview/install reread the lock.
+    let installLock: Promise<PluginLockfile> | null = null
+    const readInstallLock = (): Promise<PluginLockfile> =>
+      (installLock ??= this.options.installer.readInstallLockfile().catch((error: unknown) => {
+        // Why: a transient read error fails only this plugin, as the per-plugin reads did.
+        installLock = null
+        throw error
+      }))
     const updatedNow: PluginAutoUpdateState['updated'] = {}
     const needsReview: PluginAutoUpdateState['needsReview'] = {}
     for (const plugin of this.options.pluginService.getDiscovered()) {
@@ -111,7 +120,7 @@ export class PluginAutoUpdater {
         continue
       }
       try {
-        const verdict = await this.updateOne(plugin, startedAt, refreshKillList)
+        const verdict = await this.updateOne(plugin, startedAt, refreshKillList, readInstallLock)
         // Why logged: a headless or remote host has no toast, so the log is the only record.
         if (verdict?.kind === 'updated') {
           updatedNow[plugin.pluginKey] = verdict.version
@@ -135,14 +144,18 @@ export class PluginAutoUpdater {
   private async updateOne(
     plugin: ValidDiscoveredPlugin,
     now: number,
-    refreshKillList: () => Promise<void>
+    refreshKillList: () => Promise<void>,
+    readInstallLock: () => Promise<PluginLockfile>
   ): Promise<{ kind: 'updated' | 'needs-review'; version: string } | null> {
     const { pluginService, installer } = this.options
     // Why approved only: a disabled or never-approved plugin is the user's to update.
     if (!readApprovedPredecessor(pluginService.options, plugin)) {
       return null
     }
-    const found = await installer.findInstalledUpdateListing(plugin.pluginKey)
+    const found = await installer.findInstalledUpdateListing(
+      plugin.pluginKey,
+      await readInstallLock()
+    )
     // Why pinned only: an unpinned listing installs a branch head, which can move after the hold.
     const release = found?.listing.release
     if (
@@ -164,8 +177,9 @@ export class PluginAutoUpdater {
       }
     }
     const preview = await installer.previewInstalledUpdate(plugin.pluginKey)
-    // Why: a catalog refresh since the hold check can list another release; install only the held one.
+    // Why: a catalog refresh or source switch since the hold check can list another release; install only the held one.
     if (
+      preview.marketplaceSourceId !== found.listing.marketplaceSourceId ||
       preview.resolvedCommit !== release.commit ||
       preview.contentHash !== release.contentHash ||
       preview.contentHash === plugin.contentHash
@@ -186,7 +200,7 @@ export class PluginAutoUpdater {
       // Why at the last await: the user may turn auto-update off while this pass waits.
       install: async () =>
         this.options.isEnabled()
-          ? installer.install(preview, { requireInstalled: true })
+          ? installer.install(preview, { requireInstalled: true, trigger: 'auto_update' })
           : { ok: false, error: 'automatic updates were turned off' },
       approve: this.options.approve
     })

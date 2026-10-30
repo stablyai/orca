@@ -12,7 +12,7 @@ export type IsolatedSpawner = (
   cwd: string,
   environmentBlock: string,
   onExit: (code: number) => void
-) => { pid: number; exitWatchError: number | null }
+) => { pid: number; exitWatchError: number | null; breakawayDenied?: boolean }
 
 export type DetachedChild = EventEmitter & {
   readonly pid?: number
@@ -142,6 +142,10 @@ export function spawnDetachedWithoutInheritance(spec: DetachedSpec): DetachedChi
     pid = spawned.pid
     if (startedAt !== null) {
       notifySpawnObserver(resolved.file, resolved.args, performance.now() - startedAt)
+    }
+    if (spawned.breakawayDenied) {
+      // The child stays in a job this process is in, and dies if that job is closed with it.
+      console.warn(`[process-host] pid ${pid} could not break away from this process's job`)
     }
     if (spawned.exitWatchError !== null) {
       console.warn(

@@ -9,7 +9,7 @@ import {
   formatJiraStoryPoints,
   type JiraListColumnId
 } from './jira-list-columns'
-import { getJiraPriorityTone } from './task-page-jira-status-tone'
+import { getJiraPriorityTone } from './task-page/jira/task-page-jira-status-tone'
 
 const MUTED_CELL = 'block truncate text-[12px] text-muted-foreground'
 

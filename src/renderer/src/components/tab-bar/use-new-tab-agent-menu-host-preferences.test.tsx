@@ -28,6 +28,8 @@ import {
   readAgentLaunchPreferencesForWorktree,
   readAgentLaunchPreferencesForWorkspace
 } from '../settings/use-host-agent-launch-preferences'
+import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
+import { agentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 
 const rpc = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn() }))
@@ -130,6 +132,16 @@ it.each(['wt', 'folder:f1'])(
       expectedEnvironmentRuntimeId: 'runtime-1'
     })
     expect(useAppStore.getState().settings?.disabledTuiAgents).toEqual(['codex'])
+    expect([
+      ...agentMenuShortcutLabels(
+        id,
+        {
+          'tab.newAgent.codex': ['Mod+Shift+X'],
+          'tab.newAgent.opencode': ['Mod+Shift+O']
+        },
+        'darwin'
+      )
+    ]).toEqual([['codex', '⌘⇧X']])
   }
 )
 
@@ -440,6 +452,124 @@ it.each(['pairing', 'runtime'] as const)(
     } finally {
       vi.useRealTimers()
     }
+  }
+)
+
+it('keeps real observation/inventory consumers asleep for unrelated settings and another host, and updates a used default', async () => {
+  let renders = 0
+  const hook = renderHook(() => {
+    const menu = useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
+    const entries = useAgentLaunchPickerInventory('wt', menu, true)
+    renders++
+    return { menu, entries }
+  })
+  await act(async () => {})
+  const settled = renders
+  await act(async () => {
+    useAppStore.setState((state) => ({ settings: { ...state.settings!, terminalFontSize: 19 } }))
+  })
+  expect(renders).toBe(settled)
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set(
+        'beta',
+        status('another-host-update')
+      )
+    }))
+  })
+  expect(renders).toBe(settled)
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      settings: {
+        ...state.settings!,
+        nativeChatPermissionMode:
+          state.settings?.nativeChatPermissionMode === 'ask' ? 'full-access' : 'ask'
+      }
+    }))
+  })
+  expect(renders).toBeGreaterThan(settled)
+  expect(hook.result.current.menu.state).toBe('settled')
+  useAppStore.setState({
+    folderWorkspaces: [makeFolderWorkspace({ id: 'local', executionHostId: 'local' })]
+  })
+  const local = renderHook(() => {
+    const menu = useNewTabAgentMenuRows('folder:local', true, { kind: 'local' })
+    return useAgentLaunchPickerInventory('folder:local', menu, true)
+  })
+  await act(async () => {})
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, agentPermissionDefault: 'ask' }
+    }))
+  })
+  expect(
+    local.result.current.find((entry) => entry.agent === 'claude')?.terminal.permissionMode
+  ).toBe('ask')
+})
+
+it.each([30, 300])(
+  'skips all fallback route/worktree work for a supplied context host across %i worktrees',
+  async (count) => {
+    const route = await import('@/lib/agent-launch-route-input')
+    const builder = vi.spyOn(route, 'buildAgentLaunchRouteInput')
+    let visited = 0
+    const worktrees = Array.from({ length: count }, (_, i) => {
+      const worktree = makeWorktree({
+        id: `scale-${i}`,
+        repoId: TEST_REPO.id,
+        hostId: 'runtime:alpha'
+      })
+      Object.defineProperty(worktree, 'id', {
+        get: () => {
+          visited++
+          return `scale-${i}`
+        },
+        enumerable: true
+      })
+      return worktree
+    })
+    useAppStore.setState({ worktreesByRepo: { [TEST_REPO.id]: worktrees } })
+    visited = 0
+    const id = `scale-${count - 1}`
+    const model = {
+      state: 'settled' as const,
+      rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
+      detection: {
+        detectedIds: ['claude' as const],
+        isLoading: false,
+        isRefreshing: false,
+        detectionFailed: false,
+        needsServerUpdate: false,
+        refresh: async () => ['claude' as const]
+      },
+      pickerContext: {
+        workspace: { kind: 'git-worktree' as const, worktreeId: id },
+        executionHostId: 'runtime:alpha',
+        settings: null,
+        key: `route-${count}`
+      }
+    }
+    const hook = renderHook(
+      ({ supplied, query }) => {
+        void query
+        return useAgentLaunchPickerInventory(
+          id,
+          supplied ? model : { ...model, pickerContext: undefined },
+          false
+        )
+      },
+      { initialProps: { supplied: true, query: '' } }
+    )
+    for (const query of ['c', 'cl', 'cla', 'claude']) {
+      await act(async () => hook.rerender({ supplied: true, query }))
+    }
+    expect(builder).not.toHaveBeenCalled()
+    expect(visited).toBe(0)
+    await act(async () => hook.rerender({ supplied: false, query: 'fallback' }))
+    expect(builder).toHaveBeenCalledOnce()
+    expect(builder.mock.results[0].value.executionHostId).toBe('runtime:alpha')
+    expect(visited).toBeGreaterThanOrEqual(count)
+    builder.mockRestore()
   }
 )
 

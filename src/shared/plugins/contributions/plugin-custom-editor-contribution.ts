@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   pluginFieldDoc,
@@ -25,17 +26,13 @@ export const pluginCustomEditorContributionSchema = z
         ['excalidraw']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(64)
-      .meta(
-        pluginFieldDoc(
-          "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
-          PLUGIN_MANIFEST_V2_SINCE,
-          ['Excalidraw']
-        )
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(64)).meta(
+      pluginFieldDoc(
+        "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
+        PLUGIN_MANIFEST_V2_SINCE,
+        ['Excalidraw']
+      )
+    ),
     icon: pluginRelativePathSchema
       .optional()
       .meta(
@@ -51,7 +48,7 @@ export const pluginCustomEditorContributionSchema = z
     }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
-        'HTML file rendered inside a sandboxed editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.',
+        'HTML file rendered inside an editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.',
         PLUGIN_MANIFEST_V2_SINCE,
         ['editor/index.html']
       )

@@ -389,7 +389,11 @@ describe('PluginManager catalog', () => {
 
   it('uses the shared update review for a single plugin', async () => {
     installApi({
-      listMarketplacePlugins: vi.fn().mockResolvedValue([{ ...listing, version: '2.0.0' }])
+      listMarketplacePlugins: vi.fn().mockResolvedValue([{ ...listing, version: '2.0.0' }]),
+      previewMarketplaceUpdate: vi.fn().mockResolvedValue({
+        ...preview,
+        accessGrowth: { capabilities: [], execution: null, contributions: [] }
+      })
     })
     const { onInstalled } = await render([installedPlugin()])
     await act(async () => button('Update 2.0.0').click())

@@ -14,6 +14,8 @@ export function SourceControlContentStatus({
   isRecoveryBusy,
   isAbortingOperation,
   onAbortOperation,
+  isCompletingMerge,
+  onCompleteMerge,
   onResolveWithAi,
   onReviewConflicts,
   repositoryHuge,
@@ -36,6 +38,8 @@ export function SourceControlContentStatus({
   isRecoveryBusy: boolean
   isAbortingOperation: boolean
   onAbortOperation: (operation: GitConflictOperation) => void
+  isCompletingMerge: boolean
+  onCompleteMerge: () => void
   onResolveWithAi: () => void
   onReviewConflicts: () => void
   repositoryHuge: { limit: number } | null | undefined
@@ -75,6 +79,8 @@ export function SourceControlContentStatus({
             isRecoveryBusy={isRecoveryBusy}
             isAbortingOperation={isAbortingOperation}
             onAbortOperation={onAbortOperation}
+            isCompletingMerge={isCompletingMerge}
+            onCompleteMerge={onCompleteMerge}
             sourceControlAiActionsVisible={sourceControlAiActionsVisible}
             onResolveWithAI={onResolveWithAi}
           />

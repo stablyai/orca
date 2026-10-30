@@ -144,6 +144,8 @@ export type IPtyProvider = {
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void>
   hasPty?: (id: string) => boolean
+  /** Read-only input availability, including retained unattached PTYs; null means unobserved. */
+  getPtyAvailability?: (id: string) => boolean | null
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): boolean | void

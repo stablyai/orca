@@ -769,7 +769,6 @@
 4 test-no-wall-clock:src/cli/runtime/serve-bundle-park.test.ts
 5 test-no-wall-clock:src/cli/runtime/serve-pid1-init-reaper.test.ts
 1 test-no-wall-clock:src/cli/runtime/status-caller.test.ts
-2 test-no-wall-clock:src/cli/runtime/status.test.ts
 1 test-no-wall-clock:src/main/acp/acp-structured-mail-admission.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/managed-hook-timeout.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/manual-compact-hook-stream.test.ts
@@ -843,7 +842,6 @@
 1 test-no-wall-clock:src/main/daemon/terminal-session-teardown.test.ts
 2 test-no-wall-clock:src/main/daemon/terminal-shell-recovery-barrier.test.ts
 1 test-no-wall-clock:src/main/daemon/terminal-spawn-gate-legacy-restores.test.ts
-2 test-no-wall-clock:src/main/ephemeral-vm/runtime-ssh.test.ts
 2 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel-settlement.test.ts
 3 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel.test.ts
 1 test-no-wall-clock:src/main/fish-history-session.test.ts
@@ -882,7 +880,6 @@
 2 test-no-wall-clock:src/main/ipc/native-chat-subscribe-lifecycle.test.ts
 2 test-no-wall-clock:src/main/ipc/native-chat.test.ts
 1 test-no-wall-clock:src/main/ipc/pty/provider/liveness-inventory.test.ts
-1 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged-exit.test.ts
 2 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged.test.ts
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts

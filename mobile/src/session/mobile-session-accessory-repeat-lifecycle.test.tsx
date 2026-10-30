@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { createElement, useLayoutEffect, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,6 +86,7 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
         connStateRef.current = props.state
       }, [props.client, props.handle, props.state])
       const scope = {
+        sendTerminalUserInput: terminalInputSend.request,
         client: props.client,
         clientRef,
         activeHandle: props.handle,

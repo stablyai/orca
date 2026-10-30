@@ -210,9 +210,8 @@ public enum BackgroundInputTransport {
             else { throw Failure.targetWindowNotKey }
             // SAFETY: the CFTypeID check above proves focused is an AXUIElement.
             let window = focused as! AXUIElement
-            var number: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(window, "AXWindowNumber" as CFString, &number) == .success,
-                  let number = number as? NSNumber, number.uint32Value == target.windowID
+            guard let windowID = try? AccessibilityWindowIdentity.windowID(of: window),
+                  windowID == target.windowID
             else { throw Failure.targetWindowNotKey }
             try body()
             return
