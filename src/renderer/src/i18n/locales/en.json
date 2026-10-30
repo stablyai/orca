@@ -14848,6 +14848,14 @@
             "slowest": "Slowest",
             "unlimited": "Unlimited"
           },
+          "AiVaultGroupSessionLimitMenu": {
+            "sessionsPerGroup": "Sessions per group: {{value0}}",
+            "all": "All"
+          },
+          "AiVaultGroupMoreRow": {
+            "showMore": "Show {{value0}} more",
+            "showFewer": "Show fewer"
+          },
           "GitHubPRStackMap": {
             "3511405914": "closed",
             "8a9bdc36c0": "merged",

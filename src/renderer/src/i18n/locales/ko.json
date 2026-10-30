@@ -14088,6 +14088,14 @@
             "slowest": "가장 느림",
             "unlimited": "무제한"
           },
+          "AiVaultGroupSessionLimitMenu": {
+            "sessionsPerGroup": "그룹당 세션 수: {{value0}}",
+            "all": "전체"
+          },
+          "AiVaultGroupMoreRow": {
+            "showMore": "{{value0}}개 더 보기",
+            "showFewer": "간단히 보기"
+          },
           "GitHubPRStackMap": {
             "3511405914": "닫힘",
             "8a9bdc36c0": "병합됨",

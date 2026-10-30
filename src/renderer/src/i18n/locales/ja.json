@@ -14088,6 +14088,14 @@
             "slowest": "最も低速",
             "unlimited": "無制限"
           },
+          "AiVaultGroupSessionLimitMenu": {
+            "sessionsPerGroup": "グループごとのセッション数: {{value0}}",
+            "all": "全て"
+          },
+          "AiVaultGroupMoreRow": {
+            "showMore": "さらに {{value0}} 件を表示",
+            "showFewer": "表示を減らす"
+          },
           "GitHubPRStackMap": {
             "3511405914": "閉まっている",
             "8a9bdc36c0": "合併した",

@@ -19,10 +19,12 @@ import {
   extractVaultVirtualRowIndexes,
   getVaultStickyHeaderIndexes,
   VAULT_GROUP_HEADER_ROW_HEIGHT,
+  VAULT_GROUP_MORE_ROW_HEIGHT,
   VAULT_SESSION_ROW_HEIGHT
 } from './ai-vault-virtual-rows'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
-import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
+import { AiVaultVirtualRow } from './AiVaultVirtualRow'
+import { buildAiVaultListRows, type AiVaultGroupSessionLimit } from './ai-vault-group-session-limit'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { resolveAiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 import { resumeAiVaultSessionHere, type AiVaultResumeHere } from './ai-vault-session-resume-here'
@@ -38,6 +40,7 @@ const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
 export function AiVaultSessionVirtualList({
   groups,
   collapsedGroups,
+  groupSessionLimit = 'all',
   loading,
   scopePending = false,
   scanProgressShown = false,
@@ -76,6 +79,7 @@ export function AiVaultSessionVirtualList({
 }: {
   groups: readonly AiVaultSessionListGroup[]
   collapsedGroups: ReadonlySet<string>
+  groupSessionLimit?: AiVaultGroupSessionLimit
   loading: boolean
   scopePending?: boolean
   /** The progress strip above names the scan, so the list does not repeat it. */
@@ -121,22 +125,19 @@ export function AiVaultSessionVirtualList({
   const stickyRangeStartIndexRef = useRef(0)
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(() => new Set())
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
+  const [expandedGroupsLimit, setExpandedGroupsLimit] = useState(groupSessionLimit)
+  // Why: "Show more" expansions belong to the limit they were made under; a new
+  // limit should cap every group again instead of leaving earlier ones fully open.
+  if (expandedGroupsLimit !== groupSessionLimit) {
+    setExpandedGroupsLimit(groupSessionLimit)
+    setExpandedGroups(new Set())
+  }
 
-  const vaultRows = useMemo(() => {
-    const rows: AiVaultListRow[] = []
-    for (const sessionGroup of groups) {
-      const label = sessionGroup.label
-      if (label !== null) {
-        rows.push({ type: 'group', group: { ...sessionGroup, label } })
-      }
-      if (label === null || !collapsedGroups.has(sessionGroup.key)) {
-        for (const session of sessionGroup.sessions) {
-          rows.push({ type: 'session', groupKey: sessionGroup.key, session })
-        }
-      }
-    }
-    return rows
-  }, [collapsedGroups, groups])
+  const vaultRows = useMemo(
+    () => buildAiVaultListRows({ groups, collapsedGroups, groupSessionLimit, expandedGroups }),
+    [collapsedGroups, expandedGroups, groupSessionLimit, groups]
+  )
 
   const stickyHeaderIndexes = useMemo(() => getVaultStickyHeaderIndexes(vaultRows), [vaultRows])
   const selection = useAiVaultSessionSelection(vaultRows, keyboardRef !== undefined, query)
@@ -150,6 +151,9 @@ export function AiVaultSessionVirtualList({
       const row = vaultRows[index]
       if (row?.type === 'group') {
         return VAULT_GROUP_HEADER_ROW_HEIGHT
+      }
+      if (row?.type === 'group-more') {
+        return VAULT_GROUP_MORE_ROW_HEIGHT
       }
       if (row?.type === 'session' && expandedSessionIds.has(row.session.id)) {
         return VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT
@@ -172,9 +176,24 @@ export function AiVaultSessionVirtualList({
       if (!row) {
         return `missing:${index}`
       }
+      if (row.type === 'group-more') {
+        return `group-more:${row.groupKey}`
+      }
       return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
     }
   })
+
+  const toggleGroupExpanded = useCallback((groupKey: string) => {
+    setExpandedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(groupKey)) {
+        next.delete(groupKey)
+      } else {
+        next.add(groupKey)
+      }
+      return next
+    })
+  }, [])
 
   const toggleSessionDetails = useCallback((sessionId: string) => {
     setExpandedSessionIds((current) => {
@@ -302,6 +321,7 @@ export function AiVaultSessionVirtualList({
                 getSessionResumeActions={getSessionResumeActions}
                 getSessionResumeInChat={getSessionResumeInChat}
                 onToggleGroup={onToggleGroup}
+                onToggleGroupExpanded={toggleGroupExpanded}
                 onToggleSessionDetails={toggleSessionDetails}
                 onJumpToOriginalPane={onJumpToOriginalPane}
                 onJumpToWorktree={onJumpToWorktree}

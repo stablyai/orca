@@ -14,6 +14,7 @@ import {
   type AiVaultViewOptions
 } from './ai-vault-view-options-persistence'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
+import type { AiVaultGroupSessionLimit } from './ai-vault-group-session-limit'
 
 type AiVaultViewOptionsUpdate = (current: AiVaultViewOptions) => AiVaultViewOptions
 
@@ -84,11 +85,13 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  groupSessionLimit: AiVaultGroupSessionLimit
   setSort: (sort: AiVaultSort) => void
   setSearchSort: (sort: AiVaultSearchSort) => void
   setGroup: (group: AiVaultGroup) => void
   setHideEmptySessions: (hide: boolean) => void
   setSessionLimit: (limit: AiVaultSessionLimit) => void
+  setGroupSessionLimit: (limit: AiVaultGroupSessionLimit) => void
   setAgentEnabled: (agent: AiVaultAgent, enabled: boolean) => void
   setAllAgentsEnabled: (enabled: boolean) => void
   resetViewOptions: () => void
@@ -140,6 +143,15 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
         : updateDisabledAgents(update),
     [local]
   )
+  const setGroupSessionLimit = useCallback(
+    (groupSessionLimit: AiVaultGroupSessionLimit) =>
+      updateOptions((current) =>
+        current.groupSessionLimit === groupSessionLimit
+          ? current
+          : { ...current, groupSessionLimit }
+      ),
+    []
+  )
   const setAgentEnabled = useCallback(
     (agent: AiVaultAgent, enabled: boolean) =>
       updateAgents((disabled) => withAgentEnabled(disabled, agent, enabled)),
@@ -168,11 +180,13 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
     group: options.group,
     hideEmptySessions: options.hideEmptySessions,
     sessionLimit: options.sessionLimit,
+    groupSessionLimit: options.groupSessionLimit,
     setSort,
     setSearchSort,
     setGroup,
     setHideEmptySessions,
     setSessionLimit,
+    setGroupSessionLimit,
     setAgentEnabled,
     setAllAgentsEnabled,
     resetViewOptions

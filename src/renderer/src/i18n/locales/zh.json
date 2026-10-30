@@ -14088,6 +14088,14 @@
             "slowest": "最慢",
             "unlimited": "无限制"
           },
+          "AiVaultGroupSessionLimitMenu": {
+            "sessionsPerGroup": "每组会话数：{{value0}}",
+            "all": "全部"
+          },
+          "AiVaultGroupMoreRow": {
+            "showMore": "再显示 {{value0}} 个",
+            "showFewer": "收起"
+          },
           "GitHubPRStackMap": {
             "3511405914": "关闭",
             "8a9bdc36c0": "合并",

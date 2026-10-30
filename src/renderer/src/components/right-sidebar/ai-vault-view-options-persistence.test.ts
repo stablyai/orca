@@ -27,7 +27,8 @@ describe('AI Vault view option persistence', () => {
         sort: 'invalid',
         group: 'agent',
         hideEmptySessions: 'yes',
-        sessionLimit: 999
+        sessionLimit: 999,
+        groupSessionLimit: 7
       })
     ).toEqual({
       disabledAgents: ['codex'],
@@ -35,7 +36,8 @@ describe('AI Vault view option persistence', () => {
       searchSort: 'relevance',
       group: 'agent',
       hideEmptySessions: false,
-      sessionLimit: 250
+      sessionLimit: 250,
+      groupSessionLimit: 'all'
     })
   })
 
@@ -46,7 +48,8 @@ describe('AI Vault view option persistence', () => {
         sort: 'updated',
         group: 'project',
         hideEmptySessions: false,
-        sessionLimit: 250
+        sessionLimit: 250,
+        groupSessionLimit: 5
       })
     ).toEqual({
       disabledAgents: [],
@@ -54,7 +57,8 @@ describe('AI Vault view option persistence', () => {
       searchSort: 'relevance',
       group: 'project',
       hideEmptySessions: false,
-      sessionLimit: 250
+      sessionLimit: 250,
+      groupSessionLimit: 5
     })
     expect(
       normalizeAiVaultViewOptions({
@@ -63,7 +67,8 @@ describe('AI Vault view option persistence', () => {
         searchSort: 'newest',
         group: 'folder',
         hideEmptySessions: true,
-        sessionLimit: 1000
+        sessionLimit: 1000,
+        groupSessionLimit: 'all'
       })
     ).toEqual({
       disabledAgents: [],
@@ -71,13 +76,30 @@ describe('AI Vault view option persistence', () => {
       searchSort: 'newest',
       group: 'folder',
       hideEmptySessions: true,
-      sessionLimit: 1000
+      sessionLimit: 1000,
+      groupSessionLimit: 'all'
     })
     expect(normalizeAiVaultViewOptions({ group: 'agent' }).group).toBe('agent')
     expect(normalizeAiVaultViewOptions({ searchSort: 'oldest' }).searchSort).toBe('relevance')
     expect(normalizeAiVaultViewOptions({ sessionLimit: 'unlimited' }).sessionLimit).toBe(
       'unlimited'
     )
+  })
+
+  it('defaults Sessions per group to All for options saved before the setting existed', () => {
+    const legacy = { disabledAgents: [], sort: 'created', group: 'project', sessionLimit: 500 }
+
+    expect(normalizeAiVaultViewOptions(legacy).groupSessionLimit).toBe('all')
+    for (const limit of [3, 5, 10, 'all'] as const) {
+      expect(normalizeAiVaultViewOptions({ groupSessionLimit: limit }).groupSessionLimit).toBe(
+        limit
+      )
+    }
+    for (const invalid of [0, -3, 4, '5', 'unlimited', null]) {
+      expect(normalizeAiVaultViewOptions({ groupSessionLimit: invalid }).groupSessionLimit).toBe(
+        'all'
+      )
+    }
   })
 
   it('preserves a fully cleared agent selection', () => {
@@ -130,7 +152,8 @@ describe('AI Vault view option persistence', () => {
           searchSort: 'newest',
           group: 'folder',
           hideEmptySessions: true,
-          sessionLimit: 500
+          sessionLimit: 500,
+          groupSessionLimit: 10
         },
         storage
       )
@@ -143,7 +166,8 @@ describe('AI Vault view option persistence', () => {
         searchSort: 'newest',
         group: 'folder',
         hideEmptySessions: true,
-        sessionLimit: 500
+        sessionLimit: 500,
+        groupSessionLimit: 10
       })
     )
   })
