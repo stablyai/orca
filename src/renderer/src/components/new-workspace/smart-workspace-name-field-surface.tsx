@@ -47,6 +47,25 @@ export function renderSmartWorkspaceNameField(
           onModeChange={controller.handleModeChange}
           inputRef={controller.localInputRef}
           tabsListRef={controller.tabsListRef}
+          issueSource={
+            !controller.repoBackedSourcesDisabled &&
+            controller.selectedRepo &&
+            controller.issueSourceCandidates
+              ? {
+                  preference: controller.selectedRepo.issueSourcePreference,
+                  origin: controller.issueSourceCandidates.origin,
+                  upstream: controller.issueSourceCandidates.upstream,
+                  disabled: controller.disabled,
+                  onChange: (next) => {
+                    const repo = controller.selectedRepo
+                    if (!repo) {
+                      return
+                    }
+                    void controller.setIssueSourcePreference(repo.id, repo.path, next)
+                  }
+                }
+              : null
+          }
         />
       )}
       {mode === 'jira' && selectedSource === null ? (
