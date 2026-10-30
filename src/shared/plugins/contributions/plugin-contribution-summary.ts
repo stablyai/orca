@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import {
   PLUGIN_CONTRIBUTION_POINTS,
   type PluginContributionPoint
@@ -24,11 +25,9 @@ export const pluginContributionSummarySchema = z
         kind: z
           .enum(PLUGIN_CONTRIBUTION_POINTS)
           .meta(pluginFieldDoc('Contribution point.', NEXT, ['themes'])),
-        name: z
-          .string()
-          .min(1)
-          .max(160)
-          .meta(pluginFieldDoc('What the item is called in Orca.', NEXT, ['Dusk'])),
+        name: safePluginDisplayText(z.string().min(1).max(160)).meta(
+          pluginFieldDoc('What the item is called in Orca.', NEXT, ['Dusk'])
+        ),
         detail: z
           .string()
           .min(1)

@@ -113,7 +113,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   buttonPressed: {

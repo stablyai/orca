@@ -1,6 +1,7 @@
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mocks, hostMocks } from './launch-work-item-direct-test-fixture'
+import * as hostPreferences from '@/components/settings/use-host-agent-launch-preferences'
 import { resolveProjectExecutionRuntime } from '../../../shared/project-execution-runtime'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
@@ -311,13 +312,24 @@ describe('direct workspace defaults', () => {
       hostMocks.callRuntimeRpc.mockResolvedValue({
         settings: projectAgentLaunchSettings({ defaultTuiAgent: 'codex' })
       })
-      await ensureAgentLaunchPreferences(useAppStore.getState(), {
+      const acquiredPreferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
         kind: 'git-worktree',
         repoId: repo.id,
         executionHostId: repo.executionHostId
       })
+      expect(acquiredPreferences.defaultTuiAgent).toBe('codex')
       vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(undefined)
       hostMocks.callRuntimeRpc.mockClear()
+      mocks.createWorktree.mockImplementationOnce(async () => {
+        const worktree = makeWorktree({
+          id: 'repo-1::/repo/worktree',
+          path: '/repo/worktree',
+          repoId: repo.id,
+          hostId: repo.executionHostId
+        })
+        useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
+        return { worktree }
+      })
       const agent = supplied ? 'claude' : 'codex'
       await expect(
         launch(
@@ -516,3 +528,50 @@ describe('direct workspace defaults', () => {
     }
   )
 })
+
+it.each(['native', 'blank', 'terminal'] as const)(
+  'acquires terminal preferences only for an actual terminal consumer (%s)',
+  async (route) => {
+    stageChat()
+    mocks.store.settings = {
+      defaultTuiAgent: route === 'blank' ? 'blank' : 'codex',
+      nativeChatProviders: route === 'native' ? EVERY_AGENT_CHAT : {}
+    }
+    vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(undefined)
+    const answer = Promise.withResolvers<Awaited<ReturnType<typeof ensureAgentLaunchPreferences>>>()
+    const ensure = vi
+      .spyOn(hostPreferences, 'ensureAgentLaunchPreferences')
+      .mockReturnValue(answer.promise)
+    try {
+      const action = launch()
+      if (route === 'terminal') {
+        await vi.waitFor(() => expect(ensure).toHaveBeenCalledOnce())
+        expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+        answer.resolve({
+          defaultTuiAgent: 'codex',
+          disabledTuiAgents: undefined,
+          agentLaunchChoices: { codex: { model: 'owner-result' } }
+        })
+      }
+      await expect(action).resolves.toBe(true)
+      if (route !== 'terminal') {
+        expect(ensure).not.toHaveBeenCalled()
+      }
+      if (route === 'native') {
+        expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            plan: expect.objectContaining({ route: 'structured-native-chat' })
+          })
+        )
+      } else if (route === 'terminal') {
+        expect(mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup.command).toContain(
+          'owner-result'
+        )
+      } else {
+        expect(mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup).toBeUndefined()
+      }
+    } finally {
+      answer.resolve({ defaultTuiAgent: undefined, disabledTuiAgents: undefined })
+    }
+  }
+)

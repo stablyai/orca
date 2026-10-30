@@ -77,6 +77,7 @@ export type TerminalSelectionEvents = {
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput?: (bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply?: (bytes: string) => void
+  onTerminalInteraction?: () => void
   onTerminalTap?: () => void
   // Every reading of the tapped text (hard wraps, overlapping detections); like desktop, the longest that exists opens.
   onFileTap?: (candidates: readonly ParsedFileLinkLocation[]) => void

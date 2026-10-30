@@ -1077,9 +1077,7 @@
         "jira": {
           "856083302c": "La connexion Jira a été remplacée par une requête plus récente."
         },
-        "linear": {
-          "37d36984d0": "La connexion Linear a été remplacée par une requête plus récente."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Échec de la création du profil",
@@ -1116,6 +1114,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} n’est plus disponible. Réactivez son plugin.",
+        "failed": "Impossible de créer le fichier."
       }
     },
     "lib": {
@@ -8263,18 +8265,6 @@
           "191ac34567": "Orchestration d'agents",
           "nestedWorkerDepthTitle": "Profondeur du travailleur imbriqué",
           "nestedWorkerDepthDescription": "Combien de générations de travailleurs détachés peuvent engendrer leurs propres travailleurs. 1 maintient l'arborescence des agents à plat : un coordinateur répartit les travailleurs, et ces travailleurs ne répartissent pas.",
-          "chatErrorEscalationTitle": "Prévenir le coordinateur des erreurs du chat",
-          "chatErrorEscalationDescription": "Quand un agent assigné rencontre une erreur qui met fin à son tour, envoie l'erreur exacte au coordinateur qui l'a assigné. La tâche reste assignée à l'agent. Fonctionne uniquement pour les agents dans l'interface de chat.",
-          "chatErrorEscalationKeywordError": "erreur",
-          "chatErrorEscalationKeywordChat": "chat",
-          "heartbeatTitle": "Signaux de vie des travailleurs",
-          "heartbeatDescription": "Les travailleurs assignés se signalent toutes les quelques minutes pour que le coordinateur distingue un agent qui travaille d'un agent figé. Les désactiver réduit les messages envoyés au coordinateur, mais il perd ce signal de suivi. S'applique aux travailleurs assignés après le changement.",
-          "heartbeatKeywordHeartbeat": "signal de vie",
-          "heartbeatKeywordStalled": "bloqué",
-          "heartbeatKeywordInterval": "intervalle",
-          "heartbeatIntervalTitle": "Intervalle des signaux de vie",
-          "heartbeatIntervalDescription": "Un intervalle plus court donne au coordinateur des nouvelles plus fréquentes, mais lui envoie plus de messages. Un intervalle plus long envoie moins de messages, mais laisse plus de temps entre deux signaux. S'applique aux travailleurs assignés après le changement.",
-          "heartbeatIntervalSuffix": "minutes",
           "7bc082f4de": "Copier la commande d'installation"
         },
         "OrchestrationSetupCard": {
@@ -11758,7 +11748,8 @@
             "terminalRun": "Exécuter des commandes dans vos terminaux, y compris SSH"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
-          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau et lancer d’autres programmes."
+          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau et lancer d’autres programmes.",
+          "uiWarning": "Exécute le code de l’éditeur dans Orca pour afficher sa vue. Orca indique ce à quoi il peut accéder et demande avant de l’activer."
         },
         "PluginConsentProvenance": {
           "official": "Officiel",
@@ -11911,7 +11902,6 @@
         },
         "PluginThemeUseNow": {
           "label": "Utiliser maintenant :",
-          "useName": "Utiliser maintenant : {{value0}}",
           "useForLight": "Utiliser en clair :",
           "useForDark": "Utiliser en sombre :"
         },
@@ -12925,7 +12915,10 @@
           "browseAll": "Parcourir tous les plugins",
           "resultCount": "{{value0}} plugins correspondent",
           "resultCountOne": "1 plugin correspond",
-          "updateAll": "Tout mettre à jour…"
+          "updateAll": "Tout mettre à jour…",
+          "notFromCatalog": "hors catalogue",
+          "allInstalledTitle": "Tous les plugins du catalogue sont installés",
+          "showInstalled": "Afficher les plugins installés"
         },
         "PluginDetailPage": {
           "bundled": "Fourni avec Orca",
@@ -12970,7 +12963,8 @@
           "copyLogs": "Copier",
           "accessFailed": "Impossible de lire ses accès",
           "retry": "Réessayer",
-          "noAccessReach": "Rien en dehors de ses propres fichiers"
+          "noAccessReach": "Rien en dehors de ses propres fichiers",
+          "customEditor": "Éditeur"
         },
         "PluginManagerRows": {
           "reinstall": "Réinstaller",
@@ -12994,6 +12988,8 @@
           "update": "Mettre à jour vers {{value0}}",
           "needsOrca": "Nécessite Orca {{value0}}",
           "rollbackTo": "Revenir à {{value0}}…",
+          "copyContentHash": "Copier le hash du contenu",
+          "reviewUpdate": "Vérifier la mise à jour",
           "dataLoadFailed": "Impossible de charger ses fichiers"
         },
         "PluginSettingsOverview": {
@@ -13006,7 +13002,13 @@
           "themes": "Thèmes",
           "languages": "Langages",
           "icons": "Icônes",
-          "commands": "Commandes et panneaux"
+          "commands": "Commandes et panneaux",
+          "catalogLabel": "Filtrer par catalogue",
+          "editors": "Éditeurs",
+          "remoteVms": "Distant/VM",
+          "games": "Jeux",
+          "agents": "Agents",
+          "integrations": "Intégrations"
         },
         "PluginUpdateAllDialog": {
           "previewError": "Impossible de lire cette mise à jour",
@@ -13029,13 +13031,13 @@
           "newRecipes": "Recettes de machine",
           "newShortcuts": "Raccourcis clavier",
           "sourceMoved": "Nouvelle source : {{value0}} (avant {{value1}})",
-          "update": "Mettre à jour"
+          "update": "Mettre à jour",
+          "review": "Examiner"
         },
         "PluginDetailInfo": {
           "previous": "Précédente",
           "updated": "Mis à jour",
           "license": "Licence",
-          "homepage": "Page d’accueil",
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
           "hashCopyFailed": "Impossible de copier l’empreinte."
@@ -13052,9 +13054,11 @@
           "languageCoverage": "Langue de l’interface · traduite à {{value0}} %"
         },
         "PluginInstallConsent": {
-          "fullAccessUpdates": "Les mises à jour peuvent modifier son code sans demander",
           "noOtherAccess": "Aucun autre accès",
-          "updatesKeepApproval": "Les mises à jour ne redemandent que pour un nouvel accès"
+          "replacesShortcut": "{{value0}} ({{value1}}) remplace votre raccourci pour {{value2}}.",
+          "updatesKeepApproval": "Les mises à jour ne redemandent que pour un nouvel accès",
+          "fullAccessUpdates": "Les mises à jour peuvent modifier son code sans demander",
+          "editsFileTypes": "Ouvre et modifie les fichiers {{value0}} dans Orca. Il peut lire les fichiers qu’il ouvre."
         },
         "PluginPageAction": {
           "contentOnly": "Contenu uniquement"
@@ -13126,6 +13130,43 @@
             "mod": "mod",
             "shortcut": "raccourci"
           }
+        },
+        "PluginUpdateReview": {
+          "title": "Examiner la mise à jour de {{value0}}",
+          "back": "Retour",
+          "approve": "Approuver et mettre à jour",
+          "explain": "Cette mise à jour demande plus que la version que vous avez approuvée. Elle ne s’installe que si vous l’approuvez ici.",
+          "before": "Avant",
+          "after": "Après"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "son éditeur",
+          "install": "Assurez-vous de faire confiance à {{value0}} avant de l’installer. Ce plugin exécute le code de l’éditeur dans Orca.",
+          "update": "Assurez-vous de faire confiance à {{value0}} avant de le mettre à jour. Ce plugin exécute le code de l’éditeur dans Orca.",
+          "installed": "Assurez-vous de faire confiance à {{value0}}. Ce plugin exécute le code de l’éditeur dans Orca.",
+          "label": "Plugin non officiel :",
+          "translations": "Les traductions peuvent modifier n’importe quel texte d’Orca. Assurez-vous de faire confiance à {{value0}}."
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Ajoute des commandes",
+          "addsPanel": "Ajoute un panneau",
+          "contentOnly": "Contenu uniquement",
+          "fullAccess": "Accès complet",
+          "addsVmRecipes": "Ajoute des recettes de VM",
+          "opensAndEditsFiles": "Ouvre et modifie des fichiers",
+          "runsPluginCode": "Exécute du code de plugin"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Ce pack de langue est trop incomplet pour l’utiliser."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} provient d’un autre dépôt",
+          "accessTitle": "{{value0}} {{value1}} demande plus d’accès",
+          "manyTitle": "{{value0}} mises à jour de plugins attendent votre vérification",
+          "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
+          "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
+          "review": "Vérifier",
+          "dismiss": "Ignorer"
         }
       },
       "right": {
@@ -18277,7 +18318,8 @@
           "searchLabel": "Rechercher des plugins",
           "searchPlaceholder": "Rechercher des plugins",
           "updates": "Mises à jour",
-          "clearSearch": "Effacer la recherche"
+          "clearSearch": "Effacer la recherche",
+          "notInstalled": "Non installés"
         },
         "PluginListGroup": {
           "showAll": "Afficher {{value0}} de plus"
@@ -18547,6 +18589,13 @@
           "insecure": "Votre connexion à ce site n'est pas privée.",
           "retry": "Ce nom d'utilisateur ou ce mot de passe n'a pas fonctionné.",
           "description": "{{origin}} demande un nom d'utilisateur et un mot de passe."
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} indique",
+          "anonymousTitle": "Cette page indique",
+          "confirm": "OK",
+          "cancel": "Annuler",
+          "answer": "Réponse"
         },
         "sitePermission": {
           "label": {
@@ -20336,6 +20385,10 @@
       "caution": "Attention"
     },
     "automations": {
+      "openIn": "Ouvrir dans",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "Le chat de cette exécution est indisponible. Son espace de travail est affiché ; toute sortie enregistrée reste dans les détails de l’exécution.",
       "runTerminalUnavailable": "Le terminal d'exécution est indisponible."
     },
     "jiraIssueTitleField": {
@@ -22619,12 +22672,7 @@
       "fetchMore": "Charger plus",
       "connectionFailed": "Échec de la connexion",
       "listLabel": "Liste Linear",
-      "projectsLoadFailed": "Impossible de charger les projets.",
       "projectNotFound": "Le projet est introuvable.",
-      "projectLoadFailed": "Impossible de charger le projet.",
-      "projectIssuesLoadFailed": "Impossible de charger les issues du projet.",
-      "viewsLoadFailed": "Impossible de charger les vues.",
-      "viewContentsLoadFailed": "Impossible de charger le contenu de la vue.",
       "issuesLoadFailed": "Impossible de charger les issues Linear.",
       "apiKeyHint": "Collez une clé API personnelle de l’espace de travail Linear à utiliser dans Orca. Si cet espace est déjà connecté, Orca remplace la clé enregistrée.",
       "remoteKeyStorage": "Cette clé est stockée par l’environnement d’exécution distant actif.",
@@ -23256,5 +23304,9 @@
       "needsPermission": "L’agent a besoin d’une autorisation",
       "statusStale": "Le statut de l’agent est obsolète"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "La distribution WSL {{distro}} est arrêtée, donc Orca n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez.",
+    "terminalUnverifiable": "Orca n'a pas pu vérifier si la distribution WSL {{distro}} est en cours d'exécution, donc il n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez."
   }
 }

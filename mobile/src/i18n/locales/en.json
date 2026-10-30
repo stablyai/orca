@@ -550,14 +550,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creating workspace…"
     },
-    "hostRailActions": {
-      "accounts": "Accounts",
-      "tasks": "Tasks",
-      "floatingWorkspace": "Floating Workspace",
-      "newWorkspace": "New workspace",
-      "closeSearch": "Close search",
-      "searchWorkspaces": "Search workspaces"
-    },
     "hostScreenHeader": {
       "workspaceOptions": "Workspace options",
       "activeFilters_one": "Workspace options ({{count}} filter active)",
@@ -569,7 +561,8 @@
       "accounts": "Accounts",
       "tasks": "Tasks",
       "closeSearch": "Close search",
-      "searchWorkspaces": "Search workspaces"
+      "searchWorkspaces": "Search workspaces",
+      "newWorkspace": "New workspace"
     },
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
@@ -1201,15 +1194,19 @@
       "mergeRequest": "MR !{{number}}"
     },
     "terminalShortcutSettings": {
-      "shortcutBar": "SHORTCUT BAR",
-      "shortcutBarDescription": "Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on the terminal shortcut bar.",
       "resetDefaults": "Reset Defaults",
       "resetDescription": "Show every built-in shortcut key in the original order",
       "customShortcuts": "CUSTOM SHORTCUTS",
       "empty": "No custom shortcuts defined yet.",
       "removeShortcut": "Remove {{label}}",
       "addShortcut": "Add Custom Shortcut…",
-      "addDescription": "Create key combo or text macro"
+      "addDescription": "Create key combo or text macro",
+      "moreKeys": "MORE KEYS",
+      "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.",
+      "directionPad": "DIRECTION PAD",
+      "showDirectionPad": "Show D-pad",
+      "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
+      "showShortcut": "Show {{label}} shortcut"
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",
@@ -1702,14 +1699,6 @@
       "preparingMic": "Preparing microphone",
       "uploadingImage": "Uploading image to host"
     },
-    "diffCommentLineRow": {
-      "diffLine": "{{title}} diff line {{line}}",
-      "addNote": "Add note on line {{line}}",
-      "line": "Line {{line}}",
-      "deleteNote": "Delete note on line {{line}}",
-      "placeholder": "Add review note",
-      "saveNote": "Save note"
-    },
     "markdownReader": {
       "readOnly": "Read only",
       "changedOnDesktop": "Changed on desktop",
@@ -1761,15 +1750,23 @@
     },
     "accessoryKeys": {
       "dismissKeyboard": "Dismiss keyboard",
-      "dismissKeyboardHint": "Hides the software keyboard and keeps the current terminal session open.",
-      "switchToDesktopMode": "Switch to desktop mode",
-      "switchToPhoneMode": "Switch to phone mode",
-      "switchToBufferedInput": "Switch to buffered command input",
-      "switchToLiveInput": "Switch to live terminal input",
-      "pasteFromClipboard": "Paste from clipboard",
-      "paste": "Paste",
       "sendKey": "Send {{label}}",
-      "addCustomShortcut": "Add custom shortcut"
+      "modifierHint": "Applies to the next key. Double tap to keep it on.",
+      "typeCharacter": "Type {{character}}",
+      "control": "Control",
+      "escape": "Escape",
+      "shiftTab": "Shift Tab",
+      "enter": "Enter",
+      "interrupt": "Interrupt terminal",
+      "tab": "Tab",
+      "alt": "Alt",
+      "shift": "Shift",
+      "keysModeLabel": "Keys mode: typing goes straight to the terminal. Switch to Message mode",
+      "messageModeLabel": "Message mode: write, then send. Switch to Keys mode",
+      "keysMode": "Keys",
+      "messageMode": "Message",
+      "moreKeys": "More keys and actions",
+      "showKeyboard": "Show keyboard"
     },
     "activeContent": {
       "noTabs": "No tabs in this session",
@@ -1783,8 +1780,10 @@
     "commandDock": {
       "liveInputLabel": "Live terminal input",
       "liveInputHint": "Typed text is sent directly to the active terminal",
-      "commandPlaceholder": "Type a command…",
-      "sendCommand": "Send command"
+      "sendCommand": "Send command",
+      "messageAgentPlaceholder": "Message {{agent}}",
+      "theAgent": "the agent",
+      "writeCommandPlaceholder": "Write a command, then send"
     },
     "contentRow": {
       "dismissCreationWarning": "Dismiss workspace creation warning"
@@ -1808,13 +1807,19 @@
       "previewLabel": "{{title}} preview"
     },
     "header": {
+      "workspaceDetailsHint": "Shows the full workspace name and where it is",
       "showSidebar": "Show sidebar",
       "backToWorktrees": "Back to worktrees",
       "terminalTitle": "Terminal",
       "reconnectToDesktop": "Reconnect to desktop",
       "openFileExplorer": "Open file explorer",
       "openSourceControl": "Open source control",
-      "moreActions": "More session actions"
+      "moreActions": "More session actions",
+      "terminalLayout": "Terminal layout",
+      "newTab": "New tab",
+      "quickCommands": "Quick commands",
+      "fileExplorer": "File explorer",
+      "sourceControl": "Source control"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -1853,13 +1858,15 @@
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
       "renameTerminal": "Rename Terminal",
-      "terminalName": "Terminal name"
+      "terminalName": "Terminal name",
+      "allowAutoClose": "Allow Auto-Close"
     },
     "tabStrip": {
       "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
-      "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
+      "checkingCapabilities": "Checking desktop capabilities — try again in a moment",
+      "terminalLayout": "Terminal layout"
     },
     "terminalInputActions": {
       "sendingImage": "Sending image",
@@ -2151,9 +2158,6 @@
       "emptyPrompt": "This action's saved prompt is empty. Update Source Control AI settings on your computer.",
       "agentStartedIn": "Agent started in {{label}}",
       "agentStarted": "Agent started"
-    },
-    "sideRail": {
-      "backToWorktrees": "Back to worktrees"
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Attach failed (reconnecting)"
@@ -2478,6 +2482,56 @@
       "chatNotFound": "Orca can't find this chat.",
       "startNewChat": "Start a new chat to continue.",
       "tryAgain": "Try again."
+    },
+    "workerAutoClose": {
+      "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
+      "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
+      "keepOpen": "Keep open"
+    },
+    "terminalArrowPad": {
+      "label": "Arrow keys",
+      "hint": "Tap a side for one arrow press, or hold and drag to repeat",
+      "up": "Up",
+      "down": "Down",
+      "left": "Left",
+      "right": "Right"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Send {{label}}",
+      "paste": "Paste",
+      "sending": "Sending…",
+      "photo": "Photo",
+      "file": "File",
+      "desktopWidth": "Desktop width",
+      "phoneWidth": "Phone width",
+      "keys": "Keys",
+      "combos": "Combos",
+      "yourKeys": "Your keys",
+      "deleteKeyHint": "Long press to delete this key",
+      "addCustomKey": "Add custom key",
+      "addKey": "Add key"
+    },
+    "terminalLayoutSheet": {
+      "title": "Terminal layout",
+      "oneTerminal": "One terminal",
+      "selected": "Selected",
+      "auto": "Auto",
+      "autoHint": "Split to fit the available space",
+      "sideBySide": "Side by side",
+      "sideBySideHint": "Two columns, even with the sidebar open",
+      "stacked": "Stacked",
+      "stackedHint": "Two rows in any orientation",
+      "selectedHint": "Selected · {{hint}}"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, focused",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, tap to focus",
+      "inputPane": "{{title}} · Input"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Layout could not be saved",
+      "saveFailedMessage": "This layout applies for now. Choose it again to retry saving."
     }
   },
   "chat": {
@@ -3949,6 +4003,18 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal did not initialize - no ready signal from the terminal view"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "D-pad up",
+      "left": "D-pad left",
+      "right": "D-pad right",
+      "down": "D-pad down",
+      "hint": "Sends an arrow key. Hold to repeat."
+    },
+    "terminalKeyRail": {
+      "ctrlC": "Ctrl+C"
     }
   }
 }

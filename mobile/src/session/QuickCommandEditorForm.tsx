@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { View, Text, Pressable, TextInput, Switch } from 'react-native'
+import { View, Text, Pressable, Switch } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { MessageBox } from '../components/composer-input/MessageBox'
+import { TextField } from '../components/composer-input/TextField'
 import {
   getQuickCommandAgentLabel,
   getTerminalQuickCommandBodySize,
@@ -100,12 +101,10 @@ export function QuickCommandEditorForm({
     <View style={styles.form}>
       <View style={styles.field}>
         <Text style={styles.label}>{t('session.quickCommandEditorForm.label', 'Label')}</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={draft.label}
           onChangeText={(label) => onChange({ label })}
           placeholder={t('session.quickCommandEditorForm.labelPlaceholder', 'Start dev server')}
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           maxLength={MAX_QUICK_COMMAND_LABEL_LENGTH}
@@ -146,8 +145,8 @@ export function QuickCommandEditorForm({
             ? t('session.quickCommandEditorForm.prompt', 'Prompt')
             : t('session.quickCommandEditorForm.commandText', 'Command Text')}
         </Text>
-        <TextInput
-          style={[styles.input, styles.textarea, !isAgent && styles.mono]}
+        <MessageBox
+          monospace={!isAgent}
           value={isAgent ? draft.prompt : draft.command}
           onChangeText={(text) => onChange(isAgent ? { prompt: text } : { command: text })}
           placeholder={
@@ -158,10 +157,8 @@ export function QuickCommandEditorForm({
                 )
               : 'npm run dev'
           }
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
-          multiline
           // Why: maxLength drops the tail of a paste silently, so prompts show a refusal instead.
           maxLength={isAgent ? undefined : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH}
         />
@@ -322,18 +319,6 @@ const styles = themedStyleSheet(() => ({
   form: { gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
   field: { gap: spacing.sm },
   label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  input: {
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  textarea: { minHeight: 92, textAlignVertical: 'top' },
-  mono: { fontFamily: typography.monoFamily },
   hint: { fontSize: 12, color: colors.textMuted },
   error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.xs },
   pressed: { backgroundColor: colors.bgRaised },
@@ -341,7 +326,7 @@ const styles = themedStyleSheet(() => ({
   toggleItem: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
+    borderRadius: concentricRadius(radii.control, 2),
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -357,7 +342,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
@@ -385,7 +370,12 @@ const styles = themedStyleSheet(() => ({
   switchTitle: { fontSize: 14, color: colors.textPrimary },
   switchDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
   footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  button: { flex: 1, borderRadius: 8, paddingVertical: spacing.md, alignItems: 'center' },
+  button: {
+    flex: 1,
+    borderRadius: radii.control,
+    paddingVertical: spacing.md,
+    alignItems: 'center'
+  },
   cancelButton: { borderWidth: 1, borderColor: colors.borderSubtle },
   cancelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   saveButton: { backgroundColor: colors.textPrimary },

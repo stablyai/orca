@@ -15,7 +15,7 @@ function selectedPalettes(
 ): TerminalPluginPalette[] {
   return [...new Set([dark, light])].flatMap((selection) => {
     const theme = pluginThemes.find((candidate) => candidate.id === selection)
-    // Why keep the old snapshot: a disabled plugin's palette keeps painting the terminal it chose.
+    // Why keep the old snapshot: re-enabling a disabled plugin restores the palette it chose.
     const palette = theme
       ? { id: theme.id, colors: theme.terminal }
       : current.find((entry) => entry.id === selection)

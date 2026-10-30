@@ -4,7 +4,8 @@ import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   collectAgentPaneConversations,
-  resolvePaneAgentConversation
+  resolvePaneAgentConversation,
+  resolvePaneLastAgentConversation
 } from '@/lib/ai-vault-tab-title-requests'
 import {
   isAiVaultSessionResumableContent,
@@ -82,7 +83,7 @@ export function resolvePaneResumeInNewChatOffer(
   state: AppState,
   pane: { worktreeId: string; paneKey: string }
 ): PaneResumeInNewChatOffer {
-  const conversation = resolvePaneAgentConversation(state, pane, adoptsCliConversations)
+  const conversation = resolvePaneLastAgentConversation(state, pane, adoptsCliConversations)
   if (!conversation) {
     return null
   }

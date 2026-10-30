@@ -120,7 +120,10 @@ export function attachMainWindowCoreServices(
       ? {
           marketplace: state.pluginMarketplaceService,
           installer: state.pluginMarketplaceInstaller,
-          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {})
+          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {}),
+          ...(state.pluginUpdateReviewNotices
+            ? { reviewNotices: state.pluginUpdateReviewNotices }
+            : {})
         }
       : undefined
   )

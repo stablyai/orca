@@ -1045,9 +1045,7 @@
       "empty": "Своих сочетаний клавиш пока нет.",
       "removeShortcut": "Удалить {{label}}",
       "resetDefaults": "Сбросить настройки",
-      "resetDescription": "Показать все встроенные клавиши в исходном порядке",
-      "shortcutBar": "ПАНЕЛЬ СОЧЕТАНИЙ КЛАВИШ",
-      "shortcutBarDescription": "Используйте переключатели для показа или скрытия клавиш. Чтобы изменить их порядок на панели терминала, удерживайте значок перетаскивания и перемещайте клавишу."
+      "resetDescription": "Показать все встроенные клавиши в исходном порядке"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Использовать сброс лимитов?",
@@ -1479,14 +1477,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Создание рабочего пространства…"
-    },
-    "hostRailActions": {
-      "accounts": "Учётные записи",
-      "closeSearch": "Закрыть поиск",
-      "floatingWorkspace": "Плавающее рабочее пространство",
-      "newWorkspace": "Новое рабочее пространство",
-      "searchWorkspaces": "Поиск рабочих пространств",
-      "tasks": "Задачи"
     },
     "hostScreenHeader": {
       "accounts": "Учётные записи",
@@ -1954,16 +1944,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Добавить пользовательское сочетание клавиш",
       "dismissKeyboard": "Скрыть клавиатуру",
-      "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет текущую сессию терминала открытой.",
-      "paste": "Вставить",
-      "pasteFromClipboard": "Вставить из буфера обмена",
-      "sendKey": "Отправить {{label}}",
-      "switchToBufferedInput": "Переключиться на буферизованный ввод команд",
-      "switchToDesktopMode": "Переключиться в режим компьютера",
-      "switchToLiveInput": "Переключиться на прямой ввод в терминал",
-      "switchToPhoneMode": "Переключить в режим телефона"
+      "sendKey": "Отправить {{label}}"
     },
     "activeContent": {
       "createTab": "Создать вкладку",
@@ -2105,21 +2087,12 @@
       "titleRight": "Закрыть вкладки справа?"
     },
     "commandDock": {
-      "commandPlaceholder": "Введите команду…",
       "liveInputHint": "Вводимый текст отправляется прямо в активный терминал",
       "liveInputLabel": "Прямой ввод в терминал",
       "sendCommand": "Отправить команду"
     },
     "contentRow": {
       "dismissCreationWarning": "Закрыть предупреждение о создании рабочего пространства"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Добавить заметку к строке {{line}}",
-      "deleteNote": "Удалить заметку к строке {{line}}",
-      "diffLine": "{{title}}: строка {{line}} в сравнении",
-      "line": "Строка {{line}}",
-      "placeholder": "Добавить заметку к проверке",
-      "saveNote": "Сохранить заметку"
     },
     "diffLineRow": {
       "addNoteLabel": "Добавить заметку к строке {{line}}",
@@ -2292,6 +2265,7 @@
       "requestFailed": "Ошибка запроса: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Показывает полное название рабочего пространства и его расположение",
       "backToWorktrees": "Вернуться к рабочим деревьям",
       "moreActions": "Другие действия с сессией",
       "openFileExplorer": "Открыть файловый проводник",
@@ -2501,9 +2475,6 @@
       "terminalName": "Название терминала",
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
       "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку."
-    },
-    "sideRail": {
-      "backToWorktrees": "Вернуться к рабочим деревьям"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "На сервере этого рабочего пространства не найдено включённых ИИ-агентов.",

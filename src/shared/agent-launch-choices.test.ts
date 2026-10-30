@@ -349,7 +349,11 @@ describe('dedicated agent choices', () => {
         { agentPermissionDefault: 'ask' },
         { target: 'structured', choices: { model: 'opus' }, userArgs: '' }
       )
-    ).toEqual({ args: '', choices: { model: 'opus', permissionMode: 'ask' } })
+    ).toEqual({
+      args: '',
+      choices: { model: 'opus', permissionMode: 'ask' },
+      launch: { args: ['--model', 'opus'], appliedValues: { model: 'opus' } }
+    })
     expect(agentLaunchNeedsPreparedCommand('codex', { model: 'unlisted', effort: 'high' })).toBe(
       false
     )
@@ -747,5 +751,35 @@ it('keeps settings equals, operand and terminator ownership at the shared analyz
     const result = choiceArgs.analyzeAgentChoiceArgs('claude', raw)
     expect(result.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
     expect(result.cut([])).toBe(raw)
+  }
+})
+
+it('retains unlisted Codex effort until the complete selection actually emits its replacement', () => {
+  for (const raw of [
+    '-c model_reasoning_effort=future_effort --search',
+    `-c 'model_reasoning_effort="future_effort"' --search`
+  ]) {
+    const unprepared = projectAgentLaunchProfile(
+      'codex',
+      { agentPermissionDefault: 'own' },
+      {
+        target: 'terminal',
+        userArgs: raw,
+        choices: { options: { effort: 'future_effort' } }
+      }
+    )
+    expect(unprepared.args).toBe(raw)
+    expect(unprepared.launch).toEqual({ args: [], appliedValues: {} })
+    const emitted = projectAgentLaunchProfile(
+      'codex',
+      { agentPermissionDefault: 'own' },
+      {
+        target: 'terminal',
+        userArgs: raw,
+        choices: { model: 'gpt-5.6-sol', options: { effort: 'future_effort' } }
+      }
+    )
+    expect(emitted.launch.appliedValues).toEqual({ model: 'gpt-5.6-sol', effort: 'future_effort' })
+    expect(emitted.args).toBe("-m gpt-5.6-sol -c model_reasoning_effort=future_effort '--search'")
   }
 })

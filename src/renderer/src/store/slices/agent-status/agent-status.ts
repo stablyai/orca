@@ -61,6 +61,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     subscribeAgentStatusChanges: runtime.subscribeAgentStatusChanges,
     updateAgentStatusState: runtime.set,
     agentStatusByPaneKey: {},
+    agentConversationsByPaneKey: {},
     runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,

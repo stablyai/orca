@@ -3,7 +3,7 @@ import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { HomeStatsSummary } from '../stats/home-stats-total'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileHomeAppUpdateCard } from './MobileHomeAppUpdateCard'
@@ -72,7 +72,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: 10,
+    borderRadius: radii.surface,
     paddingVertical: 8,
     paddingHorizontal: spacing.md
   },

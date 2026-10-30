@@ -30,3 +30,24 @@ it('keeps own permission on the direct terminal route with unrelated args and en
   expect(result.startupPlan?.launchCommand).toContain("'--search'")
   expect(result.startupPlan?.env).toEqual({ KEEP: 'value' })
 })
+
+it.each([undefined, '--model literal'])(
+  'uses authored defaults at the direct work-item entrypoint while raw %s retains ownership',
+  (agentArgs) => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'claude',
+      agentArgs,
+      draftContent: 'Fix checks',
+      promptDelivery: 'draft',
+      launchPlatform: 'linux',
+      settings: {
+        agentPermissionDefault: 'own',
+        agentDefaultArgs: { claude: '--verbose' },
+        agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
+      }
+    })
+    expect(result.startupPlan?.launchCommand).toContain(agentArgs ? "'literal'" : "'opus'")
+    expect(result.startupPlan?.launchCommand?.includes("'high'")).toBe(agentArgs === undefined)
+    expect(result.startupPlanFailed).toBe(false)
+  }
+)

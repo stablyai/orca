@@ -106,6 +106,10 @@ export const store = {
 
 vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'tab-1' }))
 
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  runtimeEnvironmentSupportsCapability: async () => false,
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => store
@@ -176,7 +180,10 @@ beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
+  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({
+    outcome: { status: 'created' },
+    promptDelivered: true
+  })
   store.activeRepoId = 'repo-1'
   store.activeWorktreeId = 'wt-1'
   store.settings = {

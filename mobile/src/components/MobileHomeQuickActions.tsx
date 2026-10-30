@@ -82,7 +82,7 @@ const styles = themedStyleSheet(() => ({
     paddingVertical: spacing.sm + 2,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   quickActionPressed: {
@@ -94,7 +94,7 @@ const styles = themedStyleSheet(() => ({
   quickActionIcon: {
     width: 28,
     height: 28,
-    borderRadius: 9,
+    borderRadius: radii.tile,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised

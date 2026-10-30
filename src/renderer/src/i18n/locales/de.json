@@ -1292,9 +1292,7 @@
         "jira": {
           "856083302c": "Die Jira-Verbindung wurde durch eine neuere Anfrage ersetzt."
         },
-        "linear": {
-          "37d36984d0": "Die Linear-Verbindung wurde durch eine neuere Anfrage ersetzt."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Profil konnte nicht erstellt werden",
@@ -1331,6 +1329,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} ist nicht mehr verfügbar. Aktiviere das zugehörige Plugin wieder.",
+        "failed": "Die Datei konnte nicht erstellt werden."
       }
     },
     "lib": {
@@ -8380,18 +8382,6 @@
           "191ac34567": "Agenten-Orchestrierung",
           "nestedWorkerDepthTitle": "Verschachtelungstiefe der Arbeitsagenten",
           "nestedWorkerDepthDescription": "Wie viele Generationen beauftragter Arbeitsagenten eigene Arbeitsagenten starten dürfen. Bei 1 bleibt der Agentenbaum flach: Ein Koordinator beauftragt Arbeitsagenten, die selbst keine weiteren beauftragen.",
-          "chatErrorEscalationTitle": "Koordinator über Chat-Fehler informieren",
-          "chatErrorEscalationDescription": "Wenn ein beauftragter Agent auf einen Fehler stößt, der seinen aktuellen Durchlauf beendet, wird die genaue Fehlermeldung an den Koordinator gesendet, der ihn beauftragt hat. Die Aufgabe bleibt dem Agenten zugewiesen. Funktioniert nur für Agenten in der Chat-Oberfläche.",
-          "chatErrorEscalationKeywordError": "Fehler",
-          "chatErrorEscalationKeywordChat": "Chat",
-          "heartbeatTitle": "Lebenszeichen der Arbeitsagenten",
-          "heartbeatDescription": "Beauftragte Arbeitsagenten melden sich alle paar Minuten, damit der Koordinator arbeitende von hängenden Agenten unterscheiden kann. Bei Deaktivierung erhält der Koordinator weniger Nachrichten, aber auch keine Lebenszeichen mehr. Gilt für Arbeitsagenten, die nach der Änderung beauftragt werden.",
-          "heartbeatKeywordHeartbeat": "Lebenszeichen",
-          "heartbeatKeywordStalled": "Blockiert",
-          "heartbeatKeywordInterval": "Intervall",
-          "heartbeatIntervalTitle": "Intervall der Lebenszeichen",
-          "heartbeatIntervalDescription": "Kürzere Intervalle liefern dem Koordinator häufigere Lebenszeichen, senden aber mehr Nachrichten. Längere Intervalle senden weniger Nachrichten, lassen aber längere Pausen zwischen den Lebenszeichen. Gilt für Arbeitsagenten, die nach der Änderung beauftragt werden.",
-          "heartbeatIntervalSuffix": "Minuten",
           "7bc082f4de": "Installationsbefehl kopieren"
         },
         "OrchestrationSetupCard": {
@@ -11868,7 +11858,9 @@
             "secrets": "Geheimnisse im eigenen verschlüsselten Tresor des Plugins speichern und lesen",
             "settingsOwn": "Die eigenen Einstellungen des Plugins lesen und ändern"
           },
-          "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen."
+          "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen und andere Programme ausführen.",
+          "uiWarning": "Führt den Code des Herausgebers in Orca aus, um seine Ansicht darzustellen. Orca zeigt, worauf er zugreifen kann, und fragt vor der Aktivierung."
         },
         "PluginConsentProvenance": {
           "official": "Offiziell",
@@ -12960,6 +12952,187 @@
               "windowsFailureDescription": "Benachrichtigungen für Orca in „Windows Settings“ aktivieren."
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "Prüfen"
+        },
+        "PluginUpdateReview": {
+          "title": "Update für {{value0}} prüfen",
+          "back": "Zurück",
+          "approve": "Genehmigen & aktualisieren",
+          "explain": "Dieses Update verlangt mehr als die Version, die du genehmigt hast. Es wird nur installiert, wenn du es hier genehmigst.",
+          "before": "Vorher",
+          "after": "Nachher"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "seinem Herausgeber",
+          "install": "Stelle sicher, dass du {{value0}} vertraust, bevor du es installierst. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "update": "Stelle sicher, dass du {{value0}} vertraust, bevor du es aktualisierst. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "installed": "Stelle sicher, dass du {{value0}} vertraust. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "label": "Kein offizielles Plugin:",
+          "translations": "Übersetzungen können jeden Text in Orca ändern. Stelle sicher, dass du {{value0}} vertraust."
+        },
+        "PluginCardAction": {
+          "installed": "Installiert",
+          "installing": "Wird installiert…",
+          "reviewLabel": "{{value0}} prüfen und installieren",
+          "review": "Prüfen & installieren",
+          "retry": "Erneut versuchen"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "Sprache wechseln",
+          "switchTo": "Sprache zu {{value0}} wechseln",
+          "switchBack": "Zurückwechseln",
+          "switchBackFrom": "Von {{value0}} zurückwechseln",
+          "failed": "Sprache konnte nicht gewechselt werden"
+        },
+        "PluginContributionActionPanel": {
+          "open": "Panel öffnen",
+          "openName": "Panel öffnen: {{value0}}"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "Eine beliebige {{value0}}-Datei öffnen",
+          "openFilename": "{{value0}} öffnen"
+        },
+        "PluginDetailInfo": {
+          "previous": "Vorherige",
+          "updated": "Aktualisiert",
+          "license": "Lizenz",
+          "whatsNew": "Neuigkeiten"
+        },
+        "PluginDetailPage": {
+          "back": "Plugins",
+          "info": "Info",
+          "version": "Version",
+          "latest": "Neueste",
+          "requires": "Benötigt",
+          "requiresValue": "Orca {{value0}} oder neuer",
+          "categories": "Kategorien",
+          "pluginId": "Plugin-ID",
+          "repository": "Repository"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "Oberflächensprache",
+          "typeAppTheme": "App-Design",
+          "typeTerminalTheme": "Terminal-Design",
+          "typeIconTheme": "Dateisymbol-Design",
+          "typeSyntax": "Syntaxhervorhebung",
+          "typeInstructions": "Agent-Anweisungen",
+          "typePanel": "Seitenleisten-Panel",
+          "typeWorker": "Hintergrundcode",
+          "adds": "Fügt Orca hinzu",
+          "replaces": "Ersetzt dein Tastenkürzel für {{value0}}",
+          "changeShortcuts": "In Tastenkürzeln ändern",
+          "command": "Befehl",
+          "access": "Kann zugreifen auf",
+          "accessLoading": "Plugin wird gelesen…",
+          "accessFailed": "Zugriff konnte nicht gelesen werden",
+          "retry": "Erneut versuchen",
+          "customEditor": "Editor"
+        },
+        "PluginFilterPopover": {
+          "kind": "Kategorie",
+          "catalog": "Katalog",
+          "clear": "Filter zurücksetzen",
+          "themes": "Designs",
+          "languages": "Sprachen",
+          "icons": "Symbole",
+          "commands": "Befehle & Panels",
+          "catalogLabel": "Nach Katalog filtern",
+          "editors": "Editoren",
+          "remoteVms": "Remote/VMs",
+          "games": "Spiele",
+          "agents": "Agenten",
+          "integrations": "Integrationen"
+        },
+        "PluginInUseAction": {
+          "inUseDark": "Aktiv · Dunkel",
+          "inUseLight": "Aktiv · Hell",
+          "inUse": "Aktiv",
+          "useName": "{{value0}} verwenden",
+          "use": "Verwenden"
+        },
+        "PluginInstallConsent": {
+          "noOtherAccess": "Kein weiterer Zugriff",
+          "replacesShortcut": "{{value0}} ({{value1}}) ersetzt dein Tastenkürzel für {{value2}}.",
+          "updatesKeepApproval": "Updates fragen nur bei neuem Zugriff erneut",
+          "fullAccessUpdates": "Updates können seinen Code ohne Nachfrage ändern",
+          "editsFileTypes": "Öffnet und bearbeitet {{value0}}-Dateien in Orca. Es kann die Dateien lesen, die es öffnet."
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "Keine Plugins entsprechen diesen Filtern",
+          "clearBoth": "Suche und Filter zurücksetzen",
+          "pageGone": "Dieses Plugin ist nicht mehr installiert oder gelistet."
+        },
+        "PluginManager": {
+          "retry": "Erneut versuchen",
+          "installed": "Installiert",
+          "installedFailedTitle": "Deine installierten Plugins konnten nicht gelesen werden.",
+          "updatesTitle": "Updates",
+          "refreshLabel": "Kataloge aktualisieren",
+          "noResultsTitle": "Keine Plugins entsprechen „{{value0}}“",
+          "noneInstalledTitle": "Keine Plugins installiert",
+          "browseAll": "Alle Plugins durchsuchen",
+          "resultCount": "{{value0}} Plugins gefunden",
+          "resultCountOne": "1 Plugin gefunden",
+          "updateAll": "Alle aktualisieren…",
+          "notFromCatalog": "nicht aus einem Katalog",
+          "allInstalledTitle": "Alle Katalog-Plugins sind installiert",
+          "showInstalled": "Installierte Plugins anzeigen"
+        },
+        "PluginManagerRows": {
+          "reinstall": "Neu installieren",
+          "crashedCount": "{{value0}}-mal in Folge abgestürzt",
+          "crashed": "Beim Start abgestürzt",
+          "remove": "Entfernen…",
+          "review": "Prüfen",
+          "restart": "Neu starten",
+          "viewError": "Fehler anzeigen",
+          "copyId": "Plugin-ID kopieren",
+          "checkUpdate": "Nach Update suchen",
+          "bundledWithOrca": "Mit Orca mitgeliefert",
+          "installName": "{{value0}} installieren",
+          "crashedOnce": "Einmal abgestürzt",
+          "updateLabel": "{{value0}} auf {{value1}} aktualisieren",
+          "update": "Auf {{value0}} aktualisieren",
+          "needsOrca": "Benötigt Orca {{value0}}",
+          "rollbackTo": "Auf {{value0}} zurücksetzen…",
+          "copyContentHash": "Inhalts-Hash kopieren",
+          "reviewUpdate": "Update prüfen",
+          "dataLoadFailed": "Dateien konnten nicht geladen werden"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} installiert",
+          "tryIt": "Ausprobieren",
+          "mismatch": "Der Download stimmte nicht mit dem Katalog überein. Nichts wurde installiert.",
+          "catalogChanged": "Der Katalog hat sich geändert. Aktualisieren und erneut versuchen.",
+          "blocked": "Die Sicherheitsliste von Orca blockiert dieses Plugin.",
+          "downloadFailed": "Download fehlgeschlagen. Prüfe deine Verbindung."
+        },
+        "pluginThemeApply": {
+          "nowUsing": "Jetzt aktiv: {{value0}}",
+          "switchBack": "Zurückwechseln"
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Fügt Befehle hinzu",
+          "addsPanel": "Fügt ein Panel hinzu",
+          "contentOnly": "Nur Inhalte",
+          "fullAccess": "Vollzugriff",
+          "addsVmRecipes": "Fügt VM-Rezepte hinzu",
+          "opensAndEditsFiles": "Öffnet und bearbeitet Dateien",
+          "runsPluginCode": "Führt Plugin-Code aus"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Dieses Sprachpaket ist zu unvollständig, um dorthin zu wechseln."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} stammt aus einem anderen Repository",
+          "accessTitle": "{{value0}} {{value1}} möchte mehr Zugriff",
+          "manyTitle": "{{value0}} Plugin-Updates warten auf deine Prüfung",
+          "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
+          "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
+          "review": "Prüfen",
+          "dismiss": "Schließen"
         }
       },
       "right": {
@@ -18011,7 +18184,13 @@
           "all": "Alle",
           "installed": "Installiert",
           "searchLabel": "Plugins suchen",
-          "searchPlaceholder": "Plugins, Kategorien oder Herausgeber suchen"
+          "searchPlaceholder": "Plugins, Kategorien oder Herausgeber suchen",
+          "updates": "Updates",
+          "clearSearch": "Suche leeren",
+          "notInstalled": "Nicht installiert"
+        },
+        "PluginListRow": {
+          "official": "Offiziell"
         }
       },
       "terminalPane": {
@@ -18209,6 +18388,13 @@
           "password": "Passwort",
           "confirm": "Anmelden",
           "cancel": "Abbrechen"
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} meldet",
+          "anonymousTitle": "Diese Seite meldet",
+          "confirm": "OK",
+          "cancel": "Abbrechen",
+          "answer": "Antwort"
         },
         "sitePermission": {
           "label": {
@@ -22171,10 +22357,7 @@
       "issuesLoadFailed": "Linear-Issues konnten nicht geladen werden.",
       "listLabel": "Linear-Liste",
       "localKeyStorage": "Schlüssel der lokalen Laufzeitumgebung werden auf diesem Gerät gespeichert, nach Möglichkeit im verschlüsselten Speicher von Electron.",
-      "projectIssuesLoadFailed": "Projekt-Issues konnten nicht geladen werden.",
-      "projectLoadFailed": "Projekt konnte nicht geladen werden.",
       "projectNotFound": "Das Projekt wurde nicht gefunden.",
-      "projectsLoadFailed": "Projekte konnten nicht geladen werden.",
       "remoteKeyStorage": "Dieser Schlüssel wird von der aktiven entfernten Laufzeitumgebung gespeichert.",
       "titleUpdateFailed": "Der Titel konnte nicht aktualisiert werden.",
       "truncated": {
@@ -22191,8 +22374,6 @@
       },
       "updateAccess": "Zugriff aktualisieren",
       "updateWorkspaceAccess": "Linear-Zugriff für {{workspace}} aktualisieren",
-      "viewContentsLoadFailed": "Inhalte der Ansicht konnten nicht geladen werden.",
-      "viewsLoadFailed": "Ansichten konnten nicht geladen werden.",
       "workspaceApiKeyHint": "Einen persönlichen API-Schlüssel für {{workspace}} einfügen. Ist dieser Arbeitsbereich bereits verbunden, ersetzt Orca den gespeicherten Schlüssel."
     }
   },
@@ -22579,5 +22760,9 @@
       "needsPermission": "Agent benötigt eine Genehmigung",
       "statusStale": "Agentenstatus ist veraltet"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat Orca dieses Terminal nicht gestartet. Starte die Distribution und versuche es dann erneut.",
+    "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   }
 }

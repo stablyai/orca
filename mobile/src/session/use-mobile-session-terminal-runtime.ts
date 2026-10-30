@@ -1,3 +1,8 @@
+import {
+  terminalPaneViewport,
+  resolveTerminalPaneHandles,
+  type TerminalPaneViewport
+} from './mobile-terminal-pane-layout'
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
@@ -35,6 +40,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     client,
     clientId,
     sessionTabs,
+    terminals,
     setLiveInputCapture,
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
@@ -53,11 +59,25 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   deviceTokenRef.current = clientId
   // Use state so loaded endpoint hints trigger a render.
   const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
+  const [hostName, setHostName] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
   const connStateRef = useRef<ConnectionState>(connState)
   // Carry measured phone dimensions on subscribes so the host fits before snapshot serialization.
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
+  const terminalPaneViewportsRef = useRef(new Map<string, TerminalPaneViewport>())
+  const getTerminalPaneViewport = useCallback(
+    (handle: string) => terminalPaneViewport(terminalPaneViewportsRef.current, handle),
+    []
+  )
+  const [splitTerminalHandles, setSplitTerminalHandles] = useState<readonly string[] | null>(null)
+  const visibleTerminalHandles = resolveTerminalPaneHandles(
+    activeHandle,
+    splitTerminalHandles,
+    terminals.map((terminal) => terminal.handle)
+  )
+  // The controller publishes the committed list, once native chat has had its say.
+  const visibleTerminalHandlesRef = useRef<readonly string[]>(visibleTerminalHandles)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const commandInputRef = useRef<TextInput>(null)
@@ -190,10 +210,18 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     deviceTokenRef,
     hostEndpoint,
     setHostEndpoint,
+    hostName,
+    setHostName,
     clientRef,
     connStateRef,
     viewportRef,
     viewportMeasuredRef,
+    terminalPaneViewportsRef,
+    getTerminalPaneViewport,
+    splitTerminalHandles,
+    setSplitTerminalHandles,
+    visibleTerminalHandles,
+    visibleTerminalHandlesRef,
     terminalRefs,
     liveInputRef,
     commandInputRef,

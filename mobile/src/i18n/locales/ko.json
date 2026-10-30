@@ -957,9 +957,7 @@
       "empty": "아직 설정된 맞춤 단축키가 없습니다.",
       "removeShortcut": "{{label}} 제거",
       "resetDefaults": "기본값 복원",
-      "resetDescription": "모든 기본 단축키를 원래 순서로 표시",
-      "shortcutBar": "단축키 바",
-      "shortcutBarDescription": "키를 켜거나 꺼서 표시 여부를 설정하고, 손잡이를 누른 채 드래그하여 터미널 단축키 바의 키를 원하는 순서로 배치하세요."
+      "resetDescription": "모든 기본 단축키를 원래 순서로 표시"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "사용량 한도를 재설정하시겠습니까?",
@@ -1389,14 +1387,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "워크스페이스 만드는 중…"
-    },
-    "hostRailActions": {
-      "accounts": "계정",
-      "closeSearch": "검색 닫기",
-      "floatingWorkspace": "플로팅 워크스페이스",
-      "newWorkspace": "새로운 워크스페이스",
-      "searchWorkspaces": "워크스페이스 검색",
-      "tasks": "작업"
     },
     "hostScreenHeader": {
       "accounts": "계정",
@@ -1836,16 +1826,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "사용자 지정 단축키 추가",
       "dismissKeyboard": "키보드 닫기",
-      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 현재 터미널 세션을 열린 상태로 유지합니다.",
-      "paste": "붙여넣기",
-      "pasteFromClipboard": "클립보드에서 붙여넣기",
-      "sendKey": "{{label}} 보내기",
-      "switchToBufferedInput": "버퍼링된 명령 입력으로 전환",
-      "switchToDesktopMode": "데스크톱 모드로 전환",
-      "switchToLiveInput": "실시간 터미널 입력으로 전환",
-      "switchToPhoneMode": "휴대폰 모드로 전환"
+      "sendKey": "{{label}} 보내기"
     },
     "activeContent": {
       "createTab": "탭 만들기",
@@ -1955,21 +1937,12 @@
       "titleRight": "오른쪽 탭을 닫을까요?"
     },
     "commandDock": {
-      "commandPlaceholder": "명령을 입력하세요…",
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
       "liveInputLabel": "실시간 터미널 입력",
       "sendCommand": "명령 보내기"
     },
     "contentRow": {
       "dismissCreationWarning": "워크스페이스 생성 경고 닫기"
-    },
-    "diffCommentLineRow": {
-      "addNote": "{{line}}행에 메모 추가",
-      "deleteNote": "{{line}}행 메모 삭제",
-      "diffLine": "{{title}} 차이점 {{line}}행",
-      "line": "{{line}}행",
-      "placeholder": "리뷰 메모 추가",
-      "saveNote": "메모 저장"
     },
     "diffLineRow": {
       "addNoteLabel": "{{line}}행에 메모 추가",
@@ -2140,6 +2113,7 @@
       "requestFailed": "요청 실패: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "워크스페이스의 전체 이름과 위치를 표시합니다",
       "backToWorktrees": "워크트리로 돌아가기",
       "moreActions": "세션 작업 더 보기",
       "openFileExplorer": "파일 탐색기 열기",
@@ -2347,9 +2321,6 @@
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다."
-    },
-    "sideRail": {
-      "backToWorktrees": "워크트리로 돌아가기"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "이 워크스페이스 호스트에서는 활성화된 AI 에이전트가 감지되지 않았습니다.",

@@ -957,9 +957,7 @@
       "empty": "尚未設定自訂快速鍵。",
       "removeShortcut": "移除 {{label}}",
       "resetDefaults": "還原預設值",
-      "resetDescription": "依原始順序顯示所有內建快速鍵",
-      "shortcutBar": "快速鍵列",
-      "shortcutBarDescription": "使用開關顯示或隱藏按鍵，並長按拖曳控點，調整按鍵在終端機快速鍵列上的順序。"
+      "resetDescription": "依原始順序顯示所有內建快速鍵"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "要使用速率限制重設額度嗎？",
@@ -1389,14 +1387,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "正在建立工作區…"
-    },
-    "hostRailActions": {
-      "accounts": "帳戶",
-      "closeSearch": "關閉搜尋",
-      "floatingWorkspace": "浮動工作區",
-      "newWorkspace": "新工作區",
-      "searchWorkspaces": "搜尋工作區",
-      "tasks": "任務"
     },
     "hostScreenHeader": {
       "accounts": "帳戶",
@@ -1836,16 +1826,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "新增自訂快速鍵",
       "dismissKeyboard": "收起鍵盤",
-      "dismissKeyboardHint": "隱藏螢幕鍵盤，並保持目前的終端機工作階段開啟。",
-      "paste": "貼上",
-      "pasteFromClipboard": "從剪貼簿貼上",
-      "sendKey": "傳送 {{label}}",
-      "switchToBufferedInput": "切換到緩衝命令輸入模式",
-      "switchToDesktopMode": "切換至桌面模式",
-      "switchToLiveInput": "切換到終端機即時輸入模式",
-      "switchToPhoneMode": "切換到手機模式"
+      "sendKey": "傳送 {{label}}"
     },
     "activeContent": {
       "createTab": "建立分頁",
@@ -1955,21 +1937,12 @@
       "titleRight": "要關閉右側的分頁嗎？"
     },
     "commandDock": {
-      "commandPlaceholder": "輸入命令…",
       "liveInputHint": "輸入的文字會直接傳送至目前使用中的終端機",
       "liveInputLabel": "終端機即時輸入",
       "sendCommand": "傳送命令"
     },
     "contentRow": {
       "dismissCreationWarning": "關閉工作區建立警告"
-    },
-    "diffCommentLineRow": {
-      "addNote": "在第 {{line}} 行新增備註",
-      "deleteNote": "刪除第 {{line}} 行的備註",
-      "diffLine": "{{title}} 差異的第 {{line}} 行",
-      "line": "第 {{line}} 行",
-      "placeholder": "新增審查備註",
-      "saveNote": "儲存備註"
     },
     "diffLineRow": {
       "addNoteLabel": "在第 {{line}} 行新增備註",
@@ -2140,6 +2113,7 @@
       "requestFailed": "請求失敗：{{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "顯示工作區的完整名稱及其所在位置",
       "backToWorktrees": "返回工作樹",
       "moreActions": "更多工作階段操作",
       "openFileExplorer": "開啟檔案總管",
@@ -2347,9 +2321,6 @@
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。"
-    },
-    "sideRail": {
-      "backToWorktrees": "返回工作樹"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作區主機上未偵測到已啟用的 AI 代理程式。",

@@ -169,7 +169,7 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
 
     expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'branch-diff' })
     expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'squash-diff' })
-    expect(runGit).not.toHaveBeenCalledWith(['cherry', '-v', 'target', 'refs/heads/feature/test'])
+    expect(runGit).not.toHaveBeenCalledWith(['cherry', 'target', 'refs/heads/feature/test'])
     // Only merge-tree's throwaway tree writes go to a scratch object store.
     const discarding = vi
       .mocked(runGit)
@@ -300,7 +300,7 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
     const runGit = baseProofResponses({
       'merge-tree --write-tree target refs/heads/feature/test': unsupported,
       'rev-list --right-only --merges --count target...refs/heads/feature/test': '0\n',
-      'cherry -v target refs/heads/feature/test': '+ branch-only commit\n'
+      'cherry target refs/heads/feature/test': '+ branch-only\n'
     })
     const capabilities = new GitCapabilityCache()
 
