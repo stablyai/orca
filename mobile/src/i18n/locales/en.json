@@ -531,9 +531,7 @@
       "tryAgain": "Please try again.",
       "removeHostFailed": "Could not remove host",
       "removeHostTitle": "Remove Host",
-      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
-      "deleteFailed": "Failed to delete \"{{name}}\"",
-      "deleteAnyway": "Delete Anyway"
+      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
     },
     "bottomBar": {
       "connectFirst": "Connect a desktop to start new work.",
@@ -590,7 +588,9 @@
       "pin": "Pin",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
-      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
+      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
+      "deleteFailed": "Failed to delete \"{{name}}\"",
+      "deleteAnyway": "Delete Anyway"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
