@@ -1,7 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   root: {
@@ -51,16 +50,6 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm,
     gap: spacing.sm,
     zIndex: 2
-  },
-  search: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
   },
   tabRow: {
     flexDirection: 'row',

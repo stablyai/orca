@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -10,7 +10,7 @@ import {
   parseGitHubIssueOrPRNumber
 } from '../../../../src/shared/github/links'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { TextField } from '../composer-input/TextField'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
@@ -78,15 +78,13 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
       <Text style={styles.label}>
         {t('pullRequest.linkPrForm.referenceLabel', 'PR number or GitHub URL')}
       </Text>
-      <TextInput
-        style={styles.input}
+      <TextField
         value={input}
         onChangeText={setInput}
         placeholder={t(
           'pullRequest.linkPrForm.referencePlaceholder',
           '#123 or https://github.com/owner/repo/pull/123'
         )}
-        placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!submitting}
@@ -137,14 +135,6 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     marginTop: spacing.sm,
     marginBottom: spacing.xs
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE
   },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md },
   submit: {

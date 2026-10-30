@@ -20,9 +20,18 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
     density: {
       default: '',
       // Why: matches DropdownMenuItem type so a searchable picker reads like its sibling menus.
-      menu: '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px] [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
+      menu: '[&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px]',
+      model:
+        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]'
     }
   },
+  compoundVariants: [
+    {
+      density: ['menu', 'model'],
+      className:
+        '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
+    }
+  ],
   defaultVariants: { surface: 'default', density: 'default' }
 })
 

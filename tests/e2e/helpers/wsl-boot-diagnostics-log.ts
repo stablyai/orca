@@ -11,6 +11,8 @@ import type { ElectronApplication } from '@stablyai/playwright-test'
 export type DiagnosticRecord = { file: string; args: string[]; at?: number; stack?: string[] }
 
 export const UNC_TOUCH = 'fs'
+/** A terminal spawn: node-pty launches outside main's child_process, so main's per-spawn history log line stands in. */
+export const PTY_SPAWN = 'pty'
 
 /**
  * Logs main's direct child_process spawns (spawn, exec and execFile all pass through
@@ -58,6 +60,16 @@ export async function recordMainProcessWslDiagnostics(
     }
     logged.orcaE9SpawnLog = true
     proto.spawn = logged
+
+    // Every daemon or local PTY spawn with a worktree logs this line first (logHistoryInjection).
+    const originalLog = console.log
+    console.log = function (this: unknown, ...args: unknown[]) {
+      if (typeof args[0] === 'string' && args[0].startsWith('[pty:history] ')) {
+        // Keep in sync with PTY_SPAWN; evaluate cannot see module constants.
+        append('pty', [args[0]])
+      }
+      return originalLog.apply(this, args)
+    }
 
     const isWslUnc = (value: unknown): boolean =>
       /^([\\/]{2})(wsl\.localhost|wsl\$)[\\/]/i.test(

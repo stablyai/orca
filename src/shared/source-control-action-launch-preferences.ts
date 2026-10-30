@@ -71,14 +71,15 @@ export function sourceControlActionOptions(
   modelId: string
 ): SourceControlActionOption[] {
   const catalog = getAgentSessionOptionCatalog(agent)
-  const options =
-    findCatalogModel(catalog ?? { models: [], modelApply: {} }, modelId)?.options ??
-    catalog?.unknownModelOptions ??
-    []
+  const model = findCatalogModel(catalog ?? { models: [], modelApply: {} }, modelId)
+  const options = model?.options ?? catalog?.unknownModelOptions ?? []
   return options.flatMap((option): SourceControlActionOption[] => {
     const chats = optionReachesChats(agent, option)
     const terminals = Boolean(option.apply.launchArgs || option.apply.composedIntoModel)
-    if (!chats && !terminals) {
+    if (
+      (!chats && !terminals) ||
+      (option.kind.type === 'select' && option.kind.choices.length === 0)
+    ) {
       return []
     }
     return [{ option, route: !terminals ? 'chats' : !chats ? 'terminals' : null }]

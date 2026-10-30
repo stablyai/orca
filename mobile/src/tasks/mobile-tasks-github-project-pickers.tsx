@@ -4,7 +4,8 @@ import {
   BottomDrawer,
   View,
   Text,
-  TextInput,
+  TextField,
+  Search,
   colors,
   Pressable,
   AlertTriangle,
@@ -62,18 +63,17 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
       </View>
 
       <View style={styles.projectPickerControls}>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={githubProjectPickerSearch}
           onChangeText={setGithubProjectPickerSearch}
           placeholder={translate('tasks.githubProjectPickers.searchProjects', 'Search projects')}
-          placeholderTextColor={colors.textMuted}
+          leading={<Search size={16} color={colors.textMuted} />}
           autoCapitalize="none"
           autoCorrect={false}
         />
         <View style={styles.projectPasteRow}>
-          <TextInput
-            style={[styles.input, styles.projectPasteInput]}
+          <TextField
+            style={styles.projectPasteInput}
             value={githubProjectPasteInput}
             onChangeText={(next) => {
               setGithubProjectPasteInput(next)
@@ -84,7 +84,6 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
               'tasks.githubProjectPickers.addPlaceholder',
               'Add by URL or owner/number'
             )}
-            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
           />

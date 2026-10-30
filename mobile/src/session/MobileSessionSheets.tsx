@@ -3,7 +3,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
-import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
+import { MobileSessionTerminalLayoutSheet } from './MobileSessionTerminalLayoutSheet'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { ActionSheetModal } from '../components/ActionSheetModal'
@@ -29,6 +29,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     client,
     worktreeName,
     sessionTabs,
+    showTerminalLayout,
+    setShowTerminalLayout,
     actionTarget,
     setActionTarget,
     markdownActionTarget,
@@ -61,21 +63,16 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     bulkCloseConfirm,
     closeWithBulkActions,
     createTabAgentActions,
-    sendDiffNotesAgentActions,
-    handlePanelTap,
-    openAgentSessionHistory
+    sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
   return (
     <>
-      <MobileSessionHeaderMoreActionsSheet
-        visible={controller.showHeaderMoreActions}
-        showAgentSessionHistory={controller.showAgentSessionHistoryAction}
-        showChecks={controller.showChecksAction}
-        onOpenAgentSessionHistory={openAgentSessionHistory}
-        onOpenChecks={() => handlePanelTap('pr')}
-        onClose={() => controller.setShowHeaderMoreActions(false)}
+      <MobileSessionTerminalLayoutSheet
+        controller={controller}
+        visible={showTerminalLayout}
+        onClose={() => setShowTerminalLayout(false)}
       />
       <QuickCommandsSheet
         visible={controller.showQuickCommands && quickCommandsSupported === true}

@@ -145,6 +145,9 @@ export function useNativeChatHandOff({
         ? (context.capturedText ?? '')
         : messages
             .flatMap((message) => {
+              if (message.agentStart) {
+                return []
+              }
               const text = nativeChatMessageCopyText(message).trim()
               return text ? [`${message.role}: ${text}`] : []
             })

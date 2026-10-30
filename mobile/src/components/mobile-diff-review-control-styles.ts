@@ -1,7 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   footer: {
@@ -91,9 +90,6 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   buttonPressed: {
     opacity: 0.76
   },
-  buttonDisabled: {
-    opacity: 0.45
-  },
   composerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -110,19 +106,6 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     marginTop: 2
-  },
-  composerInput: {
-    minHeight: 112,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS.
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    lineHeight: 20,
-    padding: spacing.md,
-    textAlignVertical: 'top'
   },
   drawerButtonRow: {
     flexDirection: 'row',

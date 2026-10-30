@@ -378,8 +378,8 @@ branch refs/heads/main
       'git rev-list --right-only --merges --count base123...refs/heads/feature/test': {
         stdout: '0\n'
       },
-      'git cherry -v base123 refs/heads/feature/test': {
-        stdout: '- def456 fix: already squash-merged\n'
+      'git cherry base123 refs/heads/feature/test': {
+        stdout: '- def456\n'
       },
       'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'base123\n' },
       'git merge-base base123 refs/heads/feature/test': { stdout: 'base000\n' },

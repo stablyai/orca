@@ -285,6 +285,49 @@ describe('useMobileStructuredAgentSession', () => {
     )
   })
 
+  it('keeps creation facts out of the current phone conversation', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'before',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Coordinate' }] }
+      },
+      {
+        itemId: 'start',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'agent-start',
+          dispatchId: 'dispatch',
+          task: 'Worker assignment',
+          worker: {
+            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+            name: 'Worker'
+          }
+        }
+      },
+      {
+        itemId: 'after',
+        revision: 1,
+        sequence: 3,
+        observedAt: 3,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
+      }
+    ]
+    await act(async () => listener?.(snapshotEvent(3, items)))
+    expect(hook?.session.messages.map(({ blocks }) => blocks)).toEqual([
+      [{ type: 'text', text: 'Coordinate' }],
+      [{ type: 'text', text: 'Answer' }]
+    ])
+  })
+
   it('re-holds before resubscribing after a reconnect', async () => {
     act(() => {
       renderer = create(createElement(Harness, { connected: true }))

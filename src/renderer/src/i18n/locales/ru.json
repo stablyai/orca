@@ -546,15 +546,9 @@
       },
       "providers": {
         "title": "Провайдеры",
-        "description": "Выберите агентов, которые открываются в чате. Если выключено, установленный агент открывается в терминале.",
         "searchAgents": "агенты",
         "searchCli": "командная строка",
         "searchTerminal": "терминал",
-        "agentDisabled": "Выключено в настройках агентов",
-        "installed": "Установлено",
-        "notInstalled": "Не установлено",
-        "install": "Установить",
-        "toggleLabel": "Открывать {{value0}} в чате",
         "antigravityDescription": "Для чатов Antigravity Orca загружает на этот сервер отдельный серверный компонент, независимый от agy CLI.",
         "antigravityNotSignedIn": "Вход не выполнен. Для чатов нужен отдельный вход в Antigravity, независимо от учётной записи agy в терминале.",
         "antigravityAccount": "Учётная запись",
@@ -803,7 +797,6 @@
       "defaultOpensAs": "Открывать {{value0}} как",
       "defaultOpensAsChat": "Чат",
       "defaultOpensAsCli": "Командная строка",
-      "defaultOpensAsScope": "Для новых сессий {{value0}}, запускаемых с этого компьютера, в том числе на подключённых серверах. Соответствует переключателю в разделе «Провайдеры».",
       "save": "Сохранить",
       "clearDefault": "Сбросить агента по умолчанию",
       "autoUnsupported": "Для автоматического режима нужна более новая версия Orca на этом сервере.",
@@ -859,7 +852,11 @@
         "description": "Позволяет каждому аккаунту Codex и вашему собственному ~/.codex продолжать разговоры, начатые в других. Выключите, чтобы история каждого аккаунта оставалась отдельной. При выключении ничего из уже общего не удаляется.",
         "unsupported": "Обновите Orca на {{host}}, чтобы изменить там эту настройку.",
         "updateFailed": "Не удалось обновить настройку на {{host}}."
-      }
+      },
+      "installCliForTerminal": "Установите CLI {{value0}}, чтобы открывать его в терминале.",
+      "chatRuntime": "Среда чата",
+      "chatChoiceTitle": "Открывать как чат или CLI",
+      "chatChoiceDescription": "Выберите, открывается ли каждый агент как чат или в своём CLI."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "символическая ссылка",
@@ -1362,6 +1359,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} больше недоступен. Снова включите его плагин.",
+        "failed": "Не удалось создать файл."
       }
     },
     "lib": {
@@ -12231,7 +12232,9 @@
             "secrets": "Хранить и читать секреты в собственном зашифрованном хранилище плагина",
             "settingsOwn": "Читать и менять собственные настройки плагина"
           },
-          "decisionFailed": "Не удалось сохранить решение о разрешениях. Повторите попытку."
+          "decisionFailed": "Не удалось сохранить решение о разрешениях. Повторите попытку.",
+          "fullAccessWarning": "Полный доступ: работает как обычная программа и может читать ваши файлы, использовать сеть и запускать другие программы.",
+          "uiWarning": "Запускает код издателя внутри Orca, чтобы отрисовать своё представление. Orca показывает, к чему у него есть доступ, и спрашивает перед включением."
         },
         "PluginConsentProvenance": {
           "official": "Официальный",
@@ -13329,6 +13332,178 @@
               "windowsFailureDescription": "Включите уведомления для Orca в настройках Windows."
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "Проверить"
+        },
+        "PluginUpdateReview": {
+          "title": "Проверка обновления {{value0}}",
+          "back": "Назад",
+          "approve": "Одобрить и обновить",
+          "explain": "Это обновление запрашивает больше, чем одобренная вами версия. Оно установится, только если вы одобрите его здесь.",
+          "before": "До",
+          "after": "После"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "его издателю",
+          "install": "Перед установкой убедитесь, что доверяете {{value0}}. Этот плагин выполняет код издателя внутри Orca.",
+          "update": "Перед обновлением убедитесь, что доверяете {{value0}}. Этот плагин выполняет код издателя внутри Orca.",
+          "installed": "Убедитесь, что доверяете {{value0}}. Этот плагин выполняет код издателя внутри Orca.",
+          "label": "Неофициальный плагин:",
+          "translations": "Переводы могут изменить любой текст в Orca. Убедитесь, что доверяете {{value0}}."
+        },
+        "PluginCardAction": {
+          "installed": "Установлен",
+          "installing": "Установка…",
+          "reviewLabel": "Проверить и установить {{value0}}",
+          "review": "Проверить и установить",
+          "retry": "Повторить"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "Сменить язык",
+          "switchTo": "Сменить язык на {{value0}}",
+          "switchBack": "Вернуть",
+          "switchBackFrom": "Отменить переключение на {{value0}}",
+          "failed": "Не удалось сменить язык"
+        },
+        "PluginContributionActionPanel": {
+          "open": "Открыть панель",
+          "openName": "Открыть панель: {{value0}}"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "Открыть любой файл {{value0}}",
+          "openFilename": "Открыть {{value0}}"
+        },
+        "PluginDetailInfo": {
+          "previous": "Предыдущая",
+          "updated": "Обновлено",
+          "license": "Лицензия",
+          "whatsNew": "Что нового"
+        },
+        "PluginDetailPage": {
+          "back": "Плагины",
+          "info": "Сведения",
+          "version": "Версия",
+          "latest": "Последняя",
+          "requires": "Требуется",
+          "requiresValue": "Orca {{value0}} или новее",
+          "categories": "Категории",
+          "pluginId": "ID плагина",
+          "repository": "Репозиторий"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "Язык интерфейса",
+          "typeAppTheme": "Тема приложения",
+          "typeTerminalTheme": "Тема терминала",
+          "typeIconTheme": "Тема значков файлов",
+          "typeSyntax": "Подсветка синтаксиса",
+          "typeInstructions": "Инструкции для агентов",
+          "typePanel": "Боковая панель",
+          "typeWorker": "Фоновый код",
+          "adds": "Добавляет в Orca",
+          "replaces": "Заменяет ваше сочетание клавиш для «{{value0}}»",
+          "changeShortcuts": "Изменить в разделе «Сочетания клавиш»",
+          "command": "Команда",
+          "access": "Имеет доступ к",
+          "accessLoading": "Чтение плагина…",
+          "accessFailed": "Не удалось прочитать доступ",
+          "retry": "Повторить",
+          "customEditor": "Редактор"
+        },
+        "PluginFilterPopover": {
+          "kind": "Категория",
+          "catalog": "Каталог",
+          "clear": "Сбросить фильтры",
+          "themes": "Темы",
+          "languages": "Языки",
+          "icons": "Значки",
+          "commands": "Команды и панели",
+          "catalogLabel": "Фильтр по каталогу",
+          "editors": "Редакторы",
+          "remoteVms": "Удалённые/ВМ",
+          "games": "Игры",
+          "agents": "Агенты",
+          "integrations": "Интеграции"
+        },
+        "PluginInUseAction": {
+          "inUseDark": "Используется · Тёмная",
+          "inUseLight": "Используется · Светлая",
+          "inUse": "Используется",
+          "useName": "Использовать {{value0}}",
+          "use": "Использовать"
+        },
+        "PluginInstallConsent": {
+          "noOtherAccess": "Другого доступа нет",
+          "replacesShortcut": "{{value0}} ({{value1}}) заменяет ваше сочетание клавиш для «{{value2}}».",
+          "updatesKeepApproval": "Обновления спрашивают снова только о новом доступе",
+          "fullAccessUpdates": "Обновления могут менять его код без запроса",
+          "editsFileTypes": "Открывает и редактирует файлы {{value0}} в Orca. Может читать открытые им файлы."
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "Нет плагинов, подходящих под эти фильтры",
+          "clearBoth": "Сбросить поиск и фильтры",
+          "pageGone": "Этот плагин больше не установлен и не указан в каталоге."
+        },
+        "PluginManager": {
+          "retry": "Повторить",
+          "installed": "Установленные",
+          "installedFailedTitle": "Не удалось прочитать установленные плагины.",
+          "updatesTitle": "Обновления",
+          "refreshLabel": "Обновить каталоги",
+          "noResultsTitle": "Нет плагинов по запросу «{{value0}}»",
+          "noneInstalledTitle": "Плагины не установлены",
+          "browseAll": "Все плагины",
+          "resultCount": "Найдено плагинов: {{value0}}",
+          "resultCountOne": "Найден 1 плагин",
+          "updateAll": "Обновить все…",
+          "notFromCatalog": "не из каталога",
+          "allInstalledTitle": "Все плагины из каталога установлены",
+          "showInstalled": "Показать установленные плагины"
+        },
+        "PluginManagerRows": {
+          "reinstall": "Переустановить",
+          "crashedCount": "Сбоев подряд: {{value0}}",
+          "crashed": "Сбой при запуске",
+          "remove": "Удалить…",
+          "review": "Проверить",
+          "restart": "Перезапустить",
+          "viewError": "Показать ошибку",
+          "copyId": "Копировать ID плагина",
+          "checkUpdate": "Проверить обновления",
+          "bundledWithOrca": "В комплекте Orca",
+          "installName": "Установить {{value0}}",
+          "crashedOnce": "Один сбой",
+          "updateLabel": "Обновить {{value0}} до {{value1}}",
+          "update": "Обновить до {{value0}}",
+          "needsOrca": "Требуется Orca {{value0}}",
+          "rollbackTo": "Откатить до {{value0}}…",
+          "copyContentHash": "Копировать хеш содержимого",
+          "reviewUpdate": "Проверить обновление",
+          "dataLoadFailed": "Не удалось загрузить его файлы"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} установлен",
+          "tryIt": "Попробовать",
+          "mismatch": "Загрузка не совпала с каталогом. Ничего не установлено.",
+          "catalogChanged": "Каталог изменился. Обновите и повторите попытку.",
+          "blocked": "Список безопасности Orca блокирует этот плагин.",
+          "downloadFailed": "Не удалось скачать. Проверьте подключение."
+        },
+        "pluginThemeApply": {
+          "nowUsing": "Сейчас используется {{value0}}",
+          "switchBack": "Вернуть"
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Добавляет команды",
+          "addsPanel": "Добавляет панель",
+          "contentOnly": "Только контент",
+          "fullAccess": "Полный доступ",
+          "addsVmRecipes": "Добавляет рецепты ВМ",
+          "opensAndEditsFiles": "Открывает и редактирует файлы",
+          "runsPluginCode": "Запускает код плагина"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Этот языковой пакет слишком неполный, чтобы переключиться на него."
         }
       },
       "right": {
@@ -18576,7 +18751,13 @@
           "all": "Все",
           "installed": "Установлено",
           "searchLabel": "Поиск плагинов",
-          "searchPlaceholder": "Поиск плагинов, категорий или издателей"
+          "searchPlaceholder": "Поиск плагинов, категорий или издателей",
+          "updates": "Обновления",
+          "clearSearch": "Очистить поиск",
+          "notInstalled": "Не установлены"
+        },
+        "PluginListRow": {
+          "official": "Официальный"
         }
       },
       "terminalPane": {
@@ -18774,6 +18955,13 @@
           "password": "Пароль",
           "confirm": "Войти",
           "cancel": "Отмена"
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} сообщает",
+          "anonymousTitle": "Эта страница сообщает",
+          "confirm": "ОК",
+          "cancel": "Отмена",
+          "answer": "Ответ"
         },
         "sitePermission": {
           "label": {
@@ -20717,7 +20905,7 @@
       "heroBody": "Однократная загрузка {{size}} МБ. Эта копия общая для чатов {{agent}} на компьютере, где работает этот чат.",
       "heroBodyNoSize": "Однократная загрузка. Эта копия общая для чатов {{agent}} на компьютере, где работает этот чат.",
       "stripSize": "Загрузка {{size}} МБ на компьютере, где работает этот чат",
-      "settingsHint": "Также в разделе «Настройки › Чат › Провайдеры»",
+      "settingsHint": "Также в разделе «Настройки › Агенты»",
       "installShort": "Установить",
       "tryAgain": "Повторить попытку",
       "cancelShort": "Отмена",
@@ -23328,5 +23516,9 @@
       "needsPermission": "Агенту требуется разрешение",
       "statusStale": "Статус агента устарел"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "Дистрибутив WSL {{distro}} остановлен, поэтому Orca не запустила этот терминал. Запустите дистрибутив и повторите попытку.",
+    "terminalUnverifiable": "Orca не удалось проверить, запущен ли дистрибутив WSL {{distro}}, поэтому этот терминал не запущен. Запустите дистрибутив и повторите попытку."
   }
 }

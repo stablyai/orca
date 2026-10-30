@@ -1,7 +1,7 @@
 import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +22,7 @@ import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { prepareStructuredAgentSessionCreateForWorktree } from './structured-agent-session-create'
 
 const SESSION = 'session-adoption-replay'
 const THREAD = 'thread-adoption-replay'
@@ -144,7 +145,11 @@ afterEach(async () => {
 })
 
 describe('committed adopting create RPC replay', () => {
-  it.each([true, false])('captures source before routing (unary=%s)', async (unary) => {
+  it.each([
+    [true, false],
+    [false, false],
+    [true, true]
+  ] as const)('captures source before routing (unary=%s, absent=%s)', async (unary, absent) => {
     const originalHome = join(root, 'account-original')
     const driftedHome = join(root, 'account-drifted')
     const transcriptPath = join(
@@ -168,6 +173,16 @@ describe('committed adopting create RPC replay', () => {
       })}\n`,
       'utf8'
     )
+    if (absent) {
+      await appendFile(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'response_item',
+          timestamp: '2026-09-06T18:10:01.000Z',
+          payload: { type: 'message', role: 'assistant', content: 'late adopted history' }
+        })}\n`
+      )
+    }
 
     let selectedHome = originalHome
     const selectAccountHome = vi.fn(() => selectedHome)
@@ -212,6 +227,7 @@ describe('committed adopting create RPC replay', () => {
     const sourceRows = vi
       .spyOn(runtime, 'getAgentProviderSessionRows')
       .mockImplementation(() => rows)
+    const sourceRoute = vi.spyOn(runtime, 'getStructuredAgentCliSourceRoute')
     // The structured surface is settings-gated for every caller, not just mobile; this test
     // probes durable-identity replay, which only runs once the gate admits the call.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The RPC gate reads only this setting from the test double.
@@ -306,8 +322,9 @@ describe('committed adopting create RPC replay', () => {
     writerVerdict = 'exited'
     const params = createParams()
 
+    // absent row with proven local history now imports (Continue after exit); invalid source still refuses
     rows = unary
-      ? []
+      ? [{ ...sourceRow, providerSession: undefined }]
       : [{ ...sourceRow, providerSession: { ...sourceRow.providerSession, id: 'replaced' } }]
     const route = vi
       .spyOn(runtime, 'routeClientHostedBrowserRpc')
@@ -321,7 +338,42 @@ describe('committed adopting create RPC replay', () => {
     })
     expect(sessionAdapter.acquire).not.toHaveBeenCalled()
     expect(internal.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
+    if (absent) {
+      rows = []
+      const source = params.resumeFrom.cliSource
+      const binding = { tabId: 'tab-source', leafId: SOURCE_LEAF, incarnationId: 'i1' }
+      expect(runtime.getStructuredAgentCliSourceRoute(source)).toBe('native-local')
+      runtime.registerPty('source-pty', WORKSPACE, null, binding, true)
+      expect(runtime.getStructuredAgentCliSourceRoute(source)).toBe('unsupported')
+      runtime.registerPty('source-pty', WORKSPACE, 'ssh', binding, false)
+      expect(runtime.getStructuredAgentCliSourceRoute(source)).toBe('unsupported')
+      runtime.registerPty('source-pty', WORKSPACE, null, binding, false)
+      expect(runtime.getStructuredAgentCliSourceRoute({ ...source, paneKey: 'missing' })).toBe(
+        'unknown'
+      )
+      expect(() =>
+        runtime.getStructuredAgentCliSourceRoute({ ...source, workspaceId: 'other' })
+      ).toThrow('terminal_not_found')
+      const direct = {
+        runtime,
+        ensureHost: async () => host,
+        envelope: params.envelope,
+        worktree: params.worktree,
+        agent: params.agent,
+        caller: { callerKey: CLIENT.clientId },
+        resumeFrom: params.resumeFrom
+      }
+      sourceRoute.mockClear()
+      const prepared = await prepareStructuredAgentSessionCreateForWorktree(direct)
+      expect(prepared.attachParams.adopt?.transcriptPath).toBe(await realpath(transcriptPath))
+      expect(sourceRoute).toHaveBeenCalledOnce()
+      sourceRoute.mockClear()
+      const intent = await runtime.resolveStructuredAgentSessionCreateIntent(direct)
+      expect(intent.adopt?.transcriptPath).toBe(await realpath(transcriptPath))
+      expect(sourceRoute).toHaveBeenCalledOnce()
+    }
     selectAccountHome.mockClear()
+    sourceRoute.mockClear()
     const entered = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     route.mockImplementationOnce(async () => {
@@ -331,6 +383,10 @@ describe('committed adopting create RPC replay', () => {
     })
     const pending = call(dispatcher, params, CLIENT, unary)
     await entered.promise
+    expect(sourceRoute).toHaveBeenCalledOnce()
+    if (absent) {
+      runtime.onPtyExit('source-pty', 0)
+    }
     if (unary) {
       rows = []
     } else {
@@ -343,6 +399,7 @@ describe('committed adopting create RPC replay', () => {
       ok: true,
       result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
     })
+    expect(sourceRoute).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.accountHome).toMatchObject({ path: originalHome })
     await rm(transcriptPath)
     selectedHome = driftedHome
@@ -357,7 +414,8 @@ describe('committed adopting create RPC replay', () => {
       return []
     })
 
-    expect(await call(dispatcher, params)).toMatchObject({
+    const replay = await call(dispatcher, params)
+    expect(replay).toMatchObject({
       ok: true,
       result: {
         ok: true,
@@ -377,6 +435,9 @@ describe('committed adopting create RPC replay', () => {
         }
       }
     })
+    if (absent) {
+      expect(JSON.stringify(replay)).toContain('late adopted history')
+    }
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
     expect(internal.publishStructuredAgentSessionTab).toHaveBeenCalledTimes(2)
     expect(selectAccountHome).toHaveBeenCalledTimes(1)
