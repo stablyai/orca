@@ -1,60 +1,78 @@
 // @vitest-environment happy-dom
 
 import { afterEach, expect, it, vi } from 'vitest'
+import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { Tab } from '../../../shared/tab-types'
-import type { WorktreeRuntimeOwnerState } from '../lib/worktree-runtime-owner-state'
-import { applyLocalStructuredSessionTabSnapshots } from './local-structured-session-tabs-sync/snapshot-apply'
-import { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
-import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
-import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-import { makeState } from './web-session-tabs-sync-test-harness'
 
-// The window's half of a terminal→chat switch: the host's frame carries the chat with the slot it
-// replaced, and the window puts the chat there and reports the terminal tab for closing.
+// The window's half of a terminal→chat switch, through the real store: the host's frame carries the
+// chat with the slot it replaced, and one pass puts the chat there and closes the terminal tab, as
+// a replace rather than a user's close.
+
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/runtime/structured-agent-session-close', () => ({
+  closeStructuredAgentSession: vi.fn(() => Promise.resolve())
+}))
+
+const { createTabsSliceMockApi } = await import('@/store/slices/tabs-slice-test-harness')
+createTabsSliceMockApi()
+const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
+  await import('@/store/slices/store-test-helpers')
+const store = createTestStore()
+vi.mock('@/store', () => ({ useAppStore: store }))
+
+const { applyStructuredSessionTabSnapshots } =
+  await import('./local-structured-session-tabs-sync/snapshot-apply')
+const { resetLocalStructuredSessionVersionForTests } =
+  await import('./local-structured-session-tabs-sync/inventory-generation-fence')
+const { resetWebSessionTabsSnapshotFreshnessForTests } =
+  await import('./web-session-tabs-sync/tracking-lifecycle')
 
 const WORKTREE = 'repo-1::/tmp/wt-switch'
 const GROUP = 'group-1'
-
-type SyncState = WebSessionTabsSyncState & WorktreeRuntimeOwnerState
 
 afterEach(() => {
   resetLocalStructuredSessionVersionForTests()
   resetWebSessionTabsSnapshotFreshnessForTests()
 })
 
-const terminalTab = (id: string): Tab => ({
-  id,
-  entityId: id,
-  groupId: GROUP,
-  worktreeId: WORKTREE,
-  contentType: 'terminal',
-  label: id,
-  customLabel: null,
-  color: null,
-  sortOrder: 0,
-  createdAt: 1
-})
-
-it('puts the chat in the replaced terminal’s slot and reports that terminal', () => {
-  const state = {
-    ...makeState({ activeWorktreeId: WORKTREE }),
+it('puts the chat in the replaced terminal’s pinned slot and closes it without a reopen entry', () => {
+  const terminal = (id: string, isPinned = false) =>
+    makeUnifiedTab({
+      id,
+      entityId: id,
+      groupId: GROUP,
+      worktreeId: WORKTREE,
+      contentType: 'terminal',
+      isPinned
+    })
+  seedStore(store, {
+    activeWorktreeId: WORKTREE,
+    worktreesByRepo: {
+      'repo-1': [makeWorktree({ id: WORKTREE, repoId: 'repo-1', path: '/tmp/wt-switch' })]
+    },
+    tabsByWorktree: {
+      [WORKTREE]: ['before', 'switched', 'after'].map((id) => makeTab({ id, worktreeId: WORKTREE }))
+    },
     unifiedTabsByWorktree: {
-      [WORKTREE]: [terminalTab('before'), terminalTab('switched'), terminalTab('after')]
+      [WORKTREE]: [terminal('before', true), terminal('switched', true), terminal('after')]
     },
     groupsByWorktree: {
       [WORKTREE]: [
-        {
+        makeTabGroup({
           id: GROUP,
           worktreeId: WORKTREE,
           activeTabId: 'switched',
           tabOrder: ['before', 'switched', 'after'],
           recentTabIds: ['switched']
-        }
+        })
       ]
     },
-    worktreesByRepo: { 'repo-1': [{ id: WORKTREE, path: '/tmp/wt-switch' }] }
-  } as unknown as SyncState
+    layoutByWorktree: { [WORKTREE]: { type: 'leaf', groupId: GROUP } },
+    activeGroupIdByWorktree: { [WORKTREE]: GROUP },
+    openFiles: [],
+    browserTabsByWorktree: {}
+  } as Partial<AppState>)
+  const reopenStack = store.getState().recentlyClosedTerminalTabsByWorktree
   const frame = {
     worktree: WORKTREE,
     publicationEpoch: 'renderer:switch',
@@ -75,22 +93,15 @@ it('puts the chat in the replaced terminal’s slot and reports that terminal', 
     ],
     tabGroups: [{ id: GROUP, activeTabId: null, tabOrder: ['agent-session:session-1'] }]
   } as unknown as RuntimeMobileSessionTabsResult
-  const onReplacedTab = vi.fn()
-  const next = applyLocalStructuredSessionTabSnapshots(state, [frame], undefined, 1, {
-    onReplacedTab
-  })
-  const chat = next.unifiedTabsByWorktree[WORKTREE]?.find(
+
+  applyStructuredSessionTabSnapshots([frame])
+
+  const state = store.getState()
+  const chat = state.unifiedTabsByWorktree[WORKTREE]?.find(
     (tab) => tab.contentType === 'agent-session'
   )
-  expect(next.groupsByWorktree[WORKTREE]?.[0]?.tabOrder).toEqual([
-    'before',
-    chat?.id,
-    'switched',
-    'after'
-  ])
-  expect(onReplacedTab).toHaveBeenCalledExactlyOnceWith({
-    worktreeId: WORKTREE,
-    tabId: 'switched',
-    sessionId: 'session-1'
-  })
+  expect(state.groupsByWorktree[WORKTREE]?.[0]?.tabOrder).toEqual(['before', chat?.id, 'after'])
+  expect(chat?.isPinned).toBe(true)
+  expect(state.tabsByWorktree[WORKTREE]?.some((tab) => tab.id === 'switched')).toBe(false)
+  expect(state.recentlyClosedTerminalTabsByWorktree).toEqual(reopenStack)
 })

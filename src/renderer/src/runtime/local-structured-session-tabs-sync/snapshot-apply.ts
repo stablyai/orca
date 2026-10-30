@@ -260,7 +260,9 @@ function closeReplacedTerminalTabs(replacements: readonly ReplacedSessionTab[]):
     if (replaced.isPinned && !chat.isPinned) {
       useAppStore.getState().pinTab(chat.id, { recordInteraction: false })
     }
+    // Not a user close: a replace never feeds Reopen Closed Tab or drops the tab's drafts.
     closeTerminalTab(replaced.entityId, {
+      reason: 'cleanup',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
