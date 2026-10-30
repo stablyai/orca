@@ -8,12 +8,17 @@ import {
 } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
-import { createBridgeClientShellSession } from './bridge-client-shell-session'
+import {
+  createBridgeClientShellSession,
+  shellSessionListeners,
+  type BridgeShellSessionListeners
+} from './bridge-client-shell-session'
 import type { BridgeShellSession } from './bridge-client-session'
 import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
+  BridgeClientNotNativeVerbError,
   BridgeClientNotReadyError,
   BridgeRequestOversizedError,
   BridgeSendFailedError,
@@ -22,20 +27,18 @@ import {
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
-import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import { createBridgeClientTerminalKeys } from './bridge-client-terminal-keys'
 import { createPageBackConsumers, type PageBackConsumer } from './page-back-consumers'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { readBridgeRequestFrameOptions, readBridgeRpcEnvelope } from './bridge-client-rpc-envelope'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
-import type { BridgeNativeVerb } from './bridge-native-verbs'
-import { callBridgeNativeVerb } from './bridge-native-verb-call'
+import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
 import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
   type BridgeClientMessage,
-  type BridgeConnectionSnapshot,
-  type BridgeInitRoute
+  type BridgeConnectionSnapshot
 } from './bridge-envelope'
 
 export type { BridgeShellSession } from './bridge-client-session'
@@ -62,36 +65,33 @@ export type BridgeRpcClientOptions = {
   onDiagnostic?: (diagnostic: BridgeRpcClientDiagnostic) => void
 }
 
-export type BridgeRpcClient = RpcClient & {
-  onReady: (listener: () => void) => () => void
-  // Publish changed params only, never initial/repeated init. Clear consumed one-shot params so repeat taps to the same pane still appear as real changes.
-  onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
-  onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
-  onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
-  onColorSchemeUpdate: (listener: (scheme: BridgeShellSession['colorScheme']) => void) => () => void
-  onUiLocaleUpdate: (listener: (locale: BridgeShellSession['uiLocale']) => void) => () => void
-  getShellSession: () => BridgeShellSession | null
-  // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
-  notifyNavigate: (href: string, replace?: boolean) => boolean
-  // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
-  notifyNavigateBack: () => boolean
-  // False means missing externalLink grant or refused URL; callers must offer another outcome for the tap.
-  notifyExternalLink: (url: string) => boolean
-  // Use the existing request/id/cap lane but keep native methods inside the bridge’s typed surface; they are device verbs, not catalogued desktop RPCs.
-  callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
-  // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
-  notifyPagePainted: () => void
-  // Older shells refuse the frame with a diagnostic only; they reopen the host route after a fold.
-  notifyPageLocation: (href: string) => void
-  // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
-  claimBack: (consumer: PageBackConsumer) => () => void
-  notifyStorageWrite: (key: string, value: string | null) => boolean
-  notifyHaptics: (kind: BridgeHapticsKind) => boolean
-  // Never throw from error-boundary reporting. False means no frame left; shell load recovery covers reports that cannot be sent, without retrying this fault.
-  notifyPageFault: (error: unknown) => boolean
-  // After applying a one-shot param, ask its holder to clear that value (ruling 34). A failed clear is repaired when init delivers the still-held request again.
-  clearRouteParam: (param: BridgeClearableRouteParam, value: string) => boolean
-}
+export type BridgeRpcClient = RpcClient &
+  BridgeShellSessionListeners & {
+    /**
+     * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
+     * dispose is called; `listener` takes each press. Nothing is sent to a shell without the grant.
+     */
+    claimTerminalKeyRail: ReturnType<typeof createBridgeClientTerminalKeys>['claim']
+    getShellSession: () => BridgeShellSession | null
+    // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
+    notifyNavigate: (href: string, replace?: boolean) => boolean
+    // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
+    notifyNavigateBack: () => boolean
+    // False means missing externalLink grant or refused URL; callers must offer another outcome for the tap.
+    notifyExternalLink: (url: string) => boolean
+    // Use the existing request/id/cap lane but keep native methods inside the bridge’s typed surface; they are device verbs, not catalogued desktop RPCs.
+    callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
+    // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
+    notifyPagePainted: () => void
+    // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
+    claimBack: (consumer: PageBackConsumer) => () => void
+    notifyStorageWrite: (key: string, value: string | null) => boolean
+    notifyHaptics: (kind: BridgeHapticsKind) => boolean
+    // Never throw from error-boundary reporting. False means no frame left; shell load recovery covers reports that cannot be sent, without retrying this fault.
+    notifyPageFault: (error: unknown) => boolean
+    // After applying a one-shot param, ask its holder to clear that value (ruling 34). A failed clear is repaired when init delivers the still-held request again.
+    clearRouteParam: (param: BridgeClearableRouteParam, value: string) => boolean
+  }
 
 // Expose synchronous RpcClient getters from init-primed state so first renders match native clients. Page close settles its own work, never the native client shared by other screens.
 // Ungated calls before init throw for mount-order bugs; after close, teardown calls are inert and getters retain a disconnected snapshot. Stream failures notify listeners.
@@ -135,9 +135,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
 
   const subscriptions = new BridgeClientSubscriptions({
     send: (frame) => posted(frame),
-    onDroppedBinaryFrame: () => {
-      report({ kind: 'binary-frame-dropped' })
-    }
+    onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
   const handshake = createBridgeInitHandshake(() => {
@@ -196,9 +194,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       handshake.stop()
       shellSession.accept(message)
       back.reassert()
+      terminalKeys.reassert()
     },
     acceptState,
-    acceptBack: back.press
+    acceptBack: back.press,
+    acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
 
   function receive(json: string): void {
@@ -301,6 +301,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     isClosed: () => closed,
     hasGrant
   })
+  const terminalKeys = createBridgeClientTerminalKeys(notifications.notifyTerminalKeyRailClaim)
 
   const unsubscribeFromMessages = options.onMessage(receive)
   handshake.start()
@@ -323,20 +324,27 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyNavigate: notifications.notifyNavigate,
     notifyNavigateBack: notifications.notifyNavigateBack,
     notifyExternalLink: notifications.notifyExternalLink,
-    callNativeVerb: (verb, params) => callBridgeNativeVerb(sendRequest, verb, params),
+    callNativeVerb: (verb, params) => {
+      // Validate the typed verb at runtime too; widened callers must not turn this into an untracked raw desktop RPC port.
+      if (!isBridgeNativeMethod(verb)) {
+        return Promise.reject(new BridgeClientNotNativeVerbError(verb))
+      }
+      return sendRequest(verb, params).then((reply) => {
+        // Native refusals reject as error frames and never forward to desktop, so the return has no RpcFailure arm.
+        if (!reply.ok) {
+          throw new Error(reply.error.message)
+        }
+        return reply
+      })
+    },
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
     notifyPagePainted: notifications.notifyPagePainted,
-    notifyPageLocation: notifications.notifyPageLocation,
     claimBack: back.claim,
     close,
-    onReady: shellSession.onReady,
-    onRouteUpdate: shellSession.onRouteUpdate,
-    onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
-    onKeyboardInsetUpdate: shellSession.onKeyboardInsetUpdate,
-    onColorSchemeUpdate: shellSession.onColorSchemeUpdate,
-    onUiLocaleUpdate: shellSession.onUiLocaleUpdate,
+    ...shellSessionListeners(shellSession),
+    claimTerminalKeyRail: terminalKeys.claim,
     getShellSession: shellSession.current,
     clearRouteParam: (param, value) =>
       posted({

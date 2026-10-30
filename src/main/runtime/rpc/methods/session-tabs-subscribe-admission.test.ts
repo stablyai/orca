@@ -1,3 +1,4 @@
+import { RuntimeClientCapabilities } from '../runtime-client-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -70,7 +71,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
     dispatch: (
       request: RpcRequest,
       messages: Frame[] = [],
-      extra: { signal?: AbortSignal } = {}
+      extra: { signal?: AbortSignal; capabilitySource?: RuntimeClientCapabilities } = {}
     ): Promise<void> =>
       dispatcher.dispatchStreaming(request, (message) => messages.push(JSON.parse(message)), {
         connectionId: CONNECTION,
@@ -341,3 +342,30 @@ describe('session.tabs.subscribeAll registers before restoring structured tabs',
     ).toBe(0)
   })
 })
+
+it.each(['abort', 'failure'] as const)(
+  'disposes capability observation on %s before workspace identity resolves',
+  async (outcome) => {
+    const host = makeHost()
+    const source = new RuntimeClientCapabilities()
+    const observe = vi.spyOn(source, 'observe')
+    const stop = vi.fn()
+    observe.mockImplementation(() => stop)
+    const listing = deferred<RuntimeMobileSessionTabsResult>()
+    host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
+    const abort = new AbortController()
+    const pending = host.dispatch(
+      request('unresolved', 'session.tabs.subscribe', { worktree: '/unresolved/path' }),
+      [],
+      { capabilitySource: source, signal: abort.signal }
+    )
+    await settle()
+    if (outcome === 'abort') {
+      abort.abort()
+    }
+    listing.reject(new Error('identity resolution failed'))
+    await pending
+    expect(stop).toHaveBeenCalledOnce()
+    expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
+  }
+)

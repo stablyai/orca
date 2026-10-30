@@ -12,7 +12,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserSelectResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -39,7 +39,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScrollResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
       const args = ['scroll', direction]
       if (amount != null) {
         args.push(String(amount))
@@ -53,7 +53,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -105,7 +105,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     browserPageId?: string
   ): Promise<unknown> {
     await assertClipboardTextWriteWithinLimitWithYield(text)
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {

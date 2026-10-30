@@ -87,12 +87,13 @@ const store: GenerationStore = {
   forgetHostUpdateFailures: async () => undefined
 }
 
-function routes(declares: boolean): MobileWebBundleManifestRead['routes'] {
+function routes(declares: boolean, acrossLayouts = true): MobileWebBundleManifestRead['routes'] {
   return [
     {
       pathname: '/h/[hostId]',
       grants: ['navigate'],
-      ...(declares ? { canOwnHostArea: true } : {})
+      ...(declares ? { canOwnHostArea: true } : {}),
+      ...(declares && acrossLayouts ? { canOwnHostAreaAcrossLayouts: true } : {})
     },
     { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'] }
   ]
@@ -101,9 +102,10 @@ function routes(declares: boolean): MobileWebBundleManifestRead['routes'] {
 async function settledKinds(
   declares: boolean,
   widths: readonly boolean[],
-  routePathname = '/h/host-1/session/wt-1'
+  routePathname = '/h/host-1/session/wt-1',
+  acrossLayouts = true
 ) {
-  doubles.routes = routes(declares)
+  doubles.routes = routes(declares, acrossLayouts)
   doubles.manifestReads = 0
   doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
   const seen: MobileWebShellSessionState[] = []
@@ -142,9 +144,16 @@ async function settledKinds(
 }
 
 describe('a detail session across a layout-class change', () => {
-  // Each layout flip must reconsider which host-route hops the page may keep.
-  it('restarts an open page once per flip under a declaring bundle', async () => {
+  // Ownership and route grants belong to the document, not its changing viewport.
+  it('preserves the open page across rotation under a declaring bundle', async () => {
     expect(await settledKinds(true, [false, true, false])).toEqual({
+      kinds: ['ready session-1', 'ready session-1', 'ready session-1'],
+      manifestReads: 1
+    })
+  })
+
+  it('keeps legacy declaring pages usable under their original layout-specific sessions', async () => {
+    expect(await settledKinds(true, [false, true, false], '/h/host-1', false)).toEqual({
       kinds: ['ready session-1', 'ready session-2', 'ready session-3'],
       manifestReads: 3
     })
@@ -157,9 +166,9 @@ describe('a detail session across a layout-class change', () => {
     })
   })
 
-  it('rebuilds the host route, whose wide session owns the area under other grants', async () => {
-    const { kinds } = await settledKinds(true, [false, true], '/h/host-1')
-    expect(kinds).toEqual(['ready session-1', 'ready session-2'])
+  it('preserves the host-area document and its in-page workspace across rotation', async () => {
+    const { kinds } = await settledKinds(true, [false, true, false], '/h/host-1')
+    expect(kinds).toEqual(['ready session-1', 'ready session-1', 'ready session-1'])
   })
 })
 

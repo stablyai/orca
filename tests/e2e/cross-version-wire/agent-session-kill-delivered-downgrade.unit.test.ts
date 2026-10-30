@@ -263,7 +263,7 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
     })
     expect(replaced.lease.deathEvidence).not.toHaveProperty('delivery')
   } finally {
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     await rm(directory, { recursive: true, force: true })
   }
 }, 300_000)
