@@ -196,7 +196,9 @@
       "cancelEditing": "Отменить редактирование",
       "placeholder": "Задайте вопрос; @ — файлы, / — команды",
       "saveEditedMessage": "Сохранить изменённое сообщение",
-      "sendMessage": "Отправить сообщение"
+      "sendMessage": "Отправить сообщение",
+      "sendQueue": "В очередь",
+      "sendSteer": "Направить"
     },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",

@@ -13,7 +13,11 @@ import type {
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatAwaitingInput } from '../../../src/shared/native-chat/native-chat-terminal-turn'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
-import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from './native-chat/mobile-native-chat-send'
+import type { NativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { MobileNativeChatCommandRefusalCauses } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
@@ -54,6 +58,8 @@ export type MobileNativeChatController = {
   nativeChatActionablePromptIds: readonly string[] | undefined
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses
   nativeChatCanStop: boolean
+  /** The host's follow-up setting while Send's hold menu offers Queue and Steer; null otherwise. */
+  nativeChatSendMenu: NativeChatFollowUpBehavior | null
   nativeChatStreamingText?: string
   nativeChatPermission: MobileChatPermission | null
   // A new prompt occurrence resets local card submission state only.
@@ -97,7 +103,8 @@ export type MobileNativeChatController = {
     images?: string[],
     deadline?: number,
     attachments?: readonly StructuredMobileSendAttachment[],
-    sentAt?: number
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   // Read parked TUI launch text to clear one line per Ctrl+U before pasting images.
   readSeededLaunchDraft: () => string | null

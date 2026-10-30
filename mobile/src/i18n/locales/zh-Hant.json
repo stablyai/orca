@@ -188,7 +188,9 @@
       "cancelEditing": "取消編輯",
       "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
       "saveEditedMessage": "儲存編輯後的訊息",
-      "sendMessage": "傳送訊息"
+      "sendMessage": "傳送訊息",
+      "sendQueue": "加入佇列",
+      "sendSteer": "引導"
     },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",

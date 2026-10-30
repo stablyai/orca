@@ -5,6 +5,7 @@ import { isStructuredAgentSessionThinking } from '../../../src/shared/structured
 import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat/transcript/native-chat-turn-activity'
 import { agentStopDisplayStatus } from '../../../src/shared/agent-stop-display-status'
 import { mobileStructuredSendQueues } from './use-mobile-structured-send-with-outcome'
+import type { NativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
 
 export function useMobileStructuredTurnIndicator(input: {
   state: StructuredAgentSessionState
@@ -16,7 +17,11 @@ export function useMobileStructuredTurnIndicator(input: {
   stopPressed: boolean
   queueCapable: boolean
   queueFollowUps: boolean
-}): NativeChatLiveTurnIndicator & { stopping: boolean } {
+}): NativeChatLiveTurnIndicator & {
+  stopping: boolean
+  /** The setting while Send's hold menu offers Queue and Steer: the two differ only mid-turn. */
+  sendMenu?: NativeChatFollowUpBehavior
+} {
   const { state, turnId, hostStopping, stopPressed, queueCapable, queueFollowUps } = input
   const activityText = useMemo(
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null,
@@ -31,14 +36,17 @@ export function useMobileStructuredTurnIndicator(input: {
       ? ('queue' as const)
       : ('send' as const)
     : undefined
+  const sendMenu =
+    queueCapable && working && !stopping ? (queueFollowUps ? 'queue' : 'steer') : null
   return useMemo(
     () => ({
       thinking,
       activityText,
       stopping,
       stopRequestInFlight,
+      ...(sendMenu ? { sendMenu } : {}),
       ...(afterStop ? { afterStop } : {})
     }),
-    [thinking, activityText, stopping, stopRequestInFlight, afterStop]
+    [thinking, activityText, stopping, stopRequestInFlight, sendMenu, afterStop]
   )
 }

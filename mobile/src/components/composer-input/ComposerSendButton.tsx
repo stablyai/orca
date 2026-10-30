@@ -6,11 +6,14 @@ import { composerInputStyles as styles } from './composer-input-styles'
 
 export function ComposerSendButton({
   onPress,
+  onLongPress,
   canSend,
   sending = false,
   label = 'Send'
 }: {
   onPress: () => void
+  /** A hold offers more ways to send; absent, a hold is a plain press. */
+  onLongPress?: () => void
   canSend: boolean
   sending?: boolean
   label?: string
@@ -30,6 +33,7 @@ export function ComposerSendButton({
         pressed && enabled && styles.pressed
       ]}
       onPress={onPress}
+      onLongPress={onLongPress}
       disabled={!enabled}
     >
       {sending ? (

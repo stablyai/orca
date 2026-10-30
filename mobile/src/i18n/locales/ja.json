@@ -188,7 +188,9 @@
       "cancelEditing": "編集をキャンセル",
       "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
       "saveEditedMessage": "編集したメッセージを保存",
-      "sendMessage": "メッセージを送信"
+      "sendMessage": "メッセージを送信",
+      "sendQueue": "キューに入れる",
+      "sendSteer": "今すぐ送信"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",

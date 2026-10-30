@@ -188,7 +188,9 @@
       "cancelEditing": "取消编辑",
       "placeholder": "随心输入，@ 引用文件，/ 使用命令",
       "saveEditedMessage": "保存编辑后的消息",
-      "sendMessage": "发送消息"
+      "sendMessage": "发送消息",
+      "sendQueue": "加入队列",
+      "sendSteer": "立即发送"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
