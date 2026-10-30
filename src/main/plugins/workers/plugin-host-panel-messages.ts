@@ -1,4 +1,7 @@
-import { pluginWorkerPanelMessageParamsSchema } from '../../../shared/plugins/workers/plugin-host-protocol'
+import {
+  PLUGIN_WORKER_MAX_PENDING_PANEL_MESSAGES,
+  pluginWorkerPanelMessageParamsSchema
+} from '../../../shared/plugins/workers/plugin-host-protocol'
 import {
   pluginError,
   pluginFailure,
@@ -22,6 +25,7 @@ export function createWorkerPanelMessages(options: {
   running: Map<number, AbortController>
 }) {
   const handlers = new Map<string, { handler: PanelMessageHandler }>()
+  let active = 0
   const api: PluginPanelMessagesApi = Object.freeze({
     onMessage(panelId, handler) {
       if (typeof panelId !== 'string' || panelId === '') {
@@ -59,7 +63,18 @@ export function createWorkerPanelMessages(options: {
       )
       return
     }
+    // Why count here too: the host stops waiting at its timeout, but a handler that ignores its signal keeps running.
+    if (active >= PLUGIN_WORKER_MAX_PENDING_PANEL_MESSAGES) {
+      options.send(
+        pluginFailure(
+          request.id,
+          pluginError('rate_limited', 'too many panel message handlers are running')
+        )
+      )
+      return
+    }
     const controller = new AbortController()
+    active++
     options.running.set(request.id, controller)
     try {
       const reply = await handler(parsed.data.message, { signal: controller.signal })
@@ -69,6 +84,7 @@ export function createWorkerPanelMessages(options: {
       const message = error instanceof Error ? error.message : String(error)
       options.send(pluginFailure(request.id, pluginError('action_failed', message)))
     } finally {
+      active--
       options.running.delete(request.id)
     }
   }

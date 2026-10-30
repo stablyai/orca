@@ -139,8 +139,8 @@ no `orca.panel`.
   handler; its own `signal` aborts when Orca stops waiting (the 30 second timeout or the worker
   stopping).
 - **Handlers.** A second `onMessage` for the same panel id throws until the first is disposed.
-  Handlers run concurrently, up to 16 unanswered messages per worker; past that the call rejects
-  with `rate_limited`.
+  Handlers run concurrently, up to 16 per worker, and a handler counts until it returns, even
+  after Orca stopped waiting for it; past that the call rejects with `rate_limited`.
 - **Detecting it.** Check `typeof orca.panel?.postMessage === 'function'` in a panel and
   `typeof orca.panels?.onMessage === 'function'` in a worker. They are frame and worker APIs, not
   host methods, so `orca.api.minor` does not change and `orca.host.has` does not list them.

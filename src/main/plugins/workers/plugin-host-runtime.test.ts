@@ -278,6 +278,37 @@ describe('worker panel messages', () => {
     expect(send).toHaveBeenLastCalledWith({ orca: 1, kind: 'res', id: 1, result: 'again' })
   })
 
+  it('refuses a message past 16 handlers still running, even ones that ignore their signal', async () => {
+    const finishers: (() => void)[] = []
+    const { send, runtime } = await activateWith((orca) => {
+      orca.panels.onMessage('player', () => new Promise<void>((resolve) => finishers.push(resolve)))
+    })
+    const running = Array.from({ length: 16 }, (_, i) =>
+      runtime.handleMessage(panelMessage(i + 1, 'player', {}))
+    )
+    // The host gave up on message 1 at its timeout; the handler is still running.
+    await runtime.handleMessage({ orca: 1, kind: 'cancel', id: 1 })
+
+    await runtime.handleMessage(panelMessage(100, 'player', {}))
+    expect(send).toHaveBeenLastCalledWith({
+      orca: 1,
+      kind: 'res',
+      id: 100,
+      error: {
+        code: 'rate_limited',
+        message: 'too many panel message handlers are running',
+        retryable: true
+      }
+    })
+
+    finishers[0]()
+    await running[0]
+    const next = runtime.handleMessage(panelMessage(101, 'player', {}))
+    expect(finishers).toHaveLength(17)
+    finishers.forEach((finish) => finish())
+    await Promise.all([...running, next])
+  })
+
   it('hands the handler a signal the host aborts', async () => {
     const seen: { signal?: AbortSignal } = {}
     let finish!: () => void
