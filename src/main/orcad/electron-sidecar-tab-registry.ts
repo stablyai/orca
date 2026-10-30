@@ -142,22 +142,8 @@ export class ElectronSidecarTabRegistry {
     }
     return tabs
       .flatMap((tab) => {
-        const opener = tab.openerBrowserPageId
-          ? this.pagesBySidecarId.get(tab.openerBrowserPageId)
-          : undefined
-        // A popup joins its opener's workspace without taking focus; other unknown pages need an unscoped listing.
         const page =
-          this.pagesBySidecarId.get(tab.browserPageId) ??
-          (opener
-            ? this.track(
-                tab.browserPageId,
-                tab.browserPageId,
-                opener.worktreeId,
-                opener.publicPageId
-              )
-            : worktreeId
-              ? undefined
-              : this.register(tab.browserPageId, undefined, undefined))
+          this.pagesBySidecarId.get(tab.browserPageId) ?? this.adoptListedPage(tab, worktreeId)
         if (!page || (worktreeId && page.worktreeId !== worktreeId)) {
           return []
         }
@@ -167,6 +153,25 @@ export class ElectronSidecarTabRegistry {
         return [this.rewriteTab(tab)]
       })
       .map((tab, index) => ({ ...tab, index }))
+  }
+
+  // A popup joins its opener's workspace without taking focus; other unknown pages need an unscoped listing.
+  private adoptListedPage(
+    tab: ElectronSidecarTab,
+    worktreeId: string | undefined
+  ): ElectronSidecarPage | undefined {
+    const opener = tab.openerBrowserPageId
+      ? this.pagesBySidecarId.get(tab.openerBrowserPageId)
+      : undefined
+    if (opener) {
+      return this.track(
+        tab.browserPageId,
+        tab.browserPageId,
+        opener.worktreeId,
+        opener.publicPageId
+      )
+    }
+    return worktreeId ? undefined : this.register(tab.browserPageId, undefined, undefined)
   }
 
   rewriteResult(result: unknown): unknown {

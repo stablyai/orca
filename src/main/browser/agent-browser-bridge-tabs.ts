@@ -111,12 +111,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     worktreeId: string,
     excludedWebContentsId?: number
   ): number | null {
-    for (const [tabId, wcId] of this.getRegisteredTabs(worktreeId)) {
-      // A closing tab's popups close with it, so only tabs can take over.
-      if (
-        wcId === excludedWebContentsId ||
-        this.browserManager.getTabIdForWebContentsId(wcId) !== tabId
-      ) {
+    // A closing tab's popups close with it, so only tabs can take over.
+    for (const [, wcId] of this.registeredTabsWithoutPopups(worktreeId)) {
+      if (wcId === excludedWebContentsId) {
         continue
       }
       if (this.getWebContents(wcId)) {
@@ -155,20 +152,49 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     this.selectForPerson(webContentsId, worktreeId)
     this.options.onTabsChanged?.(worktreeId)
   }
-  getRegisteredTabs(worktreeId?: string): Map<string, number> {
+  getRegisteredTabs(
+    worktreeId?: string,
+    popupPages = this.browserManager.getPopupPages()
+  ): Map<string, number> {
+    const tabs = this.registeredTabsWithoutPopups(worktreeId)
+    // Popups list after the tabs and share their opener's scope.
+    for (const popup of popupPages) {
+      if (tabs.has(popup.openerBrowserPageId)) {
+        tabs.set(popup.browserPageId, popup.webContentsId)
+      }
+    }
+    return tabs
+  }
+
+  private registeredTabsWithoutPopups(worktreeId?: string): Map<string, number> {
     const tabs = new Map<string, number>()
     for (const [tabId, wcId] of this.browserManager.getWebContentsIdByTabId()) {
       if (!worktreeId || this.browserManager.getWorktreeIdForTab(tabId) === worktreeId) {
         tabs.set(tabId, wcId)
       }
     }
-    // Popups list after the tabs and share their opener's scope.
-    for (const popup of this.browserManager.getPopupPages()) {
-      if (tabs.has(popup.openerBrowserPageId)) {
-        tabs.set(popup.browserPageId, popup.webContentsId)
+    return tabs
+  }
+
+  /** Moves every route at one webContents to another; true when the agent's route moved. */
+  protected retargetRouting(fromWebContentsId: number, toWebContentsId: number): boolean {
+    let moved = false
+    if (this.activeWebContentsId === fromWebContentsId) {
+      this.activeWebContentsId = toWebContentsId
+      moved = true
+    }
+    for (const [worktreeId, routedWebContentsId] of this.activeWebContentsPerWorktree) {
+      if (routedWebContentsId === fromWebContentsId) {
+        this.activeWebContentsPerWorktree.set(worktreeId, toWebContentsId)
+        moved = true
       }
     }
-    return tabs
+    for (const [key, heldWebContentsId] of this.heldPersonSelections) {
+      if (heldWebContentsId === fromWebContentsId) {
+        this.heldPersonSelections.set(key, toWebContentsId)
+      }
+    }
+    return moved
   }
 
   /** Tab list results omit workspace ownership. */
@@ -180,11 +206,10 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
 
   tabList(worktreeId?: string): BrowserTabListResult {
     this.applyHeldPersonSelections(worktreeId)
-    const tabs = this.getRegisteredTabs(worktreeId)
+    const popupPages = this.browserManager.getPopupPages()
+    const tabs = this.getRegisteredTabs(worktreeId, popupPages)
     const popupOpeners = new Map(
-      this.browserManager
-        .getPopupPages()
-        .map((popup) => [popup.browserPageId, popup.openerBrowserPageId])
+      popupPages.map((popup) => [popup.browserPageId, popup.openerBrowserPageId])
     )
     // Match command routing without changing active-tab selection during discovery.
     let activeWcId =

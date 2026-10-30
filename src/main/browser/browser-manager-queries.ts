@@ -37,7 +37,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     const ownerTabId =
       popupWebContentsId === null
         ? null
-        : this.resolvePopupOwnerContext(popupWebContentsId)?.browserTabId
+        : this.resolveBrowserTabIdForGuestWebContentsId(popupWebContentsId)
     return ownerTabId ?? browserPageId
   }
 
@@ -69,7 +69,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     const pages: BrowserPopupPage[] = []
     for (const webContentsId of popupWebContentsIds) {
       const browserPageId = browserPopupPageId(webContentsId)
-      const openerBrowserPageId = this.resolvePopupOwnerContext(webContentsId)?.browserTabId
+      const openerBrowserPageId = this.resolveBrowserTabIdForGuestWebContentsId(webContentsId)
       const popup = webContents.fromId(webContentsId)
       if (
         openerBrowserPageId &&

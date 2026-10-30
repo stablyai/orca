@@ -93,7 +93,7 @@ export class BrowserAgentActivity {
       ended = true
       owned.commands -= 1
       if (owned.commands === 0) {
-        owned.idleTimer = setTimeout(() => this.end(browserPageId), ACTIVITY_IDLE_MS)
+        this.restartIdleWindow(browserPageId, owned)
       }
     }
     return {
@@ -120,14 +120,18 @@ export class BrowserAgentActivity {
       return
     }
     const page = existing ?? { commands: 0, executing: false, idleTimer: null }
-    if (page.idleTimer) {
-      clearTimeout(page.idleTimer)
-    }
-    page.idleTimer = setTimeout(() => this.end(toPageId), ACTIVITY_IDLE_MS)
+    this.restartIdleWindow(toPageId, page)
     if (!existing) {
       this.pages.set(toPageId, page)
       this.publish(toPageId, true)
     }
+  }
+
+  private restartIdleWindow(browserPageId: string, page: PageActivity): void {
+    if (page.idleTimer) {
+      clearTimeout(page.idleTimer)
+    }
+    page.idleTimer = setTimeout(() => this.end(browserPageId), ACTIVITY_IDLE_MS)
   }
 
   isActive(browserPageId: string): boolean {
