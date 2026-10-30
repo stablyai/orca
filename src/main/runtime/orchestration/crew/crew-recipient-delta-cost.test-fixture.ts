@@ -95,7 +95,10 @@ export function remembered(f: ReturnType<typeof deltaFixture>, id = TARGET, coun
       coordinatorOrcaSessionId: id
     })
   )
-  f.db.unbindOtherRunsForCoordinator({ terminalHandle: null, paneKey: null, orcaSessionId: id })
+  f.db.unbindOtherRunsForCoordinator(
+    { terminalHandle: null, paneKey: null, orcaSessionId: id },
+    f.run.id
+  )
   return runs
 }
 

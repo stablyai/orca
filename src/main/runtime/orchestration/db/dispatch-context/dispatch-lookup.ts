@@ -202,18 +202,18 @@ export function getActiveDispatchMailboxOwners(
   if (activeDispatchMailboxBranch(byHandle, paneKey, byExactPane) === 'pane') {
     return byExactPane
   }
-  return equivalentDispatchMailboxOwners(
-    this.db
-      .prepare(
-        `SELECT * FROM dispatch_contexts
+  const rawByPaneSuffix = this.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
          WHERE assignee_pane_key IS NOT NULL
            AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
            AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid DESC`
-      )
-      .all(paneKeyMatchSuffix(paneKey!)) as DispatchContextRow[],
-    paneKey!
-  )
+    )
+    .all(paneKeyMatchSuffix(paneKey!))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * reads the schema-owned Dispatch row; the statement wrapper normalizes integer fields.
+  const byPaneSuffix = rawByPaneSuffix as DispatchContextRow[]
+  return equivalentDispatchMailboxOwners(byPaneSuffix, paneKey!)
 }
 
 export function isDispatchMessageSender(
