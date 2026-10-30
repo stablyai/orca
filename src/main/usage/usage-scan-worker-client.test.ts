@@ -3,7 +3,8 @@ import {
   MAX_CONSECUTIVE_DEATHS,
   USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS,
   UsageScanWorkerClient,
-  scanCodexUsageOnWorker
+  scanCodexUsageOnWorker,
+  scanOmpUsageOnWorker
 } from './usage-scan-worker-client'
 import type { UsageScanWorkerRequest, UsageScanWorkerScanBody } from './usage-scan-worker-protocol'
 import type { UsageSourceCacheRef } from './usage-source-cache-file'
@@ -95,6 +96,26 @@ describe('UsageScanWorkerClient', () => {
       sessions: [{ sessionId: 'session-1' }],
       dailyAggregates: []
     })
+  })
+
+  it('routes an omp scan to the worker and hands back its projection', async () => {
+    const worker = new FakeWorker()
+    const client = createClient(() => worker)
+
+    const pending = scanOmpUsageOnWorker((body) => client.scan(body), [], SOURCE_CACHE)
+    await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+    expect(worker.postedRequests[0]).toMatchObject({
+      operation: 'scan',
+      providerId: 'omp',
+      sourceCache: SOURCE_CACHE
+    })
+    worker.emit('message', {
+      id: worker.lastId(),
+      ok: true,
+      value: { operation: 'scan', providerId: 'omp', sessions: [], dailyAggregates: [] }
+    })
+
+    await expect(pending).resolves.toEqual({ sessions: [], dailyAggregates: [] })
   })
 
   it('routes a cache split to the worker and hands back the report text', async () => {

@@ -6,6 +6,7 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-us
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
+import type { OmpUsageDailyAggregate, OmpUsageSession } from '../omp-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageCacheSplitRequest,
@@ -16,6 +17,7 @@ import {
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
   scanMuseUsageOnWorker,
+  scanOmpUsageOnWorker,
   scanOpenCodeUsageOnWorker,
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
@@ -80,6 +82,16 @@ export function scanOpenCodeUsageDatabasesViaWorker(
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
   return scanOpenCodeUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+}
+
+export function scanOmpUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<{
+  sessions: OmpUsageSession[]
+  dailyAggregates: OmpUsageDailyAggregate[]
+}> {
+  return scanOmpUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
 }
 
 export function scanMuseUsageFilesViaWorker(

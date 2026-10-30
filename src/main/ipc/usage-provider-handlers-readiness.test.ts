@@ -26,6 +26,7 @@ vi.mock('../usage/usage-scan-worker-spawn', () => ({
   scanCodexUsageFilesViaWorker: vi.fn(),
   scanOpenCodeUsageDatabasesViaWorker: vi.fn(),
   scanMuseUsageFilesViaWorker: vi.fn(),
+  scanOmpUsageFilesViaWorker: vi.fn(),
   splitUsageCacheFileViaWorker: vi.fn()
 }))
 

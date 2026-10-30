@@ -13,15 +13,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', () => ({
-  scanOmpUsageFiles: vi.fn()
-}))
-
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanOmpUsageFilesViaWorker: vi.fn(),
   splitUsageCacheFileViaWorker: vi.fn()
 }))
 
-import { scanOmpUsageFiles } from './scanner'
+import { scanOmpUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 import {
   getDefaultOmpUsageState,
   initOmpUsagePath,
@@ -37,8 +34,8 @@ describe('OmpUsageStore', () => {
     tempUserData = await mkdtemp(join(tmpdir(), 'orca-omp-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initOmpUsagePath()
-    vi.mocked(scanOmpUsageFiles).mockReset()
-    vi.mocked(scanOmpUsageFiles).mockResolvedValue({ sessions: [], dailyAggregates: [] })
+    vi.mocked(scanOmpUsageFilesViaWorker).mockReset()
+    vi.mocked(scanOmpUsageFilesViaWorker).mockResolvedValue({ sessions: [], dailyAggregates: [] })
   })
 
   afterEach(async () => {
@@ -65,12 +62,13 @@ describe('OmpUsageStore', () => {
     })
   })
 
-  it('scans omp session files through the provider lifecycle and persists the report', async () => {
+  it('scans omp session files on the usage worker and persists the report', async () => {
     const store = createStore()
     await store.setEnabled(true)
     await store.refresh(true)
 
-    expect(scanOmpUsageFiles).toHaveBeenCalledWith([], {
+    // Resolution: every history scan runs on the worker, never on main.
+    expect(scanOmpUsageFilesViaWorker).toHaveBeenCalledWith([], {
       path: join(tempUserData, 'orca-omp-usage-sources.json'),
       schemaVersion: 1,
       worktreeFingerprint: '[]',

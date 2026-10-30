@@ -12,8 +12,10 @@ import type {
 } from '../../shared/omp-usage-types'
 import type { Store } from '../persistence'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
-import { scanOmpUsageFiles } from './scanner'
+import {
+  scanOmpUsageFilesViaWorker,
+  splitUsageCacheFileViaWorker
+} from '../usage/usage-scan-worker-spawn'
 import {
   buildOmpUsageBreakdownRows,
   buildOmpUsageDailyPoints,
@@ -84,7 +86,7 @@ export class OmpUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizePersistedState,
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyOmpData',
-      scan: scanOmpUsageFiles,
+      scan: scanOmpUsageFilesViaWorker,
       splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
