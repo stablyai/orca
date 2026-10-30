@@ -369,11 +369,15 @@ On a headless host running Orca (`orca serve` or the desktop app), add managed C
 
 ```bash
 orca account list
+orca account usage               # used % and time to reset per agent account
+orca account usage --agent claude --fresh --json
 orca account add                 # Claude by default
 orca account add --agent codex
 ```
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
+
+`account usage` prints the same windows as the status-bar **Usage** popover, with a row for every managed Claude and Codex account. It reads the host's last snapshot; `--fresh` re-reads usage for every account first. `--json` returns one entry per agent account with `windows[].usedPercent` and `resetsAt`, so scripts can pick the account with the most headroom.
 
 ## Artifacts
 

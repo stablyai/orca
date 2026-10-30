@@ -30,6 +30,18 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca account list']
   },
   {
+    path: ['account', 'usage'],
+    summary: 'Show rate-limit usage per agent account on this Orca host',
+    usage: 'orca account usage [--agent <agent>] [--fresh] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'fresh'],
+    notes: [
+      'Lists every tracked agent with each window’s used % and time to reset; Claude and Codex list every managed account.',
+      'Reads the host’s last usage snapshot. --fresh makes the host re-read usage for every account first, one network round-trip per account.',
+      '--agent narrows output to one agent: claude, codex, gemini, opencode-go, kimi, antigravity, minimax, grok, cursor, or zcode.'
+    ],
+    examples: ['orca account usage', 'orca account usage --agent claude --fresh --json']
+  },
+  {
     path: ['account', 'select'],
     summary: 'Select an OpenCode or Devin profile for new agent launches',
     usage: 'orca account select --agent opencode|devin --account <id|system> [--json]',
