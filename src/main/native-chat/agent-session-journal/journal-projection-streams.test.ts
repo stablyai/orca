@@ -24,8 +24,19 @@ import { readJournalSavedState } from './journal-state-cache-test-support'
 import { restoreJournal } from './journal-open'
 import { applyJournalRow, renderJournalState } from './journal-reducer'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import { expectProjectionMatches, finishCatchUp } from './journal-projection-test-support'
+import {
+  expectProjectionMatches,
+  finishCatchUp,
+  projectionBase,
+  projectionEpoch,
+  projectionEpochRow,
+  projectionSessionId,
+  projectionWriter,
+  seedOutcomeRows,
+  seedProjectionRows
+} from './journal-projection-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalRow } from './journal-row-schema'
 
 const sessionId = 'session-1'
 let root: string
@@ -224,5 +235,41 @@ it.each(['claude', 'codex'] as const)(
     expect(readJournalSavedState(database.db, sessionId, journal.epoch)?.lastSequence).toBe(
       journal.cursor().sequence
     )
+  }
+)
+
+// One row may remove an item, add another, then re-create the first above its tombstone: the
+// re-created item moves after the new one, live and saved alike, written or converted.
+it.each(['written', 'converted'] as const)(
+  'keeps live order for a key deleted and re-created around a new key in one %s row',
+  async (path) => {
+    const item = (itemId: string, revision: number) => ({
+      kind: 'item' as const,
+      itemId,
+      revision,
+      body: { kind: 'status' as const, text: `${itemId} ${revision}` }
+    })
+    const first: JournalRow = { ...projectionBase(2), ...item('x', 1) }
+    const batch: JournalRow = {
+      ...projectionBase(3),
+      kind: 'lifecycle-batch',
+      settlementId: 'reorder',
+      mutations: [{ kind: 'tombstone', itemId: 'x', revision: 2 }, item('y', 1), item('x', 3)]
+    }
+    if (path === 'converted') {
+      const state = seedProjectionRows(database, [projectionEpochRow, first, batch])
+      expect([...state.items.keys()]).toEqual(['y', 'x'])
+      await finishCatchUp(
+        new JournalProjectionCatchUp(database, projectionSessionId, projectionEpoch)
+      )
+      expectProjectionMatches(database, state)
+      return
+    }
+    const rig = projectionWriter(database, seedOutcomeRows(database, [projectionEpochRow, first]))
+    disposals.push(() => rig.projection.close())
+    await rig.writer.enqueue((seq, ts) => ({ ...batch, seq, ts }))
+    expect([...rig.state().items.keys()]).toEqual(['y', 'x'])
+    database.transaction((db) => clearJournalSavedState(db, projectionSessionId))
+    expectProjectionMatches(database, rig.state())
   }
 )
