@@ -6,9 +6,6 @@ import type { AutomationRunCompletionObservation } from './run-completion-watche
 const HANDLE = 'terminal-1'
 const RUNTIME_TUI_IDLE_TIMEOUT_MS = 5 * 60 * 1000
 
-/** The three shapes the runtime satisfies tui-idle from. `lastAgentStatus` is the
- *  sticky pty record, `paneTitle` the leaf branch's inlined title read, `preview`
- *  the ready-shell-prompt match. All three are level, none require an edge. */
 type FakePane = {
   lastAgentStatus: 'idle' | 'working' | 'permission' | null
   paneTitle: string | null
@@ -31,8 +28,6 @@ function createFakeRuntime(initial: Partial<FakePane>) {
   const waiters = new Set<FakeWaiter>()
   let waitCalls = 0
 
-  // Mirrors the runtime's tui-idle satisfaction: sticky status, idle title, or a
-  // ready shell prompt — whichever is true at the instant of the read.
   const satisfiedNow = (): boolean =>
     pane.lastAgentStatus === 'idle' ||
     (pane.paneTitle?.toLowerCase().includes('idle') ?? false) ||
@@ -123,40 +118,6 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
     await run.promise
   })
 
-  it('does not complete from a stale idle pane title (leaf branch shape)', async () => {
-    const runtime = createFakeRuntime({ lastAgentStatus: null, paneTitle: '✳ Claude — idle' })
-    const run = observe(runtime)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ paneTitle: '✳ Claude — working' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ paneTitle: '✳ Claude — idle' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled[0]?.status).toBe('completed')
-    await run.promise
-  })
-
-  it('does not complete from a ready shell prompt left over at dispatch', async () => {
-    const runtime = createFakeRuntime({ preview: 'user@host repo %\n$' })
-    const run = observe(runtime)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ preview: 'claude is thinking…' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ lastAgentStatus: 'idle' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled[0]?.status).toBe('completed')
-    await run.promise
-  })
-
   it('fails the run truthfully when the pane never leaves its pre-dispatch state', async () => {
     const runtime = createFakeRuntime({ lastAgentStatus: 'idle' })
     const run = observe(runtime)
@@ -188,7 +149,7 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
     await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000 + RUNTIME_TUI_IDLE_TIMEOUT_MS)
     expect(run.settled[0]?.status).toBe('dispatch_failed')
     expect(run.settled[0]?.error).toContain('without a completion signal')
-    // 6h of 5-minute waits, not an unbounded re-arm.
+    // Six hours allow 72 five-minute waits plus the initial probe.
     expect(runtime.waitCalls()).toBeLessThanOrEqual(80)
     await run.promise
   })

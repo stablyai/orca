@@ -5,7 +5,7 @@ import {
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
-import { canResumeAiVaultSessionOnTarget } from './ai-vault-resume-target'
+import { canResumeAiVaultSessionOnTarget } from '../../../shared/ai-vault-resume-target'
 import { getAiVaultResumeWorkspaceWslDistro } from './ai-vault-resume-shell'
 import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
@@ -31,6 +31,10 @@ function stateFor(host: ExecutionHostId, distro?: string): State {
   return {
     activeRepoId: 'repo',
     activeWorktreeId: worktree.id,
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     settings: null,

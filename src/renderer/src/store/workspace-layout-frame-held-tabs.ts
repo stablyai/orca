@@ -1,7 +1,4 @@
-// Builds frame slices only and never calls set: the store patch applies what it returns.
-// Slices rebuilt from a frame, with each tab the window's own command still holds put back as the
-// store shows it (present, gone, or where the window placed it), and the rest as main has it. A
-// group's order keeps main's for the tabs nothing holds, and the window's hidden chat launch slots.
+// Build slices without set: pending window commands keep tabs as drawn (including removal/placement); other tabs and order follow main, retaining hidden chat launch slots.
 
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
@@ -23,7 +20,6 @@ export const NO_HELD_TABS: HeldDrawnTabs = {
   isGroupLayoutHeld: () => false
 }
 
-/** Holds what either holds. */
 export function eitherHeld(a: HeldDrawnTabs, b: HeldDrawnTabs | undefined): HeldDrawnTabs {
   if (!b) {
     return a

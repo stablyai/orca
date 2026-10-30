@@ -1,11 +1,4 @@
-/**
- * A layout-class change (rotation, Split View, a foldable opening) re-decides a mounted session.
- *
- * Off a wide layout a detail route is served as before; on one it is served only by a page that
- * declares `canOwnHostArea`, because an older page would draw its own sidebar beside the native
- * one, so an older one is walled. The session rebuilds on the change, so the page's in-page stack
- * does not survive it.
- */
+// Rebuild on layout-class changes: wide sessions require canOwnHostArea to avoid duplicate sidebars; an older page must be walled.
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
@@ -74,7 +67,6 @@ vi.mock('../transport/mobile-web-bundle-fetch', () => ({
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 
 const store: GenerationStore = {
-  // The same build on disk, so a session opens it and reaches `ready` without a download.
   readActiveGeneration: async () => ({
     buildId: 'b'.repeat(64),
     directory: 'file:///cache/gen',
@@ -87,6 +79,7 @@ const store: GenerationStore = {
     throw new Error('not reached')
   },
   abortStagedGeneration: async () => undefined,
+  openReusableAssets: async () => ({ has: () => false, check: async () => false }),
   sweepStagedGenerations: async () => undefined,
   deleteHostCache: async () => undefined,
   recordUpdateFailure: async () => undefined,
@@ -94,12 +87,13 @@ const store: GenerationStore = {
   forgetHostUpdateFailures: async () => undefined
 }
 
-function routes(declares: boolean): MobileWebBundleManifestRead['routes'] {
+function routes(declares: boolean, acrossLayouts = true): MobileWebBundleManifestRead['routes'] {
   return [
     {
       pathname: '/h/[hostId]',
       grants: ['navigate'],
-      ...(declares ? { canOwnHostArea: true } : {})
+      ...(declares ? { canOwnHostArea: true } : {}),
+      ...(declares && acrossLayouts ? { canOwnHostAreaAcrossLayouts: true } : {})
     },
     { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'] }
   ]
@@ -108,9 +102,10 @@ function routes(declares: boolean): MobileWebBundleManifestRead['routes'] {
 async function settledKinds(
   declares: boolean,
   widths: readonly boolean[],
-  routePathname = '/h/host-1/session/wt-1'
+  routePathname = '/h/host-1/session/wt-1',
+  acrossLayouts = true
 ) {
-  doubles.routes = routes(declares)
+  doubles.routes = routes(declares, acrossLayouts)
   doubles.manifestReads = 0
   doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
   const seen: MobileWebShellSessionState[] = []
@@ -149,9 +144,16 @@ async function settledKinds(
 }
 
 describe('a detail session across a layout-class change', () => {
-  // Once per flip: the wide session may not keep the host-route hop the narrow one could.
-  it('restarts an open page once per flip under a declaring bundle', async () => {
+  // Ownership and route grants belong to the document, not its changing viewport.
+  it('preserves the open page across rotation under a declaring bundle', async () => {
     expect(await settledKinds(true, [false, true, false])).toEqual({
+      kinds: ['ready session-1', 'ready session-1', 'ready session-1'],
+      manifestReads: 1
+    })
+  })
+
+  it('keeps legacy declaring pages usable under their original layout-specific sessions', async () => {
+    expect(await settledKinds(true, [false, true, false], '/h/host-1', false)).toEqual({
       kinds: ['ready session-1', 'ready session-2', 'ready session-3'],
       manifestReads: 3
     })
@@ -164,14 +166,13 @@ describe('a detail session across a layout-class change', () => {
     })
   })
 
-  it('rebuilds the host route, whose wide session owns the area under other grants', async () => {
-    const { kinds } = await settledKinds(true, [false, true], '/h/host-1')
-    expect(kinds).toEqual(['ready session-1', 'ready session-2'])
+  it('preserves the host-area document and its in-page workspace across rotation', async () => {
+    const { kinds } = await settledKinds(true, [false, true, false], '/h/host-1')
+    expect(kinds).toEqual(['ready session-1', 'ready session-1', 'ready session-1'])
   })
 })
 
 describe('a phone mount', () => {
-  // The layout effect fires once on mount; on a phone it must be a no-op, not a restart.
   it.each([
     [true, '/h/host-1'],
     [true, '/h/host-1/session/wt-1'],

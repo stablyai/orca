@@ -15,7 +15,6 @@ import { cleanupTerminalPaneMount } from './terminal-pane-mount-cleanup'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 
-/** Mounts the PaneManager and wires pane creation, close, and split events. */
 export function useTerminalPaneMountLifecycle(
   deps: UseTerminalPaneLifecycleDeps,
   refs: TerminalPaneLifecycleRefs
@@ -45,8 +44,7 @@ export function useTerminalPaneMountLifecycle(
       refs,
       ptyDeps,
       deferredSplitHandoffs,
-      // Keep the raw startup object for identity checks against the store's queued command.
-      // `ptyDeps.startup` is consumed/mutated during bootstrap.
+      // Preserve startup identity before bootstrap mutates ptyDeps.startup, so ownership checks compare the queued object.
       startup: deps.startup,
       defaultTabCwd: preparation.defaultTabCwd,
       startupCwd: preparation.startupCwd,
@@ -85,7 +83,6 @@ export function useTerminalPaneMountLifecycle(
       ptyDeps,
       initialLayoutHadBuffers: preparation.initialLayoutHadBuffers
     })
-    // Switch point: main writes a startup split and starts its command; its frame draws the pane.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       runBootstrapSplitInMain({
         manager,

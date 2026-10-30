@@ -106,8 +106,7 @@ describe('agent completion coordinator', () => {
         isLive: () => true
       })
 
-      // Pi/OMP emit agent_end ('done') between milestones with no prior 'working';
-      // the done must wait out the quiet window instead of firing immediately.
+      // Pi/OMP milestone done can lack prior working; still wait for quiet before completion.
       coordinator.observeHookStatus({
         state: 'done',
         prompt: 'run the mission',
@@ -178,8 +177,7 @@ describe('agent completion coordinator', () => {
   })
 
   it('still fires a pending Pi done when process inspection sees the agent exit first', async () => {
-    // Why: a process-exit probe landing inside the quiet window must not tear
-    // down agent evidence, or the pending hook 'done' would be silently dropped.
+    // Process probes during the quiet window must preserve evidence needed for the pending hook completion.
     let foregroundProcess: string | null = 'pi'
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({

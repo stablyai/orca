@@ -11,17 +11,12 @@ export type DocPreviewHistory = {
   reset: () => void
 }
 
-/**
- * Back/Forward for the preview guest. In-preview navigation between workspace documents under the
- * same grant is allowed by the guest policy, so a report that links to a sibling page builds real
- * history — and fragments build in-document entries the same way a browser does.
- */
+/** Track full and fragment navigations allowed within one grant as ordinary browser history. */
 export function useDocPreviewWebviewHistory(
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
 ): DocPreviewHistory {
   const [depth, setDepth] = useState({ canGoBack: false, canGoForward: false })
-  // Why a ref alongside state: sync fires per navigation event and would otherwise re-render on
-  // every one, even though the buttons only change at the edges of history.
+  // Compare against a ref so navigation events re-render only when history button availability changes.
   const depthRef = useRef(depth)
 
   const apply = useCallback((next: { canGoBack: boolean; canGoForward: boolean }): void => {

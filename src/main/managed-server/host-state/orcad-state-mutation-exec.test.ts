@@ -11,12 +11,11 @@ import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 
-/** An ssh2 exec channel whose remote command answers only when the test says so. */
 class SlowChannel extends EventEmitter {
   readonly stderr = new EventEmitter()
   readonly stdin = this
   closed = false
-  // sshd acknowledges the close at once, which ssh2 reports as a confirmed close.
+  // Model sshd acknowledging channel close without proving the command stopped.
   close(): void {
     this.closed = true
     queueMicrotask(() => this.emit('close', 0))

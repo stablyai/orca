@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -67,8 +68,11 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) => store.records.get(sessionId) ?? null,
-        listRecords: () => [...store.records.values()],
+        getConversation: (sessionId: string) => {
+          const record = store.records.get(sessionId)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => [...store.records.values()].map(agentSessionConversationView),
         getVisibleSessionTabIndex: () => store.visible
       }
     }
@@ -79,12 +83,11 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
 let db: InstanceType<typeof OrchestrationDb>
 
 function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a prototype-only probe; every field the methods read is assigned below.
   return Object.assign(Object.create(MailTargetProbe.prototype), {
     _orchestrationDb: db,
     ptysById: new Map(),
     ...extra
-  }) as MailTargetProbe
+  })
 }
 
 function chatCoordinatedRun(): string {
@@ -107,8 +110,7 @@ afterEach(() => {
 
 describe('a Run whose coordinator is a chat (an Orca session id, no handle)', () => {
   it('delivers its mailbox to that session', () => {
-    // The defect this pins: the resolver read only `coordinator_handle`, which a chat never has, so
-    // neither lane claimed the Run mailbox and a worker's result never reached the chat.
+    // Chat coordinators lack handles; both delivery lanes must claim their Run through session identity.
     installStore(chatRecord())
     const runId = chatCoordinatedRun()
     expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
@@ -254,8 +256,7 @@ describe('the idle edge after a restart, before any orchestration call', () => {
   }
 
   it('opens an existing orchestration database itself, so mail stored before the restart is redriven', () => {
-    // The strand this pins: the edge read the raw database field, null until the first
-    // orchestration RPC opened it, so a restarted chat's idle edges silently redrove nothing.
+    // An idle edge after restart must open the orchestration DB rather than silently read its null field.
     installStore(chatRecord())
     const stored = new OrchestrationDb(join(userData, 'orchestration.db'))
     const runId = stored.createRun({
@@ -377,8 +378,7 @@ describe('a coordinator chat continued by /clear', () => {
   })
 
   it("never unbinds the successor's own Run", () => {
-    // The strand this pins: the successor's own run-create, then its idle edge rebinding the
-    // predecessor's Run through an exclusive bind, which unbound the Run the successor created.
+    // Adopting a predecessor Run must not exclusively rebind and unbind the successor's own Run.
     installLineage(SUCCESSOR)
     chatCoordinatedRun()
     const ownRun = runCreatedBy(SUCCESSOR)
@@ -414,7 +414,7 @@ describe('a coordinator chat continued by /clear', () => {
   })
 
   it('keeps the Run a middle session created bound after the next clear', () => {
-    // The chain strand: adopting each predecessor's Run in turn unbound all but the last adopted.
+    // Adopting a chain must preserve every predecessor Run, not just the last.
     installLineage(MIDDLE)
     runCreatedBy(CHAT)
     const middleRun = runCreatedBy(MIDDLE)
@@ -497,8 +497,7 @@ describe('a structured worker continued by /clear', () => {
   }
 
   it("delivers mail at the worker's handle to the live successor, as a terminal keeps its handle", () => {
-    // The strand this pins: the handle resolved to the session minted for it, which `/clear`
-    // replaced, so the worker's own mail was pointed at a session that no longer runs its turns.
+    // A cleared worker's mail must target its running successor rather than the retired initial session.
     const { handle } = clearedWorker()
     expect(probe().target(handle)).toEqual({ sessionId: WORKER_SUCCESSOR, dispatchId: null })
   })

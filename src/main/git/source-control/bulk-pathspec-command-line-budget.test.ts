@@ -34,10 +34,14 @@ const WSL_WORKTREE = `\\\\wsl$\\${WSL_DISTRO}\\home\\emilio\\projects\\orca`
 
 /** Windows-side length of the line `wsl.exe` is spawned with, wrapper included. */
 function finishedCommandLineLength(args: readonly string[], wslDistro?: string): number {
-  const resolved = resolveGitCommandWithoutProbe([...args], {
-    cwd: wslDistro ? WSL_WORKTREE : '/home/emilio/projects/orca',
-    ...(wslDistro ? { wslDistro } : {})
-  })
+  const resolved = resolveGitCommandWithoutProbe(
+    [...args],
+    {
+      cwd: wslDistro ? WSL_WORKTREE : '/home/emilio/projects/orca',
+      ...(wslDistro ? { wslDistro } : {})
+    },
+    true
+  )
   return commandLineLength([resolved.binary, ...resolved.args])
 }
 
@@ -128,7 +132,7 @@ describe('bulk pathspec command-line budget', () => {
     const filePaths = realisticChangedPaths(120)
     const { bulkDiscardChanges } = await import('./discard-changes')
 
-    // Empty ls-files output: every path is untracked, so all of them take the clean lane.
+    // Empty ls-files output routes every path to git clean.
     await bulkDiscardChanges(WSL_WORKTREE, filePaths, { wslDistro: WSL_DISTRO })
 
     const cleans = capturedInvocations().filter((args) => args[0] === 'clean')
@@ -170,7 +174,6 @@ describe('bulk pathspec command-line budget', () => {
 
   it('gives a native Windows git.exe the CreateProcess cap and a POSIX host a larger one', async () => {
     const { bulkPathspecCommands } = await import('./git-pathspec')
-    // Long enough that the raw argv alone passes the Windows cap with no wrapper in sight.
     const filePaths = Array.from(
       { length: 100 },
       (_, index) => `packages/${'deeply-nested-module/'.repeat(18)}file-${index}.ts`
@@ -192,7 +195,6 @@ describe('bulk pathspec command-line budget', () => {
 
     await bulkStageFiles('/home/emilio/projects/orca', realisticChangedPaths(100))
 
-    // Same 100 paths that need several chunks under the WSL wrapper stay one native call.
     expect(capturedInvocations()).toHaveLength(1)
   })
 })

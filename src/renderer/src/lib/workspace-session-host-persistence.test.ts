@@ -529,9 +529,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
   } satisfies HostPersistenceState
 
   it('routes a layouts-only patch to the partition of the tab the live catalog names', async () => {
-    // A park capture changes only terminalLayoutsByTabId, so the patch carries no tab rows. Routed
-    // by the payload alone it fell into 'local', where main strips scrollback it cannot attribute
-    // to a remote worktree — the runtime partition never received the capture (#21295).
+    // Layouts-only park patches lack tabs; payload-only routing sent them local, where main pruned unattributable remote scrollback (#21295).
     const patch = vi.fn().mockResolvedValue(undefined)
 
     await patchWorkspaceSessionByHost(
@@ -584,8 +582,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
   })
 
   it("lets the payload's own tab row outrank the live catalog", async () => {
-    // Main merges the payload's tabsByWorktree into whichever partition it lands in, so the layout
-    // must follow the tab row in this write even when the store has since moved the tab.
+    // Payload tabs are merged into their target partition; layouts must follow those rows even if live store routing changed.
     const patch = vi.fn().mockResolvedValue(undefined)
 
     await patchWorkspaceSessionByHost(

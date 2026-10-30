@@ -1,7 +1,7 @@
-import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -71,14 +71,6 @@ export const styles = StyleSheet.create({
   searchRow: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm
-  },
-  searchInput: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
   },
   list: {
     paddingHorizontal: spacing.md,
@@ -239,4 +231,4 @@ export const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

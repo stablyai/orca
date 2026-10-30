@@ -20,6 +20,12 @@ vi.mock('@/store', async () => {
 import { useAppStore } from '@/store'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+import {
+  structuredSessionSelectionController,
+  forgetStructuredSessionSelection,
+  registerStructuredSelectionCatalogStore
+} from '@/lib/structured-agent-session-selection-controller'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 
 function makeStatus(runtimeId: string): RuntimeStatus {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture carries only the fields the slice reads.
@@ -35,10 +41,29 @@ function makeStatus(runtimeId: string): RuntimeStatus {
   } as RuntimeStatus
 }
 
+const env = (revision: number, key?: string): PublicKnownRuntimeEnvironment => ({
+  id: 'env-a',
+  name: 'managed',
+  createdAt: 1,
+  updatedAt: revision,
+  pairingRevision: revision,
+  lastUsedAt: null,
+  runtimeId: null,
+  endpoints: [],
+  preferredEndpointId: 'loopback',
+  connectionDependency: 'ssh-tunnel',
+  hostKeyFingerprint: key,
+  orcadDeployment: {
+    sshTargetId: 'box',
+    sshTargetGeneration: 1,
+    localPort: 46768,
+    remotePort: 6768
+  }
+})
+
 let lastVerified: RuntimeStatus | null = null
 
-// As the host-status snapshot does: an outage keeps the last verified status, so a same-runtime
-// return moves only the contact epoch, not the connection generation.
+// Same-runtime return retains verified status and advances contact epoch, not connection generation.
 function publish(status: RuntimeStatus | null, checkedAt: number): void {
   lastVerified = status ?? lastVerified
   useAppStore.getState().setRuntimeEnvironmentStatus('env-a', {
@@ -56,7 +81,12 @@ function publish(status: RuntimeStatus | null, checkedAt: number): void {
   })
 }
 
+let restoreCatalog: () => void
 beforeEach(() => {
+  restoreCatalog = registerStructuredSelectionCatalogStore({
+    read: useAppStore.getState,
+    subscribe: useAppStore.subscribe
+  })
   clearRuntimeEnvironmentConnectionGenerationsForTests()
   vi.stubGlobal('window', { api: {}, dispatchEvent: vi.fn() })
   useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
@@ -64,6 +94,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  forgetStructuredSessionSelection('continuity')
+  forgetStructuredSessionSelection('keyless')
+  restoreCatalog()
   vi.unstubAllGlobals()
 })
 
@@ -108,4 +141,50 @@ describe('subscribeRuntimeHostContactRegained', () => {
     expect(listener).not.toHaveBeenCalled()
     stop()
   })
+
+  it('wakes a parked owner when a pending managed pairing proves its key without another revision', async () => {
+    useAppStore.getState().setRuntimeEnvironments([env(1, 'key-A')])
+    const target = { kind: 'environment', environmentId: 'env-a' } as const
+    const owner = structuredSessionSelectionController(target, 'continuity', 'codex')
+    const held = owner.issue('model', 'gpt-5.4', null)
+    const listener = vi.fn()
+    const stop = subscribeRuntimeHostContactRegained('env-a', listener)
+    useAppStore.getState().setRuntimeEnvironments([env(2)])
+    expect(structuredSessionSelectionController(target, 'continuity', 'codex')).toBe(owner)
+    expect(held.outcome).toBeUndefined()
+    const pendingWakes = listener.mock.calls.length
+    useAppStore.getState().setRuntimeEnvironments([env(2, 'key-A')])
+    expect(listener).toHaveBeenCalledTimes(pendingWakes + 1)
+    useAppStore.getState().setRuntimeEnvironments([env(2, 'key-A')])
+    expect(listener).toHaveBeenCalledTimes(pendingWakes + 1)
+    useAppStore.getState().setRuntimeEnvironments([env(3)])
+    expect(structuredSessionSelectionController(target, 'continuity', 'codex')).toBe(owner)
+    expect(held.outcome).toBeUndefined()
+    useAppStore.getState().setRuntimeEnvironments([env(3, 'key-A')])
+    const send = vi.fn().mockResolvedValue('current')
+    await owner.request(send)
+    expect(send).toHaveBeenCalledWith({ expectedEnvironmentPairingRevision: 3 })
+    useAppStore.getState().setRuntimeEnvironments([env(4, 'different')])
+    expect(held.outcome).toEqual({ kind: 'superseded' })
+    expect(structuredSessionSelectionController(target, 'continuity', 'codex')).not.toBe(owner)
+    stop()
+    forgetStructuredSessionSelection('continuity')
+  })
+})
+
+it('ends supported keyless SSH affinity when the classifier supplies neither proof nor pending', async () => {
+  useAppStore.getState().setRuntimeEnvironments([env(1)])
+  const target = { kind: 'environment', environmentId: 'env-a' } as const
+  const owner = structuredSessionSelectionController(target, 'keyless', 'codex')
+  const held = owner.issue('model', 'gpt-5.4', null)
+  useAppStore.getState().setRuntimeEnvironments([env(2)])
+  await expect(held.result).resolves.toEqual({ kind: 'superseded' })
+  const send = vi.fn().mockResolvedValue('current')
+  await expect(owner.request(send)).rejects.toThrow('retired')
+  expect(send).not.toHaveBeenCalled()
+  const fresh = structuredSessionSelectionController(target, 'keyless', 'codex')
+  expect(fresh).not.toBe(owner)
+  await expect(fresh.request(send)).resolves.toBe('current')
+  expect(send).toHaveBeenCalledWith({ expectedEnvironmentPairingRevision: 2 })
+  forgetStructuredSessionSelection('keyless')
 })

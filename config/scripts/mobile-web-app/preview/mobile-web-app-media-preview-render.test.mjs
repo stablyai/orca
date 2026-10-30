@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
 import { buildMobileWebAppBundle } from '../../build-mobile-web-app-bundle.mjs'
-import { mobileWebAppDependenciesPresent } from '../../mobile-web-app-bundle-dependencies.mjs'
+import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
   installShellDouble,
@@ -119,13 +119,18 @@ describeRender('mobile media under the shipped shell policy', () => {
     async (name, bytes, tag) => {
       const { page, errors } = await openMedia(name, bytes)
       await page.waitForFunction((tag) => document.querySelector(tag)?.readyState >= 2, tag)
-      const playback = await page.evaluate(async (tag) => {
+      await page.evaluate(async (tag) => {
         const media = document.querySelector(tag)
         globalThis.__previousMedia = media
         media.muted = true
         media.currentTime = 1
         await media.play()
-        await new Promise((resolve) => setTimeout(resolve, 200))
+      }, tag)
+      await page.waitForFunction((tag) => document.querySelector(tag).currentTime > 1, tag, {
+        timeout: 10_000
+      })
+      const playback = await page.evaluate((tag) => {
+        const media = document.querySelector(tag)
         media.pause()
         return {
           duration: media.duration,

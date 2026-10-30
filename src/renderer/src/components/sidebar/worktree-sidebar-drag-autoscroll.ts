@@ -18,6 +18,7 @@ export type WorktreeSidebarDragPoint = {
 }
 
 export type WorktreeSidebarDragRect = {
+  /** Host identity, as drag groups key their members. */
   worktreeId: string
   groupIndex: number
   top: number
@@ -25,15 +26,17 @@ export type WorktreeSidebarDragRect = {
 }
 
 export type WorktreeSidebarDragSession = {
+  /** Host identity of the pressed card; drag groups key members the same way. */
   draggingWorktreeId: string
   sourceGroupKey: string
   draggedIds: readonly string[]
   draggedCopies: DraggedWorktreeCopies
+  /** Worktree ids, for status, pin and board writes. */
   reorderDraggedIds: readonly string[]
-  reorderUnitDraggedIds: readonly string[]
-  // Why: one live coordinate space for both hit testing and rendering. Stability
-  // against mid-drag card resizes comes from holding the drop *decision*
-  // (`anchor`), not from freezing this geometry.
+  /** Host identities, for sidebar reorder slots and manual ranks. */
+  reorderDraggedKeys: readonly string[]
+  reorderUnitDraggedKeys: readonly string[]
+  // Keep live geometry for rendering/hit tests; hold the drop decision in anchor to resist mid-drag resizing.
   rects: readonly WorktreeSidebarDragRect[]
   grab: WorktreeSidebarDragGrab | null
   anchor: WorktreeSidebarDropAnchor | null
@@ -137,7 +140,8 @@ export function getWorktreeSidebarDragRectsForGroup(
     if (element.getAttribute('data-worktree-drag-group-key') !== groupKey) {
       return
     }
-    const worktreeId = element.getAttribute('data-worktree-drag-id')
+    // Why host identity: same-id copies on two machines are separate drop slots.
+    const worktreeId = element.getAttribute('data-worktree-host-identity')
     const rawGroupIndex = element.getAttribute('data-worktree-drag-group-index')
     const groupIndex = rawGroupIndex === null ? Number.NaN : Number(rawGroupIndex)
     if (!worktreeId || !Number.isFinite(groupIndex)) {
@@ -153,8 +157,7 @@ export function getWorktreeSidebarDragRectsForGroup(
     rects.push({
       worktreeId,
       groupIndex,
-      // Why: drop previews animate via row transforms. Anchor hit-testing to
-      // the virtual row's static slot so animated offsets cannot perturb it.
+      // Hit-test the static virtual slot so preview transforms cannot shift the target.
       top,
       bottom: top + rect.height
     })
@@ -194,8 +197,8 @@ export function refreshWorktreeSidebarDragSession(args: {
   const sourceGroupIds = new Set(sourceGroup.worktreeIds)
   const sourceUnitIds = new Set(sourceUnitGroup.worktreeIds)
   if (
-    args.session.reorderUnitDraggedIds.some(
-      (worktreeId) => !sourceUnitIds.has(worktreeId) && !sourceGroupIds.has(worktreeId)
+    args.session.reorderUnitDraggedKeys.some(
+      (key) => !sourceUnitIds.has(key) && !sourceGroupIds.has(key)
     )
   ) {
     return null

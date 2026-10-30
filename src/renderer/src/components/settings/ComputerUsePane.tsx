@@ -66,7 +66,7 @@ export function ComputerUsePane(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<ComputerUsePermissionId | null>(null)
   const [resetting, setResetting] = useState(false)
-  // Why: reset changes OS permission state, so older status probes must not overwrite it.
+  // Permission resets invalidate older status probes.
   const resettingRef = useRef(false)
   const permissionOperationSequence = useRef(0)
   const mountedRef = useRef(true)
@@ -120,16 +120,16 @@ export function ComputerUsePane(): React.JSX.Element {
             'auto.components.settings.computerUseSummary.readyDescription',
             'Agents can inspect and operate app windows when you ask.'
           )
-        : missingCount === 1
-          ? translate(
-              'auto.components.settings.computerUseSummary.permissionsRequired_one',
-              '1 permission required before agents can operate app windows.'
-            )
-          : translate(
-              'auto.components.settings.computerUseSummary.permissionsRequired_other',
-              '{{value0}} permissions required before agents can operate app windows.',
-              { value0: missingCount }
-            )
+        : translate(
+            'auto.components.settings.computerUseSummary.permissionsRequired',
+            '{{value0}} permissions required before agents can operate app windows.',
+            {
+              value0: missingCount,
+              count: missingCount,
+              defaultValue_one:
+                '{{value0}} permission required before agents can operate app windows.'
+            }
+          )
 
   useEffect(() => {
     mountedRef.current = true
@@ -180,8 +180,7 @@ export function ComputerUsePane(): React.JSX.Element {
     void refresh()
   }, [refresh])
 
-  // Why: users grant these in System Settings, so refresh when focus returns
-  // instead of polling while the settings pane is open.
+  // Refresh after returning from System Settings instead of polling an idle pane.
   useEffect(() => {
     const onFocus = (): void => {
       void refresh()
@@ -198,7 +197,14 @@ export function ComputerUsePane(): React.JSX.Element {
       if (!mountedRef.current) {
         return
       }
-      if (result.launchedHelper) {
+      if (result.launchQueued) {
+        toast.message(
+          translate(
+            'auto.components.settings.ComputerUsePane.794807aa21',
+            'Queued macOS Privacy & Security; a newer request or a reset may replace it'
+          )
+        )
+      } else if (result.launchedHelper) {
         toast.message(
           translate(
             'auto.components.settings.ComputerUsePane.697005758f',

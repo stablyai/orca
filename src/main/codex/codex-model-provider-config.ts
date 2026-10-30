@@ -7,8 +7,7 @@ import {
   updateTomlLineScanState
 } from './config-toml-line-scan'
 
-// Why: only the root setting selects the provider for every OAuth login;
-// similarly named keys inside profiles or provider tables are not global pins.
+// Only root model_provider pins every OAuth login; profile/provider-table keys are not global.
 export function readCodexTopLevelModelProvider(config: string): string | null {
   let state = createTomlLineScanState()
   let lineOffset = 0

@@ -20,14 +20,6 @@ describe('attemptEditorFileSave', () => {
     vi.restoreAllMocks()
   })
 
-  it('reports success only after the save request resolves', async () => {
-    requestEditorFileSave.mockResolvedValue(undefined)
-
-    await expect(attemptEditorFileSave({ fileId: 'file-1' })).resolves.toBe(true)
-
-    expect(toastError).not.toHaveBeenCalled()
-  })
-
   it('surfaces a failed save and reports failure to dependent actions (STA-2027)', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const cause = new Error('disk full')

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import { buildStructuredJournalArchive } from './structured-worker-journal-archive'
-import { foldToolMessages, pairToolBlocks } from '../../../shared/native-chat-tool-fold'
+import { foldToolMessages } from '../../../shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../shared/native-chat/tools/native-chat-tool-pairs'
 
 const STRUCTURED_ARCHIVE_MAX_BYTES = 262_144
 
@@ -38,9 +39,7 @@ function archive(items: AgentJournalRenderItem[], hasOlder = false) {
 
 describe('buildStructuredJournalArchive', () => {
   it('keeps the worker final answer when the journal exceeds the bound', () => {
-    // The whole reason a released worker is read back. Bounding forward first kept the HEAD — the
-    // dispatch preamble and early exploration — and the newest-first cap then trimmed that head,
-    // so the answer was gone while the receipt said only the oldest messages had been dropped.
+    // Forward bounding keeps early exploration; archive tail bounding must retain the final answer.
     const items = longJournal(200)
     const built = archive(items)
     expect(built.limited).toBe(true)

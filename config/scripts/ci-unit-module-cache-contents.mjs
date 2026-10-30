@@ -11,6 +11,8 @@ export const MODULE_CACHE_LIMITS = Object.freeze({
   entryBytes: 32 * 2 ** 20
 })
 const METADATA = '_metadata.json'
+// Vitest 5.0.5+ marks its cache root with a fixed-content CACHEDIR.TAG.
+const CACHEDIR_TAG = 'CACHEDIR.TAG'
 const MODULE_NAME = /^[a-f0-9]{40}$/
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
 const fail = (message) => {
@@ -76,7 +78,12 @@ export async function inventoryModuleCache({ path, lockfileHash }) {
       while (next < names.length) {
         const index = next++
         const name = names[index]
-        if (name !== METADATA && name !== MODULE_CACHE_MANIFEST && !MODULE_NAME.test(name)) {
+        if (
+          name !== METADATA &&
+          name !== MODULE_CACHE_MANIFEST &&
+          name !== CACHEDIR_TAG &&
+          !MODULE_NAME.test(name)
+        ) {
           fail(`invalid cache entry name: ${name}`)
         }
         const buffer = await readRegularFile(join(path, name))
@@ -95,6 +102,10 @@ export async function inventoryModuleCache({ path, lockfileHash }) {
           const metadata = JSON.parse(buffer.toString('utf8'))
           if (!isRecord(metadata) || metadata.lockfileHash !== lockfileHash) {
             fail('cache lockfile hash mismatch')
+          }
+        } else if (name === CACHEDIR_TAG) {
+          if (!buffer.toString('utf8').startsWith('Signature: 8a477f597d28d172789f06886806bc55')) {
+            fail('invalid cache directory tag')
           }
         } else {
           checkModuleTrailer(buffer)

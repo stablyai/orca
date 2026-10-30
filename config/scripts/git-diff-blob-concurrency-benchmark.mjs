@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: latency of loading one file diff, which reads two git blobs.
-//
-// The diff loaders in src/main/git/status.ts awaited their two sides in series,
-// so the second `git show` could not start until the first had fully returned.
-// The two reads are independent, so that serialization was pure added latency on
-// every diff the review panel opens.
-//
-// This spawns the real `git` binary against this repo, so it measures actual
-// process-launch and read cost rather than a model of it. Over SSH each diff is
-// one relay RPC and the two spawns run host-local inside the relay, so the same
-// relative saving applies to remote-host spawn time, not to network round trips.
+// Measure real Git blob-read latency: serial two-sided diffs versus concurrent reads.
+// SSH performs both spawns host-local within one RPC, so savings affect spawn/read time, not network round trips.
 import { execFile } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -35,14 +26,12 @@ function git(args) {
   })
 }
 
-// Pre-fix: await one side, then the other.
 async function readSequential(leftRef, rightRef, filePath) {
   const left = await git(['show', '--end-of-options', `${leftRef}:${filePath}`])
   const right = await git(['show', '--end-of-options', `${rightRef}:${filePath}`])
   return left.length + right.length
 }
 
-// Post-fix: issue both, await together.
 async function readConcurrent(leftRef, rightRef, filePath) {
   const [left, right] = await Promise.all([
     git(['show', '--end-of-options', `${leftRef}:${filePath}`]),
@@ -51,10 +40,7 @@ async function readConcurrent(leftRef, rightRef, filePath) {
   return left.length + right.length
 }
 
-// Why interleaved: running one strategy's whole batch before the other's lets
-// cache warming, CPU-frequency drift, and background load correlate with the
-// strategy being measured. Alternating per iteration and taking medians keeps
-// that drift common to both arms.
+// Interleave strategies and take medians so cache warming, CPU drift and background load affect both arms.
 async function measureInterleaved(leftRef, rightRef, filePath) {
   for (let index = 0; index < WARMUP; index += 1) {
     await readSequential(leftRef, rightRef, filePath)
@@ -82,8 +68,7 @@ async function measureInterleaved(leftRef, rightRef, filePath) {
 const head = (await git(['rev-parse', 'HEAD'])).trim()
 const parent = `${head}~1`
 
-// Files that exist on both sides, spanning small to large so the fixed spawn
-// cost and the size-dependent read cost are both represented.
+// Span file sizes to cover both fixed spawn and size-dependent read costs.
 const CANDIDATES = [
   'src/main/git/status.ts',
   'src/shared/agent-hook-listener.ts',

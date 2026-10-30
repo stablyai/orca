@@ -7,6 +7,7 @@ import {
 } from './terminal-pane/terminal-hidden-view-parking'
 import { getTerminalParkingPolicyOverrides } from './terminal-pane/terminal-parking-e2e-overrides'
 import { canWatcherCoverParkedTerminalTab } from './terminal-pane/terminal-parked-tab-watchers'
+import { getHeldTerminalPrewarmWorktrees } from './terminal/terminal-worktree-prewarm'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
 export type TerminalParkingPassCandidates = ReturnType<typeof collectTerminalParkingPassCandidates>
@@ -113,8 +114,13 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
       watcherCoverageByTabId.set(tab.id, covered)
       return covered
     })
+  // Leased prewarm worktrees (hover, keyboard neighbors) stay mounted; the retention budget still applies.
+  const keepWarmWorktreeIds = getHeldTerminalPrewarmWorktrees()
   for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
-    if (!worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])) {
+    if (
+      keepWarmWorktreeIds.has(worktreeId) ||
+      !worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])
+    ) {
       nextParkedTerminalWorktreeIds.delete(worktreeId)
     }
   }

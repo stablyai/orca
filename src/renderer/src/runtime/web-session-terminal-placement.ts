@@ -1,11 +1,4 @@
-/**
- * Pending client-side placement for terminals created with a target group, keyed
- * by host tab id. The host silently drops group ids it has never seen (client
- * split-group ids are client-minted), so the client's own record is the only
- * authority that can land the mirrored tab in the pane that asked for it.
- * Records are consumed once the tab materializes; a lingering record would yank
- * a user-dragged tab back, so lifecycle is short by construction.
- */
+// Client-created group IDs are unknown to host, so pending host-tab placements own destination. Consume on materialization or later user drags can be yanked back.
 const groupByPendingHostTabId = new Map<string, string>()
 const MAX_PENDING_TERMINAL_PLACEMENTS = 128
 

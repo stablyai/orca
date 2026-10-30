@@ -6,7 +6,6 @@ export type BrowserRoutePartitionBindingStoreFake = BrowserRoutePartitionBinding
 
 type FakeBinding = { fingerprint: string; storageScope: string; aliasFingerprints?: string[] }
 
-/** In-memory stand-in for the persisted binding store, for tests that only need its semantics. */
 export function createBrowserRoutePartitionBindingStoreFake(): BrowserRoutePartitionBindingStoreFake {
   const entries = new Map<string, FakeBinding>()
   return {

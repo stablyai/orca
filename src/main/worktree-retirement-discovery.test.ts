@@ -18,7 +18,6 @@ describe('extractBucketLeafCandidates', () => {
   })
 
   it('does not treat the parent directory as a leaf when the workspace name is numeric', () => {
-    // Real data: `-Users-x-orca-workspaces-orca-7474` must not retire `orca`, which is in the pool.
     expect(extractBucketLeafCandidates('-w-workspaces-orca-7474', ['-w-workspaces-orca'])).toEqual([
       '7474'
     ])
@@ -55,8 +54,7 @@ describe('collectRetiredNamesFromLeafNames', () => {
 })
 
 describe('discoverRetiredWorktreeNames', () => {
-  /** Buckets are written with the REAL per-character encoding, because a helper that mirrors the
-   *  implementation would pass against a broken encoder — which is how the Windows gap shipped. */
+  /** Use literal real-world bucket encodings so a mirrored encoder cannot hide a broken implementation. */
   async function withFakeHome(
     buckets: readonly string[],
     run: (home: string) => Promise<void>
@@ -73,9 +71,6 @@ describe('discoverRetiredWorktreeNames', () => {
   }
 
   it('calls a machine with no agent state a complete answer, not a hole to rescan forever', async () => {
-    // ENOENT is the common case — a Codex-only or fresh install has no `~/.claude/projects`, and
-    // no workspace root until the first create. Reporting that as incomplete would turn the
-    // one-time seed into a rescan on every composer open for the life of the process.
     const retired = await discoverRetiredWorktreeNames({
       workspaceRoots: [join(tmpdir(), 'orca-retirement-absent-root')],
       home: join(tmpdir(), 'orca-retirement-absent-home'),
@@ -121,8 +116,7 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('matches a Windows drive root', async () => {
-    // `getDefaultWorkspaceDir` returns `C:\Users\<user>\orca\workspaces` on Windows, so an encoder
-    // that collapsed `:\` rejected every bucket on that platform by default.
+    // Claude encodes drive punctuation separately; C:\ must produce C--.
     await withFakeHome([`C--Users-ada-orca-workspaces-${FIRST}`], async (home) => {
       const retired = await discoverRetiredWorktreeNames({
         workspaceRoots: ['C:\\Users\\ada\\orca\\workspaces'],
@@ -139,8 +133,7 @@ describe('discoverRetiredWorktreeNames', () => {
         workspaceRoots: ['\\\\wsl$\\Ubuntu\\home\\ada\\orca\\workspaces'],
         home,
         env: {},
-        // Stubbed even though this case asserts the host-side bucket: the real resolver shells out
-        // to `wsl.exe`, so on a Windows runner this unit test would boot the developer's distro.
+        // Stub distro-home resolution so Windows tests cannot boot the developer's distro.
         resolveWslHome: async () => null
       })
       expect(retired.names).toEqual(new Set([FIRST]))
@@ -171,7 +164,6 @@ describe('discoverRetiredWorktreeNames', () => {
           home,
           env: { CLAUDE_CONFIG_DIR: configDir }
         })
-        // The override relocates the whole state root, so the default home is not also scanned.
         expect(retired.names).toEqual(new Set([FIRST]))
       } finally {
         await rm(configDir, { force: true, recursive: true })
@@ -180,9 +172,6 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it("matches a WSL workspace's bucket inside the distro, keyed by its Linux cwd", async () => {
-    // The agent for a WSL workspace is spawned through `wsl.exe`, so it runs inside the distro:
-    // its cwd is `/home/ada/...`, and its bucket lands in the distro's own home — not the
-    // Windows-side one. After the workspace directory is gone, that bucket is the only evidence.
     const distroHome = await mkdtemp(join(tmpdir(), 'orca-retirement-distro-'))
     await withFakeHome([], async (home) => {
       try {
@@ -203,7 +192,6 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('still reads the Windows-side home for a WSL root when the distro home cannot be resolved', async () => {
-    // A stopped distro must not cost the retirements the host can still see.
     await withFakeHome(
       [`--wsl-localhost-Ubuntu-home-ada-orca-workspaces-${FIRST}`],
       async (home) => {

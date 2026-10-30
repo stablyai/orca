@@ -3,7 +3,7 @@ import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-ur
 import {
   compareWorkspacePorts,
   enrichPort,
-  normalizeWorkspacePortProbes,
+  resolveWorkspacePortProbes,
   reconcileAdvertisedUrls
 } from './local-workspace-port-attribution'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
@@ -35,11 +35,12 @@ export async function scanWorkspacePorts(
   try {
     const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts(options)
     recordWorkspacePortScanSuccess()
-    const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
-    // Why (#11161): without cwd/command-line every port looks unattributed, and
-    // reconciling that would read as "the listener vanished" and evict cached
-    // advertised URLs that only live PTY output can ever restore.
-    if (metadataAvailable) {
+    const { probes: normalizedWorktrees, complete } = await resolveWorkspacePortProbes(
+      worktrees,
+      options.requireMetadata
+    )
+    // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
+    if (metadataAvailable && complete) {
       reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
     }
     const ports = rawPorts

@@ -4,9 +4,7 @@ import type * as NodeReadlineModule from 'node:readline'
 import type * as WslFsAccessModule from '../native-chat/wsl-transcript-fs-access'
 import type { FileWithMtime } from './session-scanner-types'
 
-// readline.close() leaves its input open, so a parser that stops consuming
-// mid-file (a throw, a break) strands the gated transcript handle until the
-// gate's deadline and delays every later scan. These pin the finally blocks.
+// readline.close() leaves its input open; parser exits must destroy streams to release gated handles.
 const mocks = vi.hoisted(() => ({
   openStream: vi.fn(),
   readFile: vi.fn(),
@@ -73,8 +71,6 @@ beforeEach(() => {
     opened.push({ path, stream })
     return stream
   })
-  // One line, then a consumer-side throw: the parser must still tear the
-  // stream down on its way out.
   mocks.createInterface.mockImplementation(() => {
     const lines = {
       close: vi.fn(),
@@ -115,8 +111,7 @@ describe('session parsers that stop consuming a gated transcript early', () => {
   it('destroys the chat_history stream when the Grok parse swallows the failure', async () => {
     mocks.readFile.mockResolvedValue(JSON.stringify({ info: { id: 'ses-1' } }))
 
-    // Grok degrades to a summary-only session on a non-gate failure, so the
-    // teardown has no rejection to ride out on.
+    // Grok swallows non-gate read failures, so verify cleanup on the successful fallback path too.
     await expect(
       parseGrokSessionFile(file('/w/.grok/sessions/ses-1/session.json'))
     ).resolves.toBeTruthy()

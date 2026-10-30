@@ -1,5 +1,4 @@
-// Which workspaces a paired server's main takes layout intents for now: those its frames draw in
-// this window (server-layout-frames.ts). A leaf, so the store-free sender can ask without the store.
+// Leaf ownership registry for store-free senders: only paired workspaces currently drawn by server-layout-frames take server intents.
 
 /** A workspace a server's frames draw, as `layout.apply` reaches that server's main. */
 export type ServerLayoutApplyRoute = {

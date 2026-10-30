@@ -82,8 +82,7 @@ describe('renderer crash diagnostics', () => {
         usedHeapMB: 32,
         totalHeapMB: 64,
         heapLimitMB: 512,
-        // Why: without this tag a reader cannot tell an exact heap number from a
-        // Blink-quantized one, which is what made earlier bundles unanalyzable.
+        // Tag exact versus Blink-quantized heap readings so bundles remain interpretable.
         heapSource: 'quantized',
         browserWebviews: 4,
         registeredBrowserGuests: 3
@@ -136,6 +135,55 @@ describe('renderer crash diagnostics', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(2)
     expect(recordBreadcrumbMock).not.toHaveBeenCalled()
+  })
+
+  it('includes delivered and queued long tasks once in each memory sample', () => {
+    let now = 0
+    let deliver = (_durations: number[]): void => {}
+    const pending: { duration: number }[] = []
+    const observe = vi.fn()
+    vi.stubGlobal('performance', { now: () => now })
+    vi.stubGlobal(
+      'PerformanceObserver',
+      class {
+        static supportedEntryTypes = ['longtask']
+        constructor(callback: (list: { getEntries: () => { duration: number }[] }) => void) {
+          deliver = (durations) =>
+            callback({ getEntries: () => durations.map((duration) => ({ duration })) })
+        }
+        observe = observe
+        disconnect = vi.fn()
+        takeRecords = () => pending.splice(0)
+      }
+    )
+    diagnostics.installRendererCrashDiagnostics()
+    diagnostics.installRendererCrashDiagnostics()
+    expect(observe).toHaveBeenCalledTimes(1)
+    deliver([75, 100])
+    pending.push({ duration: 125 })
+    now = 90_000
+    const sample = setIntervalMock.mock.calls[0][0]
+    sample()
+    expect(recordBreadcrumbMock).toHaveBeenLastCalledWith({
+      name: 'renderer_memory',
+      data: expect.objectContaining({
+        longTaskMs: 300,
+        longTaskCount: 3,
+        longestTaskMs: 125,
+        sampleWindowMs: 90_000
+      })
+    })
+    now += 60_000
+    sample()
+    expect(recordBreadcrumbMock).toHaveBeenLastCalledWith({
+      name: 'renderer_memory',
+      data: expect.objectContaining({
+        longTaskMs: 0,
+        longTaskCount: 0,
+        longestTaskMs: 0,
+        sampleWindowMs: 60_000
+      })
+    })
   })
 
   it('records application errors that only mention a ResizeObserver loop', () => {
@@ -261,8 +309,7 @@ describe('renderer crash diagnostics', () => {
 
       diagnostics.installRendererCrashDiagnostics()
 
-      // Why: performance.memory still says 32MB here. Reporting 101 proves the
-      // exact reading wins rather than merely being recorded alongside.
+      // Blink still reports 32MB; 101 proves exact data replaces it rather than merely accompanying it.
       expect(recordBreadcrumbMock).toHaveBeenCalledWith({
         name: 'renderer_memory',
         data: expect.objectContaining({
@@ -276,9 +323,7 @@ describe('renderer crash diagnostics', () => {
     })
 
     it('observes growth that performance.memory quantizes away', () => {
-      // Why: this is the whole point. Blink pins usedJSHeapSize to a bucket and
-      // caches it ~20min, so a real climb reports byte-identical values and a
-      // highwater threshold never fires. Exact stats must still cross it.
+      // Blink’s long-lived quantized bucket can hide heap growth; exact readings must still cross highwater thresholds.
       const quantized = (window.performance as unknown as { memory: Record<string, number> }).memory
       quantized.usedJSHeapSize = 32 * 1024 * 1024
       stubHeap(100)
@@ -307,8 +352,7 @@ describe('renderer crash diagnostics', () => {
     })
 
     it('omits the Blink field instead of emitting a junk value for it', () => {
-      // Why: `undefined * 1024` is NaN. The breadcrumb must carry no
-      // blinkAllocatedMB at all rather than a meaningless number.
+      // Missing source data must omit blinkAllocatedMB rather than emit NaN from undefined * 1024.
       readHeapStatistics.mockReturnValue({
         usedHeapKB: 77 * KB,
         totalHeapKB: 154 * KB,
@@ -393,9 +437,7 @@ describe('renderer crash diagnostics', () => {
         .map((call) => call[0] as { data: Record<string, unknown> })
 
     it('reports the private footprint and what it holds outside the heap counters', async () => {
-      // Why these numbers: Windows crash 36048e26 — a 618MB private renderer
-      // whose V8 heap was 150MB. 438MB of it is xterm scrollback and glyph
-      // atlases, which no V8 or Blink counter reports.
+      // Model Windows crash 36048e26: private memory far exceeds V8 heap, exposing native xterm/atlas growth that heap counters miss.
       stubFootprint(618)
       diagnostics.installRendererCrashDiagnostics()
       await flush()
@@ -411,8 +453,7 @@ describe('renderer crash diagnostics', () => {
     })
 
     it('arms the leak census on footprint even when the heap ratio never trips', async () => {
-      // Why: 150MB of a 4192MB limit is 3.6% — far below the 60% ratio mark, so
-      // before this the census that names the leak never reached a report.
+      // Low heap/limit ratio must not prevent the census that identifies native-memory growth.
       stubFootprint(618)
       diagnostics.installRendererCrashDiagnostics()
       expect(highwaterCalls()).toHaveLength(0)

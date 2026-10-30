@@ -65,7 +65,6 @@ describe('the turn Codex answered a send into but has not opened', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('client-1')
     echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
-    // A completed end leaves its unechoed send armed.
     expect(echoes.endTurn('thread-1', 'turn-1', { status: 'completed' })).toEqual([])
 
     expect(echoes.answeredUnopenedTurn('thread-1', NONE_OPEN)).toBeNull()
@@ -105,7 +104,7 @@ describe('the sends Codex holds', () => {
     echoes.bindTurn('sent', 'thread-1', 'turn-1', 'start', echoes.tick())
     expect(held(echoes)).toEqual(['sent'])
 
-    // Completed with no echo, as when a hook refused the prompt: no longer Codex's work.
+    // A hook can refuse input and complete the turn without echoing it.
     echoes.endTurn('thread-1', 'turn-1', { status: 'completed' })
     expect(held(echoes)).toEqual([])
     expect(changes).toEqual([''])
@@ -114,7 +113,7 @@ describe('the sends Codex holds', () => {
   it('holds a send answered into no turn only while a status read after its answer says running', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('timed-out')
-    // Idle read while the request is unanswered: Codex may not have read it yet, so it still holds it.
+    // Pre-answer idle status cannot prove Codex has read the send.
     echoes.observeStatus(false)
     expect(held(echoes)).toEqual(['timed-out'])
     echoes.answered('timed-out', echoes.tick())

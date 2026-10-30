@@ -151,6 +151,7 @@ orca-ide serve --pairing-address 100.64.1.20
 The command:
 
 - starts the Orca runtime without opening the desktop window;
+- on macOS, stays out of the Dock and the Cmd-Tab switcher until you open a desktop window from it;
 - runs in the foreground until you press `Ctrl-C`;
 - prints the bound endpoint and a runtime pairing URL;
 - uses `--pairing-address` only for the address clients should dial.
@@ -185,6 +186,17 @@ orca-ide serve --pairing-address 100.64.1.20
 - They need systemd with cgroup v2 and a user manager that outlives logout (`loginctl enable-linger <user>`). If the host can't enforce a limit, Orca skips it, logs `terminal-memory-limits` in the terminal host log, and starts terminals without it.
 - Orca reads them only when its terminal host process starts. That process keeps running when `orca serve` restarts, so terminals keep their old limits until it restarts too, for example after the server reboots.
 - They have no effect on macOS or Windows.
+
+### Use the GPU on a Linux server
+
+On Linux, `orca serve` turns off hardware acceleration by default, because most headless hosts have no GPU and a failing GPU process can stop the server from starting. Browser panes then render in software. If the host gives the Orca process a GPU (for example a render node such as `/dev/dri/renderD128`), set `ORCA_SERVE_GPU=1` in the environment that starts `orca serve` (or in its service unit) to keep hardware acceleration on:
+
+```bash
+export ORCA_SERVE_GPU=1
+orca-ide serve --pairing-address 100.64.1.20
+```
+
+This only stops Orca from turning the GPU off. Chromium may still render in software on Orca's own Xvfb, which has no GPU of its own; open `chrome://gpu` in a browser pane to check, and point `DISPLAY` at a GPU-backed X server if it reports software rendering. If you installed the server with `orca serve service install`, add the variable to the service unit yourself. If the server stops starting or browser panes crash with it set, unset it to go back to software rendering.
 
 ### Mobile from a headless server
 

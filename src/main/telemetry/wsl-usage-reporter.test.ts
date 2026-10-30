@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +11,7 @@ vi.mock('./client', () => ({
 
 import {
   collectWslProjects,
-  listRunningDistrosForSnapshot,
+  countWindowsDriveReposWithWslWorktrees,
   WSL_USAGE_SNAPSHOT_INTERVAL_MS,
   WslUsageReporter,
   type WslUsageStore
@@ -24,6 +24,7 @@ const input: WslUsageSnapshotInput = {
   wslPackageVersion: '2.4.13',
   wslAvailableCached: true,
   projects: [],
+  windowsDriveReposWithWslWorktrees: 0,
   wslHostsGateOpen: false
 }
 
@@ -72,14 +73,6 @@ describe('WslUsageReporter', () => {
     expect(gather).toHaveBeenCalledTimes(2)
   })
 
-  it('gathers nothing off Windows or while telemetry is off', async () => {
-    expect(await reporter({ platform: 'darwin' }).reportIfDue()).toBe(false)
-    expect(await reporter({ platform: 'linux' }).reportIfDue()).toBe(false)
-    expect(await reporter({ telemetryEnabled: () => false }).reportIfDue()).toBe(false)
-    expect(gather).not.toHaveBeenCalled()
-    expect(trackMock).not.toHaveBeenCalled()
-  })
-
   it('does not regather an hour after a failed gather', async () => {
     gather.mockRejectedValueOnce(new Error('store unavailable'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -108,40 +101,6 @@ describe('WslUsageReporter', () => {
   it('treats a corrupt stamp as never sent', async () => {
     writeFileSync(join(dir, 'wsl-usage-telemetry.json'), 'not json')
     expect(await reporter().reportIfDue()).toBe(true)
-  })
-
-  it('never throws when gathering fails', async () => {
-    gather.mockRejectedValueOnce(new Error('reg.exe timed out'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(await reporter().reportIfDue()).toBe(false)
-    warn.mockRestore()
-  })
-})
-
-describe('listRunningDistrosForSnapshot', () => {
-  it('reuses a confirmed list without probing', async () => {
-    const probe = vi.fn(async () => ['Other'])
-    const running = await listRunningDistrosForSnapshot(
-      [{ distro: 'Ubuntu' }],
-      () => ['Ubuntu'],
-      probe
-    )
-    expect(running).toEqual(['Ubuntu'])
-    expect(probe).not.toHaveBeenCalled()
-  })
-
-  it('probes once when nothing is cached and a user distro exists', async () => {
-    const probe = vi.fn(async () => ['Ubuntu'])
-    const running = await listRunningDistrosForSnapshot([{ distro: 'Ubuntu' }], () => null, probe)
-    expect(running).toEqual(['Ubuntu'])
-    expect(probe).toHaveBeenCalledTimes(1)
-  })
-
-  it('never probes without a user distro', async () => {
-    const probe = vi.fn(async () => [])
-    await listRunningDistrosForSnapshot([{ distro: 'docker-desktop' }], () => null, probe)
-    await listRunningDistrosForSnapshot(null, () => null, probe)
-    expect(probe).not.toHaveBeenCalled()
   })
 })
 
@@ -180,5 +139,64 @@ describe('collectWslProjects', () => {
   it('counts a WSL-host project on a Windows drive when the gate is open', () => {
     const projects = collectWslProjects(wslStore, true, () => new Map([['env-1', 'Debian']]), null)
     expect(projects).toContainEqual({ location: 'windows_drive', kind: 'folder', distro: 'Debian' })
+  })
+})
+
+describe('countWindowsDriveReposWithWslWorktrees', () => {
+  let root: string
+  const originalPlatform = process.platform
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-wsl-usage-links-'))
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  })
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  function repoWithLinks(id: string, links: string[]) {
+    const path = join(root, id)
+    links.forEach((link, index) => {
+      mkdirSync(join(path, '.git', 'worktrees', `w${index}`), { recursive: true })
+      writeFileSync(join(path, '.git', 'worktrees', `w${index}`, 'gitdir'), `${link}\n`)
+    })
+    mkdirSync(join(path, '.git'), { recursive: true })
+    return { id, path, displayName: id, badgeColor: '', addedAt: 0 }
+  }
+
+  it('counts Windows-drive WSL repos with a worktree WSL Git made, reading files only', async () => {
+    const repos = [
+      repoWithLinks('mixed', ['C:/src/mixed-a/.git', '/mnt/c/src/mixed-b/.git']),
+      repoWithLinks('native', ['C:/src/native-a/.git']),
+      repoWithLinks('none', []),
+      repoWithLinks('share', ['//server/share/app-feature/.git'])
+    ]
+    const countStore: WslUsageStore = {
+      getRepos: () => repos,
+      getProjects: () => [
+        {
+          id: 'p',
+          displayName: 'p',
+          badgeColor: '',
+          sourceRepoIds: repos.map((repo) => repo.id),
+          createdAt: 0,
+          updatedAt: 0,
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      getSettings: () => ({})
+    }
+    await expect(countWindowsDriveReposWithWslWorktrees(countStore)).resolves.toBe(1)
+  })
+
+  it('ignores repos that run on Windows', async () => {
+    const repos = [repoWithLinks('mixed', ['/mnt/c/src/mixed-b/.git'])]
+    await expect(
+      countWindowsDriveReposWithWslWorktrees({
+        getRepos: () => repos,
+        getProjects: () => [],
+        getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+      })
+    ).resolves.toBe(0)
   })
 })

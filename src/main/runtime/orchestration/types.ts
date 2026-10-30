@@ -47,7 +47,7 @@ export type RunRow = {
   home_database: string
   coordinator_handle: string | null
   coordinator_pane_key: string | null
-  /** Bare Orca session id the coordinator is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** Bare coordinator session id; cleared chats use their lineage root. */
   coordinator_orca_session_id: OrcaSessionId | null
   /** The consumer_generation the id was written at; see currentRunCoordinatorOrcaSessionId. */
   coordinator_orca_session_id_generation: number | null
@@ -284,7 +284,7 @@ export type DispatchContextRow = {
   launch_token_hash: string | null
   assignee_handle: string | null
   assignee_pane_key: string | null
-  /** Bare Orca session id the assignee is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** Bare assignee session id; cleared chats use their lineage root. */
   assignee_orca_session_id: OrcaSessionId | null
   /** Written only by hosts that minted a per-Dispatch capability; never read for authority. */
   capability_hash: string | null
@@ -297,14 +297,13 @@ export type DispatchContextRow = {
   /** Creator identity; equal to the assignee means a self-dispatch, which adds no nesting depth. */
   creator_handle: string | null
   creator_pane_key: string | null
-  /** Bare Orca session id the creator is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** Bare creator session id; cleared chats use their lineage root. */
   creator_orca_session_id: OrcaSessionId | null
   host_scope: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
-  /** Why the dispatch ended, when Orca could establish it — `operator_close`,
-   *  `signaled`, `exited`, `unknown`. Null on rows written before STA-4603. */
+  /** Proven termination cause; null for rows predating STA-4603. */
   termination_reason: TerminalExitCause['kind'] | null
   /** Nesting depth; a root coordinator's worker is 1. Never 0 on a persisted row. */
   depth: number

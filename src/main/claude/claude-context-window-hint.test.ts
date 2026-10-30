@@ -20,7 +20,6 @@ const answer = (model: string, totalTokens: number, rawMaxTokens: number) => ({
   categories: []
 })
 
-/** A new session whose configured model the host applied before the first send. */
 function session(init: string, configured?: string) {
   const t = setup({ init })
   if (configured !== undefined) {
@@ -44,7 +43,6 @@ function session(init: string, configured?: string) {
 
 describe('the window a configured model name implies', () => {
   it.each([
-    // First-party runs these natively at 1M; a gateway or cloud provider runs them at 200k.
     ['opus', null],
     ['sonnet', null],
     ['fable', null],
@@ -52,7 +50,6 @@ describe('the window a configured model name implies', () => {
     ['claude-fable-5-1', null],
     ['claude-opus-5-5', null],
     ['claude-sonnet-5', null],
-    // Plan mode runs another model: Opus for `opusplan`, Sonnet for `haiku`.
     ['opusplan', null],
     ['haiku', null],
     ['default', null],
@@ -124,7 +121,6 @@ describe('the context ring before the first window is measured', () => {
     'sizes the first response from the report a pick of %s made before any turn',
     async (configured, reported, window, share) => {
       const s = session(reported)
-      // What the host does for a model picked in a chat with no turn row for the report to land on.
       s.translator.modelMayHaveChanged()
       s.translator.modelWritten(configured)
       await s.reply(answer(reported, 20_000, window))
@@ -148,7 +144,6 @@ describe('the context ring before the first window is measured', () => {
     expect(s.ring()).toMatchObject({ usedTokens: 100_000, windowTokens: 400_000, percentage: 25 })
     await s.reply(answer(SONNET, 101_000, 500_000))
     expect(s.ring()).toMatchObject({ usedTokens: 101_000, windowTokens: 500_000, estimated: false })
-    // A measured window stands: the next turn's estimates divide by it, not the name's.
     s.handle(initFrame(SONNET, 3_900))
     s.handle(userFrame('turn-b', 4_000))
     s.handle(assistantFrame('reply-b', 5_000, 110_000, undefined, SONNET))
@@ -164,7 +159,6 @@ describe('the context ring before the first window is measured', () => {
     await s.reply(answer(SONNET, 151_000, 200_000))
     expect(s.ring()).toMatchObject({ windowTokens: 200_000, percentage: 76 })
 
-    // What the host does for a model write the child applied.
     s.translator.modelMayHaveChanged()
     s.translator.modelWritten('sonnet[1m]')
     const switched = s.pending.length - 1
@@ -189,7 +183,6 @@ describe('the context ring before the first window is measured', () => {
     s.handle(assistantFrame('reply-a', 2_000, 50_000, undefined, SONNET))
     expect(s.ring()).toMatchObject({ windowTokens: 1_000_000 })
 
-    // A permission-mode write names no model, so nothing says which window serves now.
     s.translator.modelMayHaveChanged()
     const toggled = s.pending.length - 1
     s.handle(assistantFrame('reply-a2', 3_000, 60_000, undefined, SONNET))

@@ -11,10 +11,7 @@ export type AgentRowLineageTree = {
   childrenByParentPaneKey: Map<string, RuntimeWorktreeAgentRow[]>
 }
 
-// Mirrors the desktop buildAgentRowLineageTree: groups a flat agent list into a
-// spawn tree by parentPaneKey. The wire rows already carry a resolved
-// parentPaneKey (the server reads the orchestration db), so this only has to
-// group and guard against malformed (cyclic / dangling-parent) metadata.
+// Mirror desktop lineage using server-resolved parentPaneKey; guard cyclic and dangling metadata.
 export function buildAgentRowLineageTree(
   rows: readonly RuntimeWorktreeAgentRow[]
 ): AgentRowLineageTree {
@@ -29,8 +26,7 @@ export function buildAgentRowLineageTree(
   const childPaneKeys = new Set<string>()
   for (const row of rows) {
     const parentPaneKey = row.parentPaneKey
-    // Why: ignore a parent that points at the row itself or at a pane not in
-    // this list — treat those as roots rather than dropping them.
+    // Invalid/self parents become roots so malformed metadata cannot hide rows.
     if (!parentPaneKey || parentPaneKey === row.paneKey || !byPaneKey.has(parentPaneKey)) {
       continue
     }
@@ -45,16 +41,13 @@ export function buildAgentRowLineageTree(
 
   const rootRows = rows.filter((row) => !childPaneKeys.has(row.paneKey))
   if (rootRows.length === 0 && rows.length > 0) {
-    // Why: a closed cycle leaves no root. Keep every agent visible as a flat
-    // root instead of hiding all participants.
+    // A closed cycle has no root; keep every participant visible.
     return { rootRows: [...rows], childrenByParentPaneKey: new Map() }
   }
 
   return { rootRows, childrenByParentPaneKey }
 }
 
-// Flattens the lineage tree into depth-tagged nodes in render order
-// (parent immediately followed by its descendants). Cycle-guarded.
 export function flattenAgentRowLineage(rows: readonly RuntimeWorktreeAgentRow[]): AgentRowNode[] {
   const { rootRows, childrenByParentPaneKey } = buildAgentRowLineageTree(rows)
   const out: AgentRowNode[] = []
@@ -76,9 +69,7 @@ export function flattenAgentRowLineage(rows: readonly RuntimeWorktreeAgentRow[])
   for (const root of rootRows) {
     visit(root, 0)
   }
-  // Why: a cyclic component that coexists with a normal rooted tree has no entry
-  // in rootRows and is unreachable from any root, so it would silently vanish.
-  // Surface any not-yet-emitted rows as depth-0 so every agent stays visible.
+  // Cycles beside a normal tree are unreachable from roots; emit unseen rows so none vanish.
   for (const row of rows) {
     if (!seen.has(row.paneKey)) {
       seen.add(row.paneKey)

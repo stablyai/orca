@@ -129,7 +129,6 @@ export type ResolvedGitHubApiRepositorySource = {
   fellBack: boolean
 }
 
-/** Hosted mirror of resolveIssueSource — same preference semantics. */
 export async function resolveIssueGitHubApiRepositorySource(
   repoPath: string,
   preference: IssueSourcePreference | undefined,
@@ -188,8 +187,7 @@ export async function resolveGitHubApiRepository(
     if (isDefaultGitHubHost(host)) {
       return { ...repository, host }
     }
-    // Why: client-supplied hosts must match gh's local auth inventory before
-    // they can receive ambient Enterprise credentials from a host-pinned call.
+    // Verify supplied hosts against local auth inventory before giving them ambient Enterprise credentials.
     const authenticated = await isGitHubHostAuthenticated(
       host,
       repoPath,
@@ -206,13 +204,11 @@ export async function resolveGitHubApiRepository(
   if (!repository) {
     return originRepository
   }
-  // Why: older clients only send owner/repo. The origin still supplies the
-  // execution host for fork-base slugs on the same GitHub Enterprise server.
+  // Older clients omit host; resolved origin supplies it for fork-base slugs on the same server.
   if (originRepository?.host) {
     return { ...repository, host: originRepository.host }
   }
-  // Why: a host-less identity can honor ambient GH_HOST even with a local cwd.
-  // Only a resolved origin may supply the execution host for legacy clients.
+  // Host-less calls could follow ambient GH_HOST; only resolved origin can supply the legacy host.
   return null
 }
 
@@ -222,11 +218,9 @@ export async function resolveGitHubRepoExecution(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubRepoExecution> {
-  // Why: issue-scoped paths retain their upstream-first resolver while sharing
-  // the same repo-scoped and host-scoped gh execution option construction.
+  // Retain upstream-first issue resolution with the same host-pinned execution options.
   const requestedRepository = typeof repository === 'function' ? await repository() : repository
-  // Why: normalize host-less resolver results without replacing an
-  // authoritative null with the generic origin fallback.
+  // Preserve authoritative nulls instead of replacing them with origin.
   const ownerRepo =
     typeof repository === 'function' && !requestedRepository
       ? null

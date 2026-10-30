@@ -7,16 +7,15 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 
 const toastInfo = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { info: toastInfo, dismiss: vi.fn() } }))
 
-/**
- * The sidebar drop only reorders if the payload `reorderWorktrees` builds is the
- * one `updateWorktreesMeta` consumes. The e2e that covered this replaced the store
- * action with a fake, so a payload-shape change (#16691, Map -> batch array) showed
- * up as a red drag spec instead of a red contract. This runs the real action.
- */
+/** Run the real metadata action so a drag payload-shape mismatch cannot hide behind an E2E fake. */
 
 const initialState = useAppStore.getInitialState()
 const REPO_ID = 'repo-manual-order'
@@ -56,7 +55,7 @@ function manualOrderedIds(): readonly string[] {
   return buildWorktreeManualOrderCatalog({
     worktrees: useAppStore.getState().worktreesByRepo[REPO_ID] ?? [],
     folderWorkspaces: []
-  }).orderedIds
+  }).orderedKeys.map(getWorktreeIdFromHostIdentity)
 }
 
 describe('sidebar manual-order drop', () => {
@@ -75,13 +74,14 @@ describe('sidebar manual-order drop', () => {
   it('moves the dragged row past its neighbor in the store', async () => {
     const worktrees = seedManualOrderedRows(3)
     const ids = worktrees.map((worktree) => worktree.id)
+    const keys = worktrees.map(getWorktreeHostIdentity)
     const reorder = renderReorder(worktrees)
 
     await act(async () => {
       reorder.current.reorderWorktrees({
-        groups: [{ key: GROUP_KEY, worktreeIds: ids }],
+        groups: [{ key: GROUP_KEY, worktreeIds: keys }],
         sourceGroupKey: GROUP_KEY,
-        draggedIds: [ids[0]!],
+        draggedKeys: [keys[0]!],
         dropIndex: 2
       })
     })
@@ -99,14 +99,15 @@ describe('sidebar manual-order drop', () => {
   it('leaves the order alone when the drop lands where the row already is', async () => {
     const worktrees = seedManualOrderedRows(3)
     const ids = worktrees.map((worktree) => worktree.id)
+    const keys = worktrees.map(getWorktreeHostIdentity)
     const reorder = renderReorder(worktrees)
     const epochBeforeDrop = useAppStore.getState().sortEpoch
 
     await act(async () => {
       reorder.current.reorderWorktrees({
-        groups: [{ key: GROUP_KEY, worktreeIds: ids }],
+        groups: [{ key: GROUP_KEY, worktreeIds: keys }],
         sourceGroupKey: GROUP_KEY,
-        draggedIds: [ids[0]!],
+        draggedKeys: [keys[0]!],
         dropIndex: 1
       })
     })
@@ -122,13 +123,14 @@ describe('sidebar manual-order drop', () => {
     const worktrees = seedManualOrderedRows(3)
     useAppStore.setState({ sortBy: 'manual' })
     const ids = worktrees.map((worktree) => worktree.id)
+    const keys = worktrees.map(getWorktreeHostIdentity)
     const reorder = renderReorder(worktrees)
 
     await act(async () => {
       reorder.current.reorderWorktrees({
-        groups: [{ key: GROUP_KEY, worktreeIds: ids }],
+        groups: [{ key: GROUP_KEY, worktreeIds: keys }],
         sourceGroupKey: GROUP_KEY,
-        draggedIds: [ids[0]!],
+        draggedKeys: [keys[0]!],
         dropIndex: 2
       })
     })

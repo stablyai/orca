@@ -1,18 +1,5 @@
-/**
- * #26887: after the connection to a remote host drops and comes back, a pane running an idle
- * full-screen program must show the program's current frame, not the one it drew before the drop.
- * The program changes its frame while the client is away and then goes quiet, the way an agent
- * finishes its turn during a laptop sleep, so no later byte can heal the pane.
- *
- * Two hosts: one that can image the pane (the reconnect snapshot repaints it), and one forced to
- * answer every snapshot with `no-serializable-buffer`, where only a repaint by the program itself
- * can bring the pane up to date.
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-reconnect-idle-frame.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// #26887: change an alt-screen frame while disconnected, then leave the program idle so later bytes cannot heal stale restore.
+// Test both host snapshots and no-serializable-buffer, where the program must repaint itself.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

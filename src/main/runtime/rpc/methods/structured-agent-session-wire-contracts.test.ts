@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +11,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
@@ -81,6 +82,10 @@ it.each([
   await call('agentSession.subscribe', { sessionId: SESSION }, client)
   expect(input?.boundedFrames === true).toBe(bounded)
   expect(input?.snapshotCatchUp).toBe(snapshot)
+  const request = { sessionId: SESSION, direction: 'after', cursor: { epoch: 'e', sequence: 1 } }
+  await call('agentSession.history', request, client)
+  const replaceHistory = snapshot && input?.readsCurrentRequests === true
+  expect(hostCalls.history).toHaveBeenCalledWith(request, undefined, replaceHistory)
 })
 
 it('allows the local desktop renderer to replace a missed gap with a snapshot', async () => {
@@ -571,3 +576,36 @@ describe('agentSession.subscribeTurnCompletions', () => {
     expect(subscribed().map((sub) => sub.includePrompts)).toEqual([true])
   })
 })
+
+it.each([false, true])(
+  'negotiates command demand per request and subscriber: capable=%s',
+  async (capable) => {
+    const client = {
+      ...STRUCTURED_CLIENT,
+      clientCapabilities: [
+        ...STRUCTURED_CLIENT.clientCapabilities,
+        ...(capable ? [AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY] : [])
+      ]
+    }
+    hostCalls.readCommands = vi.fn(async () => ({ commands: [] }))
+    expect(await call('agentSession.commands', { sessionId: SESSION }, client)).toMatchObject({
+      ok: true
+    })
+    expect(hostCalls.readCommands).toHaveBeenCalledWith(SESSION, capable)
+    let subscription: AgentSessionSubscribeInput | undefined
+    hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
+      subscription = input
+      input.emit({ type: 'end' })
+      return () => {}
+    })
+    await call('agentSession.subscribe', { sessionId: SESSION }, client)
+    expect(subscription?.commandsOnRequest).toBe(capable)
+    expect(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+    expect(
+      parseRuntimeClientCapabilities([...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES])
+    ).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+  }
+)

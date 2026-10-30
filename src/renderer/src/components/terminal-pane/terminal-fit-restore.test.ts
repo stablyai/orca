@@ -113,8 +113,7 @@ describe('terminal-fit-restore', () => {
     vi.useFakeTimers()
     try {
       vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue(null)
-      // Why: models a wedged runtime/daemon after system sleep (#9447) — the
-      // IPC invoke stays pending forever.
+      // Model sleep-wedged runtime/daemon IPC that never resolves (#9447).
       restoreTerminalFit.mockReturnValue(new Promise(() => {}))
 
       let settled: boolean | null = null

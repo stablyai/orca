@@ -34,7 +34,7 @@ export async function materializeClaudeRewindTranscript(
   let resumeCursor: string | undefined
   const result = await forkSession(fork.sourceSessionId, {
     upToMessageId: fork.throughEntryId,
-    // A store pins both reads and writes to the resolved account, without changing process.env.
+    // Pin reads and writes to the resolved account without mutating process.env.
     sessionStore: {
       load: async () => {
         const entries: SessionStoreEntry[] = []
@@ -43,7 +43,7 @@ export async function materializeClaudeRewindTranscript(
             continue
           }
           const entry = parseTranscriptEntry(line)
-          // Skip torn lines (crash mid-write) like the SDK's own local reader does.
+          // Tolerate crash-torn lines like the SDK reader.
           if (entry) {
             entries.push(entry)
           }
@@ -55,7 +55,8 @@ export async function materializeClaudeRewindTranscript(
           (entry) => entry.type === 'assistant' || entry.type === 'user'
         )?.uuid
         if (!resumeCursor) {
-          throw new Error('claude rewind fork is missing its resume point')
+          // Metadata alone uses the same fresh launch as a rewind with no parent.
+          return
         }
         const destination = join(dirname(sourcePath), `${key.sessionId}.jsonl`)
         const temporary = durableWriteTempPath(destination)
@@ -72,5 +73,12 @@ export async function materializeClaudeRewindTranscript(
       }
     }
   })
-  return { ...fork, sessionId: result.sessionId, resumeCursor, materialized: true }
+  return resumeCursor
+    ? { ...fork, sessionId: result.sessionId, resumeCursor, materialized: true }
+    : {
+        sessionId: fork.sessionId,
+        sourceSessionId: fork.sourceSessionId,
+        replacesSessionId: fork.replacesSessionId,
+        materialized: true
+      }
 }

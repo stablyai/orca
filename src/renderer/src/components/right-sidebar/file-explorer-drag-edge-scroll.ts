@@ -1,5 +1,4 @@
-// Native drag auto-scroll uses a very thin band; a wider zone matches IDE-style
-// tree dragging so users need not hug the scrollbar.
+// Widen native drag auto-scroll's thin edge zone so users need not hug the scrollbar.
 export const DRAG_EDGE_ZONE_PX = 48
 
 export function getDragEdgeScrollTarget({

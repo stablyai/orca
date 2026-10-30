@@ -4,17 +4,9 @@ import { acquireWebviewsDragPassthrough } from '../host-guest/webview-drag-passt
 import { webviewRegistry } from '../host-guest/webview-registry'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 
-it('restores pointer input when a drag ends after attaching a document preview', () => {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const append = vi.spyOn(container, 'appendChild')
-  append.mockImplementation((node) => {
-    expect((node as HTMLElement).style.pointerEvents).toBe('none')
-    return Node.prototype.appendChild.call(container, node)
-  })
-  const release = acquireWebviewsDragPassthrough()
-  const attached = attachDocPreviewWebview({
-    previewId: 'preview-drag',
+function attach(previewId: string, container: HTMLDivElement) {
+  return attachDocPreviewWebview({
+    previewId,
     container,
     url: 'orca-preview://grant/index.html',
     ariaLabel: 'HTML preview',
@@ -25,6 +17,18 @@ it('restores pointer input when a drag ends after attaching a document preview',
     onTitleUpdated: vi.fn(),
     onViewportMessage: vi.fn()
   })
+}
+
+it('restores pointer input when a drag ends after attaching a document preview', () => {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const append = vi.spyOn(container, 'appendChild')
+  append.mockImplementation((node) => {
+    expect((node as HTMLElement).style.pointerEvents).toBe('none')
+    return Node.prototype.appendChild.call(container, node)
+  })
+  const release = acquireWebviewsDragPassthrough()
+  const attached = attach('preview-drag', container)
 
   try {
     expect(webviewRegistry.get('preview-drag')).toBe(attached.webview)

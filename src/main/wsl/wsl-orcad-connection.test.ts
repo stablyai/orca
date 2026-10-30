@@ -1,4 +1,5 @@
-import { connect, type Server, type Socket } from 'node:net'
+import { connect, createServer, type Server, type Socket } from 'node:net'
+import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, parsePairingCode, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
@@ -21,6 +22,7 @@ import {
   type WslOrcadConnectionDependencies
 } from './wsl-orcad-connection'
 import {
+  WslDistroNotRunningError,
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
@@ -170,6 +172,29 @@ describe('WslOrcadConnectionManager', () => {
     expect(await roundTrip(connection, 'hello')).toBe('hello')
   })
 
+  it('retires the listener without announcing a close, so the idle or stopped status stands', async () => {
+    const { manager, onChange } = setup()
+    const connection = await manager.ensure('Ubuntu')
+    const calls = onChange.mock.calls.length
+    await manager.retireListener('ubuntu')
+    expect(manager.get('Ubuntu')).toBeNull()
+    expect(onChange).toHaveBeenCalledTimes(calls)
+    await expect(dial(connection.localPort)).rejects.toThrow()
+    await manager.retireListener('Ubuntu')
+  })
+
+  it('keeps the listener while a user connect for the distro is in flight', async () => {
+    const { manager, deployAndLaunch } = setup()
+    const connection = await manager.ensure('Ubuntu')
+    const launch = Promise.withResolvers<WslOrcadLaunch>()
+    deployAndLaunch.mockImplementationOnce(() => launch.promise)
+    const connecting = manager.ensure('Ubuntu')
+    await manager.retireListener('Ubuntu')
+    expect(manager.get('Ubuntu')).toBe(connection)
+    launch.resolve(ready(first.port))
+    expect(await connecting).toBe(connection)
+  })
+
   it('shares one deploy and one bridge between concurrent connects to a distro', async () => {
     const { manager, deployAndLaunch, children } = setup()
     const [a, b] = await Promise.all([manager.ensure('Ubuntu'), manager.ensure('ubuntu ')])
@@ -177,8 +202,97 @@ describe('WslOrcadConnectionManager', () => {
     expect(deployAndLaunch).toHaveBeenCalledTimes(1)
     expect(manager.list()).toEqual([a])
     expect(manager.get('UBUNTU')).toBe(a)
-    // Only the bridge check ran a child so far.
     expect(children.commands).toHaveLength(1)
+  })
+
+  it('a no-boot connect spawns nothing in a distro not confirmed running (E9)', async () => {
+    const { manager, deployAndLaunch, children } = setup()
+    const requireRunning = vi.fn(async () => false)
+    await expect(manager.ensure('Ubuntu', { requireRunning })).rejects.toBeInstanceOf(
+      WslDistroNotRunningError
+    )
+    expect(requireRunning).toHaveBeenCalledWith('Ubuntu')
+    expect(deployAndLaunch).not.toHaveBeenCalled()
+    expect(children.commands).toHaveLength(0)
+    requireRunning.mockResolvedValue(true)
+    await expect(manager.ensure('Ubuntu', { requireRunning })).resolves.toBeTruthy()
+    expect(deployAndLaunch).toHaveBeenCalledTimes(1)
+    // The deploy gets the same check, so its own second wake can refuse too.
+    const calls: readonly unknown[][] = deployAndLaunch.mock.calls
+    const deployOptions = calls[0]?.[1]
+    const recheck =
+      deployOptions && typeof deployOptions === 'object' && 'requireRunning' in deployOptions
+        ? deployOptions.requireRunning
+        : undefined
+    expect(typeof recheck).toBe('function')
+    requireRunning.mockClear()
+    if (typeof recheck === 'function') {
+      await recheck()
+    }
+    expect(requireRunning).toHaveBeenCalledWith('Ubuntu')
+  })
+
+  it('a connect that may boot does not ride on an in-flight no-boot one (E9)', async () => {
+    const { manager, deployAndLaunch } = setup()
+    let answer: (running: boolean) => void = () => {}
+    const requireRunning = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve
+        })
+    )
+    const poll = manager.ensure('Ubuntu', { requireRunning })
+    // The user focuses the host while the poll's running-list read is pending.
+    const focus = manager.ensure('Ubuntu')
+    answer(false)
+    await expect(poll).rejects.toBeInstanceOf(WslDistroNotRunningError)
+    await expect(focus).resolves.toBeTruthy()
+    expect(deployAndLaunch).toHaveBeenCalledTimes(1)
+  })
+
+  it('a no-boot refusal reports no failure; liveness owns the distro verdict (E9)', async () => {
+    const { manager, onChange } = setup()
+    await expect(
+      manager.ensure('Ubuntu', { requireRunning: async () => false })
+    ).rejects.toBeInstanceOf(WslDistroNotRunningError)
+    expect(onChange.mock.calls.map(([, , status]) => status.state)).not.toContain('failed')
+  })
+
+  it('a no-boot connect never shows the row as connecting, since it may be refused quietly', async () => {
+    const { manager, onChange } = setup()
+    await manager.ensure('Ubuntu', { requireRunning: async () => false }).catch(() => {})
+    expect(onChange.mock.calls.map(([, , status]) => status.state)).not.toContain('connecting')
+  })
+
+  it('a no-boot recovery connect still publishes its own pending status', async () => {
+    const { manager, onChange } = setup()
+    const pending: WslOrcadConnectionStatus = {
+      state: 'reconnecting',
+      reason: 'orcad-exited',
+      attempt: 1,
+      terminals: 'unverifiable',
+      retryInMs: null
+    }
+    await manager.ensure('Ubuntu', {
+      requireRunning: async () => true,
+      status: { pending, ready: { state: 'ready', census: null } }
+    })
+    expect(onChange.mock.calls.map(([, , status]) => status)).toContainEqual(pending)
+  })
+
+  it('a close during the running-list read supersedes the connect before it deploys (E9)', async () => {
+    const { manager, deployAndLaunch } = setup()
+    let answer: (running: boolean) => void = () => {}
+    const pending = manager.ensure('Ubuntu', {
+      requireRunning: () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve
+        })
+    })
+    await manager.close('Ubuntu')
+    answer(true)
+    await expect(pending).rejects.toBeInstanceOf(WslOrcadConnectionSupersededError)
+    expect(deployAndLaunch).not.toHaveBeenCalled()
   })
 
   it('keeps the bridge when orcad still listens on the same port', async () => {
@@ -187,7 +301,6 @@ describe('WslOrcadConnectionManager', () => {
     launches.push(ready(first.port))
     expect(await manager.ensure('Ubuntu')).toBe(connection)
     expect(children.commands).toHaveLength(1)
-    // A refresh that changed nothing stays quiet: connecting, ready, and no more.
     expect(onChange).toHaveBeenCalledTimes(2)
   })
 
@@ -217,6 +330,33 @@ describe('WslOrcadConnectionManager', () => {
     await staleClosed
     expect(await roundTrip(after, 'new')).toBe('new')
     expect(children.commands.at(-1)).toContain(` ${second.port}; fi; done;`)
+  })
+
+  it('rebinds the bridge port the host record saved, so an app restart keeps the pairing', async () => {
+    const saved = await setup().manager.ensure('Ubuntu')
+    const port = saved.localPort
+    await saved.close()
+
+    const { manager } = setup({ recordedLocalPort: () => port })
+    const restarted = await manager.ensure('Ubuntu')
+    expect(restarted.localPort).toBe(port)
+    expect(restarted.pairingOffer).toBe(saved.pairingOffer)
+    expect(await roundTrip(restarted, 'again')).toBe('again')
+  })
+
+  it('picks a free port when the recorded one is taken', async () => {
+    const squatter = createServer()
+    await new Promise<void>((resolve) => squatter.listen(0, '127.0.0.1', resolve))
+    const address = squatter.address()
+    const taken = typeof address === 'object' && address ? address.port : 0
+    try {
+      const { manager } = setup({ recordedLocalPort: () => taken })
+      const connection = await manager.ensure('Ubuntu')
+      expect(connection.localPort).not.toBe(taken)
+      expect(await roundTrip(connection, 'free')).toBe('free')
+    } finally {
+      squatter.close()
+    }
   })
 
   it('serves the incumbent with its deferred update, then reports the update landing', async () => {
@@ -298,7 +438,6 @@ describe('WslOrcadConnectionManager', () => {
     await expect(manager.ensure('Ubuntu')).rejects.toBeInstanceOf(WslOrcadLaunchDeferredError)
     expect(children.commands).toHaveLength(0)
     expect(manager.get('Ubuntu')).toBeNull()
-    // Nothing serves, so the deferral is what offers Update or Force.
     expect(onChange).toHaveBeenLastCalledWith(
       'Ubuntu',
       null,
@@ -424,7 +563,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
       resolve: () => stored,
       connect: async () => {
         const target = { kind: 'wsl', id: 'wsl:ubuntu', distro: 'Ubuntu', label: 'Ubuntu' } as const
-        // Never used: readReadiness answers from the fixture.
+        // The fixture supplies readiness, so this spawner is unused.
         const spawn = fakeWslBridgeChildren().spawn
         return { target, connection: createWslOrcadHostTransport({ target, spawn }) }
       },
@@ -438,7 +577,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
     return { stored: () => stored, refresh, recovery }
   }
 
-  // The host knows only the token it published after losing its device registry.
+  // After registry loss, only the newly published token authenticates.
   const verifyIdentity = async (pairingOffer: string) =>
     parsePairingCode(pairingOffer)?.deviceToken === 'fresh-token'
       ? ({ verdict: 'verified' } as const)
@@ -468,7 +607,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
     let hostLostRegistry = false
     const onChange = vi.fn()
     const { manager } = setup({
-      // The host accepts the enrolled token until it loses its registry, then accepts nothing.
+      // Registry loss invalidates the previously enrolled token.
       verifyIdentity: async (pairingOffer: string) =>
         !hostLostRegistry && parsePairingCode(pairingOffer)?.deviceToken === 'lost-token'
           ? ({ verdict: 'verified' } as const)

@@ -1,6 +1,15 @@
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight, CircleCheck, Copy, Pencil, Send, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  Copy,
+  Image as ImageIcon,
+  Pencil,
+  Send,
+  Trash2
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
@@ -18,9 +27,15 @@ import {
   type BrowserPageAnnotation
 } from '../../../../../shared/browser-grab-types'
 import { BROWSER_ANNOTATION_INTENT_OPTIONS } from '../describe-page/browser-annotation-geometry'
-import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
+import {
+  BrowserAnnotationSendMenuContent,
+  browserAnnotationCopyTooltip
+} from './BrowserAnnotationSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from './prevent-agent-send-target-outside-dismiss'
 import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
+import { useBrowserAnnotationImages } from './use-browser-annotation-images'
+import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
+import type { BrowserPageAnnotationTrayProps } from '../describe-page/browser-page-types'
 
 export function BrowserPageAnnotationTray({
   browserAnnotations,
@@ -30,6 +45,8 @@ export function BrowserPageAnnotationTray({
   worktreeId,
   activeGroupId,
   browserAnnotationsPrompt,
+  includePageDetails,
+  handleIncludePageDetailsChange,
   handleBrowserAnnotationsSentToAgent,
   handleBrowserAnnotationsHandedOff,
   handleCopyBrowserAnnotations,
@@ -37,29 +54,12 @@ export function BrowserPageAnnotationTray({
   handleClearBrowserAnnotations,
   handleDeleteBrowserAnnotation,
   handleUpdateBrowserAnnotation
-}: {
-  browserAnnotations: BrowserPageAnnotation[]
-  currentUrl?: string
-  annotationTraySendOpen: boolean
-  handleAnnotationTraySendOpenChange: (open: boolean) => void
-  worktreeId: string
-  activeGroupId: string | undefined
-  browserAnnotationsPrompt: string
-  handleBrowserAnnotationsSentToAgent: () => void
-  handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
-  handleCopyBrowserAnnotations: () => void
-  browserAnnotationsCopied: boolean
-  handleClearBrowserAnnotations: () => void
-  handleDeleteBrowserAnnotation: (annotationId: string) => void
-  handleUpdateBrowserAnnotation: (
-    annotationId: string,
-    comment: string,
-    intent: BrowserAnnotationIntent
-  ) => void
-}): React.JSX.Element {
+}: BrowserPageAnnotationTrayProps): React.JSX.Element {
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null)
   const [editComment, setEditComment] = useState('')
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
+  const editImages = useBrowserAnnotationImages(worktreeId)
+  const resetEditImages = editImages.resetImages
   const [expanded, setExpanded] = useState(true)
   const ToggleChevron = expanded ? ChevronDown : ChevronRight
 
@@ -70,26 +70,34 @@ export function BrowserPageAnnotationTray({
       !browserAnnotations.some((annotation) => annotation.id === editingAnnotationId)
     ) {
       setEditingAnnotationId(null)
+      resetEditImages()
     }
-  }, [browserAnnotations, editingAnnotationId])
+  }, [browserAnnotations, editingAnnotationId, resetEditImages])
 
   const handleStartEdit = (annotation: BrowserPageAnnotation): void => {
     setEditingAnnotationId(annotation.id)
     setEditComment(annotation.comment)
     setEditIntent(annotation.intent)
+    editImages.resetImages(annotation.imagePaths)
   }
 
   const handleCancelEdit = (): void => {
     setEditingAnnotationId(null)
+    editImages.resetImages()
   }
 
+  const canSaveEdit = Boolean(editComment.trim()) && !editImages.saving
   const handleSaveEdit = (): void => {
-    const trimmed = editComment.trim()
-    if (!trimmed || !editingAnnotationId) {
+    if (!canSaveEdit || !editingAnnotationId) {
       return
     }
-    handleUpdateBrowserAnnotation(editingAnnotationId, trimmed, editIntent)
-    setEditingAnnotationId(null)
+    handleUpdateBrowserAnnotation(
+      editingAnnotationId,
+      editComment.trim(),
+      editIntent,
+      editImages.imagePaths
+    )
+    handleCancelEdit()
   }
 
   return (
@@ -166,26 +174,35 @@ export function BrowserPageAnnotationTray({
                 worktreeId={worktreeId}
                 groupId={activeGroupId ?? worktreeId}
                 prompt={browserAnnotationsPrompt}
+                includePageDetails={includePageDetails}
+                onIncludePageDetailsChange={handleIncludePageDetailsChange}
                 onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                 onPromptHandedOff={handleBrowserAnnotationsHandedOff}
               />
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            size="xs"
-            variant="outline"
-            className="gap-1.5"
-            onClick={handleCopyBrowserAnnotations}
-          >
-            {browserAnnotationsCopied ? (
-              <CircleCheck className="size-3" />
-            ) : (
-              <Copy className="size-3" />
-            )}
-            {browserAnnotationsCopied
-              ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
-              : translate('auto.components.browser.pane.BrowserPane.d51ef37351', 'Copy')}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="xs"
+                variant="outline"
+                className="gap-1.5"
+                onClick={handleCopyBrowserAnnotations}
+              >
+                {browserAnnotationsCopied ? (
+                  <CircleCheck className="size-3" />
+                ) : (
+                  <Copy className="size-3" />
+                )}
+                {browserAnnotationsCopied
+                  ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
+                  : translate('auto.components.browser.pane.BrowserPane.d51ef37351', 'Copy')}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {browserAnnotationCopyTooltip(includePageDetails)}
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -230,8 +247,12 @@ export function BrowserPageAnnotationTray({
                       className="min-w-0 flex-1"
                       data-slot="annotation-edit"
                       onKeyDown={(event) => {
-                        // Why: bail-out selector in useGrabMode lets this reach any focused child, not just the textarea.
-                        if (event.key === 'Escape') {
+                        // Why: useGrabMode's bail-out lets this reach any focused child; an image preview's portal only closes itself.
+                        if (
+                          event.key === 'Escape' &&
+                          event.target instanceof Node &&
+                          event.currentTarget.contains(event.target)
+                        ) {
                           event.preventDefault()
                           event.stopPropagation()
                           handleCancelEdit()
@@ -241,6 +262,7 @@ export function BrowserPageAnnotationTray({
                       <ImeTextarea
                         value={editComment}
                         onChange={(event) => setEditComment(event.target.value)}
+                        onPaste={editImages.handlePaste}
                         maxLength={GRAB_BUDGET.annotationCommentMaxLength}
                         className="h-16 w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                         autoFocus
@@ -255,6 +277,10 @@ export function BrowserPageAnnotationTray({
                             handleSaveEdit()
                           }
                         }}
+                      />
+                      <BrowserAnnotationImageStrip
+                        images={editImages.images}
+                        onRemove={editImages.removeImage}
                       />
                       <ToggleGroup
                         type="single"
@@ -294,7 +320,7 @@ export function BrowserPageAnnotationTray({
                             'Cancel'
                           )}
                         </Button>
-                        <Button size="xs" disabled={!editComment.trim()} onClick={handleSaveEdit}>
+                        <Button size="xs" disabled={!canSaveEdit} onClick={handleSaveEdit}>
                           {translate(
                             'auto.components.browser.pane.annotate.browser.page.annotation.tray.c16f932cb3',
                             'Save'
@@ -315,6 +341,12 @@ export function BrowserPageAnnotationTray({
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                           <span>{annotation.intent}</span>
+                          {annotation.imagePaths?.length ? (
+                            <span className="flex items-center gap-0.5">
+                              <ImageIcon className="size-3" />
+                              {annotation.imagePaths.length}
+                            </span>
+                          ) : null}
                           {currentUrl !== undefined &&
                           !browserAnnotationMatchesPageUrl(
                             annotation.payload.page.sanitizedUrl,

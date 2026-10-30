@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import {
   CircleDot,
   ExternalLink,
@@ -10,23 +10,25 @@ import {
 import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TextField } from './composer-input/TextField'
 
 type Props = {
   composer: MobileComposerSource
   label: string
   disabled?: boolean
   onOpenExternalUrl: (url: string) => void
-  // Why: only the active form view may focus this field. While the source drawer
-  // is open/closing this stays non-focusable so the drawer's dismiss (which
-  // restores native focus back here) can't re-fire onFocus and reopen the drawer.
+  // Disable form focus while drawer opens/closes; native focus restoration must not reopen it via onFocus.
   interactive: boolean
   onBeforeOpen?: () => void
   onOpenDrawer: () => void
 }
 
 function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
+  useMobileColorScheme()
   if (kind === 'github-pr') {
     return <GitPullRequest size={15} color={colors.textSecondary} />
   }
@@ -51,6 +53,8 @@ export function SmartWorkspaceSourceField({
   onBeforeOpen,
   onOpenDrawer
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const selection = composer.smartNameSelection
 
   function openDrawer(): void {
@@ -64,7 +68,10 @@ export function SmartWorkspaceSourceField({
   return (
     <View style={styles.field}>
       <Text style={styles.label}>
-        {label} <Text style={styles.labelHint}>[Optional]</Text>
+        {label}{' '}
+        <Text style={styles.labelHint}>
+          {t('components.smartWorkspaceSourceField.optional', '[Optional]')}
+        </Text>
       </Text>
       {selection ? (
         <View style={styles.pill}>
@@ -75,7 +82,10 @@ export function SmartWorkspaceSourceField({
           {selection.url ? (
             <Pressable
               accessibilityRole="link"
-              accessibilityLabel="Open selected source"
+              accessibilityLabel={t(
+                'components.smartWorkspaceSourceField.openSelectedSource',
+                'Open selected source'
+              )}
               hitSlop={6}
               onPress={() => {
                 if (selection.url) {
@@ -91,21 +101,21 @@ export function SmartWorkspaceSourceField({
           </Pressable>
         </View>
       ) : (
-        // Why: real TextInput (not a Pressable fake) so the typed value is the
-        // same composer.name the source drawer docks — focus handoff keeps the
-        // string continuous even though native focus moves to the docked field.
-        <TextInput
-          style={[styles.input, disabled && styles.disabled]}
+        // Use real TextInput sharing composer.name with docked picker field so typed text survives native focus handoff.
+        <TextField
+          // A non-interactive sheet is mid-swap, not disabled, so it stays undimmed.
+          style={disabled ? undefined : styles.enabled}
           value={composer.name}
           onChangeText={composer.setName}
           onFocus={openDrawer}
           editable={!disabled && interactive}
-          placeholder="Type a name or search a source"
-          placeholderTextColor={colors.textMuted}
+          placeholder={t(
+            'components.smartWorkspaceSourceField.searchPlaceholder',
+            'Type a name or search a source'
+          )}
           autoCapitalize="none"
           autoCorrect={false}
-          // Why: form field is a portal into the picker; return should not
-          // submit the create form while the drawer is about to open.
+          // Return opens picker, never submits create form during focus handoff.
           blurOnSubmit={false}
           showSoftInputOnFocus={false}
         />
@@ -114,7 +124,7 @@ export function SmartWorkspaceSourceField({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   field: {
     marginBottom: spacing.md
   },
@@ -128,18 +138,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.textMuted
   },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    color: colors.textPrimary
-  },
-  disabled: {
-    opacity: 0.55
+  enabled: {
+    opacity: 1
   },
   pill: {
     flexDirection: 'row',
@@ -157,4 +157,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     color: colors.textPrimary
   }
-})
+}))

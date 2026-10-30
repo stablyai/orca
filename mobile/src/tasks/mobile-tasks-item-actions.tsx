@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
   Pressable,
@@ -46,8 +47,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
         disabled={creatingKey === actionItem.key}
         onPress={() =>
           taskDetailHandoff.closeThen(() => {
-            // Jira, like Linear, is not repo-scoped, so the target repo has to be asked for
-            // rather than defaulted to the first one.
+            // Jira and Linear are not repo-scoped; ask for the target repo instead of choosing the first.
             const needsRepoChoice =
               actionItem.provider === 'linear' || actionItem.provider === 'jira'
             if (needsRepoChoice && workspaceRepos.length > 1) {
@@ -60,7 +60,9 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
       >
         <Plus size={16} color={colors.textPrimary} />
         <Text style={styles.actionText}>
-          {creatingKey === actionItem.key ? 'Creating...' : 'Create Workspace'}
+          {creatingKey === actionItem.key
+            ? translate('tasks.itemActions.creating', 'Creating...')
+            : translate('tasks.itemActions.createWorkspace', 'Create Workspace')}
         </Text>
       </Pressable>
 
@@ -84,7 +86,9 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
           >
             <Copy size={16} color={colors.textPrimary} />
             <Text style={styles.actionText}>
-              {copiedLinkKey === `linear-url:${actionItem.key}` ? 'Copied' : 'Copy Linear link'}
+              {copiedLinkKey === `linear-url:${actionItem.key}`
+                ? translate('common.copied', 'Copied')
+                : translate('tasks.itemActions.copyLinearLink', 'Copy Linear link')}
             </Text>
           </Pressable>
         </>
@@ -99,7 +103,9 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
           >
             <Copy size={16} color={colors.textPrimary} />
             <Text style={styles.actionText}>
-              {copiedLinkKey === `task:${actionItem.key}` ? 'Copied' : 'Copy GitHub link'}
+              {copiedLinkKey === `task:${actionItem.key}`
+                ? translate('common.copied', 'Copied')
+                : translate('tasks.itemActions.copyGitHubLink', 'Copy GitHub link')}
             </Text>
           </Pressable>
         </>
@@ -143,10 +149,14 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             }
           >
             <GitBranch size={16} color={colors.textPrimary} />
-            <Text style={styles.actionText}>Merge pull request</Text>
+            <Text style={styles.actionText}>
+              {translate('tasks.itemActions.mergePullRequest', 'Merge pull request')}
+            </Text>
           </Pressable>
           {isGitHubPrMergeBlocked(actionItem) ? (
-            <Text style={styles.emptyInlineText}>GitHub reports merge conflicts.</Text>
+            <Text style={styles.emptyInlineText}>
+              {translate('tasks.itemActions.mergeConflicts', 'GitHub reports merge conflicts.')}
+            </Text>
           ) : null}
         </>
       ) : null}
@@ -191,7 +201,9 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             }
           >
             <GitBranch size={16} color={colors.textPrimary} />
-            <Text style={styles.actionText}>Merge merge request</Text>
+            <Text style={styles.actionText}>
+              {translate('tasks.itemActions.mergeMergeRequest', 'Merge merge request')}
+            </Text>
           </Pressable>
         </>
       ) : null}
@@ -207,7 +219,9 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             }}
           >
             <GitBranch size={16} color={colors.textPrimary} />
-            <Text style={styles.actionText}>Change status</Text>
+            <Text style={styles.actionText}>
+              {translate('tasks.itemActions.changeStatus', 'Change status')}
+            </Text>
           </Pressable>
         </>
       ) : null}

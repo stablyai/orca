@@ -64,8 +64,7 @@ export function resolveWorktreeCreateParent(
   }
 }
 
-/** Resolved late so the common create path never walks the folder-workspace list, and defensively
- *  so a missing label can never fail a create that already succeeded. */
+/** Resolve label only for warnings; missing labels must never fail an already successful create. */
 function parentLabel(state: AppState, parent: WorktreeCreateParentPick): string | null {
   // Why not truthiness: a picked-but-unnamed worktree must warn unnamed, not name the active folder.
   if (parent.pickedDisplayName !== null) {

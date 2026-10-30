@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => {
-  // Annotated rather than asserted: the literal alone narrows to 'ios' and the tests reassign it.
+  // Annotate rather than assert: the tests reassign the initial ios literal.
   const platform: { os: 'ios' | 'android' | 'web' } = { os: 'ios' }
   return {
     platform,
@@ -102,8 +102,6 @@ describe('leaving the file preview', () => {
   })
 
   it('drops the question when the draft it was about is gone', () => {
-    // A save lands while the prompt is up: there is nothing left to discard, and a prompt still
-    // offering to throw work away would be offering to throw away nothing.
     const leave = vi.fn()
     const renderer = render(true, leave)
     act(() => {
@@ -118,21 +116,17 @@ describe('leaving the file preview', () => {
   })
 
   it('does not re-show itself on the next edit after a save', () => {
-    // `asking` outlives the draft it was about unless something clears it: with the prompt up, a
-    // save makes `hasUnsavedDraft` false and the prompt hides, but the flag is still set, so the
-    // very next edit puts the prompt back with no Back request behind it.
+    // Saving hides the prompt but must also clear asking, or the next edit reopens it without a Back request.
     const leave = vi.fn()
     const renderer = render(true, leave)
     act(() => {
       held.back?.requestBack()
     })
     expect(held.back?.confirmingDiscard).toBe(true)
-    // The save lands: nothing left to discard.
     act(() => {
       renderer.update(createElement(Screen, { hasUnsavedDraft: false, leave }))
     })
     expect(held.back?.confirmingDiscard).toBe(false)
-    // The next edit. Nobody asked to leave, so nobody should be asked about it.
     act(() => {
       renderer.update(createElement(Screen, { hasUnsavedDraft: true, leave }))
     })
@@ -140,23 +134,16 @@ describe('leaving the file preview', () => {
     expect(leave).not.toHaveBeenCalled()
   })
 
-  it('arms the hardware back press natively', () => {
-    render(false, vi.fn())
-    expect(native.addEventListener).toHaveBeenCalledTimes(1)
-    expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
-  })
-
-  // Which module answers is the bundler's, not this hook's: `use-back-claim.web.ts` claims the key
-  // from the shell instead, and the census beside it is what holds every site to the one seam.
+  // The bundler selects use-back-claim.web.ts for the shell’s Back key; the hook uses one seam on both platforms.
   it('registers once across a rebuilt handler, rather than per dependency change', () => {
     const leave = vi.fn()
     const renderer = render(false, leave)
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
     act(() => {
       renderer.update(createElement(Screen, { hasUnsavedDraft: true, leave }))
     })
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
-    // And the newest handler is the one that answers: the prompt, not the leave it replaced.
     let handled = false
     act(() => {
       handled = native.addEventListener.mock.calls[0]?.[1]?.() ?? false

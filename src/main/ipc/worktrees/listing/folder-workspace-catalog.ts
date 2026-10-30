@@ -29,7 +29,7 @@ import {
   mergeFolderWorkspace
 } from '../folder-workspace-model'
 
-// A project a WSL move is taking still lists, with its repairs projected in memory only.
+// During WSL moves, project repairs stay in memory to avoid mutating the source store.
 function folderMetaWriter(
   store: Store,
   repo: Repo
@@ -40,7 +40,7 @@ function folderMetaWriter(
   }
   return (worktreeId, updates) => {
     const existing = store.getWorktreeMeta(worktreeId)
-    // Nothing persists, so a minted root id would change on every listing; derive it instead.
+    // Without persistence, derive root identity so repeated listings cannot mint new instances.
     const instanceId =
       existing?.instanceId ??
       (worktreeId === getFolderWorkspaceRootId(repo)
@@ -106,21 +106,6 @@ export function buildFolderDetectedWorktrees(store: Store, repo: Repo): Detected
       worktreeVisibilitySourceMatcher
     })
   )
-}
-
-export function listVisibleFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
-  const writeMeta = folderMetaWriter(store, repo)
-  return buildFolderDetectedWorktrees(store, repo)
-    .filter((worktree) => worktree.visible)
-    .map((worktree) => {
-      const meta = store.getWorktreeMeta(worktree.id)
-      const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, meta)
-      const repairedMeta =
-        meta && Object.keys(ownershipUpdates).length === 0
-          ? meta
-          : writeMeta(worktree.id, ownershipUpdates)
-      return mergeFolderWorkspace(repo, worktree.id, repairedMeta)
-    })
 }
 
 export function buildDisconnectedDetectedWorktrees(

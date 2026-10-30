@@ -1,10 +1,4 @@
-/**
- * The worker mode is the user's own setting, not a flag, and the fallback is never silent.
- *
- * Every case here is one a coordinator can hit on a routine `worker-start`. Before this became
- * settings-driven each of them was a REFUSAL, which was right for an explicit `--structured` and
- * wrong for a preference: a dispatch that cannot be a structured session must still start.
- */
+/** Launch mode follows settings, with explicit fallback reasons; unsupported preference must not refuse ordinary worker-start. */
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -72,8 +66,7 @@ describe('a structured default this dispatch cannot honour', () => {
     ['--effort with its model', { model: 'opus', effort: 'high' }],
     ['both at once', { worktree: 'new-child', model: 'opus', effort: 'high' }]
   ])('no longer downgrades for %s, which is what made structured unreachable', (_name, params) => {
-    // Both flags are what a routine dispatch passes, and each used to force a PTY worker, so
-    // orchestration never produced a structured chat in practice.
+    // Both routine dispatch flags previously forced PTY mode.
     expect(decide({ params: { agent: 'claude', ...params } })).toMatchObject({
       mode: 'structured',
       preferred: 'structured',

@@ -18,6 +18,8 @@ ORCA orchestration task-list --ready --brief --json
 `spec_truncated` identifies shortened rows. Omit it when full specs are needed or
 when an older CLI rejects the flag. A nested worker must respect
 `nested_worker_depth_exceeded`; creating another Run does not reset depth.
+Helpers a worker starts appear in this Run's `worker-list` with their
+`creatorDispatchId`, and report to that worker rather than to you.
 
 ## Launch preferences
 

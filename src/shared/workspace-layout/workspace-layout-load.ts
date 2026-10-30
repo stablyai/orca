@@ -1,7 +1,4 @@
-// Loader: one stored session partition (as the Store loads it, after its pane identity
-// normalization) into the layout model and what is kept beside it. Runs on every load because an
-// older build can write the same documents between upgrades. Stored data that disagrees with
-// itself is resolved by fixed precedence; nothing is merged.
+// Load one session partition after Store pane-identity normalization. Reapply fixed precedence on every load because older builds may rewrite the documents; do not merge disagreements.
 
 import type { ExecutionHostId } from '../execution-host'
 import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
@@ -48,10 +45,7 @@ function workspaceKeys(session: WorkspaceSessionState): string[] {
   ]
 }
 
-/**
- * A terminal row stored in two workspaces is kept where the tab bar or a group also names it,
- * else in the first; the other copies are dropped.
- */
+/** Keep a terminal row in the workspace whose tab bar/group names it, falling back to its first occurrence. */
 function resolveTerminalHomes(session: WorkspaceSessionState): Map<string, string> {
   const homes = new Map<string, string>()
   const namedByTabBar = (key: string, tabId: string): boolean =>
@@ -76,6 +70,9 @@ function loadRecords(session: WorkspaceSessionState): WorkspaceLayoutRecords {
       : {}),
     ...(session.clientHostedBrowserPagesByWorktree
       ? { clientHostedBrowserPagesByWorkspace: session.clientHostedBrowserPagesByWorktree }
+      : {}),
+    ...(session.closedTerminalPanesByPaneKey
+      ? { closedTerminalPanesByPaneKey: session.closedTerminalPanesByPaneKey }
       : {})
   }
 }
@@ -131,10 +128,7 @@ function followSubsumedTabSelections(
   }
 }
 
-/**
- * Loads by fixed precedence only. What the next save would write differently from `stored` is
- * reported as one field-by-field diff, so every changed value is in it by construction.
- */
+/** Report every stored-to-next-save field difference after resolving fixed precedence. */
 export function loadWorkspaceLayout(
   hostId: ExecutionHostId,
   stored: WorkspaceSessionState,

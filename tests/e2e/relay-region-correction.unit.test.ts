@@ -12,7 +12,6 @@ import { createRelayServer } from '../../cloud/apps/relay/src/relay-server'
 import { IDLE_REHOME_MIN_CONTROL_AGE_MS } from '../../cloud/apps/relay/src/host-session-registry'
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../../cloud/apps/relay/src/control-renewal-batch'
 import { RELAY_PROTOCOL_LIMITS } from '../../cloud/packages/relay-contract/src/protocol-limits'
-import type { RelayConfig } from '../../cloud/apps/relay/src/config'
 import type * as AdminTokenVerifier from '../../cloud/apps/relay/src/admin-token-verifier'
 import { RelayOriginPool } from '../../src/main/runtime/mobile-cloud-relay/relay-origin-pool'
 import { RELAY_HOST_CAPABILITY_HEADERS } from '../../src/main/runtime/mobile-cloud-relay/relay-control-protocol'
@@ -100,6 +99,7 @@ async function topology() {
         assignmentSigningKey: new Uint8Array(32),
         adminAudience: 'https://director.example.test/v1/admin/drain',
         deployServiceAccount: 'deploy@example.test',
+        runtimeServiceAccount: 'relay-cell@example.test',
         rehomeAudience: 'https://director.example.test/v1/admin/host-drain',
         rehomeDirectorServiceAccount: 'director@example.test',
         databasePoolMax: 1,
@@ -111,7 +111,7 @@ async function topology() {
         publicResolveWaitMs: 5_000,
         publicAssignmentRetryAfterSeconds: 5,
         regionCorrectionCohortPercent: 100
-      } as RelayConfig,
+      },
       database,
       { now: () => clock, random: () => 0.5, cellIncarnation: incarnations[index] }
     )

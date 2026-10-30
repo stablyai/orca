@@ -110,7 +110,6 @@ describe("the status bar's Disconnect of a server", () => {
     await invoke('runtimeEnvironments:connect')
 
     expect(isRuntimeEnvironmentManuallyDisconnected('env-1')).toBe(false)
-    // That connect republishes the managed verdict and restores the host's port forwards.
     expect(hoisted.connectHost).toHaveBeenCalledWith('ssh-1')
   })
 

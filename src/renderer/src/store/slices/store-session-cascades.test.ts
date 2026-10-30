@@ -3,10 +3,8 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -73,7 +71,6 @@ describe('removeProject cascade', () => {
     expect(s.terminalLayoutsByTabId['tab2']).toBeUndefined()
     expect(s.activeTabId).toBeNull()
 
-    // PTYs were killed
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
 

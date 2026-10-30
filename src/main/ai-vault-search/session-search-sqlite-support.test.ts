@@ -6,14 +6,14 @@ afterEach(() => {
 })
 
 describe('sessionSearchSqliteAvailable', () => {
-  it('registers no index on a host Node whose node:sqlite lacks backup()', () => {
+  it('rejects a SQLite surface without backup()', () => {
     vi.spyOn(process, 'getBuiltinModule').mockReturnValue({
       DatabaseSync: function DatabaseSync() {}
     })
     expect(sessionSearchSqliteAvailable()).toBe(false)
   })
 
-  it('registers no index on a host Node with no node:sqlite at all', () => {
+  it('rejects a host without node:sqlite', () => {
     vi.spyOn(process, 'getBuiltinModule').mockReturnValue(undefined)
     expect(sessionSearchSqliteAvailable()).toBe(false)
   })

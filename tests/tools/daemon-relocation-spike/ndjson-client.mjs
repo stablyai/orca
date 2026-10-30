@@ -1,11 +1,5 @@
-// Minimal purpose-built NDJSON client for the daemon wire protocol.
-//
-// Deliberately standalone (no electron / src imports) so the spike runs under
-// plain node. Mirrors the handshake in src/main/daemon/daemon-server.ts:
-//   1. read the token the server wrote to <tokenPath> after it began listening
-//   2. control socket: send hello {role:'control'}, await {type:'hello',ok:true}
-//   3. stream socket:  send hello {role:'stream'} with the SAME clientId
-//   4. createOrAttach on control, then write() input, read 'data' events on stream
+// Standalone plain-Node client: token plus control/stream hello with one clientId, then create/write on control and read stream data.
+// Mirror daemon-server.ts without importing Electron/source.
 
 import { connect } from 'node:net'
 import { readFileSync } from 'node:fs'
@@ -15,7 +9,6 @@ function encodeNdjson(msg) {
   return `${JSON.stringify(msg)}\n`
 }
 
-// Split incoming bytes on newlines and dispatch each complete JSON line.
 function makeLineReader(onMessage) {
   let buffer = ''
   return (chunk) => {
@@ -50,7 +43,6 @@ function connectSocket(socketPath, timeoutMs) {
   })
 }
 
-// Send a hello and resolve once the server accepts (or reject on rejection).
 function handshake(socket, hello) {
   return new Promise((resolve, reject) => {
     const read = makeLineReader((msg) => {
@@ -71,17 +63,14 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// Strip CSI / OSC / two-char VT escapes so the marker regex can match executed
-// PTY output that ConPTY interleaves with cursor-move and SGR color codes.
-// eslint-disable-next-line no-control-regex -- ANSI escapes are control chars by definition
+// Strip VT escapes interleaved by ConPTY so executed-marker matching sees plain output.
 const ANSI_ESCAPE = /\[[0-9;?]*[ -/]*[@-~]|\][^]*?|[@-Z\\-_]/g
 
 function stripAnsi(text) {
   return text.replace(ANSI_ESCAPE, '')
 }
 
-// Race a promise against a timeout so a dead daemon can't wedge the failure
-// path (an unanswered RPC would otherwise hang until the CI job limit).
+// Bound RPC waits so a dead daemon cannot wedge the failure path until CI timeout.
 function withTimeout(promise, ms, label) {
   let timer
   const timeout = new Promise((_resolve, reject) => {
@@ -90,14 +79,8 @@ function withTimeout(promise, ms, label) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
-/**
- * Connect a control+stream client, create a session, submit `command` + CR, and
- * resolve once `expectRe` matches the accumulated PTY output (or reject on
- * timeout). Returns { output, diagnostics } on success. On timeout/error the
- * rejected Error carries `.diagnostics` and `.output` so the caller can tell
- * "no session created" vs "session created but no output" vs "output arrived
- * but the regex did not match". Always tears down its sockets.
- */
+// Connect, create, submit command+CR and await expectRe; always close sockets.
+// Return output/diagnostics or attach both to errors, distinguishing no session, silent session and unmatched output.
 export async function runPtyEcho(options) {
   const {
     socketPath,
@@ -108,9 +91,7 @@ export async function runPtyEcho(options) {
     shellOverride,
     connectTimeoutMs = 5000,
     ioTimeoutMs = 20000,
-    // Why: PowerShell/PSReadLine needs a beat to initialize before it echoes
-    // typed input; writing the command the instant createOrAttach returns can
-    // race the shell's own startup so the keystrokes land before the prompt.
+    // Allow PowerShell/PSReadLine startup after attach before submitting input.
     writeDelayMs = 400
   } = options
 
@@ -118,8 +99,7 @@ export async function runPtyEcho(options) {
   const clientId = randomUUID()
   const sessionId = `spike-${randomUUID()}`
 
-  // Everything we learn on the failure path, so the CI log can pinpoint where
-  // the ConPTY round-trip broke.
+  // Record failure-path evidence so logs identify the broken ConPTY phase.
   const diagnostics = {
     createResponse: null,
     ourDataFrames: 0,
@@ -152,7 +132,6 @@ export async function runPtyEcho(options) {
       role: 'stream'
     })
 
-    // Route control RPC responses by id.
     const pending = new Map()
     control.removeAllListeners('data')
     control.on(
@@ -169,7 +148,6 @@ export async function runPtyEcho(options) {
         }
       })
     )
-    // The initial controlRead consumed only the hello; discard it now.
     void controlRead
 
     const rpc = (type, payload) => {
@@ -196,9 +174,7 @@ export async function runPtyEcho(options) {
       }
 
       const timer = setTimeout(() => {
-        // On timeout, ask the daemon what sessions it thinks exist — this
-        // distinguishes "session never created / already exited" from "session
-        // alive but silent".
+        // On timeout, query session liveness to distinguish failed create/early exit from a live silent PTY.
         withTimeout(rpc('listSessions'), 2000, 'listSessions')
           .then((payload) => {
             diagnostics.sessionsAtTimeout = payload?.sessions ?? payload
@@ -223,8 +199,7 @@ export async function runPtyEcho(options) {
             if (msg.sessionId === sessionId) {
               diagnostics.ourDataFrames++
               output += data
-              // Test against the ANSI-stripped stream: ConPTY interleaves the
-              // executed marker with cursor-move / SGR codes.
+              // Match ANSI-stripped output because ConPTY interleaves cursor/SGR codes.
               if (expectRe.test(stripAnsi(output)) && !settled) {
                 settled = true
                 clearTimeout(timer)
@@ -248,9 +223,7 @@ export async function runPtyEcho(options) {
           diagnostics.createResponse = payload
           return delay(writeDelayMs)
         })
-        // Submit with a lone CR: PSReadLine treats CRLF as a soft newline
-        // (multiline continuation) and leaves the command typed but unexecuted;
-        // a bare CR is Enter.
+        // Submit lone CR: PSReadLine treats CRLF as soft newline and leaves the command unexecuted.
         .then(() => rpc('write', { sessionId, data: `${command}\r` }))
         .catch((err) => {
           rejectWith(err instanceof Error ? err : new Error(String(err)))

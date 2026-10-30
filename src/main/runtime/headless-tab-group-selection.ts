@@ -1,6 +1,4 @@
-// The headless host's per-group selected tab, kept beside the shared group moves, which hold only
-// order and membership: the moved tab is selected where it lands; elsewhere a group keeps its
-// selection while that tab stays, else selects its first tab.
+// Preserve per-group selection across shared membership moves; removed selections fall back to the first tab.
 
 import type { RuntimeMobileSessionTabGroup } from '../../shared/runtime-types'
 import type { LayoutGroup } from '../../shared/workspace-layout/workspace-layout-model'

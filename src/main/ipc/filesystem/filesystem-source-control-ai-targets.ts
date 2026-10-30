@@ -8,7 +8,7 @@ import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/comm
 import type { CommitMessageGenerationTarget } from '../../text-generation/commit-message-text-generation'
 import { resolve } from 'node:path'
 import { listRepoWorktreeGraph } from '../../repo-worktrees'
-import { resolveAuthorizedPath } from '../filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem-auth'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 
@@ -79,7 +79,7 @@ async function localRepoOwnsWorktree(
     return true
   }
   try {
-    // Why the project runtime: WSL Git names a drive worktree differently than host Git does.
+    // WSL Git names drive-backed worktrees differently from host Git.
     const worktrees = await listRepoWorktreeGraph(
       repo,
       getLocalProjectWorktreeGitOptions(store, repo)
@@ -112,13 +112,13 @@ export async function getRepoForSourceControlAi(
     if (repo.connectionId !== args.connectionId) {
       return null
     }
-    // Why: one SSH connection can host several repos; repo-scoped AI overrides apply only when the worktree belongs to that repo.
+    // Shared SSH connections can host several repos; apply overrides only to the verified owner.
     return remoteRepoOwnsWorktree(store, repo, args.worktreePath) ? repo : null
   }
   if (repo.connectionId) {
     return null
   }
-  // Why: renderer-supplied repoId is advisory; apply repo overrides only when the local worktree belongs to that repo.
+  // Renderer repoId is advisory until local worktree ownership is verified.
   return (await localRepoOwnsWorktree(store, repo, args.worktreePath)) ? repo : null
 }
 

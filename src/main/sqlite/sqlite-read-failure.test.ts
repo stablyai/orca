@@ -5,10 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from './sync-database'
 import { classifySqliteReadFailure, isTransientSqliteContention } from './sqlite-read-failure'
 
-// Error codes here are the ones a real node:sqlite open produces: a contended
-// database reports errcode 5 ("database is locked"), while a read-only WAL open
-// with no usable -shm reports errcode 14 ("unable to open database file"). The
-// two need opposite responses, so the classifier must never conflate them.
+// Real node:sqlite codes distinguish transient contention (5) from missing read-only WAL companions (14); they require opposite recovery.
 
 const tempDirs: string[] = []
 
@@ -66,7 +63,6 @@ describe('isTransientSqliteContention', () => {
   })
 
   it('reads extended result codes through their primary code', () => {
-    // SQLITE_BUSY_SNAPSHOT (517) and SQLITE_BUSY_RECOVERY (261) both pack 5.
     expect(isTransientSqliteContention({ errcode: 517, message: 'busy snapshot' })).toBe(true)
     expect(isTransientSqliteContention({ errcode: 261, message: 'recovery' })).toBe(true)
   })

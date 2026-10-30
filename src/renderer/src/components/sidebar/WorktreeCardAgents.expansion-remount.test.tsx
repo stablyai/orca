@@ -90,14 +90,44 @@ async function mountAgents(worktreeId: string): Promise<HTMLElement> {
   mountedRoots.push({ root, host })
   const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
   await act(async () => {
-    root.render(<WorktreeCardAgents worktreeId={worktreeId} />)
+    root.render(
+      <div data-worktree-sidebar>
+        <div role="option" aria-selected={false} data-worktree-id={worktreeId}>
+          <div data-worktree-context-menu-scope>
+            <div data-worktree-card-surface>
+              <WorktreeCardAgents worktreeId={worktreeId} />
+              <div data-worktree-lineage-children>
+                <div role="option" aria-selected={false} data-worktree-id="child" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  })
+  const sidebar = host.querySelector<HTMLElement>('[data-worktree-sidebar]')!
+  const option = sidebar.querySelector<HTMLElement>('[role=option]')!
+  const boundary = option.querySelector<HTMLElement>('[data-worktree-lineage-children]')!
+  Object.defineProperty(sidebar, 'clientHeight', { value: 673 })
+  sidebar.getBoundingClientRect = () => new DOMRect(0, 0, 300, 673)
+  option.getBoundingClientRect = () => new DOMRect(0, 200 - sidebar.scrollTop, 300, 11800)
+  boundary.getBoundingClientRect = () =>
+    new DOMRect(
+      0,
+      (summaryButton(host).getAttribute('aria-expanded') === 'true' ? 820 : 320) -
+        sidebar.scrollTop,
+      300,
+      11180
+    )
+  sidebar.scrollTo = vi.fn((options?: ScrollToOptions | number) => {
+    if (typeof options === 'object') {
+      sidebar.scrollTop = options.top ?? 0
+    }
   })
   return host
 }
 
 function summaryButton(host: HTMLElement): HTMLButtonElement {
-  // The compact multi-agent summary is the only control carrying aria-expanded
-  // when the agents are flat (no per-agent child disclosure).
   const button = host.querySelector<HTMLButtonElement>('button[aria-expanded]')
   if (!button) {
     throw new Error('compact agent summary button not found')
@@ -120,28 +150,46 @@ describe('WorktreeCardAgents inline-list expansion durability', () => {
     })
     document.body.innerHTML = ''
     clearWorktreeAgentExpansionStateForTests()
+    vi.useRealTimers()
   })
 
-  it('keeps the compact agent summary expanded across a card remount', async () => {
+  it('reveals expanded own agents without the workspace tail, and does not reveal cached remounts', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] })
     const host = await mountAgents('wt-remount')
+    const sidebar = host.querySelector<HTMLElement>('[data-worktree-sidebar]')!
+    const option = sidebar.querySelector<HTMLElement>('[role=option]')!
+    const scroll = sidebar.scrollTo
     expect(summaryButton(host).getAttribute('aria-expanded')).toBe('false')
 
     await act(async () => {
       summaryButton(host).dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(summaryButton(host).getAttribute('aria-expanded')).toBe('true')
+    const agents = host.querySelector<HTMLElement>('.compact-agent-expansion-content')!
+    agents.getBoundingClientRect = () => new DOMRect(0, 320 - sidebar.scrollTop, 300, 490)
+    expect(agents.getBoundingClientRect().bottom).toBeGreaterThan(sidebar.clientHeight)
+    expect(scroll).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(16)
+    })
+    expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: 147, behavior: 'auto' })
+    expect(agents.getBoundingClientRect().top).toBeGreaterThanOrEqual(0)
+    expect(agents.getBoundingClientRect().bottom).toBeLessThanOrEqual(sidebar.clientHeight)
+    expect(option.getBoundingClientRect().bottom).toBeGreaterThan(sidebar.clientHeight)
 
-    // Simulate the WorktreeCard remount that a virtualizer recycle or a sibling
-    // child-worktrees toggle triggers: fully unmount, then mount a fresh tree
-    // for the same worktree. Before the fix this reset the summary to collapsed.
+    // Fully remount the same worktree as virtualizer recycling or child-worktree toggles do.
     await act(async () => {
       const first = mountedRoots.shift()!
       first.root.unmount()
       first.host.remove()
     })
     const remounted = await mountAgents('wt-remount')
-
+    const remountScroll = remounted.querySelector<HTMLElement>('[data-worktree-sidebar]')!.scrollTo
+    await act(async () => {
+      vi.advanceTimersByTime(16)
+    })
     expect(summaryButton(remounted).getAttribute('aria-expanded')).toBe('true')
+    expect(remountScroll).not.toHaveBeenCalled()
   })
 
   it('does not leak expansion between different worktrees', async () => {
@@ -194,7 +242,6 @@ describe('worktree-card-agents-expansion-state module cache', () => {
     })
     expect(read()).toBe('true')
 
-    // Remount the hook consumer: the collapsed parent must survive.
     await act(async () => root.unmount())
     root = createRoot(host)
     await act(async () => {

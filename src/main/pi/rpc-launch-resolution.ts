@@ -5,6 +5,7 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey,
+  type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
@@ -17,7 +18,10 @@ import {
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation,
   resolveStructuredAgentCommand,
+  type StructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
@@ -32,6 +36,8 @@ import {
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
   replacement?: 'unsaved' | 'restore-failed'
+  /** Conversation files, newest first; empty for a new conversation. */
+  lineage?: readonly string[]
 }
 export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
@@ -39,16 +45,14 @@ export type PiRpcLaunchPartDeps = {
   resolveFullAccess?: () => boolean
 }
 
-// From 0.84.0 Pi emits agent_settled after retries and detached compaction, which a chat's turn
-// waits on; older Pi (the 0.73.x package included) runs only in a terminal.
+// RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
 export const PI_RPC_MINIMUM_VERSIONS = ['0.84.0'] as const
 
-/** The binary a Pi launch with `env` spawns; create support resolves through here too. */
 export function resolvePiRpcCommand(
   env: Readonly<Record<string, string>>,
   commandSettings: StructuredAgentCommandSettings = {},
   resolve?: typeof resolveCliCommand
-): string {
+): StructuredAgentCommand {
   const homePath = env.HOME ?? env.USERPROFILE
   return resolveStructuredAgentCommand(
     'pi',
@@ -59,11 +63,16 @@ export function resolvePiRpcCommand(
 }
 
 export function checkPiRpcVersion(
-  launch: { command: string; cwd: string; env: Record<string, string> },
+  launch: {
+    command: string
+    prefixArgs?: readonly string[]
+    cwd: string
+    env: Record<string, string>
+  },
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
   return checkAgentCliVersion(
-    { program: launch.command, cwd: launch.cwd, env: launch.env },
+    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
     PI_RPC_MINIMUM_VERSIONS,
     read
   )
@@ -108,18 +117,17 @@ export async function samePiDirectory(left: string, right: string): Promise<bool
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
-/** The binary and environment a Pi child runs under for the account directory `accountDir`: a
- *  chat's launch and a catalog listing both resolve here, rereading the environment once when Pi
- *  is missing from it. */
+/** Resolve chat/catalog launches identically; refresh the environment once if Pi is missing. */
 export function resolvePiRpcInvocation(deps: {
+  operation?: StructuredAgentResolutionOperation
   accountDir: string
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   commandSettings?: StructuredAgentCommandSettings
   resolveCommand?: typeof resolveCliCommand
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
-  /** Where the program starts, for a PATH entry relative to it; Orca's own when absent. */
+  /** Base for relative PATH entries; defaults to Orca's working directory. */
   resolveWorkingDirectory?: () => Promise<string> | string
-}): Promise<{ command: string; env: Record<string, string> }> {
+}): Promise<StructuredAgentCommand & { env: Record<string, string> }> {
   return resolveAgainAfterRefreshOnMissingProgram(
     async () => {
       const env: Record<string, string> = {}
@@ -128,15 +136,16 @@ export function resolvePiRpcInvocation(deps: {
           env[key] = value
         }
       }
+      assertStructuredAgentResolutionCurrent(deps.operation)
       env.PI_CODING_AGENT_DIR = deps.accountDir
-      return { env, command: resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
+      return { env, ...resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
     },
     deps.refreshEnvironmentAfterMiss,
-    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory }
+    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory },
+    deps.operation
   )
 }
 
-/** Pi's part of a launch: its account directory, session file or fork, binary and release check. */
 export function piRpcLaunchPart(
   deps: PiRpcLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<PiRpcResolvedLaunch> {
@@ -147,7 +156,7 @@ export function piRpcLaunchPart(
     }
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const cwd = await basis.launchDirectory()
-    const { env, command } = await resolvePiRpcInvocation({
+    const { env, command, prefixArgs } = await resolvePiRpcInvocation({
       accountDir: accountHome.path,
       resolveEnvironment: basis.environment,
       commandSettings: basis.commandSettings(),
@@ -187,16 +196,23 @@ export function piRpcLaunchPart(
         forkFile = source
       }
     }
-    // Again at every launch: the binary on PATH may have changed since the chat was created.
-    const launchVersion = await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)
+    // Recheck each launch because the PATH binary may have changed.
+    const launchVersion = await checkPiRpcVersion(
+      { command, prefixArgs, cwd, env },
+      deps.probeVersion
+    )
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
     return {
       launch: {
         command,
+        prefixArgs,
         fullAccess: deps.resolveFullAccess?.() ?? true,
         previous,
+        ...(sessionFile || forkFile
+          ? { lineage: piConversationFiles(record.providerHandleChain) }
+          : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {})
@@ -205,6 +221,21 @@ export function piRpcLaunchPart(
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
     }
   }
+}
+
+/** Follow resumes and directory forks to the original session; forks preserve entry IDs. */
+function piConversationFiles(chain: AgentSessionProviderHandleChain): string[] {
+  const files: string[] = []
+  for (const link of chain.toReversed()) {
+    if (link.handle.transport !== 'jsonl-rpc' || link.handle.agent !== 'pi') {
+      break
+    }
+    files.push(link.handle.nativeId)
+    if (link.origin !== 'resumed' && link.origin !== 'forked') {
+      break
+    }
+  }
+  return files
 }
 
 export function piRpcProviderLink(

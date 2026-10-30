@@ -23,7 +23,7 @@ const mocks = vi.hoisted((): Mocks => ({
   userConfigDir: '/home/me/claude-config',
   mayAutoOpen: vi.fn<(input: unknown) => Promise<boolean>>()
 }))
-vi.mock('../../pty-host-bindings', () => ({
+vi.mock('../pty-host-bindings', () => ({
   getPtyIpc: () => ({
     handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler)
   })

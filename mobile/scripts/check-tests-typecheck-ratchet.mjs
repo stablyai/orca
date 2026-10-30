@@ -3,25 +3,24 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { resolveMobileTypecheckCompiler } from './mobile-typecheck-compiler.mjs'
+import { resolveMobileTypecheckCommand } from './mobile-typecheck-compiler.mjs'
 
-// Ratchet gate for the mobile test typecheck.
-//
-// mobile/tsconfig.json excludes *.test.ts so Metro never compiles tests into the release bundle,
-// and vitest transpiles without typechecking. Nothing checked a mobile test until tsconfig.test.json
-// existed, so 144 of the 632 test files had accumulated type errors — overwhelmingly one seam, the
-// react-test-renderer / mocked-react-native pair, whose fix is a test-support typing decision rather
-// than 587 local edits. This check freezes that set and fails when a test file that typechecks today
-// stops doing so. The baseline may only shrink.
+// Mobile release tsconfig excludes tests and Vitest does not typecheck; separate test program freezes existing errors with a shrink-only baseline.
 
 const BASELINE_PATH = 'tests-typecheck-baseline.txt'
 const PROJECT = 'tsconfig.test.json'
 const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
-// The only test files allowed to sit outside the program, and why. Everything else on disk must be
-// in it: the error diff below sees a file only once it errors, so an excluded or shadowed test
-// disappears from this gate silently.
+// Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
+  [
+    'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
+    'Node-side: renders the mobile consumer of real desktop SQLite assignment projection, against Node rather than RN libs'
+  ],
+  [
+    'src/session/mobile-native-command-discovery.test.tsx',
+    'Node-side: imports the desktop ACP command discovery source, checked against @types/node rather than RN libs'
+  ],
   [
     'src/tasks/agent-launch-mobile-replay.test.ts',
     'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
@@ -37,11 +36,14 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/transport/mobile-relay-browser-cancel-budget.test.ts',
     'Node-side: imports @orca/process-host, checked against @types/node rather than RN libs'
+  ],
+  [
+    'src/transport/mobile-web-bundle-host-slow-link.test.ts',
+    'Node-side: imports the desktop bundle RPC handlers, checked against @types/node rather than RN libs'
   ]
 ])
 
-// tsc prints the host's own separator; the baseline stores POSIX, so a Windows run would otherwise
-// read every entry as both stale and added.
+// Normalize tsc’s host separators to POSIX baseline paths or Windows reports every entry stale and added.
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
 
 export function parseFailingFiles(tscOutput) {
@@ -74,9 +76,7 @@ export function collectTestFilesOnDisk(root = process.cwd()) {
   return found.sort()
 }
 
-// --listFiles prints one absolute real path per line into the same stream as the diagnostics; a
-// diagnostic carries `(line,col): error` and a path relative to cwd, so neither filter can take the
-// other's lines.
+// Separate absolute --listFiles rows from relative (line,col):error diagnostics in their shared stream.
 export function parseProgramTestFiles(tscOutput, realRoot) {
   const prefix = `${toPosix(realRoot).replace(/\/$/, '')}/`
   return [
@@ -144,37 +144,20 @@ export function diffBaseline(current, baseline) {
   }
 }
 
-function runTsc(root, args, compiler) {
-  return runProcessSync({
-    program: compiler.program,
-    args: [...compiler.args, ...args],
-    cwd: root,
+// Type errors are expected; only compiler crash is fatal. One pass collects both program files and diagnostics.
+export function collectTypecheckPass(root = process.cwd()) {
+  const command = resolveMobileTypecheckCommand(PROJECT, root)
+  const result = runProcessSync({
+    program: command.program,
+    args: [...command.args, '--listFiles'],
+    cwd: command.cwd,
     timeoutMs: null,
     maxOutputBytes: 64 * 1024 * 1024
   })
-}
-
-// tsc exits non-zero on type errors, which is the expected state here, so only a crash is fatal.
-// One pass answers both questions: --listFiles names the program, the diagnostics name the failures.
-export function collectTypecheckPass(root = process.cwd()) {
-  const compiler = resolveMobileTypecheckCompiler()
-  const cache = process.env.ORCA_MOBILE_TYPECHECK_CACHE_DIR
-  const result = runTsc(
-    root,
-    [
-      '--noEmit',
-      '--listFiles',
-      '-p',
-      PROJECT,
-      ...(cache && !compiler.native
-        ? ['--incremental', '--tsBuildInfoFile', path.join(cache, 'tests.tsbuildinfo')]
-        : [])
-    ],
-    compiler
-  )
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
   return {
     failing: parseFailingFiles(output),
+    diagnostics: output.split('\n').filter((line) => ERROR_LINE.test(line)),
     programTestFiles: parseProgramTestFiles(output, fs.realpathSync(root))
   }
 }
@@ -299,6 +282,9 @@ export function main(root = process.cwd()) {
 
   if (added.length > 0) {
     printAddedFailure(added)
+    for (const diagnostic of pass.diagnostics) {
+      console.error(diagnostic)
+    }
     if (stale.length > 0) {
       printStaleFailure(stale)
     }

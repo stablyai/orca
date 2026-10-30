@@ -1,7 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { getTrustedUIRendererWebContents, isTrustedUIRenderer } from './ui'
 import {
-  closeWorkspaceSpaceWindow,
   createOrFocusWorkspaceSpaceWindow,
   getWorkspaceSpaceWindow,
   isWorkspaceSpaceWindowRenderer
@@ -15,7 +14,6 @@ import type { Store } from '../persistence'
 export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
   for (const channel of [
     'workspaceSpace:openWindow',
-    'workspaceSpace:closeWindow',
     'workspaceSpace:publishWindowState',
     'workspaceSpace:requestWindowState',
     'workspaceSpace:revealWorktree',
@@ -28,11 +26,6 @@ export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
   ipcMain.handle('workspaceSpace:openWindow', (event): void => {
     if (isTrustedUIRenderer(event.sender)) {
       createOrFocusWorkspaceSpaceWindow(store)
-    }
-  })
-  ipcMain.handle('workspaceSpace:closeWindow', (event): void => {
-    if (isWorkspaceSpaceWindowRenderer(event.sender)) {
-      closeWorkspaceSpaceWindow()
     }
   })
   ipcMain.handle('workspaceSpace:publishWindowState', (event, state: unknown): void => {

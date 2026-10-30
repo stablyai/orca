@@ -1,9 +1,10 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 import { diffStyles } from './mobile-source-control-diff-styles'
 import { listStyles } from './mobile-source-control-list-styles'
 
-const baseStyles = StyleSheet.create({
+const baseStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -100,7 +101,7 @@ const baseStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  // Separate line under counts — keeps Abort inside the card on narrow phones.
+  // Keep Abort below counts so narrow cards cannot overflow.
   conflictRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -115,7 +116,6 @@ const baseStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     textTransform: 'capitalize'
   },
-  // Match bulk-action hit target so Abort reads as a real control, not a chip.
   abortButton: {
     minHeight: 32,
     paddingHorizontal: spacing.md,
@@ -127,6 +127,21 @@ const baseStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
+  },
+  completeMergeButton: {
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.button,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  completeMergeText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   },
   abortPressed: {
     opacity: 0.75
@@ -242,6 +257,6 @@ const baseStyles = StyleSheet.create({
     textAlign: 'center',
     flexShrink: 1
   }
-})
+}))
 
-export const styles = { ...baseStyles, ...listStyles, ...diffStyles }
+export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))

@@ -15,7 +15,6 @@ import type {
   NativeChatComposerNoticeContent
 } from './native-chat-composer-notice'
 
-/** A chat whose start failed or went unconfirmed, as a notice with Retry. */
 function nativeChatLaunchNotice({
   lifecycle,
   failure = null,
@@ -25,10 +24,9 @@ function nativeChatLaunchNotice({
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
   failure?: StructuredLaunchFailure | null
-  /** Names the agent in a start failure's words. */
   agentLabel?: string
   onRetry: () => void
-  /** Offered instead of Retry until it signs in, when the start failed for want of a sign-in. */
+  /** Replace Retry with sign-in until authentication succeeds. */
   claudeSignIn?: NativeChatClaudeSignIn | null
 }): NativeChatComposerNotice | null {
   if (lifecycle !== 'failed' && lifecycle !== 'visibility-unknown') {
@@ -76,7 +74,6 @@ function nativeChatLaunchNotice({
   }
 }
 
-/** A structured chat's own notices, for the card above its composer. */
 export function structuredSessionNotices({
   launch,
   agentLabel,
@@ -95,9 +92,7 @@ export function structuredSessionNotices({
   sessionError: string | null
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
   claudeSignIn?: NativeChatClaudeSignIn | null
-  /** Why the host says no chat can start here, from `useNativeChatAvailabilityNotice`. */
   availability?: NativeChatComposerNotice | null
-  /** Why this chat's host may not take a turn, from `useNativeChatHostPermissionGate`. */
   hostPermission?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice[] {
   // A host held for its permission mode already says why nothing starts; Retry returns with it.

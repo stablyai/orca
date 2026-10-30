@@ -1,6 +1,7 @@
-// Type-only and electron-free: the worker entry and the main-process client both import it.
+// Keep this Electron-free so both worker and main-process clients can import it.
 
 import type { OpenCodeSessionCursor } from './opencode-binder-sessions-result'
+import type { OpenCodePromptFailureQuery } from './opencode-prompt-failure-result'
 
 type CursorProfileRequest = {
   id: number
@@ -15,7 +16,15 @@ type OpenCodeBinderSessionsRequest = {
   cursor: OpenCodeSessionCursor
 }
 
-export type ForeignSqliteReaderRequest = CursorProfileRequest | OpenCodeBinderSessionsRequest
+type OpenCodePromptFailureRequest = OpenCodePromptFailureQuery & {
+  id: number
+  kind: 'openCodePromptFailure'
+}
+
+export type ForeignSqliteReaderRequest =
+  | CursorProfileRequest
+  | OpenCodeBinderSessionsRequest
+  | OpenCodePromptFailureRequest
 
 export type ForeignSqliteReaderKind = ForeignSqliteReaderRequest['kind']
 

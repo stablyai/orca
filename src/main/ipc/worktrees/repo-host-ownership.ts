@@ -12,22 +12,12 @@ export function resolveRepoForExecutionHost(
   repoId: string,
   hostId?: ExecutionHostId
 ): Repo | undefined {
-  // Why: host-qualified operations must never guess between repo owners; legacy unscoped calls work only for one unique owner.
+  // Legacy unscoped calls require one unique owner; host-qualified calls must never guess.
   const owner = resolveWorktreeRemovalRepoOwner(store, repoId, hostId)
   return owner.kind === 'resolved' ? owner.repo : undefined
 }
 
-/**
- * Refuses a repo row whose two host spellings disagree.
- *
- * Everything below picks the filesystem it deletes on from `repo.connectionId`, while the metadata
- * prune, the archive-hook route and the home authority all come from `removalHostId`. A row naming
- * `executionHostId: 'ssh:<target>'` with no `connectionId` therefore lists and deletes a same-named
- * path on THIS machine while the guards vouch for the remote one, and the reverse row does the
- * mirror image (#11163). Neither spelling is evidence about the other, so refuse instead of picking
- * a winner: the worktree is left in place, which is the recoverable outcome
- * (docs/reference/ssh-execution-boundary.md).
- */
+/** Reject mismatched filesystem/guard ownership before a remote path could be deleted on this client (#11163). */
 export function assertRemovalHostMatchesRepoRow(
   repo: Repo,
   repoId: string,
@@ -37,9 +27,7 @@ export function assertRemovalHostMatchesRepoRow(
     connectionId: repo.connectionId,
     executionHostId: null
   })
-  // `repoRowHostId` is built from `connectionId`, so it is always `local` or an `ssh:` id and its
-  // name is never `null`. An unroutable `removalHostId` can therefore only ever be the left operand,
-  // and `null` matches no name — which is how `runtime:<env>` is refused here.
+  // The repo row always names local/SSH; null for runtime or malformed removal hosts therefore refuses them.
   if (removalHostName(removalHostId) !== removalHostName(repoRowHostId)) {
     throw new Error(
       `Refusing to delete worktree: repo ${repoId} names execution host ${removalHostId}, but its checkout is only reachable as ${repoRowHostId}.`
@@ -47,14 +35,7 @@ export function assertRemovalHostMatchesRepoRow(
   }
 }
 
-/**
- * The machine a host id names, or `null` for one this path cannot delete on.
- *
- * Compared after decoding rather than as stored text: `ssh:my target` and `ssh:my%20target` are the
- * same host, and refusing a removal over the spelling of a percent-escape would be a false alarm on
- * a row that is perfectly consistent. `runtime:<env>` and an unparseable id name no machine this
- * path can delete on, so they answer `null` and the caller refuses them outright.
- */
+/** Decode equivalent SSH spellings; runtime and malformed IDs name no host this removal path can serve. */
 function removalHostName(hostId: ExecutionHostId): string | null {
   const parsed = parseExecutionHostId(hostId)
   if (parsed?.kind === 'local') {

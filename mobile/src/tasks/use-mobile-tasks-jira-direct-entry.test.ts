@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'

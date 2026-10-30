@@ -49,7 +49,7 @@
         }
       }
     },
-    "295e74f620bd": {
+    "0d6e25838291": {
       "data": {
         "checks": [],
         "checksError": "The host sent a reply this app could not read (github.prChecks)",
@@ -64,6 +64,15 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
           "headSha": "head-sha-1",
           "mergeMethodSettings": {
             "$rpc": "undefined"
@@ -82,45 +91,39 @@
           "reviewDecision": {
             "$rpc": "undefined"
           },
+          "stack": {
+            "$rpc": "undefined"
+          },
           "state": "open",
           "title": "Recorded",
           "updatedAt": "",
           "url": "https://x/12"
+        },
+        "pushTarget": {
+          "$rpc": "null"
         }
       },
       "kind": "ready"
     },
-    "3182bdacb811": {
+    "0e35af4e1fa3": {
       "name": "github.prForBranch#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":12,\"currentHeadOid\":null}}"
+    },
+    "15c9074079de": {
+      "name": "reply-salvage",
       "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prForBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "branch": "feature",
-            "linkedPRNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["linkedPR"],
+        "method": "worktree.show",
+        "operation": "worktree.summary-or-skip",
+        "variant": "worktree-summary"
       }
     },
-    "47cbe89ba85a": {
+    "1c1552d03dfc": {
       "name": "github.prForBranch#1",
-      "ordinal": 5,
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -130,7 +133,13 @@
           "name": "params",
           "value": {
             "branch": "feature",
-            "linkedPRNumber": 12,
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": 12,
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
             "repo": "id:repo-9"
           }
         },
@@ -163,28 +172,76 @@
         }
       }
     },
+    "4777f063108d": {
+      "name": "github.prForBranch#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": 12,
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "4b26820600b0": {
       "name": "hostedReview.forBranch#1",
       "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":null,\"active\":true}}"
     },
-    "5dbd52d6a1c7": {
-      "name": "worktree.show#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "972c02b38720": {
-      "name": "github.prForBranch#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":12}}"
-    },
-    "9dff4422846f": {
+    "4fae27394886": {
       "name": "github.prChecks#1",
-      "ordinal": 7,
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "54d7c17a92f3": {
+      "name": "github.prChecks#1",
+      "ordinal": 8,
       "args": [
         {
           "name": "method",
@@ -218,86 +275,12 @@
         }
       }
     },
-    "9fac855f9003": {
-      "name": "github.prChecks#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
+    "5dbd52d6a1c7": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
-    "a6cb6a8ef089": {
-      "name": "github.prChecks#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prChecks"
-        },
-        {
-          "name": "params",
-          "value": {
-            "headSha": "head-sha-1",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "c5859dcb8664": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "data": {
-          "checks": [],
-          "checksError": "The host sent a reply this app could not read (github.prChecks)",
-          "details": {
-            "$rpc": "null"
-          },
-          "pr": {
-            "autoMergeAllowed": {
-              "$rpc": "undefined"
-            },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
-            },
-            "checksStatus": "pending",
-            "headSha": "head-sha-1",
-            "mergeMethodSettings": {
-              "$rpc": "undefined"
-            },
-            "mergeQueueRequired": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": "MERGEABLE",
-            "number": 12,
-            "prRepo": {
-              "$rpc": "undefined"
-            },
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "state": "open",
-            "title": "Recorded",
-            "updatedAt": "",
-            "url": "https://x/12"
-          }
-        },
-        "kind": "ready"
-      }
-    },
-    "d8f5fb00693d": {
+    "7cbf1de78fc1": {
       "name": "worktree.show#1",
       "ordinal": 2,
       "args": [
@@ -327,13 +310,85 @@
           "ok": true,
           "result": {
             "worktree": {
-              "linkedPR": 12
+              "linkedPR": {
+                "$rpc": "null"
+              }
             }
           }
         }
       }
     },
-    "e169ebaf642b": "unloaded"
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "dcec20ae0055": {
+      "name": "github.prChecks#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
+    },
+    "e169ebaf642b": "unloaded",
+    "ecc073fe6e31": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "data": {
+          "checks": [],
+          "checksError": "The host sent a reply this app could not read (github.prChecks)",
+          "details": {
+            "$rpc": "null"
+          },
+          "pr": {
+            "autoMergeAllowed": {
+              "$rpc": "undefined"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "checksStatus": "pending",
+            "confirmedContainedHeadOid": {
+              "$rpc": "undefined"
+            },
+            "headDivergedFromMergedPRAtOid": {
+              "$rpc": "undefined"
+            },
+            "headRefName": {
+              "$rpc": "undefined"
+            },
+            "headSha": "head-sha-1",
+            "mergeMethodSettings": {
+              "$rpc": "undefined"
+            },
+            "mergeQueueRequired": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": "MERGEABLE",
+            "number": 12,
+            "prRepo": {
+              "$rpc": "undefined"
+            },
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "stack": {
+              "$rpc": "undefined"
+            },
+            "state": "open",
+            "title": "Recorded",
+            "updatedAt": "",
+            "url": "https://x/12"
+          },
+          "pushTarget": {
+            "$rpc": "null"
+          }
+        },
+        "kind": "ready"
+      }
+    }
   },
   "recording": {
     "scenario": "pr-sidebar-checks-refused",
@@ -341,37 +396,37 @@
       {
         "id": "branch-hint",
         "observation": {
-          "sender": ["07639c4f1e7f", "d8f5fb00693d", "3182bdacb811"],
-          "payloads": ["4b26820600b0", "5dbd52d6a1c7", "972c02b38720"],
+          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "4777f063108d"],
+          "payloads": ["4b26820600b0", "5dbd52d6a1c7", "0e35af4e1fa3"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
           "state": "e169ebaf642b",
-          "effects": []
+          "effects": ["15c9074079de"]
         }
       },
       {
         "id": "pr",
         "observation": {
-          "sender": ["07639c4f1e7f", "d8f5fb00693d", "47cbe89ba85a", "a6cb6a8ef089"],
-          "payloads": ["4b26820600b0", "5dbd52d6a1c7", "972c02b38720", "9fac855f9003"],
+          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "1c1552d03dfc", "4fae27394886"],
+          "payloads": ["4b26820600b0", "5dbd52d6a1c7", "0e35af4e1fa3", "dcec20ae0055"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
           "state": "e169ebaf642b",
-          "effects": []
+          "effects": ["15c9074079de"]
         }
       },
       {
         "id": "checks-refused",
         "observation": {
-          "sender": ["07639c4f1e7f", "d8f5fb00693d", "47cbe89ba85a", "9dff4422846f"],
-          "payloads": ["4b26820600b0", "5dbd52d6a1c7", "972c02b38720", "9fac855f9003"],
+          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "1c1552d03dfc", "54d7c17a92f3"],
+          "payloads": ["4b26820600b0", "5dbd52d6a1c7", "0e35af4e1fa3", "dcec20ae0055"],
           "settlements": {
-            "load": "c5859dcb8664"
+            "load": "ecc073fe6e31"
           },
-          "state": "295e74f620bd",
-          "effects": []
+          "state": "0d6e25838291",
+          "effects": ["15c9074079de"]
         }
       }
     ]

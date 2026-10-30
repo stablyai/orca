@@ -35,7 +35,6 @@ describe('reasoning disclosure', () => {
       'false'
     )
     expect(screen.queryByTestId('markdown')).not.toBeInTheDocument()
-    // The same category glyph slot a tool row leads with, hidden from the accessible name.
     const glyph = screen.getByRole('button').querySelector('svg.lucide-brain')
     expect(glyph).toHaveAttribute('aria-hidden', 'true')
   })
@@ -64,7 +63,6 @@ describe('reasoning disclosure', () => {
         markdown="Inspecting"
       />
     )
-    // An SVG's `className` is an `SVGAnimatedString`, so read the attribute.
     const chevron = screen.getByRole('button').querySelector('svg.lucide-chevron-right')
     const classes = (chevron?.getAttribute('class') ?? '').split(' ')
     // Touch has no hover, so an ungated `opacity-0` would hide it there for good.
@@ -96,7 +94,6 @@ describe('reasoning disclosure', () => {
     expect(screen.getByRole('button')).toBe(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByTestId('markdown')).toHaveTextContent('More')
-    // Collapsed again by the user, it stays collapsed through the next revision.
     fireEvent.click(trigger)
     rerender(<NativeChatReasoningRow message={message} markdown={'Inspecting\nFinal'} />)
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
@@ -120,7 +117,6 @@ describe('reasoning disclosure', () => {
     )
     const { rerender } = render(<Transcript>{row}</Transcript>)
     fireEvent.click(screen.getByRole('button'))
-    // Windowed out, then back.
     rerender(<Transcript>{null}</Transcript>)
     rerender(<Transcript>{row}</Transcript>)
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true')
@@ -153,7 +149,6 @@ describe('the reasoning headline', () => {
     return screen.queryByRole('button')?.textContent ?? null
   }
 
-  // The live line hides the one block it discloses; any other open row draws, claiming no end.
   it('reads Reasoning while the row is open and its turn or subagent is running', () => {
     expect(headline({ timestamp: STARTED, state: 'running' }, true)).toBe('Reasoning')
   })

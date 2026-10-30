@@ -12,6 +12,15 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
 
   protected abstract rejectWaitersForHandle(handle: string, code: string): void
 
+  protected retirePredecessorPtyExitEvidence(pty: RuntimePtyWorktreeRecord): void {
+    pty.lastExitCode = null
+    pty.lastExitCause = null
+    for (const leaf of this.getLeavesForPty(pty.ptyId)) {
+      leaf.lastExitCode = null
+      leaf.lastExitCause = null
+    }
+  }
+
   protected invalidateAllHandlesForPty(ptyId: string, preserveHandle?: string): Set<string> {
     const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
     const preallocatedHandle = this.handleByPtyId.get(ptyId)
@@ -20,8 +29,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
       this.handleByPtyIncarnation.delete(ptyId)
       invalidated.add(incarnationHandle)
     } else if (incarnationHandle) {
-      // The retained handle no longer describes the old incarnation. Keep its direct alias,
-      // when requested, but discard the incarnation-specific leaf record.
+      // Retain only the requested direct alias; drop incarnation-specific leaf identity.
       this.handleByPtyIncarnation.delete(ptyId)
     }
     if (preallocatedHandle && preallocatedHandle !== preserveHandle) {
@@ -44,9 +52,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
       }
     }
     if (preserveHandle !== undefined) {
-      // The direct alias is the only identity retained across an incarnation
-      // change. Renderer records point at the predecessor pane generation and
-      // must be rebuilt by graph sync (or issuePtyHandle) before use.
+      // Only the direct alias survives incarnation changes; rebuild predecessor pane records before reuse.
       this.handles.delete(preserveHandle)
       this.syntheticTerminalHandles.delete(preserveHandle)
     }
@@ -92,11 +98,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
     return true
   }
 
-  // Why: adoption is best-effort restart recovery and must be first-wins.
-  // Re-keying a pty that already has a handle this session would strand
-  // waiters registered under the old handle, and provider-reported values
-  // are not trusted to be collision-free — a handle bound to a different
-  // pty must never be stolen by a later report.
+  // Adoption is first-wins: re-keying strands old-handle waiters, and provider handles cannot steal another PTY's identity.
   protected isTerminalHandleAdoptionBlocked(ptyId: string, handle: string): boolean {
     if (this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId)) {
       return true
@@ -149,15 +151,16 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
       existingPty.incarnationId !== null &&
       existingPty.incarnationId !== incarnationId
     ) {
-      // Providers announce a child before the commit binds its pane. Fence the
-      // predecessor now so a reused id cannot route through its old handle in
-      // that gap.
+      // Fence predecessors when providers announce children, before pane binding commits, so reused ids cannot route through stale handles.
       this.rememberPtyHandleReplacementFence(
         ptyId,
         incarnationId,
         this.invalidateAllHandlesForPty(ptyId),
         true
       )
+      if (incarnationId) {
+        this.retirePredecessorPtyExitEvidence(existingPty)
+      }
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.stopRequestedPtyIds.delete(ptyId)

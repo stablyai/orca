@@ -37,7 +37,6 @@ describe('a Codex usage limit', () => {
         secondary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: RESETS_AT_S }
       }
     })
-    // An update may carry only what changed; the spent weekly window still stands.
     notify('account/rateLimits/updated', {
       rateLimits: {
         primary: { usedPercent: 41, windowDurationMins: 300, resetsAt: RESETS_AT_S - 3600 }
@@ -53,7 +52,7 @@ describe('a Codex usage limit', () => {
     expect(bodies.filter((body) => body.kind === 'status')).toEqual([
       expect.objectContaining({
         tone: 'warning',
-        text: 'Codex hit its weekly limit. Send a message once it resets to continue.',
+        text: 'Codex hit its weekly limit.',
         failure: {
           kind: 'usageLimitReached',
           usageLimit: { window: 'weekly', resetsAt: RESETS_AT_S * 1000 },

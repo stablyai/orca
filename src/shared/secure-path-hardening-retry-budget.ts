@@ -7,33 +7,12 @@ import { reportSecurePathHardening } from './secure-path-hardening-report'
 
 type HardeningFailureRecord = { at: number; attempts: number }
 
-/**
- * How often a path whose hardening keeps failing may be retried.
- *
- * Why throttle at all: the env store re-hardens on the *read* path at ~2/s (#4901), so retrying
- * every failure is a log storm on hosts where hardening cannot work — FAT32/exFAT have
- * no ACLs, and network paths, redirected profiles and restricted tokens refuse.
- *
- * Why exponential and not a cap: a cap that never expires latches a *transient* failure — one AV
- * scan or momentary lock and the path is abandoned for the life of the process, which can be days.
- * Backoff bounds the rate without ever bounding the lifetime. It settles at ~2 attempts/hour on a
- * permanently incapable host, which matters because the budget is per path and there are several
- * secure files; a fixed one-minute floor would leave a standing five-figure daily spawn count for
- * work that will never succeed.
- *
- * Why slowing it down is close to free: the synchronous write path is deliberately *not*
- * throttled, so a host that recovers hardens on its very next credential write. This read-path
- * re-probe is a backstop, not the recovery mechanism.
- */
+/** Read-path polling (~2/s, #4901) needs exponential backoff on incapable hosts, but never permanent abandonment
+ * after transient locks/AV scans. Settle at two attempts/hour/path; writes remain unthrottled for immediate recovery. */
 const HARDENING_RETRY_FLOOR_MS = 60_000
 const HARDENING_RETRY_CEILING_MS = 30 * 60_000
 
-/**
- * Why not `Date.now`: an NTP correction, a VM snapshot restore or a user changing the clock steps
- * the wall clock backwards, which made the elapsed time negative and held every path below its
- * delay until the clock caught up — a year, for a year-long step. That is the permanent latch this
- * backoff exists to remove. Elapsed monotonic time cannot go backwards.
- */
+/** Wall clocks can step backward for years after NTP/VM/user changes; monotonic elapsed time prevents retry latches. */
 const monotonicNowMs = (): number => performance.now()
 
 /** Consecutive failures before the degraded state is announced. */
@@ -46,13 +25,7 @@ export function hardeningRetryDelayMs(attempts: number): number {
 
 let hardeningFailures: SecurePathHardeningCache<HardeningFailureRecord> | null = null
 
-/**
- * Why it defaults instead of throwing: this used to require `configureHardeningRetryBudget` first,
- * and the only thing keeping that contract was import order — one module configured it at module
- * scope and happened to be the sole importer. Any second importer got a throw, and from the async
- * lane that throw lands in a `.then` handler as an unhandled rejection, which takes the Electron
- * main process down. A retry budget is not worth a crash, and a default is not worth a caller.
- */
+/** Default independently of import order; an unconfigured second importer previously threw inside async hardening and crashed main. */
 function failures(): SecurePathHardeningCache<HardeningFailureRecord> {
   hardeningFailures ??= new SecurePathHardeningCache<HardeningFailureRecord>(
     DEFAULT_HARDENING_CACHE_BOUNDS

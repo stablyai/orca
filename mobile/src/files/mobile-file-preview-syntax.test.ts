@@ -6,6 +6,7 @@ describe('mobile-file-preview-syntax', () => {
     const syntax = buildMobileFilePreviewSyntax('src/app.ts', 'const answer = 42')
 
     expect(syntax.language).toBe('typescript')
+    expect(syntax.segments).toContainEqual({ kind: 'keyword', text: 'const' })
     expect(syntax.segments.map((segment) => segment.text).join('')).toBe('const answer = 42')
   })
 

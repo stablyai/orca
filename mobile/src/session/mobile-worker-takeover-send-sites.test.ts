@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { resetWorkerTerminalTakeoverReportsForTest } from '../terminal/worker-terminal-takeover-report'
+import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
 import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
@@ -11,15 +12,15 @@ import { routeDictationTranscript } from '../terminal/terminal-live-dictation-ro
 import {
   sendMobileNativeChatMessageWithOutcome,
   clearMobileNativeChatInput
-} from './mobile-native-chat-send'
+} from './native-chat/mobile-native-chat-send'
 import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
-import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
+import { pasteMobileNativeChatImagePaths } from './native-chat/composer/mobile-native-chat-image-send'
 
 vi.mock('react-native', () => ({ Keyboard: { dismiss: vi.fn() } }))
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
-vi.mock('expo-clipboard', () => ({ getStringAsync: async () => 'pasted text' }))
-// Reached through the media seam, which the paste hook now holds instead of the picker modules.
+const clipboard = vi.hoisted(() => ({ text: 'pasted text' }))
+vi.mock('expo-clipboard', () => ({ getStringAsync: async () => clipboard.text }))
 vi.mock('./mobile-image-source-picker', () => ({
   pickMobileImage: vi.fn(),
   pickMobileImages: vi.fn()
@@ -31,7 +32,7 @@ const ref = <T>(current: T) => ({ current })
 const renderers: ReactTestRenderer[] = []
 function clientFixture() {
   return {
-    sendRequest: vi.fn(async (method: string) => ({
+    sendRequest: vi.fn(async (method: string, _params?: unknown) => ({
       id: 'rpc',
       ok: true as const,
       result:
@@ -48,11 +49,22 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
   const activeHandleRef = ref<string | null>(handle)
   const activeSessionTabTypeRef = ref<string | null>('terminal')
   const sendLiveTerminalInputRef = ref(async (_handle: string, _text: string) => false)
+  const scrollToBottom = vi.fn()
   const scope = {
+    terminalRefs: ref(new Map([[handle, { scrollToBottom }]])),
     client,
     clientRef: ref(client),
     activeHandle: handle,
     activeHandleRef,
+    terminals: [{ handle }],
+    visibleTerminalHandles: [handle],
+    visibleTerminalHandlesRef: ref([handle]),
+    setSplitTerminalHandles: vi.fn(),
+    terminalPaneViewportsRef: ref(new Map()),
+    terminalUnsubsRef: ref(new Map()),
+    subscribeToTerminal: vi.fn(),
+    unsubscribeTerminal: vi.fn(),
+    getTerminalPaneViewport: () => undefined,
     activeSessionTabTypeRef,
     connState: 'connected',
     connStateRef: ref('connected'),
@@ -95,13 +107,24 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
       sendLiveTerminalInputRef,
       setLiveInputCapture: vi.fn()
     })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only supplied view refs are read; unrelated subscription callbacks never run.
+    const webview = useMobileSessionTerminalWebview(scope as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the send routes; unrelated session model fields are unused.
     actions = useMobileSessionTerminalSendActions({
       ...scope,
+      ...webview,
       handleLiveInputAccessoryBytes: live.handleLiveInputAccessoryBytes
     } as never)
-    gestures = useMobileSessionTerminalInput(scope as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies gesture refs; unrelated file-action callbacks are unused.
+    gestures = useMobileSessionTerminalInput({
+      ...scope,
+      liveInputTerminalHandlesRef: ref(new Set([handle])),
+      sendLiveInputClick: live.sendLiveInputClick
+    } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies paste dependencies; unrelated session callbacks are unused.
     paste = useMobileTerminalPaste({
       ...scope,
+      sendTerminalUserInput: webview.sendTerminalUserInput,
       flushPendingLiveInputBeforeExternalSend: live.flushPendingLiveInputBeforeExternalSend,
       getActiveWorktreeConnectionId: async () => null,
       onError: vi.fn(),
@@ -125,9 +148,16 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
   })
   let text = ''
   return {
+    scrollToBottom,
     'live field': async () => {
       text += 'x'
       live.handleLiveInputChange({ nativeEvent: { text, isComposing: false } })
+      await live.flushPendingLiveInputBeforeExternalSend(handle)
+    },
+    'mouse-shaped live field': async () => {
+      live.handleLiveInputChange({
+        nativeEvent: { text: '\x1b[<0;2;2M', isComposing: false }
+      })
       await live.flushPendingLiveInputBeforeExternalSend(handle)
     },
     'live submit': () => live.handleLiveInputSubmit(),
@@ -137,10 +167,24 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
     },
     'raw accessory': () => actions.handleAccessoryKey({ bytes: '\x1b[A' } as never),
     'buffered submit': () => actions.handleSend(),
+    'mouse-shaped composer': () => {
+      scope.bufferedTerminalDraftState.input = '\x1b[<0;2;2M'
+      return actions.handleSend()
+    },
+    'mouse-shaped paste': () => {
+      clipboard.text = '\x1b[<0;2;2M'
+      return paste()
+    },
+    'accessory tab': () => actions.handleAccessoryKey({ bytes: '\t' }),
     'gesture arrows': async () => {
       await gestures.handleTerminalInput(handle, '\x1b[A')
       await gestures.flushTerminalGestureInput(handle)
     },
+    'gesture wheel': async () => {
+      await gestures.handleTerminalInput(handle, '\x1b[<64;2;2M')
+      await gestures.flushTerminalGestureInput(handle)
+    },
+    'gesture click': () => gestures.handleTerminalInput(handle, '\x1b[<0;2;2M', { click: true }),
     paste: () => paste(),
     dictation: async () => {
       const route = routeDictationTranscript('dictated text', true)
@@ -161,6 +205,7 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
         connected: true,
         handle,
         hostSupportsQueryReplyInput: true,
+        hostSupportsProgramStatus: true,
         subscribedTerminals: new Set([handle])
       }),
     'image heal': () =>
@@ -186,6 +231,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(1_000)
   resetWorkerTerminalTakeoverReportsForTest()
+  clipboard.text = 'pasted text'
 })
 afterEach(() => {
   act(() => {
@@ -264,3 +310,39 @@ it.each(realSites)('%s does not report a rejected send', async (site) => {
   })
   expect(client.sendRequest.mock.calls.filter(([method]) => method === REPORT)).toHaveLength(0)
 })
+
+it.each([
+  'live field',
+  'live submit',
+  'live accessory',
+  'raw accessory',
+  'accessory tab',
+  'buffered submit',
+  'mouse-shaped live field',
+  'mouse-shaped composer',
+  'mouse-shaped paste',
+  'paste',
+  'dictation'
+] as const)('%s returns to the prompt once per typed send', async (site) => {
+  const client = clientFixture()
+  const sites = mountSendSites(client)
+  await act(async () => {
+    await sites[site]()
+  })
+  const sends = client.sendRequest.mock.calls.filter(([method]) => method === 'terminal.send')
+  expect(sends.length).toBeGreaterThan(0)
+  expect(sites.scrollToBottom).toHaveBeenCalledTimes(sends.length)
+})
+
+it.each(['query reply', 'gesture arrows', 'gesture wheel', 'gesture click'] as const)(
+  '%s preserves the reading position',
+  async (site) => {
+    const client = clientFixture()
+    const sites = mountSendSites(client)
+    await act(async () => {
+      await sites[site]()
+    })
+    expect(client.sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(true)
+    expect(sites.scrollToBottom).not.toHaveBeenCalled()
+  }
+)

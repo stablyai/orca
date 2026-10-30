@@ -20,8 +20,7 @@ import {
   launchWorkspaceId
 } from '../../../shared/launch-parity-window-request.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them. The mocked
-// client outlives each client's module reset, so its transport is kept here.
+// Keep main’s mocked layout transport outside module resets so each rebuilt client still reaches it.
 type TransportFixture = typeof TransportFixtureModule
 const main = vi.hoisted((): { transport: TransportFixture['layoutApplyTestTransport'] | null } => ({
   transport: null
@@ -52,7 +51,6 @@ const load = perClientLoader(async () => ({
   switch: await import('../../../shared/layout-owner-switch')
 }))
 
-/** Runs one automation in a local workspace. */
 async function runAutomation(c: AutomationLaunchCase) {
   const modules = await load(c.client)
   const store = modules.createStore()
@@ -69,13 +67,11 @@ async function runAutomation(c: AutomationLaunchCase) {
     agent: c.agent,
     worktreeId: launchWorkspaceId(c.workspace),
     prompt: AUTOMATION_PROMPT,
-    // Automation dispatch always passes 'unknown'.
     launchSource: 'unknown',
     title: c.title
   })
   const phone = modules.phone.buildMobileSessionTabSnapshots(store.getState(), false)
   if (modules.switch.ORCA_LAYOUT_OWNER_IS_MAIN) {
-    // Main takes the run title by tab-bar id, and its frame (not modelled here) draws it.
     const tabBarId = store.getState().unifiedTabsByWorktree[launchWorkspaceId(c.workspace)]![0]!.id
     expect(main.transport?.sentOfType('renameTab').at(-1)).toEqual(
       expect.objectContaining({ tabId: tabBarId, kind: 'custom', title: c.title })
@@ -87,7 +83,6 @@ async function runAutomation(c: AutomationLaunchCase) {
   return { spawn, phone }
 }
 
-/** Swaps the random tab, leaf and token ids for the table's fixed ones. */
 function withFixedIds(value: unknown): unknown {
   const text = JSON.stringify(value)
   const ids = [
@@ -97,8 +92,7 @@ function withFixedIds(value: unknown): unknown {
   return JSON.parse(ids.reduce((out, id, index) => out.replaceAll(id, fixed[index] ?? id), text))
 }
 
-// Pins main's current launch behaviour as the convergence parity baseline (row 5): the pty:spawn
-// request a desktop automation sends and its phone tab. C7 replaces this producer.
+// Pin automation pty:spawn and mobile-tab behavior as the convergence baseline before C7 replaces this producer.
 describe('row 5: desktop automation pty:spawn request', () => {
   beforeAll(async () => {
     await load('darwin')

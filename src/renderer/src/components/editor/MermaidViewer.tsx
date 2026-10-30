@@ -1,28 +1,47 @@
-import React, { useLayoutEffect, useRef } from 'react'
+import React, { useCallback, useLayoutEffect, useRef } from 'react'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import MermaidBlock from './MermaidBlock'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 type MermaidViewerProps = {
   content: string
-  filePath: string
+  scrollCacheKey: string
 }
 
-// Why: MermaidViewer is the full-file counterpart to MermaidBlock (which
-// renders fenced mermaid blocks inside markdown). When a user opens a .mmd
-// or .mermaid file in diagram mode, the entire file content is the diagram
-// source — no markdown wrapper, no frontmatter, just mermaid syntax.
+// Render full .mmd/.mermaid files directly as diagram source.
 export default function MermaidViewer({
   content,
-  filePath
+  scrollCacheKey
 }: MermaidViewerProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
+  const pendingScrollTopRef = useRef<number | undefined>(undefined)
+  const renderCompleteRef = useRef(false)
+  const restoreObserverRef = useRef<ResizeObserver | null>(null)
   const isDark = useDocumentDarkTheme()
+  const diagramSource = content.trim()
 
-  // Why: Each viewing mode (source vs diagram) produces different DOM heights.
-  // Mode-scoped keys prevent restoring a source-mode scroll position in diagram
-  // mode (same reasoning as MarkdownPreview's scrollCacheKey).
-  const scrollCacheKey = `${filePath}:mermaid-diagram`
+  const cancelPendingScroll = useCallback(() => {
+    pendingScrollTopRef.current = undefined
+    restoreObserverRef.current?.disconnect()
+    restoreObserverRef.current = null
+  }, [])
+  const restorePendingScroll = useCallback(() => {
+    const container = rootRef.current
+    const targetScrollTop = pendingScrollTopRef.current
+    if (!container || targetScrollTop === undefined || container.clientHeight === 0) {
+      return
+    }
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+    if (!renderCompleteRef.current && maxScrollTop < targetScrollTop) {
+      return
+    }
+    container.scrollTop = Math.min(targetScrollTop, maxScrollTop)
+    cancelPendingScroll()
+  }, [cancelPendingScroll])
+  const onRenderComplete = useCallback(() => {
+    renderCompleteRef.current = true
+    restorePendingScroll()
+  }, [restorePendingScroll])
 
   useLayoutEffect(() => {
     const container = rootRef.current
@@ -44,9 +63,7 @@ export default function MermaidViewer({
 
     container.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      // Why: guard against writing 0 when the SVG has not rendered yet (e.g.,
-      // StrictMode double-mount or quick tab switch before mermaid.render()
-      // completes). Without this, a valid cached position gets clobbered.
+      // Before async SVG renders, zero layout must not overwrite cached scroll during quick switches or Strict Mode remounts.
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       }
@@ -60,41 +77,39 @@ export default function MermaidViewer({
   useLayoutEffect(() => {
     const container = rootRef.current
     const targetScrollTop = scrollTopCache.get(scrollCacheKey)
+    pendingScrollTopRef.current = targetScrollTop
+    renderCompleteRef.current = false
     if (!container || targetScrollTop === undefined) {
       return
     }
-
-    let frameId = 0
-    let attempts = 0
-
-    // Why: mermaid.render() is async, so the SVG may not exist on the first
-    // frame. Retry up to 30 frames (~500ms) to match MarkdownPreview's pattern.
-    const tryRestore = (): void => {
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-      const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
-      container.scrollTop = nextScrollTop
-
-      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || maxScrollTop >= targetScrollTop) {
-        return
-      }
-
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(tryRestore)
-      }
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(restorePendingScroll)
+    restoreObserverRef.current = observer
+    observer?.observe(container)
+    // User scrolling wins over a restore that is still waiting on render or layout.
+    const userScrollEvents = ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const
+    userScrollEvents.forEach((type) =>
+      container.addEventListener(type, cancelPendingScroll, { passive: true })
+    )
+    restorePendingScroll()
+    return () => {
+      observer?.disconnect()
+      cancelPendingScroll()
+      renderCompleteRef.current = false
+      userScrollEvents.forEach((type) => container.removeEventListener(type, cancelPendingScroll))
     }
-
-    tryRestore()
-    return () => window.cancelAnimationFrame(frameId)
-  }, [scrollCacheKey, content])
+  }, [scrollCacheKey, diagramSource, restorePendingScroll, cancelPendingScroll])
 
   return (
     <div ref={rootRef} className="mermaid-viewer h-full min-h-0 overflow-auto scrollbar-editor">
       <div className="mermaid-viewer-canvas">
-        {/* Why: DOMPurify's SVG profile strips <foreignObject> elements that
-           mermaid uses for HTML labels. Force SVG-native <text> labels so
-           they survive sanitization — same fix as the markdown preview path. */}
-        <MermaidBlock content={content.trim()} isDark={isDark} htmlLabels={false} />
+        {/* DOMPurify strips foreignObject HTML labels; request native SVG text so labels survive sanitization. */}
+        <MermaidBlock
+          content={diagramSource}
+          isDark={isDark}
+          htmlLabels={false}
+          onRenderComplete={onRenderComplete}
+        />
       </div>
     </div>
   )

@@ -13,7 +13,7 @@ describe('agentVerdictStatusLine', () => {
         ...FAILED,
         agentType: 'rsync',
         lastAssistantMessage: 'rsync failed',
-        programStatus: { state: 'error', message: 'rsync failed', observedAt: 1 }
+        programStatus: { state: 'error', message: 'Transfer interrupted', observedAt: 1 }
       })
     ).toBe('Failed: rsync failed')
   })

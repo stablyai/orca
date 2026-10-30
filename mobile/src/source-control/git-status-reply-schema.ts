@@ -1,13 +1,7 @@
 import { z } from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
-// Schemas for the two `git.status` replies mobile reads. Checked against the host's published
-// shape in src/shared/git-status-types.ts (GitStatusResult / GitUncommittedEntry), which is what
-// src/main/runtime/rpc/methods/git.ts returns from getRuntimeGitStatus verbatim.
-//
-// A member is required only where a consumer reads it without a guard. Everything the host may
-// send and mobile does not read is undeclared and passes through: a schema that required a field
-// an older host omits would turn every reply from that host into an incompatible error.
+// Require only unguarded consumer fields; unread host metadata must not become a compatibility gate.
 
 const GIT_FILE_STATUS = ['modified', 'added', 'deleted', 'renamed', 'untracked', 'copied'] as const
 const GIT_STAGING_AREA = ['staged', 'unstaged', 'untracked'] as const
@@ -24,23 +18,18 @@ const GIT_CONFLICT_KIND = [
 ] as const
 const GIT_CONFLICT_OPERATION = ['merge', 'rebase', 'cherry-pick', 'unknown'] as const
 
-// Built once: readProjectedConflictOperation runs on every reply.
 const gitConflictOperationSchema = z.enum(GIT_CONFLICT_OPERATION)
 
-/**
- * One working-tree entry.
- *
- * `path`, `status` and `area` are required because every list read reaches them unguarded:
- * use-mobile-source-control-state.ts:122 sections by `entry.area`, mobile-git-status.ts:63 sorts on
- * `entry.path`, and MOBILE_GIT_STATUS_LABELS is indexed by `entry.status`. The rest are optional in
- * the host type and read through a guard or a default, so they stay optional here.
- *
- * `area` degrades to absent rather than to an arm. Every arm carries an affordance — stage,
- * unstage, commit — and every reader is an equality check against a known one, so an absent area
- * lands the row in no section and withholds all three, which is what main did with an area it did
- * not know. Dropping the row instead would also drop it from the unresolved-conflict gate, which
- * grants create on a conflicted worktree.
- */
+// Desktop's stage/discard rules refuse submodule-internal rows and gitlink-only dirtiness.
+const gitSubmoduleStatusSchema = z.looseObject({
+  commitChanged: z.boolean(),
+  trackedChanges: z.boolean().catch(false),
+  untrackedChanges: z.boolean().catch(false),
+  restoreRecurses: z.boolean().optional().catch(undefined)
+})
+
+// Unknown area withholds stage/unstage/commit, but retain the row for unresolved-conflict gating.
+// Path and status are read unguarded; other fields have consumer fallbacks.
 const gitStatusEntrySchema = z.looseObject({
   path: z.string(),
   status: openEnum(GIT_FILE_STATUS, 'modified'),
@@ -49,6 +38,8 @@ const gitStatusEntrySchema = z.looseObject({
   conflictKind: openEnum(GIT_CONFLICT_KIND, undefined).optional(),
   conflictStatus: openEnum(GIT_CONFLICT_STATUS, undefined).optional(),
   conflictStatusSource: openEnum(GIT_CONFLICT_SOURCE, undefined).optional(),
+  submodule: salvagedOptional('submodule', gitSubmoduleStatusSchema),
+  submoduleRoot: salvagedOptional('submoduleRoot', z.string()),
   added: z.number().optional(),
   removed: z.number().optional()
 })
@@ -62,15 +53,7 @@ const gitUpstreamStatusSchema = z.looseObject({
   behindCommitsArePatchEquivalent: z.boolean().optional()
 })
 
-/**
- * The verbatim host payload the Changes screen publishes into its ready state.
- *
- * Only `entries` is required: mobile-hosted-review-create-intent.ts:70 reads
- * `status?.entries.some(...)`, which throws on a status object without it. Every other consumer
- * optional-chains — MobileSourceControlPanel.tsx:126/274, use-mobile-source-control-state.ts:163.
- * A salvaging array so one unreadable row drops instead of failing the whole screen's reply, and
- * salvagedOptional so a malformed optional reads as absent rather than as an incompatible reply.
- */
+// Only entries is read unguarded; salvage malformed rows and optional fields instead of failing the screen.
 export const gitStatusHostPayloadSchema = z.looseObject({
   entries: salvagingArray(gitStatusEntrySchema),
   conflictOperation: salvagedOptional('conflictOperation', gitConflictOperationSchema),
@@ -85,7 +68,6 @@ export type MobileGitUpstreamStatus = z.output<typeof gitUpstreamStatusSchema>
 type MobileProjectedUpstreamStatus = z.output<typeof projectedUpstreamStatusSchema>
 type GitConflictOperation = (typeof GIT_CONFLICT_OPERATION)[number]
 
-/** What readMobileGitStatusResult publishes: the host payload narrowed to five members. */
 type MobileGitStatusProjection = {
   entries: MobileGitStatusEntry[]
   conflictOperation: GitConflictOperation
@@ -94,10 +76,7 @@ type MobileGitStatusProjection = {
   upstreamStatus: MobileProjectedUpstreamStatus | undefined
 }
 
-// The projection's own shapes: the fields readMobileGitStatusResult kept, nothing else, and every
-// one of them written out even when absent. Not loose, and not zod's own optional-key omission —
-// main built these objects by hand, so an absent member is a present `undefined`, which is what
-// the recorded projections carry.
+// Preserve projected keys with undefined values; optional-key omission changes the established projection.
 const projectedUpstreamStatusSchema = z
   .object({
     hasUpstream: z.boolean(),
@@ -120,25 +99,20 @@ const projectedUpstreamStatusSchema = z
   }))
 
 const projectedEntrySchema = z.object({
-  // `.min(1)` because main's `!path` drop is falsy, not nullish: an empty path was never a row.
+  // Empty paths were never valid projected rows.
   path: z.string().min(1),
   status: openEnum(GIT_FILE_STATUS, 'modified'),
   area: openEnum(GIT_STAGING_AREA, undefined),
   oldPath: salvagedOptional('oldPath', z.string()),
   conflictStatus: salvagedOptional('conflictStatus', z.enum(GIT_CONFLICT_STATUS)),
   conflictStatusSource: salvagedOptional('conflictStatusSource', z.enum(GIT_CONFLICT_SOURCE)),
+  submodule: salvagedOptional('submodule', gitSubmoduleStatusSchema),
+  submoduleRoot: salvagedOptional('submoduleRoot', z.string()),
   added: salvagedOptional('added', z.number().finite()),
   removed: salvagedOptional('removed', z.number().finite())
 })
 
-/**
- * The normalized projection hosted-review preparation and the diff-review loaders read.
- *
- * `.catch(null)` keeps this reader's verdict exactly where main put it: a payload that is not a
- * record, or whose `entries` is not an array, is a decoded `null`, not an incompatible reply.
- * Three call sites route on that null — a refused status must leave their screens alone — so
- * tightening it is a product decision with its own expectation, not part of this step.
- */
+// Unreadable normalized status is null; callers fall back on that verdict instead of rejecting the reply.
 export const gitStatusProjectionSchema: z.ZodType<MobileGitStatusProjection | null, unknown> = z
   .object({
     entries: salvagingArray(projectedEntrySchema),
@@ -153,10 +127,12 @@ export const gitStatusProjectionSchema: z.ZodType<MobileGitStatusProjection | nu
       status: entry.status,
       area: entry.area,
       oldPath: entry.oldPath,
-      // Never projected: main dropped the host's conflictKind and stamped undefined instead.
+      // Preserve the established projection: conflictKind is always undefined.
       conflictKind: undefined,
       conflictStatus: entry.conflictStatus,
       conflictStatusSource: entry.conflictStatusSource,
+      submodule: entry.submodule,
+      submoduleRoot: entry.submoduleRoot,
       added: entry.added,
       removed: entry.removed
     })),
@@ -168,8 +144,7 @@ export const gitStatusProjectionSchema: z.ZodType<MobileGitStatusProjection | nu
   .nullable()
   .catch(null)
 
-// Main coerced an unreadable operation to 'unknown' rather than dropping the reply; four screens
-// render off that value, so the coercion is the behaviour, not a defect.
+// Unrecognized conflict operations render as unknown instead of rejecting the reply.
 function readProjectedConflictOperation(value: unknown): GitConflictOperation {
   const parsed = gitConflictOperationSchema.safeParse(value)
   return parsed.success ? parsed.data : 'unknown'

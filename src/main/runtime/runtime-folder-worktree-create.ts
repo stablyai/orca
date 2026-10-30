@@ -1,3 +1,4 @@
+import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
@@ -140,7 +141,7 @@ export async function createRuntimeFolderWorktree(args: {
   let warning: string | undefined
   let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
-  // Switch point: main starts the agent even with no terminal service, so its pane shows why not.
+  // Main owns failed agent startup too, so its pane can show the reason without a terminal service.
   if (args.startup && (deps.ptySpawnAvailable || ORCA_LAYOUT_OWNER_IS_MAIN)) {
     try {
       const launchRuntime = args.startupLaunchRuntime
@@ -162,7 +163,7 @@ export async function createRuntimeFolderWorktree(args: {
         ...(args.startup.viewMode ? { viewMode: args.startup.viewMode } : {}),
         startupCommandDelivery: args.startup.startupCommandDelivery,
         telemetry: args.startup.telemetry,
-        // Switch point: a start main could not make stays in its pane, showing why.
+        // Keep failed main-owned starts visible in their panes.
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...(shouldActivate ? {} : { surfaceOwner: false })
       })
@@ -182,7 +183,9 @@ export async function createRuntimeFolderWorktree(args: {
         surface: 'background'
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = readableWslDistroHoldText(
+        error instanceof Error ? error.message : String(error)
+      )
       warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
       console.warn(`[worktree-create] ${warning}`)
     }
@@ -192,7 +195,7 @@ export async function createRuntimeFolderWorktree(args: {
       repo.id,
       worktree.id,
       undefined,
-      // Switch point: a start main could not make stays main's to show, never the window's.
+      // Main retains failed startup presentation; the window must not take it over.
       ORCA_LAYOUT_OWNER_IS_MAIN
         ? undefined
         : args.startup && !didSpawnStartup
@@ -205,7 +208,7 @@ export async function createRuntimeFolderWorktree(args: {
     (!shouldActivate || deps.provisionInBackground?.() === true) &&
     deps.ptySpawnAvailable &&
     shouldSeedWorktreePrimaryTerminal({
-      // Switch point: a failed agent start keeps its pane, so no shell is seeded beside it.
+      // Failed agents retain their panes; do not seed a shell beside them.
       hasPrimarySurface: didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(args.startup)),
       // Background attribution-only creates have historically omitted the shell.
       callerProvidesSurface: args.promisedAgentChat === true || args.createdWithAgent !== undefined
@@ -214,7 +217,9 @@ export async function createRuntimeFolderWorktree(args: {
     try {
       await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = readableWslDistroHoldText(
+        error instanceof Error ? error.message : String(error)
+      )
       const initialWarning = `Failed to create the initial terminal for ${worktree.path}: ${message}`
       warning = warning
         ? `${warning} Also failed to create the initial terminal for ${worktree.path}: ${message}`

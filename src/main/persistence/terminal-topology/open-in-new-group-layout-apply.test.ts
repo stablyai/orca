@@ -72,7 +72,6 @@ describe.each([
         split: { besideGroupId: 'terminal-split', direction: 'down' }
       })
     ).resolves.toMatchObject({ ok: true, result: { tabId: 'editor-tab' } })
-    // Beside a split main lacks: refused, nothing written.
     await expect(
       store.applyLayoutCommand({
         type: 'openEditorTab',

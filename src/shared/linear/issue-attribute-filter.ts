@@ -1,6 +1,4 @@
-// Why: shared wire + cache identity for Linear plain-list attribute facets.
-// IPC/RPC parse unknown input; renderer canonicalizes typed state. An empty
-// filter is omitted from transport so unfiltered list requests stay equivalent.
+// Share Linear facet wire/cache identity. Parse unknown IPC/RPC input and canonicalize renderer state; omit empty filters for equivalent unfiltered requests.
 
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_ID_MAX_LENGTH = 256
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS = 100
@@ -98,11 +96,7 @@ export function canonicalizeLinearIssueAttributeFilter(
   }
 }
 
-/**
- * Enforces the transport bounds that `canonicalize` does not. Canonical form is
- * deduped but unbounded, so a filter built in memory can exceed limits that only
- * the throwing parser checks — and be rejected the moment it crosses a schema.
- */
+/** Canonicalization dedupes without bounds; apply transport limits here so in-memory filters do not fail only after schema crossing. */
 export function boundLinearIssueAttributeFilter(
   filter: LinearIssueAttributeFilter
 ): LinearIssueAttributeFilter {

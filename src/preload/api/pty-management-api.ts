@@ -1,7 +1,7 @@
 import type { DaemonPtyCwdClass } from '../../shared/daemon-adoption-telemetry'
 import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
-// Mirror of daemon's `DaemonSessionInfo` (src/main/daemon/types.ts); not imported — preload can't depend on main-only protocol types.
+// Mirrors DaemonSessionInfo; preload cannot import main-only daemon protocol types.
 export type PtyManagementSession = {
   sessionId: string
   state: 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -15,34 +15,29 @@ export type PtyManagementSession = {
   protocolVersion: number
 }
 
-// 'severed': macOS can no longer attribute daemon terminals to Orca, so Accessibility/
-// Automation grants silently stop applying until the daemon is restarted (STA-3491).
+// severed: macOS privacy grants stop applying to daemon terminals until daemon restart.
 export type PtyManagementMacTccAttributionHealth = 'intact' | 'severed' | 'unknown'
 
 export type PtyManagementDaemonCwdClass = DaemonPtyCwdClass
 
-// The daemon spawned a terminal into a folder it can't read while Orca can (STA-7948).
-// `daemonScope` is an opaque per-daemon digest, never a path — it only latches the notice.
-// `freshDaemonAccess` is what a daemon forked now would get: 'allowed' means restarting is the
-// whole remedy, 'denied' means Orca must be re-allowed first, 'unknown' means main could not tell.
+// Access a fresh daemon would get: allowed needs restart; denied needs renewed Orca permission.
 export type PtyManagementFreshDaemonAccess = 'allowed' | 'denied' | 'unknown'
 
+// The daemon cannot read a folder Orca can.
 export type PtyManagementFolderAccessMismatch = {
+  /** Opaque per-daemon digest used to latch the notice, never a path. */
   daemonScope: string
   cwdClass: PtyManagementDaemonCwdClass
   freshDaemonAccess: PtyManagementFreshDaemonAccess
 }
 
-// Mirrors DaemonFolderAccessResetResult in src/main/daemon/daemon-folder-access-reset.ts.
-// 'unsupported': nothing to reset, or the platform/app bundle cannot support one.
-// 'reset_failed': tccutil refused. 'probed': the reset ran and `mismatch` is the fresh verdict.
+// Mirrors DaemonFolderAccessResetResult; probed carries the post-reset mismatch verdict.
 export type PtyManagementFolderAccessResetResult =
   | { outcome: 'unsupported' }
   | { outcome: 'reset_failed' }
   | { outcome: 'probed'; mismatch: PtyManagementFolderAccessMismatch | null }
 
-// Mirrors SeveredDaemonStatus in src/main/daemon/daemon-host-image-state.ts: a Linux AppImage
-// daemon kept for its live terminals although its program files are gone.
+// Mirrors SeveredDaemonStatus: a live Linux AppImage daemon whose program files are gone.
 export type PtyManagementSeveredDaemon = {
   pid: number
   linuxStartTicks: string
@@ -56,12 +51,14 @@ export type PtyManagementSeveredDaemonRestartResult =
 
 export type PtyManagementApi = {
   asyncIoHealth: () => Promise<DaemonAsyncIoStatus>
-  // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
+  // degraded: new PTYs fall back to local spawning without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{
     killedCount: number
     remainingCount: number
     killedSessionIds?: string[]
+    /** Some sessions could not be listed, so the counts may miss some. */
+    listingIncomplete?: boolean
   }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>

@@ -76,7 +76,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
-    // Why: seed active sessions and mock the snapshot-then-clear so a regression measuring killedCount *after* fanout surfaces as 0.
+    // Clear active IDs during fanout so a late killedCount measurement would be wrong.
     const originalAdapter = adapterInstances[0]
     let activeIds = ['sess-a', 'sess-b', 'sess-c']
     originalAdapter.getActiveSessionIds.mockImplementation(() => [...activeIds])
@@ -92,12 +92,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     const result = await mod.restartDaemon()
 
-    // killedCount must be 3 — proves the count was taken *before* fanout cleared the set (a swapped-order bug reports 0).
     expect(result.killedCount).toBe(3)
     expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1, {
       replacedByRestart: true
     })
-    // Ordering invariant: synthetic exits must reach the renderer *before* listeners are torn down (Step 1 before 2).
     expect(order).toEqual(['fanout', 'unbind'])
     expect(recoverRetired).toHaveBeenCalledOnce()
     expect(recoverRetired.mock.invocationCallOrder[0]).toBeLessThan(
@@ -245,7 +243,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await mod.restartDaemon()
 
-    // No second DaemonSpawner was constructed — restart uses the one from init.
     expect(spawnerInstances).toHaveLength(1)
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
     expect(originalSpawner.ensureRunning).toHaveBeenCalledTimes(2)
@@ -255,7 +252,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     isPackagedMock.mockReturnValue(true)
     await mod.initDaemonPtyProvider(undefined, { recycleStaleDaemonOnEveryPlatform: true })
-    // Why linux: darwin already recycles without the opt-in, which would hide a dropped policy.
+    // Exercise Linux: macOS already recycles without the opt-in.
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
     try {
@@ -278,30 +275,25 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await mod.restartDaemon()
 
-    // A new adapter was constructed against the replacement daemon's socket.
     expect(adapterInstances).toHaveLength(2)
     const replacementAdapter = adapterInstances[1]
     expect(replacementAdapter).not.toBe(originalAdapter)
     expect(replacementAdapter.options.socketPath).toBe('/fake/socket-2')
     expect(replacementAdapter.options.tokenPath).toBe('/fake/token-2')
 
-    // The replacement adapter's respawn closure must drive the *same* original spawner (see daemon-init.ts step 5).
     originalSpawner.resetHandle.mockClear()
     originalSpawner.ensureRunning.mockClear()
     await replacementAdapter.options.respawn?.('daemon_died')
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
     expect(originalSpawner.ensureRunning).toHaveBeenCalledTimes(1)
-    // STA-2376: death → respawn retires, exactly once.
     expect(trackDaemonRetiredMock).toHaveBeenCalledTimes(1)
     expect(trackDaemonRetiredMock).toHaveBeenCalledWith('died_respawn')
     trackDaemonRetiredMock.mockClear()
     trackDaemonReplacedMock.mockClear()
-    // STA-2376: the resolver respawn attributes rather than emits — the launch it triggers reports it.
-    // Emitting here too would double-count, and would fire before the outcome is known.
+    // Attribute resolver recovery at launch so it is emitted once after the outcome is known.
     await replacementAdapter.options.respawn?.('unhealthy_resolver')
     expect(trackDaemonRetiredMock).not.toHaveBeenCalled()
     expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
-    // Still only one spawner in the whole test — nobody new was constructed.
     expect(spawnerInstances).toHaveLength(1)
   })
 
@@ -309,7 +301,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
-    // initDaemonPtyProvider calls setLocalPtyProvider once with the original.
     expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(1)
     const originalProvider = setLocalPtyProviderMock.mock.calls[0][0]
     expect(originalProvider).toBe(adapterInstances[0])
@@ -318,21 +309,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await mod.restartDaemon()
 
     const replacementAdapter = adapterInstances[1]
-    // Second call: swap to the replacement provider (Step 6).
     expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(2)
     expect(setLocalPtyProviderMock.mock.calls[1][0]).toBe(replacementAdapter)
     expect(mod.getDaemonProvider()).toBe(replacementAdapter)
 
-    // Step 7: rebind must run *after* Step 6 (the provider swap).
     const rebindOrder = rebindLocalProviderListenersMock.mock.invocationCallOrder.at(-1) ?? -1
     const swapOrder = setLocalPtyProviderMock.mock.invocationCallOrder.at(-1) ?? -1
     expect(rebindOrder).toBeGreaterThan(swapOrder)
   })
 
-  // STA-2376: a manual restart kills the daemon while the outgoing adapter is still live, so a pane
-  // respawning on its synthetic exit reaches the death path for a user action. That must not land in
-  // the crash bucket. Driven from inside the restart's ensureRunning so restartInFlight is genuinely
-  // set, rather than asserting the guard against a flag the test poked itself.
+  // Trigger respawn inside ensureRunning to exercise the real in-flight restart guard.
   it('does not report a retirement for a death observed during a manual restart', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
@@ -354,13 +340,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(respawnedMidRestart).toBe(true)
     expect(trackDaemonRetiredMock).not.toHaveBeenCalled()
 
-    // The same closure still retires once the restart has settled, so the guard is scoped, not permanent.
     await outgoingRespawn?.('daemon_died')
     expect(trackDaemonRetiredMock).toHaveBeenCalledTimes(1)
     expect(trackDaemonRetiredMock).toHaveBeenCalledWith('died_respawn')
 
-    // The restart installs its own adapter, whose closure is a second copy of the guard — and the one
-    // that actually runs in the field from the second restart onward, since the first adapter is gone.
+    // Repeat through the replacement adapter: later restarts use its distinct respawn closure.
     const restartedRespawn = adapterInstances[1].options.respawn
     trackDaemonRetiredMock.mockClear()
     let respawnedMidSecondRestart = false
@@ -382,7 +366,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   it('preserves legacy adapter instances by identity, drains outgoing router via disposeRouterOnly, and re-discovers legacy sessions on the new router', async () => {
     const mod = await importFresh()
 
-    // Why: bypass createLegacyDaemonAdapters' socket-probe machinery — directly construct a router with a legacy adapter and install it.
+    // Install a router directly so legacy discovery cannot affect the restart test.
     await mod.initDaemonPtyProvider()
 
     const { DaemonPtyRouter } = await import('./daemon-pty-router')
@@ -397,7 +381,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       current: currentAtConstruction as unknown as InstanceType<typeof DaemonPtyAdapter>,
       legacy: [legacyAdapter as unknown as InstanceType<typeof DaemonPtyAdapter>]
     })
-    // Why: spy on the outgoing router's disposeRouterOnly — adapter survival alone wouldn't catch a no-op that leaks listeners.
+    // Observe router disposal to detect leaked subscriptions even if the adapters survive.
     const disposeRouterOnlySpy = vi.spyOn(routerWithLegacy, 'disposeRouterOnly')
     const oldRouterDispose = vi.spyOn(routerWithLegacy, 'dispose')
     mod.replaceDaemonProvider(routerWithLegacy)
@@ -409,18 +393,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const newRouter = provider as InstanceType<typeof DaemonPtyRouter>
     expect(newRouter).not.toBe(routerWithLegacy)
 
-    // Legacy adapter is preserved by identity — not reconstructed, copied, or disposed.
     const legacies = newRouter.getLegacyAdapters()
     expect(legacies).toHaveLength(1)
     expect(legacies[0]).toBe(legacyAdapter)
     expect(legacyAdapter.dispose).not.toHaveBeenCalled()
-    // Router drained via disposeRouterOnly (router-only teardown), so legacy adapters' connections are untouched.
     expect(legacyAdapter.disconnectOnly).not.toHaveBeenCalled()
-    // disposeRouterOnly drained subscriptions but did NOT dispose the adapters behind it.
     expect(disposeRouterOnlySpy).toHaveBeenCalledTimes(1)
     expect(oldRouterDispose).not.toHaveBeenCalled()
 
-    // The replacement router re-runs discovery so spawns for a surviving legacy sessionId still route to the legacy adapter.
     expect(legacyAdapter.listProcesses).toHaveBeenCalled()
   })
 
@@ -468,7 +448,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
-    // initDaemonPtyProvider yields a bare adapter when no legacy adapters exist — confirm that shape persists across restart.
     const { DaemonPtyAdapter } = await import('./daemon-pty-adapter')
     const { DaemonPtyRouter } = await import('./daemon-pty-router')
     expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyAdapter)
@@ -486,7 +465,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const originalSpawner = spawnerInstances[0]
     const originalAdapter = adapterInstances[0]
 
-    // Build an ordered trace by stamping each step; cleanup has no observable in the default probeSocket=false path, so instrument resetHandle instead.
+    // The dead-socket cleanup branch has no observable call; trace resetHandle after it.
     const trace: string[] = []
     originalAdapter.fanoutSyntheticExits.mockImplementation(() => trace.push('fanout'))
     unbindLocalProviderListenersMock.mockImplementation(() => trace.push('unbind'))
@@ -503,9 +482,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     rebindLocalProviderListenersMock.mockImplementation(() => trace.push('rebind'))
 
     await mod.restartDaemon()
-    void originalEnsureRunning // keep ref so tslint doesn't complain
+    void originalEnsureRunning
 
-    // Full 7-step order; Step 3 (cleanup) has no observable in the dead-socket branch, so it's pinned implicitly by resetHandle running after unbind.
+    // The trace covers the observable order; cleanup has no event in this branch.
     expect(trace).toEqual([
       'fanout',
       'unbind',
@@ -515,7 +494,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       'rebind'
     ])
 
-    // A fresh adapter built between ensureRunning and replaceProvider (Step 5 before 6); its Step-4 socketPath proves the ordering.
     expect(adapterInstances).toHaveLength(2)
     expect(adapterInstances[1].options.socketPath).toBe('/fake/socket-2')
     expect(adapterInstances[1].establishLifecycleLease).toHaveBeenCalledOnce()
@@ -525,13 +503,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('exercises the alive-daemon cleanup path: issues shutdown RPC via DaemonClient before spawning a replacement', async () => {
-    // Why: default probeSocket=false skips Step 3's shutdown RPC; flip the socket "alive" to cover the shutdown-RPC-succeeded branch.
-
     const requestMock = vi.fn(async (method: string) => {
       if (method === 'listSessions') {
         return { sessions: [{ sessionId: 'live-1', isAlive: true }] }
       }
-      // `shutdown` RPC — daemon exits before reply lands; return undefined.
       return undefined
     })
     const ensureConnectedMock = vi.fn(async () => {})
@@ -546,7 +521,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
-    // Make probeSocket return true: needs both the fs.existsSync proxy AND net.connect resolving "alive".
+    // Both path existence and a successful connection are needed for the live-socket branch.
     probeSocketExistsMock.mockReturnValue(true)
     netConnectMock.mockImplementationOnce(() => {
       const handlers: Record<string, (() => void)[]> = {
@@ -571,12 +546,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await mod.restartDaemon()
 
-    // The shutdown RPC must have been issued with killSessions=true.
     expect(ensureConnectedMock).toHaveBeenCalled()
     expect(requestMock).toHaveBeenCalledWith('shutdown', {
       killSessions: true
     })
-    // The fallback killStaleDaemon must NOT fire when the RPC path worked.
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
   })
 
@@ -631,7 +604,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     const originalSpawner = spawnerInstances[0]
 
-    // Why: the deferred gate holds the first restart inside ensureRunning so the second call provably enters while the first is mid-flight.
+    // Hold ensureRunning open so the second restart is guaranteed to overlap the first.
     let markEnsureRunningEntered: (() => void) | undefined
     const ensureRunningEntered = new Promise<void>((resolve) => {
       markEnsureRunningEntered = resolve
@@ -650,21 +623,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await ensureRunningEntered
     const call2 = mod.restartDaemon()
 
-    // Why: restartDaemon wraps each return in a fresh Promise, so call1===call2 can't prove coalescing; instead assert resetHandle stayed at 1 mid-flight.
+    // Async wrappers return distinct promises; prove coalescing by observing work while the first is blocked.
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
     expect(adapterInstances).toHaveLength(1)
 
     releaseEnsureRunning?.()
     const [r1, r2] = await Promise.all([call1, call2])
-    // Both resolved values are structurally identical — same result bubbled up through the shared runRestartDaemon promise.
     expect(r1).toEqual(r2)
 
-    // resetHandle=1/restart, ensureRunning=1 init+1 restart; an un-coalesced second restart would push these to 2 and 3.
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
     expect(originalSpawner.ensureRunning).toHaveBeenCalledTimes(2)
     expect(adapterInstances).toHaveLength(2)
 
-    // After the in-flight promise settles, a fresh restart runs — proves .finally cleared restartInFlight (a stale slot would skip work).
     await mod.restartDaemon()
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(2)
     expect(adapterInstances).toHaveLength(3)

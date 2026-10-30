@@ -1,3 +1,4 @@
+import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -19,17 +20,16 @@ export type TerminalHostOptions = {
     terminalShellArgs?: string[]
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    onCreationDisposition?: (disposition: PtyCreationDisposition) => void
+    assertCreateAllowed?: () => void
     isCanceled?: () => boolean
     cancelSignal?: AbortSignal
-    // Async production spawns and sync test stubs share this boundary.
   }) => SubprocessHandle | Promise<SubprocessHandle>
-  // Why: login-session death detection (#7936) needs subprocess exits even when no client is attached.
+  // Login-session death detection needs exits even when no viewer is attached.
   onSessionReaped?: (sessionId: string) => void
-  /** Reports a shell-readiness outcome worth diagnosing. Why threaded rather
-   *  than console: the detached daemon runs with stdio 'ignore', so the only
-   *  durable sink is its NDJSON file log. */
+  /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
-  // Why: graceful shutdown checkpoints must finish in-process before teardown.
+  // Finish shutdown checkpoints in-process before native teardown.
   onFinalCheckpoint?: (
     sessionId: string,
     snapshot: TerminalSnapshot,
@@ -37,6 +37,6 @@ export type TerminalHostOptions = {
   ) => void
   /** Charged only on the branch that forks; attach and adoption never reach it. */
   spawnGate?: TerminalSpawnGate
-  // Why: tests need deterministic tombstone eviction without thousands of sessions.
+  // Allow deterministic eviction tests without creating thousands of sessions.
   maxTombstones?: number
 }

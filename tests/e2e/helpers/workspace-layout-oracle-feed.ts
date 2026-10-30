@@ -1,7 +1,4 @@
-/**
- * The runtime's live layout as the oracle reads it: a `layout.subscribe` consumer's cache, applied
- * frame by frame, and the same layout as models for the model rules.
- */
+// Apply layout.subscribe frames to the oracle cache and partition them for model-rule checks.
 
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../src/shared/execution-host'
 import type {

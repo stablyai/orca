@@ -13,7 +13,7 @@ const dependencyExports: [string, string[]][] = [
   ['../agent-hooks/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
   ['../runtime/structured-agent-session-runtime', ['stopStructuredAgentSessionRuntime']],
   [
-    '../runtime/structured-agent-session-runtime-teardown',
+    '../runtime/agent-session/structured-agent-session-runtime-teardown',
     ['setStructuredAgentSessionTeardownTrigger']
   ],
   ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],
@@ -22,7 +22,10 @@ const dependencyExports: [string, string[]][] = [
     '../browser/paired-runtime-browser-client-host-runtime',
     ['shutdownPairedRuntimeBrowserClientHosts']
   ],
+  ['../ipc/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
+  ['../orca-profiles/profile-cloud-session-owner', ['flushUnsavedCloudSessions']],
   ['../browser/browser-manager', ['browserManager']],
+  ['../browser/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
   ['../git/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],

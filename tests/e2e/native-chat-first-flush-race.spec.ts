@@ -28,9 +28,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-first-flush-${randomUUID()}`
 
-    // Why: a real Claude Code session flushes its first JSONL line up to
-    // minutes after launch (#8401) — this directory intentionally has no file
-    // yet when the pane resolves its providerSession.
+    // #8401: Claude may flush its first JSONL minutes after launch; resolve providerSession before creating the file.
     const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-'))
     const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
 
@@ -60,11 +58,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
         path: path.join(screenshotDir, '01-loading-no-error.png')
       })
 
-      // Why observe, not sleep: 1_500ms is exactly UNFLUSHED_SETTLE_MS, so a fixed
-      // wait straddles the boundary where the host reports the transcript pending
-      // and the renderer cancels its own retry. Read through the same IPC instead,
-      // proving the miss directly. A notFound is never cached, so this cannot
-      // perturb the hydration the assertions below measure.
+      // Observe the uncached miss through IPC: a fixed 1500ms wait races UNFLUSHED_SETTLE_MS and retry cancellation.
       await expect
         .poll(
           () =>
@@ -85,8 +79,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
         'The main process now retries a not-yet-flushed transcript instead of caching a permanent miss.'
       writeFileSync(transcriptPath, claudeTranscriptLines({ sessionId, userText, assistantText }))
 
-      // Why: the user text also surfaces as chrome (worktree row, tab
-      // title), so scope hydration assertions to the transcript subtree.
+      // Scope to transcript content because user text also appears in workspace/tab chrome.
       const transcript = orcaPage.locator('[data-native-chat-root="true"]')
       await expect(transcript.getByText(userText)).toBeVisible({ timeout: 30_000 })
       await expect(transcript.getByText(assistantText)).toBeVisible({ timeout: 30_000 })

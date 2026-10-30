@@ -1,3 +1,5 @@
+import { translateMain } from '../i18n/main-i18n'
+import { PET_BUNDLE_DEFAULT_LABEL, PetImportError } from '../../shared/pet-import-failure-copy'
 import { BrowserWindow, dialog } from 'electron'
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -16,9 +18,9 @@ export async function importPetBundle(
 ): Promise<CustomPet | null> {
   const senderWindow =
     BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
-  // Why: the bundle is a folder, but Finder may let users pick `pet.json` inside it — post-pick logic walks up to the parent.
+  // Finder may select pet.json inside the bundle; accept it and use its parent.
   const options: Electron.OpenDialogOptions = {
-    title: 'Pick a .codex-pet bundle',
+    title: translateMain('native.dialog.importPetBundle', 'Pick a .codex-pet bundle'),
     properties: ['openFile', 'openDirectory', 'treatPackageAsDirectory']
   }
   const result = senderWindow
@@ -33,7 +35,7 @@ export async function importPetBundle(
     const pickedStat = await stat(picked)
     bundleDir = pickedStat.isDirectory() ? picked : dirname(picked)
   } catch {
-    throw new Error('Could not read the selected path.')
+    throw new PetImportError('pathUnreadable')
   }
 
   const manifestPath = join(bundleDir, 'pet.json')
@@ -41,39 +43,43 @@ export async function importPetBundle(
   try {
     manifestStat = await stat(manifestPath)
   } catch {
-    throw new Error('Bundle is missing pet.json.')
+    throw new PetImportError('manifestMissing')
   }
   if (!manifestStat.isFile() || manifestStat.size > MAX_MANIFEST_BYTES) {
-    throw new Error('pet.json is invalid.')
+    throw new PetImportError('manifestInvalid')
   }
   if (await isSymlink(manifestPath)) {
-    throw new Error('pet.json must not be a symlink.')
+    throw new PetImportError('manifestSymlink')
   }
 
   let manifest: ResolvedPetManifest<PetManifest>
   try {
     const raw = await readFile(manifestPath, 'utf8')
-    // Why: defend against TOCTOU — the file may have grown between the stat check and this read.
+    // Recheck the read size because the file may have grown after stat.
     if (Buffer.byteLength(raw, 'utf8') > MAX_MANIFEST_BYTES) {
       throw new Error('pet.json exceeded the manifest size limit.')
     }
     manifest = applyCodexPetDefaults(PetManifestSchema.parse(JSON.parse(raw)))
   } catch (error) {
-    throw new Error(`Invalid pet.json: ${error instanceof Error ? error.message : 'parse error'}`)
+    throw new PetImportError(
+      'manifestParseFailed',
+      {},
+      error instanceof Error ? error.message : 'parse error'
+    )
   }
 
   const { sheetSrc, sheetClass } = await resolveBundleSpritesheetSource(manifest, bundleDir)
 
   const sprite = await buildBundleSprite(manifest, sheetSrc)
 
-  // Why: always a fresh UUID (not the manifest's display-hint id) to avoid collisions, unsafe ids, and re-import clobbering.
+  // Ignore manifest IDs to prevent collisions, unsafe paths and re-import overwrites.
   const id = randomUUID()
   const root = getPetsDir()
   await mkdir(root, { recursive: true })
   const destDir = join(root, id)
   const sheetExt = sheetClass.ext
   const sheetFileName = `spritesheet${sheetExt}`
-  // Why: stage into a sibling .tmp then atomically rename, so a mid-copy failure can't leave a half-imported bundle.
+  // Stage beside the destination so failed copies cannot publish a partial bundle.
   const tmpDir = `${destDir}.tmp`
   try {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
@@ -83,11 +89,11 @@ export async function importPetBundle(
     await rename(tmpDir, destDir)
   } catch {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
-    throw new Error('Could not save the pet bundle.')
+    throw new PetImportError('bundleSaveFailed')
   }
 
   const rawLabel = (manifest.displayName ?? manifest.id ?? basename(bundleDir)).trim()
-  const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Pet bundle'
+  const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : PET_BUNDLE_DEFAULT_LABEL
   return {
     id,
     label,
@@ -95,7 +101,6 @@ export async function importPetBundle(
     mimeType: sheetClass.mimeType,
     kind: 'bundle',
     sprite,
-    // Why: renderer falls back to spriteFps when sprite is undefined (detected-frame bundles).
     ...(manifest.fps !== undefined ? { spriteFps: manifest.fps } : {})
   }
 }

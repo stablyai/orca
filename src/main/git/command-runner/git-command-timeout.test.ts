@@ -17,10 +17,6 @@ describe('gitCommandTimeoutMs', () => {
     expect(gitCommandTimeoutMs(['status'], 7)).toBe(7)
     expect(gitCommandTimeoutMs(['fetch'], 7)).toBe(7)
   })
-
-  it('provides a deterministic read-timeout seam', () => {
-    expect(gitCommandTimeoutMs(['status'], undefined, 25)).toBe(25)
-  })
 })
 
 describe('GitCommandTimeoutError', () => {

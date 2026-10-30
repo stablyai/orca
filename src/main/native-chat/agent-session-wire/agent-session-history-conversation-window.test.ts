@@ -12,7 +12,7 @@ import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryRequest
 } from '../../../shared/agent-session-wire'
-import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime-memory-limits'
+import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -20,14 +20,13 @@ import {
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { foldSubagentItems } from '../../../shared/native-chat-subagent-items'
+import { foldSubagentItems } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   subagentJournalBody,
   subagentJournalItemIdentity
 } from '../agent-session-journal/journal-subagent-item'
 
-// A backward page windows over the session's own rows, and a subagent's rows in
-// that range ride along, so a burst cannot crowd the conversation off the page.
+// Window on session-owned rows; include subagent rows without letting bursts crowd out conversation.
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',

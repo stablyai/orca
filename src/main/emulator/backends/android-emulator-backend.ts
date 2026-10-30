@@ -1,4 +1,5 @@
-import { EmulatorError } from '../emulator-errors'
+import { EmulatorError, emulatorErrorCodedMessage } from '../emulator-errors'
+import { emulatorCodedMessage, emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import type {
   BackendAvailability,
@@ -27,6 +28,7 @@ import { ensureAdbOk } from '../android/android-adb-result'
 import {
   findRunningAvdSerial,
   listAndroidDevices,
+  listConfirmedAdbSerials,
   listRunningAdbDevices
 } from '../android/android-device-inventory'
 import {
@@ -49,7 +51,7 @@ import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type AndroidEmulatorBackendOptions = {
   runner?: AndroidCommandRunner
-  // Inject discovered SDK paths (tests); undefined means auto-discover, null means "no SDK".
+  // undefined discovers the host SDK; null explicitly disables it.
   sdk?: AndroidSdkPaths | null
   bootTimeoutMs?: number
   pollIntervalMs?: number
@@ -62,9 +64,6 @@ export type AndroidEmulatorBackendOptions = {
 const DEFAULT_BOOT_TIMEOUT_MS = 180_000
 const DEFAULT_POLL_INTERVAL_MS = 2_000
 
-// The Android backend. Device discovery + lifecycle + input run through `adb`
-// and the `emulator` binary; the live H.264 pane streams via scrcpy. Input uses
-// `adb shell input`, so it works without sending on the scrcpy control socket.
 export class AndroidEmulatorBackend implements EmulatorBackend {
   readonly kind = 'android' as const
   readonly streamCodec = 'h264' as const
@@ -112,25 +111,25 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   async checkAvailability(): Promise<BackendAvailability> {
     const sdk = this.sdkState.resolve()
     if (!sdk) {
-      return {
-        available: false,
-        devices: [],
-        message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
-      }
+      return { available: false, devices: [], ...emulatorCodedMessage('androidSdkMissing') }
     }
     const sdkPath = sdk.sdkRoot
     let devices: EmulatorDevice[] = []
     try {
       devices = await this.listDevices()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'adb is unavailable.'
-      return { available: false, devices: [], message, sdkPath }
+      return {
+        available: false,
+        devices: [],
+        ...emulatorErrorCodedMessage(error, 'adbUnavailable'),
+        sdkPath
+      }
     }
     if (devices.length === 0) {
       return {
         available: false,
         devices,
-        message: 'No Android devices or AVDs found. Create one in Android Studio.',
+        ...emulatorCodedMessage('noAndroidDevices'),
         sdkPath
       }
     }
@@ -140,6 +139,11 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   async listDevices(): Promise<EmulatorDevice[]> {
     const sdk = this.sdkState.resolve()
     return sdk ? listAndroidDevices(this.runner, sdk) : []
+  }
+
+  async listRunningDeviceIds(): Promise<string[] | null> {
+    const sdk = this.sdkState.resolve()
+    return sdk ? listConfirmedAdbSerials(this.runner, sdk) : null
   }
 
   async ownsDevice(id: string): Promise<boolean> {
@@ -162,7 +166,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     }
     throw new EmulatorError(
       'emulator_device_not_found',
-      `Android device "${deviceOrName}" is not running. Boot it first.`
+      emulatorFailureText('androidDeviceNotRunning', { device: deviceOrName })
     )
   }
 
@@ -186,8 +190,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
-    // Reuse a live scrcpy stream so a renderer remount reconnects to it (the
-    // registry replays meta + config + GOP) instead of respawning the server.
+    // Reuse the registered stream so remounts replay cached video instead of restarting scrcpy.
     return scrcpyVideoRegistry.has(info.deviceUdid)
   }
 
@@ -288,7 +291,6 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     return run(this.requireSdk(), await this.resolveDeviceId(deviceId))
   }
 
-  // Boots an AVD (by name) when not running and waits for boot; returns the serial.
   async ensureBooted(deviceOrName: string): Promise<string> {
     return bootAndroidDevice(this.runner, this.requireSdk(), deviceOrName, {
       bootTimeoutMs: this.bootTimeoutMs,

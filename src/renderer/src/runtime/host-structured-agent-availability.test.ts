@@ -18,6 +18,7 @@ const owner = {
 const handlers = (call: number) => subscribe.mock.calls[call][3]
 
 beforeEach(() => {
+  unsubscribe.mockClear()
   subscribe.mockReset().mockResolvedValue({ unsubscribe })
 })
 
@@ -34,11 +35,13 @@ it('keeps the snapshot through lost contact and after its last holder, until the
   handlers(0).onClose()
   expect(read('runtime:env', 'r1', 1)).toEqual(known)
   // A reconnect reopens the stream; the snapshot stays until the host replays its own.
-  acquire(owner)
+  const releaseReconnected = acquire(owner)
   expect(subscribe).toHaveBeenCalledTimes(2)
   expect(read('runtime:env', 'r1', 1)).toEqual(known)
   release()
+  releaseReconnected()
   await Promise.resolve()
+  expect(unsubscribe).toHaveBeenCalledTimes(2)
   expect(read('runtime:env', 'r1', 1)).toEqual(known)
 
   acquire({ ...owner, pairingRevision: 2 })

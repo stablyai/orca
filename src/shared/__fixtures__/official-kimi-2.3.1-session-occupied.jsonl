@@ -1,0 +1,2 @@
+{"role":"meta","type":"system.version","version":"2.3.1"}
+{"type":"error","code":"session.occupied","message":"This session is in use by another Kimi Code CLI instance. Stop the session in that instance or exit it, then try again.","details":{"sessionId":"session_REDACTED","holder":{"version":1,"token":"LOCK_TOKEN_REDACTED","pid":21616,"hostname":"awin","startedAt":1793072814941,"clientIdentity":"kimi_code_cli","clientDisplayName":"Kimi Code CLI"}}}

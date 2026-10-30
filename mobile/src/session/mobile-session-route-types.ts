@@ -10,6 +10,7 @@ import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord
 
@@ -25,9 +26,9 @@ export type MobileSessionTab =
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null
-      /** Agent Orca launched in this terminal, if any. This makes chat eligible
-       *  before the first live agent-status update reaches the mobile client. */
+      // Launch identity enables chat before live agent status arrives.
       launchAgent?: TuiAgent
+      nativeChatIdentity?: MobileNativeChatIdentity
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
       launchDraftCreatedAt?: number
@@ -62,6 +63,7 @@ export type MobileSessionTab =
       language?: string
       mode?: 'edit' | 'diff'
       diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+      oldPath?: string
       isDirty: boolean
       isActive: boolean
     }
@@ -69,6 +71,8 @@ export type MobileSessionTab =
 
 export type SessionTabsResult = {
   worktree: string
+  clientHostedPagesUnreconciled?: true
+  agentSessionsUnverifiable?: true
   publicationEpoch?: string
   snapshotVersion: number
   tabs: MobileSessionTab[]
@@ -115,7 +119,6 @@ export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
 
 export type DiffCommentActions = {
   comments: DiffComment[]
-  /** Notes a new agent session is still being started with. */
   sendingCommentIds: ReadonlySet<string>
   busy: boolean
   onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
@@ -149,7 +152,6 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-/** `other-runtime`: another Orca server owns the workspace, so the paired host cannot list its agents. */
 export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'

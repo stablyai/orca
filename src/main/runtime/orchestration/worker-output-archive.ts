@@ -62,9 +62,7 @@ export function summarizeWorkerOutputArchive(archive: WorkerTerminalArchiveRow):
     return { source: 'transcript', status: 'captured' }
   }
   if (archive.kind === 'structured_journal') {
-    // A structured session's journal IS its transcript, so it reports as one. A third `source`
-    // would leak the structured/terminal split into a CLI surface this PR keeps deliberately
-    // uniform, and would widen a shape that already reaches paired clients.
+    // Report journals as transcript output to preserve the existing paired-client source union.
     const journal = JSON.parse(archive.content) as WorkerStructuredJournalArchive
     return { source: 'transcript', status: journal.messages.length > 0 ? 'captured' : 'empty' }
   }
@@ -77,9 +75,7 @@ export function summarizeWorkerOutputArchive(archive: WorkerTerminalArchiveRow):
   }
 }
 
-// Freezes an inspectable output source before the live PTY is closed. Prefers the exact
-// hook-reported provider transcript; falls back to bounded redacted terminal output. Throws
-// typed archive_failed so release retains the live terminal when no evidence can be preserved.
+// Archive exact provider transcript or redacted terminal tail before close; typed archive_failed retains live output.
 export async function captureWorkerOutputArchive(args: {
   runtime: WorkerTerminalReleaseRuntime
   dispatchId: string
@@ -104,7 +100,7 @@ export async function captureWorkerOutputArchive(args: {
   if (session) {
     transcriptFallbackReason = 'transcript_unreadable'
     const isWslSession = isWslHookRelayConnectionId(session.connectionId)
-    // Why: this process serves no SSH filesystem, so an SSH worker's transcript is unreachable.
+    // No SSH filesystem provider is installed, so remote transcripts are unreachable.
     const isSshSession = Boolean(session.connectionId) && !isWslSession
     if ((isWslSession && !session.wslDistro) || isSshSession) {
       transcriptFallbackReason = 'remote_capability_unavailable'
@@ -155,8 +151,7 @@ export async function captureWorkerOutputArchive(args: {
   const bounded = boundArchiveLines(redacted.lines)
   const draft = terminal.draft ? bounded.lines.at(-1) : undefined
   const lines = terminal.draft ? bounded.lines.slice(0, -1) : bounded.lines
-  // Why: an exited PTY zeroes its tail immediately, so an empty capture is a distinct receipt,
-  // not silent success — worker-read must be able to say why nothing is there.
+  // An exited PTY clears its tail; report empty evidence explicitly to worker-read.
   const empty = bounded.lines.every((line) => line.trim() === '')
   return {
     kind: 'terminal_tail',
@@ -193,8 +188,7 @@ export function boundArchiveLines(lines: string[]): { lines: string[]; truncated
   if (total <= TERMINAL_ARCHIVE_MAX_CHARS) {
     return { lines, truncated: false }
   }
-  // Collected newest-first and reversed once: unshift per line is O(n^2) and the
-  // char budget admits ~260k blank lines.
+  // Collect newest-first and reverse once; per-line unshift is quadratic for ~260k blank lines.
   const keptReversed: string[] = []
   let budget = TERMINAL_ARCHIVE_MAX_CHARS
   for (let index = lines.length - 1; index >= 0; index -= 1) {

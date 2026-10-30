@@ -74,7 +74,6 @@ describe('readOpenCodeBinderSessions', () => {
     expect(readOpenCodeBinderSessions(dbPath, START)).toEqual([])
   })
 
-  // #24577: an absent store is normal, so it answers [] and the client logs nothing.
   it('reads a missing database as empty and detects it once it appears', () => {
     expect(readOpenCodeBinderSessions(join(dir, 'later.db'), START)).toEqual([])
     expect(readOpenCodeBinderSessions(join(dir, 'missing', 'opencode.db'), START)).toEqual([])

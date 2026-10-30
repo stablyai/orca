@@ -1,16 +1,16 @@
+import type * as PromptCardModule from './use-native-chat-interactive-prompt-card'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useImperativeHandle } from 'react'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import type { AskPrompt } from './native-chat-interactive-prompt'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type * as InteractiveCardModule from './NativeChatInteractiveCard'
 
-// The transcript and composer are stubbed: the wire under test is which of this
-// pane's sends tell the transcript to bring the latest into view.
+// Stub transcript and composer to observe which pane sends request latest-message navigation.
 type ComposerStubProps = { onSubmitted?: () => void }
 const stubs = vi.hoisted(
   (): {
@@ -44,9 +44,20 @@ vi.mock('./use-native-chat-interactive-send', () => ({
   })
 }))
 // A pending question, so the pane mounts its card with the send it hands it.
-vi.mock('./use-native-chat-interactive-prompt-card', () => ({
-  useNativeChatInteractivePromptCard: () => ({ kind: 'question', prompt })
-}))
+vi.mock('./use-native-chat-interactive-prompt-card', async (importOriginal) => {
+  const original = await importOriginal<typeof PromptCardModule>()
+  const { useNativeChatPromptCardPresentation } =
+    await import('./use-native-chat-prompt-card-presentation')
+  return {
+    useNativeChatTerminalPromptCard: (
+      args: Parameters<typeof original.useNativeChatTerminalPromptCard>[0]
+    ) => {
+      const card = { kind: 'question' as const, prompt }
+      const presentation = useNativeChatPromptCardPresentation({ ...args, card })
+      return { promptCard: card, presentation, actionKey: presentation.occurrenceKey ?? 'prompt' }
+    }
+  }
+})
 vi.mock('./NativeChatInteractiveCard', async (importOriginal) => {
   const original = await importOriginal<typeof InteractiveCardModule>()
   return {
@@ -145,7 +156,6 @@ describe('NativeChatResolvedView sends', () => {
         ownsTabWideLaunchDraft={false}
       />
     )
-    // Anti-vacuous: opening the pane reveals nothing by itself.
     expect(stubs.revealLatest).not.toHaveBeenCalled()
 
     stubs.composer?.onSubmitted?.()

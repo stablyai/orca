@@ -1,9 +1,10 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
+import { defineMethod, type RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { GIT_METHODS } from './git'
+import { GitRemoteFileUrl } from '../../../../shared/rpc-contract/git-params'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -344,6 +345,23 @@ describe('git RPC methods', () => {
         line: 3
       })
     )
+    const oldMethods = [
+      defineMethod({
+        name: 'git.remoteFileUrl',
+        permission: 'workspace',
+        params: GitRemoteFileUrl.omit({ endLine: true }),
+        handler: (params, { runtime }) =>
+          runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+      })
+    ]
+    for (const methods of [GIT_METHODS, oldMethods]) {
+      const owner = new RpcDispatcher({ runtime, methods })
+      const params = { worktree: 'id:wt-1', relativePath: 'src/a.ts', line: 3, endLine: 8 }
+      expect((await owner.dispatch(makeRequest('git.remoteFileUrl', params))).ok).toBe(true)
+      expect(
+        (await owner.dispatch(makeRequest('git.remoteFileUrl', { ...params, line: 0 }))).ok
+      ).toBe(false)
+    }
     const commitUrlResponse = await dispatcher.dispatch(
       makeRequest('git.remoteCommitUrl', {
         worktree: 'id:wt-1',
@@ -366,6 +384,11 @@ describe('git RPC methods', () => {
       undefined
     )
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
+    expect(vi.mocked(runtime.getRuntimeGitRemoteFileUrl).mock.calls).toEqual([
+      ['id:wt-1', 'src/a.ts', 3, undefined],
+      ['id:wt-1', 'src/a.ts', 3, 8],
+      ['id:wt-1', 'src/a.ts', 3]
+    ])
     expect(runtime.getRuntimeGitRemoteCommitUrl).toHaveBeenCalledWith('id:wt-1', commitOid)
     expect(commitUrlResponse).toMatchObject({ ok: true, result: 'https://example.com/commit/abc' })
   })

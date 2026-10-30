@@ -16,9 +16,7 @@ import {
 
 type AttributionDetails = Record<string, CrashReportDetailValue>
 
-// Why: the sibling ring has to see the child deaths that classification throws
-// away as recoverable churn — those are precisely the ones that explain a
-// renderer death, so observing runs before any suppression decision.
+// Observe before suppression: recoverable child deaths can still explain a renderer crash.
 export function correlateChildProcessDeath(death: ChildProcessDeath): void {
   observeChildProcessDeath(death)
   for (const { pending, attribution } of collectLateSiblingAttributions(death)) {
@@ -55,13 +53,7 @@ export function trackRendererSiblingAttribution(
   )
 }
 
-/**
- * Folds a sibling death that arrived late into the report already on disk.
- *
- * Why an amend: the report is persisted immediately rather than deferred behind a
- * settle timer (#14667), so a sibling that dies after it cannot be folded into the
- * original write.
- */
+// Amend late sibling evidence without delaying the initial crash-report write.
 export function siblingAttributionAttacher(
   attachDetails: (reportId: string, details: AttributionDetails) => Promise<unknown>,
   recorded: Promise<{ id: string }>,
@@ -71,8 +63,7 @@ export function siblingAttributionAttacher(
   return (details) => {
     void recorded
       .then((report) =>
-        // Why: nothing else observes this amend, so a failed write would otherwise
-        // drop the attribution with no trace of why.
+        // Surface amendment failures; no other caller observes this promise.
         attachDetails(report.id, details).catch((error) => {
           console.error('[crash-reporting] Failed to attach sibling attribution:', error)
           recordDurableCrashBreadcrumb(
@@ -83,7 +74,7 @@ export function siblingAttributionAttacher(
           )
         })
       )
-      // A rejected record is already reported by the recorder's persist chain.
+      // The recorder already reports a failed initial write.
       .catch(() => {})
   }
 }

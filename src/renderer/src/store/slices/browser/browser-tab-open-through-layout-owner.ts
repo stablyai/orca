@@ -1,6 +1,4 @@
-// A browser tab open in a layout-owner build: the window proposes the tab-bar entry, record and
-// page ids and sends the open; main's frame draws the tab with the window's page state, and only
-// then does the window select it. A caller acting on the record waits with `afterPendingTab`.
+// Propose browser tab/record/page IDs to main; select only after frame draws them with window page state. Record consumers wait through afterPendingTab.
 
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'

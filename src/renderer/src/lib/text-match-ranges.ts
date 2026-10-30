@@ -75,18 +75,17 @@ function findCaseInsensitiveMatchRanges(
       start: normalizedText.originalStartByNormalizedOffset?.[matchStart] ?? matchStart,
       end: normalizedText.originalEndByNormalizedOffset?.[matchEnd - 1] ?? matchEnd
     })
-    // Why: advance by at least 1 to guarantee forward progress even if a
-    // future locale edge-case produces a zero-length normalizedQuery.
+    // Advance at least one even if future locale normalization yields an empty query.
     searchStart = matchEnd + (normalizedQuery.length === 0 ? 1 : 0)
   }
 
   return matches
 }
 
-// Why: whole-word matching treats Unicode letters, digits, and underscore as
-// word characters so a match only counts when both edges sit on a word boundary,
-// mirroring the editor's "whole word" find toggle.
-const WORD_CHARACTER = /[\p{L}\p{N}_]/u
+// Combining marks stay attached to their letters when checking whole-word boundaries.
+const WORD_CHARACTER = /[\p{L}\p{M}\p{N}_]/u
+const COMBINING_MARK = /\p{M}/u
+const ENCLOSING_MARK = /\p{Me}/u
 
 function isWordCharacter(char: string | undefined): boolean {
   return char !== undefined && WORD_CHARACTER.test(char)
@@ -116,10 +115,22 @@ function codePointAt(text: string, index: number): string | undefined {
   return codePoint === undefined ? undefined : String.fromCodePoint(codePoint)
 }
 
+// A leading mark belongs to the preceding base (emoji+VS16 stays a boundary); enclosing marks make a symbol (keycaps).
+function isWordGraphemeBefore(text: string, index: number): boolean {
+  let offset = index
+  let codePoint = codePointBefore(text, offset)
+  while (codePoint !== undefined && COMBINING_MARK.test(codePoint)) {
+    if (ENCLOSING_MARK.test(codePoint)) {
+      return false
+    }
+    offset -= codePoint.length
+    codePoint = codePointBefore(text, offset)
+  }
+  return isWordCharacter(codePoint)
+}
+
 function isWholeWordMatch(text: string, start: number, end: number): boolean {
-  const before = codePointBefore(text, start)
-  const after = codePointAt(text, end)
-  return !isWordCharacter(before) && !isWordCharacter(after)
+  return !isWordGraphemeBefore(text, start) && !isWordCharacter(codePointAt(text, end))
 }
 
 function buildLocaleLowercaseIndex(text: string): {
@@ -151,9 +162,7 @@ function buildLocaleLowercaseIndex(text: string): {
         (_, index) => index + 1
       )
     }
-    // Why: locale lowercasing can expand one original character into multiple
-    // UTF-16 code units (for example `İ` -> `i\u0307`). Search matches happen
-    // in normalized text but DOM slicing needs original offsets.
+    // Locale folding can expand UTF-16 (İ → i + combining dot); map normalized matches back to original DOM offsets.
     for (let i = 0; i < normalizedChar.length; i += 1) {
       originalStartByNormalizedOffset?.push(originalOffset)
       originalEndByNormalizedOffset?.push(originalEnd)

@@ -18,7 +18,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import type { CmdJTaskSearchResult } from './task-search-results'
-import { getJiraIssueWorkspaceSeed } from '../task-page-source-context'
+import { getJiraIssueWorkspaceSeed } from '../task-page/task-page-source-context'
 
 function sourceMatches(source: TaskSourceContext, target: TaskSourceContext): boolean {
   if (source.provider !== target.provider || source.hostId !== target.hostId) {

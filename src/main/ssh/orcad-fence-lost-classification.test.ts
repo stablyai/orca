@@ -20,7 +20,7 @@ import {
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { OrcadHostTransport } from './orcad-host-transport'
 
-/** An ssh2 exec channel; the host never acknowledges a close, as when the link is down. */
+/** Model an exec channel whose unreachable host never acknowledges close. */
 class HostChannel extends EventEmitter {
   readonly stderr = Object.assign(new EventEmitter(), { resume: () => {} })
   readonly stdin = this
@@ -52,7 +52,6 @@ const fence = {
   token: 't1'
 }
 
-// As serializedStateMutationCommand builds it: the guard leads the mutation.
 const mutation = `${posixOrcadFenceGuard(fence)} restore`
 
 function fenced<T>(run: () => Promise<T>): Promise<T> {
@@ -75,7 +74,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-// Round 13: the real exec error quotes the command, and every fenced command carries the marker.
+// Real exec errors quote commands that contain the guard marker; that alone must not imply fence loss.
 describe('a fenced step through the real exec', () => {
   it('stays an ordinary failure when the step itself exits nonzero', async () => {
     const error = await settledAfter(

@@ -91,7 +91,7 @@ describe('SSH IPC handlers', () => {
     mockConnectionManager.disconnectAll.mockResolvedValue(undefined)
     mockConnectionManager.disconnect.mockClear().mockResolvedValue(undefined)
 
-    // Why: a probe holds a transport no session owns, so shutdown has to wait for it to hand it back.
+    // Shutdown must join probes because no session owns their transport.
     const probeState = {
       targetId: 'ssh-probe',
       status: 'connected',

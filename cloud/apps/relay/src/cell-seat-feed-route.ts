@@ -7,8 +7,7 @@ import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import type { RelayRuntimeCounts } from './relay-observability.js'
 import { readBearer } from './relay-token-verifier.js'
 
-// Read-only, so it reuses the directors' rehome credential and grants it nothing new. Only
-// cells that already hold the rehome pair serve it: giving a cell the pair turns rehome on.
+// Reuse read-only rehome credentials only on cells already holding the pair; distributing it further would enable rehome.
 export function registerCellSeatFeedRoute(
   app: Hono,
   config: RelayConfig,
