@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MRs navigation example</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 32px;
+        color: var(--orca-foreground);
+        background: var(--orca-background);
+        font:
+          13px system-ui,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .badge {
+        border: 1px solid var(--orca-border);
+        border-radius: 6px;
+        padding: 2px 8px;
+        color: var(--orca-muted-foreground);
+      }
+      p {
+        line-height: 1.6;
+        color: var(--orca-muted-foreground);
+      }
+      section {
+        max-width: 640px;
+        margin-top: 28px;
+        border: 1px solid var(--orca-border);
+        border-radius: 8px;
+        padding: 20px;
+      }
+      h2 {
+        margin: 0;
+        font-size: 14px;
+      }
+      button {
+        border: 1px solid var(--orca-border);
+        border-radius: 6px;
+        padding: 7px 12px;
+        background: var(--orca-secondary);
+        color: var(--orca-secondary-foreground);
+        font: inherit;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--orca-ring);
+        outline-offset: 2px;
+      }
+      output {
+        display: block;
+        min-height: 20px;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>MRs</h1>
+      <span class="badge">Navigation example</span>
+    </header>
+    <p>A plugin page opened from Orca's left navigation.</p>
+    <section aria-labelledby="example-title">
+      <h2 id="example-title">Your plugin's main page</h2>
+      <p>
+        This example demonstrates the new mounting location. It does not load merge requests or
+        connect to a provider.
+      </p>
+      <button id="check" type="button">Check interaction</button>
+      <output id="status" role="status" aria-live="polite">Ready</output>
+    </section>
+    <script>
+      let clicks = 0
+      document.getElementById('check').addEventListener('click', () => {
+        clicks += 1
+        document.getElementById('status').textContent = `Interaction received: ${clicks}`
+      })
+    </script>
+  </body>
+</html>
