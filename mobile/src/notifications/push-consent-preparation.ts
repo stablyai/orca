@@ -8,16 +8,17 @@ type ConsentResult =
   | { status: 'retired' }
 export type ConsentPreparation = { readonly result: Promise<ConsentResult>; release(): void }
 type Cell = { current?: () => boolean; deliver?: (result: ConsentResult) => void }
-type ConsentPhase = { slot: object; selected?: Cell }
-const rootSlot = {}
-const waiting = new Map<object, Cell>()
+class ConsentSlot {}
+type ConsentPhase = { slot: ConsentSlot; selected?: Cell }
+const rootSlot = new ConsentSlot()
+const waiting = new Map<ConsentSlot, Cell>()
 let physical: ConsentPhase | undefined
 
 function clear(cell: Cell): void {
   cell.current = undefined
   cell.deliver = undefined
 }
-function retire(slot: object, cell: Cell): void {
+function retire(slot: ConsentSlot, cell: Cell): void {
   if (waiting.get(slot) === cell) {
     waiting.delete(slot)
   }
@@ -64,7 +65,7 @@ function pump(): void {
 }
 export function preparePushConsent(isCurrent: () => boolean): ConsentPreparation {
   const own = Promise.withResolvers<ConsentResult>()
-  const slot = {}
+  const slot = new ConsentSlot()
   const cell: Cell = { current: isCurrent, deliver: own.resolve }
   waiting.set(slot, cell)
   pump()

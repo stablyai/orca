@@ -92,7 +92,9 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: async (key: string) => {
       const raw = ports.storage.get(key) ?? null
-      if (key === 'orca:hosts') ports.readHosts(raw)
+      if (key === 'orca:hosts') {
+        ports.readHosts(raw)
+      }
       return raw
     },
     setItem: async (key: string, value: string) => {
@@ -226,7 +228,9 @@ function committedHost() {
       }
     ]
   }
-  for (const listener of ports.stateListeners) listener()
+  for (const listener of ports.stateListeners) {
+    listener()
+  }
 }
 async function mount(initial: NativeResponse | null) {
   ports.input.initial = initial
@@ -237,7 +241,9 @@ async function mount(initial: NativeResponse | null) {
 async function warm(input: NativeResponse, expected: string) {
   const pushes = ports.router.push.mock.calls.length
   await act(async () => {
-    if (!ports.input.response) throw new Error('root response listener absent')
+    if (!ports.input.response) {
+      throw new Error('root response listener absent')
+    }
     ports.input.response(input)
     await vi.waitFor(() => expect(ports.router.push).toHaveBeenCalledTimes(pushes + 1))
   })
@@ -406,7 +412,9 @@ it('rederives membership after the real native catalog await, preserves credenti
   const pending = holdCredential()
   try {
     await mount(null)
-    if (!ports.input.response) throw new Error('root response listener absent')
+    if (!ports.input.response) {
+      throw new Error('root response listener absent')
+    }
     ports.input.response(
       response(
         'warm-removal',
@@ -478,7 +486,9 @@ it.each([10, 100])('bounds actual warm tap membership work for %i hosts', async 
   const readBytes = () =>
     ports.readHosts.mock.calls.map(([value]) => Buffer.byteLength(value ?? ''))
   ports.storage.set('orca:hosts', raw)
-  for (const profile of profiles) ports.secrets.set(`orca.host-token.${profile.id}`, 'token')
+  for (const profile of profiles) {
+    ports.secrets.set(`orca.host-token.${profile.id}`, 'token')
+  }
   let joined = false
   let currentReads = 0,
     records = 0,
@@ -491,51 +501,60 @@ it.each([10, 100])('bounds actual warm tap membership work for %i hosts', async 
     joined = false
     const catalog = await loadCatalog()
     joined = true
-    return new Proxy(catalog, {
-      get(target, key, receiver) {
-        if (key !== 'filter') return Reflect.get(target, key, receiver)
-        return (
-          predicate: (row: HostCatalogEntry, index: number, rows: HostCatalogEntry[]) => unknown,
-          thisArg?: unknown
-        ) =>
-          target.filter((row, index, rows) => {
-            filters++
-            const accepted = predicate.call(thisArg, row, index, rows)
-            if (accepted) kept++
-            return accepted
-          })
-      }
-    })
+    const originalFilter = catalog.filter.bind(catalog)
+    function countedFilter<S extends HostCatalogEntry>(
+      predicate: (row: HostCatalogEntry, index: number, rows: HostCatalogEntry[]) => row is S,
+      thisArg?: unknown
+    ): S[]
+    function countedFilter(
+      predicate: (row: HostCatalogEntry, index: number, rows: HostCatalogEntry[]) => unknown,
+      thisArg?: unknown
+    ): HostCatalogEntry[]
+    function countedFilter(
+      predicate: (row: HostCatalogEntry, index: number, rows: HostCatalogEntry[]) => unknown,
+      thisArg?: unknown
+    ): HostCatalogEntry[] {
+      return originalFilter((row, index, rows) => {
+        filters++
+        const accepted = predicate.call(thisArg, row, index, rows)
+        if (accepted) {
+          kept++
+        }
+        return accepted
+      })
+    }
+    catalog.filter = countedFilter
+    return catalog
   })
   const metadataSpy = vi
     .spyOn(metadataStore, 'loadStoredHostProfiles')
     .mockImplementation(async () => {
       const current = await loadMetadata()
-      if (!joined || !current) return current
+      if (!joined || !current) {
+        return current
+      }
       currentReads++
-      return new Proxy(current, {
-        get(target, key, receiver) {
-          if (key !== 'map') return Reflect.get(target, key, receiver)
-          return <U,>(
-            callback: (row: StoredHostProfile, index: number, rows: StoredHostProfile[]) => U,
-            thisArg?: unknown
-          ) => {
-            const mapped = target.map((row, index, rows) => {
-              records++
-              return callback.call(thisArg, row, index, rows)
-            })
-            const values = mapped.values.bind(mapped)
-            mapped[Symbol.iterator] = function* () {
-              for (const entry of values()) {
-                entries++
-                yield entry
-              }
-              return undefined
-            }
-            return mapped
+      const originalMap = current.map
+      current.map = <U,>(
+        callback: (row: StoredHostProfile, index: number, rows: StoredHostProfile[]) => U,
+        thisArg?: unknown
+      ): U[] => {
+        const map = originalMap<U>
+        const mapped = map.call(current, (row, index, rows) => {
+          records++
+          return callback.call(thisArg, row, index, rows)
+        })
+        const values = mapped.values.bind(mapped)
+        mapped[Symbol.iterator] = function* () {
+          for (const entry of values()) {
+            entries++
+            yield entry
           }
+          return undefined
         }
-      })
+        return mapped
+      }
+      return current
     })
   let pending: ReturnType<typeof holdCredential> | undefined
   try {
@@ -564,7 +583,9 @@ it.each([10, 100])('bounds actual warm tap membership work for %i hosts', async 
     ports.readSecret.mockClear()
     currentReads = records = entries = filters = kept = 0
     pending = holdCredential()
-    if (!ports.input.response) throw new Error('root response listener absent')
+    if (!ports.input.response) {
+      throw new Error('root response listener absent')
+    }
     ports.input.response(
       response(`scaled-${n}-removed`, {
         worktreeId: 'WA',

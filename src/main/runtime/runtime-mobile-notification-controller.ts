@@ -1,3 +1,4 @@
+import timers from 'node:timers'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import {
@@ -72,7 +73,7 @@ export class RuntimeMobileNotificationController {
   }
   private forwarded = '[]'
   private readonly forwardedListeners = new Set<(environments: string[]) => void>()
-  private expiryTimer?: ReturnType<typeof setTimeout>
+  private expiryTimer?: ReturnType<typeof timers.setTimeout>
 
   getForwardedEnvironments(): string[] {
     this.refreshForwardedEnvironments()
@@ -86,7 +87,7 @@ export class RuntimeMobileNotificationController {
 
   refreshForwardedEnvironments(): void {
     if (this.expiryTimer) {
-      clearTimeout(this.expiryTimer)
+      timers.clearTimeout(this.expiryTimer)
     }
     const snapshot = this.dismissalStore?.forwardedEnvironments() ?? { environments: [] }
     const encoded = JSON.stringify(snapshot.environments)
@@ -99,7 +100,7 @@ export class RuntimeMobileNotificationController {
       )
     }
     if (snapshot.expiresAt !== undefined) {
-      this.expiryTimer = setTimeout(
+      this.expiryTimer = timers.setTimeout(
         () => this.refreshForwardedEnvironments(),
         Math.max(1, snapshot.expiresAt - Date.now())
       )
@@ -126,7 +127,7 @@ export class RuntimeMobileNotificationController {
 
   closeDismissals(): Promise<void> {
     if (this.expiryTimer) {
-      clearTimeout(this.expiryTimer)
+      timers.clearTimeout(this.expiryTimer)
     }
     return this.dismissalStore?.close() ?? Promise.resolve()
   }
