@@ -141,3 +141,37 @@ describe('buildPluginList I/O', () => {
     expect(fsCalls.count).toBe(0)
   })
 })
+
+describe('buildPluginList panel placement', () => {
+  it('passes placement through while leaving legacy panels without it', async () => {
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'samples.demo',
+      rootDir: join(tmpdir(), 'development', 'demo'),
+      manifest: pluginManifestSchema.parse({
+        ...manifest,
+        engines: { orca: '>=1.4.246' },
+        contributes: {
+          ...manifest.contributes,
+          panels: [
+            { id: 'main', title: 'Dashboard', entry: 'main.html', placement: 'left-navigation' },
+            { id: 'side', title: 'Dashboard', entry: 'side.html' }
+          ]
+        }
+      }),
+      consentFingerprint: 'sha256-current',
+      contentHash: null,
+      isDev: true
+    }
+
+    const [entry] = await buildPluginList(
+      serviceWith(plugin, { activation: 'approved' }),
+      emptyPluginLockfile()
+    )
+
+    expect(entry?.panels).toEqual([
+      expect.objectContaining({ tabKey: 'plugin:samples.demo/main', placement: 'left-navigation' }),
+      expect.objectContaining({ tabKey: 'plugin:samples.demo/side' })
+    ])
+    expect(entry?.panels[1]).not.toHaveProperty('placement')
+  })
+})

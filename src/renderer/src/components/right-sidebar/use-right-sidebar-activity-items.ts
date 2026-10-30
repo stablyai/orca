@@ -13,7 +13,7 @@ import {
 } from './ports-panel-host'
 import {
   collectInstalledPluginTabKeys,
-  usePluginPanels,
+  useRightSidebarPluginPanels,
   usePluginPanelsStore,
   type PluginPanelsFetchStatus
 } from '@/store/plugin-panels'
@@ -58,7 +58,7 @@ export function useRightSidebarActivityItems({
     )
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
-  const pluginPanels = usePluginPanels()
+  const pluginPanels = useRightSidebarPluginPanels()
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
     [pluginPanels, pluginSystemEnabled]

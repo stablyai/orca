@@ -192,6 +192,18 @@ export function collectActivePluginPanels(
     .flatMap((plugin) => plugin.panels.map((panel) => fromPlugin(plugin, panel)))
 }
 
+export function collectRightSidebarPluginPanels(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginPanel[] {
+  return collectActivePluginPanels(plugins).filter((panel) => panel.placement !== 'left-navigation')
+}
+
+export function collectLeftNavigationPluginPanels(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginPanel[] {
+  return collectActivePluginPanels(plugins).filter((panel) => panel.placement === 'left-navigation')
+}
+
 /** Installed keys normalize persisted routes: remove uninstalled panels, retain merely disabled ones. */
 export function collectInstalledPluginTabKeys(
   plugins: readonly PluginHostListEntry[]
@@ -218,6 +230,14 @@ export function collectEditablePluginCommands(
 /** Panel contributions of enabled plugins, loading the list on first use. */
 export function usePluginPanels(): ActivePluginPanel[] {
   return usePluginListDerived(collectActivePluginPanels)
+}
+
+export function useRightSidebarPluginPanels(): ActivePluginPanel[] {
+  return usePluginListDerived(collectRightSidebarPluginPanels)
+}
+
+export function useLeftNavigationPluginPanels(): ActivePluginPanel[] {
+  return usePluginListDerived(collectLeftNavigationPluginPanels)
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */
