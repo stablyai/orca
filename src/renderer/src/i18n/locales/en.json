@@ -480,7 +480,8 @@
         "noContent": "No content to export",
         "timedOut": "Export timed out"
       }
-    }
+    },
+    "jsonSchemaProblems": "JSON problems"
   },
   "githubChecks": {
     "retrying": "Retrying…",
@@ -990,6 +991,10 @@
         "notPng": "Repo icons must be PNG files.",
         "tooLarge": "Repo icon image must be 256KB or smaller."
       }
+    },
+    "editor": {
+      "remoteJsonSchemas": "Download JSON Schemas",
+      "remoteJsonSchemasDescription": "Fetch schemas and known filename mappings from the web for JSON validation and completion. Turn off for offline use. Workspace schemas still work."
     }
   },
   "menu": {
