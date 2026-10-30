@@ -36,26 +36,23 @@ export function withoutImageReferenceNodes(
   document: JSONContent,
   attachmentId: string
 ): JSONContent {
-  if (!document.content) {
-    return document
-  }
-  const content: JSONContent[] = []
-  let afterChip = false
-  for (const node of document.content) {
-    if (node.type === IMAGE_REFERENCE_NODE && node.attrs?.attachmentId === attachmentId) {
-      afterChip = true
-      continue
-    }
-    if (afterChip && node.type === 'text' && node.text?.startsWith(' ')) {
-      if (node.text.length > 1) {
-        content.push({ ...node, text: node.text.slice(1) })
+  const isChip = (node: JSONContent | undefined): boolean =>
+    node?.type === IMAGE_REFERENCE_NODE && node.attrs?.attachmentId === attachmentId
+  return document.content
+    ? {
+        ...document,
+        content: document.content.flatMap((node, index, nodes) => {
+          if (isChip(node)) {
+            return []
+          }
+          if (isChip(nodes[index - 1]) && node.type === 'text' && node.text?.startsWith(' ')) {
+            const text = node.text.slice(1)
+            return text ? [{ ...node, text }] : []
+          }
+          return [withoutImageReferenceNodes(node, attachmentId)]
+        })
       }
-    } else {
-      content.push(withoutImageReferenceNodes(node, attachmentId))
-    }
-    afterChip = false
-  }
-  return { ...document, content }
+    : document
 }
 
 /** Applies an appended text change without replacing existing picked nodes. */
