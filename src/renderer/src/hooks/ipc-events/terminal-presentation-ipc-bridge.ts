@@ -7,7 +7,7 @@ import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
+import { findUnifiedTab, placeCreatedTerminalTab } from '@/lib/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
@@ -50,10 +50,13 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         leafId,
         splitFromLeafId,
         splitDirection,
-        splitTelemetrySource
+        splitTelemetrySource,
+        replaces
       }) => {
         try {
           const store = useAppStore.getState()
+          // A replace opens in the replaced tab's group and takes its slot once the tab exists.
+          const replaced = replaces && findUnifiedTab(worktreeId, replaces.tabId)
           const terminalPresentation = resolveTerminalPresentation({
             presentation,
             activate,
@@ -107,7 +110,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           const tab =
             reusedTab ??
             (ptyId
-              ? store.createTab(worktreeId, targetGroupId, shellOverride, {
+              ? store.createTab(worktreeId, replaced?.groupId ?? targetGroupId, shellOverride, {
                   initialPtyId: ptyId,
                   activate:
                     shouldActivate ||
@@ -130,7 +133,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 })
               : store.createTab(
                   worktreeId,
-                  targetGroupId,
+                  replaced?.groupId ?? targetGroupId,
                   shellOverride,
                   shouldActivate
                     ? cwd
@@ -142,16 +145,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                         ...(cwd ? { startupCwd: cwd } : {})
                       }
                 ))
-          if (afterTabId) {
-            const unifiedTabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-            const createdUnified = unifiedTabs.find((item) => item.entityId === tab.id)?.id
-            const anchorUnified = unifiedTabs.find(
-              (item) => item.id === afterTabId || item.entityId === afterTabId
-            )?.id
-            if (createdUnified && anchorUnified) {
-              insertUnifiedTabAfterAnchor(worktreeId, createdUnified, anchorUnified)
-            }
-          }
+          placeCreatedTerminalTab(worktreeId, tab.id, { afterTabId, replaced })
           // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
           if (tabId !== undefined && tab.id !== tabId) {
             console.warn(

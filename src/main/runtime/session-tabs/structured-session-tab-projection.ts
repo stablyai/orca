@@ -1,46 +1,56 @@
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import type { SessionTabOpenPlacement } from '../../../shared/session-tab-placement'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
+import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
 import {
   insertTabIdIntoOrder,
   partitionPinnedTabOrder
 } from '../../../shared/workspace-layout/tab-order'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
-import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
+import { replaceSessionTabInSnapshot } from './session-tab-replace'
 
 export type StructuredSessionTabProjection = {
   workspaceId: string
   sessionId: string
   agent: StructuredAgentId
   activate: boolean
-  openPlacement?: SessionTabOpenPlacement
+  /** Where a new chat goes; absent means the end of the active group. */
+  placement?: { groupId?: string; afterTabId?: string; index?: number }
+  /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
+  replaces?: string
 }
 
-/** Publish membership and its addressed open together; existing destinations keep their current place. */
+/** Publish membership; a listed chat keeps its place, a new one goes last or into the replaced slot. */
 export function projectStructuredSessionTab(
   existing: RuntimeMobileSessionTabsSnapshot | undefined,
   input: StructuredSessionTabProjection
 ): RuntimeMobileSessionTabsSnapshot | null {
   const id = `agent-session:${input.sessionId}`
   const listed = existing?.tabs.some((tab) => tab.id === id)
-  if (listed && !input.activate && !input.openPlacement) {
+  if (listed && !input.activate) {
     return null
+  }
+  const row = {
+    type: 'agent-session' as const,
+    id,
+    title: defaultAgentChatLabel(input.agent),
+    sessionId: input.sessionId,
+    agent: input.agent,
+    isActive: input.activate
+  }
+  if (input.replaces && !listed) {
+    return replaceSessionTabInSnapshot(existing, {
+      workspaceId: input.workspaceId,
+      replacedTabId: input.replaces,
+      row,
+      activate: input.activate
+    })
   }
   const tabs = [...(existing?.tabs ?? [])].map((tab) => ({
     ...tab,
-    isActive: input.activate ? tab.id === id : tab.isActive,
-    ...(tab.id === id && input.openPlacement ? { openPlacement: input.openPlacement } : {})
+    isActive: input.activate ? tab.id === id : tab.isActive
   }))
   if (!listed) {
-    tabs.push({
-      type: 'agent-session',
-      id,
-      title: defaultAgentChatLabel(input.agent),
-      sessionId: input.sessionId,
-      agent: input.agent,
-      isActive: input.activate,
-      ...(input.openPlacement ? { openPlacement: input.openPlacement } : {})
-    })
+    tabs.push(row)
   }
   const priorGroups = existing?.tabGroups ?? [
     {
@@ -49,7 +59,7 @@ export function projectStructuredSessionTab(
       tabOrder: []
     }
   ]
-  const placement = input.openPlacement?.placement
+  const { placement } = input
   const listedGroup = priorGroups.find((group) => group.tabOrder.includes(id))
   const anchorGroup = priorGroups.find((group) =>
     group.tabOrder.includes(placement?.afterTabId ?? '')

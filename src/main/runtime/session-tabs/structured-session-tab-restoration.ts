@@ -5,10 +5,6 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import {
-  isSessionTabSelectionRequest,
-  type SessionTabOpenPlacement
-} from '../../../shared/session-tab-placement'
 import { projectStructuredSessionTab } from './structured-session-tab-projection'
 import { OrcaRuntimeWithStructuredSessionLaunchRuntime } from './structured-session-launch-runtime'
 
@@ -74,25 +70,13 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     }
   }
 
-  captureSessionSwitchSelection(
-    _worktreeId?: string,
-    viewerSelection?: string,
-    deferAcceptance = false
-  ) {
-    // A window request is transported to its viewer; it grants no host-view authority.
-    return viewerSelection !== undefined
-      ? Object.assign((_consume = false) => false, { accept: () => {} })
-      : this.clientSessionTabSelections.captureHostSelection(deferAcceptance)
-  }
-
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
     agent: StructuredAgentId
     activate: boolean
+    /** A switch's open: refused once newer work supersedes it, and its tab write is awaited. */
     check?: () => void
-    selectionCurrent?: (consume?: boolean) => boolean
-    viewerSelection?: string
     focusWindow?: boolean
     notify?: boolean
     /** The host tab id a create reserved; a session that already has a tab keeps its own. */
@@ -102,14 +86,11 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     /** Where the creating paired client opens the chat. */
     /** A ChatTabPlacement, typed in place: this file is at its line limit. */
     placement?: { groupId?: string; afterTabId?: string; index?: number }
-    openPlacement?: SessionTabOpenPlacement
+    /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
+    replaces?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     input.check?.()
-    // First membership includes placement, even while visibility or the durable queue is awaited.
-    if (input.openPlacement) {
-      this.projectStructuredAgentSessionTab({ ...input, activate: false, notify: false })
-    }
     if (input.check && host) {
       await host.deps.store.setSessionTabVisibility(input.sessionId, true, input.tabId, input.check)
     } else if (typeof host?.setSessionTabVisibility === 'function') {
@@ -147,26 +128,9 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       this.saveWindowlessAgentSessionTab(input.workspaceId, input)
     }
     input.check?.()
-    const viewerRequest = isSessionTabSelectionRequest(input.viewerSelection)
-    const activate = input.activate && !viewerRequest && (input.selectionCurrent?.() ?? true)
-    if (activate) {
-      input.check?.()
-      input.selectionCurrent?.(true)
-    }
-    this.projectStructuredAgentSessionTab({
-      ...input,
-      activate,
-      ...(input.openPlacement
-        ? {
-            openPlacement: {
-              ...input.openPlacement,
-              activate: viewerRequest ? input.openPlacement.activate : activate
-            }
-          }
-        : {})
-    })
-    if (activate) {
-      input.check?.()
+    this.projectStructuredAgentSessionTab(input)
+    if (input.activate && input.check) {
+      // The saved view selects the chat the switch put in the slot; the window draws from it.
       this.commitWindowlessChatSession(input.workspaceId, (session) =>
         withSelectedChatTab(
           this.getWorkspaceSessionHostIdForWorktree(input.workspaceId),
@@ -176,12 +140,10 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         )
       )
     }
-    if ((activate || (viewerRequest && input.activate)) && input.focusWindow !== false) {
-      input.check?.()
+    if (input.activate && input.focusWindow !== false && input.check) {
       this.notifier?.focusEditorTab?.(
         input.tabId ?? host?.getSessionTabId(input.sessionId) ?? `agent-session:${input.sessionId}`,
-        input.workspaceId,
-        input.viewerSelection
+        input.workspaceId
       )
     }
   }
@@ -193,7 +155,8 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     agent: StructuredAgentId
     activate: boolean
     notify?: boolean
-    openPlacement?: SessionTabOpenPlacement
+    /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
+    replaces?: string
   }): void {
     const next = projectStructuredSessionTab(
       this.mobileSessionTabsByWorktree.get(input.workspaceId),
@@ -203,9 +166,6 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       return
     }
     const stored = this.storeMobileSessionSnapshot(input.workspaceId, next)
-    if (input.openPlacement) {
-      this.markPaneLiveTitlesDirty()
-    }
     if (input.notify !== false) {
       this.emitMobileSessionTabsSnapshot(stored)
     }

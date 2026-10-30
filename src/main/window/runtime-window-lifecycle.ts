@@ -142,7 +142,8 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.splitTelemetrySource !== undefined
             ? { splitTelemetrySource: opts.splitTelemetrySource }
             : {}),
-          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
+          ...(opts.focus !== undefined ? { focus: opts.focus } : {}),
+          ...(opts.replaces ? { replaces: opts.replaces } : {})
         })
         if (!sent) {
           clearTimeout(timer)
@@ -178,14 +179,9 @@ export function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
-    focusEditorTab: (tabId, worktreeId, viewerSelection) =>
-      send('ui:focusEditorTab', {
-        tabId,
-        worktreeId,
-        ...(viewerSelection !== undefined ? { viewerSelection } : {})
-      }),
-    closeSessionTab: (tabId, worktreeId, switchProjection) =>
-      requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId, switchProjection),
+    focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
+    closeSessionTab: (tabId, worktreeId) =>
+      requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?, navigation?, position?) =>

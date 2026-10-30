@@ -57,6 +57,8 @@ export const uiTerminalAndSessionTabsApi = {
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
       splitTelemetrySource?: TerminalPaneSplitSource
+      /** The tab this terminal takes the slot of, closed in the same store write. */
+      replaces?: { tabId: string }
     }) => void
   ): (() => void) => {
     const listener = (
@@ -87,6 +89,7 @@ export const uiTerminalAndSessionTabsApi = {
         splitFromLeafId?: string
         splitDirection?: 'horizontal' | 'vertical'
         splitTelemetrySource?: TerminalPaneSplitSource
+        replaces?: { tabId: string }
       }
     ) => callback(data)
     ipcRenderer.on('ui:createTerminal', listener)
@@ -221,16 +224,11 @@ export const uiTerminalAndSessionTabsApi = {
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
   onFocusEditorTab: (
-    callback: (data: {
-      tabId: string
-      worktreeId: string
-      viewerSelection?: string
-      userInitiated?: boolean
-    }) => void
+    callback: (data: { tabId: string; worktreeId: string; userInitiated?: boolean }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { tabId: string; worktreeId: string; viewerSelection?: string; userInitiated?: boolean }
+      data: { tabId: string; worktreeId: string; userInitiated?: boolean }
     ) => callback(data)
     ipcRenderer.on('ui:focusEditorTab', listener)
     return () => ipcRenderer.removeListener('ui:focusEditorTab', listener)

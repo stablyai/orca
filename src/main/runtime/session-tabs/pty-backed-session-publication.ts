@@ -3,6 +3,7 @@ import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from '../s
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../shared/agent-title-owner'
 import { getLatestPtyTitle } from '../runtime-worktree-status-projection'
+import { replaceSessionTabInSnapshot } from './session-tab-replace'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../terminal/query/pty-terminal-summary'
 import type {
   RuntimeMobileSessionTabsSnapshot,
@@ -52,6 +53,8 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
       notify?: boolean
+      /** A same-slot switch: this row takes that tab's slot and the tab's rows leave, in one write. */
+      replaces?: string
     }
   ): void {
     if (
@@ -127,6 +130,21 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       parentLayout,
       isActive:
         args.activate || (args.selectIfNoActiveTab !== false && existing?.activeTabId == null)
+    }
+    if (args.replaces) {
+      this.storeMobileSessionSnapshot(
+        worktreeId,
+        replaceSessionTabInSnapshot(existing, {
+          workspaceId: worktreeId,
+          replacedTabId: args.replaces,
+          row: tab,
+          activate: args.activate
+        })
+      )
+      if (args.notify !== false) {
+        this.notifyMobileSessionTabsChanged(worktreeId)
+      }
+      return
     }
     const existingTabs = (existing?.tabs ?? []).filter(
       (candidate) =>

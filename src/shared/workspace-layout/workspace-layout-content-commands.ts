@@ -1,5 +1,11 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
-import { applied, refuse, workspaceOrEmpty, type Applied } from './workspace-layout-command-steps'
+import {
+  applied,
+  refuse,
+  replacedTabSlot,
+  workspaceOrEmpty,
+  type Applied
+} from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
 import { editorOpenFileId } from './workspace-layout-editor-open-file-id'
 import { sameEditorFile } from './workspace-layout-editor-tab-file'
@@ -12,7 +18,11 @@ import type {
   WorkspaceLayoutModel
 } from './workspace-layout-model'
 import { withWorkspace } from './workspace-layout-removal'
-import { placeContentTab, promotePreviewTab } from './workspace-layout-tab-commands'
+import {
+  closeReplacedTab,
+  placeContentTab,
+  promotePreviewTab
+} from './workspace-layout-tab-commands'
 
 function contentTab(
   context: LayoutContext,
@@ -226,9 +236,12 @@ export function openAgentSessionTab(
     agentSessionAgent: command.agent
   })
   const target = withSendersGroup(model, command.workspace, command.groupId)
-  return applied(placeContentTab(target, command.workspace, tab, command, context).model, {
-    tabId: tab.id
-  })
+  const slot = replacedTabSlot(workspaceOrEmpty(target, command.workspace), command)
+  return closeReplacedTab(
+    placeContentTab(target, command.workspace, tab, slot, context).model,
+    command,
+    { tabId: tab.id }
+  )
 }
 
 /** Drawn tab IDs make resent or already-saved opens idempotent; refuseTaken rejects IDs held by another tab. Null proceeds with creation. */

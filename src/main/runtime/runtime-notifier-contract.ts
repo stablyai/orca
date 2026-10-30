@@ -30,7 +30,7 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
-import type { SessionSwitchProjection } from '../../shared/agent-session-switch-execution'
+import type { ReplacedTab } from '../../shared/workspace-layout/workspace-layout-command-types'
 
 type DriverState = RuntimeTerminalDriverState
 
@@ -94,6 +94,8 @@ export type RuntimeNotifier = {
         terminalHandle: string
         incarnationId: string
       }
+      /** The tab this terminal takes the slot of, closed by the same window write. */
+      replaces?: ReplacedTab
     }
   ):
     | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
@@ -132,12 +134,8 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
-  focusEditorTab?(tabId: string, worktreeId: string, viewerSelection?: string): void
-  closeSessionTab?(
-    tabId: string,
-    worktreeId: string,
-    switchProjection?: SessionSwitchProjection
-  ): void | Promise<void | boolean>
+  focusEditorTab?(tabId: string, worktreeId: string): void
+  closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void | boolean>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** Host window only: host/all move it; caller/clients open without moving it; absence keeps legacy switching. Paired clients never navigate (all means host). */
   openFile?(

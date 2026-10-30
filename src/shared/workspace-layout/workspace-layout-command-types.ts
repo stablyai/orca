@@ -27,6 +27,12 @@ export type WindowPaneDetach = {
   startupCwd?: string
 }
 
+/**
+ * The new tab takes this tab's slot and this tab goes, in the one write. A replaced tab that is
+ * already gone or moved degrades to the command's own placement; the result says what closed.
+ */
+export type ReplacedTab = { tabId: string }
+
 export type LayoutCommand =
   | (On & {
       type: 'createTerminalTab'
@@ -47,6 +53,7 @@ export type LayoutCommand =
       initial?: InitialSurfaceReason
       /** A live terminal no pane shows: its pane when main holds one, else this tab, bound to it. */
       adopt?: LiveTerminalAdoption
+      replaces?: ReplacedTab
       split?: NewGroupSplit
     })
   | (On & {
@@ -219,6 +226,7 @@ export type LayoutCommand =
       /** When the window drew the tab, so a later save of it matches main's copy. */
       createdAt?: number
       initial?: InitialSurfaceReason
+      replaces?: ReplacedTab
       split?: NewGroupSplit
     })
   | (On & { type: 'startPane'; paneKey: string })

@@ -17,7 +17,16 @@ import { structuredAgentSessionTabId } from '../../../shared/structured-agent-se
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string; index?: number }
 
 export type ChatTabChange =
-  | { open: { sessionId: string; agent: AgentType; tabId: string; placement?: ChatTabPlacement } }
+  | {
+      open: {
+        sessionId: string
+        agent: AgentType
+        tabId: string
+        placement?: ChatTabPlacement
+        /** A same-slot switch: the chat takes this tab's slot and the tab closes, in one write. */
+        replaces?: string
+      }
+    }
   | { close: string }
 
 export type ChatTabLayoutCommand =
@@ -68,7 +77,8 @@ export function chatTabLayoutCommand(
       ? { afterTabId }
       : placement?.index !== undefined
         ? { index: placement.index }
-        : {})
+        : {}),
+    ...(change.open.replaces ? { replaces: { tabId: change.open.replaces } } : {})
   }
 }
 

@@ -1,6 +1,5 @@
 // Explicit layout.subscribe wire projection includes terminal startup inputs and permits live pane titles/status. Persistence-only records and view selection stay private.
 
-import type { SessionTabOpenPlacement } from '../session-tab-placement'
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
 import type { ExecutionHostId } from '../execution-host'
@@ -56,8 +55,6 @@ export type PublishedTerminal = {
 >
 
 export type PublishedTab = {
-  /** Ephemeral ordinary open intent, overlaid by the runtime; never a stored LayoutTab field. */
-  openPlacement?: SessionTabOpenPlacement
   id: string
   kind: TabContentType
   entityId: string

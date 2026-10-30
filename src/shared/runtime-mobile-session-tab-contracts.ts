@@ -1,4 +1,4 @@
-import type { SessionTabOpenPlacement } from './session-tab-placement'
+import type { ReplacedTab } from './workspace-layout/workspace-layout-command-types'
 import type { AgentStatusEntry } from './agent-status-types'
 import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
@@ -8,7 +8,8 @@ import type { TuiAgent } from './tui-agent'
 import type { StructuredAgentId } from './agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {
-  openPlacement?: SessionTabOpenPlacement
+  /** Published in the tab it replaced's slot; a client whose order differs puts it where that tab was. */
+  replaces?: ReplacedTab
   type: 'terminal'
   id: string
   title: string
@@ -106,7 +107,7 @@ export type RuntimeMobileSessionBrowserTab = {
 }
 
 export type RuntimeMobileSessionAgentTab = {
-  openPlacement?: SessionTabOpenPlacement
+  replaces?: ReplacedTab
   type: 'agent-session'
   id: string
   title: string
