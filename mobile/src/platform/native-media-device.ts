@@ -51,7 +51,10 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
         base64: false,
         allowsMultipleSelection: multiple,
         ...(multiple ? { selectionLimit: limit, orderedSelection: true } : {}),
-        quality: 1
+        quality: 1,
+        // iOS otherwise returns HEIC bytes, which agents can't read and the host names .png.
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
       }),
     // DocumentPicker has no selection cap; enforce remaining room again before staging and minting.
     launchFiles: ({ multiple }) =>

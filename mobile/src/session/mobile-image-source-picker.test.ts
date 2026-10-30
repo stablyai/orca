@@ -3,7 +3,8 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-
 
 vi.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: vi.fn(),
-  launchImageLibraryAsync: vi.fn()
+  launchImageLibraryAsync: vi.fn(),
+  UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' }
 }))
 vi.mock('expo-document-picker', () => ({
   getDocumentAsync: vi.fn()
@@ -78,7 +79,9 @@ describe('pickMobileImage', () => {
       base64: Buffer.from(bytes).toString('base64'),
       uri: 'file:///x.jpg'
     })
-    expect(launchLibrary).toHaveBeenCalledWith(expect.objectContaining({ base64: false }))
+    expect(launchLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ base64: false, preferredAssetRepresentationMode: 'compatible' })
+    )
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(file.close).toHaveBeenCalledTimes(1)
   })
