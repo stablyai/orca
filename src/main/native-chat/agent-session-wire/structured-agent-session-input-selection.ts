@@ -90,8 +90,14 @@ export function selectStructuredAgentSessionInput(
     return { kind: 'submission', submission: selected }
   }
   const predecessors = cards.filter((card) => journal.inputOrder.precedes(card, selected))
+  const handoffs = new Map<string, AgentJournalSubmission>()
+  for (const entry of pending) {
+    if (entry.queuedMessageId !== undefined && !handoffs.has(entry.queuedMessageId)) {
+      handoffs.set(entry.queuedMessageId, entry)
+    }
+  }
   for (const card of predecessors) {
-    const handoff = pending.find((entry) => entry.queuedMessageId === card.messageId)
+    const handoff = handoffs.get(card.messageId)
     if (handoff) {
       selected = handoff
       break

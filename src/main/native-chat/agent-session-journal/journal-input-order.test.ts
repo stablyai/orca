@@ -1,11 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { holdUnsentSends } from './journal-unsent-send-hold'
-import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  loadTestJournal,
+  openTestJournalHostDatabase,
+  liveTestJournalRows
+} from './journal-host-database-test-support'
 import {
   selectedStructuredSubmission,
   selectStructuredAgentSessionInput
@@ -76,3 +81,174 @@ it('preserves the forced queue place through command removal, two epoch replacem
     await rm(root, { recursive: true, force: true })
   }
 })
+
+it.each(['resume', 'accepted'] as const)(
+  'preserves failed reopen admission facts across replay/replacement and %s release',
+  async (release) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-input-order-reopen-'))
+    const journals = createTrackedJournalOpener()
+    const identity = {
+      sessionId: 'order',
+      workspaceId: 'folder',
+      hostId: 'ssh',
+      agent: 'claude' as const,
+      providerHandle: claudeProviderHandle('thread', null)
+    }
+    const message = (text: string): AgentJournalMessageItem => ({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+    let journal = await journals.open({ identity, stateDirectory: root })
+    const append = (
+      id: string,
+      receipt?: Parameters<typeof journal.appendSubmission>[2],
+      fence = 1
+    ) =>
+      journal.appendSubmission(
+        {
+          clientMessageId: id,
+          body: message(id),
+          payloadFingerprint: id,
+          fence,
+          handoverRecorded: true,
+          origin: 'client',
+          options: { effort: 'high' }
+        },
+        undefined,
+        receipt
+      )
+    const accept = (id: string) =>
+      journal.resolveDispatch({
+        clientMessageId: id,
+        state: 'accepted',
+        providerIdentity: null,
+        fence: 1
+      })
+    try {
+      await journal.queuedMessages.insert({
+        messageId: 'C',
+        body: { ...message('/compact'), command: { name: 'compact' } }
+      })
+      await append('forced')
+      const mark = vi
+        .spyOn(journal, 'appendQueueReopen')
+        .mockRejectedValueOnce(new Error('disk full'))
+      await expect(journal.markQueueReopen(1)).rejects.toThrow('disk full')
+      mark.mockRestore()
+      const floor = journal.reopenFloor()!
+      const before = journal.cursor()
+      let committed = 0
+      await expect(
+        append('M', {
+          write: () => {
+            throw new Error('receipt transaction fails')
+          },
+          committed: () => {
+            committed++
+          }
+        })
+      ).rejects.toThrow('receipt transaction fails')
+      expect(journal.cursor()).toEqual(before)
+      expect(journal.submission('M')).toBeUndefined()
+      expect(journal.reopenFloor()).toEqual(floor)
+      expect(
+        loadTestJournal(root, identity.sessionId)!.state.queuePauseMarks.reopenedSequence
+      ).toBe(0)
+      expect(committed).toBe(0)
+      await expect(append('stale', undefined, 0)).rejects.toMatchObject({
+        code: 'journal_stale_fence'
+      })
+      expect(journal.cursor()).toEqual(before)
+      expect(journal.reopenFloor()).toEqual(floor)
+      if (release === 'resume') {
+        await journal.appendQueueResume(1)
+      }
+      let target: { epoch: string; sequence: number } | undefined
+      const cursor = await append('M', {
+        write: (_db, row) => {
+          if (row) {
+            target = { epoch: row.epoch, sequence: row.seq }
+          }
+          expect(row).toMatchObject({
+            kind: 'submission',
+            clientMessageId: 'M',
+            payloadFingerprint: 'M',
+            options: { effort: 'high' },
+            body: message('M')
+          })
+        },
+        committed: () => {
+          committed++
+        }
+      })
+      expect(target).toEqual(cursor)
+      expect(committed).toBe(1)
+      expect(journal.reopenFloor()).toBeNull()
+      const rows = liveTestJournalRows(
+        openTestJournalHostDatabase(root).db,
+        identity.sessionId
+      ).map((r) => JSON.parse(r.rowJson))
+      expect(rows.find((r) => r.queueReopen === true)).toMatchObject({
+        queueReopenSince: floor.sequence,
+        seq: cursor.sequence - 1
+      })
+      expect(journal.inputOrder.prefix('M').map((c) => c.messageId)).toEqual(
+        release === 'resume' ? ['C'] : []
+      )
+      if (release === 'accepted') {
+        expect(journal.queuedMessages.pauses().map((p) => p.reason)).toEqual(['restarted'])
+        await append('N')
+        expect(journal.inputOrder.prefix('N')).toEqual([])
+        await accept('N')
+        expect(journal.queuedMessages.pauses()).toEqual([])
+        await append('ordinary-held')
+        // The accepted N released C; this later input genuinely belongs behind it.
+        expect(journal.inputOrder.prefix('ordinary-held').map((c) => c.messageId)).toEqual(['C'])
+      } else {
+        expect(journal.queuedMessages.pauses()).toEqual([])
+      }
+      const beforePrefixes = ['forced', 'M', 'ordinary-held'].map((id) =>
+        journal.inputOrder.prefix(id).map((c) => c.messageId)
+      )
+      const replay = loadTestJournal(root, identity.sessionId)!
+      expect(replay.damage).toBeNull()
+      expect(replay.newer).toBeNull()
+      expect(
+        ['forced', 'M', 'ordinary-held'].map((id) =>
+          replay.state.inputOrder.prefix(id).map((c) => c.messageId)
+        )
+      ).toEqual(beforePrefixes)
+      const lateMark = vi
+        .spyOn(journal, 'appendQueueReopen')
+        .mockRejectedValueOnce(new Error('later reopen write fails'))
+      await expect(journal.markQueueReopen(1)).rejects.toThrow('later reopen write fails')
+      lateMark.mockRestore()
+      const foreignFloor = journal.reopenFloor()!
+      await journal.replaceEpochItems('unreconcilable_prefix', 1, [])
+      expect(journal.reopenFloor()).toEqual(foreignFloor)
+      expect(foreignFloor.epoch).not.toBe(journal.epoch)
+      const beforeForeign = journal.cursor()
+      await append('new-epoch')
+      expect(journal.cursor().sequence).toBe(beforeForeign.sequence + 1)
+      expect(journal.inputOrder.prefix('new-epoch')).toEqual([])
+      expect(
+        ['forced', 'M', 'ordinary-held'].map((id) =>
+          journal.inputOrder.prefix(id).map((c) => c.messageId)
+        )
+      ).toEqual(beforePrefixes)
+      await journal.close()
+      journal = await journals.open({ identity, stateDirectory: root })
+      expect(
+        ['forced', 'M', 'ordinary-held'].map((id) =>
+          journal.inputOrder.prefix(id).map((c) => c.messageId)
+        )
+      ).toEqual(beforePrefixes)
+      await accept('forced')
+      expect(journal.inputOrder.prefix('forced')).toEqual([])
+    } finally {
+      await journals.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)

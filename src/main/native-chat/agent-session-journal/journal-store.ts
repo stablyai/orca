@@ -2,6 +2,7 @@
 
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
+import { commitJournalRows } from './journal-commit'
 import { createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -31,7 +32,6 @@ import {
   rejectJournalQueuedSubmissions
 } from './journal-pending-submission-recovery'
 import {
-  applyJournalRow,
   createJournalReducerState,
   resolveJournalItemId,
   type JournalReducerState
@@ -108,9 +108,7 @@ export class AgentSessionJournal {
         this.onCommitted?.()
       },
       commit: (rows, savedAt) => {
-        for (const row of rows) {
-          applyJournalRow(this.state, row, savedAt)
-        }
+        this.reopenUnmarked = commitJournalRows(this.state, rows, savedAt, this.reopenUnmarked)
         this.onCommitted?.(rows)
       },
       notifyCommitted: () => this.onCommitted?.([]),
@@ -330,7 +328,6 @@ export class AgentSessionJournal {
       const sequence = since ?? this.state.lastSequence + 1
       this.reopenUnmarked = { epoch: this.state.epoch, sequence }
       await this.appendQueueReopen(fence, since)
-      this.reopenUnmarked = null
     }
   }
 

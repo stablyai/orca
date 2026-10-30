@@ -53,7 +53,8 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import { queuedChangeOf } from './journal-queue-retention'
-import { journalInputAcceptance } from './journal-input-provenance'
+import type { QueuedMessageRow } from './queued-message-table'
+import { journalQueueRebase } from './journal-input-provenance'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
   echoOf?: JournalItemEcho['echoOf']
@@ -138,7 +139,9 @@ export function replaceJournalEpoch(input: {
   const queued = [...(input.previous?.submissions.values() ?? [])]
     .filter(isQueuedAgentJournalSubmission)
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
-  const staged = new Set<string>()
+  const staged = new Map<string, QueuedMessageRow>()
+  let lastPrefix: readonly QueuedMessageRow[] | undefined
+  let lastLinked: QueuedMessageRow | undefined
   const appendQueue = (messageId: string, change: Parameters<typeof buildJournalQueueRow>[2]) => {
     const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, input.now())
     applyJournalRow(state, row)
@@ -146,21 +149,32 @@ export function replaceJournalEpoch(input: {
   }
   const rebuilt = new Map<string, number>()
   for (const submission of queued) {
-    // Retain the actual pre-admission queue facts until their direct input's obligation dies.
-    for (const messageId of staged) {
-      appendQueue(messageId, { op: 'withdrawn' })
-    }
-    staged.clear()
+    // Restate changes between admission contexts; equal contexts share their existing rows.
     const prefix = input.previous?.inputOrder.prefix(submission.clientMessageId) ?? []
     const linked = submission.queuedMessageId
       ? input.previous?.queue.cards.get(submission.queuedMessageId)
       : undefined
-    for (const card of linked ? [...prefix, linked] : prefix) {
-      appendQueue(card.messageId, {
-        ...queuedChangeOf(card),
-        queuedAt: { epoch, sequence: state.lastSequence }
-      })
-      staged.add(card.messageId)
+    if (prefix !== lastPrefix || linked !== lastLinked) {
+      const desired = new Map(
+        (linked ? [...prefix, linked] : prefix).map((card) => [card.messageId, card])
+      )
+      for (const messageId of staged.keys()) {
+        if (!desired.has(messageId)) {
+          appendQueue(messageId, { op: 'withdrawn' })
+          staged.delete(messageId)
+        }
+      }
+      for (const [messageId, card] of desired) {
+        if (staged.get(messageId) !== card) {
+          appendQueue(messageId, {
+            ...queuedChangeOf(card),
+            queuedAt: { epoch, sequence: state.lastSequence }
+          })
+          staged.set(messageId, card)
+        }
+      }
+      lastPrefix = prefix
+      lastLinked = linked
     }
     const body = input.previous?.items.get(
       agentJournalSubmissionKey(submission.clientMessageId)
@@ -181,42 +195,23 @@ export function replaceJournalEpoch(input: {
     rows.push(row)
     rebuilt.set(submission.clientMessageId, row.seq)
   }
-  for (const messageId of staged) {
+  for (const messageId of staged.keys()) {
     appendQueue(messageId, { op: 'withdrawn' })
   }
+  const rebase = journalQueueRebase(
+    input.database.db,
+    input.identity.sessionId,
+    epoch,
+    input.previous?.epoch,
+    queued,
+    rebuilt
+  )
   for (const { messageId, change } of input.queue.cards) {
     if (!change) {
       continue
     }
     const prior = input.previous?.queue.cards.get(messageId)
-    let queuedAt = change.op === 'queued' ? change.queuedAt : null
-    if (queuedAt && input.previous) {
-      const boundary = queuedAt
-      const comparable = queued.flatMap((submission) => {
-        if (boundary.epoch === input.previous?.epoch && submission.acceptedSequence !== undefined) {
-          return [{ submission, sequence: submission.acceptedSequence }]
-        }
-        const original = journalInputAcceptance(
-          input.database.db,
-          input.identity.sessionId,
-          submission.clientMessageId
-        )
-        if (original?.epoch !== boundary.epoch) {
-          return []
-        }
-        return [{ submission, sequence: original.sequence }]
-      })
-      if (comparable.length === queued.length) {
-        const earlier = comparable.filter((entry) => entry.sequence <= boundary.sequence)
-        queuedAt = {
-          epoch,
-          sequence: Math.max(
-            1,
-            ...earlier.flatMap((entry) => rebuilt.get(entry.submission.clientMessageId) ?? [])
-          )
-        }
-      }
-    }
+    const queuedAt = change.op === 'queued' ? rebase(change.queuedAt) : null
     appendQueue(
       messageId,
       change.op === 'queued'
