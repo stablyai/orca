@@ -12,10 +12,12 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import {
   createTrackedJournalOpener,
+  deleteTestJournalRow,
   insertTestJournalRow,
   openTestJournalHostDatabase,
   publishTestJournalEpoch,
   liveTestJournalRows,
+  saveTestJournalState,
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
 import { AgentSessionJournal } from './journal-store'
@@ -26,7 +28,8 @@ import {
 } from './journal-saved-state'
 import { replayJournal, restoreJournal } from './journal-open'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import { startJournalStateBackfill } from './journal-state-backfill'
+import { applyJournalRow, createJournalReducerState } from './journal-reducer'
+import { backfillJournalState, startJournalStateBackfill } from './journal-state-backfill'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { deleteJournalEpochRows } from './journal-row-table'
@@ -38,6 +41,7 @@ import {
   projectionSessionId as sessionId,
   replayedPrefixCoverage,
   seedProjectionRows,
+  unpacedCatchUp,
   watchJournalStatements
 } from './journal-projection-test-support'
 
@@ -77,11 +81,15 @@ const legacyItem = (seq: number): JournalRow => ({
   revision: 1,
   body: { kind: 'status', text: 'Saved before projections existed' }
 })
-const legacyChat = (rows: number) =>
-  seedProjectionRows(database, [
-    projectionEpochRow,
-    ...Array.from({ length: rows - 1 }, (_, index) => legacyItem(index + 2))
-  ])
+const legacyRows = (rows: number): JournalRow[] => [
+  projectionEpochRow,
+  ...Array.from({ length: rows - 1 }, (_, index) => legacyItem(index + 2))
+]
+const legacyChat = (rows: number) => seedProjectionRows(database, legacyRows(rows))
+const savedTables = () =>
+  ['journal_state', 'journal_items', 'journal_entries'].map((table) =>
+    database.db.prepare(`SELECT * FROM ${table} ORDER BY 1, 2, 3, 4`).all()
+  )
 // Saved coverage straight from its row, so checks between timer windows read no journal rows.
 const coverage = (session = sessionId) =>
   database.db.prepare('SELECT through_seq FROM journal_state WHERE session_id = ?').get(session)
@@ -273,7 +281,7 @@ it('drops a catch-up that a rollover replaced, without writing the retired epoch
   await vi.advanceTimersByTimeAsync(1_000)
   expect(coverage()).toBe(32)
   const retired = new JournalProjectionCatchUp(database, sessionId, epoch)
-  expect(await retired.load(async () => true)).toBe(true)
+  expect(await retired.load(unpacedCatchUp)).toBe('ready')
   await journal.rollEpoch('session_created', 1)
   expect(retired.page()).toBe('retired')
   await vi.advanceTimersByTimeAsync(60_000)
@@ -292,11 +300,11 @@ it('lets one of two catch-ups on the same saved view commit, then the other cont
     new JournalProjectionCatchUp(database, sessionId, epoch)
   ]
   for (const runner of runners) {
-    expect(await runner.load(async () => true)).toBe(true)
+    expect(await runner.load(unpacedCatchUp)).toBe('ready')
   }
   expect(runners[0].page()).toBe('advanced')
   expect(runners[1].page()).toBe('stale')
-  expect(await runners[1].load(async () => true)).toBe(true)
+  expect(await runners[1].load(unpacedCatchUp)).toBe('ready')
   expect(runners[1].page()).toBe('advanced')
   expect(runners[0].page()).toBe('stale')
   expect(replayedPrefixCoverage(database)).toBe(64)
@@ -359,4 +367,89 @@ it('keeps the pages before damage and parks a closed chat until its rows change,
     throw new Error('missing published clean epoch')
   }
   expectProjectionMatches(database, published)
+})
+
+it.each(['another codec version', 'a corrupt item'])(
+  'leaves a current-epoch view with %s untouched until the whole history folds, and parks it on a gap',
+  async (unreadable) => {
+    const rows = legacyRows(60)
+    seedProjectionRows(database, rows)
+    const prefix = createJournalReducerState(sessionId, epoch)
+    for (const row of rows.slice(0, 20)) {
+      applyJournalRow(prefix, row)
+    }
+    saveTestJournalState(database, prefix)
+    database.transaction((db) => {
+      if (unreadable === 'another codec version') {
+        db.prepare('UPDATE journal_state SET version = 3 WHERE session_id = ?').run(sessionId)
+      } else {
+        db.prepare("UPDATE journal_items SET item_json = '{' WHERE item_id = 'legacy-5'").run()
+      }
+      deleteTestJournalRow(db, sessionId, 45)
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const unpublishable = new Map<string, string>()
+    const pass = () =>
+      backfillJournalState({
+        database: () => database,
+        repairOpen: async () => false,
+        stopped: () => false,
+        rest: async () => undefined,
+        unpublishable
+      })
+    const before = savedTables()
+    await pass()
+    expect(savedTables()).toStrictEqual(before)
+    expect(unpublishable.get(sessionId)).toBe(`${epoch}\n60`)
+    const watched = watchJournalStatements(database)
+    await pass()
+    expect(watched.rowsRead()).toBe(0)
+    expect(savedTables()).toStrictEqual(before)
+
+    // A later launch finds the missing row back: the whole history folds, so the view is
+    // replaced from the first row.
+    database.transaction((db) => insertTestJournalRow(db, sessionId, rows[44]))
+    unpublishable.clear()
+    await pass()
+    expect(coverage()).toBe(60)
+    expect(replayedPrefixCoverage(database)).toBe(60)
+  }
+)
+
+it('keeps a saved view whose read fails, then advances it from its coverage once reads work', async () => {
+  const rows = legacyRows(60)
+  seedProjectionRows(database, rows)
+  const prefix = createJournalReducerState(sessionId, epoch)
+  for (const row of rows.slice(0, 20)) {
+    applyJournalRow(prefix, row)
+  }
+  saveTestJournalState(database, prefix)
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const prepare = database.db.prepare.bind(database.db)
+  const failing = vi.spyOn(database.db, 'prepare').mockImplementation((sql: string) => {
+    if (sql.startsWith('SELECT ordinal, item_json FROM journal_items')) {
+      throw new Error('disk I/O error')
+    }
+    return prepare(sql)
+  })
+  const unpublishable = new Map<string, string>()
+  const pass = () =>
+    backfillJournalState({
+      database: () => database,
+      repairOpen: async () => false,
+      stopped: () => false,
+      rest: async () => undefined,
+      unpublishable
+    })
+  const before = savedTables()
+  await pass()
+  // A storage failure is retried, not taken as a missing view or memoized as damage.
+  expect(savedTables()).toStrictEqual(before)
+  expect(unpublishable.size).toBe(0)
+  failing.mockRestore()
+  const watched = watchJournalStatements(database)
+  await pass()
+  expect(coverage()).toBe(60)
+  expect(watched.rowsRead()).toBe(40)
+  expect(replayedPrefixCoverage(database)).toBe(60)
 })

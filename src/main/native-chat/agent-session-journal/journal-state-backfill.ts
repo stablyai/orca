@@ -24,17 +24,22 @@ export async function backfillJournalState(run: JournalStateBackfillRun): Promis
     const database = run.database()
     return run.stopped() || !database || database.isClosed || database.readOnly ? null : database
   }
-  const resume = async (): Promise<boolean> => {
-    await pace()
-    return current() !== null
+  // The pace charges only this pass's own units, never an open chat's catch-up it waited for.
+  const pacing = {
+    work: pace.work,
+    rest: async (): Promise<boolean> => {
+      await pace.rest()
+      return current() !== null
+    }
   }
   const database = current()
   if (!database) {
     return
   }
-  sweepJournalSavedState(database)
-  const sessions = database.db
-    .prepare(`SELECT s.session_id, s.epoch,
+  pace.work(() => sweepJournalSavedState(database))
+  const sessions = pace.work(() =>
+    database.db
+      .prepare(`SELECT s.session_id, s.epoch,
       (SELECT MAX(r.seq) FROM journal_rows r
         WHERE r.session_id = s.session_id AND r.epoch = s.epoch) AS last_seq
     FROM journal_sessions s
@@ -43,7 +48,8 @@ export async function backfillJournalState(run: JournalStateBackfillRun): Promis
       SELECT MAX(r.seq) FROM journal_rows r
         WHERE r.session_id = s.session_id AND r.epoch = s.epoch
     ) ORDER BY s.session_id`)
-    .all()
+      .all()
+  )
   for (const session of sessions) {
     const { session_id: sessionId, epoch, last_seq: lastSequence } = session
     if (
@@ -60,17 +66,18 @@ export async function backfillJournalState(run: JournalStateBackfillRun): Promis
     try {
       const catchUp = new JournalProjectionCatchUp(database, sessionId, epoch)
       for (;;) {
-        if (!(await resume())) {
+        if (!(await pacing.rest())) {
           return
         }
         // An open chat owns its lane and continues from the last committed page.
         if (await run.repairOpen(sessionId)) {
           break
         }
-        if (!(await catchUp.load(resume)) || !current()) {
+        const loaded = await catchUp.load(pacing)
+        if (loaded === 'stopped' || !current()) {
           return
         }
-        const step = catchUp.page()
+        const step = loaded === 'parked' ? 'parked' : pace.work(() => catchUp.page())
         if (step === 'parked') {
           run.unpublishable?.set(sessionId, attempt)
         }

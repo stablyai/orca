@@ -195,12 +195,26 @@ it('keeps committed catch-up pages and the live state when a later page fails, t
   expect(rig.state()).toBe(live)
   expect(encodeJournalState(live)).toStrictEqual(before)
   expectProjectionMatches(database, live)
+  // The failed page keeps its private prefix for the retry.
+  expect(rig.projection.holdsCatchUp()).toBe(true)
   database.db.exec('DROP TRIGGER fail_page')
   const watched = watchJournalStatements(database)
   await vi.advanceTimersByTimeAsync(4_000)
   expect(readJournalSavedState(database.db, sessionId, epoch)?.lastSequence).toBe(64)
   expect(watched.rowsRead()).toBe(64 - 32)
   expectProjectionMatches(database, live)
+  // At the tip the private prefix is released; a later lag decodes a fresh one and converges.
+  expect(rig.projection.holdsCatchUp()).toBe(false)
+  database.db.exec(`CREATE TRIGGER fail_later BEFORE INSERT ON journal_state
+    BEGIN SELECT RAISE(ABORT, 'database or disk is full'); END`)
+  await rig.writer.enqueue(status('lagging-again'))
+  database.db.exec('DROP TRIGGER fail_later')
+  const decoded = watched.rowsRead('journal_items')
+  await vi.advanceTimersByTimeAsync(4_000)
+  expect(watched.rowsRead('journal_items')).toBeGreaterThan(decoded)
+  expect(readJournalSavedState(database.db, sessionId, epoch)?.lastSequence).toBe(65)
+  expect(rig.projection.holdsCatchUp()).toBe(false)
+  expectProjectionMatches(database, rig.state())
 })
 
 it('fails the per-commit check when saved state stops decoding, though a full replay still matches', async () => {

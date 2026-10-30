@@ -93,14 +93,23 @@ export class JournalWriteProjection {
   /** Sends keep committing between pages, skipping the projection until coverage meets the tip. */
   private async catchUpPages(): Promise<void> {
     const pace = journalCatchUpPace()
-    const rest = async (): Promise<boolean> => {
-      await pace()
-      return !this.closed
+    const pacing = {
+      work: pace.work,
+      rest: async (): Promise<boolean> => {
+        await pace.rest()
+        return !this.closed
+      }
     }
     try {
       for (;;) {
         const live = this.deps.state()
-        if (this.closed || this.through === live.lastSequence) {
+        if (this.closed) {
+          return
+        }
+        // Coverage reached the tip: the private prefix is no longer needed, and later lag derives
+        // a new one from durable coverage.
+        if (this.through === live.lastSequence) {
+          this.catchUp = null
           return
         }
         const catchUp =
@@ -108,18 +117,24 @@ export class JournalWriteProjection {
             ? this.catchUp
             : new JournalProjectionCatchUp(this.deps.database, live.sessionId, live.epoch)
         this.catchUp = catchUp
-        if (!(await catchUp.load(rest))) {
+        const loaded = await catchUp.load(pacing)
+        if (loaded === 'stopped') {
           return
         }
-        const step = await this.deps.queue.serialize(() => this.page(catchUp))
+        const step =
+          loaded === 'parked'
+            ? 'parked'
+            : await this.deps.queue.serialize(() => pace.work(() => this.page(catchUp)))
+        // A failed or parked page keeps the private prefix for its retry.
         if (step === 'failed' || step === 'parked') {
           this.failures += 1
           return
         }
         if (step === 'retired') {
+          this.catchUp = null
           return
         }
-        await pace()
+        await pace.rest()
       }
     } catch (error) {
       if (!this.closed) {
@@ -140,6 +155,11 @@ export class JournalWriteProjection {
       this.failures = 0
     }
     return step
+  }
+
+  /** Tests: whether a private catch-up prefix is still held. */
+  holdsCatchUp(): boolean {
+    return this.catchUp !== null
   }
 
   /** Runs after commit notification, never in the adopt path. */

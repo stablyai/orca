@@ -329,3 +329,63 @@ it('catches up a lagging closed chat in pages whose writes do not grow with its 
   // Decoding the larger saved view takes more paced pages, not a longer stretch.
   expect(large.loadRests).toBeGreaterThan(small.loadRests)
 })
+
+it('reads no journal row or saved item past a page budget, and each once, at N and 10N row size', async () => {
+  const budget = 1 << 20
+  const measure = async (chars: number) => {
+    const database = openTestJournalHostDatabase(join(root, `wide-${chars}`))
+    const rows: JournalRow[] = [projectionEpochRow]
+    for (let index = 0; index < 20; index++) {
+      rows.push({
+        ...base(rows.length + 1),
+        kind: 'item',
+        itemId: `wide-${index}`,
+        revision: 1,
+        body: message('x'.repeat(chars), 'assistant')
+      })
+    }
+    seedProjectionRows(database, rows)
+    const watched = watchJournalStatements(database)
+    const read = () => ({ rows: watched.rowsRead(), items: watched.rowsRead('journal_items') })
+    const pages: { rows: number; items: number }[] = []
+    let last = read()
+    let tick = 0
+    const run = {
+      database: () => database,
+      repairOpen: async () => false,
+      stopped: () => false,
+      // Every unit overruns its slice, so each page is its own stretch.
+      now: () => (tick += 30),
+      rest: async () => {
+        const next = read()
+        pages.push({ rows: next.rows - last.rows, items: next.items - last.items })
+        last = next
+      }
+    }
+    await backfillJournalState(run)
+    // One more row makes the second pass load the saved view of wide items in pages.
+    database.transaction((db) =>
+      insertTestJournalRow(db, sessionId, answer('last', 1)(rows.length + 1, 2_000))
+    )
+    await backfillJournalState(run)
+    pages.push({ rows: read().rows - last.rows, items: read().items - last.items })
+    const through = database.db
+      .prepare('SELECT through_seq FROM journal_state WHERE session_id = ?')
+      .get(sessionId)?.through_seq
+    expect(through).toBe(rows.length + 1)
+    return { pages, total: read() }
+  }
+  for (const chars of [64 * 1024, 640 * 1024]) {
+    const { pages, total } = await measure(chars)
+    // Each row and saved item is read once: nothing fetched past a page's end is fetched again.
+    expect(total).toStrictEqual({ rows: 22, items: 20 })
+    // A page stops at the row that fills its budget: rows read are rows folded, plus the founding
+    // row that shares the first page.
+    const perPage = Math.ceil(budget / chars)
+    for (const key of ['rows', 'items'] as const) {
+      const counts = pages.map((page) => page[key]).filter((count) => count > 0)
+      expect(counts.length).toBeGreaterThan(1)
+      expect(Math.max(...counts)).toBeLessThanOrEqual(perPage + 1)
+    }
+  }
+})

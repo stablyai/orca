@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import type { SqliteBindings, SqliteRow, SqliteStatement } from '../../sqlite/sqlite-statement'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import { startJournalStateDecode } from './journal-state-codec'
@@ -26,64 +27,89 @@ export function readJournalSavedState(
   sessionId: string,
   epoch: string
 ): JournalReducerState | null {
-  const pages = readJournalSavedStatePages(() => db, sessionId, epoch)
-  let step = pages.next()
-  while (!step.done) {
-    step = pages.next()
+  try {
+    const pages = readJournalSavedStatePages(() => db, sessionId, epoch)
+    let step = pages.next()
+    while (!step.done) {
+      step = pages.next()
+    }
+    return typeof step.value === 'string' ? null : step.value
+  } catch (error) {
+    logJournalProjectionFailure(sessionId, error)
+    return null
   }
-  return step.value
 }
 
-/** Decodes `limit` stored rows per page in storage order, yielding between pages; a negative limit
- * reads each table at once. Null when the view is absent, from another codec, or invalid. */
+/** A decoded view, none for this epoch, or a present view this build cannot read. */
+export type JournalSavedView = JournalReducerState | 'absent' | 'unreadable'
+
+/** Rows per page and the stored text (UTF-16 units) after which a page stops; at least one row. */
+export type JournalSavedPage = { rows: number; chars: number }
+
+/** Decodes the view in storage-order pages, yielding between them; the default reads each table at
+ * once. Content this codec rejects is unreadable; storage errors throw, so they are never absent. */
 export function* readJournalSavedStatePages(
   database: () => Database.Database,
   sessionId: string,
   epoch: string,
-  limit = -1
-): Generator<void, JournalReducerState | null> {
-  try {
-    const row = database()
-      .prepare(`SELECT through_seq, version, state_json FROM journal_state
-      WHERE session_id = ? AND epoch = ?`)
-      .get(sessionId, epoch)
-    if (!row) {
-      return null
-    }
+  page: JournalSavedPage = { rows: -1, chars: Number.POSITIVE_INFINITY }
+): Generator<void, JournalSavedView> {
+  const row = database()
+    .prepare(`SELECT through_seq, version, state_json FROM journal_state
+    WHERE session_id = ? AND epoch = ?`)
+    .get(sessionId, epoch)
+  if (!row) {
+    return 'absent'
+  }
+  const decode = decoding(sessionId, () => {
     if (typeof row.version !== 'number' || typeof row.state_json !== 'string') {
       throw new Error('invalid saved journal state')
     }
-    const decode = startJournalStateDecode(row.version, row.state_json)
-    if (!decode) {
-      return null
-    }
-    let ordinal = -1
-    for (;;) {
-      const items = database()
-        .prepare(`SELECT ordinal, item_json FROM journal_items
-        WHERE session_id = ? AND epoch = ? AND ordinal > ? ORDER BY ordinal LIMIT ?`)
-        .all(sessionId, epoch, ordinal, limit)
-      for (const item of items) {
+    return startJournalStateDecode(row.version, row.state_json) ?? 'unreadable'
+  })
+  if (decode === 'unreadable') {
+    return 'unreadable'
+  }
+  let ordinal = -1
+  for (let more = true; more;) {
+    const items = readTextPage(
+      database().prepare(`SELECT ordinal, item_json FROM journal_items
+      WHERE session_id = ? AND epoch = ? AND ordinal > ? ORDER BY ordinal LIMIT ?`),
+      [sessionId, epoch, ordinal],
+      'item_json',
+      page
+    )
+    for (const item of items.rows) {
+      const next = decoding(sessionId, () => {
         if (typeof item.ordinal !== 'number' || typeof item.item_json !== 'string') {
           throw new Error('invalid saved journal item')
         }
         decode.item(item.item_json)
-        ordinal = item.ordinal
+        return item.ordinal
+      })
+      if (next === 'unreadable') {
+        return 'unreadable'
       }
-      if (limit < 0 || items.length < limit) {
-        break
-      }
+      ordinal = next
+    }
+    more = items.more
+    if (more) {
       yield
     }
-    let field = ''
-    ordinal = -1
-    for (;;) {
-      const entries = database()
-        .prepare(`SELECT field, ordinal, entry_json FROM journal_entries
-        WHERE session_id = ? AND epoch = ? AND (field, ordinal) > (?, ?)
-        ORDER BY field, ordinal LIMIT ?`)
-        .all(sessionId, epoch, field, ordinal, limit)
-      for (const entry of entries) {
+  }
+  let field = ''
+  ordinal = -1
+  for (let more = true; more;) {
+    const entries = readTextPage(
+      database().prepare(`SELECT field, ordinal, entry_json FROM journal_entries
+      WHERE session_id = ? AND epoch = ? AND (field, ordinal) > (?, ?)
+      ORDER BY field, ordinal LIMIT ?`),
+      [sessionId, epoch, field, ordinal],
+      'entry_json',
+      page
+    )
+    for (const entry of entries.rows) {
+      const next = decoding(sessionId, () => {
         if (
           typeof entry.field !== 'string' ||
           typeof entry.ordinal !== 'number' ||
@@ -92,14 +118,20 @@ export function* readJournalSavedStatePages(
           throw new Error('invalid saved journal entry')
         }
         decode.entry(entry.field, entry.entry_json)
-        field = entry.field
-        ordinal = entry.ordinal
+        return { field: entry.field, ordinal: entry.ordinal }
+      })
+      if (next === 'unreadable') {
+        return 'unreadable'
       }
-      if (limit < 0 || entries.length < limit) {
-        break
-      }
+      field = next.field
+      ordinal = next.ordinal
+    }
+    more = entries.more
+    if (more) {
       yield
     }
+  }
+  return decoding(sessionId, () => {
     const state = decode.finish()
     if (
       state.sessionId !== sessionId ||
@@ -109,10 +141,37 @@ export function* readJournalSavedStatePages(
       throw new Error('invalid saved journal coverage')
     }
     return state
+  })
+}
+
+/** Content the codec rejects marks the view unreadable; storage errors propagate. */
+function decoding<T>(sessionId: string, decode: () => T): T | 'unreadable' {
+  try {
+    return decode()
   } catch (error) {
     logJournalProjectionFailure(sessionId, error)
-    return null
+    return 'unreadable'
   }
+}
+
+/** The cursor stops after the row whose `column` text reaches the page's budget. */
+function readTextPage(
+  statement: SqliteStatement,
+  parameters: SqliteBindings,
+  column: string,
+  page: JournalSavedPage
+): { rows: SqliteRow[]; more: boolean } {
+  const rows: SqliteRow[] = []
+  let chars = 0
+  for (const row of statement.iterate(...parameters, page.rows)) {
+    rows.push(row)
+    const text = row[column]
+    chars += typeof text === 'string' ? text.length : 0
+    if (chars >= page.chars) {
+      return { rows, more: true }
+    }
+  }
+  return { rows, more: page.rows >= 0 && rows.length === page.rows }
 }
 
 /** Items and entries are written only beside their session's state row, so orphans are found from

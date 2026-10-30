@@ -22,7 +22,11 @@ import {
 import { clearJournalSavedState, readJournalSavedState } from './journal-saved-state'
 import { renderJournalState } from './journal-reducer'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import { expectProjectionMatches, replayedPrefixCoverage } from './journal-projection-test-support'
+import {
+  expectProjectionMatches,
+  replayedPrefixCoverage,
+  unpacedCatchUp
+} from './journal-projection-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 
 const sessionId = 'session-1'
@@ -211,7 +215,7 @@ it.each(['claude', 'codex'] as const)(
     // its tail fold to the full replay, through aliases, settlements and per-row timestamps.
     database.transaction((db) => clearJournalSavedState(db, sessionId))
     const catchUp = new JournalProjectionCatchUp(database, sessionId, journal.epoch, 1)
-    expect(await catchUp.load(async () => true)).toBe(true)
+    expect(await catchUp.load(unpacedCatchUp)).toBe('ready')
     const prefixes: (number | null)[] = []
     while (catchUp.page() === 'advanced') {
       prefixes.push(replayedPrefixCoverage(database, sessionId))

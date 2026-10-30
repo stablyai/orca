@@ -6,7 +6,7 @@ import type { JournalHostDatabase } from './journal-host-database'
 import { startJournalRowFold } from './journal-open'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
-import { readJournalRowsAfter, readJournalSessionEpoch } from './journal-row-table'
+import { readJournalRowsWithin, readJournalSessionEpoch } from './journal-row-table'
 import { clearJournalSavedState, writeJournalProjection } from './journal-projection-table'
 import { JOURNAL_STATE_CODEC_VERSION } from './journal-state-codec'
 import {
@@ -18,8 +18,9 @@ import {
 } from './journal-saved-state'
 
 const PAGE_ROWS = 32
-// A page ends after the row that crosses this much row text; a single row always fits.
-const PAGE_BYTES = 1 << 20
+// A page stops reading after the row whose text crosses about 1 MiB (UTF-16 units); one row
+// always fits. Saved-view pages use the same budget.
+const PAGE_CHARS = 1 << 20
 const SLICE_MS = 25
 
 export type JournalCatchUpStep =
@@ -35,6 +36,12 @@ export type JournalCatchUpStep =
   | 'retired'
   /** The page did not commit; coverage is unchanged. */
   | 'failed'
+
+/** Charges each synchronous unit of runner work; `rest` resolves false when the runner must stop. */
+export type JournalCatchUpPacing = {
+  work: <T>(unit: () => T) => T
+  rest: () => Promise<boolean>
+}
 
 /** A private prefix of one epoch, never the live state; it changes only after its page commits. */
 export class JournalProjectionCatchUp {
@@ -54,28 +61,40 @@ export class JournalProjectionCatchUp {
     return this.base?.state.lastSequence ?? 0
   }
 
-  /** Decodes the accepted prefix once, resting between pages; false when `rest` stops it. */
-  async load(rest: () => Promise<boolean>): Promise<boolean> {
+  /** Decodes the accepted prefix once, resting between pages. Storage errors throw: a view that
+   * could not be read is never taken as missing. */
+  async load(pacing: JournalCatchUpPacing): Promise<'ready' | 'stopped' | 'parked'> {
     if (this.base) {
-      return true
+      return 'ready'
     }
     const { database, sessionId, epoch } = this
-    const stamp = readJournalSavedStamp(database.db, sessionId)
-    const pages = readJournalSavedStatePages(() => database.db, sessionId, epoch, this.pageRows)
-    for (let step = pages.next(); ; step = pages.next()) {
-      if (step.done) {
-        if (database.isClosed) {
-          return false
-        }
-        // A missing or unreadable view restarts from the epoch's first row; that page clears it.
-        const state = step.value ?? createJournalReducerState(sessionId, epoch)
-        this.base = { state, stamp, valid: step.value !== null }
-        return true
+    const budget = { rows: this.pageRows, chars: PAGE_CHARS }
+    const pages = readJournalSavedStatePages(() => database.db, sessionId, epoch, budget)
+    const stamp = pacing.work(() => readJournalSavedStamp(database.db, sessionId))
+    let step = pacing.work(() => pages.next())
+    while (!step.done) {
+      if (!(await pacing.rest())) {
+        return 'stopped'
       }
-      if (!(await rest())) {
-        return false
+      step = pacing.work(() => pages.next())
+    }
+    const view = step.value
+    // A present view this build cannot read may be the chat's only authority for its history; it is
+    // replaced only after every row through the tip folds cleanly. R1's contract recognition joins
+    // this classification and the stamp.
+    if (view === 'unreadable') {
+      const proof = await this.prove(pacing)
+      if (proof !== 'ready') {
+        return proof
       }
     }
+    // An absent or other-epoch view, or a proven unreadable one, restarts from the epoch's first
+    // row; that page clears it.
+    this.base =
+      typeof view === 'string'
+        ? { state: createJournalReducerState(sessionId, epoch), stamp, valid: false }
+        : { state: view, stamp, valid: true }
+    return 'ready'
   }
 
   /** Runs synchronously on the chat's owning lane: one FULL transaction or nothing. */
@@ -98,22 +117,21 @@ export class JournalProjectionCatchUp {
             return 'stale'
           }
           const after = base.state.lastSequence
-          const rows = readJournalRowsAfter(
+          const rows = readJournalRowsWithin(
             db,
             sessionId,
             epoch,
             after === 0 ? Number.MIN_SAFE_INTEGER : after,
-            this.pageRows
+            this.pageRows,
+            PAGE_CHARS
           )
           if (rows.length === 0) {
             return 'current'
           }
           const transition = isolateJournalTransition(base.state, (draft) => {
             const fold = startJournalRowFold({ sessionId, epoch, untilDamage: true }, draft)
-            let bytes = 0
             for (const row of rows) {
-              bytes += row.rowJson.length
-              if (!fold.add(row) || bytes >= PAGE_BYTES) {
+              if (!fold.add(row)) {
                 break
               }
             }
@@ -148,20 +166,56 @@ export class JournalProjectionCatchUp {
       return 'failed'
     }
   }
+
+  /** Folds every row through the tip on a throwaway state, writing nothing. */
+  private async prove(pacing: JournalCatchUpPacing): Promise<'ready' | 'stopped' | 'parked'> {
+    const { database, sessionId, epoch } = this
+    const fold = startJournalRowFold({ sessionId, epoch, untilDamage: true })
+    let after = Number.MIN_SAFE_INTEGER
+    for (;;) {
+      const rows = pacing.work(() =>
+        readJournalRowsWithin(database.db, sessionId, epoch, after, this.pageRows, PAGE_CHARS)
+      )
+      const last = rows.at(-1)
+      if (!last) {
+        break
+      }
+      if (!pacing.work(() => rows.every((row) => fold.add(row)))) {
+        return 'parked'
+      }
+      after = last.seq
+      if (!(await pacing.rest())) {
+        return 'stopped'
+      }
+    }
+    const proved = fold.finish()
+    return proved.damage || proved.newer ? 'parked' : 'ready'
+  }
 }
 
-/** Each slice of catch-up work up to 25 ms is followed by nine times its length at rest. */
+/** Rests nine times the runner's own work once it reaches 25 ms; time spent awaiting other work
+ * (an open chat's catch-up, the write lane, rests) is not charged. */
 export function journalCatchUpPace(
   now: () => number = () => performance.now(),
   rest: (ms: number) => Promise<void> = (ms) =>
     new Promise<void>((resolve) => unrefJournalProjectionTimer(setTimeout(resolve, ms)))
-): () => Promise<void> {
-  let sliceAt = now()
-  return async () => {
-    const elapsed = now() - sliceAt
-    if (elapsed >= SLICE_MS) {
-      await rest(elapsed * 9)
-      sliceAt = now()
+): { work: <T>(unit: () => T) => T; rest: () => Promise<void> } {
+  let worked = 0
+  return {
+    work<T>(unit: () => T): T {
+      const start = now()
+      try {
+        return unit()
+      } finally {
+        worked += now() - start
+      }
+    },
+    async rest(): Promise<void> {
+      if (worked >= SLICE_MS) {
+        const ms = worked * 9
+        worked = 0
+        await rest(ms)
+      }
     }
   }
 }

@@ -13,6 +13,7 @@ import {
 import { replayJournal, restoreJournal } from './journal-open'
 import { encodeJournalState } from './journal-state-codec'
 import { readJournalSavedState } from './journal-saved-state'
+import type { JournalCatchUpPacing } from './journal-projection-catch-up'
 import { insertTestJournalRow, publishTestJournalEpoch } from './journal-host-database-test-support'
 import type { JournalRow } from './journal-row-schema'
 
@@ -109,32 +110,56 @@ export function replayedPrefixCoverage(
     : null
 }
 
-/** Every statement prepared, and the rows read back by journal row page queries. */
+const PAGE_READS = {
+  journal_rows: 'SELECT seq, ts, row_json FROM journal_rows',
+  journal_items: 'SELECT ordinal, item_json FROM journal_items',
+  journal_entries: 'SELECT field, ordinal, entry_json FROM journal_entries'
+} as const
+
+/** Every statement prepared, and the rows read back by page queries on each table, whether the
+ * caller fetched them all at once or iterated. */
 export function watchJournalStatements(database: JournalHostDatabase): {
   statements: string[]
-  rowsRead: () => number
+  rowsRead: (table?: keyof typeof PAGE_READS) => number
 } {
   const prepare = database.db.prepare.bind(database.db)
   const statements: string[] = []
-  let rowsRead = 0
+  const read = new Map<string, number>()
   vi.spyOn(database.db, 'prepare').mockImplementation((sql: string) => {
     statements.push(sql)
     const statement = prepare(sql)
-    if (!sql.startsWith('SELECT seq, ts, row_json FROM journal_rows')) {
+    const table = Object.entries(PAGE_READS).find(([, prefix]) => sql.startsWith(prefix))?.[0]
+    if (!table) {
       return statement
+    }
+    const count = (rows: number): void => {
+      read.set(table, (read.get(table) ?? 0) + rows)
     }
     const counted: SqliteStatement = {
       all: (...parameters) => {
         const rows = statement.all(...parameters)
-        rowsRead += rows.length
+        count(rows.length)
         return rows
       },
       get: (...parameters) => statement.get(...parameters),
       run: (...parameters) => statement.run(...parameters),
-      iterate: (...parameters) => statement.iterate(...parameters),
+      iterate: function* (...parameters) {
+        for (const row of statement.iterate(...parameters)) {
+          count(1)
+          yield row
+        }
+      },
       setReadBigInts: (enabled) => statement.setReadBigInts(enabled)
     }
     return counted
   })
-  return { statements, rowsRead: () => rowsRead }
+  return { statements, rowsRead: (table = 'journal_rows') => read.get(table) ?? 0 }
+}
+
+/** Runs a catch-up runner's units with no rests. */
+export const unpacedCatchUp: JournalCatchUpPacing = {
+  work<T>(unit: () => T): T {
+    return unit()
+  },
+  rest: async () => true
 }
