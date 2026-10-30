@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { fillPluginPanelShell } from './plugin-panel-design-token-css'
+import { forwardPanelMessage } from './plugin-frame-host'
 import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginFrameEntry } from './use-plugin-frame-entry'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
@@ -53,6 +54,26 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       setPanelHealth(tabKey, 'error')
     }
   }, [entry.status, setPanelHealth, tabKey])
+
+  const panelPluginKey = panel?.pluginKey ?? null
+  const panelId = panel?.id ?? null
+  // Why not the frame host: it handles traffic the frame starts; a worker's post starts in main.
+  useEffect(() => {
+    if (!panelPluginKey || !panelId || entry.status !== 'ready') {
+      return
+    }
+    const subscribe = window.api?.plugins?.onPanelMessage
+    if (!subscribe) {
+      return
+    }
+    return subscribe((message) =>
+      forwardPanelMessage(
+        { pluginKey: panelPluginKey, panelId },
+        message,
+        iframeRef.current?.contentWindow ?? null
+      )
+    )
+  }, [entry.status, panelId, panelPluginKey])
 
   // Persisted tabs can outlive an uninstalled or disabled plugin.
   if (!panel) {

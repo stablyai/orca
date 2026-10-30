@@ -60,6 +60,8 @@ const panelActionMock = vi.fn()
 const SESSION_TOKEN = 's'.repeat(43)
 const REFRESHED_SESSION_TOKEN = 'r'.repeat(43)
 let pluginChangedListener: (() => void) | null
+let panelMessageListener: ((message: unknown) => void) | null
+const panelMessageUnsubscribeMock = vi.fn()
 
 function waitForHappyDomTasks(): Promise<void> {
   return (
@@ -80,6 +82,8 @@ beforeEach(() => {
   setPanelHealthMock.mockReset()
   document.documentElement.classList.remove('dark')
   pluginChangedListener = null
+  panelMessageListener = null
+  panelMessageUnsubscribeMock.mockReset()
   usePluginPanelsMock.mockReturnValue([dashboardPanel])
   globalThis.window.api = {
     plugins: {
@@ -88,6 +92,10 @@ beforeEach(() => {
       onChanged: (listener: () => void) => {
         pluginChangedListener = listener
         return vi.fn()
+      },
+      onPanelMessage: (listener: (message: unknown) => void) => {
+        panelMessageListener = listener
+        return panelMessageUnsubscribeMock
       }
     }
   } as unknown as Window['api']
@@ -109,6 +117,37 @@ async function renderPanel(tabKey: string): Promise<void> {
 }
 
 describe('PluginPanel', () => {
+  it('relays a matching panel message into the frame and unsubscribes on unmount', async () => {
+    readPanelEntryMock.mockResolvedValue({
+      html: '<h1>Hello plugin</h1>',
+      sessionToken: SESSION_TOKEN
+    })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    const frameWindow = container.querySelector('iframe')?.contentWindow
+    if (!frameWindow) {
+      throw new Error('frame window missing')
+    }
+    const posted = vi.spyOn(frameWindow, 'postMessage')
+
+    panelMessageListener?.({
+      pluginKey: 'samples.my-plugin',
+      panelId: 'dashboard',
+      payload: { n: 1 }
+    })
+    expect(posted).toHaveBeenCalledWith(
+      { orca: 1, kind: 'evt', event: 'panel.message', payload: { n: 1 } },
+      '*'
+    )
+
+    panelMessageListener?.({ pluginKey: 'samples.my-plugin', panelId: 'other', payload: { n: 2 } })
+    expect(posted).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.unmount()
+    })
+    expect(panelMessageUnsubscribeMock).toHaveBeenCalled()
+  })
+
   it('renders the panel HTML in a scripts-only sandboxed iframe', async () => {
     readPanelEntryMock.mockResolvedValue({
       html: '<h1>Hello plugin</h1>',

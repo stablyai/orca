@@ -139,6 +139,14 @@ describe('window.orca', () => {
     expect(onTheme).toHaveBeenCalledTimes(1)
     expect(onTheme).toHaveBeenCalledWith({ colorScheme: 'dark' })
   })
+
+  it('delivers a panel.message event to orca.on handlers', () => {
+    const { orca, fromHost } = mountShell()
+    const seen = vi.fn()
+    orca.on('panel.message', seen)
+    fromHost({ orca: 1, kind: 'evt', event: 'panel.message', payload: { card: 'c1' } })
+    expect(seen).toHaveBeenCalledWith({ card: 'c1' })
+  })
 })
 
 describe('window.orca.document', () => {
