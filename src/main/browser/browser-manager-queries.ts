@@ -7,7 +7,10 @@ import type { ManagedBrowserGuestContext } from './browser-certificate-trust-con
 import { redactKagiSessionToken } from '../../shared/browser-url'
 import { safeOrigin, type BrowserPopupPage } from './browser-manager-types'
 import { BrowserManagerRegistration } from './browser-manager-registration'
-import { listBrowserRouteGuestPopups } from './browser-route-guest-popup-ownership'
+import {
+  isBrowserRouteGuestPopup,
+  listBrowserRouteGuestPopups
+} from './browser-route-guest-popup-ownership'
 
 // WebContents ids are never reused within a run, so a popup page id stays unique while it lives.
 const POPUP_PAGE_ID_PREFIX = 'popup-'
@@ -40,12 +43,21 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
 
   /** A popup page belongs to its opener tab, sharing its workspace and profile. */
   getOwningTabIdForPage(browserPageId: string): string {
-    const popupWebContentsId = popupPageWebContentsId(browserPageId)
+    const popupWebContentsId = this.resolvePopupPageWebContentsId(browserPageId)
     const ownerTabId =
       popupWebContentsId === null
         ? null
         : this.resolvePopupOwnerContext(popupWebContentsId)?.browserTabId
     return ownerTabId ?? browserPageId
+  }
+
+  private resolvePopupPageWebContentsId(browserPageId: string): number | null {
+    const webContentsId = popupPageWebContentsId(browserPageId)
+    return webContentsId !== null &&
+      (this.popupOwnerContextByGuestId.has(webContentsId) ||
+        isBrowserRouteGuestPopup(webContentsId))
+      ? webContentsId
+      : null
   }
 
   getWorktreeIdForTab(browserTabId: string): string | undefined {
@@ -89,7 +101,10 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   }
 
   getBrowserPageLoadError(browserPageId: string): BrowserLoadError | null {
-    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    const webContentsId =
+      this.webContentsIdByTabId.get(browserPageId) ??
+      this.resolvePopupPageWebContentsId(browserPageId) ??
+      undefined
     return webContentsId === undefined
       ? null
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)

@@ -29,6 +29,8 @@ export type ElectronSidecarPage = {
   publicPageId: string
   sidecarPageId: string
   worktreeId?: string
+  /** Set on a popup window: the page that opened it, where the agent returns when it closes. */
+  openerPublicPageId?: string
 }
 
 export class ElectronSidecarTabRegistry {
@@ -48,8 +50,13 @@ export class ElectronSidecarTabRegistry {
     return page
   }
 
-  private track(sidecarPageId: string, publicPageId: string, worktreeId?: string) {
-    const page = { publicPageId, sidecarPageId, worktreeId }
+  private track(
+    sidecarPageId: string,
+    publicPageId: string,
+    worktreeId?: string,
+    openerPublicPageId?: string
+  ) {
+    const page = { publicPageId, sidecarPageId, worktreeId, openerPublicPageId }
     this.pagesByPublicId.set(publicPageId, page)
     this.pagesBySidecarId.set(sidecarPageId, page)
     return page
@@ -79,9 +86,14 @@ export class ElectronSidecarTabRegistry {
   }
 
   pageAt(worktreeId: string | undefined, index: number): ElectronSidecarPage {
-    const page = [...this.pagesByPublicId.values()].filter(
+    const pages = [...this.pagesByPublicId.values()].filter(
       (candidate) => !worktreeId || candidate.worktreeId === worktreeId
-    )[index]
+    )
+    // Match the sidecar's listing, which puts popups after every tab.
+    const page = [
+      ...pages.filter((candidate) => !candidate.openerPublicPageId),
+      ...pages.filter((candidate) => candidate.openerPublicPageId)
+    ][index]
     if (!page) {
       throw new BrowserError('browser_tab_not_found', `Browser tab index ${index} was not found.`)
     }
@@ -101,9 +113,14 @@ export class ElectronSidecarTabRegistry {
     this.pagesBySidecarId.delete(page.sidecarPageId)
     const key = page.worktreeId ?? ''
     if (this.activePageIdByWorktree.get(key) === page.publicPageId) {
-      const replacement = [...this.pagesByPublicId.values()].find(
-        (candidate) => candidate.worktreeId === page.worktreeId
-      )
+      const opener = page.openerPublicPageId
+        ? this.pagesByPublicId.get(page.openerPublicPageId)
+        : undefined
+      const replacement =
+        opener ??
+        [...this.pagesByPublicId.values()].find(
+          (candidate) => candidate.worktreeId === page.worktreeId
+        )
       if (replacement) {
         this.activePageIdByWorktree.set(key, replacement.publicPageId)
       } else {
@@ -132,7 +149,12 @@ export class ElectronSidecarTabRegistry {
         const page =
           this.pagesBySidecarId.get(tab.browserPageId) ??
           (opener
-            ? this.track(tab.browserPageId, tab.browserPageId, opener.worktreeId)
+            ? this.track(
+                tab.browserPageId,
+                tab.browserPageId,
+                opener.worktreeId,
+                opener.publicPageId
+              )
             : worktreeId
               ? undefined
               : this.register(tab.browserPageId, undefined, undefined))

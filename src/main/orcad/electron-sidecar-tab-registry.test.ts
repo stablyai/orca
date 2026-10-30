@@ -40,24 +40,33 @@ describe('ElectronSidecarTabRegistry', () => {
     )
   })
 
-  it('scopes a listed popup to its opener without making it active', () => {
+  it('keeps a listed popup with its opener: scoped, listed last, and handing back to it on close', () => {
     const registry = new ElectronSidecarTabRegistry()
     registry.register('sidecar-a', 'public-a', 'worktree-a')
+    registry.register('sidecar-b', 'public-b', 'worktree-a')
 
     const tabs = registry.reconcileTabs(
       [
-        { browserPageId: 'sidecar-a', active: true },
-        { browserPageId: 'popup-7', openerBrowserPageId: 'sidecar-a' }
+        { browserPageId: 'sidecar-a' },
+        { browserPageId: 'sidecar-b', active: true },
+        { browserPageId: 'popup-7', openerBrowserPageId: 'sidecar-b' }
       ],
       'worktree-a'
     )
-
-    expect(tabs).toEqual([
-      expect.objectContaining({ browserPageId: 'public-a', index: 0 }),
-      expect.objectContaining({ browserPageId: 'popup-7', openerBrowserPageId: 'public-a' })
-    ])
+    expect(tabs[2]).toEqual(
+      expect.objectContaining({ browserPageId: 'popup-7', openerBrowserPageId: 'public-b' })
+    )
     expect(registry.require('popup-7', 'worktree-a').sidecarPageId).toBe('popup-7')
-    expect(registry.active('worktree-a').publicPageId).toBe('public-a')
+    expect(registry.active('worktree-a').publicPageId).toBe('public-b')
+
+    registry.register('sidecar-c', 'public-c', 'worktree-a')
+    expect(registry.pageAt('worktree-a', 2).publicPageId).toBe('public-c')
+    expect(registry.pageAt('worktree-a', 3).publicPageId).toBe('popup-7')
+
+    const popup = registry.require('popup-7')
+    registry.setActive(popup)
+    registry.delete(popup)
+    expect(registry.active('worktree-a').publicPageId).toBe('public-b')
   })
 
   it('rewrites page ids in tab and command results', () => {

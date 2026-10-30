@@ -111,8 +111,12 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     worktreeId: string,
     excludedWebContentsId?: number
   ): number | null {
-    for (const [, wcId] of this.getRegisteredTabs(worktreeId)) {
-      if (wcId === excludedWebContentsId) {
+    for (const [tabId, wcId] of this.getRegisteredTabs(worktreeId)) {
+      // A closing tab's popups close with it, so only tabs can take over.
+      if (
+        wcId === excludedWebContentsId ||
+        this.browserManager.getTabIdForWebContentsId(wcId) !== tabId
+      ) {
         continue
       }
       if (this.getWebContents(wcId)) {
