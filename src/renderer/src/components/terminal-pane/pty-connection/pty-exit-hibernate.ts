@@ -42,10 +42,12 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
   type ProcessExitState = {
     startup: PtyPaneStartup
     detector: GitBashConsoleCapacityDetector
+    userInteracted: boolean
   }
   session.createProcessExitState = (startup: PtyPaneStartup): ProcessExitState => ({
     startup,
-    detector: createGitBashConsoleCapacityDetector()
+    detector: createGitBashConsoleCapacityDetector(),
+    userInteracted: false
   })
   session.currentProcessExitState = session.createProcessExitState(session.paneStartup)
   session.processExitStateByPtyId = new Map<string, ProcessExitState>()
@@ -57,6 +59,13 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     if (replacedPtyId && replacedPtyId !== ptyId) {
       session.processExitStateByPtyId.delete(replacedPtyId)
     }
+  }
+  // Mark attempts against the bound PTY so a late acknowledgement cannot contaminate its replacement.
+  session.noteTerminalInputForPty = (ptyId: string | null | undefined): void => {
+    const state: ProcessExitState =
+      (ptyId ? session.processExitStateByPtyId.get(ptyId) : undefined) ??
+      session.currentProcessExitState
+    state.userInteracted = true
   }
   session.focusSurvivingPtyPaneAfterKeptExit = (): void => {
     if (session.manager.getActivePane()?.id !== session.pane.id) {
@@ -256,14 +265,20 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return
     }
     session.manager.setPaneGpuRendering(session.pane.id, true)
-    const failedLocalProcess = session.runtimeEnvironmentId === null && exitCode !== 0
-    if (failedLocalProcess && session.deps.onPaneProcessDied) {
-      const gitBashConsoleCapacityFailure = processExitState.detector.detected()
+    // Only the exact console failure owns this overlay; other exits keep the existing newborn guards.
+    const gitBashConsoleCapacityFailure =
+      session.isNativeWindowsConpty &&
+      session.runtimeEnvironmentId === null &&
+      exitCode !== 0 &&
+      session.spawnedFreshPtyId === ptyId &&
+      !processExitState.userInteracted &&
+      processExitState.detector.detected()
+    if (gitBashConsoleCapacityFailure && session.deps.onPaneProcessDied) {
       session.deps.onPaneProcessDied({
         paneId: session.pane.id,
         exitCode,
-        startup: gitBashConsoleCapacityFailure ? processExitState.startup : null,
-        reason: gitBashConsoleCapacityFailure ? 'git-bash-console-capacity' : 'process-failed'
+        startup: processExitState.startup,
+        reason: 'git-bash-console-capacity'
       })
       return
     }

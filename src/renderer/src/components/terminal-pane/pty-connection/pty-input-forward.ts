@@ -76,6 +76,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
+    session.noteTerminalInputForPty(currentPtyId)
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'
     const intent = session.pendingTerminalInputIntentFor(data)
