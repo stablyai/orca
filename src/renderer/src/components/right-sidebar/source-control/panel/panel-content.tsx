@@ -13,6 +13,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
   const {
     activeConnectionId,
+    activeOpenBranchPath,
     activeOpenRowKeys,
     branchEntries,
     branchSummary,
@@ -215,6 +216,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           worktreePath={worktreePath}
           revealInExplorer={revealInExplorer}
           activeConnectionId={activeConnectionId}
+          activeOpenBranchPath={activeOpenBranchPath}
           openCommittedDiff={openCommittedDiff}
           openBranchAllDiffs={openBranchAllDiffs}
           diffCommentCountByPath={diffCommentCountByPath}

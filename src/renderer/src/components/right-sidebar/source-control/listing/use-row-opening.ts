@@ -7,7 +7,11 @@ import type {
   GitBranchCompareSummary
 } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
+import {
+  buildActiveOpenFileSignature,
+  buildActiveOpenRowKeys,
+  resolveActiveOpenBranchPath
+} from './active-open-file-keys'
 import type { FlatEntry } from './use-selection'
 import {
   isSourceControlSplitOpenModifier,
@@ -80,6 +84,7 @@ export function useSourceControlRowOpening({
     () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
     [activeOpenAvailableRowKeys, activeOpenFileSignature]
   )
+  const activeOpenBranchPath = resolveActiveOpenBranchPath(activeOpenFileSignature)
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => {
@@ -130,5 +135,11 @@ export function useSourceControlRowOpening({
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
 
-  return { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff }
+  return {
+    resolveSplitTargetGroupId,
+    activeOpenRowKeys,
+    activeOpenBranchPath,
+    handleOpenDiff,
+    openCommittedDiff
+  }
 }

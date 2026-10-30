@@ -2,6 +2,7 @@ import React from 'react'
 import { MessageSquare } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
+import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
@@ -17,6 +18,7 @@ export function BranchEntryRow({
   currentWorktreeId,
   worktreePath,
   depth = 0,
+  isOpenFile = false,
   onRevealInExplorer,
   connectionId,
   onOpen,
@@ -27,6 +29,7 @@ export function BranchEntryRow({
   currentWorktreeId: string
   worktreePath: string
   depth?: number
+  isOpenFile?: boolean
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   connectionId?: string | null
   onOpen: (event?: SourceControlRowOpenEvent) => void
@@ -48,7 +51,13 @@ export function BranchEntryRow({
       onRevealInExplorer={onRevealInExplorer}
     >
       <div
-        className="group flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40"
+        data-testid="source-control-branch-entry"
+        data-source-control-path={entry.path}
+        data-current={isOpenFile ? 'true' : undefined}
+        className={cn(
+          'group flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
+          isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40'
+        )}
         style={{
           paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
         }}
