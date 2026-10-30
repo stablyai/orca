@@ -20,6 +20,7 @@ import { getHostDisplayLabelOverrides } from '../../shared/host-setting-override
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { RuntimeStore } from './runtime-store-contract'
 import {
@@ -72,6 +73,8 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
+      codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
@@ -265,6 +268,8 @@ export class RuntimeClientSettingsController {
         return
       }
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
+        // R42, COMPAT(wsl-bridge): the bridge's panes in this distro share these entries; drop at D4.
+        keepSharedEntries: isWslHostOrcadProcess(),
         shouldHydrateShellPath: getAppEnvironment().isPackaged(),
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {

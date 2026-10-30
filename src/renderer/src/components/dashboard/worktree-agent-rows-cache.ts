@@ -1,3 +1,4 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -146,6 +147,9 @@ export function selectWorktreeAgentRowsCached(args: {
   const rows = applyAgentRowLineage(
     buildWorktreeAgentRows({
       tabs: tabs ?? [],
+      representedTabs: state.unifiedTabsByWorktree
+        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
+        : undefined,
       entries,
       retained,
       runtimePaneTitlesByTabId: paneTitlesByTabId,

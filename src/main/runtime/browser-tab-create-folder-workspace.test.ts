@@ -25,7 +25,7 @@ const FOLDER = 'folder:folder-1'
 function createHost(overrides: Record<string, unknown>): RuntimeBrowserCommandHost {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test host implements only the members browserTabCreate reads.
   return {
-    resolveWorktreeSelector: vi.fn(async () => {
+    resolveWorkspaceSelector: vi.fn(async () => {
       throw new Error('selector_not_found')
     }),
     resolveBrowserWorkspace: vi.fn(async () => ({ id: FOLDER })),

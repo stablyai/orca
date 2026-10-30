@@ -12,7 +12,7 @@ import type { Repo } from '../../../src/shared/repo-types'
 import type { WorkspaceVisibleTabType } from '../../../src/shared/tab-types'
 import type { TerminalTab } from '../../../src/shared/terminal-tab-types'
 import type { Worktree } from '../../../src/shared/worktree/types'
-import type { DictationMeterState } from '../../../src/renderer/src/components/dictation/dictation-audio-meter'
+import type { DictationMeterState } from '../../../src/shared/dictation-audio-meter'
 import type { ReactCommitHook } from './tab-render-recorder'
 
 // window.__store is the bound Zustand store, including its StoreApi.

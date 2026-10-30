@@ -22,6 +22,7 @@ import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-ba
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
     session: MobileNativeChatSession
+    asyncQuestionSourceScope: string
     isWorking: boolean
     /** Desktop's Stop rule: a running turn, or conversation Stop while working or sending. */
     canStop: boolean
@@ -62,8 +63,11 @@ export type MobileStructuredAgentSessionArgs = {
   hostSupport: StructuredAgentSessionHostSupport | null
   agent: string | null
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
+  onCommandsChanged?: () => void
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  composerScopeKey?: string | null
   appendComposerText?: (text: string) => boolean
+  onQueuedEditNotice?: (message: string) => void
   onSendError: MobileNativeChatSendErrorReporter
   // Accepted queued actions retire the route’s failure banner.
   onActionResolved?: () => void

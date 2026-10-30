@@ -37,10 +37,11 @@ import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { NativeChatQueuedMessageEditor } from './NativeChatQueuedMessageEditor'
-import type { QueuedEditAttachTarget } from './use-native-chat-queued-edit-image-intake'
+import { NativeChatQueuedMessageComposer } from './NativeChatQueuedMessageComposer'
+import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import { nativeChatImageLabelCopy } from './native-chat-image-label'
+import { NATIVE_CHAT_UNKERNED_CSS, nativeChatTextHasUnkernedRun } from './native-chat-unkerned-runs'
 
 /** The visible caption under the text; the default waiting hold needs none. */
 export function queuedMessageCardCaption(
@@ -171,7 +172,7 @@ export function NativeChatQueuedMessageCard({
     return (
       // The editor fills the row, so a drop anywhere on the card reaches it.
       <li data-queued-message-id={card.messageId} data-queued-message-state={card.state}>
-        <NativeChatQueuedMessageEditor
+        <NativeChatQueuedMessageComposer
           editor={editor}
           attachTo={editAttachTo}
           sender={sender}
@@ -344,6 +345,7 @@ export function NativeChatQueuedMessageCard({
         <p
           id={textId}
           className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm"
+          style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
         >
           {line}
         </p>

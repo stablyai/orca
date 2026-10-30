@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-na
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session-wire'
@@ -16,8 +17,8 @@ import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollLi
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 
 // Use NUL-prefixed header keys because message ids cannot contain NUL.
-const RESUME_KEY = '\u0000resume'
-const CLEAR_KEY = '\u0000clear'
+// Resume and Clear all share one key: a Resume would send the cards a Clear is deleting.
+const QUEUE_KEY = '\u0000queue'
 const MOVE_KEY = '\u0000move'
 
 export type MobileNativeChatQueuedMessagesProps = {
@@ -47,6 +48,7 @@ export function MobileNativeChatQueuedMessages({
   steerHeld = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   // Use a ref to block duplicate actions before disabled state renders.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
   const inFlightRef = useRef(new Set<string>())
@@ -62,9 +64,9 @@ export function MobileNativeChatQueuedMessages({
   const run = (
     messageId: string,
     action?: (id: string) => Promise<boolean>,
-    resource?: string
+    resources: readonly string[] = []
   ): boolean => {
-    const keys = resource ? [messageId, resource] : [messageId]
+    const keys = [messageId, ...resources]
     if (keys.some((key) => inFlightRef.current.has(key)) || !action) {
       return false
     }
@@ -80,8 +82,10 @@ export function MobileNativeChatQueuedMessages({
     })()
     return true
   }
-  const resuming = busyIds.has(RESUME_KEY)
-  const clearing = busyIds.has(CLEAR_KEY)
+  const queueBusy = busyIds.has(QUEUE_KEY)
+  const messageIds = cards.map((card) => card.messageId)
+  // Clear all takes every card, so it waits for any card's own action rather than skip that card.
+  const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
   // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
   const menuCard = cards.find((card) => card.messageId === menuFor)
   if (menuFor !== null && !menuCard) {
@@ -92,43 +96,46 @@ export function MobileNativeChatQueuedMessages({
       {onClearAll ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: clearing }}
-          accessibilityLabel="Delete every queued message"
+          accessibilityState={{ disabled: clearBusy }}
+          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete every queued message')}
           style={({ pressed }) => [
             styles.headerAction,
             pressed && styles.pressed,
-            clearing && styles.disabled
+            clearBusy && styles.disabled
           ]}
-          disabled={clearing}
-          onPress={() => void run(CLEAR_KEY, () => onClearAll(cards.map((card) => card.messageId)))}
+          disabled={clearBusy}
+          onPress={() => void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds)}
         >
           <Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />
-          <Text style={styles.actionLabel}>Clear all</Text>
+          <Text style={styles.actionLabel}>{t('chat.queuedMessages.clearAll', 'Clear all')}</Text>
         </Pressable>
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ disabled: resuming }}
-        accessibilityLabel="Resume sending the queued messages"
+        accessibilityState={{ disabled: queueBusy }}
+        accessibilityLabel={t(
+          'chat.queuedMessages.resumeSending',
+          'Resume sending the queued messages'
+        )}
         style={({ pressed }) => [
           styles.headerAction,
           pressed && styles.pressed,
-          resuming && styles.disabled
+          queueBusy && styles.disabled
         ]}
-        disabled={resuming}
-        onPress={() => void run(RESUME_KEY, onResume && (() => onResume()))}
+        disabled={queueBusy}
+        onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()))}
       >
         <Play size={12} color={colors.textPrimary} strokeWidth={2} />
-        <Text style={styles.actionLabel}>Resume</Text>
+        <Text style={styles.actionLabel}>{t('chat.queuedMessages.resume', 'Resume')}</Text>
       </Pressable>
     </>
   ) : null
   const attentionCaption = !expanded ? cards.find((card) => card.needsAttention)?.caption : null
   const headerCountStyle = [styles.headerCount, attentionCaption && styles.captionReturned]
   return (
-    <View style={styles.list}>
+    <View style={[styles.list, editor && styles.inlineList]}>
       {}
-      <View style={styles.box} testID="queued-box">
+      <View style={[styles.box, editor && styles.inlineBox]} testID="queued-box">
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"
@@ -140,13 +147,15 @@ export function MobileNativeChatQueuedMessages({
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded }}
-            accessibilityLabel="Queued messages"
+            accessibilityLabel={t('chat.queuedMessages.title', 'Queued messages')}
             style={({ pressed }) => [styles.headerToggle, pressed && styles.pressed]}
             onPress={() => setExpanded(!expanded)}
           />
           <View style={styles.headerLabels} pointerEvents="none">
             <Text style={[styles.headerLabel, pause && styles.headerLabelPaused]}>
-              {pause ? 'Paused' : 'Queued'}
+              {pause
+                ? t('chat.queuedMessages.pausedState', 'Paused')
+                : t('chat.queuedMessages.queuedState', 'Queued')}
             </Text>
             <Text
               style={styles.headerLabel}
@@ -178,6 +187,7 @@ export function MobileNativeChatQueuedMessages({
           <MobileQueuedMessageScrollList
             messageIds={cards.map((card) => card.messageId)}
             newestIsPersons={!cards.at(-1)?.attribution}
+            inlineEditorActive={editor !== undefined}
           >
             {(reveal, drag) => {
               const renderRow = (card: MobileQueuedMessageCard, handle?: React.ReactNode) => (
@@ -202,7 +212,7 @@ export function MobileNativeChatQueuedMessages({
                   isMoveDisabled={(card) => busyIds.has(MOVE_KEY) || busyIds.has(card.messageId)}
                   rowPresentation="plain"
                   renderRow={renderRow}
-                  onMove={(move) => run(move.movedId, () => onMove(move), MOVE_KEY)}
+                  onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY])}
                   {...drag}
                 />
               ) : (
@@ -217,7 +227,8 @@ export function MobileNativeChatQueuedMessages({
         title={menuCard?.line}
         actions={[
           {
-            label: 'Edit message',
+            id: 'editMessage',
+            label: t('chat.queuedMessages.editMessage', 'Edit message'),
             icon: Pencil,
             // Runs once the sheet's Modal is gone, so the composer Edit fills can take focus.
             closeBeforePress: true,

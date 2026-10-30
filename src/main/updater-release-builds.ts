@@ -13,6 +13,7 @@ import { parseRetryAfterHeaderMs } from '../shared/retry-after-header'
 import { getGhRateLimitBlockedUntilMs, recordGhPrimaryRateLimit } from './git/gh-rate-limit-breaker'
 import { isValidVersion } from './updater-fallback'
 import { rejectReleaseApiToken, resolveReleaseApiToken } from './updater-release-api-token'
+import { UpdaterCodedError } from './updater/updater-coded-error'
 
 const FETCH_TIMEOUT_MS = 8000
 const MAX_LISTED_BUILDS = 100
@@ -60,12 +61,18 @@ export function rateLimitResetAtMs(headers: Headers, nowMs: number): number | nu
   return resetEpochSeconds > 0 ? resetEpochSeconds * 1000 : null
 }
 
-export function describeRateLimitReset(resetAtMs: number | null, nowMs: number): string {
+function rateLimitError(resetAtMs: number | null, nowMs: number, signedIn: boolean): Error {
   if (resetAtMs === null) {
-    return 'in a few minutes'
+    return new UpdaterCodedError(signedIn ? 'rateLimitedSoon' : 'rateLimitedSoonSignedOut')
   }
   const minutes = Math.ceil((resetAtMs - nowMs) / 60_000)
-  return minutes <= 1 ? 'in about a minute' : `in about ${minutes} minutes`
+  if (minutes <= 1) {
+    return new UpdaterCodedError(signedIn ? 'rateLimitedInMinute' : 'rateLimitedInMinuteSignedOut')
+  }
+  return new UpdaterCodedError(
+    signedIn ? 'rateLimitedInMinutes' : 'rateLimitedInMinutesSignedOut',
+    { count: minutes }
+  )
 }
 
 function releaseListError(
@@ -75,18 +82,13 @@ function releaseListError(
   signedIn: boolean
 ): Error {
   if (res.status === 404) {
-    return new Error(`No releases repository found at ${repo}.`)
+    return new UpdaterCodedError('releaseRepoNotFound', { repo })
   }
   if (isRateLimited(res)) {
     const nowMs = Date.now()
-    const retry = describeRateLimitReset(rateLimitResetAtMs(res.headers, nowMs), nowMs)
-    return new Error(
-      signedIn
-        ? `GitHub rate limit reached. Try again ${retry}.`
-        : `GitHub rate limit reached. Try again ${retry}, or run \`gh auth login\` so Orca can use your account's higher limit.`
-    )
+    return rateLimitError(rateLimitResetAtMs(res.headers, nowMs), nowMs, signedIn)
   }
-  return new Error(`Could not list ${channel} builds (HTTP ${res.status}).`)
+  return new UpdaterCodedError('releaseListFailed', { channel, status: res.status })
 }
 
 export function getReleaseDownloadUrlForRepo(repo: string, tag: string): string {
@@ -180,7 +182,7 @@ export async function listReleaseBuilds(
   }
   const payload: unknown = await res.json()
   if (!Array.isArray(payload)) {
-    throw new Error(`Could not read the ${channel} release list.`)
+    throw new UpdaterCodedError('releaseListUnreadable', { channel })
   }
   const builds = payload
     .map((entry) => parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform))
@@ -198,7 +200,7 @@ export type ResolvedTargetBuild = {
 export function resolveTargetBuild(channel: ReleaseChannel, tag: string): ResolvedTargetBuild {
   const version = normalizeTagToVersion(tag)
   if (!isValidVersion(version)) {
-    throw new Error(`"${tag}" is not a valid release tag.`)
+    throw new UpdaterCodedError('invalidReleaseTag', { tag })
   }
   const repo = getReleaseRepoForChannel(channel)
   return { tag, version, feedUrl: getReleaseDownloadUrlForRepo(repo, tag) }

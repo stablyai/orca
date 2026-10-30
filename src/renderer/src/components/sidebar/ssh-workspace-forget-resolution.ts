@@ -1,40 +1,30 @@
-import type { Repo } from '../../../../shared/repo-types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
 
-/** Choose normal deletion, reconnect-or-forget, or forget-only from SSH target state. */
+/** Choose normal deletion or forget-only from the route a removal would take. */
 export type SshWorkspaceForgetResolution =
   | { kind: 'not-ssh' }
-  // Connected targets allow normal remote removal.
-  | { kind: 'connected'; targetId: string }
-  // Configured offline targets offer reconnect or local forget.
-  | { kind: 'disconnected'; targetId: string; status: SshConnectionState['status'] }
-  // Removed targets cannot reconnect; only local forget remains.
+  // A saved target whose workspace this client can only forget.
+  | { kind: 'saved'; targetId: string }
+  // Removed targets keep only their local records.
   | { kind: 'ghost'; targetId: string }
 
 export function resolveSshWorkspaceForget(args: {
-  repo: Pick<Repo, 'connectionId'> | null | undefined
-  sshConnectionStates: ReadonlyMap<string, SshConnectionState>
+  route: WorktreeOperationRoute | null
   // Keys are configured SSH target ids (targets that still exist in settings).
   sshTargetLabels: ReadonlyMap<string, string>
 }): SshWorkspaceForgetResolution {
-  const connectionId = args.repo?.connectionId?.trim()
-  // Runtime-owned ephemeral targets manage their lifecycle and must never become user-facing ghosts.
-  if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
+  const host = parseExecutionHostId(args.route?.executionHostId)
+  // An Orca server deletes the SSH workspaces it serves; this app's main serves no ssh: host, connected or not.
+  if (
+    host?.kind !== 'ssh' ||
+    args.route?.runtimeEnvironmentId ||
+    // Runtime-owned ephemeral targets manage their lifecycle and must never become user-facing ghosts.
+    isRuntimeOwnedSshTargetId(host.targetId)
+  ) {
     return { kind: 'not-ssh' }
   }
-
-  const isConfigured = args.sshTargetLabels.has(connectionId)
-  const status = args.sshConnectionStates.get(connectionId)?.status
-
-  // An unconfigured target cannot reconnect; offer local forget for its remaining records.
-  if (!isConfigured) {
-    return { kind: 'ghost', targetId: connectionId }
-  }
-
-  if (status === 'connected') {
-    return { kind: 'connected', targetId: connectionId }
-  }
-
-  return { kind: 'disconnected', targetId: connectionId, status: status ?? 'disconnected' }
+  return args.sshTargetLabels.has(host.targetId)
+    ? { kind: 'saved', targetId: host.targetId }
+    : { kind: 'ghost', targetId: host.targetId }
 }

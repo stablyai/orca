@@ -11,6 +11,7 @@ import { getRepoLucideIconOptions } from '../../../repo/repo-icon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { repoIconPickFailureText } from './repo-icon-pick-failure-text'
 
 const RepositoryIconEmojiPicker = lazyWithRetry(
   () =>
@@ -44,6 +45,10 @@ export function RepositoryIconTabs({
     try {
       const result = await window.api.shell.pickRepoIconImage()
       if (!result || !mountedRef.current) {
+        return
+      }
+      if ('error' in result) {
+        toast.error(repoIconPickFailureText(result))
         return
       }
       onSetIcon({

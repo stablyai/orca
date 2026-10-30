@@ -108,6 +108,7 @@ const ARTIFACT = {
 const MANUAL_INSTALL_STATUS = {
   state: 'error',
   message: 'Quit Orca before running the system package install command.',
+  messageCode: 'linuxPackageManualInstall',
   recovery: {
     kind: 'linux-package-install',
     packageType: 'deb',

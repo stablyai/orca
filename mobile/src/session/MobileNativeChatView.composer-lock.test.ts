@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -22,6 +23,7 @@ vi.mock('react-native-gesture-handler', async () => {
 })
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
+  ChevronUp: 'ChevronUp',
   ChevronsDownUp: 'ChevronsDownUp',
   ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
@@ -182,4 +184,71 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
       expect(composer().props.sendDisabled).toBe(false)
     })
   })
+
+  // Why: as on desktop, the card is the one answering surface; the composer keeps its draft underneath.
+  describe('a shown prompt card replaces the composer', () => {
+    const permission = { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] }
+    const composerHidden = (): boolean => {
+      let node = composer().parent
+      while (node && hostType(node) !== 'View') {
+        node = node.parent
+      }
+      return node?.props.style?.display === 'none'
+    }
+
+    it('hides the mounted composer and its draft until the card clears', async () => {
+      await render({ permission, composerText: 'half-written' })
+      const mounted = composer()
+      expect(composerHidden()).toBe(true)
+      expect(mounted.props.value).toBe('half-written')
+
+      await update({ permission: null, composerText: 'half-written' })
+      expect(composerHidden()).toBe(false)
+      expect(composer()).toBe(mounted)
+    })
+
+    it('keeps the queued tray in view, as desktop does', async () => {
+      await render({ permission, composerTray: { content: createElement('QueuedTray') } })
+      let node = root().find((n) => hostType(n) === 'QueuedTray').parent
+      while (node && hostType(node) !== 'View') {
+        node = node.parent
+      }
+      expect(node?.props.style?.display).not.toBe('none')
+      expect(composerHidden()).toBe(true)
+    })
+
+    it('keeps the composer for an approval this build cannot draw, so a turn can cancel it', async () => {
+      await render({
+        permission: { ...permission, subject: JSON.parse('{"kind":"diff"}') },
+        structuredActivityUi: true
+      })
+      expect(composerHidden()).toBe(false)
+    })
+
+    it('keeps the composer for an ask only the terminal can answer, so Stop stays reachable', async () => {
+      const ask = {
+        questions: [{ question: 'Tabs?', multiSelect: false, options: [{ label: 'Tabs' }] }]
+      }
+      await render({ ask, askRequiresTerminal: true })
+      expect(composerHidden()).toBe(false)
+
+      await update({ ask })
+      expect(composerHidden()).toBe(true)
+    })
+
+    it('shows the composer for a collapsed card and while dictation runs or lands', async () => {
+      await render({ permission, collapsedPrompt: { title: 'Approve?', expand: () => {} } })
+      expect(composerHidden()).toBe(false)
+
+      await update({ permission, micActive: true })
+      expect(composerHidden()).toBe(false)
+
+      await update({ permission, micProcessing: true })
+      expect(composerHidden()).toBe(false)
+    })
+  })
 })
+
+vi.mock('./MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

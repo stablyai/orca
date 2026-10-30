@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { listStructuredProviderSessionOwnership } from './structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../structured-agent-session-history-adoption'
 import { cp, mkdtemp, rm } from 'node:fs/promises'
@@ -333,7 +334,7 @@ describe('same-conversation clear', () => {
   it('starts fresh after a restart between clear and first send', async () => {
     await clearCommits()
     await restartHost()
-    await host.restoreReadableSessions(store.listVisibleSessionIds())
+    await openTestChats(host, store.listVisibleSessionIds())
     expect(await host.send(caller, sendParams('after restart'))).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(adapter.dispatch).toHaveBeenCalledTimes(1))
     expect(vi.mocked(adapter.acquire).mock.calls.at(-1)![0].identity.providerHandle).toBeNull()
@@ -371,7 +372,7 @@ describe('same-conversation clear', () => {
         replacementSessionId: 'old-clear-destination'
       }
     })
-    await host.restoreReadableSessions(store.listVisibleSessionIds())
+    await openTestChats(host, store.listVisibleSessionIds())
     expect(await host.send(caller, sendParams('still this conversation'))).toMatchObject({
       ok: true
     })

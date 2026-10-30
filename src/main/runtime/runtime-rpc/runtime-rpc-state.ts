@@ -31,6 +31,7 @@ import type {
   PairingOfferUnavailable
 } from './runtime-rpc-pairing-types'
 import { DEFAULT_WS_PORT } from './runtime-rpc-pairing-types'
+import { DeclaredDesktopClients } from '../declared-desktop-clients'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -76,6 +77,7 @@ export class RuntimeRpcState {
   protected mobileDesktopRelay: MobileDesktopRelay | null = null
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
   protected detachPairedServerRows: (() => void) | null = null
+  protected readonly declaredDesktopClients = new DeclaredDesktopClients()
   // Why: lets an automatic mint install a provider whose launch-time construction failed.
   protected mobileRelayPairingProviderInstaller: (() => Promise<unknown>) | null = null
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()

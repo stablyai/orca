@@ -7,6 +7,7 @@ import {
   spacing,
   typography
 } from './mobile-tasks-dependencies'
+import { FIELD_MIN_HEIGHT } from '../components/composer-input/composer-input-styles'
 
 export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
   boardContainer: {
@@ -158,7 +159,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     flex: 1
   },
   projectPasteButton: {
-    minHeight: 40,
+    minHeight: FIELD_MIN_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center'
   },

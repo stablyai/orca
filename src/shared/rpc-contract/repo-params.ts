@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+import {
+  OptionalBoolean,
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString
+} from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
 
@@ -26,6 +31,9 @@ export const RepoSetBaseRef = z.object({
 })
 
 export const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
+
+/** `background`: a render-driven check, which must not open a stopped WSL distro (E9). Older hosts ignore it. */
+export const RepoHooksCheck = RepoSelector.extend({ background: z.boolean().optional() })
 
 export const RepoSearchRefs = z.object({
   repo: requiredString('Missing repo selector'),
@@ -90,8 +98,10 @@ export const ProjectGroupImportNested = z.discriminatedUnion('mode', [
   })
 ])
 
+/** `wakeWslDistro`: the user saving their own edit, which may start a stopped WSL distro; older hosts drop it. */
 export const RepoIssueCommandWrite = RepoSelector.extend({
-  content: z.string()
+  content: z.string(),
+  wakeWslDistro: OptionalBoolean
 })
 
 export const RepoSparsePresetSave = RepoSelector.extend({

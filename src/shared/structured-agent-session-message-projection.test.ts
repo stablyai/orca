@@ -18,7 +18,7 @@ import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED
 } from './structured-agent-session-dispatch-rejection'
-import { withNativeChatCutTurnNotices } from './native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from './native-chat/transcript/native-chat-cut-turn-notice'
 import { agentSessionFailureFact } from './agent-session-failure'
 import { agentSessionFailureWords } from './agent-session-failure-words'
 

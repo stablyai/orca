@@ -112,9 +112,12 @@ function parseRemoteCount(stdout: string): number {
 }
 
 /** Count configured remotes; zero means either none or unavailable. */
-export async function getRemoteCount(path: string): Promise<number> {
+export async function getRemoteCount(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<number> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     return parseRemoteCount(stdout)
   } catch (err) {
     console.warn('[getRemoteCount] git remote failed', { path, err })

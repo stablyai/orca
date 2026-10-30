@@ -53,6 +53,7 @@ export type NativeChatStructuredComposerTransport = {
   sessionCommands?: readonly AgentSessionSlashCommand[]
   /** Request command refresh; updated choices arrive through sessionCommands. */
   refreshCommands?: () => void
+  setCommandsMenuOpen?: (open: boolean) => void
   /** False when the agent takes no image input, as its host registered it. */
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
@@ -83,6 +84,8 @@ export type NativeChatOptimisticSendOutcome = {
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
+  /** Input-only edit session: every submit saves, Escape cancels, and send-only actions are absent. */
+  editSession?: { save: () => void; cancel: () => void; canSave: boolean }
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */
   paneKey: string
   /** Unsent-draft owner; defaults to paneKey, while structured chats share conversation scope. */
@@ -142,8 +145,10 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  isComposing?: () => boolean
   focus: () => boolean
   insertTypedText: (text: string) => boolean
+  insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
   /** Append deduplicated text after a blank line and place the caret at its end. */

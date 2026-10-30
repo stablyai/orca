@@ -143,7 +143,11 @@ export function createTerminalPixelSizeQueryResponder(
 
 export function installTerminalCapabilityReplyHandlers(
   deps: TerminalCapabilityRepliesDeps
-): IDisposable {
+): IDisposable & { replyPrimaryDeviceAttributesQuery: () => boolean } {
+  const replyPrimaryDeviceAttributesQuery = (): boolean => {
+    const base = deps.da1Response ?? DEFAULT_DA1_RESPONSE
+    return deps.sendInput(deps.sixelSupported?.() ? withSixelDa1Attribute(base) : base) !== false
+  }
   const disposables = [
     registerTerminalDa1Owner(deps.terminal, () =>
       deps.parser.registerCsiHandler(
@@ -154,8 +158,7 @@ export function installTerminalCapabilityReplyHandlers(
           }
           // Never answer replayed queries into the fresh shell; that recreates stray input.
           if (!deps.isReplaying()) {
-            const base = deps.da1Response ?? DEFAULT_DA1_RESPONSE
-            deps.sendInput(deps.sixelSupported?.() ? withSixelDa1Attribute(base) : base)
+            replyPrimaryDeviceAttributesQuery()
           }
           return true
         })
@@ -195,6 +198,7 @@ export function installTerminalCapabilityReplyHandlers(
   ]
 
   return {
-    dispose: () => disposeAll(disposables)
+    dispose: () => disposeAll(disposables),
+    replyPrimaryDeviceAttributesQuery
   }
 }

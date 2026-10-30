@@ -1,4 +1,5 @@
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
 import {
   localBackgroundStreamUnsub,
   localDataUnsub,
@@ -86,6 +87,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (!isCurrentPtyExit(payload)) {
         return
       }
+      // Its distro's hook relay may idle out once no bridge terminal remains.
+      wslBridgePtyPresence.noteExited(payload.id)
       const syntheticExit = session.consumeSyntheticKillExit(payload.id, payload.incarnationId)
       // Daemon restart replaces processes while their panes survive.
       const settleRestartStop = payload.replacedByRestart

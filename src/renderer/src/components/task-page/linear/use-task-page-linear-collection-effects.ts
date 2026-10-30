@@ -1,3 +1,5 @@
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { translate } from '@/i18n/i18n'
 import type { TaskPageLinearInOrcaEffectsModel } from './use-task-page-linear-in-orca-effects'
 import { useEffect } from 'react'
 import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
@@ -73,7 +75,9 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
       .catch((error) => {
         if (!cancelled) {
           setLinearProjectsError(
-            error instanceof Error ? error.message : 'Failed to load projects.'
+            error instanceof Error
+              ? taskProviderErrorText(error.message)
+              : translate('taskProviders.linear.projectsLoadFailed', 'Failed to load projects.')
           )
           setLinearProjectsLoading(false)
         }
@@ -117,7 +121,9 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
             setSelectedLinearProject(null)
             setLinearProjectParentView(null)
             setLinearProjectDetailError(null)
-            setLinearProjectsError('Project was not found.')
+            setLinearProjectsError(
+              translate('taskProviders.linear.projectNotFound', 'Project was not found.')
+            )
             setTaskResumeState({
               linearContext: undefined
             })
@@ -127,7 +133,9 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
       .catch((error) => {
         if (!cancelled) {
           setLinearProjectDetailError(
-            error instanceof Error ? error.message : 'Failed to load project.'
+            error instanceof Error
+              ? taskProviderErrorText(error.message)
+              : translate('taskProviders.linear.projectLoadFailed', 'Failed to load project.')
           )
           setLinearProjectDetailLoading(false)
         }
@@ -174,7 +182,12 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
       .catch((error) => {
         if (!cancelled) {
           setLinearProjectIssuesError(
-            error instanceof Error ? error.message : 'Failed to load project issues.'
+            error instanceof Error
+              ? taskProviderErrorText(error.message)
+              : translate(
+                  'taskProviders.linear.projectIssuesLoadFailed',
+                  'Failed to load project issues.'
+                )
           )
           setLinearProjectIssuesLoading(false)
         }

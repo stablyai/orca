@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { buildMobileCreatePrAction } from './mobile-create-pr-action'
 import { useMobileHostedReviewEligibility } from './use-mobile-hosted-review-eligibility'
 import {
@@ -24,6 +25,7 @@ export function useMobileSourceControlCreatePrAction({
   commitArea,
   createPr
 }: Params) {
+  const t = useMobileTranslation()
   const { status, busyAction } = commitArea
   const upstream = status?.upstreamStatus
   const eligibilityState = useMobileHostedReviewEligibility({
@@ -54,6 +56,6 @@ export function useMobileSourceControlCreatePrAction({
         },
         onCreatePr: createPr
       }),
-    [busyAction, commitArea, createPr, eligibilityState, status?.branch, upstream]
+    [busyAction, commitArea, createPr, eligibilityState, status?.branch, upstream, t]
   )
 }

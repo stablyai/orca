@@ -1,3 +1,5 @@
+// Before any module that builds i18next plural rules; kept out of mobile-i18n so desktop tests need no mobile deps.
+import './src/i18n/plural-rules-polyfill'
 // Headless notification launches do not mount the router layout.
 import './src/notifications/push-background-dismissal'
 import { loadPairedE2EENativeBindings } from './src/transport/paired-e2ee-native-bindings'

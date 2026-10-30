@@ -1,4 +1,4 @@
-import { getRuntimeFileListTarget } from './quick-open-file-list-target'
+import { getRuntimeFileListTarget, useKeyedExcludeRequest } from './quick-open-file-list-target'
 export {
   getRuntimeFileListTarget,
   getNestedWorktreeExcludeRequest
@@ -93,7 +93,7 @@ export function useRuntimeFileListForWorktree({
     () => getRuntimeFileListTarget(worktreeId, worktreePath, repoWorktrees),
     [repoWorktrees, worktreeId, worktreePath]
   )
-  const { excludeRequest } = target
+  const excludeRequest = useKeyedExcludeRequest(target.excludeRequest)
 
   const operationOwnerState = useAppStore(
     useShallow((state) => ({

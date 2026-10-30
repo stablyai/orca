@@ -6,8 +6,11 @@ import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 
 type UseFileExplorerTreeLoadEffectsParams = {
+  /** The store worktree id, keying the user's own switches to this workspace. */
+  workspaceKey: string | null
   visibleFilesWorktreePath: string | null
   displayRootPath?: string | null
   expanded: Set<string>
@@ -27,6 +30,7 @@ type UseFileExplorerTreeLoadEffectsParams = {
 }
 
 export function useFileExplorerTreeLoadEffects({
+  workspaceKey,
   visibleFilesWorktreePath,
   displayRootPath = visibleFilesWorktreePath,
   expanded,
@@ -86,8 +90,9 @@ export function useFileExplorerTreeLoadEffects({
     lastResetWorktreePathRef.current = visibleFilesWorktreePath
     resetSelection()
     setNameFilterQuery('')
-    // Opening a workspace is a user act: it may start its stopped WSL distro.
-    resetAndLoad({ wakeWslDistro: true })
+    // Only the user's own switch here may start its stopped WSL distro (E9), once per switch.
+    const wake = workspaceKey !== null && takeRecentWorkspaceSwitchWake(workspaceKey, 'explorer')
+    resetAndLoad(wake ? { wakeWslDistro: true } : undefined)
     clearFileExplorerUndoHistory()
   }, [visibleFilesWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -117,10 +122,19 @@ export function useFileExplorerTreeLoadEffects({
     void loadDir(displayRootPath, depth)
   }, [visibleFilesWorktreePath, displayRootPath, dirCache, loadingDirPaths, loadDir])
 
+  // Only a folder expanded since the last run of this mount is the user acting (E9): a mount, a
+  // workspace switch or a host loss re-running this with the same folders must not wake WSL.
+  const seenExpandedRef = useRef<{ worktreePath: string | null; dirs: ReadonlySet<string> }>({
+    worktreePath: null,
+    dirs: new Set()
+  })
   useEffect(() => {
     if (!visibleFilesWorktreePath) {
       return
     }
+    const seen = seenExpandedRef.current
+    const sameWorkspace = seen.worktreePath === visibleFilesWorktreePath
+    seenExpandedRef.current = { worktreePath: visibleFilesWorktreePath, dirs: new Set(expanded) }
     for (const dirPath of expanded) {
       // Refresh waves premark owned dirs; skip them to prevent unbounded duplicate loadDir fan-out.
       if (loadingDirPaths.has(dirPath)) {
@@ -135,9 +149,8 @@ export function useFileExplorerTreeLoadEffects({
         continue
       }
       const depth = splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
-      // Runs when the user expands a folder or opens the workspace: a user act may start WSL.
       void loadDir(dirPath, depth, {
-        wakeWslDistro: true,
+        ...(sameWorkspace && !seen.dirs.has(dirPath) ? { wakeWslDistro: true } : {}),
         ...(decision === 'reload' ? { force: true } : {})
       })
     }

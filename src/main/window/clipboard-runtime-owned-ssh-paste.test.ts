@@ -49,7 +49,10 @@ vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () 
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
-import { registerClipboardHandlers } from './clipboard-ipc-handlers'
+import {
+  registerClipboardHandlers,
+  setTrustedClipboardRendererWebContentsId
+} from './clipboard-ipc-handlers'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 
 type SaveImageHandler = (event: unknown, args?: unknown) => Promise<string | null>
@@ -106,6 +109,7 @@ function runtimeCall(method: string): unknown[] | undefined {
 describe('clipboard image paste for a runtime-owned SSH workspace', () => {
   beforeEach(() => {
     installFakeAppEnvironment({ getPath: () => '/tmp' })
+    setTrustedClipboardRendererWebContentsId(rendererEvent.sender.id)
     callRuntimeEnvironmentMock.mockReset()
     fsWriteFileMock.mockReset()
   })

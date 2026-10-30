@@ -1,29 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
+import { nativeChatElapsedSeconds } from '../../../../../src/shared/native-chat-turn-status'
 import {
-  formatNativeChatTurnStatusLabel,
-  NATIVE_CHAT_TURN_STATUS_COPY,
-  nativeChatElapsedSeconds
-} from '../../../../../src/shared/native-chat-turn-status'
+  formatMobileNativeChatTurnStatusLabel,
+  nativeChatTurnStatusCopy
+} from '../native-chat-turn-status-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { AgentTurnOutcome } from '../../../../../src/shared/agent-turn-outcome'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useNow } from '../../../hooks/use-now'
 
 // Stop ticking settled turns so old transcripts retain no timers.
 function useElapsedSeconds(startedAt: number | null, counting: boolean): number {
   // Preserves the pre-stamp epoch for the frame before the turn's startedAt lands.
   const [mountedAt] = useState(() => Date.now())
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!counting) {
-      return
-    }
-    setNow(Date.now())
-    const timer = setInterval(() => setNow(Date.now()), 1_000)
-    return () => clearInterval(timer)
-  }, [counting])
+  const now = useNow(1_000, counting)
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
 }
 
@@ -41,9 +35,10 @@ export function MobileNativeChatTurnStatus({
   onToggleExpanded?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const settled = workedSeconds != null
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
-  const label = formatNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict })
+  const label = formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t)
 
   if (settled && onToggleExpanded) {
     return (
@@ -53,7 +48,7 @@ export function MobileNativeChatTurnStatus({
         hitSlop={6}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={NATIVE_CHAT_TURN_STATUS_COPY.toggleDetails}
+        accessibilityLabel={nativeChatTurnStatusCopy(t).toggleDetails}
       >
         <Text style={styles.label}>{label}</Text>
         <View style={expanded ? styles.caretOpen : undefined}>

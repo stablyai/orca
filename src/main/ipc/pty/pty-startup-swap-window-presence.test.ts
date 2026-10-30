@@ -47,6 +47,11 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
+type PresenceController = {
+  hasPty: (ptyId: string) => boolean | null
+  getPtyAvailability: (ptyId: string) => boolean | null
+}
+
 // During daemon startup, local-provider absence cannot prove restored PTYs dead; await the owning provider or report unknown.
 describe('registerPtyHandlers daemon-swap-window presence', () => {
   const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
@@ -66,10 +71,8 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     )
   }
 
-  const installRuntimeControllerWithBarrier = (
-    barrier: Promise<void>
-  ): { hasPty: (ptyId: string) => boolean | null } => {
-    let controller: { hasPty: (ptyId: string) => boolean | null } | undefined
+  const installRuntimeControllerWithBarrier = (barrier: Promise<void>): PresenceController => {
+    let controller: PresenceController | undefined
     registerWithStartupBarrier(barrier, {
       setPtyController: vi.fn((next) => {
         controller = next
@@ -114,18 +117,23 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
 
     // The pre-swap local provider cannot authoritatively answer for a daemon-owned PTY.
     expect(controller.hasPty('daemon-restored-pty')).toBe(null)
+    expect(controller.getPtyAvailability('daemon-restored-pty')).toBe(null)
 
-    installDaemonTestProvider({ hasPty: (id: string) => id === 'daemon-restored-pty' })
+    installDaemonTestProvider({
+      hasPty: (id: string) => id === 'daemon-restored-pty',
+      getPtyAvailability: () => false
+    })
     barrier.resolve()
 
     await vi.waitFor(() => {
       expect(controller.hasPty('daemon-restored-pty')).toBe(true)
+      expect(controller.getPtyAvailability('daemon-restored-pty')).toBe(false)
     })
   })
 
   it('runtime controller hasPty never answers a paired-runtime handle from the local registry', () => {
     // Exercise remote ownership without a startup barrier; local-provider silence must still remain unknown.
-    let controller: { hasPty: (ptyId: string) => boolean | null } | undefined
+    let controller: PresenceController | undefined
     registerPtyHandlers(
       mainWindow as never,
       {
@@ -140,6 +148,7 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     )
 
     expect(controller?.hasPty('remote:environment@@pty-1')).toBe(null)
+    expect(controller?.getPtyAvailability('remote:environment@@pty-1')).toBe(null)
   })
 
   it('pty:inspectProcess defers a restored daemon id until the provider swap lands instead of answering from the non-owning provider', async () => {
@@ -177,7 +186,7 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
 
   it('keeps the in-process provider authoritative when no startup barrier is configured', async () => {
     // Headless hosts install their sole provider before registration; its absence is authoritative (#12393).
-    let controller: { hasPty: (ptyId: string) => boolean | null } | undefined
+    let controller: PresenceController | undefined
     registerPtyHandlers(
       mainWindow as never,
       {

@@ -5,6 +5,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { canCloseTerminalPane, terminalPaneCloseLabel } from './terminal-pane-close-affordance'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport-types'
 import { TerminalPaneHeaderDropSurface } from './TerminalPaneHeaderDropSurface'
@@ -120,16 +121,13 @@ export default function TerminalPaneHeaderOverlay({
         const isActivePane = activePaneId === pane.id
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
-        const closeLabel =
-          paneCount > 1
-            ? translate(
-                'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                'Close Pane'
-              )
-            : translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
+        const closeLabel = terminalPaneCloseLabel(paneCount)
         // Titled split panes use X to clear titles; titled single panes still need a close control.
         const showCloseButton =
-          showAlwaysOnHeaders && (paneCount > 1 ? !title : showSplitButton && !isTabPinned)
+          showAlwaysOnHeaders &&
+          (paneCount > 1
+            ? !title
+            : canCloseTerminalPane({ paneCount, showSplitButton, isTabPinned }))
         if (!showHeader || !overlayRect) {
           return null
         }

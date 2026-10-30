@@ -4,6 +4,7 @@ import {
   retireRuntimeBrowserClientPage
 } from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
+import { browserManager } from '../../browser/browser-manager'
 import { closeBrowserTabInRenderer } from './browser-tab-renderer-close'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
@@ -22,7 +23,7 @@ export class RuntimeBrowserTabClose {
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'getAgentBrowserBridge'
-      | 'resolveWorktreeSelector'
+      | 'resolveWorkspaceSelector'
       | 'getAvailableAuthoritativeWindow'
       | 'getOffscreenBrowserBackend'
       | 'getAuthoritativeWindow'
@@ -52,7 +53,7 @@ export class RuntimeBrowserTabClose {
         namedPageId &&
         params.worktree &&
         this.targets.retireGhostBrowserSessionRow(
-          (await this.host.resolveWorktreeSelector(params.worktree)).id,
+          (await this.host.resolveWorkspaceSelector(params.worktree)).id,
           namedPageId
         )
       ) {
@@ -62,7 +63,7 @@ export class RuntimeBrowserTabClose {
     }
     const worktreeId = explicitPage
       ? params.worktree
-        ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+        ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
         : undefined
       : await this.targets.resolveBrowserWorktreeId(params.worktree)
 
@@ -84,6 +85,16 @@ export class RuntimeBrowserTabClose {
       if (activeEntry) {
         tabId = activeEntry[0]
       }
+    }
+
+    // Popups are windows, not renderer tabs; close them as the page's own window.close() would.
+    const popupPageId = tabId ?? bridge.getActivePageId(worktreeId)
+    if (
+      popupPageId &&
+      bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
+      (await browserManager.closePopupPage(popupPageId))
+    ) {
+      return { closed: true }
     }
 
     const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()

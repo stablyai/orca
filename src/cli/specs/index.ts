@@ -27,6 +27,7 @@ import { SEARCH_COMMAND_SPECS } from './search'
 import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 import { REFERENCE_COMMAND_SPECS } from './reference'
 import { PORTS_COMMAND_SPECS } from './ports'
+import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './plugin'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -56,5 +57,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...SKILL_COMMAND_SPECS,
   ...SEARCH_COMMAND_SPECS,
   ...PROFILE_STATE_COMMAND_SPECS,
-  ...PORTS_COMMAND_SPECS
+  ...PORTS_COMMAND_SPECS,
+  ...PLUGIN_AUTHORING_COMMAND_SPECS,
+  ...PLUGIN_RUNTIME_COMMAND_SPECS
 ]

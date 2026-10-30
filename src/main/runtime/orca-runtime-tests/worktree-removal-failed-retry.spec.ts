@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   join,
   listWorktreesStrict,
+  localWorktreeFilesystem,
   mkdir,
   mkdtemp,
   removeWorktree,
@@ -26,6 +27,7 @@ import {
 } from '../../worktree-removal-records'
 
 const FAILURE = "error: failed to delete 'node_modules/a/LICENSE': Operation not permitted"
+const FOLLOW_UP_DELETE_FAILURE = "EPERM: operation not permitted, unlink 'node_modules/a/LICENSE'"
 
 describe('runtime Delete on a failed delete’s leftover', () => {
   let directory = ''
@@ -203,18 +205,22 @@ describe('runtime listing straight after a delete fails partway', () => {
       gitLists([])
       throw new Error(FAILURE)
     })
+    // Orca's follow-up delete of the folder Git left also fails, so the row stays listed.
+    vi.spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath').mockRejectedValueOnce(
+      new Error(FOLLOW_UP_DELETE_FAILURE)
+    )
 
     await expect(
       runtime.removeManagedWorktree(`id:${leftoverId}`, {
         force: true,
         waitForBackgroundRemoval: true
       })
-    ).rejects.toThrow(/Operation not permitted/)
+    ).rejects.toThrow(FOLLOW_UP_DELETE_FAILURE)
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(await listLeftover()).toMatchObject({
       path: leftover,
-      removalError: expect.stringMatching(/Operation not permitted/)
+      removalError: expect.stringContaining(FOLLOW_UP_DELETE_FAILURE)
     })
   })
 })

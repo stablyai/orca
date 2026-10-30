@@ -52,7 +52,7 @@ export class SttService {
 
   stopDictation(
     owner = 'desktop',
-    options: { cancelStarting?: boolean } = { cancelStarting: true }
+    options: { cancelStarting?: boolean; discard?: boolean } = { cancelStarting: true }
   ): Promise<void> {
     return stopSttDictation(this.state, owner, options)
   }

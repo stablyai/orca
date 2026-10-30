@@ -4,7 +4,8 @@ import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/orcad-artifa
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
-  parseOrcadProfilePreflight
+  parseOrcadProfilePreflight,
+  type OrcadProfilePreflightResponse
 } from '../../../shared/orcad-profile-preflight'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import {
@@ -27,7 +28,8 @@ import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 export function orcadProfilePreflightCommand(
   host: RemoteHostPlatform,
   directory: string,
-  nonce: string
+  nonce: string,
+  probeDaemonsUnder?: string
 ): string {
   assertPosixOrcadHost(host)
   // New candidates always use pinned Node; host Node fallback could mask an incomplete slot.
@@ -39,28 +41,36 @@ export function orcadProfilePreflightCommand(
     '"$orcad_runtime"',
     '"$orcad_entry"',
     ORCAD_PROFILE_PREFLIGHT_FLAG,
-    quotePosixShell(nonce)
+    quotePosixShell(nonce),
+    ...(probeDaemonsUnder === undefined ? [] : [quotePosixShell(probeDaemonsUnder)])
   ].join(' ')
   return `[ -e ${marker} ] || exit 78; ${orcadNodeSlotRuntimeCommand(host, directory)}${selectOrcadSlotEntryCommand(host, directory)}; ${launch}`
 }
 
+/** Qualify the candidate; given the served data root, it also names the daemon generations alive there. */
 export async function preflightInstalledOrcad(options: {
   conn: OrcadHostTransport
   host: RemoteHostPlatform
   remoteInstallDir: string
+  probeDaemonsUnder?: string
   fullVersion: string
   signal?: AbortSignal
-}): Promise<void> {
+}): Promise<OrcadProfilePreflightResponse> {
   const nonce = randomUUID()
   const command = isWindowsRemoteHost(options.host)
     ? await windowsOrcadProfilePreflightCommand(options, nonce)
-    : orcadProfilePreflightCommand(options.host, options.remoteInstallDir, nonce)
+    : orcadProfilePreflightCommand(
+        options.host,
+        options.remoteInstallDir,
+        nonce,
+        options.probeDaemonsUnder
+      )
   const output = await execCommand(options.conn, command, {
     signal: options.signal,
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     wrapCommand: !isWindowsRemoteHost(options.host)
   })
-  parseOrcadProfilePreflight(output, nonce, ORCAD_NODE_RUNTIME_IDENTITY, options.fullVersion)
+  return parseOrcadProfilePreflight(output, nonce, ORCAD_NODE_RUNTIME_IDENTITY, options.fullVersion)
 }
 
 // Windows uses plain argv; orcad opens no window and needs no background-launch environment.
@@ -69,6 +79,7 @@ async function windowsOrcadProfilePreflightCommand(
     conn: OrcadHostTransport
     host: RemoteHostPlatform
     remoteInstallDir: string
+    probeDaemonsUnder?: string
     signal?: AbortSignal
   },
   nonce: string
@@ -86,6 +97,7 @@ async function windowsOrcadProfilePreflightCommand(
   return orcadWindowsNodeCommandLine(runtime, [
     readWindowsOrcadSlotEntry(slotAnswer, host, remoteInstallDir),
     ORCAD_PROFILE_PREFLIGHT_FLAG,
-    nonce
+    nonce,
+    ...(options.probeDaemonsUnder === undefined ? [] : [options.probeDaemonsUnder])
   ])
 }

@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  APP_MENU_PASTE_EVENT,
-  dispatchAppMenuPasteEvent,
-  handleAppMenuPasteRequest
-} from './app-menu-paste'
+import { APP_MENU_PASTE_EVENT, handleAppMenuPasteRequest } from './app-menu-paste'
 
 function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
@@ -148,6 +144,21 @@ describe('app menu paste', () => {
     expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
   })
 
+  it('native-pastes an image-only clipboard so the control can take the image', async () => {
+    const textarea = appendTextarea()
+    textarea.focus()
+    const performNativePaste = vi.fn()
+
+    const result = await handleAppMenuPasteRequest({
+      readClipboardText: vi.fn(async () => ''),
+      performNativePaste,
+      dispatchOwnedPasteEvent: () => false
+    })
+
+    expect(result).toEqual({ status: 'native-fallback', reason: 'no-clipboard-text' })
+    expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
+  })
+
   it('does not native-fallback when clipboard read fails after focus moves', async () => {
     const textarea = appendTextarea('unchanged')
     const other = appendTextarea('other')
@@ -203,16 +214,5 @@ describe('app menu paste', () => {
     )
     expect(textarea.value).toBe('unchanged')
     expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('exposes a cancellable ownership event', () => {
-    const onPaste = (event: Event): void => {
-      event.preventDefault()
-    }
-    window.addEventListener(APP_MENU_PASTE_EVENT, onPaste)
-
-    expect(dispatchAppMenuPasteEvent()).toBe(true)
-
-    window.removeEventListener(APP_MENU_PASTE_EVENT, onPaste)
   })
 })

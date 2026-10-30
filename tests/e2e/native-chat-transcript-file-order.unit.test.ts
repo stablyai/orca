@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../src/shared/native-chat-types'
 import { projectNativeChatTranscriptMessages } from '../../src/shared/native-chat-transcript-projection'
-import { createNativeChatMerger, replaceList } from '../../src/shared/native-chat-merge'
+import { createNativeChatMerger, replaceList } from '../../src/shared/native-chat/native-chat-merge'
 import { readNativeChatTranscript } from '../../src/main/native-chat/transcript-reader'
 import {
   readNativeChatTranscriptTail,

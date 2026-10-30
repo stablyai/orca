@@ -24,7 +24,9 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
   // Preserve Enterprise host through parsing for host-qualified gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr'])
+  type: z.enum(['issue', 'pr']),
+  // Older hosts strip it and answer with the full lookup.
+  preview: z.boolean().optional()
 })
 
 export const WorkItemDetails = WorkItem

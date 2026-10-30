@@ -280,6 +280,29 @@ describeRender(
       await page.close()
     }, 300_000)
 
+    it('preserves the middle caret after accessory Delete and subsequent typing', async () => {
+      const { errors, page } = await openProbe()
+      await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+      await page.keyboard.type('abcdef')
+      const sentBeforeSelection = await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())
+      await page.evaluate((id) => {
+        document.getElementById(id).setSelectionRange(3, 3)
+      }, LIVE_INPUT_FIELD_ID)
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual(
+        sentBeforeSelection
+      )
+      expect(
+        await page.evaluate(() =>
+          globalThis.__orcaLiveInputProbe.accessory({ bytes: '\x1b[3~', localEdit: 'delete' })
+        )
+      ).toEqual({ kind: 'handled' })
+      expect(await fieldValue(page)).toBe('abcef')
+      await page.keyboard.type('X')
+      expect(await fieldValue(page)).toBe('abcXef')
+      expect(errors).toEqual([])
+      await page.close()
+    }, 300_000)
+
     describe('under an Android keyboard, which composes every word it types', () => {
       // Android WebView Latin keyboard keeps composing region mid-word; native Android reports no range and forwards ASCII immediately.
       const ANDROID_WEBVIEW_USER_AGENT =

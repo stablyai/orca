@@ -6,7 +6,7 @@ import {
   listOpenCodeDatabases,
   listOpenCodeDatabasesInDirectory
 } from '../opencode-usage/opencode-database-discovery'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
 import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
@@ -52,7 +52,7 @@ function opencodeSources(
   issues: AiVaultScanIssue[]
 ): OpenCodeSource[] {
   const onRefusal = (path: string, error: WslTranscriptFsError): void => {
-    recordSessionScanIssue(issues, { agent: 'opencode', path, message: error.message })
+    recordSessionScanIssue(issues, { agent: 'opencode', path, ...scanIssueTextFromError(error) })
   }
   const dataDirectorySource = (dataDirectory: string): OpenCodeSource => ({
     storageDir: join(dataDirectory, 'storage'),

@@ -11,15 +11,21 @@ const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as cons
 
 export function MobileNativeChatComposerMenu({
   rows,
-  onPick
+  onPick,
+  nestedScrollEnabled
 }: {
   rows: readonly ComposerMenuRow[]
   onPick: (row: ComposerMenuRow) => void
+  nestedScrollEnabled?: boolean
 }): React.JSX.Element {
   useMobileColorScheme()
   return (
     <View style={styles.card}>
-      <ScrollView keyboardShouldPersistTaps="always" style={styles.scroll}>
+      <ScrollView
+        keyboardShouldPersistTaps="always"
+        nestedScrollEnabled={nestedScrollEnabled}
+        style={styles.scroll}
+      >
         {rows.map((row, index) => (
           <View key={row.id}>
             {rows[index - 1]?.kind !== row.kind ? (

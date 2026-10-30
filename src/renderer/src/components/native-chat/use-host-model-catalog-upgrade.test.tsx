@@ -1,7 +1,9 @@
+import { useAppStore } from '@/store'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
@@ -60,7 +62,7 @@ function renderOptions(initial: Props = {}) {
         turnId: null,
         unloadedTurnRevisions: undefined,
         mutate,
-        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
+        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' } }
       }),
     { initialProps: initial }
   )
@@ -116,8 +118,28 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
 
 const flush = (): Promise<void> => act(async () => {})
 
+const initialStore = useAppStore.getState()
+afterEach(() => {
+  cleanup()
+  forgetStructuredSessionSelection(sessionId, PAIRED_TARGET)
+  forgetStructuredSessionSelection(`${sessionId}-other`, PAIRED_TARGET)
+  useAppStore.setState(initialStore, true)
+})
 describe('host model catalog read', () => {
   beforeEach(() => {
+    useAppStore.getState().setRuntimeEnvironments([
+      {
+        id: PAIRED_TARGET.environmentId,
+        name: 'catalog host',
+        createdAt: 1,
+        updatedAt: 1,
+        pairingRevision: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [],
+        preferredEndpointId: 'loopback'
+      }
+    ])
     mocks.call.mockReset()
     resetHostModelCatalogSnapshotsForTests()
     sessionCount += 1
@@ -203,6 +225,7 @@ describe('host model catalog read', () => {
     )
     const { result, unmount } = renderOptions({ attached: true })
     await flush()
+    expect(mocks.call.mock.calls.some(([, method]) => method === 'agentSession.options')).toBe(true)
     live.resolve({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-live', confirmed: ['model'] }

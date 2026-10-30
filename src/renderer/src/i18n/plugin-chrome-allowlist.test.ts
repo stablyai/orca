@@ -1,6 +1,6 @@
 /** Reject dead exemption paths and security-copy keys that drift into the plugin-chrome allowlist. */
 import { describe, expect, it } from 'vitest'
-import { translatablePluginChromePaths } from '../../../shared/plugins/plugin-translatable-chrome'
+import { translatablePluginChromePaths } from '../../../shared/plugins/languages/plugin-translatable-chrome'
 
 // Match the security components pinned by plugin-language-pack-artifact.test.ts.
 const SECURITY_COPY_COMPONENTS = [
@@ -9,9 +9,14 @@ const SECURITY_COPY_COMPONENTS = [
   'pluginError',
   'PluginKeybindingConsentPreview',
   'PluginMarketplaceListingRow',
-  'PluginMarketplacePreviewDialog',
+  'PluginUpdateAllDialog',
   'PluginMarketplaceSourceDialog',
-  'PluginVmRecipeConsentPreview'
+  'PluginVmRecipeConsentPreview',
+  // The inline consent and its copy replaced the review dialog.
+  'PluginInstallConsent',
+  'PluginPageAction',
+  'pluginConsentCopy',
+  'pluginInstallAction'
 ]
 
 describe('translatable plugin chrome', () => {

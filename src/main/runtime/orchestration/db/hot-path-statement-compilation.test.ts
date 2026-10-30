@@ -103,7 +103,8 @@ function buildProjection(db: OrchestrationDb): RuntimeAgentOrchestrationProjecti
             processIncarnation: 'inc_1'
           } as OrchestrationCompatibilityTerminalAuthority)
         : null,
-    getAgentStatusSnapshot: () => []
+    getAgentStatusSnapshot: () => [],
+    getSessionRecords: () => null
   })
 }
 

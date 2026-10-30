@@ -1,7 +1,9 @@
 /** Windows sees only wsl.exe and bridge bash lacks OSC 7; inherited ORCA_PANE_KEY identifies shell folders inside the guest. */
 import { isShellProcess } from '../../shared/shell-process-detection'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
-import { peekConfirmedRunningWslDistros } from '../wsl-running-distro-cache'
+import {
+  isWslDistroRunning,
+  wasWslDistroLastSeenRunningSettled
+} from '../wsl-background-distro-gate'
 import { runWslProcess } from './wsl-runner'
 
 export type WslGuestProcessRow = {
@@ -76,10 +78,9 @@ export function readWslGuestPaneProcesses(
     return inFlight
   }
   const read = (async () => {
-    // A client-held live session may belong to a terminated distro; require confirmation before skipping the boot guard.
-    const knownRunning =
-      opts.running === true &&
-      (peekConfirmedRunningWslDistros() ?? []).some((running) => running.toLowerCase() === key)
+    // A client-held live session may belong to a terminated distro; skip the probe only on a list
+    // taken after any stop of the distro settled (a list from before a terminate still names it).
+    const knownRunning = opts.running === true && wasWslDistroLastSeenRunningSettled(distro)
     if (!knownRunning && !(await isWslDistroRunning(distro))) {
       return null
     }

@@ -33,10 +33,14 @@ describe('classifyGhRateLimitBucket', () => {
     expect(classifyGhRateLimitBucket(['search', 'prs', '--author', 'x'])).toBe('search')
   })
 
-  it('classifies graphql and defaults everything else to core', () => {
+  it('classifies graphql endpoints and GraphQL-backed subcommands, defaulting the rest to core', () => {
     expect(classifyGhRateLimitBucket(['api', 'graphql', '-f', 'query=…'])).toBe('graphql')
+    expect(classifyGhRateLimitBucket(['pr', 'list', '--limit', '36'])).toBe('graphql')
+    expect(classifyGhRateLimitBucket(['issue', 'close', '5', '--repo', 'a/b'])).toBe('graphql')
+    expect(classifyGhRateLimitBucket(['repo', 'view', 'a/b', '--json', 'isFork'])).toBe('graphql')
     expect(classifyGhRateLimitBucket(['api', 'repos/a/b/pulls?per_page=36'])).toBe('core')
-    expect(classifyGhRateLimitBucket(['pr', 'list', '--limit', '36'])).toBe('core')
+    expect(classifyGhRateLimitBucket(['run', 'list', '--json', 'status'])).toBe('core')
+    expect(classifyGhRateLimitBucket(['pr'])).toBe('core')
   })
 })
 
@@ -68,6 +72,9 @@ describe('isGhPrimaryRateLimitStderr', () => {
       isGhPrimaryRateLimitStderr(
         'gh: API rate limit exceeded for user ID 1775218. If you reach out to GitHub Support… (HTTP 403)'
       )
+    ).toBe(true)
+    expect(
+      isGhPrimaryRateLimitStderr('GraphQL: API rate limit already exceeded for user ID 1775218.')
     ).toBe(true)
     expect(isGhPrimaryRateLimitStderr('You have exceeded a secondary rate limit.')).toBe(false)
     expect(isGhPrimaryRateLimitStderr('gh: Not Found (HTTP 404)')).toBe(false)

@@ -7,6 +7,9 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
 import { RelayControlClient } from './relay-control-client'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import { RelayUnavailableError } from './relay-readiness'
+import { mobileRelayMintFailureFromUnknown } from '../../../shared/mobile-relay-mint-failure'
 
 const encoder = new TextEncoder()
 
@@ -588,12 +591,59 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     expect(client.isLive()).toBe(true)
   })
 
-  it('rejects a challenge issued beyond the clock tolerance', async () => {
-    const { client } = scriptedControl({ issuedAtOffsetMs: 45_000 })
-
-    await expect(client.connect()).rejects.toThrow('invalid host challenge')
-    expect(client.isLive()).toBe(false)
-  })
+  it.each([38_000, -45_000])(
+    'preserves clock drift of %i ms through readiness, status and serialized pairing failure',
+    async (issuedAtOffsetMs) => {
+      vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+      let currentOffsetMs = issuedAtOffsetMs
+      const onStatus = vi.fn()
+      const coordinator = new RelayAuthCoordinator({
+        readContext: async () => ({
+          identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+          accessToken: 'access-1',
+          relayEntitled: true
+        }),
+        openBroker: async () => {
+          const { client } = scriptedControl({ issuedAtOffsetMs: currentOffsetMs })
+          await client.connect()
+          return client
+        },
+        onStatus,
+        random: () => 1
+      })
+      try {
+        coordinator.reconcile()
+        const readiness = await coordinator.waitForReadiness(0)
+        expect(readiness.ready).toBe(false)
+        if (readiness.ready) {
+          throw new Error('expected clock failure')
+        }
+        const failure = mobileRelayMintFailureFromUnknown({
+          error: new RelayUnavailableError(readiness),
+          stage: 'create_pairing_relay',
+          fallbackCode: 'relay_mint_failed',
+          fallbackMessage: 'Relay pairing invite request failed'
+        })
+        expect(readiness).toMatchObject({
+          reason: 'clock_skew',
+          clockOffsetMs: -issuedAtOffsetMs
+        })
+        expect(failure).toMatchObject({
+          code: 'relay_clock_skew',
+          clockOffsetMs: -issuedAtOffsetMs
+        })
+        expect(onStatus).toHaveBeenLastCalledWith('offline', undefined, -issuedAtOffsetMs)
+        currentOffsetMs = 0
+        coordinator.reconcile()
+        await coordinator.waitForLiveBroker()
+        expect(coordinator.readiness()).toMatchObject({ ready: true })
+        expect(onStatus).toHaveBeenLastCalledWith('registered', undefined, undefined)
+      } finally {
+        coordinator.stop()
+        vi.restoreAllMocks()
+      }
+    }
+  )
 
   it('terminates a silent control after the silence limit and reports closure', async () => {
     vi.useFakeTimers()

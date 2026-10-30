@@ -8,7 +8,7 @@ import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setu
 
 export function useSetupGuideBrowserMilestoneProgress(
   rawProgress: FeatureWallSetupProgress,
-  historicalSplitTerminalDone: boolean
+  preBrowserSetupComplete: boolean
 ): FeatureWallSetupProgress {
   const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
   const browserMilestoneMigrated = useAppStore((s) => s.setupGuideBrowserMilestoneMigrated)
@@ -19,8 +19,7 @@ export function useSetupGuideBrowserMilestoneProgress(
   const pendingLegacyComplete =
     !browserMilestoneMigrated && rawProgress.ready
       ? shouldMarkBrowserMilestoneLegacyComplete({
-          stepDone: rawProgress.stepDone,
-          historicalSplitTerminalDone,
+          preBrowserSetupComplete,
           setupGuideSidebarDismissed
         })
       : false
@@ -45,18 +44,10 @@ export function useSetupGuideBrowserMilestoneProgress(
 }
 
 export function shouldMarkBrowserMilestoneLegacyComplete(input: {
-  stepDone: Partial<Record<FeatureWallSetupStepId, boolean>>
-  historicalSplitTerminalDone: boolean
+  preBrowserSetupComplete: boolean
   setupGuideSidebarDismissed: boolean
 }): boolean {
-  if (input.setupGuideSidebarDismissed) {
-    return true
-  }
-  // The historical pre-browser checklist included the removed split-terminal milestone.
-  return (
-    input.historicalSplitTerminalDone &&
-    FEATURE_WALL_SETUP_STEPS.every((step) => step.id === 'browser' || input.stepDone[step.id])
-  )
+  return input.setupGuideSidebarDismissed || input.preBrowserSetupComplete
 }
 
 export function getSetupGuideBrowserMilestoneAwareProgress(

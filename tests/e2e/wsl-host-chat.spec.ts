@@ -4,128 +4,31 @@
  * there, then sees the distro stop: chat calls refuse without booting it (E9) and switching back
  * to the workspace boots it so the chat continues.
  */
-// Minimum launch copied from wsl-host-fake-transport.spec.ts; move to a shared helper once one is on main.
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  _electron as electron,
-  type ElectronApplication,
-  type Page
-} from '@stablyai/playwright-test'
-import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
-import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
-import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
-import { expect, forwardElectronProcessLogs } from './helpers/orca-app'
+import { expect } from './helpers/orca-app'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { callEnvironment } from './helpers/paired-host-terminal'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { SUPPORTED, test } from './helpers/structured-claude-stub'
 import { waitForSessionReady } from './helpers/store'
-import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
-
-const WSL_ENVIRONMENT_ID = 'wsl:ubuntu'
-const RUNNING = [{ name: 'Ubuntu', state: 'running', version: 2 }]
-const STOPPED = [{ name: 'Ubuntu', state: 'stopped', version: 2 }]
-
-async function launchDesktopWithFakeWsl(
-  fake: Record<string, unknown>,
-  testInfo: Parameters<typeof forwardElectronProcessLogs>[1]
-): Promise<{ app: ElectronApplication; page: Page; dispose: () => Promise<void> }> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-chat-desktop-'))
-  writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-  )
-  const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
-  void _unused
-  const isolation = createElectronHomeIsolation({
-    inheritedEnv: cleanEnv,
-    launchEnv: {},
-    extraEnv: {
-      [WSL_HOSTS_INTERNAL_GATE_ENV]: '1',
-      ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify(fake)
-    },
-    userDataDir
-  })
-  const app = await electron.launch({
-    args: getOrcaElectronLaunchArgs(path.join(process.cwd(), 'out', 'main', 'index.js'), false),
-    env: { ...isolation.env, NODE_ENV: 'development', ORCA_E2E_HEADLESS: '1' }
-  })
-  forwardElectronProcessLogs(app, testInfo)
-  const dispose = async (): Promise<void> => {
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
-  }
-  try {
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await waitForSessionReady(page)
-    return { app, page, dispose }
-  } catch (error) {
-    await dispose()
-    throw error
-  }
-}
-
-function createGitProject(): string {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-chat-project-'))
-  execFileSync('git', ['init', '-q', '-b', 'main', dir])
-  writeFileSync(path.join(dir, 'README.md'), '# wsl host chat project\n')
-  execFileSync('git', ['-C', dir, 'add', '.'])
-  execFileSync(
-    'git',
-    ['-C', dir, '-c', 'user.name=e2e', '-c', 'user.email=e2e@example.com', 'commit', '-qm', 'init'],
-    { stdio: 'ignore' }
-  )
-  return dir
-}
-
-/** The fake re-reads this file on every check, so it must never see a half-written one. */
-function writeDistros(distrosFile: string, distros: readonly object[]): void {
-  const tmp = `${distrosFile}.tmp`
-  writeFileSync(tmp, JSON.stringify(distros))
-  renameSync(tmp, distrosFile)
-}
-
-function readDistroState(distrosFile: string): string | undefined {
-  const distros: { state?: string }[] = JSON.parse(readFileSync(distrosFile, 'utf8'))
-  return distros[0]?.state
-}
-
-function fakeWslConnects(connectLogFile: string): string[] {
-  return existsSync(connectLogFile)
-    ? readFileSync(connectLogFile, 'utf8').split('\n').filter(Boolean)
-    : []
-}
-
-/** Focuses the project's worktree on the desktop, which is the act that may boot its distro. */
-async function focusProject(page: Page, repoPath: string): Promise<string | null> {
-  return page.evaluate(
-    ({ repoPath, hostId }) => {
-      const state = window.__store?.getState()
-      const repo = state?.repos.find((entry) => entry.path === repoPath)
-      const worktree = repo
-        ? state?.allWorktrees().find((entry) => entry.repoId === repo.id)
-        : undefined
-      if (!state || !worktree) {
-        return null
-      }
-      state.setActiveWorktree(worktree.id, hostId)
-      return worktree.id
-    },
-    { repoPath, hostId: toRuntimeExecutionHostId(WSL_ENVIRONMENT_ID) }
-  )
-}
+import {
+  createGitProject,
+  fakeWslConnects,
+  focusProject,
+  launchDesktopWithFakeWsl,
+  readDistroState,
+  RUNNING,
+  STOPPED,
+  WSL_ENVIRONMENT_ID,
+  writeDistros
+} from './helpers/wsl-host-fake-desktop'
 
 test.describe('native chat on a WSL host', () => {
   test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
 
-  test('admits, streams, refuses while the distro is stopped, and continues after focus boots it', async ({
+  test('admits, streams, offers Start for a stopped distro, and continues after Start or a focus boot', async ({
     orcaPage: hub,
     claudeStub
   }, testInfo) => {
@@ -209,19 +112,41 @@ test.describe('native chat on a WSL host', () => {
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-streamed.png') })
 
       // The distro stops: a chat call is a runtime call, so it refuses rather than boot it.
-      const connectsBeforeStop = fakeWslConnects(connectLogFile).length
-      writeDistros(distrosFile, STOPPED)
-      await expect
-        .poll(
-          () =>
-            askSupport().then(
-              () => 'answered',
-              (error: unknown) => String(error)
-            ),
-          { timeout: 30_000 }
-        )
-        .toContain('Ubuntu was stopped')
+      const stopDistro = async (): Promise<number> => {
+        const connects = fakeWslConnects(connectLogFile).length
+        writeDistros(distrosFile, STOPPED)
+        await expect
+          .poll(
+            () =>
+              askSupport().then(
+                () => 'answered',
+                (error: unknown) => String(error)
+              ),
+            { timeout: 30_000 }
+          )
+          .toContain('Ubuntu was stopped')
+        return connects
+      }
+      const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
+      const start = chat.getByRole('button', { name: 'Start', exact: true })
+      const connectsBeforeStart = await stopDistro()
+      // The chat names the stopped distro and offers Start instead of a raw error.
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-stopped.png') })
+      expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStart)
+      await start.click()
+      await expect
+        .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
+        .toBe(connectsBeforeStart + 1)
+      await expect(stoppedNotice).toBeHidden({ timeout: 60_000 })
+      await send('after Start')
+      await expectReplyAfter('after Start')
+      // One Start is one connect: a second would rerun the server's launch in the distro.
+      expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStart + 1)
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-after-start.png') })
+
+      const connectsBeforeStop = await stopDistro()
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
 
       // Switching away and back is the user acting on the host: that boots it and the chat goes on.
       await page.evaluate(() => window.__store?.getState().setActiveWorktree(null))
@@ -236,6 +161,214 @@ test.describe('native chat on a WSL host', () => {
       await send('after the distro restarted')
       await expectReplyAfter('after the distro restarted')
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-after-boot.png') })
+    } finally {
+      await desktop.dispose()
+      rmSync(fakeDir, { recursive: true, force: true })
+      rmSync(projectPath, { recursive: true, force: true })
+    }
+  })
+
+  test('names the distro when the agent is no longer installed there', async ({
+    orcaPage: hub,
+    claudeStub
+  }, testInfo) => {
+    // Two Electron apps, one chat turn and one failed restart.
+    test.setTimeout(240_000)
+    await waitForSessionReady(hub)
+    await hub.evaluate(async (command) => {
+      await window.__store?.getState().updateSettings({
+        experimentalNativeChat: true,
+        agentCmdOverrides: { claude: command }
+      })
+    }, buildFakeAgentCommandOverride(claudeStub.command))
+    const offer = await createRuntimeDesktopPairingOffer(hub)
+    const fakeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-chat-missing-'))
+    const distrosFile = path.join(fakeDir, 'distros.json')
+    writeDistros(distrosFile, RUNNING)
+    const desktop = await launchDesktopWithFakeWsl(
+      { distros: RUNNING, distrosFile, pairingCode: offer.pairingUrl },
+      testInfo
+    )
+    const projectPath = createGitProject()
+    try {
+      const { page } = desktop
+      await page.evaluate(async () => {
+        const settings = await window.api.settings.set({ experimentalWslHosts: true })
+        window.__store?.setState({ settings })
+        await window.__store?.getState().updateSettings({
+          experimentalNativeChat: true,
+          defaultTuiAgent: 'claude'
+        })
+      })
+      const added = await page.evaluate(() =>
+        window.api.runtimeEnvironments.wslHosts?.add({ distro: 'Ubuntu' })
+      )
+      expect(added, JSON.stringify(added)).toMatchObject({ ok: true })
+      await callEnvironment(page, WSL_ENVIRONMENT_ID, 'repo.add', {
+        path: projectPath,
+        kind: 'git'
+      })
+      await expect.poll(() => focusProject(page, projectPath), { timeout: 60_000 }).toBeTruthy()
+      // The menu offers only installed agents, so the chat starts while claude is there.
+      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await page
+        .getByRole('menu')
+        .getByText('Claude', { exact: true })
+        .first()
+        .click({ timeout: 60_000 })
+      const chat = page.locator('[data-native-chat-root="true"]')
+      const composer = chat.getByRole('textbox')
+      const send = async (text: string): Promise<void> => {
+        await expect(composer).toBeEditable({ timeout: 60_000 })
+        await composer.click()
+        await page.keyboard.type(text)
+        await expect(composer).toContainText(text)
+        await chat.getByRole('button', { name: 'Send', exact: true }).click()
+      }
+      await send('hello')
+      await expect(chat.getByText('Stub reply.').first()).toBeVisible({ timeout: 120_000 })
+
+      // Then claude leaves the host (its PATH keeps only the system dirs the stub fixture checked),
+      // and the chat's next start has to find it again.
+      await hub.evaluate(async () => {
+        await window.__store?.getState().updateSettings({
+          agentCmdOverrides: {},
+          agentDefaultEnv: { claude: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin' } }
+        })
+      })
+      const sessionId = await page.evaluate(
+        () =>
+          Object.values(window.__store?.getState().unifiedTabsByWorktree ?? {})
+            .flat()
+            .find((tab) => tab.agentSessionAgent === 'claude')?.entityId ?? null
+      )
+      expect(sessionId).toBeTruthy()
+      await callEnvironment(page, WSL_ENVIRONMENT_ID, 'agentSession.close', { sessionId })
+      await send('again')
+      // Says where it's missing, not "the computer running this chat".
+      await expect(
+        chat.getByText(/Claude isn't installed in the WSL distro Ubuntu\./).first()
+      ).toBeVisible({ timeout: 120_000 })
+      await expect(chat.getByText(/the computer running this chat/)).toHaveCount(0)
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-cli-missing.png') })
+    } finally {
+      await desktop.dispose()
+      rmSync(fakeDir, { recursive: true, force: true })
+      rmSync(projectPath, { recursive: true, force: true })
+    }
+  })
+
+  test('holds Send and offers Start when a runtime call, not liveness, finds the distro stopped', async ({
+    orcaPage: hub,
+    claudeStub
+  }, testInfo) => {
+    // Two Electron apps and two chat turns around one stop.
+    test.setTimeout(240_000)
+    await waitForSessionReady(hub)
+    await hub.evaluate(async (command) => {
+      await window.__store?.getState().updateSettings({
+        experimentalNativeChat: true,
+        agentCmdOverrides: { claude: command }
+      })
+    }, buildFakeAgentCommandOverride(claudeStub.command))
+    const offer = await createRuntimeDesktopPairingOffer(hub)
+    const fakeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-chat-parked-'))
+    const distrosFile = path.join(fakeDir, 'distros.json')
+    const connectLogFile = path.join(fakeDir, 'connects.log')
+    writeDistros(distrosFile, RUNNING)
+    // The fake reports no stop of its own, so only the runtime call's park can say it.
+    const desktop = await launchDesktopWithFakeWsl(
+      {
+        distros: RUNNING,
+        distrosFile,
+        connectLogFile,
+        pairingCode: offer.pairingUrl,
+        stopSilently: true
+      },
+      testInfo
+    )
+    const projectPath = createGitProject()
+    try {
+      const { page } = desktop
+      await page.evaluate(async () => {
+        const settings = await window.api.settings.set({ experimentalWslHosts: true })
+        window.__store?.setState({ settings })
+        await window.__store?.getState().updateSettings({
+          experimentalNativeChat: true,
+          defaultTuiAgent: 'claude'
+        })
+      })
+      const added = await page.evaluate(() =>
+        window.api.runtimeEnvironments.wslHosts?.add({ distro: 'Ubuntu' })
+      )
+      expect(added, JSON.stringify(added)).toMatchObject({ ok: true })
+      await callEnvironment(page, WSL_ENVIRONMENT_ID, 'repo.add', {
+        path: projectPath,
+        kind: 'git'
+      })
+      await expect.poll(() => focusProject(page, projectPath), { timeout: 60_000 }).toBeTruthy()
+      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await page
+        .getByRole('menu')
+        .getByText('Claude', { exact: true })
+        .first()
+        .click({ timeout: 60_000 })
+      const chat = page.locator('[data-native-chat-root="true"]')
+      const composer = chat.getByRole('textbox')
+      const sendButton = chat.getByRole('button', { name: 'Send', exact: true })
+      const type = async (text: string): Promise<void> => {
+        await expect(composer).toBeEditable({ timeout: 60_000 })
+        await composer.click()
+        await page.keyboard.type(text)
+        await expect(composer).toContainText(text)
+      }
+      const replies = chat.getByText('Stub reply.')
+      await type('hello')
+      await sendButton.click()
+      await expect(replies.first()).toBeVisible({ timeout: 120_000 })
+
+      // The distro stops; a runtime call (as a poll would) finds it stopped and parks the host.
+      const connectsBeforeStop = fakeWslConnects(connectLogFile).length
+      writeDistros(distrosFile, STOPPED)
+      await expect
+        .poll(
+          () =>
+            callEnvironment(page, WSL_ENVIRONMENT_ID, 'agentSession.createSupport', {
+              worktree: `path:${projectPath}`,
+              agent: 'claude'
+            }).then(
+              () => 'answered',
+              (error: unknown) => String(error)
+            ),
+          { timeout: 30_000 }
+        )
+        .toContain('Ubuntu was stopped')
+      const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
+      // Send waits for Start rather than failing against a stopped distro; while held, the button is
+      // named by why it waits, as for any host hold.
+      await type('while stopped')
+      await expect(
+        chat.getByRole('button', { name: 'Start Ubuntu to send.', exact: true })
+      ).toBeDisabled()
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-parked.png') })
+      expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStop)
+      expect(readDistroState(distrosFile)).toBe('stopped')
+
+      await chat.getByRole('button', { name: 'Start', exact: true }).click()
+      await expect
+        .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
+        .toBeGreaterThan(connectsBeforeStop)
+      await expect(stoppedNotice).toBeHidden({ timeout: 60_000 })
+      await expect(sendButton).toBeEnabled({ timeout: 60_000 })
+      await sendButton.click()
+      // The held message goes out after Start and gets its own reply.
+      const held = chat
+        .locator('[data-native-chat-scroll]')
+        .getByText('while stopped', { exact: true })
+      await expect(
+        held.last().locator('xpath=following::*[text()="Stub reply."]').first()
+      ).toBeVisible({ timeout: 120_000 })
     } finally {
       await desktop.dispose()
       rmSync(fakeDir, { recursive: true, force: true })

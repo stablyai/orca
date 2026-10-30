@@ -12,7 +12,8 @@ import type {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
+  orcadMigrationScopeOwnsWholeHost,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationOwnsRepoId,
   type OrcadMigrationSourceScope,
@@ -25,6 +26,8 @@ export type OrcadMigrationSourceAutomationInspection = {
   automationRuns: AutomationRun[]
   blockedAutomationCount: number
   blockedRunCount: number
+  /** Moved disabled, as the wire requires; the move re-enables these on the host after commit. */
+  enabledAtSourceIds: string[]
   /** Automations held back only by a run still in flight; they move once it finishes. */
   runningAutomationNames: string[]
 }
@@ -34,7 +37,7 @@ export function collectOrcadMigrationSourceAutomationState(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload
 ): OrcadMigrationSourceAutomationInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const touchedAutomations = state.automations.filter((entry) =>
     automationTouchesScope(entry, scope)
   )
@@ -48,6 +51,7 @@ export function collectOrcadMigrationSourceAutomationState(
   const automationRuns: AutomationRun[] = []
   let blockedAutomationCount = 0
   let blockedRunCount = 0
+  const enabledAtSourceIds: string[] = []
   const runningAutomationNames: string[] = []
 
   for (const [automationId, matching] of automationsById) {
@@ -64,7 +68,12 @@ export function collectOrcadMigrationSourceAutomationState(
       blockedRunCount += runs.length
       continue
     }
-    automations.push(projectAutomationToDestination(matching[0]))
+    const projected = projectAutomationToDestination(matching[0])
+    // The projection always sends it disabled; a WSL move re-enables what ran here.
+    if (scope.kind === 'local-wsl' && matching[0].enabled) {
+      enabledAtSourceIds.push(projected.id)
+    }
+    automations.push(projected)
     automationRuns.push(...runs.map(projectAutomationRunToDestination))
   }
 
@@ -75,11 +84,13 @@ export function collectOrcadMigrationSourceAutomationState(
   }
   automations.sort((left, right) => compareKeys(left.id, right.id))
   automationRuns.sort((left, right) => compareKeys(left.id, right.id))
+  enabledAtSourceIds.sort(compareKeys)
   return {
     automations,
     automationRuns,
     blockedAutomationCount,
     blockedRunCount,
+    enabledAtSourceIds,
     runningAutomationNames: runningAutomationNames.sort(compareKeys)
   }
 }
@@ -110,6 +121,17 @@ function runTouchesScope(run: AutomationRun, scope: OrcadMigrationSourceScope): 
 }
 
 function automationCanTransfer(automation: Automation, scope: OrcadMigrationSourceScope): boolean {
+  if (scope.kind === 'local-wsl') {
+    // This desktop schedules it today; the host's scheduler takes over, re-enabled after commit.
+    return (
+      automation.executionTargetType === 'local' &&
+      automation.schedulerOwner === 'local_host_service' &&
+      scope.repoIds.has(getAutomationRunRepoId(automation)) &&
+      ownerCanTransfer(automation.workspaceId, scope) &&
+      contextCanTransfer(automation.runContext, scope) &&
+      contextCanTransfer(automation.sourceContext, scope)
+    )
+  }
   return (
     automation.executionTargetType === 'ssh' &&
     automation.executionTargetId === scope.targetId &&
@@ -139,6 +161,12 @@ function contextTouchesScope(
   context: WorkspaceRunContext | TaskSourceContext | null | undefined,
   scope: OrcadMigrationSourceScope
 ): boolean {
+  if (!orcadMigrationScopeOwnsWholeHost(scope)) {
+    return (
+      (!context?.hostId || context.hostId === scope.hostId) &&
+      orcadMigrationOwnsRepoId(scope, context?.repoId)
+    )
+  }
   return (
     context?.hostId === scope.hostId ||
     (!context?.hostId && orcadMigrationOwnsRepoId(scope, context?.repoId))

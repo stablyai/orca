@@ -2,6 +2,7 @@ import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch-runtime-capability'
+import { WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {
@@ -19,19 +20,30 @@ export async function createWorktreeOnRuntimeHost(
   attempt: WorktreeCreateAttempt,
   clientCreateSettings: ClientWorktreeCreateSettings
 ): Promise<CreatedWorktreeResult> {
+  const clientAutomationProvenance = request.options?.clientAutomationProvenance
+  // Why: only a capable host accepts the field; older ones create the same plain workspace as before.
+  const provenanceParams =
+    clientAutomationProvenance &&
+    (await hostSupportsCapability(
+      environmentId,
+      WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY
+    ))
+      ? { clientAutomationProvenance }
+      : {}
   const call = (launch?: HostAgentLaunch): Promise<CreateWorktreeResult> =>
     callRuntimeRpc<CreateWorktreeResult>(
       { kind: 'environment', environmentId },
       'worktree.create',
       {
         ...buildRuntimeWorktreeCreateParams(request, attempt, launch),
+        ...provenanceParams,
         // Why: the host's own store defaults would otherwise override the user's choices.
         ...clientCreateSettings
       },
       { timeoutMs: 10 * 60_000 }
     )
   const launch = request.options?.hostAgentLaunch
-  if (!launch || !(await hostPlansAgentLaunch(environmentId))) {
+  if (!launch || !(await hostSupportsCapability(environmentId, AGENT_LAUNCH_RUNTIME_CAPABILITY))) {
     return call()
   }
   try {
@@ -45,13 +57,10 @@ export async function createWorktreeOnRuntimeHost(
   }
 }
 
-/** A failed read-only probe keeps the desktop plan; a compat block still stops the create. */
-async function hostPlansAgentLaunch(environmentId: string): Promise<boolean> {
+/** A failed read-only probe keeps the older plan; a compat block still stops the create. */
+async function hostSupportsCapability(environmentId: string, capability: string): Promise<boolean> {
   try {
-    return await runtimeEnvironmentSupportsCapability(
-      environmentId,
-      AGENT_LAUNCH_RUNTIME_CAPABILITY
-    )
+    return await runtimeEnvironmentSupportsCapability(environmentId, capability)
   } catch (error) {
     if (isRuntimeCompatBlockError(error)) {
       throw error

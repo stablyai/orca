@@ -39,6 +39,12 @@ import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
 import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
+import { releaseWslStoppedWorktreeRescan } from '../../../wsl-stopped-worktree-rescan-registry'
+import {
+  listWslStoppedWorktrees,
+  rescanWorktreesWhenWslDistroRuns,
+  wslDistroNotRunningForScanFailure
+} from './wsl-stopped-worktree-listing'
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -153,6 +159,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       }
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+    releaseWslStoppedWorktreeRescan(repo.id)
     // Rows describe scan-start generation, which clients order against applied create/remove replies.
     return {
       repoId: repo.id,
@@ -174,15 +181,30 @@ export async function listDetectedWorktreesForCapturedRepo(
     if (!isCurrent()) {
       return null
     }
+    // Retained rows need their scan-failure cause to explain why they are unavailable.
+    const unavailableReason = describeWorktreeScanFailure(err)
+    const failureKind = classifyWorktreeScanFailure(unavailableReason)
+    // A distro the gate would not start (E9) is expected: keep stored rows and re-list once it runs.
+    const wslDistroStopped = wslDistroNotRunningForScanFailure(err)
+    if (wslDistroStopped) {
+      rescanWorktreesWhenWslDistroRuns(repo.id, wslDistroStopped.distro)
+      return {
+        repoId: repo.id,
+        authoritative: false,
+        source: 'metadata-fallback',
+        worktrees: listWslStoppedWorktrees(store, repo, allMeta),
+        unavailableReason,
+        failureKind,
+        wslDistroStopped,
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+      }
+    }
     warnOnce(
       loggedWorktreeListFailures,
       `${repo.id}:${repo.path}`,
       `[worktrees] failed to list detected worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
       err
     )
-    // Retained rows need their scan-failure cause to explain why they are unavailable.
-    const unavailableReason = describeWorktreeScanFailure(err)
-    const failureKind = classifyWorktreeScanFailure(unavailableReason)
     return {
       repoId: repo.id,
       authoritative: false,

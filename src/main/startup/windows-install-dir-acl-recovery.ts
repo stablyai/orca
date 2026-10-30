@@ -1,5 +1,6 @@
 import { dirname } from 'node:path'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
+import { translateMain } from '../i18n/main-i18n'
 import { logStartupMilestone } from './startup-diagnostics'
 import {
   clearGpuFallbackMarker,
@@ -255,24 +256,35 @@ export async function repairKnownPoisonedInstallDirBeforeWindow(
   }
 }
 
-const CAUSE =
-  "Windows permissions on Orca's install folder are blocking its own sandboxed processes from reading the files it shipped with."
-
 // The blank-window recovery dialog is the only place to deliver exact admin commands.
 export function describeInstallDirAclPoison(): InstallDirAclPoisonDiagnosis | null {
   if (!poison) {
     return null
   }
   const commands = buildInstallDirAclRepairCommands(poison.installDir)
+  const cause = translateMain(
+    'installDirAcl.cause',
+    "Windows permissions on Orca's install folder are blocking its own sandboxed processes from reading the files it shipped with."
+  )
   if (poison.stage === 'repaired') {
-    return { detail: `${CAUSE}\n\nOrca repaired the permissions. Reload to use them.`, commands }
+    return {
+      detail: `${cause}\n\n${translateMain('installDirAcl.repaired', 'Orca repaired the permissions. Reload to use them.')}`,
+      commands
+    }
   }
   const status =
     poison.stage === 'pending'
-      ? 'Orca is repairing the permissions now.'
-      : 'Orca could not repair them, which usually means the folder needs an administrator.'
+      ? translateMain('installDirAcl.repairing', 'Orca is repairing the permissions now.')
+      : translateMain(
+          'installDirAcl.repairFailed',
+          'Orca could not repair them, which usually means the folder needs an administrator.'
+        )
+  const runCommands = translateMain(
+    'installDirAcl.runCommands',
+    'Run these in an Administrator Command Prompt, then relaunch Orca:'
+  )
   return {
-    detail: `${CAUSE} ${status}\n\nRun these in an Administrator Command Prompt, then relaunch Orca:\n\n${commands.join('\n')}`,
+    detail: `${cause} ${status}\n\n${runCommands}\n\n${commands.join('\n')}`,
     commands
   }
 }

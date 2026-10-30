@@ -20,8 +20,10 @@ import type {
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
+import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './rpc-binary-sender'
 import type { RpcMethodPermission } from './rpc-method-permission'
+import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
@@ -143,6 +145,12 @@ export type RpcContext = {
     list(): MobileRelayHostsListResult
     worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
   }
+  // Authenticated runtime devices see which other desktops share this server.
+  peerDesktops?: {
+    list(callerClientInstanceId?: string): OrcadPeerDesktopsResult
+    /** Tags this socket with the caller's installation until it closes. */
+    declare(clientInstanceId: string): void
+  }
   // Authenticated runtime devices may manage only their own delegated phones.
   delegatedMobileDevices?: {
     sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult
@@ -171,6 +179,8 @@ export type RpcTypedMethod<TName extends string, TSchema extends ZodType | null,
   // Every new method must explicitly choose caller permissions.
   readonly permission: RpcMethodPermission
   readonly params: TSchema
+  // Startup phases this method needs; the dispatcher waits for them, bounded (orcad only).
+  readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
   readonly handler: (params: RpcParsedParams<TSchema>, ctx: RpcContext) => TResult
 }
 
@@ -185,6 +195,7 @@ export type RpcTypedStreamingMethod<TName extends string, TSchema extends ZodTyp
   readonly name: TName
   readonly permission: RpcMethodPermission
   readonly params: TSchema
+  readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
   readonly stream: true
   readonly handler: (
     params: RpcParsedParams<TSchema>,
@@ -203,6 +214,7 @@ type RpcMethodWithParams<P> = {
   readonly name: string
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
+  readonly requires?: OrcadFeatureRequirement<P>
   readonly handler: (params: P, ctx: RpcContext) => unknown
 }
 
@@ -210,6 +222,7 @@ type RpcStreamingMethodWithParams<P> = {
   readonly name: string
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
+  readonly requires?: OrcadFeatureRequirement<P>
   readonly stream: true
   readonly handler: (params: P, ctx: RpcContext, emit: (result: unknown) => void) => Promise<void>
 }

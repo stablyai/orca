@@ -2,8 +2,12 @@ import { spawn, spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
+import {
+  ORCAD_IDLE_TIMEOUT_ENV,
+  WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS
+} from '../../../shared/orcad-idle-exit'
 
 import {
   ORCAD_READINESS_FILENAME,
@@ -75,6 +79,24 @@ describe('orcadLaunchCommand', () => {
     expect(command.indexOf(ORCAD_MANAGED_ACTIVATION_ROOT_ENV)).toBeLessThan(
       command.indexOf('nohup')
     )
+  })
+
+  describe('idle timeout', () => {
+    afterEach(() => vi.unstubAllEnvs())
+
+    it('never forwards a shorter idle timeout to an SSH launch, even from the desktop env', () => {
+      vi.stubEnv(ORCAD_IDLE_TIMEOUT_ENV, String(WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS))
+
+      expect(orcadLaunchCommand(posix, SPEC)).not.toContain(ORCAD_IDLE_TIMEOUT_ENV)
+    })
+
+    it('carries the host-supplied idle timeout on a WSL (setsid) launch', () => {
+      const command = orcadLaunchCommand(posix, SPEC, 'setsid', [
+        [ORCAD_IDLE_TIMEOUT_ENV, String(WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS)]
+      ])
+
+      expect(command).toContain(`${ORCAD_IDLE_TIMEOUT_ENV}='300000'`)
+    })
   })
 
   it('declares the Windows refusal instead of emitting a command that cannot work', () => {

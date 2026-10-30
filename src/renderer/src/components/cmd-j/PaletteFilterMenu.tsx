@@ -4,6 +4,7 @@ import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
   addPaletteFilterValues,
@@ -71,6 +72,7 @@ export default function PaletteFilterMenu({
   onRequestInputFocus: () => void
   portalContainer: HTMLElement | null
 }): React.JSX.Element | null {
+  const languageRevision = useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const [activeField, setActiveField] = useState<PaletteFilterField | null>(null)
   const [optionQuery, setOptionQuery] = useState('')
@@ -96,7 +98,8 @@ export default function PaletteFilterMenu({
       })
     }
     return entries
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories, languageRevision])
 
   const activeGroup =
     activeField == null ? null : (groups.find((group) => group.field === activeField) ?? null)

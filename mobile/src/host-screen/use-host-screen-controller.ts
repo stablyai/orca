@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -36,16 +37,14 @@ export type HostScreenProps = {
   // Layout-mounted sidebars lack route params; receive them explicitly.
   hostId?: string
   onHideSidebar?: () => void
-  // The detail pane is empty, so a side rail beside it may carry the sidebar's actions.
-  actionsInRail?: boolean
 }
 
 export function useHostScreenController({
   embedded = false,
   hostId: hostIdProp,
-  onHideSidebar,
-  actionsInRail = false
+  onHideSidebar
 }: HostScreenProps = {}) {
+  useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
@@ -180,7 +179,6 @@ export function useHostScreenController({
     noticeParam,
     now,
     onHideSidebar,
-    actionsInRail,
     reconnectAttempts,
     relayRecovery,
     routeNotice,

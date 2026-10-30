@@ -65,9 +65,11 @@ export function useNativeChatPickerState(args: {
   disabled: boolean
   isComposing: () => boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
+  commandAvailable?: (name: string) => boolean
   sessionSkills?: readonly NativeChatSessionSkill[]
   /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
+  onPickerDemand?: (open: boolean) => void
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -84,7 +86,9 @@ export function useNativeChatPickerState(args: {
     disabled,
     isComposing,
     sessionSkills,
+    commandAvailable,
     onPickerOpened,
+    onPickerDemand,
     textareaRef,
     setDraft,
     setCaret,
@@ -118,7 +122,8 @@ export function useNativeChatPickerState(args: {
             profile,
             discovery,
             dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
-            sessionSkills
+            sessionSkills,
+            commandAvailable
           ),
     [
       caret,
@@ -130,7 +135,8 @@ export function useNativeChatPickerState(args: {
       pickerCommands,
       profile,
       recalledFromHistory,
-      sessionSkills
+      sessionSkills,
+      commandAvailable
     ]
   )
 
@@ -152,6 +158,12 @@ export function useNativeChatPickerState(args: {
       onPickerOpened?.()
     }
   }, [agent, autocomplete, dismissalContext, onPickerOpened])
+
+  const menuOpen = autocomplete.mode === 'slash'
+  useEffect(() => {
+    onPickerDemand?.(menuOpen)
+    return () => onPickerDemand?.(false)
+  }, [dismissalContext, menuOpen, onPickerDemand])
 
   // The editor may be ahead of this render when a key lands just before the pick.
   const liveDraft = useCallback((): [string, number] => {
@@ -225,13 +237,23 @@ export function useNativeChatPickerState(args: {
         profile,
         discovery,
         null,
-        sessionSkills
+        sessionSkills,
+        commandAvailable
       )
       if (next.mode === 'none' || next.triggerKey !== dismissed.triggerKey) {
         setDismissed(null)
       }
     },
-    [dismissalContext, dismissed, discovery, draft, pickerCommands, profile, sessionSkills]
+    [
+      dismissalContext,
+      dismissed,
+      discovery,
+      draft,
+      pickerCommands,
+      profile,
+      sessionSkills,
+      commandAvailable
+    ]
   )
 
   const classifySend = useCallback(

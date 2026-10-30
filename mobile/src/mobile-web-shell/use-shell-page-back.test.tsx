@@ -29,7 +29,7 @@ function Screen(props: {
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
 }): null {
-  useShellPageBack(props)
+  useShellPageBack({ ...props, isFocused: () => true })
   return null
 }
 

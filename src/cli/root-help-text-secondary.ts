@@ -3,7 +3,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  focus                     Focus an element by --element ref',
   '  clear                     Clear an input by --element ref',
   '  drag                      Drag --from ref to --to ref',
-  '  upload                    Upload --files to a file input by --element ref',
+  '  upload                    Upload --files to a file input or picker button by --element ref',
   '  dblclick                  Double-click element by --element ref',
   '  forward                   Navigate forward in browser history',
   '  scrollintoview            Scroll --element into view',

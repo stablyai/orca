@@ -1,17 +1,20 @@
-import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
 import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
+import { getNvmVersionDirectories, nvmVersionDirectories } from './nvm-version-directories'
+import { isRunnableCommand, runCliFsReadsSync, type CliFsReads } from './cli-fs-reads'
 import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
-type ResolveCommandOptions = {
+export type ResolveCommandOptions = {
   pathEnv?: string | null
   platform?: NodeJS.Platform
   homePath?: string
+  /** Skip the PATH scan; the caller already established absence there (agent detection batches it). */
+  skipPathSearch?: boolean
 }
 
-function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
+export function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
   if (platform === 'win32') {
     return [`${commandName}.cmd`, `${commandName}.exe`, `${commandName}.bat`, commandName]
   }
@@ -33,27 +36,20 @@ function splitPath(
     .filter(Boolean)
 }
 
-function parseVersionSegment(raw: string): number[] {
-  return raw
-    .replace(/^v/i, '')
-    .split('.')
-    .map((segment) => Number.parseInt(segment, 10))
-    .map((segment) => (Number.isFinite(segment) ? segment : 0))
-}
-
-function compareVersionDesc(left: string, right: string): number {
-  const leftParts = parseVersionSegment(left)
-  const rightParts = parseVersionSegment(right)
-  const length = Math.max(leftParts.length, rightParts.length)
-
-  for (let index = 0; index < length; index += 1) {
-    const delta = (rightParts[index] ?? 0) - (leftParts[index] ?? 0)
-    if (delta !== 0) {
-      return delta
+function* firstRunnable(
+  platform: NodeJS.Platform,
+  directories: string[],
+  executableNames: string[]
+): CliFsReads<string | null> {
+  for (const directory of directories) {
+    for (const executableName of executableNames) {
+      const path = join(directory, executableName)
+      if ((yield { kind: 'runnable', platform, path }) === true) {
+        return path
+      }
     }
   }
-
-  return right.localeCompare(left)
+  return null
 }
 
 function findFirstExecutable(
@@ -61,33 +57,7 @@ function findFirstExecutable(
   directories: string[],
   executableNames: string[]
 ): string | null {
-  for (const directory of directories) {
-    for (const executableName of executableNames) {
-      const candidate = join(directory, executableName)
-      if (isRunnableCommand(platform, candidate)) {
-        return candidate
-      }
-    }
-  }
-
-  return null
-}
-
-function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolean {
-  try {
-    const stats = statSync(candidate)
-    if (!stats.isFile()) {
-      return false
-    }
-    if (platform === 'win32') {
-      return true
-    }
-    // Skip nonexecutables/placeholders now so GUI probing reaches a runnable CLI instead of later EACCES/EISDIR.
-    accessSync(candidate, constants.X_OK)
-    return true
-  } catch {
-    return false
-  }
+  return runCliFsReadsSync(firstRunnable(platform, directories, executableNames))
 }
 
 function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: string): string[] {
@@ -119,94 +89,6 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   return directories
 }
 
-// Bound/track nvm aliases (default → lts/* → lts/krypton → version). Hand-edited cycles must yield no preference,
-// not whichever alias happens to exhaust the hop limit; mirror nvm’s seen-set behavior.
-const NVM_ALIAS_CHAIN_LIMIT = 10
-
-/** Resolves `alias/default` to an installed version directory name, or null. */
-function resolveNvmDefaultVersion(nvmVersionsDir: string, installed: string[]): string | null {
-  const aliasDir = join(nvmVersionsDir, '..', '..', 'alias')
-  let token = readNvmAlias(join(aliasDir, 'default'))
-  const seen = new Set<string>()
-  for (let hop = 0; token && hop < NVM_ALIAS_CHAIN_LIMIT; hop += 1) {
-    if (seen.has(token)) {
-      return null
-    }
-    seen.add(token)
-    const next = readNvmAlias(join(aliasDir, token))
-    if (!next) {
-      break
-    }
-    token = next
-  }
-  if (!token) {
-    return null
-  }
-  // Why: `system` selects the OS node, so nvm owns nothing to prefer here.
-  // `node`/`stable` mean newest, which is the ordering we already produce.
-  if (token === 'system' || token === 'node' || token === 'stable') {
-    return null
-  }
-  return matchNvmVersion(token, installed)
-}
-
-function readNvmAlias(aliasPath: string): string | null {
-  // Reject literal traversal cheaply; join normalizes it away. Real containment comes from matchNvmVersion returning only installed readdir entries,
-  // so arbitrary alias tokens can never add foreign paths to PATH.
-  if (aliasPath.includes('..')) {
-    return null
-  }
-  try {
-    if (!statSync(aliasPath).isFile()) {
-      return null
-    }
-    const value = readFileSync(aliasPath, 'utf8').trim()
-    return value.length > 0 ? value : null
-  } catch {
-    return null
-  }
-}
-
-/** `24` matches the highest installed `v24.x.y`; `v24.18.0` matches exactly. */
-function matchNvmVersion(token: string, installed: string[]): string | null {
-  // Validate full decimal version shape with no leading zeros: parseInt would coerce garbage/0x18/00/0abc to zero and select old v0.x.
-  // nvm stores nonexistent aliases but resolves them as N/A; preserve newest-first fallback for those, including 024.
-  if (!/^v?(0|[1-9]\d*)(\.(0|[1-9]\d*))*$/.test(token)) {
-    return null
-  }
-  const wanted = parseVersionSegment(token)
-  const matches = installed.filter((entry) => {
-    const parts = parseVersionSegment(entry)
-    return wanted.every((segment, index) => parts[index] === segment)
-  })
-  return matches.sort(compareVersionDesc)[0] ?? null
-}
-
-function getNvmVersionDirectories(homePath: string): string[] {
-  const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
-  if (!existsSync(nvmVersionsDir)) {
-    return []
-  }
-
-  let installed: string[]
-  try {
-    installed = readdirSync(nvmVersionsDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort(compareVersionDesc)
-  } catch {
-    return []
-  }
-
-  // Prefer nvm default when login probing fails. Freshest installs often have no CLIs and mismatched native ABIs (#10932);
-  // keep other installed versions as fallbacks so their CLIs remain reachable.
-  const preferred = resolveNvmDefaultVersion(nvmVersionsDir, installed)
-  const ordered = preferred
-    ? [preferred, ...installed.filter((entry) => entry !== preferred)]
-    : installed
-  return ordered.map((entry) => join(nvmVersionsDir, entry, 'bin'))
-}
-
 function getVersionManagerDirectories(
   platform: NodeJS.Platform,
   homePath: string,
@@ -225,33 +107,42 @@ function getVersionManagerDirectories(
 }
 
 // Share native/WSL ordering: version-manager bins must precede system Homebrew/npm/snap installs.
-function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): string[] {
+function* cliInstallDirectories(platform: NodeJS.Platform, homePath: string): CliFsReads<string[]> {
   return [
-    ...getNvmVersionDirectories(homePath),
+    ...(yield* nvmVersionDirectories(homePath)),
     ...getBaseVersionManagerDirectories(platform, homePath),
     ...getSystemCliInstallDirectories(platform, homePath)
   ]
+}
+
+function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): string[] {
+  return runCliFsReadsSync(cliInstallDirectories(platform, homePath))
+}
+
+/** PATH entries first; install dirs are listed only once PATH misses. Run with cli-fs-reads. */
+export function* cliCommandLookup(
+  commandName: string,
+  options: ResolveCommandOptions = {}
+): CliFsReads<string> {
+  const platform = options.platform ?? process.platform
+  const names = getExecutableNames(platform, commandName)
+  const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
+  return (
+    (yield* firstRunnable(platform, splitPath(pathEnv), names)) ??
+    (yield* firstRunnable(
+      platform,
+      yield* cliInstallDirectories(platform, options.homePath ?? homedir()),
+      names
+    )) ??
+    commandName
+  )
 }
 
 export function resolveCliCommand(
   commandName: string,
   options: ResolveCommandOptions = {}
 ): string {
-  const platform = options.platform ?? process.platform
-  const executableNames = getExecutableNames(platform, commandName)
-  const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
-  const pathCandidate = findFirstExecutable(platform, splitPath(pathEnv), executableNames)
-  if (pathCandidate) {
-    return pathCandidate
-  }
-
-  const homePath = options.homePath ?? homedir()
-  const installCandidate = findFirstExecutable(
-    platform,
-    getCliInstallDirectories(platform, homePath),
-    executableNames
-  )
-  return installCandidate ?? commandName
+  return runCliFsReadsSync(cliCommandLookup(commandName, options))
 }
 
 /** Resolve a literal override without falling back to an unverified command name. */
@@ -288,7 +179,9 @@ export function resolveCliCommands(
 
   for (const commandName of new Set(commandNames)) {
     const executableNames = getExecutableNames(platform, commandName)
-    const pathCandidate = findFirstExecutable(platform, pathDirectories, executableNames)
+    const pathCandidate = options.skipPathSearch
+      ? undefined
+      : findFirstExecutable(platform, pathDirectories, executableNames)
     const installCandidate =
       pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
     resolved.set(commandName, installCandidate ?? commandName)

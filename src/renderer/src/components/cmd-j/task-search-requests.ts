@@ -23,7 +23,7 @@ import { getTaskEligibleRepos } from '../task-page/task-page-default-repo-select
 import { getRepoBackedProviderAvailability } from '../task-source-provider-availability'
 import { getTaskPageRepoSourceContext } from '../task-page/task-page-source-context'
 import { searchJiraIssuesByKeyOrText } from '../jira-key-or-text-search'
-import { bindTaskPageJiraItemSourceContext } from '../task-page-jira-item-source-context'
+import { bindTaskPageJiraItemSourceContext } from '../task-page/jira/task-page-jira-item-source-context'
 import { makeCmdJTaskSearchResult, type CmdJTaskSearchResult } from './task-search-results'
 
 const RESULT_LIMIT = 12

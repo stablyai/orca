@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   SHOW_MOBILE_DETAIL_METADATA_EDITORS,
   SHOW_MOBILE_DETAIL_REVIEW_PANELS,
@@ -8,7 +9,8 @@ import {
   GitHubPrFileDiff
 } from './mobile-tasks-legacy-foundation'
 import {
-  TextInput,
+  MessageBox,
+  TextField,
   colors,
   Pressable,
   Text,
@@ -42,19 +44,16 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
         detailPayload.provider === 'gitlab' &&
         (actionItem.source.type === 'issue' || actionItem.source.type === 'mr'))) ? (
     <>
-      <TextInput
-        style={[styles.input, styles.bodyInput]}
+      <MessageBox
         value={itemBodyDraft}
         onChangeText={setItemBodyDraft}
-        placeholder="Description"
-        placeholderTextColor={colors.textMuted}
-        multiline
-        textAlignVertical="top"
-      />
-      <Pressable
-        style={styles.inlineSaveButton}
-        disabled={mutatingStatus || itemBodyDraft === detailPayload.body}
-        onPress={() => {
+        placeholder={translate('tasks.itemReviewSections.descriptionPlaceholder', 'Description')}
+        canSend={!mutatingStatus && itemBodyDraft !== detailPayload.body}
+        sendAccessibilityLabel={translate(
+          'tasks.itemReviewSections.saveDescription',
+          'Save description'
+        )}
+        onSend={() => {
           if (actionItem.provider === 'github' && actionItem.source.type === 'pr') {
             void updateGitHubPullRequestMetadata(actionItem, {
               body: itemBodyDraft
@@ -76,13 +75,17 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
             })
           }
         }}
-      >
-        <Text style={styles.inlineSaveText}>Save description</Text>
-      </Pressable>
-      <MobileMarkdown content={itemBodyDraft} fallback="No description." />
+      />
+      <MobileMarkdown
+        content={itemBodyDraft}
+        fallback={translate('tasks.itemReviewSections.noDescription', 'No description.')}
+      />
     </>
   ) : (
-    <MobileMarkdown content={detailPayloadBody(detailPayload)} fallback="No description." />
+    <MobileMarkdown
+      content={detailPayloadBody(detailPayload)}
+      fallback={translate('tasks.itemReviewSections.noDescription', 'No description.')}
+    />
   )
 }
 
@@ -107,14 +110,18 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
     actionItem.source.type === 'pr' ? (
     <View style={styles.detailSection}>
       <View style={styles.detailSectionHeader}>
-        <Text style={styles.detailSectionTitle}>Reviewers</Text>
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.itemReviewSections.reviewersTitle', 'Reviewers')}
+        </Text>
         {detailPayload.provider === 'github' ? (
           <Text style={styles.detailSectionMeta}>{getGitHubReviewSummary(detailPayload)}</Text>
         ) : null}
       </View>
       {detailPayload.provider === 'github' ? (
         getGitHubReviewerRows(detailPayload).length === 0 ? (
-          <Text style={styles.detailMuted}>No reviewers requested.</Text>
+          <Text style={styles.detailMuted}>
+            {translate('tasks.itemReviewSections.noReviewersRequested', 'No reviewers requested.')}
+          </Text>
         ) : (
           getGitHubReviewerRows(detailPayload).map((reviewer) => (
             <View key={reviewer.login} style={styles.reviewerRow}>
@@ -141,12 +148,19 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
       {itemAssignableUsersLoading ? (
         <View style={styles.detailLoadingInline}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.detailMuted}>Loading reviewers...</Text>
+          <Text style={styles.detailMuted}>
+            {translate('tasks.itemReviewSections.loadingReviewers', 'Loading reviewers...')}
+          </Text>
         </View>
       ) : itemAssignableUsersError ? (
         <Text style={styles.detailError}>{itemAssignableUsersError}</Text>
       ) : itemReviewerCandidates.length === 0 ? (
-        <Text style={styles.detailMuted}>No reviewer suggestions found.</Text>
+        <Text style={styles.detailMuted}>
+          {translate(
+            'tasks.itemReviewSections.noReviewerSuggestions',
+            'No reviewer suggestions found.'
+          )}
+        </Text>
       ) : (
         <View style={styles.chipRow}>
           {itemReviewerCandidates.map((user) => {
@@ -167,12 +181,13 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
           })}
         </View>
       )}
-      <TextInput
-        style={styles.input}
+      <TextField
         value={itemReviewersDraft}
         onChangeText={setItemReviewersDraft}
-        placeholder="Request reviewers"
-        placeholderTextColor={colors.textMuted}
+        placeholder={translate(
+          'tasks.itemReviewSections.reviewersPlaceholder',
+          'Request reviewers'
+        )}
         autoCapitalize="none"
       />
       <Pressable
@@ -180,7 +195,9 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
         disabled={mutatingStatus || splitReviewerList(itemReviewersDraft).length === 0}
         onPress={() => void requestGitHubReviewers(actionItem)}
       >
-        <Text style={styles.inlineSaveText}>Request review</Text>
+        <Text style={styles.inlineSaveText}>
+          {translate('tasks.itemReviewSections.requestReview', 'Request review')}
+        </Text>
       </Pressable>
     </View>
   ) : null
@@ -207,7 +224,9 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
     detailPayload.provider === 'github' &&
     detailPayload.files.length > 0 ? (
     <View style={styles.detailSection}>
-      <Text style={styles.detailSectionTitle}>Changed files</Text>
+      <Text style={styles.detailSectionTitle}>
+        {translate('tasks.itemReviewSections.changedFilesTitle', 'Changed files')}
+      </Text>
       {detailPayload.files.map((file) =>
         actionItem.provider === 'github' && actionItem.source.type === 'pr' ? (
           <View key={file.path} style={styles.fileCard}>
@@ -223,7 +242,9 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
                   : ''}
               </Text>
               <Text style={styles.detailSectionMeta}>
-                {expandedPrFilePath === file.path ? 'Hide' : 'View'}
+                {expandedPrFilePath === file.path
+                  ? translate('tasks.itemReviewSections.hideFile', 'Hide')
+                  : translate('tasks.itemReviewSections.viewFile', 'View')}
               </Text>
             </Pressable>
             <Pressable
@@ -232,7 +253,9 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
               onPress={() => void toggleGitHubFileViewed(actionItem, file)}
             >
               <Text style={styles.inlineSaveText}>
-                {file.viewerViewedState === 'VIEWED' ? 'Mark unviewed' : 'Mark viewed'}
+                {file.viewerViewedState === 'VIEWED'
+                  ? translate('tasks.itemReviewSections.markUnviewed', 'Mark unviewed')
+                  : translate('tasks.itemReviewSections.markViewed', 'Mark viewed')}
               </Text>
             </Pressable>
             {expandedPrFilePath === file.path ? (
@@ -241,7 +264,9 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : prFileContents[file.path]?.originalIsBinary ||
                   prFileContents[file.path]?.modifiedIsBinary ? (
-                  <Text style={styles.detailMuted}>Binary file.</Text>
+                  <Text style={styles.detailMuted}>
+                    {translate('tasks.itemReviewSections.binaryFile', 'Binary file.')}
+                  </Text>
                 ) : prFileContents[file.path] ? (
                   <GitHubPrFileDiff
                     filePath={file.path}
@@ -259,7 +284,12 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
                     }
                   />
                 ) : (
-                  <Text style={styles.detailMuted}>File contents unavailable.</Text>
+                  <Text style={styles.detailMuted}>
+                    {translate(
+                      'tasks.itemReviewSections.fileContentsUnavailable',
+                      'File contents unavailable.'
+                    )}
+                  </Text>
                 )}
               </View>
             ) : null}

@@ -172,8 +172,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Statusline lacks Fable scope; retain the latest OAuth value.
+        // Statusline lacks Fable scope and credits; retain the latest OAuth values.
         fableWeekly: inherited?.fableWeekly ?? null,
+        extraUsage: inherited?.extraUsage ?? null,
         updatedAt: Date.now(),
         error: null,
         status: 'ok',
