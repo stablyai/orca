@@ -48,6 +48,23 @@ const {
   shellOpenExternalMock
 } = browserMocks
 
+let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
+const fakeGuest = (id: number) => ({
+  id,
+  isDestroyed: vi.fn(() => false),
+  isCurrentlyAudible: vi.fn(() => false),
+  getType: vi.fn(() => 'webview'),
+  setWindowOpenHandler: vi.fn(),
+  on: vi.fn((event: string, listener: (window: { webContents: unknown }) => void) => {
+    if (event === 'did-create-window') {
+      didCreateWindow = listener
+    }
+  }),
+  off: vi.fn(),
+  once: vi.fn((_event: string, listener: () => void) => listener()),
+  close: vi.fn()
+})
+
 describe('browserManager popup child policies', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
@@ -255,22 +272,6 @@ describe('browserManager popup child policies', () => {
   })
 
   it('exposes a live popup child as a page owned by its opener tab', async () => {
-    let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
-    const fakeGuest = (id: number) => ({
-      id,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setWindowOpenHandler: vi.fn(),
-      on: vi.fn((event: string, listener: (window: { webContents: unknown }) => void) => {
-        if (event === 'did-create-window') {
-          didCreateWindow = listener
-        }
-      }),
-      off: vi.fn(),
-      once: vi.fn((_event: string, listener: () => void) => listener()),
-      close: vi.fn()
-    })
     const opener = fakeGuest(404)
     const popup = fakeGuest(4040)
     webContentsFromIdMock.mockImplementation((id: number) =>
@@ -301,21 +302,8 @@ describe('browserManager popup child policies', () => {
   })
 
   it("saves a popup page's agent download to its path and refuses a second claim on the tab", async () => {
-    let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
-    const opener = {
-      id: 406,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setWindowOpenHandler: vi.fn(),
-      on: vi.fn((event: string, listener: (window: { webContents: unknown }) => void) => {
-        if (event === 'did-create-window') {
-          didCreateWindow = listener
-        }
-      }),
-      off: vi.fn()
-    }
-    const popup = { ...opener, id: 4060, on: vi.fn() }
+    const opener = fakeGuest(406)
+    const popup = fakeGuest(4060)
     webContentsFromIdMock.mockImplementation((id: number) =>
       id === opener.id ? opener : id === popup.id ? popup : null
     )
@@ -337,6 +325,5 @@ describe('browserManager popup child policies', () => {
 
     expect(item.setSavePath).toHaveBeenCalledWith('/work/out/receipt.pdf')
     await expect(claim.started).resolves.toBe(true)
-    claim.release()
   })
 })

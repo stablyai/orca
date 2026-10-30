@@ -238,16 +238,17 @@ describe('tab-shaped OAuth opens without an opener', () => {
   })
 })
 
-describe('target=_blank links to local files', () => {
+describe('target=_blank links', () => {
   const link = { frameName: '', features: '', disposition: 'foreground-tab' }
 
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
     rendererSendMock.mockReset()
+    guestDownloadURLMock.mockReset()
   })
 
-  it('opens them in an Orca tab from a local page', () => {
+  it('opens local files in an Orca tab from a local page', () => {
     const handler = attachClickedGuest('file:///tmp/site/index.html')
 
     expect(handler({ url: 'file:///tmp/site/detail.html#pain', ...link })).toEqual({
@@ -270,19 +271,8 @@ describe('target=_blank links to local files', () => {
       action: 'blocked'
     })
   })
-})
 
-describe('target=_blank links during an agent download', () => {
-  const link = { frameName: '', features: '', disposition: 'foreground-tab' }
-
-  beforeEach(() => {
-    resetBrowserManagerMocks(browserMocks)
-    resetBrowserManagerState()
-    rendererSendMock.mockReset()
-    guestDownloadURLMock.mockReset()
-  })
-
-  it('downloads the link on the claiming page instead of opening a tab', () => {
+  it('downloads the link on the page during an agent download instead of opening a tab', () => {
     const handler = attachClickedGuest()
     const claim = browserManager.claimNextDownload(2200, '/work/out/report.csv')
 

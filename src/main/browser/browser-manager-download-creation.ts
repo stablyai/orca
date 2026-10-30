@@ -53,10 +53,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     this.requestedSavePaths.set(item, savePath)
   }
 
-  /**
-   * Agent `download`: saves the next download this tab (or its popups) starts to `savePath`.
-   * New-tab links opened meanwhile are downloaded in place instead of opening a tab.
-   */
+  /** Agent `download`: saves the next download this tab (or its popups) starts to `savePath`. */
   claimNextDownload(guestWebContentsId: number, savePath: string): BrowserDownloadClaim {
     // Claims live on the tab's root guest, where will-download and the popup policy look them up.
     const rootGuestWebContentsId =
