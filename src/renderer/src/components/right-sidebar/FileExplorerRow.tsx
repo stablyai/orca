@@ -23,6 +23,8 @@ import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
 export type FileExplorerRowProps = {
   node: TreeNode
+  readOnly?: boolean
+  dragDisabled?: boolean
   displayDepthOffset?: number
   isExpanded: boolean
   isLoading: boolean
@@ -73,6 +75,8 @@ export type FileExplorerRowProps = {
 /** Offsets visual indentation for a scoped tree without changing the node paths passed to file actions. */
 export function FileExplorerRow({
   node,
+  readOnly = false,
+  dragDisabled = false,
   displayDepthOffset = 0,
   isExpanded,
   isLoading,
@@ -115,6 +119,7 @@ export function FileExplorerRow({
   onNativeDragTargetChange,
   onNativeDragExpandDir
 }: FileExplorerRowProps): React.JSX.Element {
+  const dragBlocked = readOnly || dragDisabled
   const showLoadError = node.isDirectory && isExpanded && !isLoading && loadError !== null
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
@@ -153,44 +158,51 @@ export function FileExplorerRow({
           style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
           ref={setRowDragNode}
           // The OS-drop owner reads the target folder here at drop time.
-          data-file-explorer-drop-dir={rowDropDir}
+          data-file-explorer-drop-dir={readOnly ? undefined : rowDropDir}
           // Let wheel capture rescue scrolling Chromium swallows over draggable rows (file-explorer-drag-scroll-marker).
-          data-explorer-draggable="true"
-          draggable
-          onDragStart={(event) => {
-            const paths =
-              selectedPaths.has(node.path) && selectedPaths.size > 1
-                ? [...selectedPaths]
-                : [node.path]
-            event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
-            if (paths.length > 1) {
-              event.dataTransfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
-            }
-            const sourceOwner = resolveDragSourceOwner?.(paths)
-            writeWorkspaceFileDragSourceIfResolved(
-              event.dataTransfer,
-              sourceWorkspaceId,
-              sourceOwner?.executionHostId,
-              sourceOwner?.runtimeEnvironmentId
-            )
-            event.dataTransfer.effectAllowed = 'copyMove'
-            onDragSourceChange(node.path)
+          data-explorer-draggable={dragBlocked ? undefined : 'true'}
+          draggable={!dragBlocked}
+          onDragStart={
+            dragBlocked
+              ? undefined
+              : (event) => {
+                  const paths =
+                    selectedPaths.has(node.path) && selectedPaths.size > 1
+                      ? [...selectedPaths]
+                      : [node.path]
+                  event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
+                  if (paths.length > 1) {
+                    event.dataTransfer.setData(
+                      WORKSPACE_FILE_PATHS_MIME,
+                      encodeWorkspaceFilePaths(paths)
+                    )
+                  }
+                  const sourceOwner = resolveDragSourceOwner?.(paths)
+                  writeWorkspaceFileDragSourceIfResolved(
+                    event.dataTransfer,
+                    sourceWorkspaceId,
+                    sourceOwner?.executionHostId,
+                    sourceOwner?.runtimeEnvironmentId
+                  )
+                  event.dataTransfer.effectAllowed = 'copyMove'
+                  onDragSourceChange(node.path)
 
-            if (paths.length > 1) {
-              const btn = event.currentTarget
-              const rowW = btn.getBoundingClientRect().width
-              const ghost = createMultiSelectDragGhost(paths, rowW)
+                  if (paths.length > 1) {
+                    const btn = event.currentTarget
+                    const rowW = btn.getBoundingClientRect().width
+                    const ghost = createMultiSelectDragGhost(paths, rowW)
 
-              document.body.appendChild(ghost)
-              event.dataTransfer.setDragImage(ghost, 12, 12)
-              setTimeout(() => document.body.removeChild(ghost), 0)
-            }
-          }}
-          onDragEnd={() => onDragSourceChange(null)}
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+                    document.body.appendChild(ghost)
+                    event.dataTransfer.setDragImage(ghost, 12, 12)
+                    setTimeout(() => document.body.removeChild(ghost), 0)
+                  }
+                }
+          }
+          onDragEnd={dragBlocked ? undefined : () => onDragSourceChange(null)}
+          onDragOver={dragBlocked ? undefined : handleDragOver}
+          onDragEnter={dragBlocked ? undefined : handleDragEnter}
+          onDragLeave={dragBlocked ? undefined : handleDragLeave}
+          onDrop={dragBlocked ? undefined : handleDrop}
           onClick={(e) => onClick(e)}
           onDoubleClick={onDoubleClick}
         >
@@ -242,6 +254,9 @@ export function FileExplorerRow({
                   : undefined
             }
             onDoubleClick={(e) => {
+              if (readOnly) {
+                return
+              }
               // Keep icon/empty-row double-clicks available for pin preview and directory toggling.
               e.stopPropagation()
               onStartRename(node)
@@ -275,6 +290,7 @@ export function FileExplorerRow({
       </ContextMenuTrigger>
       <FileExplorerRowContextMenu
         node={node}
+        readOnly={readOnly}
         isExpanded={isExpanded}
         deleteShortcutLabel={deleteShortcutLabel}
         connectionId={connectionId}

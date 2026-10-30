@@ -14,6 +14,7 @@ import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cach
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
+  resolveLocalDirectoryListingPath,
   resolveLocalFileRequestPath
 } from '../local-file-access-resolution'
 import { isPathAbsentError } from './filesystem-path-containment'
@@ -46,6 +47,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         dirPath: string
         connectionId?: string
         followSymlinks?: boolean
+        access?: LocalFileAccess
         /** A user act (open or Retry); may start a stopped WSL distro. */
         wakeWslDistro?: boolean
       }
@@ -60,14 +62,14 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         return await guardWslUncPathAccess(
           args.dirPath,
           async () => {
-            const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
+            const dirPath = await resolveLocalDirectoryListingPath(args.dirPath, args.access, store)
             throwSite = 'readdir'
             const entries = await readdir(windowsFsPath(dirPath), { withFileTypes: true })
             const mapped = await classifyFilesystemDirectoryEntries(
               args.dirPath,
               entries,
               args.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false,
-              (path) => resolveDesktopAuthorizedPath(path, store)
+              (path) => resolveLocalDirectoryListingPath(path, args.access, store)
             )
             return sortDirEntries(mapped)
           },

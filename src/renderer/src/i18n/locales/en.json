@@ -21314,6 +21314,13 @@
     "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
   },
   "fileExplorer": {
+    "navigation": {
+      "up": "Up",
+      "openFolder": "Open Folder…",
+      "outsideWorkspace": "Outside the workspace · read-only",
+      "backToWorkspace": "Back to workspace",
+      "findUnavailableOutside": "Find is not available outside the workspace"
+    },
     "root": {
       "label": "Explorer root",
       "full": "Repository root",

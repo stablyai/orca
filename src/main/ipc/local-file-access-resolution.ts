@@ -20,6 +20,8 @@ import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/wsl-unc-drive
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a file opened by name needs an absolute path.'
+const USER_DIRECTORY_NEEDS_ABSOLUTE_PATH_MESSAGE =
+  'Access denied: a directory opened by name needs an absolute path.'
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 
 const CHAT_IMAGE_TYPE_MESSAGE = 'Access denied: a chat can only show local image files.'
@@ -42,6 +44,21 @@ function resolveUserNamedLocalPath(targetPath: string): string {
     throw new Error(USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE)
   }
   return resolve(targetPath)
+}
+
+async function resolveUserNamedDirectoryPath(targetPath: string): Promise<string> {
+  if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
+    throw new Error(USER_DIRECTORY_NEEDS_ABSOLUTE_PATH_MESSAGE)
+  }
+  const resolvedTarget = resolve(targetPath)
+  if (isNetworkSharePath(resolvedTarget) || isRefusedAutomaticLoadPath(resolvedTarget)) {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  const directoryPath = resolve(await realpathAcrossWslDriveMount(resolvedTarget))
+  if (isNetworkSharePath(directoryPath) || isRefusedAutomaticLoadPath(directoryPath)) {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  return directoryPath
 }
 
 /** Require an existing regular user-named file; project paths retain normal canonicalization. */
@@ -172,6 +189,9 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   if (access.kind === 'user-file') {
     return { kind: 'user-file' }
   }
+  if (access.kind === 'user-directory') {
+    return { kind: 'user-directory' }
+  }
   if (access.kind === 'chat-image') {
     return { kind: 'chat-image' }
   }
@@ -192,7 +212,13 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   return undefined
 }
 
-export type LocalRequestOperation = 'read' | 'write' | 'rename-from' | 'rename-to' | 'import-into'
+export type LocalRequestOperation =
+  | 'read'
+  | 'read-directory'
+  | 'write'
+  | 'rename-from'
+  | 'rename-to'
+  | 'import-into'
 
 type KindRule = (targetPath: string) => Promise<string>
 
@@ -204,9 +230,11 @@ function declaredKindRule(
   switch (fileAccess.kind) {
     case 'user-file':
       // Only the opened document itself receives this rename access.
-      return operation !== 'import-into'
+      return operation !== 'import-into' && operation !== 'read-directory'
         ? async (targetPath) => resolveUserNamedLocalPath(targetPath)
         : undefined
+    case 'user-directory':
+      return operation === 'read-directory' ? resolveUserNamedDirectoryPath : undefined
     case 'document-resource':
       return operation === 'read'
         ? (targetPath) => resolveDocumentResourcePath(targetPath, fileAccess.documentPath)
@@ -237,6 +265,9 @@ export async function resolveLocalRequestPath(
     return resolveDesktopAuthorizedPath(targetPath, store, options)
   }
   if (typeof targetPath !== 'string') {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  if (fileAccess.kind === 'user-directory' && isRefusedAutomaticLoadPath(resolve(targetPath))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   // Device names must be refused before any automatic load, even inside projects.
@@ -281,6 +312,20 @@ export function resolveLocalFileRequestPath(
   store: RuntimeStore
 ): Promise<string> {
   return resolveLocalRequestPath(targetPath, access, store, 'read')
+}
+
+/** A desktop directory listing; user-directory access adds an absolute local directory. */
+export async function resolveLocalDirectoryListingPath(
+  targetPath: string,
+  access: unknown,
+  store: RuntimeStore
+): Promise<string> {
+  const directoryPath = await resolveLocalRequestPath(targetPath, access, store, 'read-directory')
+  const userDirectory = parseLocalFileAccess(access)?.kind === 'user-directory'
+  if (userDirectory && !(await stat(windowsFsPath(directoryPath))).isDirectory()) {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  return directoryPath
 }
 
 export function resolveLocalWriteRequestPath(

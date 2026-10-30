@@ -12,7 +12,7 @@ import {
   clearFailedOpenedDirectoryLink,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
-import { fileExplorerDirDepth, fileExplorerListingToDirCache } from './file-explorer-dir-pages'
+import { fileExplorerListingToDirCache } from './file-explorer-dir-pages'
 import { useFileExplorerLoadMoreDir } from './use-file-explorer-load-more'
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
 import { collectStaleDirCachePaths } from './file-explorer-stale-dir-cache'
@@ -25,6 +25,7 @@ import {
   withPendingFileExplorerDirCacheEntries
 } from './file-explorer-dir-load-state'
 import { statUserOpenedPath, type UserOpenedPathStat } from '@/lib/user-opened-local-path'
+import { getExplorerDirectoryDepth, getExplorerRefreshDirs } from './file-explorer-display-root'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
@@ -54,9 +55,10 @@ type UseFileExplorerTreeResult = {
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 export function useFileExplorerTree(
-  worktreePath: string | null,
+  treeRootPath: string | null,
   expanded: Set<string>,
-  activeWorktreeId?: string | null
+  activeWorktreeId?: string | null,
+  worktreePath: string | null = treeRootPath
 ): UseFileExplorerTreeResult {
   const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
   const [loadingDirPaths, setLoadingDirPaths] = useState<ReadonlySet<string>>(
@@ -128,7 +130,7 @@ export function useFileExplorerTree(
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
-        if (depth === -1) {
+        if (dirPath === treeRootPath) {
           setRootError(null)
           setSourceWorkspaceId(activeWorktreeId?.trim() || null)
         }
@@ -146,7 +148,7 @@ export function useFileExplorerTree(
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
-        if (depth === -1) {
+        if (dirPath === treeRootPath) {
           // Preserve root errors so authorization/path failures cannot look like empty worktrees.
           setRootError(describeFileExplorerReadError(error))
           setSourceWorkspaceId(null)
@@ -169,7 +171,7 @@ export function useFileExplorerTree(
         return !options?.failOnError
       }
     },
-    [activeWorktreeId, updateLoadingDirPaths, worktreePath]
+    [activeWorktreeId, treeRootPath, updateLoadingDirPaths, worktreePath]
   )
 
   const markPathAsDirectory = useCallback((path: string) => {
@@ -217,7 +219,7 @@ export function useFileExplorerTree(
   )
 
   const refreshTree = useCallback(async (): Promise<FileExplorerTreeRefreshOutcome> => {
-    if (!worktreePath) {
+    if (!treeRootPath) {
       // No read means superseded; root-unreadable tells callers to drop pending refreshes.
       return 'superseded'
     }
@@ -229,21 +231,20 @@ export function useFileExplorerTree(
       }
     }
     // Callers use the latest callback, so expanded reflects the current traversal.
-    for (const dirPath of collectStaleDirCachePaths(dirCacheRef.current, worktreePath, expanded)) {
+    for (const dirPath of collectStaleDirCachePaths(dirCacheRef.current, treeRootPath, expanded)) {
       staleDirsRef.current.add(dirPath)
     }
     const refreshSession = dirLoadTrackerRef.current.getSession()
     rootReadFailedRef.current = false
+    const depth = getExplorerDirectoryDepth(worktreePath, treeRootPath, treeRootPath)
     // Propagate root failure before expanded waves; 200 dead dirs would otherwise impose about 50 sequential transport timeouts.
-    const rootLoadCompleted = await loadDir(worktreePath, -1, { force: true, failOnError: true })
+    const rootLoadCompleted = await loadDir(treeRootPath, depth, { force: true, failOnError: true })
     if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
       // Callers handle root failure and supersession differently; neither verified the expanded dirs.
       return rootReadFailedRef.current ? 'root-unreadable' : 'superseded'
     }
     // Exclude the root already force-loaded above to avoid reading it twice.
-    const expandedDirs = Array.from(expanded)
-      .filter((dirPath) => dirPath !== worktreePath)
-      .map((dirPath) => ({ dirPath, depth: fileExplorerDirDepth(worktreePath, dirPath) }))
+    const expandedDirs = getExplorerRefreshDirs(worktreePath, treeRootPath, expanded)
     const allDirsCommitted = await refreshFileExplorerExpandedDirs({
       dirs: expandedDirs,
       worktreePath,
@@ -266,19 +267,17 @@ export function useFileExplorerTree(
       }
     })
     return allDirsCommitted ? 'refreshed' : 'superseded'
-  }, [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath])
+  }, [activeWorktreeId, expanded, loadDir, treeRootPath, updateLoadingDirPaths, worktreePath])
 
   const refreshDir = useCallback(
     async (dirPath: string, options?: { wakeWslDistro?: boolean }) => {
-      if (!worktreePath) {
+      if (!treeRootPath) {
         return
       }
-      await loadDir(dirPath, fileExplorerDirDepth(worktreePath, dirPath), {
-        force: true,
-        wakeWslDistro: options?.wakeWslDistro
-      })
+      const depth = getExplorerDirectoryDepth(worktreePath, treeRootPath, dirPath)
+      await loadDir(dirPath, depth, { force: true, wakeWslDistro: options?.wakeWslDistro })
     },
-    [worktreePath, loadDir]
+    [treeRootPath, worktreePath, loadDir]
   )
 
   const loadMoreDir = useFileExplorerLoadMoreDir({
@@ -293,7 +292,7 @@ export function useFileExplorerTree(
 
   const isDirStale = useCallback((dirPath: string) => staleDirsRef.current.has(dirPath), [])
 
-  const rootCache = worktreePath ? dirCache[worktreePath] : undefined
+  const rootCache = treeRootPath ? dirCache[treeRootPath] : undefined
 
   const resetAndLoad = useCallback(
     (options?: { wakeWslDistro?: boolean }) => {
@@ -305,11 +304,12 @@ export function useFileExplorerTree(
       setSourceWorkspaceId(null)
       updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
       setRootError(null)
-      if (worktreePath) {
-        void loadDir(worktreePath, -1, { force: true, wakeWslDistro: options?.wakeWslDistro })
+      if (treeRootPath) {
+        const depth = getExplorerDirectoryDepth(worktreePath, treeRootPath, treeRootPath)
+        void loadDir(treeRootPath, depth, { force: true, wakeWslDistro: options?.wakeWslDistro })
       }
     },
-    [worktreePath, loadDir, updateLoadingDirPaths]
+    [treeRootPath, worktreePath, loadDir, updateLoadingDirPaths]
   )
 
   return {

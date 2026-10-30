@@ -8,6 +8,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { Repo } from '../../../../shared/repo-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
+import { getExplorerWatchedWorkspacePath } from './file-explorer-display-root'
 import { buildFolderStatusMap, buildStatusMap } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
@@ -30,7 +31,9 @@ type UseFileExplorerTreePaneStateParams = {
   activeRepo: Repo | null
   worktreePath: string | null
   visibleFilesWorktreePath: string | null
+  visibleTreeRootPath?: string | null
   displayRootPath: string | null
+  readOnly?: boolean
   effectiveExpanded: Set<string>
   expanded: Set<string>
   activeFileId: string | null
@@ -70,7 +73,9 @@ export function useFileExplorerTreePaneState({
   activeRepo,
   worktreePath,
   visibleFilesWorktreePath,
+  visibleTreeRootPath = visibleFilesWorktreePath,
   displayRootPath,
+  readOnly = false,
   effectiveExpanded,
   expanded,
   activeFileId,
@@ -178,7 +183,8 @@ export function useFileExplorerTreePaneState({
 
   useFileExplorerTreeLoadEffects({
     workspaceKey: activeWorktreeId,
-    visibleFilesWorktreePath,
+    visibleFilesWorktreePath: visibleTreeRootPath,
+    workspacePath: worktreePath,
     displayRootPath,
     expanded: effectiveExpanded,
     dirCache,
@@ -204,7 +210,7 @@ export function useFileExplorerTreePaneState({
   })
 
   useFileExplorerWatch({
-    worktreePath: visibleFilesWorktreePath,
+    worktreePath: getExplorerWatchedWorkspacePath(visibleFilesWorktreePath, displayRootPath),
     activeWorktreeId,
     dirCache,
     setDirCache,
@@ -288,6 +294,7 @@ export function useFileExplorerTreePaneState({
     handleClick: handlers.handleClick,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     scrollToIndex: rowScrolling.scrollToIndex,
+    readOnly,
     pathOwner
   })
 

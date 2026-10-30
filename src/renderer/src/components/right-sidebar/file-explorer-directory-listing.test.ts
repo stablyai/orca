@@ -15,6 +15,7 @@ vi.mock('./file-explorer-operation-owner', () => ({
 }))
 
 import {
+  fileExplorerEntriesToTreeNodes,
   keepOpenedDirectoryLinks,
   clearFailedOpenedDirectoryLink,
   readFileExplorerDirectory
@@ -55,6 +56,34 @@ it('forwards the WSL wake flag of a user act to the directory read', async () =>
   expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {
     wakeWslDistro: true
   })
+})
+
+it('declares user-directory access only for listings outside the workspace', async () => {
+  readRuntimeDirectory.mockResolvedValue([])
+
+  await readFileExplorerDirectory('wt-1', '/workspace', '/tmp/reference')
+
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/tmp/reference', {
+    access: { kind: 'user-directory' }
+  })
+})
+
+it('gives outside nodes absolute identities so workspace git status cannot decorate them', () => {
+  expect(
+    fileExplorerEntriesToTreeNodes(
+      [{ name: 'package.json', isDirectory: false, isSymlink: false }],
+      '/tmp/reference',
+      -1,
+      '/workspace',
+      { kind: 'local' }
+    )
+  ).toEqual([
+    expect.objectContaining({
+      path: '/tmp/reference/package.json',
+      relativePath: '/tmp/reference/package.json',
+      depth: 0
+    })
+  ])
 })
 
 describe('keepOpenedDirectoryLinks', () => {

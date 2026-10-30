@@ -11,12 +11,18 @@ import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { getFileExplorerOperationExecutionHostId } from './file-explorer-operation-owner'
 import type { WorkspaceFileDragSource } from '@/lib/workspace-file-drag'
+import {
+  isFileExplorerNodeReadOnly,
+  isFileExplorerPathReadOnly
+} from './file-explorer-row-action-visibility'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
   inlineInputIndex: number
   rowProjection: FileExplorerRowProjection
   displayDepthOffset?: number
+  readOnly?: boolean
+  worktreePath?: string | null
   inlineInput: InlineInput | null
   handleInlineSubmit: (value: string) => void
   dismissInlineInput: () => void
@@ -106,6 +112,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     inlineInputIndex,
     rowProjection,
     displayDepthOffset = 0,
+    readOnly = false,
+    worktreePath = null,
     inlineInput,
     handleInlineSubmit,
     dismissInlineInput,
@@ -193,6 +201,13 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         }
 
         const n = node!
+        const nodeReadOnly = isFileExplorerNodeReadOnly(n, worktreePath, readOnly)
+        const dragDisabled =
+          selectedPaths.has(n.path) &&
+          selectedPaths.size > 1 &&
+          [...selectedPaths].some((path) =>
+            isFileExplorerPathReadOnly(path, worktreePath, readOnly)
+          )
         // Paths are already normalized at construction; avoid two redundant regexes per row render.
         const normalizedRelativePath = n.relativePath
         const nodeStatus = n.isDirectory
@@ -220,6 +235,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             style={{ transform: `translateY(${vItem.start}px)` }}
           >
             <FileExplorerRow
+              readOnly={nodeReadOnly}
+              dragDisabled={dragDisabled}
               displayDepthOffset={displayDepthOffset}
               node={n}
               isExpanded={expanded.has(n.path)}

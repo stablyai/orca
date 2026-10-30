@@ -48,7 +48,11 @@ export function assertRemoteWriteFitsOneRequest(content: string): void {
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   dirPath: string,
-  { wakeWslDistro, ...options }: { followSymlinks?: boolean; wakeWslDistro?: boolean } = {}
+  {
+    wakeWslDistro,
+    access,
+    ...options
+  }: { followSymlinks?: boolean; wakeWslDistro?: boolean; access?: LocalFileAccess } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
@@ -57,13 +61,19 @@ export async function readRuntimeDirectory(
       dirPath,
       connectionId: context.connectionId,
       ...options,
-      ...(wakeWslDistro ? { wakeWslDistro } : {})
+      ...(wakeWslDistro ? { wakeWslDistro } : {}),
+      ...localAccess(context.connectionId, access)
     })
   }
+  const remoteOptions = options.followSymlinks ? { followSymlinks: true } : {}
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
     'files.readDir',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, ...options },
+    {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath,
+      ...remoteOptions
+    },
     { timeoutMs: 15_000 }
   )
 }

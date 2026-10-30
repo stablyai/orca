@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readRuntimeDirectory } from './runtime-file-mutation-client'
 import { readRuntimeFileContent, readRuntimeFilePreview } from './runtime-file-read-client'
 import {
+  fsReadDir,
   fsReadFile,
   fsGrantRuntimeFilePreview,
   runtimeEnvironmentCall,
@@ -11,6 +12,45 @@ import {
 installRuntimeFileClientEnvironment()
 
 describe('runtime file client', () => {
+  it('declares user-directory access for a local directory listing', async () => {
+    fsReadDir.mockResolvedValue([])
+
+    await readRuntimeDirectory(
+      {
+        target: { kind: 'local' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      '/tmp/reference',
+      { access: { kind: 'user-directory' } }
+    )
+
+    expect(fsReadDir).toHaveBeenCalledWith({
+      dirPath: '/tmp/reference',
+      access: { kind: 'user-directory' }
+    })
+  })
+
+  it('never forwards user-directory access to an SSH directory listing', async () => {
+    fsReadDir.mockResolvedValue([])
+
+    await readRuntimeDirectory(
+      {
+        target: { kind: 'local' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      '/repo',
+      { access: { kind: 'user-directory' } }
+    )
+
+    expect(fsReadDir).toHaveBeenCalledWith({
+      dirPath: '/repo',
+      connectionId: 'ssh-1'
+    })
+  })
+
   it('rejects an external SSH file read after the target changes', async () => {
     await expect(
       readRuntimeFileContent({

@@ -23,7 +23,7 @@ export type RefreshFileExplorerTreeDir = {
 
 export type RefreshFileExplorerExpandedDirsParams = {
   dirs: RefreshFileExplorerTreeDir[]
-  worktreePath: string
+  worktreePath: string | null
   dirLoadTracker: FileExplorerDirLoadTracker
   setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
   updateLoadingDirPaths: FileExplorerLoadingDirsUpdater

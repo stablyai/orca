@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
 import type { Store } from '../persistence'
@@ -19,7 +19,13 @@ vi.mock('node:fs/promises', () => {
     vi.fn(async (target: unknown) => {
       fsCalls.push(`${name} ${String(target)}`)
       if (name !== 'realpath') {
-        return { isFile: () => true, isDirectory: () => false }
+        return { isFile: () => true, isDirectory: () => String(target).endsWith('\\reference') }
+      }
+      if (String(target).endsWith('device-dir-link')) {
+        return '\\\\?\\UNC\\attacker.example\\share\\dir'
+      }
+      if (String(target).endsWith('reserved-dir-link')) {
+        return 'C:\\Users\\me\\NUL'
       }
       // A project-local name resolving to a device.
       if (String(target).endsWith('share-link.png')) {
@@ -44,6 +50,7 @@ vi.mock('electron', () => ({ app: { getPath: () => 'C:\\Users\\me\\AppData\\Roam
 vi.mock('../repo-worktrees', () => ({ listRepoWorktreeGraph: vi.fn(async () => []) }))
 
 import {
+  resolveLocalDirectoryListingPath,
   resolveLocalFileRequestPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath
@@ -106,6 +113,61 @@ describe('document images on a network share', () => {
       'Access denied'
     )
     expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
+  })
+})
+
+describe('user directories on a network share', () => {
+  beforeEach(() => {
+    fsCalls.length = 0
+  })
+
+  it.each(networkTargets.slice(0, 2))('refuses %s without touching it', async (target) => {
+    await expect(
+      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+    ).rejects.toThrow('Access denied')
+    expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
+  })
+
+  it.each([
+    '\\\\?\\UNC\\attacker.example\\share\\dir',
+    '\\\\.\\UNC\\attacker.example\\share\\dir',
+    'C:\\Users\\me\\NUL'
+  ])('refuses the Windows device path %s before any filesystem call', async (target) => {
+    await expect(
+      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+    ).rejects.toThrow('Access denied')
+    expect(fsCalls).toEqual([])
+  })
+
+  it.each(['device-dir-link', 'reserved-dir-link'])(
+    'refuses a directory whose real path from %s is a device path before stat',
+    async (linkName) => {
+      const linkPath = `C:\\Users\\me\\${linkName}`
+      await expect(
+        resolveLocalDirectoryListingPath(linkPath, { kind: 'user-directory' }, store)
+      ).rejects.toThrow('Access denied')
+      expect(fsCalls).toEqual([`realpath ${linkPath}`])
+    }
+  )
+})
+
+describe('user directories on a WSL drive mount', () => {
+  const originalPlatform = process.platform
+  beforeEach(() => {
+    fsCalls.length = 0
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+  })
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+  })
+
+  it('checks the folder through its drive path because WSL refuses the UNC spelling', async () => {
+    const target = '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\me\\reference'
+    await expect(
+      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+    ).resolves.toBe(target)
+    expect(fsCalls).toContain('stat C:\\Users\\me\\reference')
+    expect(fsCalls).not.toContain(`stat ${target}`)
   })
 })
 

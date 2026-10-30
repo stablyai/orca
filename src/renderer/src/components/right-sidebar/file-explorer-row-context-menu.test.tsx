@@ -76,7 +76,10 @@ const fileNode: TreeNode = {
 
 function renderRevealItem(
   owner: Partial<
-    Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId' | 'node'>
+    Pick<
+      React.ComponentProps<typeof FileExplorerRowContextMenu>,
+      'connectionId' | 'node' | 'readOnly'
+    >
   > = {}
 ): ItemProps | undefined {
   renderToStaticMarkup(
@@ -136,6 +139,16 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
       expect(labels).toContain('Copy Relative Path')
     }
   )
+
+  it('hides Copy Relative Path for outside-workspace rows while keeping Copy Path', () => {
+    renderRevealItem({
+      readOnly: true,
+      node: fileNode
+    })
+    const labels = items.list.flatMap((item) => React.Children.toArray(item.children))
+    expect(labels).toContain('Copy Path')
+    expect(labels).not.toContain('Copy Relative Path')
+  })
 
   it('reveals a local row through the shared reveal action', () => {
     const reveal = renderRevealItem()

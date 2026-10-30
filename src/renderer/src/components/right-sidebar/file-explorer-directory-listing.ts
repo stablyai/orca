@@ -45,10 +45,11 @@ export function fileExplorerEntriesToTreeNodes(
 ): TreeNode[] {
   return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
     const path = joinPath(dirPath, entry.name)
+    const workspaceRelativePath = getRelativePathInsideRoot(path, worktreePath)
     return {
       name: entry.name,
       path,
-      relativePath: getRelativePathInsideRoot(path, worktreePath) ?? entry.name,
+      relativePath: workspaceRelativePath ?? path,
       isDirectory: entry.isDirectory,
       isSymlink: entry.isSymlink,
       depth: depth + 1,
@@ -138,10 +139,12 @@ export async function readFileExplorerDirectory(
     worktreePath,
     connectionId: route.connectionId
   }
+  const outsideWorkspace = getRelativePathInsideRoot(dirPath, worktreePath) === null
   const readOptions = {
     ...(useAppStore.getState().settings?.followSymlinkedDirectories
       ? { followSymlinks: true }
       : {}),
+    ...(outsideWorkspace ? { access: { kind: 'user-directory' as const } } : {}),
     ...(options.wakeWslDistro === undefined ? {} : { wakeWslDistro: options.wakeWslDistro })
   }
   if (!options.paged && !options.after) {
