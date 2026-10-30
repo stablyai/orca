@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -12,6 +12,14 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'
 const SECOND_CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f3170'
+
+// Completed CLI 0.159.0 /review, IDs sanitized; parent activity below is synthetic.
+const reviewRecords = readFileSync(
+  new URL('./__fixtures__/codex-review-child-0159.jsonl', import.meta.url),
+  'utf8'
+)
+  .trimEnd()
+  .split('\n')
 
 function line(record: unknown): string {
   return `${JSON.stringify(record)}\n`
@@ -48,7 +56,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
   })
 
   it.each(['immediate', 'delayed', 'revoked'])(
-    'keeps file-backed child continuation through credential %s',
+    'keeps recorded child continuation through credential %s',
     async (mode) => {
       const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
       dirs.push(dir)
@@ -67,7 +75,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
           }
         })
       )
-      writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
+      writeFileSync(childPath, `${reviewRecords[0]}\n`)
       const server = new AgentHookServer()
       const admit = () =>
         installTestLaunchAuthority(server, [
@@ -139,6 +147,10 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         expect(server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)).toBe(original)
         expect(original?.launchToken).toBeUndefined()
         expect(server.getStatusSnapshot()[0]?.launchToken).toBe('current-launch')
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(server.getStatusSnapshot()[0]?.subagents).toEqual([
+          expect.objectContaining({ id: CHILD_ID, state: 'working' })
+        ])
         const deps = agentHookRuntimeDeps(
           server,
           { read: () => ({ kind: 'unobserved' as const }) },
@@ -173,12 +185,18 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
           expect(enriched).not.toHaveBeenCalled()
         }
 
-        appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
+        appendFileSync(childPath, `${reviewRecords[1]}\n`)
         await vi.waitFor(
           () => {
             expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
           },
           { timeout: 2_000, interval: 50 }
+        )
+        expect(server.getStatusSnapshot()[0]?.launchToken).toBe(
+          mode === 'revoked' ? undefined : 'current-launch'
+        )
+        expect(selected()?.providerSession.id ?? null).toBe(
+          mode === 'revoked' ? null : 'root-session'
         )
       } finally {
         server.stop()
