@@ -87,7 +87,7 @@ describe('worker orca API parity with frames', () => {
   it('exposes api and a synchronous has() for worker methods', async () => {
     let orca!: PluginWorkerOrcaApi
     await activateWith((api) => (orca = api))
-    expect(orca.api).toEqual({ major: 1, minor: 0 })
+    expect(orca.api).toEqual({ major: 1, minor: 1 })
     expect(orca.host.has('storage.get')).toBe(true)
     expect(orca.host.has('editor.applyEdit')).toBe(false)
     expect(Object.isFrozen(orca)).toBe(true)

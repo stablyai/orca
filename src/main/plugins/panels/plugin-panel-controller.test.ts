@@ -41,6 +41,34 @@ async function createPlugin(): Promise<ValidDiscoveredPlugin> {
   }
 }
 
+describe('PluginPanelController commands.execute', () => {
+  it('forwards a panel commands.execute call to the session bound plugin', async () => {
+    const plugin = await createPlugin()
+    const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { value: null } })
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall,
+      log: () => vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'commands.execute',
+        params: { commandId: 'refresh' }
+      })
+    ).resolves.toEqual({ ok: true, value: { value: null } })
+    expect(executeHostCall).toHaveBeenCalledWith(
+      plugin.pluginKey,
+      'commands.execute',
+      { commandId: 'refresh' },
+      'panel'
+    )
+  })
+})
+
 describe('PluginPanelController identity binding', () => {
   it('uses the session identity and rejects caller-supplied plugin claims', async () => {
     const plugin = await createPlugin()

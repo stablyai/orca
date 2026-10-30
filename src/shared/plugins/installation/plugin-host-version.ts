@@ -1,5 +1,6 @@
 import { satisfiesOrcaEngineRange } from '../manifest/plugin-manifest-engine-range'
 import {
+  PLUGIN_COMMANDS_EXECUTE_SINCE,
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
@@ -9,7 +10,8 @@ import {
 export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_MANIFEST_V2_SINCE,
-  PLUGIN_DERIVED_PUBLISHER_SINCE
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_COMMANDS_EXECUTE_SINCE
 ].reduce((newest, version) => (satisfiesOrcaEngineRange(version, `>=${newest}`) ? version : newest))
 
 /**

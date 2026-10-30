@@ -53,7 +53,7 @@ describe('window.orca', () => {
     expect(Object.isFrozen(orca)).toBe(true)
     expect(Object.isFrozen(orca.host)).toBe(true)
     expect(posted()).toEqual([{ orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }])
-    expect(orca.api).toEqual({ major: 1, minor: 0 })
+    expect(orca.api).toEqual({ major: 1, minor: 1 })
     expect(orca.host.has('workspace.readContext')).toBe(true)
     expect(orca.host.has('terminal.sendText')).toBe(false)
     expect(orca.document).toBeUndefined()
