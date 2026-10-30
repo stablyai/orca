@@ -95,11 +95,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         const rendered = await controller.serializeBuffer!(ptyId, {
           scrollbackRows: this.headlessTerminalScrollbackRows
         })
-        if (
-          this.headlessTerminals.get(ptyId) !== state ||
-          !rendered ||
-          rendered.data.length === 0
-        ) {
+        if (this.headlessTerminals.get(ptyId) !== state || !rendered) {
+          return
+        }
+        // Why: a blank renderer buffer can still carry kitty flags beside the
+        // payload. Returning on empty data left the new emulator at 0, so an
+        // interrupt sent ETX while the TUI was in the protocol.
+        if (rendered.data.length === 0) {
+          if (typeof rendered.kittyKeyboardFlags === 'number') {
+            await state.emulator.applyKittyKeyboardFlags(rendered.kittyKeyboardFlags)
+          }
           return
         }
         this.recordOsc7MetadataForPty(ptyId, rendered.data)
@@ -113,6 +118,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         await state.emulator.write(rendered.data)
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
+        }
+        // Why AFTER the seed write: a renderer buffer omits kitty pushes, same as a
+        // provider snapshot. The proven flags ride beside the payload. Without this
+        // reapply, a model seeded from the mounted renderer reports 0 and an
+        // interrupt falls back to ETX while the TUI is still in the protocol.
+        if (typeof rendered.kittyKeyboardFlags === 'number') {
+          await state.emulator.applyKittyKeyboardFlags(rendered.kittyKeyboardFlags)
+          if (this.headlessTerminals.get(ptyId) !== state) {
+            return
+          }
         }
         // Why: the renderer parsed live bytes queued behind this seed while serializing; writing them again doubles TUI frames and splits escapes.
         if (typeof rendered.seq === 'number') {

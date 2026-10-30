@@ -79,7 +79,9 @@ export class RuntimeTerminalWriter {
       }
     }
     if (hasSuffix) {
-      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      // The payload already chose the interrupt bytes. Reading the flags again
+      // after the write delay can send a different sequence than the one counted.
+      const suffix = payload.slice(text.length)
       if (text) {
         // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
         await waitForTerminalWriteDelay(

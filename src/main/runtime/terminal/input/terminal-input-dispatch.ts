@@ -149,7 +149,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       if (!pty.pty.connected) {
         throw new Error('terminal_not_writable')
       }
-      const payload = buildTerminalSendPayload(action)
+      const payload = buildTerminalSendPayload(
+        action,
+        this.readPtyKittyKeyboardFlags(pty.pty.ptyId)
+      )
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
@@ -175,7 +178,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (!leaf.writable || !leaf.ptyId) {
       throw new Error('terminal_not_writable')
     }
-    const payload = buildTerminalSendPayload(action)
+    const payload = buildTerminalSendPayload(action, this.readPtyKittyKeyboardFlags(leaf.ptyId))
     if (payload === null) {
       throw new Error('invalid_terminal_send')
     }

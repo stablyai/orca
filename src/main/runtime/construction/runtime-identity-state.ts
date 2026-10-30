@@ -326,6 +326,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected readonly terminalWaiters = new RuntimeTerminalWaiterRegistry()
 
+  /** `0` until a subclass owns a headless model, so an interrupt stays a bare ETX. */
+  protected readPtyKittyKeyboardFlags(_ptyId: string): number {
+    return 0
+  }
+
   protected readonly terminalWriter = new RuntimeTerminalWriter(
     (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind) ?? false,
     (ptyId) => this.getPtyWriteHostPlatform(ptyId),
