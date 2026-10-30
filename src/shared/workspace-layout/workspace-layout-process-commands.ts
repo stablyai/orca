@@ -1,6 +1,6 @@
-// Commands that start, restart, sleep or wake terminals. Their layout effect is small (bindings
-// and sleeping records); the runtime runs the returned effects after replying.
+// Return terminal process effects separately from bindings/sleeping records; the runtime runs them after replying.
 
+import { isPaneSleepRecord } from '../agent-session-resume'
 import { omitStoredFields } from './stored-record-fields'
 import {
   applied,
@@ -13,12 +13,12 @@ import {
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
 import {
   paneKeyOf,
+  type LayoutLeaf,
   type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
 import { withWorkspace } from './workspace-layout-removal'
 
-/** Every pane of the workspace: its key (what commands name) and its leaf (what keys its data). */
 function workspacePanes(workspace: WorkspaceLayout): { paneKey: string; leafId: string }[] {
   return workspace.tabs.flatMap((tab) =>
     tab.kind === 'terminal'
@@ -27,11 +27,11 @@ function workspacePanes(workspace: WorkspaceLayout): { paneKey: string; leafId: 
   )
 }
 
-/**
- * Idempotent: starts or restores a pane that has no live terminal. A bound pane, or one whose
- * start is in flight, is left alone; only restartPane replaces a terminal. A pane with no
- * terminal and a resume record is refused: a plain start would lose how its agent resumes.
- */
+function hasResumeRecord(leaf: LayoutLeaf | undefined): boolean {
+  return leaf?.sleeping !== undefined || leaf?.resume !== undefined
+}
+
+/** Start or restore idempotently from the pane’s retained binding/resume record. Assume bindings live unless runtime evidence says otherwise; only restartPane replaces a live terminal. */
 export function startPane(
   model: WorkspaceLayoutModel,
   command: CommandOf<'startPane'>,
@@ -43,12 +43,13 @@ export function startPane(
     return refuse('pane_not_found')
   }
   const leaf = workspace.leaves?.[pane.leafId]
-  // A live terminal comes first: a running agent's resume record does not make its pane asleep.
-  if (leaf?.ptyId || context.isStarting?.(pane.leafId)) {
-    return applied(model)
+  if (leaf?.ptyId && context.retiresBinding?.(command.paneKey, leaf.ptyId)) {
+    return restartPane(model, { ...command, type: 'restartPane' })
   }
-  if (leaf?.sleeping) {
-    return refuse('pane_sleeping')
+  // A running agent’s resume record does not make a live terminal asleep.
+  const live = leaf?.ptyId && (context.isBindingLive?.(command.paneKey, leaf.ptyId) ?? true)
+  if (live || context.isStarting?.(pane.leafId)) {
+    return applied(model)
   }
   return applied(model, {}, { startPaneKeys: [command.paneKey] }, { [pane.leafId]: null })
 }
@@ -89,8 +90,11 @@ export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>):
   for (const { paneKey, leafId } of targets) {
     const record = command.records.find((entry) => entry.paneKey === paneKey)
     if (record) {
-      const sleeping = omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId'])
-      workspace = setLeaf(workspace, leafId, { ...workspace.leaves?.[leafId], sleeping })
+      const kept = omitStoredFields(workspace.leaves?.[leafId] ?? {}, ['sleeping', 'resume'])
+      const stored = omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId'])
+      // A recordOnly capture of a running agent ('live'/'quit') is a resume record, not a sleep.
+      const next = isPaneSleepRecord(stored) ? { sleeping: stored } : { resume: stored }
+      workspace = setLeaf(workspace, leafId, { ...kept, ...next })
     }
   }
   return applied(
@@ -100,24 +104,27 @@ export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>):
   )
 }
 
+/** Start slept panes unless recordOnly; retain resume records so failed starts or host crashes can retry. */
 export function wake(model: WorkspaceLayoutModel, command: CommandOf<'wake'>): Applied {
   let workspace = model.workspaces[command.workspace]!
-  const woken = workspacePanes(workspace).filter(
-    (pane) =>
+  // A recordOnly wake drops either record (how a live one is cleared); a start wakes only slept panes.
+  const woken = workspacePanes(workspace).filter((pane) => {
+    const leaf = workspace.leaves?.[pane.leafId]
+    return (
       (!command.paneKeys || command.paneKeys.includes(pane.paneKey)) &&
-      workspace.leaves?.[pane.leafId]?.sleeping
-  )
+      (command.recordOnly ? hasResumeRecord(leaf) : leaf?.sleeping !== undefined)
+    )
+  })
+  const paneKeys = woken.map((pane) => pane.paneKey)
+  if (!command.recordOnly) {
+    return applied(model, { woken: paneKeys }, { startPaneKeys: paneKeys })
+  }
   for (const { leafId } of woken) {
     workspace = setLeaf(
       workspace,
       leafId,
-      omitStoredFields(workspace.leaves![leafId]!, ['sleeping'])
+      omitStoredFields(workspace.leaves![leafId]!, ['sleeping', 'resume'])
     )
   }
-  const paneKeys = woken.map((pane) => pane.paneKey)
-  return applied(
-    withWorkspace(model, command.workspace, workspace),
-    { woken: paneKeys },
-    { startPaneKeys: command.recordOnly ? [] : paneKeys }
-  )
+  return applied(withWorkspace(model, command.workspace, workspace), { woken: paneKeys })
 }

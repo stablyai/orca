@@ -1,26 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  classifyTabEntryQuery,
-  getTabEntryOptions,
   openTabEntryWithOperations,
-  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
-  validateNewTabEntryAbsolutePath,
-  validateNewTabEntryRelativePath,
+  getTabEntryAbsolutePathRemoteBlockedMessage,
   type TabEntryOperations
 } from './tab-create-entry-action'
-import * as classifier from './tab-create-entry-classifier'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
-
-it('keeps the pure classifier available through the tab action module', () => {
-  expect(classifyTabEntryQuery).toBe(classifier.classifyTabEntryQuery)
-  expect(getTabEntryOptions).toBe(classifier.getTabEntryOptions)
-  expect(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE).toBe(
-    classifier.TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
-  )
-  expect(validateNewTabEntryAbsolutePath).toBe(classifier.validateNewTabEntryAbsolutePath)
-  expect(validateNewTabEntryRelativePath).toBe(classifier.validateNewTabEntryRelativePath)
-})
 
 describe('openTabEntryWithOperations', () => {
   function makeOperations(overrides: Partial<TabEntryOperations> = {}): TabEntryOperations {
@@ -45,7 +30,7 @@ describe('openTabEntryWithOperations', () => {
     fileList: readyFiles(['src/index.ts']),
     worktreeId: 'wt-1',
     groupId: 'group-1',
-    getFileContext: () => ({ worktreePath: '/repo', runtimeContext }),
+    getFileContext: () => ({ worktreePath: '/repo', runtimeContext, assertCurrent: () => {} }),
     allowAbsolutePaths: true,
     localPlatform: 'posix' as const,
     searchEngine: 'google' as const
@@ -363,7 +348,7 @@ describe('openTabEntryWithOperations', () => {
         query: '/tmp/notes.md',
         operations
       })
-    ).rejects.toThrow(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+    ).rejects.toThrow(getTabEntryAbsolutePathRemoteBlockedMessage())
 
     expect(operations.statUserOpenedPath).not.toHaveBeenCalled()
     expect(operations.createRuntimePath).not.toHaveBeenCalled()
@@ -392,7 +377,7 @@ describe('openTabEntryWithOperations', () => {
     await openTabEntryWithOperations({
       ...baseArgs,
       localPlatform: 'windows',
-      getFileContext: () => ({ worktreePath: 'C:/repo', runtimeContext }),
+      getFileContext: () => ({ worktreePath: 'C:/repo', runtimeContext, assertCurrent: () => {} }),
       classification: { kind: 'absolute-file', filePath: 'C:\\tmp\\notes.md' },
       query: 'C:\\tmp\\notes.md',
       operations
@@ -413,7 +398,7 @@ describe('openTabEntryWithOperations', () => {
       statUserOpenedPath: vi.fn(() => statResult),
       assertAbsolutePathAllowed: vi.fn(() => {
         if (!allowed) {
-          throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+          throw new Error(getTabEntryAbsolutePathRemoteBlockedMessage())
         }
       })
     })
@@ -425,9 +410,7 @@ describe('openTabEntryWithOperations', () => {
       operations
     })
     await vi.waitFor(() => expect(operations.statUserOpenedPath).toHaveBeenCalledTimes(1))
-    const rejection = expect(opening).rejects.toThrow(
-      TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
-    )
+    const rejection = expect(opening).rejects.toThrow(getTabEntryAbsolutePathRemoteBlockedMessage())
     allowed = false
     releaseStat?.()
     await rejection

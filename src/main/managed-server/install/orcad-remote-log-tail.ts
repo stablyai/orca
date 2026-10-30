@@ -1,8 +1,4 @@
-/**
- * The end of a slot's orcad.log, appended to a failed deploy, launch or rollback so the error
- * says why orcad stopped rather than only where its log is. Errors and the main log only; never
- * telemetry. Best-effort: a host that can't answer leaves the error as it was.
- */
+// Decorate logged errors with a bounded redacted host tail, never telemetry; missing host evidence preserves the original failure.
 import { redactString } from '../../observability/redactor'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { ORCAD_LOG_FILENAME } from './orcad-remote-host-support'
@@ -21,7 +17,7 @@ import type { OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 
 export const ORCAD_LOG_TAIL_LINES = 40
 export const ORCAD_LOG_TAIL_MAX_BYTES = 8 * 1024
-// Short, because it only decorates an error the caller already has.
+// Error decoration must not add an unbounded delay.
 const ORCAD_LOG_TAIL_TIMEOUT_MS = 10_000
 
 export function orcadLogTailCommand(host: RemoteHostPlatform, slotDir: string): string {
@@ -35,7 +31,6 @@ export function orcadLogTailCommand(host: RemoteHostPlatform, slotDir: string): 
   return `tail -c ${ORCAD_LOG_TAIL_MAX_BYTES} ${quotePosixShell(log)} 2>/dev/null || true`
 }
 
-/** The last lines of what the host printed, redacted; null when the log is empty or absent. */
 export function parseOrcadLogTail(host: RemoteHostPlatform, output: string): string | null {
   const raw = isWindowsRemoteHost(host)
     ? (readOrcadWindowsEncodedAnswer(output, ORCAD_WINDOWS_LOG_TAIL_MARKER) ?? '')
@@ -46,12 +41,12 @@ export function parseOrcadLogTail(host: RemoteHostPlatform, output: string): str
   return tail.trim() ? tail : null
 }
 
-export async function readOrcadLogTail(
+async function readOrcadLogTail(
   target: OrcadRemoteExecTarget,
   slotDir: string
 ): Promise<string | null> {
   try {
-    // No abort signal: the failure being reported may be the cancellation itself.
+    // Observe cancellation failures without reusing the already-aborted request signal.
     const output = await execCommand(target.conn, orcadLogTailCommand(target.host, slotDir), {
       wrapCommand: target.host.commandDialect !== 'powershell',
       timeoutMs: ORCAD_LOG_TAIL_TIMEOUT_MS
@@ -63,7 +58,6 @@ export async function readOrcadLogTail(
   }
 }
 
-/** `message` followed by the log tail, or `message` alone when the host had none to give. */
 export async function withOrcadLogTail(
   target: OrcadRemoteExecTarget,
   slotDir: string,

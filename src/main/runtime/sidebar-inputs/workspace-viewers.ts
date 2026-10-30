@@ -4,14 +4,11 @@ import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-wo
 
 type ClientView = { workspaceKeys: Set<string>; tabIds: Set<string>; presentUntil: number }
 
-/**
- * Who is looking at this host's workspaces: client windows by what they report on screen, and
- * phones by the session they hold open. The host's unread flag skips what someone is looking at.
- * Workspaces are keyed by identity, so path spellings of one checkout match.
- */
+/** Suppress host unread for reported desktop views and open phone sessions; workspace identity normalizes checkout path spellings. */
 export class WorkspaceViewers {
   private readonly clients = new Map<string, ClientView>()
   private readonly phoneSessions = new Map<string, number>()
+  private readonly selfRaisingClients = new Set<string>()
 
   constructor(private readonly now: () => number) {}
 
@@ -27,8 +24,14 @@ export class WorkspaceViewers {
     return !known
   }
 
+  /** Older desktops raise unread themselves; defer host raising until their connection drops via dropClient. */
+  noteSelfRaisingClient(clientKey: string): void {
+    this.selfRaisingClients.add(clientKey)
+  }
+
   dropClient(clientKey: string): void {
     this.clients.delete(clientKey)
+    this.selfRaisingClients.delete(clientKey)
   }
 
   /** A phone's open session on the workspace, until the returned release. */
@@ -53,7 +56,7 @@ export class WorkspaceViewers {
   /** As the window's own rule: a pane is seen when its tab is on screen, else the workspace. */
   isViewing(worktreeId: string, paneKey: string | null): boolean {
     const key = worktreeIdentityKey(worktreeId)
-    if (this.phoneSessions.has(key)) {
+    if (this.selfRaisingClients.size > 0 || this.phoneSessions.has(key)) {
       return true
     }
     const tabId = paneKey === null ? null : (parsePaneKey(paneKey)?.tabId ?? null)

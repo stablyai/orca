@@ -170,12 +170,14 @@ it.each(['modified', 'missing', 'extra', 'symlink', 'malformed'])(
 
 it('leaves existing dependencies alone and falls back on an absent archive', async () => {
   const { root, identity } = fixture()
-  rmSync(identity.path, { recursive: true })
-  expect((await activateCompilerCache({ root, identity })).available).toBe(false)
   mkdirSync(join(root, 'node_modules'))
   writeFileSync(join(root, 'node_modules', 'retained'), 'retained')
   expect((await activateCompilerCache({ root, identity })).available).toBe(false)
   expect(readFileSync(join(root, 'node_modules', 'retained'), 'utf8')).toBe('retained')
+  rmSync(join(root, 'node_modules'), { recursive: true })
+  rmSync(identity.path, { recursive: true })
+  expect((await activateCompilerCache({ root, identity })).available).toBe(false)
+  expect(existsSync(join(root, 'node_modules'))).toBe(false)
 })
 
 it('uses exact optional restores, seeds only main and retains full dependency fallback', () => {

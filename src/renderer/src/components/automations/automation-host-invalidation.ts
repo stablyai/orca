@@ -1,13 +1,4 @@
-/**
- * Turns `automationsChanged` events into cache invalidations.
- *
- * A scoped event invalidates its one entry; an older or unscoped event
- * invalidates every entry of *that authority only*, never the whole cache — one
- * chatty host must not evict the rows of every other host. Bursts collapse into
- * a single microtask so a run that writes definition, run, and usage events in
- * a row costs one refresh, and an old runtime's shared legacy request is issued
- * once for the whole burst.
- */
+/** Invalidate only the scoped entry or unscoped publisher authority. Coalesce event bursts in one microtask so definition/run/usage writes share one refresh and legacy authority request. */
 
 import { hostStableKey } from '../../../../shared/automation-owner-key'
 import type {
@@ -81,9 +72,7 @@ export function createAutomationHostInvalidation(
       if (invalidated.has(key)) {
         continue
       }
-      // A key with no entry has nothing stale to discard, but a create lands on
-      // exactly such a host — dropping it here is how a new row never appears.
-      // Report it either way and let the catalog decide whether it is fetchable.
+      // Report unseen keys too: creates may have no cached entry yet, and the catalog decides whether they are fetchable.
       if (options.cache.getByKey(key)) {
         options.cache.invalidateKey(key)
       }

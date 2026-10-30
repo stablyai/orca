@@ -9,13 +9,11 @@ export type LocalPreflightContext =
     }
   | undefined
 
-// Why: selector snapshots must be reference-stable, but project/runtime ids can
-// churn as repos are added and removed during a long-lived renderer session.
+// Bound reference-stable selector snapshots as project/runtime IDs churn over a long renderer session.
 const WSL_PREFLIGHT_CONTEXT_CACHE_MAX = 128
 const PROJECT_RUNTIME_PREFLIGHT_CONTEXT_CACHE_MAX = 2048
 
-// Why: these reads run inside broad store selectors. Insertion-order eviction
-// keeps cache hits read-only instead of adding Map mutations to every store update.
+// Insertion-order eviction keeps broad-selector cache hits read-only rather than mutating Map on every store write.
 const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
 const projectRuntimePreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
 
@@ -46,8 +44,7 @@ export function getWslPreflightContext(wslDistro: string): NonNullable<LocalPref
     return cached
   }
 
-  // Why: React/Zustand selectors must return a cached snapshot. A fresh object
-  // here triggers a useSyncExternalStore loop when Settings observes WSL repos.
+  // Cache snapshot identities or Settings’ WSL selectors can loop through useSyncExternalStore.
   const context = Object.freeze({ wslDistro })
   storeCacheEntry(wslPreflightContextsByDistro, wslDistro, context, WSL_PREFLIGHT_CONTEXT_CACHE_MAX)
   return context
@@ -66,8 +63,7 @@ export function getProjectRuntimePreflightContext(
     resolution.status === 'resolved' && resolution.runtime.kind === 'wsl'
       ? resolution.runtime.distro
       : undefined
-  // Why: selectors compare by reference; cache each resolved runtime context so
-  // adding projectRuntime does not reintroduce useSyncExternalStore churn.
+  // Cache runtime contexts too so adding projectRuntime cannot reintroduce selector identity churn.
   const context = Object.freeze({
     ...(wslDistro ? { wslDistro } : {}),
     projectRuntime: resolution

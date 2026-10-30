@@ -31,8 +31,7 @@ function getRepoBackedProviderToolStatus(
   if (provider === 'github') {
     return preflightStatus.gh
   }
-  // Why: older remote servers can predate GitLab preflight entirely. That is a
-  // host capability gap, not a user-fixable missing `glab` install.
+  // Older servers can lack GitLab preflight; report a capability gap instead of a fixable missing glab install.
   return Object.hasOwn(preflightStatus, 'glab')
     ? (preflightStatus.glab ?? { installed: false, authenticated: false })
     : 'unsupported'

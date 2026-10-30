@@ -55,7 +55,7 @@ export async function refreshPullRequestChecks(args: {
   args.activeChecksRefreshRequestIdRef.current = refreshRequestId
   args.setRefreshingOwner({ contextOwner: refreshContextOwner, requestId: refreshRequestId })
   try {
-    const nextChecks = (await (args.runtimeHost
+    const nextChecks = await (args.runtimeHost
       ? callRuntimeRpc<PRCheckDetail[]>(
           { kind: 'environment', environmentId: args.runtimeHost.environmentId },
           'github.prChecks',
@@ -75,8 +75,10 @@ export async function refreshPullRequestChecks(args: {
           prNumber: args.item.number,
           headSha: args.headSha,
           prRepo: args.prRepo,
-          noCache: true
-        }))) as PRCheckDetail[]
+          noCache: true,
+          // Refresh and rerun are user acts: they may start a stopped WSL distro.
+          wakeWslDistro: true
+        }))
     if (
       !args.mountedRef.current ||
       args.committedChecksContextOwnerRef.current !== refreshContextOwner ||

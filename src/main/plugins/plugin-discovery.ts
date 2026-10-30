@@ -1,50 +1,42 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
-import { PLUGIN_CONTENT_HASH_PATTERN } from '../../shared/plugins/plugin-install-lockfile'
+import { PLUGIN_CONTENT_HASH_PATTERN } from '../../shared/plugins/installation/plugin-install-lockfile'
 import {
   PLUGIN_MANIFEST_FILENAME,
   isQualifiedPluginKey,
+  parseHostPluginManifest,
   parsePluginManifest,
   qualifiedPluginKey,
   satisfiesOrcaEngineRange,
   type PluginManifest
-} from '../../shared/plugins/plugin-manifest'
+} from '../../shared/plugins/manifest/plugin-manifest'
+import { pluginManifestCompatibilityError } from '../../shared/plugins/manifest/plugin-manifest-compatibility'
 import {
   fingerprintPluginConsent,
-  hasInstructionalPluginContributions
-} from '../../shared/plugins/plugin-consent-fingerprint'
+  hasDeclarativePluginContributions,
+  requiresPluginContentApproval
+} from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
-import { readPluginCurrentPointer } from './plugin-current-pointer'
+import { readPluginCurrentPointer } from './installation/plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
 
-export { PLUGIN_CURRENT_POINTER_FILENAME } from './plugin-current-pointer'
+export { PLUGIN_CURRENT_POINTER_FILENAME } from './installation/plugin-current-pointer'
 
 const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 
-/**
- * Discovery over the hash-addressed install layout:
- *
- *   <userData>/plugins/<publisher>.<id>/current   ← text file naming the hash
- *   <userData>/plugins/<publisher>.<id>/<hash>/   ← immutable install tree
- *
- * plus dev-mode plugins loaded straight from arbitrary local directories.
- * Discovery reads manifests and checks only their declared artifact paths —
- * never plugin bytes or whole trees. Full content hashing stays lazy so
- * startup cost is bounded by installed plugins plus declared entries.
- */
+// Discovery reads manifests/declared paths only; immutable tree hashing stays lazy to bound startup cost.
 
 export type ValidDiscoveredPlugin = {
-  /** Qualified `<publisher>.<id>` key. */
   pluginKey: string
   rootDir: string
   manifest: PluginManifest
   /** Fingerprint of the capabilities and trusted-worker execution tier. */
   consentFingerprint: string
-  /** Immutable tree identity included in consent for instructional packs. */
+  /** Immutable tree identity included in consent for declarative packs. */
   consentContentHash?: string | null
-  /** Content hash the install dir is named by; null for dev plugins. */
+  /** Null for mutable dev trees. */
   contentHash: string | null
   isDev: boolean
 }
@@ -101,9 +93,11 @@ async function readManifestDir(
       isDev
     }
   }
-  const parsed = parsePluginManifest(raw)
+  // Why strict for dev trees: they are the author's working copy, so authoring errors belong there.
+  const parsed = isDev ? parsePluginManifest(raw) : parseHostPluginManifest(raw)
   if (!parsed.ok) {
-    return { rootDir, error: `invalid manifest: ${parsed.error}`, isDev }
+    const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
+    return { rootDir, error: incompatible ?? `invalid manifest: ${parsed.error}`, isDev }
   }
   const manifest = parsed.manifest
   const pluginKey = qualifiedPluginKey(manifest)
@@ -125,10 +119,12 @@ async function readManifestDir(
     }
   }
   let consentContentIdentity: string | undefined
-  if (installedContentHash && hasInstructionalPluginContributions(manifest)) {
+  if (installedContentHash && requiresPluginContentApproval(manifest)) {
     consentContentIdentity = installedContentHash
   }
-  if (isDev && hasInstructionalPluginContributions(manifest)) {
+  // Why dev trees bind only instructions: dev code is the author's working copy, and
+  // binding it would re-prompt on every save.
+  if (isDev && hasDeclarativePluginContributions(manifest)) {
     const treeHash = await hashPluginTree(rootDir)
     if (!treeHash.ok) {
       return { pluginKey, rootDir, error: treeHash.error, isDev }
@@ -139,11 +135,25 @@ async function readManifestDir(
     pluginKey,
     rootDir,
     manifest,
-    consentFingerprint: fingerprintPluginConsent(manifest, consentContentIdentity),
+    consentFingerprint: fingerprintPluginConsent(
+      manifest,
+      isDev
+        ? await devFolderConsentIdentity(rootDir, consentContentIdentity)
+        : consentContentIdentity
+    ),
     consentContentHash: consentContentIdentity ?? null,
     contentHash: null,
     isDev
   }
+}
+
+/** Why the folder: otherwise approving one dev folder approves any other claiming the same key. */
+export async function devFolderConsentIdentity(
+  rootDir: string,
+  contentIdentity?: string
+): Promise<string> {
+  const folder = await realpath(rootDir).catch(() => rootDir)
+  return `dev-folder:${folder}\0${contentIdentity ?? ''}`
 }
 
 async function readInstalledPlugin(
@@ -162,8 +172,7 @@ async function readInstalledPlugin(
       isDev: false
     }
   }
-  // The pointer names a sibling directory; refuse anything path-like so a
-  // corrupted pointer cannot address content outside the plugin dir.
+  // Pointers may name only sibling hash directories; reject paths escaping the plugin root.
   if (!PLUGIN_CONTENT_HASH_PATTERN.test(contentHash)) {
     return {
       pluginKey: dirName,
@@ -177,8 +186,7 @@ async function readInstalledPlugin(
   if (isInvalidDiscoveredPlugin(discovered)) {
     return { ...discovered, pluginKey: dirName }
   }
-  // Why: the directory name is the install key (and the uninstall target); a
-  // mismatched manifest identity would let two dirs claim the same plugin.
+  // Install directory names own uninstall identity; mismatched manifests could duplicate ownership.
   if (discovered.pluginKey !== dirName) {
     return {
       pluginKey: dirName,
@@ -230,15 +238,13 @@ export async function discoverPlugins(options: {
   const installedEntries = entries.filter(
     (entry) => entry.isDirectory() && isQualifiedPluginKey(entry.name)
   )
-  // Installed manifests are independent immutable trees. Read them in
-  // a bounded pool so startup latency stays low without exhausting handles.
+  // Bound parallel immutable-manifest reads to avoid exhausting file handles.
   discovered.push(
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
   for (const devPath of options.devPluginPaths) {
     const plugin = await readManifestDir(devPath, options.hostVersion, true)
-    // A dev path that duplicates an installed plugin's identity wins — that
-    // is the point of dev mode — but two dev paths must not collide.
+    // Dev paths override installed identities; two dev paths still cannot claim one identity.
     if (!isInvalidDiscoveredPlugin(plugin)) {
       const collision = discovered.find(
         (existing) =>

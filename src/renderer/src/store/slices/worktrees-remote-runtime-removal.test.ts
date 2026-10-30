@@ -3,6 +3,7 @@ import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archi
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   createTestStore,
   mockApi,
@@ -35,9 +36,15 @@ describe('worktree remote runtime mutations', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('removes worktrees through the active remote runtime environment', async () => {
+  it("removes worktrees through their owning server, the row's stamp", async () => {
     const store = createTestStore()
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-rm',
       ok: true,
@@ -81,6 +88,23 @@ describe('worktree remote runtime mutations', () => {
       backendOwnsPtyTeardown: true
     })
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
+  })
+
+  it('never removes an unstamped worktree through the focused server', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({
+      settings: { ...getDefaultSettings('/home'), activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'repo1', path: '/path', displayName: 'r', badgeColor: '#000', addedAt: 0 }],
+      worktreesByRepo: { repo1: [wt] }
+    })
+
+    await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, false)
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.rm' })
+    )
+    expect(mockApi.worktrees.remove).toHaveBeenCalled()
   })
 
   it('cleans up a preserved branch through the same host qualifier the removal used', async () => {
@@ -561,9 +585,7 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
   })
 
-  // Why (#11960): the store is where `force` and the PTY-stop waiver could most
-  // easily be collapsed back into one flag. The ordinary delete confirmation
-  // passes force:true, so that alone must never reach the gate as a waiver.
+  // Ordinary confirmation passes force:true; store must keep it separate from explicit PTY-stop waiver (#11960).
   it('sends force without the PTY-stop waiver unless a caller asks for it', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/w/one', repoId: 'repo1', path: '/w/one' })
@@ -574,8 +596,7 @@ describe('worktree remote runtime mutations', () => {
       expect.objectContaining({ force: true, allowUnverifiedPtyStop: false })
     )
 
-    // Re-seed: the first removal dropped the row, and a second call for a missing
-    // worktree never reaches the API — which would silently re-read the call above.
+    // Reseed a new row so second removal reaches API rather than rereading the first call.
     const retry = makeWorktree({ id: 'repo1::/w/two', repoId: 'repo1', path: '/w/two' })
     store.setState({ worktreesByRepo: { repo1: [retry] } } as Partial<AppState>)
 

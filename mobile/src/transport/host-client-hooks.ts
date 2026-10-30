@@ -5,7 +5,6 @@ import type { HostClientAcquisition } from './host-client-acquisition-registry'
 import type { ForceReconnect } from './rpc-client-context-contract'
 import { useRpcClientContext } from './client-context'
 
-// Primary hook for screens: acquires the shared client on mount, releases on unmount, re-renders on state change.
 export function useHostClient(hostId: string | undefined): {
   client: RpcClient | null
   clientId: string | null

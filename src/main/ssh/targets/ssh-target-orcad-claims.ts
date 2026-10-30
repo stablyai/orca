@@ -1,9 +1,4 @@
-/**
- * Exclusive managed-orcad ownership of an SSH target, recorded as its `orcadFence`. A claimed
- * target serves only its environment's tunnel; direct relay connects are refused. Only empty
- * targets are claimable, with no saved sessions, automations, worktree metadata or terminal
- * leases: moving a direct SSH host's state into a managed server is the catalog migration.
- */
+/** orcadFence reserves a target for its managed tunnel and refuses direct relay access. Claim only empty targets; existing state requires catalog migration. */
 import type { Store } from '../../persistence'
 import {
   getManagedOrcadFenceEnvironmentId,
@@ -39,11 +34,7 @@ export class SshTargetOrcadClaims {
     return this.store.getSshTargets()
   }
 
-  /**
-   * `owner` lets that environment's own claim pass, but only when the caller holds the durable
-   * record that explains it (a provisioning intent, an SSH-access intent or a migration journal).
-   * An owner with no such record is unexplained state to recover, never something to reuse.
-   */
+  /** Reuse an own claim only when a durable provisioning/SSH-access intent or migration journal explains it. */
   preflight(
     targetId: string,
     owner?: { environmentId: string; recorded: boolean }
@@ -57,10 +48,7 @@ export class SshTargetOrcadClaims {
     return { targetId, targetLabel: target.label, claimable: blockers.length === 0, blockers }
   }
 
-  /**
-   * Idempotent for the same environment; the caller makes the claim durable before acting on it.
-   * A deploy passes its server name so an interrupted claim reads as pending provisioning.
-   */
+  /** Caller must persist the claim before remote action; deployName identifies interrupted provisioning. */
   claim(
     targetId: string,
     environmentId: string,
@@ -76,11 +64,13 @@ export class SshTargetOrcadClaims {
     }
     const target = this.requireTarget(targetId)
     const owned = getManagedOrcadFenceEnvironmentId(target) === environmentId
-    if (owned && target.generation) {
+    if (owned && target.generation && !target.managedServerRemoved) {
       return target
     }
     const claimed = this.store.updateSshTarget(targetId, {
       orcadFence: { environmentId },
+      // A new claim is the user setting a server up again; lift any earlier removal hold.
+      managedServerRemoved: undefined,
       generation: target.generation ?? this.store.allocateSshTargetGeneration(),
       ...(deployName && !target.orcadProvisioning
         ? { orcadProvisioning: { requestId: environmentId, name: deployName } }
@@ -105,10 +95,7 @@ export class SshTargetOrcadClaims {
     return generation
   }
 
-  /**
-   * The migration fence. Unlike `claim`, it skips the empty-target rule: the caller has passed
-   * the conversion preflight and written the journal that records this fence.
-   */
+  /** Skip empty-target checks only after conversion preflight and a durable migration journal. */
   fenceForMigration(targetId: string, environmentId: string, generation: number): SshTarget {
     const target = this.requireTarget(targetId)
     if (target.generation !== generation) {
@@ -142,6 +129,19 @@ export class SshTargetOrcadClaims {
     })
   }
 
+  /** The user removed this server: release it and keep automatic dials from deploying another. */
+  releaseForUserRemoval(targetId: string, environmentId: string): SshTarget | null {
+    const target = this.store.getSshTarget(targetId)
+    if (!target) {
+      return null
+    }
+    const owned = getManagedOrcadFenceEnvironmentId(target) === environmentId
+    return this.store.updateSshTarget(targetId, {
+      ...(owned ? { orcadFence: undefined, orcadProvisioning: undefined } : {}),
+      managedServerRemoved: { removedAt: new Date().toISOString() }
+    })
+  }
+
   /** Ownership must be on disk before a remote host acts on it. */
   flush(signal?: AbortSignal): Promise<void> {
     return this.store.flushPendingOrThrowAsync({ signal, drainToStableGeneration: false })
@@ -156,7 +156,7 @@ export class SshTargetOrcadClaims {
   }
 }
 
-/** Not-found and own-fence results shared by claim and export preflight; an owner without a durable record never passes. */
+/** An own fence requires a durable owner record for both claim and export preflight. */
 export function resolveOrcadPreflightTarget(
   store: Pick<Store, 'getSshTarget'>,
   targetId: string,
@@ -195,7 +195,6 @@ function collectEmptyTargetBlockers(store: ClaimStore, target: SshTarget): Orcad
   ]
 }
 
-/** Ownership, the catalog rows the target owns, and its saved port forwards. */
 export function collectTargetCatalogBlockers(
   store: Pick<Store, 'getFolderWorkspaces' | 'getRepos'>,
   target: SshTarget
@@ -262,7 +261,7 @@ export function orcadTargetBlockerMessage(
       return 'This SSH target is held for this server, but no record explains why. Recover the server before reusing the host.'
     case 'orcad_migration_direct_ssh_repositories':
     case 'orcad_migration_direct_ssh_folder_workspaces':
-      return 'This SSH target owns repositories or folder workspaces. A managed server can only be created on a host with no direct SSH projects yet; keep this host in direct SSH mode.'
+      return 'This SSH target owns repositories or folder workspaces. Orca can only be set up on a host with no direct SSH projects yet; keep this host in direct SSH mode.'
     case 'orcad_migration_direct_ssh_terminal_leases':
       return 'This SSH target still owns terminal sessions. Close them before converting the host.'
     case 'orcad_migration_saved_port_forwards':

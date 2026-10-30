@@ -4,22 +4,14 @@ import {
   MAX_BRANCH_MAP_ENTRIES
 } from './hosted-review-refresh-pacing'
 
-/**
- * Per-branch failure escalation for hosted-review lookups (#11532).
- *
- * Split out of the branch cache so the cache file stays about caching: this map
- * has its own lifetime — a branch stays backed off after its cached answer is
- * invalidated, and it is what a lookup deadline records against (P1-D).
- */
+/** Failure escalation outlives answer invalidation and includes lookup deadlines (#11532/P1-D). */
 
-/** Bounded like the answer cache, so a churn of dead branches cannot grow it. */
 const MAX_BACKOFF_ENTRIES = MAX_BRANCH_MAP_ENTRIES
 
 const failureBackoff = new Map<string, { until: number; failures: number }>()
 
 export function backoffUntil(key: string): number | null {
-  // Why: a lapsed window keeps its failure count, otherwise the very act of
-  // retrying resets the escalation and the backoff never grows past the base.
+  // Keep failure count after window expiry or retries would never escalate.
   const entry = failureBackoff.get(key)
   return entry !== undefined && entry.until > Date.now() ? entry.until : null
 }
@@ -27,8 +19,7 @@ export function backoffUntil(key: string): number | null {
 export function noteFailure(key: string): void {
   const now = Date.now()
   for (const [candidate, entry] of failureBackoff) {
-    // Why: only counts that lapsed a full max window ago are stale enough to
-    // forget; anything more eager would undo the escalation above.
+    // Forget only after a full max window of inactivity so ordinary retries preserve escalation.
     if (now - entry.until > LOOKUP_BACKOFF_MAX_MS) {
       failureBackoff.delete(candidate)
     }

@@ -5,7 +5,6 @@ import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktree-bas
 
 type RepoRemoteClientNotifier = Pick<OrcaRuntimeService, 'notifyReposChangedForRemoteClients'>
 
-// Why: notifyReposChanged is module-level and cannot close over a handler argument (#11994).
 let repoRemoteClientNotifier: RepoRemoteClientNotifier | null = null
 
 export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier): void {
@@ -17,12 +16,11 @@ export function notifyReposChanged(mainWindow: BrowserWindow | null): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
-  // Why: paired clients only refetch a remote catalog on this event; without it a
-  // host-side delete or rename stays invisible to them indefinitely (#11994).
+  // Paired clients refetch only on this event, including host-side deletes and renames (#11994).
   try {
     repoRemoteClientNotifier?.notifyReposChangedForRemoteClients()
   } catch (err) {
-    // Why: a broadcast failure must never fail the mutation the user actually asked for.
+    // Broadcast failure must not reject an already committed mutation.
     console.error('[repos] failed to notify remote clients of repo change', err)
   }
   scheduleCurrentWorktreeBaseDirectoryWatcherSync()

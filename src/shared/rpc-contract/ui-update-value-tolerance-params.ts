@@ -1,12 +1,7 @@
 import type { z } from 'zod'
 
-/**
- * `UiUpdate` rides App.tsx's debounced writer, so one drifted enum member used
- * to fail the WHOLE batch and silently drop sidebar widths, filters and agent
- * acks alongside it. Degrade instead: a value the schema cannot express is
- * dropped from the payload and the rest of the batch still lands. Unknown KEYS
- * stay a hard rejection — the parity assertions exist to catch those.
- */
+/** Drop unknown values so one drifted enum cannot discard App.tsx’s entire debounced settings batch.
+ * Unknown keys still reject; parity checks catch missing declarations. */
 export function tolerateUnknownValues<TFields extends Readonly<Record<string, z.ZodType>>>(
   fields: TFields
 ): TFields {
@@ -18,8 +13,7 @@ export function tolerateUnknownValues<TFields extends Readonly<Record<string, z.
   return tolerant as TFields
 }
 
-/** Drops the `undefined` entries `tolerateUnknownValues` leaves behind, so a
- *  rejected value reads as absent rather than as an explicit clear. */
+/** Drop rejected values as absent; undefined must not become an explicit clear. */
 export function omitUndefinedValues<TValue extends Record<string, unknown>>(value: TValue): TValue {
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)

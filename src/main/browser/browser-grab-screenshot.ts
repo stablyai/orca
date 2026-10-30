@@ -19,18 +19,12 @@ const RESTORE_BROWSER_GRAB_OVERLAY_SCRIPT = `(function(){
   });
 })()`
 
-/**
- * Capture a screenshot of the guest surface and optionally crop it to
- * the given CSS-pixel rect.
- */
 export async function captureSelectionScreenshot(
   rect: BrowserGrabRect,
   guest: Electron.WebContents
 ): Promise<BrowserGrabScreenshot | null> {
   try {
-    // Why: the rect comes from the renderer via IPC. Validate that all fields
-    // are finite numbers before using them in arithmetic, so NaN cannot reach
-    // Electron's image.crop() and cause undefined behavior.
+    // Normalize nonfinite IPC coordinates before passing them to image.crop().
     const safeN = (n: unknown, fallback = 0): number =>
       typeof n === 'number' && Number.isFinite(n) ? n : fallback
     const safeRect = {
@@ -40,10 +34,7 @@ export async function captureSelectionScreenshot(
       height: safeN(rect.height)
     }
 
-    // Why: hide the grab overlay before capturing so the highlight box and
-    // label don't appear in the screenshot. The overlay is restored after.
-    // Wrapped in try/finally so the overlay is always restored even if
-    // capturePage() throws (e.g., guest destroyed mid-capture).
+    // Hide selection overlays during capture and attempt restoration even if capture fails.
     await guest.executeJavaScript(HIDE_BROWSER_GRAB_OVERLAY_SCRIPT).catch(() => {})
     let image: Electron.NativeImage
     try {
@@ -56,20 +47,13 @@ export async function captureSelectionScreenshot(
     }
 
     const bitmapSize = image.getSize()
-    // Why: capturePage returns a bitmap in physical pixels. The grab rect is
-    // in CSS pixels. To map between them we need the combined scale factor
-    // (zoomFactor * deviceScaleFactor). Rather than using the primary display
-    // (which is wrong on multi-monitor setups with mixed DPI), we derive the
-    // scale factor empirically: ask the guest for its CSS viewport width, then
-    // compute scaleFactor = bitmapWidth / viewportCSSWidth. This is correct
-    // regardless of which display the window is on.
+    // Derive bitmap/CSS scaling from this guest, avoiding primary-display DPI assumptions.
     const viewportCSSWidth: number = await guest.executeJavaScript('window.innerWidth')
     if (!viewportCSSWidth || viewportCSSWidth <= 0) {
       return null
     }
     const scaleFactor = bitmapSize.width / viewportCSSWidth
 
-    // Map CSS-pixel rect to bitmap coordinates
     const cropX = Math.max(0, Math.round(safeRect.x * scaleFactor))
     const cropY = Math.max(0, Math.round(safeRect.y * scaleFactor))
     const cropW = Math.min(bitmapSize.width - cropX, Math.round(safeRect.width * scaleFactor))
@@ -82,16 +66,12 @@ export async function captureSelectionScreenshot(
     const cropped = image.crop({ x: cropX, y: cropY, width: cropW, height: cropH })
     const pngBuffer = cropped.toPNG()
 
-    // Why: downscaling would add complexity for v1. Fail closed to
-    // "no screenshot" rather than send an oversized payload.
     if (pngBuffer.byteLength > GRAB_BUDGET.screenshotMaxBytes) {
       return null
     }
 
     const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`
-    // Why: cropW/cropH are in physical pixels (bitmap coordinates) but the
-    // rest of the grab payload uses CSS pixels. Divide by scaleFactor so the
-    // screenshot dimensions are consistent with rectViewport/rectPage.
+    // Report CSS dimensions to match the selection rectangles.
     return {
       mimeType: 'image/png',
       dataUrl,
@@ -99,8 +79,7 @@ export async function captureSelectionScreenshot(
       height: Math.round(cropH / scaleFactor)
     }
   } catch {
-    // Why: screenshot capture can fail if the guest is being torn down
-    // or the compositor surface is not available. Fail closed.
+    // The guest or compositor surface may disappear during capture.
     return null
   }
 }

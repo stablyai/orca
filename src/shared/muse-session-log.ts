@@ -8,9 +8,7 @@ import {
   type JsonRecord
 } from './codex-rollout-jsonl-cursor'
 
-// Why: Muse stores sessions under <XDG_DATA_HOME>/muse/sessions (default
-// ~/.local/share/muse/sessions), sharded by the host's local start date:
-// <root>/YYYY/MM/DD/<uuid>/session.jsonl. No upstream override variable exists.
+// Muse stores local-date shards under <XDG_DATA_HOME>/muse/sessions (default ~/.local/share/muse/sessions): YYYY/MM/DD/<uuid>/session.jsonl. No upstream override exists.
 export function resolveMuseSessionsDir(override?: string): string {
   if (override?.trim()) {
     return override.trim()

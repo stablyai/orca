@@ -66,23 +66,14 @@ export function suspendPaneRendering(
   }
 ): void {
   const suspended = Array.from(panes)
-  // Why: both branches must leave a suspended pane in the same state; only the retention
-  // branch below used to blur. Defence in depth, not a measured cost — display:none and
-  // inert both make Chromium blur the pane itself, and disposeWebgl kills the blink timer
-  // regardless. It only bites under opacity:0 without inert (TerminalOverlaySlot's startup
-  // probe), the one hide mode that keeps focus.
+  // Blur both suspension branches: opacity:0 startup probes can retain focus even though display:none/inert normally blur and disposal stops blink.
   for (const pane of suspended) {
     pane.webglAttachmentDeferred = true
     pane.terminal.blur()
-    // Why here, above the retention return: the retention branch keeps a live
-    // WebglRenderer, whose blink timer only stops on a real DOM blur event. blur()
-    // above is a no-op unless that pane's textarea held focus, so under a hide mode
-    // that keeps focus the pane would blink — redrawing its cursor row — until the
-    // 5-minute idle timeout. Parking the option makes it unconditional.
+    // Suspend blink before the retention return: live WebGL uses document focus, so an unfocused terminal could otherwise redraw for five minutes.
     suspendTerminalCursorBlink(pane.terminal)
   }
-  // Keep recent hidden worktrees on live WebGL so switch-back never presents
-  // DOM-fallback frames; evicted/over-cap owners fall back to dispose.
+  // Retain recent hidden WebGL for immediate switch-back; evicted/over-cap owners dispose.
   if (retention && tryRetainHiddenPanesWebgl(retention.owner, retention.livePanes)) {
     return
   }
@@ -100,8 +91,7 @@ export function resumePaneRendering(
   }
   for (const pane of panes) {
     clearTerminalWebglAttachBackoff(pane)
-    // Before the attach below so a freshly constructed WebglRenderer already samples
-    // the restored option and blinks on its first frame.
+    // Restore blink before constructing WebGL so its first frame samples the right option.
     resumeTerminalCursorBlink(pane.terminal)
     const rebuildDeferred = pane.webglRebuildDeferred === true
     pane.webglAttachmentDeferred = false

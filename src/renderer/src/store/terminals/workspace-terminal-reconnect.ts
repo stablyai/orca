@@ -2,7 +2,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,
@@ -34,9 +34,8 @@ export function createWorkspaceTerminalReconnectActions(
       // Why: defer daemon attachment for real dimensions; eager 80×24 flushes garble output.
       let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
       let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
-      // Why indexed: the loop neither sets state nor awaits, so one index over the
-      // whole store snapshot serves every iteration.
-      const worktreeById = buildWorktreeByIdIndex(get().worktreesByRepo)
+      // No writes/awaits in the loop, so one store-snapshot index serves every iteration.
+      const worktreeById = buildWorktreeByIdIndex(selectWorktreesByRepo(get()))
       const repoById = buildByIdIndex(get().repos)
       for (const worktreeId of ids) {
         const tabs = tabsByWorktree[worktreeId] ?? []
@@ -57,9 +56,7 @@ export function createWorkspaceTerminalReconnectActions(
           const leafPtyMap = layout?.ptyIdsByLeafId ?? {}
           const tabLevelPtyId = pendingReconnectPtyIdByTabId[tabId]
           const hasLeafMappings = Object.keys(leafPtyMap).length > 0
-          // Why: publish live PTY hints before mount (pty-connection reattaches later) so the
-          // sessions status segment maps daemon IDs to tabs; otherwise all sessions look like orphans until the pane mounts.
-          // A row whose tab.ptyId went to the canonical row has no tab-level id left, but its own leaf PTYs still need advertising.
+          // Advertise leaf PTYs before mount so daemon sessions do not look orphaned; subsumed rows may lack tab.ptyId but retain leaf bindings.
           const allPtyIds = hasLeafMappings
             ? (Object.values(leafPtyMap).filter(Boolean) as string[])
             : tabLevelPtyId
@@ -86,19 +83,14 @@ export function createWorkspaceTerminalReconnectActions(
       const deferredSshSessionIdsByTabId: Record<string, string> = {}
       for (const worktreeId of ids) {
         const worktree = worktreeById.get(worktreeId)
-        // Why: SSH worktrees aren't in worktreesByRepo at cold start; fall back to the repo id in the composite worktree id so sessions still reach the deferred map.
+        // Cold-start SSH listings are absent; derive repo ID from the composite worktree ID to retain deferred sessions.
         const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
         const repo = repoId ? (repoById.get(repoId) ?? null) : null
         const connectionId = repo?.connectionId
         if (!connectionId) {
           continue
         }
-        // Why: a repo can outlive its SSH target when the target was removed out of
-        // band (a crash between removal and cleanup, or edited out of the config).
-        // Once the authoritative target list has loaded, don't re-defer sessions for
-        // a target it no longer lists — a stranded deferred id reads as liveness and
-        // the orphan sweep could never remove the dead tab. Defer while the list is
-        // still unknown so a normal cold-start reconnect isn't dropped (#9911).
+        // Only a hydrated target catalog proves removal; re-deferring absent targets creates permanent orphan-sweep liveness (#9911).
         if (get().sshTargetsHydrated && !get().sshTargetLabels.has(connectionId)) {
           continue
         }
@@ -118,10 +110,8 @@ export function createWorkspaceTerminalReconnectActions(
         return
       }
       set({
-        // Switch point: main's frames draw the rows, with main's own bindings.
-        ...(reconnectedTabsByWorktree && !ORCA_LAYOUT_OWNER_IS_MAIN
-          ? { tabsByWorktree: reconnectedTabsByWorktree }
-          : {}),
+        // Only each row's ptyId changes, a field the frame merge leaves to the window.
+        ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
         ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
         workspaceSessionReady: true,
         pendingReconnectWorktreeIds: [],

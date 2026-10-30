@@ -1,6 +1,4 @@
-// A message naming a chat attachment the host no longer stores is refused whole at admission,
-// with a reason the client's existing rejected-send row puts into words, on the direct path and
-// the queued one alike; a stored one is claimed, and a /clear carries the claim to its new chat.
+// Direct/queued admission rejects missing attachments atomically; stored claims survive clear migration.
 
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -127,7 +125,7 @@ describe('attachments at send admission', () => {
       userSend: true as const
     }
     expect(await rig.host.send(CALLER, params)).toMatchObject({ ok: true, replayed: false })
-    // The upload goes; the outbox's resend of the same operation still answers as sent.
+    // Lost replies must replay acceptance even after upload deletion.
     await rm(join(agentSessionAttachmentStoreRoot(rig.root), UPLOAD), { recursive: true })
     expect(await rig.host.send(CALLER, params)).toMatchObject({ ok: true, replayed: true })
   })

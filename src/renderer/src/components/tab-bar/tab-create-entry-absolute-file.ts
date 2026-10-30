@@ -1,5 +1,9 @@
 import { detectLanguage } from '@/lib/language-detect'
-import { toWorktreeRelativePath } from '@/lib/terminal-links'
+import {
+  getTabEntryCannotOpenDirectoryMessage,
+  getTabEntryFileNotFoundMessage
+} from './tab-create-entry-copy'
+import { toWorktreeRelativePath } from '../../../../shared/terminal-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor'
 import {
@@ -32,10 +36,10 @@ export async function openAbsoluteTabEntryFile(args: {
   try {
     stat = await args.operations.statUserOpenedPath(args.context, filePath)
   } catch {
-    throw new Error(`File not found: ${filePath}`)
+    throw new Error(getTabEntryFileNotFoundMessage(filePath))
   }
   if (stat.isDirectory) {
-    throw new Error(`Cannot open a directory: ${filePath}`)
+    throw new Error(getTabEntryCannotOpenDirectoryMessage(filePath))
   }
   args.operations.assertAbsolutePathAllowed()
 

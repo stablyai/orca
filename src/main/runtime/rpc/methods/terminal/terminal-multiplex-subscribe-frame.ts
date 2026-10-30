@@ -21,6 +21,7 @@ export function installMultiplexSubscribeFrame(state: TerminalMultiplexConnectio
     if (!ptyId) {
       return
     }
+    const incarnationId = state.runtime.getPtyExecutionHostMetadata(ptyId).incarnationId
     let stream: TerminalMultiplexStream | null = null
     let installedStream: TerminalMultiplexStream | null = null
     try {
@@ -46,7 +47,7 @@ export function installMultiplexSubscribeFrame(state: TerminalMultiplexConnectio
       return
     }
     try {
-      const published = await publishMultiplexInitialSnapshot(state, request, stream)
+      const published = await publishMultiplexInitialSnapshot(state, request, stream, incarnationId)
       if (!published) {
         return
       }

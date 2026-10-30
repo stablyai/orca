@@ -1,11 +1,11 @@
-// A send's carried model and effort against the real host, store and journal: kept with the
-// message and applied as it is handed over (recorded before a start, written to a running child),
-// skipped when the chat already holds it, never stopping the message, part of the operation's
-// fingerprint, and kept on a queued card until the card goes out.
-
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
+import {
+  agentSessionMessagePayload,
+  agentSessionSendBodyFingerprint
+} from '../../../shared/structured-agent-session-send-mutation'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -14,6 +14,8 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
+  HOST_TEST_NOW,
+  HOST_TEST_THREAD as THREAD,
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
@@ -39,20 +41,6 @@ beforeEach(async () => {
 })
 
 afterEach(() => rig.dispose())
-
-function recordedOptions(): Readonly<Record<string, string>> | undefined {
-  return rig.store.getRecord(SESSION)?.options
-}
-
-async function handedOver(id: string): Promise<void> {
-  await eventually(async () => expect((await rig.submission(id))?.handedOverAt).toBeDefined())
-}
-
-/** A running child with nothing in flight. */
-async function idleRunningChild(): Promise<void> {
-  const working = await rig.workingSend()
-  await rig.settleAccepted(working, 'idle')
-}
 
 describe('a send carrying its model and effort to a chat at rest', () => {
   it('records them before the start its message needs, so the agent starts on them', async () => {
@@ -91,7 +79,6 @@ describe('a send carrying its model and effort to a chat at rest', () => {
 describe('an opening message created with a model and effort', () => {
   const OPENED = { model: 'opus', effort: 'high' }
 
-  /** Creates the chat with its opening message; its agent stays starting until `proveStart`. */
   async function createWhileStarting(
     rest: Awaited<ReturnType<typeof createRestTestRig>>,
     options: Record<string, string> = OPENED
@@ -107,13 +94,11 @@ describe('an opening message created with a model and effort', () => {
       expect(rest.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
     )
     const proveStart = async () =>
-      rest.host.handleAdapterEvent({
-        type: 'started',
+      rest.proveStart({
         sessionId: SESSION,
         fence: rest.store.getRecord(SESSION)!.lease.runtimeFence,
         acquisitionGeneration: (await rest.adapter.acquire.mock.results[0]!.value)
-          .acquisitionGeneration,
-        reportedOptions: options
+          .acquisitionGeneration
       })
     return { first, proveStart }
   }
@@ -121,7 +106,7 @@ describe('an opening message created with a model and effort', () => {
   it('runs on them though a pick made before its handover changed the chat', async () => {
     const rest = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
     try {
-      // Model only: this rig's agent answers a pick with nothing, so each write replaces the record.
+      // Limit to model: this rig’s pick response replaces rather than merges saved options.
       const { proveStart } = await createWhileStarting(rest, { model: 'opus' })
       const fields = { key: 'model', value: 'sonnet' }
       const send = restTestSend('unused', rest.store.getRecord(SESSION)?.lease.runtimeFence)
@@ -134,14 +119,10 @@ describe('an opening message created with a model and effort', () => {
         })
       }
       const picked = rest.host.setOption(REST_TEST_CALLER, { envelope, ...fields })
-      const ranOn: (string | undefined)[] = []
-      rest.adapter.dispatch.mockImplementationOnce(async () => {
-        ranOn.push(rest.store.getRecord(SESSION)?.options?.model)
-        return acceptedDispatch()
-      })
+      rest.adapter.dispatch.mockImplementationOnce(async () => acceptedDispatch())
       await proveStart()
       await vi.waitFor(() => expect(rest.adapter.dispatch).toHaveBeenCalledOnce())
-      expect(ranOn).toEqual(['opus'])
+      expect(rest.adapter.dispatch.mock.calls[0]?.[0].executionOptions).toEqual({ model: 'opus' })
       expect(await picked).toMatchObject({ ok: true })
       expect(rest.store.getRecord(SESSION)?.options?.model).toBe('sonnet')
     } finally {
@@ -167,66 +148,112 @@ describe('an opening message created with a model and effort', () => {
   })
 })
 
-describe('a send carrying its model and effort', () => {
-  it('writes them to a running child as it is handed over, model first, skipping what the chat holds', async () => {
-    await idleRunningChild()
-    const first = rig.send('switch', undefined, { carried: PICKED })
-    await first.result
-    await handedOver(first.id)
-    expect(vi.mocked(rig.setOption).mock.calls.map(([input]) => input.key)).toEqual([
-      'model',
-      'effort'
-    ])
-    expect(recordedOptions()).toMatchObject({ effort: 'high' })
-    await rig.settleAccepted(first.id, 'switch')
+const openingSelections: (Readonly<Record<string, string>> | undefined)[] = [
+  undefined,
+  {},
+  { model: 'shown-model', effort: 'high', serviceTier: 'default' }
+]
 
-    vi.mocked(rig.setOption).mockClear()
-    const again = rig.send('same again', undefined, { carried: { effort: 'high' } })
-    await again.result
-    await handedOver(again.id)
-    expect(rig.setOption).not.toHaveBeenCalled()
-  })
-
-  it("runs an accepted message on its own selection, though a later pick changed the chat's", async () => {
-    const starting = await createQueuedMessageTestRig({ starting: true })
+it.each(openingSelections)(
+  'aliases the real opening echo by body and replays the immutable create selection %j',
+  async (selection) => {
+    const rest = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
     try {
-      const sent = starting.send('mine', undefined, { carried: { model: 'gpt-a' } })
-      expect(await sent.result).toMatchObject({ ok: true })
-      await eventually(() => expect(starting.starts).toHaveBeenCalled())
-      // Picked while the message waits for its agent to start.
-      const fields = { key: 'model', value: 'gpt-b' }
-      const picked = starting.host.setOption(CALLER, {
-        envelope: starting.envelope(fields, 'agentSession.setOption', hostTestOperationId()),
-        ...fields
-      })
-      const setOption = vi.mocked(starting.setOption)
-      starting.dispatch.mockImplementationOnce(async () => {
-        expect(setOption.mock.calls.at(-1)?.[0]).toMatchObject({ key: 'model', value: 'gpt-a' })
-        expect(setOption.mock.invocationCallOrder.at(-1)).toBeLessThan(
-          starting.dispatch.mock.invocationCallOrder.at(-1) ?? 0
-        )
-        return acceptedDispatch()
-      })
-      await starting.proveStart()
-      await eventually(async () =>
-        expect((await starting.submission(sent.id))?.handedOverAt).toBeDefined()
+      const accepted = Promise.withResolvers<ReturnType<typeof acceptedDispatch>>()
+      rest.adapter.dispatch.mockImplementationOnce(() => accepted.promise)
+      const saved = { model: 'saved-model', effort: 'low', personality: 'friendly' }
+      const first: StructuredAgentSessionFirstMessage = {
+        clientMessageId: hostTestOperationId(),
+        body: hostTestMessage('opening echo'),
+        ...(selection !== undefined ? { selection } : {})
+      }
+      const params = createTestParams(first, { options: saved })
+      const envelope = structuredClone(params.envelope)
+      const created = await rest.host.create(CREATE_TEST_CALLER, params, { firstMessage: first })
+      expect(created.ok).toBe(true)
+      await vi.waitFor(() => expect(rest.adapter.dispatch).toHaveBeenCalledOnce())
+      const expected = selection === undefined ? saved : { personality: 'friendly', ...selection }
+      expect(rest.adapter.dispatch.mock.calls[0][0].executionOptions).toEqual(expected)
+      const events = rest.adapter.acquire.mock.calls[0][0].events!
+      events.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'root-turn', ordinal: 2 },
+        first.body,
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
-      expect(await picked).toMatchObject({ ok: true })
-      expect(starting.store.getRecord(SESSION)?.options?.model).toBe('gpt-b')
+      await rest.host.flushStreamedEvents(SESSION)
+      accepted.resolve({
+        state: 'accepted',
+        providerIdentity: {
+          provider: 'codex',
+          threadId: THREAD,
+          turnId: 'predicted-turn',
+          ordinal: 0
+        }
+      })
+      await vi.waitFor(async () =>
+        expect((await rest.host.journalSnapshot(SESSION)).submissions[0]?.dispatchState).toBe(
+          'accepted'
+        )
+      )
+      const snapshot = await rest.host.journalSnapshot(SESSION)
+      expect(
+        snapshot.items.filter((item) => item.body.kind === 'message' && item.body.role === 'user')
+      ).toHaveLength(1)
+      expect(snapshot.submissions).toMatchObject([
+        {
+          clientMessageId: first.clientMessageId,
+          payloadFingerprint: agentSessionSendBodyFingerprint(SESSION, first.body),
+          options: expected
+        }
+      ])
+      await rest.store.replaceSessionOptions({
+        sessionId: SESSION,
+        fence: rest.store.getRecord(SESSION)!.lease.runtimeFence,
+        now: HOST_TEST_NOW,
+        options: { model: 'new-default', effort: 'medium', personality: 'changed' }
+      })
+      const changedFirst: StructuredAgentSessionFirstMessage = {
+        ...first,
+        selection: selection?.model ? {} : { model: 'changed-control' }
+      }
+      const changedParams = createTestParams(changedFirst, { options: saved })
+      expect(changedParams.envelope.payloadFingerprint).not.toBe(envelope.payloadFingerprint)
+      const conflict = await rest.host.create(
+        CREATE_TEST_CALLER,
+        {
+          ...changedParams,
+          envelope: { ...envelope, payloadFingerprint: changedParams.envelope.payloadFingerprint }
+        },
+        { firstMessage: changedFirst }
+      )
+      expect(conflict).toMatchObject({
+        ok: false,
+        refusal: { code: 'agent_session_operation_conflict' }
+      })
+      const replay = await rest.host.create(CREATE_TEST_CALLER, params, { firstMessage: first })
+      expect(replay).toMatchObject({
+        ok: true,
+        replayed: true,
+        value: {
+          firstMessage: {
+            clientMessageId: first.clientMessageId,
+            payloadFingerprint: agentSessionSendBodyFingerprint(SESSION, first.body),
+            options: expected
+          }
+        }
+      })
+      expect(params.envelope).toEqual(envelope)
+      expect(first.selection).toEqual(selection)
+      expect((await rest.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+      expect(rest.adapter.dispatch).toHaveBeenCalledOnce()
+      expect(rest.adapter.dispatch.mock.calls[0][0].executionOptions).toEqual(expected)
     } finally {
-      await starting.dispose()
+      await rest.dispose()
     }
-  })
+  }
+)
 
-  it('still sends when the write fails, on what the chat holds', async () => {
-    await idleRunningChild()
-    vi.mocked(rig.setOption).mockRejectedValueOnce(new Error('child refused'))
-    const { id, result } = rig.send('anyway', undefined, { carried: { model: 'gpt-picked' } })
-    expect(await result).toMatchObject({ ok: true })
-    await eventually(async () => expect((await rig.submission(id))?.handedOverAt).toBeDefined())
-    expect(recordedOptions()?.model).toBeUndefined()
-  })
-
+describe('a send carrying its model and effort', () => {
   it('fingerprints them with the operation, so the same id with other options conflicts', async () => {
     const body = hostTestMessage('once')
     const clientOperationId = hostTestOperationId()
@@ -243,42 +270,6 @@ describe('a send carrying its model and effort', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_conflict' }
     })
-  })
-})
-
-describe('a queued send carrying its model and effort', () => {
-  async function queued(carried: Readonly<Record<string, string>>): Promise<{
-    working: string
-    draftId: string
-  }> {
-    const working = await rig.workingSend()
-    const answer = await rig.send('later', 'queue-if-active', { carried }).result
-    if (!answer.ok || !('queued' in answer.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    return { working, draftId: answer.value.queued.messageId }
-  }
-
-  it('keeps them on the card and applies them when the queue sends it', async () => {
-    const { working, draftId } = await queued({ model: 'gpt-picked' })
-    expect(rig.setOption).not.toHaveBeenCalled()
-    await rig.settleAccepted(working, 'a')
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    await eventually(() =>
-      expect(rig.setOption).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'model', value: 'gpt-picked' })
-      )
-    )
-  })
-
-  it('applies them when the card is sent by hand', async () => {
-    const { working, draftId } = await queued({ model: 'gpt-picked' })
-    expect(await rig.sendNow(draftId)).toMatchObject({ ok: true })
-    await rig.settleAccepted(working, 'a')
-    await handedOver(await rig.handoffId(draftId))
-    expect(rig.setOption).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'model', value: 'gpt-picked' })
-    )
   })
 })
 
@@ -301,5 +292,65 @@ describe('a send kept as a card because Orca stopped before handing it over', ()
     } finally {
       await kept.dispose()
     }
+  })
+})
+
+it('captures the shown tuple despite unseen saved picks, preserves personality, and distinguishes empty exact from legacy capture', async () => {
+  const saved = {
+    model: 'hidden-model',
+    effort: 'low',
+    serviceTier: 'priority',
+    personality: 'friendly'
+  }
+  await rig.store.replaceSessionOptions({
+    sessionId: SESSION,
+    fence: 1,
+    now: HOST_TEST_NOW,
+    options: saved
+  })
+  const send = (selection?: Record<string, string>, delivery?: 'queue-if-active') => {
+    const body = hostTestMessage('shown selection')
+    const fields = {
+      body,
+      ...(selection !== undefined ? { selection } : {}),
+      ...(delivery ? { delivery } : {})
+    }
+    const params = {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.send', hostTestOperationId())
+    }
+    return { params, result: rig.host.send(CALLER, params) }
+  }
+  const shown = { model: 'shown-model', effort: 'high', serviceTier: 'default' }
+  const exact = send(shown)
+  expect(await exact.result).toMatchObject({
+    ok: true,
+    value: { submission: { options: { ...shown, personality: 'friendly' } } }
+  })
+  expect(rig.store.getRecord(SESSION)?.options).toEqual(saved)
+  const empty = send({})
+  expect(await empty.result).toMatchObject({
+    ok: true,
+    value: { submission: { options: { personality: 'friendly' } } }
+  })
+  expect((await rig.submission(empty.params.envelope.clientOperationId))?.options).toEqual({
+    personality: 'friendly'
+  })
+  expect(await send().result).toMatchObject({ ok: true, value: { submission: { options: saved } } })
+  const changed = {
+    ...exact.params,
+    selection: {},
+    envelope: {
+      ...exact.params.envelope,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.send',
+        sessionId: SESSION,
+        fields: { body: exact.params.body, selection: {} }
+      })
+    }
+  }
+  expect(await rig.host.send(CALLER, changed)).toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict' }
   })
 })

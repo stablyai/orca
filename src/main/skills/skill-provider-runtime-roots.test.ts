@@ -9,7 +9,7 @@ import {
   withClaudeSkillProviderRoot
 } from './skill-provider-runtime-roots'
 
-// The probe prints `$HOME` then each table `homeEnv` in table order, each NUL-terminated.
+// Probe order is guest HOME, then table homeEnv values, all NUL-terminated.
 function wslHomes(values: Record<string, string>, home = '/home/dev'): string {
   return [
     home,
@@ -129,7 +129,6 @@ describe('skill provider runtime roots', () => {
       }
     })
     expect(resolved).toBe(join('/users', 'alice', '.hermes', 'skills'))
-    // A rejected LOCALAPPDATA must not cost a stat: there is nothing to compare.
     expect(seen).toEqual([])
   })
 
@@ -155,13 +154,13 @@ describe('skill provider runtime roots', () => {
     ).resolves.toEqual({
       grok: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\profiles\\grok\\skills'
     })
-    // No final terminator: the payload is incomplete, so nothing in it is trusted.
+    // Missing final NUL means incomplete output; trust none of it.
     await expect(
       resolveWslSkillProviderRoots('Ubuntu', async () =>
         wslHomes({ GROK_HOME: '/srv/grok' }).slice(0, -1)
       )
     ).resolves.toEqual({})
-    // An empty or relative guest $HOME disables the home guard, so nothing is trusted.
+    // Without an absolute guest HOME the safety guard cannot run; trust no overrides.
     for (const home of ['', 'home/dev']) {
       await expect(
         resolveWslSkillProviderRoots('Ubuntu', async () =>
@@ -170,7 +169,6 @@ describe('skill provider runtime roots', () => {
         home
       ).resolves.toEqual({})
     }
-    // A lost fence.
     await expect(resolveWslSkillProviderRoots('Ubuntu', async () => null)).resolves.toEqual({})
     await expect(
       resolveWslSkillProviderRoots('Ubuntu', async () => {

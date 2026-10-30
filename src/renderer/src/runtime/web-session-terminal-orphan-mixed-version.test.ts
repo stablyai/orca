@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
@@ -16,7 +16,8 @@ import {
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
 
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+// getState: snapshot receipt reads the held paired-tab closes; none here.
+vi.mock('../store', () => ({ useAppStore: { setState: vi.fn(), getState: () => ({}) } }))
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))
@@ -192,9 +193,7 @@ describe('mixed-version web terminal orphan recovery', () => {
     }
   })
 
-  // Wire-compat Rule 3: recovery must not stall because a newer host publishes a label this client
-  // has never seen. Before narrowing the snapshot validator, any of these rejected the whole read
-  // and the adopted terminal stayed invisible on every retry.
+  // Wire-compat Rule 3: unknown newer-host labels must not reject snapshots and leave adopted terminals invisible on every retry.
   it.each([
     { name: 'a new agent-session provider', extend: (tabs: unknown[]) => [...tabs, newerAgentTab] },
     {

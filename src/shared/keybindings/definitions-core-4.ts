@@ -11,6 +11,16 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+F'])
   },
   {
+    id: 'terminal.toggleNativeChat',
+    title: 'Switch between Chat UI and terminal',
+    group: 'Chat',
+    scope: 'terminal',
+    conflictGroups: ['global', 'tabs', 'terminal', 'chat', 'fileExplorer'],
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'chat', 'chat ui', 'native chat', 'terminal', 'toggle', 'switch'],
+    defaultBindings: platformBindings(['Mod+Shift+J'])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

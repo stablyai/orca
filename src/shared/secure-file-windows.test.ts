@@ -93,7 +93,7 @@ describe('Windows secure files through the native ACL addon', () => {
       expect(create?.path).toMatch(/secret\.json\.\d+\.\d+\.[0-9a-f]+\.tmp$/)
       expect(create && 'sddl' in create ? create.sddl : '').toBe(FILE_SDDL)
       expect(readFileSync(targetPath, 'utf-8')).toBe('contents')
-      // Born restricted: no ACL is ever set on the temp file or the published one.
+      // Restricted at creation, so neither temp nor published file needs a later ACL rewrite.
       expect(fake.callsFor('set')).toEqual([])
       expect(fake.calls.some((call) => call.path === targetPath)).toBe(false)
     })
@@ -109,7 +109,6 @@ describe('Windows secure files through the native ACL addon', () => {
       expect(reports.filter((entry) => entry.stage === 'addon')).toHaveLength(1)
     })
 
-    // Never a truncating plain write of the secret: a failed create surfaces like any fs failure.
     it('throws a failed restricted create and leaves no temp file', () => {
       const dir = tempDir()
       const targetPath = join(dir, 'secret.json')
@@ -189,7 +188,7 @@ describe('Windows secure files through the native ACL addon', () => {
       expect(fake.callsFor('setAsync')).toEqual([])
     })
 
-    // A relock walks every descendant: ~2 s on a 29k-entry userData. Writes must not wait on it.
+    // Directory relock walks every descendant (~2s for 29k entries); writes cannot wait for it.
     it('neither blocks a write nor starts twice while a slow relock is still running', async () => {
       fake.holdAsync = true
       const dir = tempDir()
@@ -297,7 +296,7 @@ describe('Windows secure files through the native ACL addon', () => {
       expect(fake.callsFor('setAsync', dir)).toHaveLength(1)
     })
 
-    // The read path polls at ~2/s (#4901); a host that can never restrict must not log each time.
+    // Read polling (~2/s, #4901) must not repeatedly log incapable-host failures.
     it('collapses a failing read-path poll to a single attempt', () => {
       const { targetPath } = existingFile()
       fake.failing.add(targetPath)
@@ -381,7 +380,7 @@ describe('Windows secure files through the native ACL addon', () => {
     }
   )
 
-  // A grant reads the DACL and writes back a merge; racing a re-lock it could restore the broad one.
+  // Serialize grant merges with relock or a stale broad DACL could be restored.
   it('runs async DACL writes to the same path one after another', async () => {
     const loaded = loadWindowsSecurity()
     if ('error' in loaded) {

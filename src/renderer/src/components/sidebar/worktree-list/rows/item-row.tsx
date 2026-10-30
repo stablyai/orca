@@ -1,3 +1,4 @@
+import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
 import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
@@ -20,7 +21,7 @@ import {
 import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getWorktreeOptionId } from './option-dom'
+import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeItemRowContext = {
@@ -56,13 +57,12 @@ export type WorktreeItemRowContext = {
   onCardDragStart: (
     event: React.DragEvent<HTMLDivElement>,
     worktreeId: string,
-    draggedIds: readonly string[]
+    draggedCopies: DraggedWorktreeCopies
   ) => void
   onCardDragEnd: () => void
 }
 
-// Geometry differs three ways: a plain grouped row, a lineage child inheriting its parent's
-// surface, and a row inside a folder-backed project group.
+// Handle plain rows, inherited lineage offsets and folder-backed project geometry separately.
 function getWorktreeItemRowGeometry(
   ctx: WorktreeItemRowContext,
   itemRow: WorktreeItemRow,
@@ -117,6 +117,7 @@ export function renderWorktreeItemRow(
     : undefined
   const worktreeDragGroupKey = ctx.groupKeyByRowKey.get(itemRow.rowKey)
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
+  const isMultiSelected = ctx.selectedWorktreeIds.has(worktreeIdentity)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
     (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
@@ -130,7 +131,7 @@ export function renderWorktreeItemRow(
       key={itemRow.rowKey}
       id={getWorktreeOptionId(itemRow.rowKey)}
       role="option"
-      aria-selected={ctx.selectedWorktreeIds.has(worktreeIdentity)}
+      aria-selected={isMultiSelected}
       aria-current={isActiveWorktree ? 'page' : undefined}
       data-worktree-id={itemRow.worktree.id}
       data-worktree-host-identity={worktreeIdentity}
@@ -149,8 +150,13 @@ export function renderWorktreeItemRow(
       data-scroll-reveal-highlight={
         ctx.highlightedRevealRowKey === itemRow.rowKey ? 'true' : undefined
       }
-      // Why: nested child cards live inside the parent's clickable body; bubbling would activate/edit the parent too.
-      onClick={nested ? stopNestedWorktreeCardBubble : undefined}
+      onClick={(event) => {
+        forwardOptionPressToCardSurface(event)
+        // Why: nested child cards live inside the parent's clickable body; bubbling would activate/edit the parent too.
+        if (nested) {
+          event.stopPropagation()
+        }
+      }}
       onClickCapture={ctx.onRowClickCapture}
       onDoubleClick={nested ? stopNestedWorktreeCardBubble : undefined}
       onDragStart={nested ? stopNestedWorktreeCardBubble : undefined}
@@ -174,12 +180,13 @@ export function renderWorktreeItemRow(
         activeSurfaceVariant={
           isActiveWorktree && !forceActiveSurface ? ctx.getActiveSurfaceVariant(itemRow) : 'primary'
         }
-        isMultiSelected={ctx.selectedWorktreeIds.has(worktreeIdentity)}
+        isMultiSelected={isMultiSelected}
         revealHighlight={ctx.highlightedRevealRowKey === itemRow.rowKey}
         revealHighlightTone={
           ctx.agentSendTargetWorktreeId === itemRow.worktree.id ? 'ai' : 'default'
         }
-        selectedWorktrees={ctx.selectedWorktrees}
+        // Only selected rows act on the selection; passing it to the rest would re-render every card per click.
+        selectedWorktrees={isMultiSelected ? ctx.selectedWorktrees : undefined}
         nativeDragEnabled={false}
         isLineageDropTarget={Boolean(isLineageDropTarget)}
         contentIndent={cardContentIndent}

@@ -6,6 +6,7 @@ import { observeExistingAutomationSession } from '@/lib/automation-session-obser
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
+import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult
@@ -32,15 +33,14 @@ export async function handleAutomationDispatchRequest({
   dispatchToken
 }: AutomationDispatchRequest): Promise<void> {
   const markDispatchResult = async (result: AutomationDispatchResult): Promise<void> => {
-    // Deliberately no local emit: the write publishes its own host-scoped event
-    // (automation-run-writer.ts) before this reply returns, and an unscoped one
-    // here would arrive second and invalidate every host in the catalog.
+    // The writer publishes host-scoped change before reply; another unscoped emit would invalidate every host.
     await window.api.automations.markDispatchResult(result)
   }
   const state = useAppStore.getState()
   const focusBeforeDispatch = {
     activeView: state.activeView,
     activeWorktreeId: state.activeWorktreeId,
+    selection: captureWorkspaceSelection(state),
     activeTabId: state.activeTabId,
     activeTabType: state.activeTabType
   }
@@ -98,8 +98,7 @@ export async function handleAutomationDispatchRequest({
         agentId: automation.agentId,
         worktreeId: worktree.id,
         currentRunId: run.id,
-        // Why: the dispatch loop only ever executes for the desktop authority,
-        // so its history read addresses the local runtime explicitly.
+        // Dispatch runs only on desktop authority, so history reads explicitly target the local runtime.
         runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
         state: useAppStore.getState()
       })
@@ -188,9 +187,9 @@ export async function handleAutomationDispatchRequest({
       throw new Error('Unable to build an agent launch plan.')
     }
     terminalOwnership = result.terminalOwnership
+    completion.setSessionObserver(result.releaseRuntimeObservers)
     if (automation.reuseSession) {
-      // Why: the first fresh launch is the seed for later reuse and must
-      // survive completion under the same policy as an already-reused tab.
+      // Preserve the first fresh-launch seed under the same completion policy as reused tabs.
       releaseTerminalOwnership()
     }
     const launchedTabId = result.tabId
@@ -213,14 +212,13 @@ export async function handleAutomationDispatchRequest({
       throw error
     }
     const currentState = useAppStore.getState()
-    // Why: Run Now and scheduled dispatches should create workspaces/tabs in
-    // the background; only an explicit row click should navigate there.
+    // Scheduled/Run Now dispatch stays in background; explicit row clicks alone navigate.
     if (
       focusBeforeDispatch.activeWorktreeId !== worktree.id &&
       currentState.activeWorktreeId === worktree.id
     ) {
       currentState.setActiveView(focusBeforeDispatch.activeView)
-      currentState.setActiveWorktree(focusBeforeDispatch.activeWorktreeId)
+      restoreWorkspaceSelection(currentState, focusBeforeDispatch.selection)
       if (focusBeforeDispatch.activeTabId) {
         currentState.setActiveTab(focusBeforeDispatch.activeTabId)
       }

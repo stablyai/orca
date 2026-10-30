@@ -1,5 +1,7 @@
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import { commitLeafMoveAndRekey } from '../../../ipc/pty/ipc/leaf-move'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MovedPanePlacement } from '../../session-tabs/headless-pane-move-to-new-tab'
 import { defineMethod } from '../core'
 import {
   assertProjectedSessionTabVisible,
@@ -8,6 +10,7 @@ import {
 import { projectSessionTabsForClient } from './session-tabs-inventory'
 import {
   ActivateTab,
+  MovePaneToNewTab,
   MoveTab,
   SetTabProps,
   UpdatePaneLayout
@@ -42,7 +45,11 @@ export const SESSION_TAB_MUTATION_METHODS = [
           })
         }
       )
-      return projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
+      const projected = projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
+      // One reply's answer, outside the projection: the fallback is never part of the tab snapshot.
+      return result.startupCwdFallback
+        ? { ...projected, startupCwdFallback: result.startupCwdFallback }
+        : projected
     }
   }),
   defineMethod({
@@ -102,6 +109,37 @@ export const SESSION_TAB_MUTATION_METHODS = [
     }
   }),
   defineMethod({
+    name: 'session.tabs.movePaneToNewTab',
+    permission: 'workspace',
+    params: MovePaneToNewTab,
+    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+      await assertVisibleMutationTab(
+        runtime,
+        params.worktree,
+        params.sourceTabId,
+        pairedDeviceId,
+        clientKind,
+        clientCapabilities
+      )
+      return runtime.moveMobileSessionLeafToNewTab(
+        params.worktree,
+        {
+          sourceTabId: params.sourceTabId,
+          targetTabId: params.targetTabId,
+          leafId: params.leafId
+        },
+        (move) => commitLeafMoveAndRekey({ store: runtime.requireStore(), runtime }, move),
+        await resolveMovedPanePlacement(
+          runtime,
+          params,
+          pairedDeviceId,
+          clientKind,
+          clientCapabilities
+        )
+      )
+    }
+  }),
+  defineMethod({
     name: 'session.tabs.setTabProps',
     permission: 'workspace',
     params: SetTabProps,
@@ -124,6 +162,46 @@ export const SESSION_TAB_MUTATION_METHODS = [
     }
   })
 ]
+
+/**
+ * The drop position in the host's own order: a client's index counts only the tabs it is shown, as
+ * `session.tabs.move` translates it. A group the client cannot name leaves the tab appended.
+ */
+async function resolveMovedPanePlacement(
+  runtime: OrcaRuntimeService,
+  params: { worktree: string; sourceTabId: string; targetGroupId?: string; index?: number },
+  pairedDeviceId: string | undefined,
+  clientKind: 'mobile' | 'runtime' | undefined,
+  clientCapabilities: Parameters<typeof projectSessionTabsForClient>[2]
+): Promise<MovedPanePlacement | undefined> {
+  const { targetGroupId, index } = params
+  if (!targetGroupId) {
+    return undefined
+  }
+  if (!clientKind || index === undefined) {
+    return { targetGroupId, ...(index !== undefined ? { index } : {}) }
+  }
+  const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+  try {
+    // The new tab does not exist yet, so its source tab stands in for it; only the index is read.
+    const translated = translateProjectedSessionTabMove(
+      raw,
+      projectSessionTabsForClient(raw, clientKind, clientCapabilities),
+      { kind: 'move-to-group', tabId: params.sourceTabId, targetGroupId, index }
+    )
+    return translated.kind === 'move-to-group' && translated.index !== undefined
+      ? { targetGroupId, index: translated.index }
+      : { targetGroupId }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message === 'target_group_not_found' || error.message === 'invalid_tab_order')
+    ) {
+      return undefined
+    }
+    throw error
+  }
+}
 
 const projectSessionTabsForMutationClient = projectSessionTabsForClient
 

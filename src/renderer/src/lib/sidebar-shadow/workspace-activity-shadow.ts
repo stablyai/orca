@@ -13,6 +13,7 @@ import {
   isIdleWorkspaceActivity,
   type WorkspaceActivityFacts
 } from '../../../../shared/sidebar-list/workspace-activity-facts'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The window's own activity facts, from the same store slices the sidebar filter reads. */
 export function readWindowWorkspaceActivityFacts(
@@ -23,10 +24,14 @@ export function readWindowWorkspaceActivityFacts(
     | 'browserTabsByWorktree'
     | 'unifiedTabsByWorktree'
     | 'agentStatusByPaneKey'
-  >,
+  > &
+    Partial<Pick<AppState, 'structuredChatSleptAtByPaneKey'>>,
   now: number
 ): Map<string, WorkspaceActivityFacts> {
-  const structuredChatIds = getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree)
+  const structuredChatIds = getWorktreeIdsWithStructuredChat(
+    state.unifiedTabsByWorktree,
+    state.structuredChatSleptAtByPaneKey
+  )
   const agentById = getLiveAgentStatusByWorktreeId(
     state.agentStatusByPaneKey,
     state.tabsByWorktree,
@@ -57,9 +62,7 @@ export function readWindowWorkspaceActivityFacts(
   return facts
 }
 
-// The local runtime answers for the rows it owns; a paired server publishes its own rows' facts.
-// The window keys activity by bare id, so an id a paired server also lists cannot be attributed
-// to one host and is left out; an id with no owner in the catalog is no row.
+// Attribute local activity only to unique catalog IDs; bare IDs shared with paired servers are ambiguous, while unknown IDs name no row.
 export function toLocallyOwnedRows<Value>(
   state: AppState,
   values: ReadonlyMap<string, Value>
@@ -77,7 +80,7 @@ export function toLocallyOwnedRows<Value>(
     const repo = repoById.get(worktree.repoId)
     own(worktree.id, worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : null))
   }
-  for (const folder of state.folderWorkspaces ?? []) {
+  for (const folder of selectFolderWorkspaces(state) ?? []) {
     own(folderWorkspaceKey(folder.id), getRepoExecutionHostId(folder))
   }
   const scoped = new Map<string, Value>()

@@ -14,8 +14,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** The strip's disclosure is parent-owned, because the strip unmounts whenever
- *  live work momentarily drops to nothing; this stands in for that owner. */
+/** Own disclosure outside the strip so temporary roster gaps cannot reset expansion. */
 function DisclosureHost(
   props: Omit<
     Parameters<typeof NativeChatBackgroundTasksStatus>[0],
@@ -71,9 +70,7 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
   })
 
   it('withholds a row stop the host reported it cannot act on', () => {
-    // Claude publishes in-turn foreground rows with `stoppable: false`: the
-    // session accepts targeted stops, but `stopTask` has no target for this row,
-    // so a Stop here resolves to an empty list and reports nothing cancelled.
+    // In-turn Claude rows can be non-stoppable even when the session supports targeted stops; no button should promise an absent target.
     render(
       <DisclosureHost
         isVisible
@@ -188,7 +185,6 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
   })
 
   it('offers no stop at all when the provider exposes none', () => {
-    // An older Codex: a Stop button here would be a control that cannot act.
     renderStrip({ supportsTaskStop: false, offersStopAll: false })
     expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
@@ -224,9 +220,7 @@ describe('background-tasks strip header', () => {
     ])
     expect(header).toHaveAttribute('aria-label', '3 agents · 1 monitor')
     expect(header.querySelector('.lucide-bot')).toBeInTheDocument()
-    // Heartbeat, the same glyph the agent sidebar shows for monitoring.
     expect(header.querySelector('.lucide-activity')).toBeInTheDocument()
-    // Two kind icons and the chevron: the aggregate state dot is gone.
     expect(header.querySelectorAll('svg')).toHaveLength(3)
     for (const icon of header.querySelectorAll('svg')) {
       expect(icon).toHaveAttribute('aria-hidden', 'true')
@@ -238,8 +232,6 @@ describe('background-tasks strip header', () => {
       { id: 'a1', kind: 'agent' },
       { id: 'm1', kind: 'monitor' }
     ])
-    // Same glyph AND same colour as AgentStateDot/StatusIndicator, or a monitor
-    // here does not read as the monitor there.
     expect(header.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
     expect(header.querySelector('.lucide-bot')?.classList).toContain('text-muted-foreground')
     expect(header.querySelector('.lucide-bot')?.classList).not.toContain('text-yellow-500')
@@ -269,7 +261,6 @@ describe('background-tasks strip header', () => {
       { id: 'c1', kind: 'command', description: 'sleep 90' }
     ])
     fireEvent.click(header)
-    // Each kind group is its own labelled list, so scope to the monitor one.
     const monitors = screen.getByRole('list', { name: 'Monitors' })
     expect(monitors.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
     const shell = screen.getByRole('list', { name: 'Shell' })
@@ -287,11 +278,8 @@ describe('background-tasks strip header', () => {
       (element) => element.textContent === ' · '
     )
     expect(separators).toHaveLength(1)
-    // `--border` is a divider line (7% white in dark), an order of magnitude
-    // fainter than the counts it sits between.
     expect(separators[0].classList).not.toContain('text-border')
     expect(separators[0].classList).toContain('text-muted-foreground')
-    // One space either side; the icon's own margin is the icon-to-label gap.
     expect(header.textContent).toBe('1 agent · 1 shell')
   })
 
@@ -333,8 +321,6 @@ describe('background-tasks strip header', () => {
 })
 
 describe('settled rows beside their live siblings', () => {
-  // Retention is the PR's headline: a finished child stays visible, keeps the
-  // usage it ended on, and stops claiming a clock or a stop control.
   it('keeps a settled row with its final usage, no clock and no stop', () => {
     render(
       <DisclosureHost
@@ -370,7 +356,6 @@ describe('settled rows beside their live siblings', () => {
     const agents = screen.getByRole('list', { name: 'Agents' })
     const rows = within(agents).getAllByRole('listitem')
     expect(rows).toHaveLength(2)
-    // First seen first: the settled sibling started earlier.
     expect(rows[0].textContent).toBe('settled child18.1k')
     expect(rows[1].textContent).toMatch(/^live child4\.1k · .+Stop$/)
     expect(within(rows[1]).getByRole('button', { name: 'Stop live child' })).toBeInTheDocument()
@@ -397,8 +382,6 @@ describe('background-task row reasons', () => {
     return screen.getAllByRole('listitem')
   }
 
-  // `unverifiable` is the SSH verdict for lost contact; a row that hides it reads
-  // like a working child. `blocked` is the same class of loss.
   it('names the reason on every attention state, not only on waiting', () => {
     const rows = expandedRows([
       { id: 'a1', kind: 'agent', description: 'ssh child', state: 'unverifiable' },
@@ -410,7 +393,6 @@ describe('background-task row reasons', () => {
     expect(rows[0].textContent).toContain('ssh child · status unavailable')
     expect(rows[1].textContent).toContain('flaky child · failed')
     expect(rows[2].textContent).toContain('approval child · needs approval')
-    // A running row has nothing to explain.
     expect(rows[3].textContent).not.toContain('·')
   })
 })

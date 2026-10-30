@@ -28,6 +28,7 @@ export function SmartWorkspaceSourceResultList({
     | 'searchResultRows'
     | 'linearStatusChecked'
     | 'linearStatus'
+    | 'linearReadError'
     | 'showJiraSiteContext'
     | 'jiraConnectionStatus'
     | 'reserveLinearLoadingResults'
@@ -53,12 +54,14 @@ export function SmartWorkspaceSourceResultList({
     showJiraSiteContext,
     jiraConnectionStatus,
     reserveLinearLoadingResults,
-    showLinearUrlLoadingFeedback
+    showLinearUrlLoadingFeedback,
+    linearReadError
   } = model
+  // Why: only the Linear tab speaks for Linear; Smart lists what the other sources return.
+  const visibleLinearReadError = mode === 'linear' ? linearReadError : null
   return (
     <>
       {mode === 'gitlab' ? (
-        // Why: state chips mirror GitLab's merge-request tab strip.
         <div
           className="flex shrink-0 items-center gap-1 border-b border-border/40 px-2 py-1.5"
           onMouseDown={(e) => e.preventDefault()}
@@ -116,6 +119,21 @@ export function SmartWorkspaceSourceResultList({
             {[0, 1, 2].map((index) => (
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
+          </div>
+        ) : searchResultRows.length === 0 && visibleLinearReadError && !jiraSource.intent ? (
+          <div role="status" aria-live="polite" className="px-3 py-6 text-center text-xs">
+            <p className="font-medium text-foreground">
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
+                'Reconnect Linear'
+              )}
+            </p>
+            <p className="mt-0.5 text-muted-foreground">
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
+                'Unable to read saved Linear login. Reconnect it in Settings.'
+              )}
+            </p>
           </div>
         ) : searchResultRows.length === 0 && !typedTextActionRow ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">

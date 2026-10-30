@@ -7,7 +7,8 @@ import {
 } from '../sftp-namespace-resolution'
 import {
   createLinkedSshFileTransferSignal,
-  raceSftpFileTransferWithAbort
+  raceSftpFileTransferWithAbort,
+  sftpSessionClosedError
 } from '../ssh-file-transfer-abort'
 import type { RemoteHostPlatform } from '../ssh-remote-platform'
 import {
@@ -43,9 +44,9 @@ export async function uploadSshDirectory(
   options?: SshRemoteFileOptions & { signal?: AbortSignal }
 ): Promise<void> {
   await withLinkedSftpTransfer(host, remoteDir, options, {
-    sftp: async (sftp, targetDir, signal) => {
+    sftp: async (sftp, targetDir, signal, endSession) => {
       const { uploadDirectory } = await import('../sftp-upload')
-      await uploadDirectory(sftp, localDir, targetDir, localDir, { signal })
+      await uploadDirectory(sftp, localDir, targetDir, localDir, { signal, endSession })
     },
     system: (signal) =>
       uploadDirectoryViaSystemSsh(host.target, localDir, remoteDir, {
@@ -92,7 +93,7 @@ export async function createSshFileUploadSession(
       close: () => sftp.end()
     }
   }
-  // Why: disconnect replaces the connection controller, so an existing import session must stay bound to the signal and SSH config it opened with.
+  // Capture config/signal once: disconnect replaces the controller while existing imports belong to their original session.
   const signal = host.systemOperationSignal()
   const buildArgsOptions = host.systemSshBuildArgsOptions()
   return {
@@ -101,7 +102,9 @@ export async function createSshFileUploadSession(
         signal,
         hostPlatform: options?.hostPlatform,
         exclusive: uploadOptions?.exclusive,
-        ...buildArgsOptions
+        ...buildArgsOptions,
+        // Read loopback routing live so a dead session route cannot be dialled.
+        loopbackRoute: host.systemSshBuildArgsOptions().loopbackRoute
       }),
     close: () => {}
   }
@@ -127,16 +130,18 @@ export async function writeSshFile(
   })
 }
 
-/**
- * One transfer under both cancellation owners (the caller and connection teardown): on ssh2,
- * through one SFTP session that also resolves the mapped path, ended on abort or completion.
- */
+/** Link caller/connection cancellation; ssh2 maps paths and transfers on one SFTP session, closed on abort or completion. */
 async function withLinkedSftpTransfer(
   host: SshFileTransferHost,
   remotePath: string,
   options: (SshRemoteFileOptions & { signal?: AbortSignal }) | undefined,
   transfer: {
-    sftp: (sftp: SFTPWrapper, targetPath: string, signal: AbortSignal) => Promise<void>
+    sftp: (
+      sftp: SFTPWrapper,
+      targetPath: string,
+      signal: AbortSignal,
+      endSession: () => void
+    ) => Promise<void>
     system: (signal: AbortSignal) => Promise<void>
   }
 ): Promise<void> {
@@ -145,6 +150,12 @@ async function withLinkedSftpTransfer(
       (signal): signal is AbortSignal => signal !== undefined
     )
   )
+  // Session loss fails the transfer and closes local files; it must not become a caller-cancellation outcome.
+  const sessionLoss = new AbortController()
+  const transferSignal = createLinkedSshFileTransferSignal([
+    linkedSignal.signal,
+    sessionLoss.signal
+  ])
   try {
     if (host.usesSystemSshTransport()) {
       await transfer.system(linkedSignal.signal)
@@ -161,22 +172,46 @@ async function withLinkedSftpTransfer(
     }
     sftp.on('error', swallowLateSftpError)
     sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+    // ssh2 never answers queued/post-loss requests or stream CLOSE; race session loss explicitly.
+    let sessionLost: (error: Error) => void = () => {}
+    const lostSession = new Promise<never>((_resolve, reject) => {
+      sessionLost = reject
+    })
+    let sftpClosed = false
+    const onSessionClose = (): void => {
+      sftpClosed = true
+      if (!sftpEndRequested) {
+        const error = sftpSessionClosedError()
+        sessionLost(error)
+        sessionLoss.abort(error)
+      }
+    }
+    sftp.once('close', onSessionClose)
     try {
-      // Why: resolve on the same session that transfers — a later one is not authoritative for its namespace.
+      // Resolve paths on the transferring session; a later session cannot authorize this namespace.
       const run = (async (): Promise<void> => {
         const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
-        linkedSignal.signal.throwIfAborted()
-        await transfer.sftp(sftp, targetPath, linkedSignal.signal)
+        transferSignal.signal.throwIfAborted()
+        await transfer.sftp(sftp, targetPath, transferSignal.signal, endSftp)
       })()
-      await raceSftpFileTransferWithAbort(run, linkedSignal.signal, (onClose) => {
-        sftp.once('close', onClose)
-        endSftp()
-        return () => sftp.removeListener('close', onClose)
-      })
+      await Promise.race([
+        raceSftpFileTransferWithAbort(run, linkedSignal.signal, (onClose) => {
+          if (sftpClosed) {
+            onClose()
+          } else {
+            sftp.once('close', onClose)
+          }
+          endSftp()
+          return () => sftp.removeListener('close', onClose)
+        }),
+        lostSession
+      ])
     } finally {
+      sftp.removeListener('close', onSessionClose)
       endSftp()
     }
   } finally {
+    transferSignal.dispose()
     linkedSignal.dispose()
   }
 }

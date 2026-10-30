@@ -47,10 +47,7 @@ export function registerWorkspaceKanbanVirtualLaneLayout(args: {
   }
 }
 
-/**
- * The lane's item ids in the index space `resolveWorkspaceKanbanVirtualLaneDropIndex`
- * reports — every item in the lane view, not just the mounted virtual window.
- */
+/** Return every item in the virtual drop-index space, including unmounted rows. */
 export function getWorkspaceKanbanVirtualLaneItemIds(
   scrollElement: HTMLElement
 ): readonly string[] | null {

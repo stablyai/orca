@@ -79,7 +79,6 @@ describe('repo maintenance idle gate', () => {
   })
 
   it('vetoes while a worktree removal is deleting refs', () => {
-    // Removal deletes branches, and a ref deletion needs the same packed-refs lock.
     hasRemovalsInFlightMock.mockReturnValue(true)
 
     expect(installProbe().probe()).toBe(true)
@@ -104,8 +103,6 @@ describe('repo maintenance idle gate', () => {
   })
 
   it('pushes the next attempt out when the machine drops onto battery', () => {
-    // Do-not-start, never stop-what-is-running: killing a pack to honour a
-    // battery change would strand a ref lock to save a little unlinking.
     installProbe()
 
     powerListeners.get('on-battery')?.()
@@ -114,8 +111,7 @@ describe('repo maintenance idle gate', () => {
   })
 
   it('pushes the next attempt out when the user comes back to the window', () => {
-    // A focus transition, not focus itself: a window left focused while the user
-    // walks away fires no event and blocks nothing.
+    // A window left focused while the user is away fires no new focus event.
     installProbe()
 
     appListeners.get('browser-window-focus')?.()

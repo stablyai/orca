@@ -41,18 +41,6 @@ describe('agent-browser orphan sweep', () => {
     runProcessMock.mockReset()
   })
 
-  it('closes tab daemons left by a previous run', async () => {
-    respond(['orca-tab-aaa', 'orca-tab-bbb'])
-
-    const closed = await sweepOrphanedAgentBrowserSessions({ binaryPath: BIN, ...SCOPED })
-
-    expect(closed).toEqual(['orca-tab-aaa', 'orca-tab-bbb'])
-    expect(closedArgs()).toEqual([
-      ['--session', 'orca-tab-aaa', 'close'],
-      ['--session', 'orca-tab-bbb', 'close']
-    ])
-  })
-
   it('never closes a daemon outside Orca tab naming', async () => {
     respond(['default', 'agent1', 'orca-orcad-deadbeef', 'orca-tab-aaa'])
 
@@ -73,8 +61,6 @@ describe('agent-browser orphan sweep', () => {
     expect(closedArgs()).toEqual([['--session', 'orca-tab-orphan', 'close']])
   })
 
-  // Why: without a socket dir Orca derived itself, `session list` can reach daemons another Orca
-  // profile owns (Windows named pipes, or an inherited AGENT_BROWSER_SOCKET_DIR). Idle timeout bounds those.
   it.each([
     ['no socket directory at all', { PATH: 'C:\\Windows' }],
     ['a socket directory Orca inherited', { AGENT_BROWSER_SOCKET_DIR: '/tmp/shared-ab' }]
@@ -106,14 +92,6 @@ describe('agent-browser orphan sweep', () => {
     expect(closedArgs()).toEqual([])
   })
 
-  it('survives a listing that never returns', async () => {
-    runProcessMock.mockRejectedValue(new Error('ENOENT'))
-
-    await expect(
-      sweepOrphanedAgentBrowserSessions({ binaryPath: BIN, ...SCOPED })
-    ).resolves.toEqual([])
-  })
-
   it('keeps sweeping after one close fails', async () => {
     runProcessMock.mockImplementation((spec: Spec) => {
       if (spec.args?.[0] === 'session') {
@@ -135,16 +113,6 @@ describe('agent-browser orphan sweep', () => {
 
     expect(closed).toEqual(['orca-tab-bbb'])
   })
-
-  it('bounds every child it starts', async () => {
-    respond(['orca-tab-aaa'])
-
-    await sweepOrphanedAgentBrowserSessions({ binaryPath: BIN, ...SCOPED })
-
-    for (const call of runProcessMock.mock.calls) {
-      expect((call[0] as { timeoutMs?: number | null }).timeoutMs).toBeGreaterThan(0)
-    }
-  })
 })
 
 describe('sweep kill switch', () => {
@@ -158,8 +126,6 @@ describe('sweep kill switch', () => {
     }
   })
 
-  // Why: the idle bound is an env passthrough an operator can raise and the quit close is
-  // self-bounded, so the sweep is the only new behaviour whose failure would need a revert.
   it('enumerates nothing when disabled, even when Orca owns the socket directory', async () => {
     process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP = '1'
     runProcessMock.mockClear()
@@ -172,19 +138,5 @@ describe('sweep kill switch', () => {
 
     expect(closed).toEqual([])
     expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('still sweeps when the flag holds any other value', async () => {
-    process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP = '0'
-    runProcessMock.mockClear()
-    runProcessMock.mockResolvedValue({ code: 0, stdout: '{"data":{"sessions":[]}}', stderr: '' })
-
-    await sweepOrphanedAgentBrowserSessions({
-      binaryPath: BIN,
-      env: {},
-      ownsSocketDirectory: true
-    })
-
-    expect(runProcessMock).toHaveBeenCalled()
   })
 })

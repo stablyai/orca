@@ -41,10 +41,7 @@ describe('resolveSourceControlAiLinkedIssue', () => {
     expect(store.getWorktreeMeta).toHaveBeenCalledWith(instanceId)
   })
 
-  // Why: the desktop renderer derives `worktreePath` from `worktreeId`, so it can
-  // never send a mismatched pair — these cases model an independent caller (relay,
-  // CLI, future in-process caller) and assert the guard fails closed for them.
-  // They are not evidence that a stale renderer context is rejected; it is not.
+  // Independent callers can mismatch ID/path; renderer-derived stale pairs still agree and are not rejected here.
   it('rejects an independently supplied id whose path does not match the request', () => {
     const store = makeStore({ [LOCAL_ID]: { linkedIssue: 123 } })
 

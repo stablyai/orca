@@ -76,6 +76,42 @@ const SEND: NativeChatInteractiveSend = {
   cancelAsk: mocks.cancelAsk
 }
 
+describe('terminal-only question presentation', () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(cleanup)
+  it.each([true, false])(
+    'replaces answer and cancel controls with terminal navigation (%s)',
+    (available) => {
+      const onAnswerInTerminal = vi.fn()
+      const onDismiss = vi.fn()
+      render(
+        <NativeChatInteractiveCard
+          card={{
+            kind: 'question',
+            prompt: {
+              questions: [{ question: 'Pick', options: [{ label: 'A' }], multiSelect: false }]
+            }
+          }}
+          send={SEND}
+          onDismiss={onDismiss}
+          requiresTerminal
+          onAnswerInTerminal={available ? onAnswerInTerminal : undefined}
+        />
+      )
+      const button = screen.getByRole('button', { name: 'Answer in terminal' })
+      expect(screen.getAllByRole('button')).toHaveLength(1)
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(button).toHaveProperty('disabled', !available)
+      fireEvent.click(button)
+      expect(onAnswerInTerminal).toHaveBeenCalledTimes(available ? 1 : 0)
+      expect(mocks.sendAnswer).not.toHaveBeenCalled()
+      expect(mocks.cancelAsk).not.toHaveBeenCalled()
+      expect(mocks.sendRawVerified).not.toHaveBeenCalled()
+      expect(onDismiss).not.toHaveBeenCalled()
+    }
+  )
+})
+
 // Stands in for the view: it derives the shown card and renders it XOR the composer.
 function CardHarness({
   canSend,
@@ -476,10 +512,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 })
 
-// A headless host, a relay gap, or a replay can leave the pane with no live
-// `interactivePrompt` while the transcript still holds the unresolved call (#11761).
-// Which asks the transcript still counts as pending (orphaned calls, turn boundaries)
-// is the shared parser's contract — covered in `src/shared/native-chat-ask.test.ts`.
+// Transcript fallback covers missing live prompts; native-chat-ask.test.ts owns pending-call parsing.
 describe('NativeChatInteractiveCard transcript fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -513,8 +546,7 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
   })
 
   it('still renders while the mirrored status says the agent is working', () => {
-    // Why no state gate: the mirrored status channel is exactly what fails in the
-    // reported topology, so keying the fallback on it would suppress the card.
+    // Mirrored status can fail independently of the transcript, so it cannot gate fallback prompts.
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = 'working'
     render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
 
@@ -546,8 +578,6 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })
 
-  // The view passes the command-boundary-trimmed messages, so an ask abandoned via
-  // `/clear` cannot come back as a permanent card sitting over the composer.
   it('drops an ask abandoned by /clear', () => {
     const abandoned = { ...askCallMessage('Tabs or spaces?'), timestamp: 100 }
     const trimmed = applyCommandMarkerBoundaries(

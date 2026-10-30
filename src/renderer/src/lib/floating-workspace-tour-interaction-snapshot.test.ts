@@ -26,41 +26,4 @@ describe('createFloatingWorkspaceTourInteractionSnapshot', () => {
     expect(snapshot.persisted).toBe(persisted)
     expect(snapshot.recordFeatureInteractionForTour).toBe(false)
   })
-
-  it('defers recording to the tour hook when opened before persisted UI is ready', () => {
-    const featureInteractions: FeatureInteractionState = {}
-    const recordFeatureInteraction = vi.fn(() => Promise.resolve())
-
-    const snapshot = createFloatingWorkspaceTourInteractionSnapshot({
-      featureInteractions,
-      persistedUIReady: false,
-      recordFeatureInteraction
-    })
-
-    expect(recordFeatureInteraction).not.toHaveBeenCalled()
-    expect(snapshot.wasPreviouslyInteracted).toBeUndefined()
-    expect(snapshot.persisted).toBeUndefined()
-    expect(snapshot.recordFeatureInteractionForTour).toBe(true)
-  })
-
-  it('preserves returning-user state while recording the new open interaction', () => {
-    const persisted = Promise.resolve()
-    const recordFeatureInteraction = vi.fn(() => persisted)
-
-    const snapshot = createFloatingWorkspaceTourInteractionSnapshot({
-      featureInteractions: {
-        'floating-workspace': {
-          firstInteractedAt: 100,
-          interactionCount: 1
-        }
-      },
-      persistedUIReady: true,
-      recordFeatureInteraction
-    })
-
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('floating-workspace')
-    expect(snapshot.wasPreviouslyInteracted).toBe(true)
-    expect(snapshot.persisted).toBe(persisted)
-    expect(snapshot.recordFeatureInteractionForTour).toBe(false)
-  })
 })

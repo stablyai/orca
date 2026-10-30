@@ -33,8 +33,8 @@ import {
   sendRemoteRuntimeRequest,
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../shared/remote-runtime-client'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-session-id'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { materializeOrcadArtifact } from './orcad-artifact-materializer'
 import {
@@ -349,7 +349,6 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
       expect(report.userMessages[0]?.message.content).toEqual([
         { type: 'text', text: 'Hello packaged server' }
       ])
-      // Follow-up #26464: assert ORCA_CLI_COMMAND executes the packaged host CLI.
     } finally {
       subscription?.close()
       await killChildAndWait(server.child)

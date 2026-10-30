@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const io = vi.hoisted(() => ({ write: vi.fn(), verified: vi.fn() }))
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: io.write,
+  sendRuntimePtyInput: io.write
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: io.verified
 }))
 import {
   sendNativeChatMessage,
   resetNativeChatPtySendQueuesForTests
 } from './native-chat-runtime-send'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from '../../../../shared/native-chat-paste-bytes'
 beforeEach(() => {
   vi.useFakeTimers()
   resetNativeChatPtySendQueuesForTests()

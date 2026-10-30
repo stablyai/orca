@@ -76,6 +76,68 @@ describe('noteEndedLaunchSshSession', () => {
     expect(mocks.publish).toHaveBeenCalledOnce()
   })
 
+  it.each(['live', 'unverifiable', 'not-recorded', 'failed'])(
+    'does not transfer an ended verdict to a replacement environment whose probe is %s',
+    async (verdict) => {
+      await noteEndedLaunchSshSession('ssh-1', 'env-1')
+      mocks.environments.current = ['env-2']
+      mocks.status.current = { kind: 'managed', environmentId: 'env-2' }
+      if (verdict === 'failed') {
+        mocks.read.mockRejectedValue(new Error('unreachable'))
+      } else {
+        mocks.read.mockResolvedValue(verdict)
+      }
+      await noteEndedLaunchSshSession('ssh-1', 'env-2')
+      await noteEndedLaunchSshSession('ssh-1', 'env-2')
+      expect(mocks.publish.mock.calls).toEqual([
+        ['ssh-1', { kind: 'managed', environmentId: 'env-1', launchSessionEnded: true }]
+      ])
+      expect(mocks.read).toHaveBeenCalledTimes(2)
+      expect(mocks.read).toHaveBeenLastCalledWith('/u', 'env-2')
+    }
+  )
+
+  it('does not let a live verdict hide an ended replacement environment', async () => {
+    mocks.read.mockResolvedValueOnce('live').mockResolvedValue('exited')
+    await noteEndedLaunchSshSession('ssh-1', 'env-1')
+    mocks.environments.current = ['env-2']
+    mocks.status.current = { kind: 'managed', environmentId: 'env-2' }
+    await noteEndedLaunchSshSession('ssh-1', 'env-2')
+    expect(mocks.publish.mock.calls).toEqual([
+      ['ssh-1', { kind: 'managed', environmentId: 'env-2', launchSessionEnded: true }]
+    ])
+  })
+
+  it.each(['exited', 'failed'])(
+    'ignores an old environment probe that settles %s after its replacement probe',
+    async (outcome) => {
+      let clock = 0
+      await noteEndedLaunchSshSession('ssh-1', 'env-1', () => clock)
+      clock = 11 * 60_000
+      let settle = (): void => {}
+      mocks.read.mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve, reject) => {
+            settle = () =>
+              outcome === 'failed' ? reject(new Error('old probe failed')) : resolve(outcome)
+          })
+      )
+      const oldProbe = noteEndedLaunchSshSession('ssh-1', 'env-1', () => clock)
+      mocks.environments.current = ['env-2']
+      mocks.status.current = { kind: 'managed', environmentId: 'env-2' }
+      mocks.read.mockResolvedValue('live')
+      await noteEndedLaunchSshSession('ssh-1', 'env-2', () => clock)
+      settle()
+      await oldProbe
+      await noteEndedLaunchSshSession('ssh-1', 'env-2', () => clock)
+      expect(mocks.publish.mock.calls).toEqual([
+        ['ssh-1', { kind: 'managed', environmentId: 'env-1', launchSessionEnded: true }]
+      ])
+      expect(mocks.read).toHaveBeenCalledTimes(3)
+      expect(mocks.read).toHaveBeenLastCalledWith('/u', 'env-2')
+    }
+  )
+
   it('retries when a start or update was still deciding', async () => {
     mocks.status.current = { kind: 'setting-up', phase: 'updating' }
     await noteEndedLaunchSshSession('ssh-1', 'env-1')

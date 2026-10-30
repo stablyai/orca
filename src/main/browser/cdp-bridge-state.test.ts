@@ -54,7 +54,7 @@ describe('CdpBridgeState reverse tab lookup', () => {
     const state = createBridgeState(getRegisteredTabs, getTabIdForWebContentsId)
     const targetWebContentsId = 10_000 + tabCount - 1
 
-    // The old forward scan inspected 1,000,000 entries for this repeated last-tab lookup.
+    // A forward scan makes this repeated last-tab lookup quadratic.
     for (let lookup = 0; lookup < lookupCount; lookup += 1) {
       expect(state.resolveTabIdSafe(targetWebContentsId)).toBe(`tab-${tabCount - 1}`)
     }

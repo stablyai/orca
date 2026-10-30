@@ -2,6 +2,7 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { AppState } from '../../../types'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
+import { endWindowCreation } from '@/lib/sidebar-ended-creations'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
@@ -61,6 +62,9 @@ export function createRemovePendingWorktreeCreation(
         ...(s.activePendingCreationId === creationId ? { activePendingCreationId: null } : {})
       }
     })
+    if (removedEntry) {
+      endWindowCreation(creationId)
+    }
     if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
       return
     }
@@ -73,7 +77,8 @@ export function createRemovePendingWorktreeCreation(
       return
     }
     void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
-      deleteProjectHostSetup: (setupId) => get().deleteProjectHostSetup({ setupId }),
+      deleteProjectHostSetup: (setupId, hostId) =>
+        get().deleteProjectHostSetup({ setupId, hostId }),
       cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
       reportSetupError: (error) =>
         console.error('Failed to remove cancelled provisioned-root project setup:', error),

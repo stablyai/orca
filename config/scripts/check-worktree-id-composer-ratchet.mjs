@@ -1,18 +1,8 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import {
-  diffCounts,
-  parseCountBaseline,
-  pruneCountBaseline,
-  readTrackedSources,
-  totalCount
-} from './ratchet-baseline.mjs'
+import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on worktree ids built by hand (`${repo.id}::${path}`) instead of through the composers in
-// src/shared/worktree/id.ts. About 22 hand-built ids each pick whichever path spelling is at hand,
-// which is how one worktree ends up with two ids (#30150). Counts per file may only go down.
+// Ratchet hand-built worktree IDs downward: inconsistent path spellings give one worktree multiple IDs (#30150); use shared/worktree/id.ts composers.
 
 const BASELINE_PATH = 'config/worktree-id-composer-baseline.txt'
 const SCAN_ROOTS = ['src', 'mobile/src']
@@ -57,38 +47,20 @@ export function collectHandBuiltWorktreeIdCounts(root = process.cwd()) {
 }
 
 export function main(root = process.cwd(), arg = undefined) {
-  const current = collectHandBuiltWorktreeIdCounts(root)
-  if (arg === '--prune') {
-    const total = pruneCountBaseline(root, BASELINE_PATH, HEADER, current)
-    console.log(`worktree-id-composer baseline pruned to ${total}.`)
-    return 0
-  }
-  const baselineFile = path.join(root, BASELINE_PATH)
-  const baseline = parseCountBaseline(
-    fs.existsSync(baselineFile) ? fs.readFileSync(baselineFile, 'utf8') : ''
+  return runCountRatchet(
+    {
+      name: 'worktree-id-composer',
+      baselinePath: BASELINE_PATH,
+      header: HEADER,
+      collect: collectHandBuiltWorktreeIdCounts,
+      unit: 'hand-built worktree id(s)',
+      fix: [
+        'Compose worktree ids with composeWorktreeId / getRepoMainWorktreeId (src/shared/worktree/id.ts).'
+      ]
+    },
+    root,
+    arg
   )
-  const { grown, shrunk } = diffCounts(current, baseline)
-  for (const { file, now, allowed } of grown) {
-    console.error(`${file}: ${now} hand-built worktree id(s), baseline allows ${allowed}.`)
-  }
-  if (grown.length > 0) {
-    console.error(
-      'Compose worktree ids with composeWorktreeId / getRepoMainWorktreeId (src/shared/worktree/id.ts).'
-    )
-  }
-  for (const { file, now, allowed } of shrunk) {
-    console.error(`${file}: now ${now}, baseline ${allowed}.`)
-  }
-  if (shrunk.length > 0) {
-    console.error(
-      'The baseline may only shrink. Fix it: pnpm check:worktree-id-composer-ratchet --prune'
-    )
-  }
-  if (grown.length + shrunk.length > 0) {
-    return 1
-  }
-  console.log(`worktree-id-composer ratchet OK — ${totalCount(current)} grandfathered id(s).`)
-  return 0
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

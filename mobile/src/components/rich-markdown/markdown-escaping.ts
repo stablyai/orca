@@ -7,14 +7,7 @@ const HTML_ESCAPES: Record<string, string> = {
   "'": '&#39;'
 }
 
-/**
- * The entities markdown may already carry, resolved before the text is escaped again.
- *
- * Without this a source that says `&amp;` renders as `&amp;amp;`: the escape below would take the
- * ampersand of the entity for a literal one. Numeric forms are range-checked because
- * `String.fromCodePoint` throws above the Unicode ceiling, and an unresolvable entity is left as
- * the text it was.
- */
+// Resolve existing entities before re-escaping so &amp; cannot double-encode; range-check numeric code points to avoid throws, leaving unknown entities literal.
 export function decodeMarkdownEntities(value: string): string {
   return value.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (match, entity: string) => {
     const lower = entity.toLowerCase()
@@ -47,8 +40,12 @@ export function decodeMarkdownEntities(value: string): string {
   })
 }
 
+export function escapeLiteralHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char)
+}
+
 export function escapeHtml(value: string): string {
-  return decodeMarkdownEntities(value).replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char)
+  return escapeLiteralHtml(decodeMarkdownEntities(value))
 }
 
 /** An attribute value cannot carry a newline, which would end it in the markup being built. */

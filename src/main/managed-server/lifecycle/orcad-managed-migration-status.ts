@@ -1,4 +1,3 @@
-/** Which dormant migrations into managed servers have not finished, for status and resume. */
 import {
   isRetainedOrcadMigrationSourceCutover,
   type OrcadMigrationSourceCutover
@@ -9,7 +8,7 @@ import {
 } from '../../../shared/runtime-environments'
 import { listOrcadMigrationSourceCutovers } from '../../ssh/orcad-migration-cutover-journal'
 
-export type OrcadManagedPendingMigration = {
+type OrcadManagedPendingMigration = {
   migrationId: string
   environmentId: string
   name: string
@@ -18,13 +17,13 @@ export type OrcadManagedPendingMigration = {
   startedAt: string
 }
 
-/** Throws on an unreadable journal: a migration we cannot read is not "none". */
+/** Unreadable journals must not look like absent migrations. */
 export function listPendingManagedOrcadMigrations(
   userDataPath: string
 ): OrcadManagedPendingMigration[] {
   return (
     listOrcadMigrationSourceCutovers(userDataPath)
-      // Why retained too: committed is finished; keeping source rows is downgrade insurance, not work.
+      // Committed/retained journals preserve downgrade recovery, not pending migration work.
       .filter(
         (cutover) =>
           cutover.phase !== 'source-retired' && !isRetainedOrcadMigrationSourceCutover(cutover)
@@ -51,7 +50,6 @@ export function findIncompleteManagedOrcadMigration(
   )
 }
 
-/** The registered server is the one the journal deploys into, on the journaled registration. */
 export function environmentMatchesManagedOrcadCutover(
   environment: KnownRuntimeEnvironment,
   cutover: OrcadMigrationSourceCutover

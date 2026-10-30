@@ -12,11 +12,6 @@ import { useSourceControlFileProjection } from './use-file-projection'
 import { useSourceControlRowOpening } from './use-row-opening'
 import type { SourceControlWorktreeContext } from './use-worktree-context'
 
-/**
- * Projects git status and branch compare into the rows the panel renders, and layers the
- * interactions that operate on those rows: submodule expansion, diff opening, selection, bulk
- * staging and the git history feed.
- */
 export function useSourceControlFileListing({
   activeRemoteActionSequence,
   activeRepoTarget,
@@ -80,7 +75,6 @@ export function useSourceControlFileListing({
     fileFilterState,
     normalizedFilter,
     isGitHistoryVisible,
-    filteredGrouped,
     displaySections,
     unfilteredDisplaySectionsById,
     filteredBranchEntries,
@@ -114,7 +108,7 @@ export function useSourceControlFileListing({
     worktreeMap
   })
 
-  // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
+  // Modifier-click opens a right split to preserve the current pane.
   const { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff } =
     useSourceControlRowOpening({
       isMac,
@@ -136,12 +130,10 @@ export function useSourceControlFileListing({
       containerRef: sourceControlRef
     })
 
-  // clear selection on list/tree presentation change
   useEffect(() => {
     clearSelection()
   }, [sourceControlViewMode, clearSelection])
 
-  // Clear selection on worktree or tab change
   useEffect(() => {
     clearSelection()
   }, [activeWorktreeId, rightSidebarTab, clearSelection])
@@ -205,7 +197,6 @@ export function useSourceControlFileListing({
     expandedSubmoduleKeys,
     fileFilterState,
     filteredBranchEntries,
-    filteredGrouped,
     flatEntriesByKey,
     gitHistoryState,
     grouped,

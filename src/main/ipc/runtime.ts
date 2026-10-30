@@ -43,15 +43,14 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
       }
       if (event.senderFrame !== event.sender.mainFrame) {
-        // Why: a disposed main frame can leave an invoke queued after its
-        // replacement starts. It must not settle the replacement generation.
+        // Queued calls from a disposed frame must not settle the replacement document's generation.
         throw new Error('Runtime graph sync must originate from the current main frame')
       }
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
       const result = runtime.syncWindowGraph(window.id, graph)
-      // Why after the sync: only the authoritative window's graph is accepted, so only its catalog is.
+      // Only the authoritative window's accepted graph may publish its project catalog.
       if (graph.projectSectionCatalog) {
         publishMobileProjectSections(graph.projectSectionCatalog)
       }
@@ -60,8 +59,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   )
 
   ipcMain.handle('runtime:getStatus', async (): Promise<RuntimeStatus> => {
-    // Why: same capped wait as `status.get`, so the renderer caption sees the friendly name unless
-    // the lookup is still running; it refetches status and picks the name up on the next read.
+    // Match status.get's capped name wait; later reads pick up a lookup that is still running.
     await runtime.machineNameReady()
     return runtime.getStatus()
   })
@@ -75,8 +73,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher's RpcSuccess/RpcFailure union is the same envelope RuntimeRpcResponse describes; only the `result` generic differs, and this call site declares it as unknown.
-      return (await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
+      return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
@@ -90,7 +87,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           connectionId: desktopSenders.connectionIdFor(event.sender),
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
         }
-      )) as RuntimeRpcResponse<unknown>
+      )
     }
   )
 
@@ -110,9 +107,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
-      // The controller outlives the dispatch: most streaming handlers return once set up and
-      // keep streaming until their signal aborts, so `runtime:unsubscribe` or sender retirement
-      // is what ends it, never the handler settling.
+      // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
       void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
         {
           id: args.subscriptionId,
@@ -187,32 +182,17 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     runtime.getBrowserRemoteViewerPages()
   )
 
-  // Why: the renderer holds these rows in memory only, so a reload has nothing to restore from.
+  // In-memory renderer rows need a main-owned source for reload restoration.
   ipcMain.removeHandler('runtime:getClientHostedBrowserRows')
   ipcMain.handle('runtime:getClientHostedBrowserRows', (): ClientHostedBrowserRowsEvent[] =>
     runtime.listClientHostedBrowserRows()
   )
 
-  // Why: the desktop "Restore" button sets the display mode to 'desktop' and
-  // applies it, which restores the PTY to its original dimensions and emits
-  // a 'resized' event to any active mobile subscriber. This uses the same
-  // code path as the mobile toggle button (terminal.setDisplayMode RPC).
+  // Restore desktop dimensions through the mobile display-mode path so subscribers receive resize events.
   ipcMain.removeHandler('runtime:restoreTerminalFit')
   ipcMain.handle('runtime:restoreTerminalFit', async (_event, args: { ptyId: string }) => {
-    // Why: this IPC powers the desktop "Take back" button. Beyond restoring
-    // PTY dims (the original semantic), it now also reclaims the input
-    // floor for the desktop via the driver state machine. The lock banner
-    // unmounts and desktop input/resize are unblocked until the next
-    // mobile interaction takes the floor again. See
-    // docs/mobile-presence-lock.md.
-    //
-    // Why async: reclaimTerminalForDesktop awaits applyMobileDisplayMode's
-    // PTY-resize chain. Returning the unresolved Promise to ipcMain made
-    // Electron try to structured-clone a Promise — "An object could not
-    // be cloned" error — and the renderer's restoreTerminalFit() rejected
-    // with no useful info.
-    // Why: keep one underlying reclaim per PTY even after callers time out;
-    // layout serialization means a retry cannot bypass the wedged operation.
+    // Take back input and sizing for desktop (docs/mobile-presence-lock.md).
+    // Keep one reclaim per PTY through caller timeouts; retries cannot bypass layout serialization.
     let pending = pendingTerminalFitRestores.get(args.ptyId)
     if (!pending) {
       try {

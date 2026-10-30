@@ -58,7 +58,23 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     const f = twin()
     const key = f.workspaceKey
 
+    const previous = {
+      paneKey: f.remote.paneKey,
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: [],
+      terminalResumeEligible: false as const
+    }
+    f.store.setState({ agentStatusByPaneKey: { [f.remote.paneKey]: previous } })
+    const accepted = vi.fn()
+    const dispose = f.store.getState().subscribeAgentStatusChanges(accepted)
     f.store.getState().purgeWorktreeTerminalState([hostWorktreeTarget({ id: key, ...f.remote })])
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([
+      { paneKey: f.remote.paneKey, previous, current: undefined }
+    ])
+    dispose()
 
     const s = f.store.getState()
     expect(s.tabsByWorktree[key]?.map((tab) => tab.id)).toEqual([

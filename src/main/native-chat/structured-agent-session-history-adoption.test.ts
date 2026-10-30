@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -63,13 +64,14 @@ function ownership(
     workspaceId: 'workspace-owner',
     provider: 'codex',
     providerSessionId: 'thread-1',
-    lease: agentSessionLeaseFixture(),
+    ownerObservation: agentSessionConversationView(agentSessionRecordFixture()).ownerObservation,
+    role: 'head',
     ...overrides
   }
 }
 
 describe('findConflictingStructuredAdoption', () => {
-  it('names the session that already holds the conversation', () => {
+  it('names the session continuing the conversation now, never one that held it earlier', () => {
     const owner = ownership()
 
     expect(
@@ -77,7 +79,11 @@ describe('findConflictingStructuredAdoption', () => {
         agent: 'codex',
         providerSessionId: 'thread-1',
         selfSessionId: 'codex_new',
-        ownership: [ownership({ sessionId: 'other', providerSessionId: 'thread-2' }), owner]
+        ownership: [
+          ownership({ sessionId: 'other', providerSessionId: 'thread-2' }),
+          ownership({ sessionId: 'moved_on', role: 'earlier' }),
+          owner
+        ]
       })
     ).toBe(owner)
   })
@@ -104,7 +110,6 @@ describe('findConflictingStructuredAdoption', () => {
     ).toBeNull()
   })
 
-  // `opencode` and `opencode2` run one OpenCode under two names, so they open the same ids.
   it.each([
     ['opencode', 'opencode2'],
     ['opencode2', 'opencode']
@@ -232,10 +237,13 @@ describe('structuredAdoptionConflictError', () => {
     ['a lease mid-handoff', { handoffStage: 'new-owner-proving' as const }],
     ['an unreconciled lease', { unreconciled: true }]
   ])('calls %s an unknown owner rather than a conflict', (_label, leaseOverrides) => {
-    // Neither verdict admits a second writer; they differ only in what the user is told.
     expect(
       structuredAdoptionConflictError(
-        ownership({ lease: agentSessionLeaseFixture(leaseOverrides) })
+        ownership({
+          ownerObservation: agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture(leaseOverrides))
+          ).ownerObservation
+        })
       ).message
     ).toBe('agent_session_ownership_unknown')
   })
@@ -243,7 +251,7 @@ describe('structuredAdoptionConflictError', () => {
 
 describe('resolveStructuredAgentSessionAdoption', () => {
   it('refuses rather than falling back to a home that does not hold the conversation', async () => {
-    // A resume under the wrong home lands in a blank chat wearing the old chat's name.
+    // Wrong-home resume silently opens a blank chat under the old name.
     await expect(
       resolveStructuredAgentSessionAdoption({
         providerSessionId: 'session-1',

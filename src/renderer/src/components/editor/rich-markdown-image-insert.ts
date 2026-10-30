@@ -15,6 +15,9 @@ import { buildRichMarkdownImageInsertContent } from './rich-markdown-image-inser
 import { showRichMarkdownImageInsertionCanceled } from './rich-markdown-image-insertion-feedback'
 import type { RichMarkdownImageInsertionRange } from './rich-markdown-image-insertion-target'
 import { richMarkdownClipboardInsertionOrderKey } from './rich-markdown-clipboard-insertion-order'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { LocalFileAccess } from '../../../../shared/local-file-access'
 
 export type RichMarkdownImageInsertArgs = {
   editor: Editor
@@ -23,6 +26,70 @@ export type RichMarkdownImageInsertArgs = {
   worktreeId: string | null
   runtimeEnvironmentId?: string | null
   getInsertionRange: () => RichMarkdownImageInsertionRange | null
+}
+
+export type RichMarkdownImageImportDestination = {
+  context: RuntimeFileOperationArgs
+  destinationDir: string
+  access: LocalFileAccess | undefined
+}
+
+/** Resolves where image bytes for this note are saved; null after reporting a missing worktree path. */
+export function captureRichMarkdownImageImportDestination({
+  filePath,
+  worktreeId,
+  runtimeEnvironmentId
+}: Pick<
+  RichMarkdownImageInsertArgs,
+  'filePath' | 'worktreeId' | 'runtimeEnvironmentId'
+>): RichMarkdownImageImportDestination | null {
+  const state = useAppStore.getState()
+  const worktreePath = getWorktreePath(worktreeId)
+  const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
+  const resolvedConnectionId = getConnectionId(worktreeId)
+  if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
+    throw new Error(
+      translate(
+        'auto.components.editor.richMarkdownImageInsert.hostUnverified',
+        "Couldn't verify which host owns this file. Reopen the file and try again."
+      )
+    )
+  }
+  const connectionId = resolvedConnectionId ?? undefined
+  const fileContext =
+    worktreeId && parsedWorkspace?.type !== 'folder'
+      ? getEditorFileOperationContext(state, { worktreeId, runtimeEnvironmentId }, worktreePath)
+      : {
+          target: requireRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId),
+          worktreeId,
+          worktreePath,
+          connectionId,
+          expectedExecutionHostId: connectionId
+            ? (`ssh:${encodeURIComponent(connectionId)}` as const)
+            : ('local' as const),
+          ...(connectionId
+            ? captureDirectSshMutationExpectation(state, connectionId, runtimeEnvironmentId)
+            : {})
+        }
+  if (fileContext.target.kind === 'environment' && !worktreePath) {
+    toast.error(
+      translate(
+        'auto.components.editor.useLocalImagePick.91d835dc88',
+        'Worktree path not available.'
+      )
+    )
+    return null
+  }
+
+  // Save image bytes beside the note, including outside projects, so rich-mode size checks measure document text only.
+  const openDocument = state.openFiles.find(
+    (file) => file.filePath === filePath && file.worktreeId === worktreeId
+  )
+  return {
+    context: fileContext,
+    destinationDir: dirname(filePath),
+    access: openDocument ? editorTabDocumentFolderAccess(state, openDocument) : undefined
+  }
 }
 
 export async function insertRichMarkdownImageFromPath({
@@ -34,50 +101,19 @@ export async function insertRichMarkdownImageFromPath({
   getInsertionRange
 }: RichMarkdownImageInsertArgs): Promise<void> {
   try {
-    const state = useAppStore.getState()
-    const worktreePath = getWorktreePath(worktreeId)
-    const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
-    const resolvedConnectionId = getConnectionId(worktreeId)
-    if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
-      throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
-    }
-    const connectionId = resolvedConnectionId ?? undefined
-    const fileContext =
-      worktreeId && parsedWorkspace?.type !== 'folder'
-        ? getEditorFileOperationContext(state, { worktreeId, runtimeEnvironmentId }, worktreePath)
-        : {
-            target: requireRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId),
-            worktreeId,
-            worktreePath,
-            connectionId,
-            expectedExecutionHostId: connectionId
-              ? (`ssh:${encodeURIComponent(connectionId)}` as const)
-              : ('local' as const),
-            ...(connectionId
-              ? captureDirectSshMutationExpectation(state, connectionId, runtimeEnvironmentId)
-              : {})
-          }
-    if (fileContext.target.kind === 'environment' && !worktreePath) {
-      toast.error(
-        translate(
-          'auto.components.editor.useLocalImagePick.91d835dc88',
-          'Worktree path not available.'
-        )
-      )
+    const destination = captureRichMarkdownImageImportDestination({
+      filePath,
+      worktreeId,
+      runtimeEnvironmentId
+    })
+    if (!destination) {
       return
     }
-
-    // Why: image bytes should live beside the note instead of inside markdown;
-    // this keeps rich-mode size checks based on document text, not binary data.
-    // Why: a document opened outside every project still gets its image beside it.
-    const openDocument = state.openFiles.find(
-      (file) => file.filePath === filePath && file.worktreeId === worktreeId
-    )
     const { results } = await importExternalPathsToRuntime(
-      fileContext,
+      destination.context,
       [sourcePath],
-      dirname(filePath),
-      { access: openDocument ? editorTabDocumentFolderAccess(state, openDocument) : undefined }
+      destination.destinationDir,
+      { access: destination.access }
     )
     const imported = results.find((result) => result.status === 'imported')
     if (!imported) {
@@ -122,13 +158,17 @@ export async function insertRichMarkdownImageFromPath({
       )
     }
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
+    toast.error(
+      extractIpcErrorMessage(
+        err,
+        translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')
+      )
+    )
   }
 }
 
-function encodeMarkdownImageBasename(destPath: string): string {
-  // Why: unescaped spaces and delimiters in markdown image destinations make
-  // screenshot filenames render as literal text or broken partial paths.
+export function encodeMarkdownImageBasename(destPath: string): string {
+  // Escape filename spaces and delimiters or Markdown interprets them as broken destinations or literal text.
   return encodeURIComponent(basename(destPath))
 }
 
@@ -140,11 +180,11 @@ function getWorktreePath(worktreeId: string | null): string | null {
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
   if (parsedWorkspaceKey?.type === 'folder') {
     return (
-      state.folderWorkspaces.find(
+      selectFolderWorkspaces(state).find(
         (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
       )?.folderPath ?? null
     )
   }
-  const worktrees = Object.values(state.worktreesByRepo ?? {}).flat()
+  const worktrees = Object.values(selectWorktreesByRepo(state) ?? {}).flat()
   return worktrees.find((worktree) => worktree.id === worktreeId)?.path ?? null
 }

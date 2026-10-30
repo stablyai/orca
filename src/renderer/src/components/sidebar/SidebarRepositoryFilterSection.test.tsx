@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The Projects filter lives in a Radix submenu, which breaks two things that
- * work fine in a flat menu: React's `autoFocus` loses a race with the root
- * menu's trapped focus scope, and search state outlives a panel close. Both are
- * invisible to typecheck, so pin them here.
- */
+/** Exercise submenu focus timing and query reset, which flat-menu tests cannot cover. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -61,7 +56,6 @@ function render(): void {
   })
 }
 
-/** Radix's trigger opens on pointer, the real path users take with a mouse. */
 function openSubmenu(): void {
   const trigger = document.querySelector<HTMLElement>('[data-slot="dropdown-menu-sub-trigger"]')
   if (!trigger) {
@@ -90,7 +84,7 @@ function searchInput(): HTMLInputElement | null {
   return document.querySelector<HTMLInputElement>('[data-slot="command-input"]')
 }
 
-/** The focus fix lands in a rAF, so let one frame plus a macrotask elapse. */
+/** Allow deferred focus to settle through one frame and a macrotask. */
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))

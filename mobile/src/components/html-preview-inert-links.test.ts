@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
-/**
- * The link-inerting pass, read as the specification ruling 37.2 wrote: no underline, no pointer, no
- * dead anchor.
- *
- * All three are one property of the document -- whether the element is a link at all -- so this file
- * measures that property and `config/scripts/mobile-web-app-html-preview-render.test.mjs` measures
- * what a real browser then paints and does with it on both engines. Neither reading substitutes for
- * the other: happy-dom has no UA stylesheet and no cursor, and the render rig cannot say which
- * attribute went.
- */
+// Assert absent link semantics (underline/pointer/dead anchor, ruling 37.2); real Chromium/WebKit rendering lives in mobile-web-app-html-preview-render.test.mjs.
+// happy-dom has no UA styles/cursor; browser rig cannot identify removed attributes, so both suites are needed.
 import { describe, expect, it } from 'vitest'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
 
@@ -34,23 +26,12 @@ const ARTIFACT =
 
 describe('an artifact rendered for a shell that cannot open a link', () => {
   it('leaves no element a browser would treat as a link', () => {
-    // The whole of "no underline, no pointer, no dead anchor": all three follow from `a:any-link`
-    // not matching, and `href` is what it matches on.
+    // Remove href so a:any-link no longer matches, disabling underline/pointer/activation together.
     expect(inert(ARTIFACT).querySelectorAll('a[href], area[href]')).toHaveLength(0)
   })
 
-  /**
-   * The fragment link goes too, and round 3 is why: in this frame a fragment is not a scroll.
-   *
-   * The document's URL is `about:srcdoc` while its base URL is inherited from the embedder, so
-   * `#target` resolves against the shell's own URL and the destination differs from the document's
-   * by more than a fragment -- which makes activating it a frame navigation. Measured on Chromium
-   * 147 and WebKit 26.4 under the shipped policy: nothing scrolls, the embedder reports
-   * `frame-src`, and on Chromium the frame is replaced by an error page and the artifact is gone.
-   *
-   * So there was no working affordance to carve out for. The render rig taps one and reads what
-   * the engines do; this is the attribute that decides it.
-   */
+  // In srcdoc, #target resolves against inherited shell base, not about:srcdoc, becoming forbidden frame navigation instead of scrolling.
+  // Chromium 147/WebKit 26.4 probes reported frame-src; Chromium replaced artifact with error page. Keep fragment links inert too.
   it('inerts a fragment link too, because a fragment is not a scroll in this frame', () => {
     const doc = inert(ARTIFACT)
     expect(doc.getElementById('frag')?.hasAttribute('href')).toBe(false)
@@ -100,15 +81,7 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(inert(ARTIFACT).getElementById('named')?.getAttribute('name')).toBe('anchor')
   })
 
-  /**
-   * The doctype, whole, because rewriting it is a change this pass has no reason to make.
-   *
-   * Not because it moves the frame between layout modes: measured, it cannot. A `srcdoc` document
-   * takes its rendering mode from its embedder whatever its own doctype says, and on Chromium 147
-   * and WebKit 26.4 a quirks doctype, the bare name and no doctype at all all read `CSS1Compat`
-   * inside the frame. The reading that does discriminate is the doctype the frame's own document
-   * reports, and that is the render rig's case; this is the string it is handed.
-   */
+  // Preserve authored doctype bytes/identifiers; srcdoc inherits embedder’s mode regardless, so test document.doctype rather than CSS1Compat.
   it('keeps the doctype whole, identifiers and all', () => {
     const doctypeOf = (html: string) => htmlPreviewWithInertLinks(html).split('>')[0] ?? ''
     expect(doctypeOf(ARTIFACT).toLowerCase()).toBe('<!doctype html')
@@ -122,22 +95,14 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     ).toContain(
       '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'
     )
-    // And an artifact that shipped without one still gets none, rather than being handed a mode it
-    // was not written for.
+    // Leave missing doctype absent rather than inventing author markup.
     expect(htmlPreviewWithInertLinks('<html><body>x</body></html>').toLowerCase()).not.toContain(
       '<!doctype'
     )
   })
 
-  /**
-   * The blank line the next parse will eat, written back before it does.
-   *
-   * A parser drops one newline after a `pre`, `listing` or `textarea` start tag and the serialiser
-   * is specified to put it back; measured, neither engine's does, so a round trip loses a blank
-   * line from every such block. This reads the string the pass produces, because happy-dom's own
-   * parser does not drop that newline and a round-trip assertion here would measure happy-dom
-   * rather than a browser. What an engine renders is the render rig's case.
-   */
+  // Browser parse drops one leading pre/listing/textarea newline; neither Chromium/WebKit serializer restores it. Reinsert before next parse.
+  // Check serialized string here: happy-dom does not drop newline, so only browser render rig can prove round-trip text.
   it('writes back the leading newline the serialiser owes each preformatted block', () => {
     const out = htmlPreviewWithInertLinks(
       '<!doctype html><html><body><pre id="p">\n\nkept</pre>' +
@@ -152,8 +117,7 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
   })
 
   it('does not run or fetch what the artifact carries, because nothing here has a context', () => {
-    // The parse is inert by definition (`parseFromString` builds no browsing context), and this is
-    // the reading that says the pass did not change that: the script survives as markup, unrun.
+    // DOMParser creates no browsing context; script remains markup without execution.
     const withScript =
       '<!doctype html><html><body><script>window.__ran = 1</script><a href="/x">a</a></body></html>'
     const out = htmlPreviewWithInertLinks(withScript)
@@ -162,8 +126,7 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
   })
 
   it('leaves an href inside a comment where a regex pass would have found it', () => {
-    // The reason this is a parser and not a pattern: a comment is text to a browser, and a pass
-    // that rewrote it would be editing the artifact rather than its links.
+    // Use parser rather than regex so href inside comment remains untouched artifact text.
     const doc = inert(
       '<!doctype html><html><body><!-- <a href="https://example.com/x">c</a> -->' +
         '<a id="real" href="https://example.com/z">r</a></body></html>'
@@ -173,16 +136,8 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(doc.getElementById('real')?.hasAttribute('href')).toBe(false)
   })
 
-  /**
-   * A template is not always inert markup, and that is what this case is about.
-   *
-   * `<template shadowrootmode>` is a declarative shadow root: the frame's parser attaches it and
-   * renders what is inside. Measured, `parseFromString` attaches no such root (Chromium 147,
-   * WebKit 26.4 and happy-dom all leave the template standing), so the links are reachable here --
-   * and `querySelectorAll` does not walk into `template.content`, so a pass over the document alone
-   * hands the frame live links inside a sandbox that refuses their navigation, which is the dead
-   * anchor ruling 37.2 forbids.
-   */
+  // Declarative shadowroot templates become rendered content at frame parse, but DOMParser leaves templates intact on Chromium 147/WebKit 26.4/happy-dom.
+  // Traverse template.content recursively: document querySelectorAll misses links that would otherwise become dead anchors under sandbox.
   it('reaches a link inside a declarative shadow root, and inside one nested in it', () => {
     const doc = inert(
       '<!doctype html><html><body><div id="host">' +

@@ -1,10 +1,14 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenPrimaryStyles = StyleSheet.create({
+export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
+  },
+  topChromeSafeArea: {
+    backgroundColor: colors.bgPanel
   },
   topChrome: {
     backgroundColor: colors.bgPanel,
@@ -154,4 +158,4 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.bodySize
   }
-})
+}))

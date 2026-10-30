@@ -86,7 +86,6 @@ export async function getPRFileContents(args: {
 
   await acquire()
   try {
-    // Added and removed files have no content on one side of the comparison.
     const needsOriginal = args.status !== 'added'
     const needsModified = args.status !== 'removed'
     const originalPath = args.oldPath ?? args.path

@@ -24,8 +24,7 @@ vi.mock('./worktree-list-reader', () => ({
 import { __resetSparseCheckoutStateCacheForTests } from './worktree-sparse-checkout-cache'
 import { listWorktreesStrict, listWorktreesUnshared } from './worktree-listing'
 
-// A WSL repo's sparse probe is pure `fs`, so it only reaches the right namespace if the listing
-// hands it the distro the git call already ran under.
+// Filesystem sparse probes need the same distro as the Git listing.
 const ROW: GitWorktreeInfo = {
   path: 'C:\\wt\\x',
   head: 'a'.repeat(40),
@@ -42,7 +41,7 @@ describe('worktree listing sparse annotation', () => {
     readWorktreeListMock.mockResolvedValue([ROW])
     readTranslatedWorktreeGraphMock.mockReset()
     readTranslatedWorktreeGraphMock.mockResolvedValue([ROW])
-    // The listing now reads through a repo-scoped cache; a warm entry would skip the probe.
+    // A warm sparse cache would bypass the probe under test.
     __resetSparseCheckoutStateCacheForTests()
   })
 

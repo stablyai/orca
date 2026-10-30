@@ -20,6 +20,7 @@ export type AgentLaunchRoutingInput = {
   /** What this client advertises to a paired host. */
   clientCapabilities?: readonly string[]
   workspaceKind?: WorkspaceLaunchKind
+  projectExecutionKind?: 'host' | 'ssh'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchText?: string
@@ -43,21 +44,21 @@ export function structuredAgentLaunchSupported(
   return structuredAgentLaunchSupport(input).supported
 }
 
-function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput, 'launchText'>) {
+export function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput, 'launchText'>) {
   return resolveStructuredNativeChatSupport({
     agent: input.agent,
     executionHostId: input.executionHostId,
     hostCapabilities: input.hostCapabilities,
     ...(input.clientCapabilities ? { clientCapabilities: input.clientCapabilities } : {}),
     workspaceKind: input.workspaceKind,
+    projectExecutionKind: input.projectExecutionKind,
     projectRuntime: input.projectRuntime,
     startsOutsideWorkspaceRoot: input.startsOutsideWorkspaceRoot,
     ...(input.hostStructuredAgents ? { hostStructuredAgents: input.hostStructuredAgents } : {})
   })
 }
 
-/** Why a launch the user wanted as a chat did not route to it; null when it did, or when the user's
- *  default for this agent is a terminal. Diagnostics only: the route itself is `resolveAgentLaunchRoute`. */
+/** Diagnostics for chat-to-terminal fallback; route decisions remain owned by resolveAgentLaunchRoute. */
 export function structuredAgentLaunchDowngrade(
   input: AgentLaunchRoutingInput,
   route: AgentLaunchRoute

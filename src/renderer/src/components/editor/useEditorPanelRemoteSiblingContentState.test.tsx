@@ -45,7 +45,8 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 
-vi.mock('./migrate-restored-editor-file-owner', () => ({
+vi.mock(import('./migrate-restored-editor-file-owner'), async (importOriginal) => ({
+  ...(await importOriginal()),
   migrateRestoredEditorFileOwner: mocks.migrateRestoredEditorFileOwner
 }))
 
@@ -72,7 +73,12 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
   }
 })
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 vi.mock('./useEditorPanelExternalContentEvents', () => ({
   useEditorPanelExternalContentEvents: vi.fn(),

@@ -46,7 +46,7 @@ function discovery(rootPaths: string[], unavailableRoots: string[] = []): SkillD
         updatedAt: null
       }
     ],
-    // A root that did not answer reports `exists` — the host cannot prove otherwise.
+    // Unavailable roots remain possibly present; absence is unproven.
     sources: unavailableRoots.map((path) => ({
       id: path,
       label: 'Agent skills home',
@@ -85,7 +85,9 @@ describe('WSL install discovery verification', () => {
     expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
       distro: 'Ubuntu',
       homeDir: '/home/alice',
-      cwd: '/home/alice'
+      cwd: '/home/alice',
+      names: ['review'],
+      sourceKinds: ['home', 'repo']
     })
   })
 
@@ -103,7 +105,9 @@ describe('WSL install discovery verification', () => {
     expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
       distro: 'Ubuntu',
       homeDir: '/mnt/c/Users/alice',
-      cwd: '/mnt/c/work/repo'
+      cwd: '/mnt/c/work/repo',
+      names: ['review'],
+      sourceKinds: ['home', 'repo']
     })
   })
 
@@ -132,9 +136,7 @@ describe('WSL install discovery verification', () => {
     )
   })
 
-  // Discovery serves an unanswered root's last completed scan so an installed skill
-  // does not flip to "Install". Verification must not read that as proof: it is the
-  // state before this install wrote, so a reinstall would verify without reading disk.
+  // Retained pre-install discovery cannot prove new bytes landed; verification needs an answered root.
   it('does not verify a placement backed only by a root that did not answer', async () => {
     discoverSkillsInWslMock.mockResolvedValue(
       discovery(['/home/alice/.agents/skills'], ['/home/alice/.agents/skills'])
@@ -155,7 +157,6 @@ describe('WSL install discovery verification', () => {
 
   it('still verifies through a co-owning root that did answer', async () => {
     discoverSkillsInWslMock.mockResolvedValue(
-      // The symlinked Claude root answered, so the placement is proven, not retained.
       discovery(
         ['/home/alice/.agents/skills', '/home/alice/.claude/skills'],
         ['/home/alice/.agents/skills']

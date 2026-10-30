@@ -69,9 +69,13 @@ export class BrowserPopupNativeFixture {
       window.once('closed', () => input.writeStatus())
       const record: (typeof this.creation)[number] = { contentsId: window.webContents.id }
       this.creation.push(record)
-      window.webContents.once('did-start-navigation', () => {
-        record.firstNavigationPolicy = window.webContents.getWebRTCIPHandlingPolicy()
-        record.firstNavigationOwner = resolveBrowserRouteGuestPopupOpener(window.webContents.id)
+      const contents = window.webContents
+      contents.once('did-start-navigation', () => {
+        if (window.isDestroyed() || contents.isDestroyed()) {
+          return
+        }
+        record.firstNavigationPolicy = contents.getWebRTCIPHandlingPolicy()
+        record.firstNavigationOwner = resolveBrowserRouteGuestPopupOpener(contents.id)
         record.firstNavigationTitle = window.getTitle()
         input.writeStatus()
       })

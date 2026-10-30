@@ -1,9 +1,12 @@
-// A window's drag-out through `layout.apply`, checked across partitions as the desktop's move
-// (planTerminalLeafMove) is, before any partition is written.
+// Validate every holder before any partition writes a renderer-requested detach.
 
 import { randomUUID } from 'node:crypto'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
+import {
+  collectLayoutLeafIdsInOrder,
+  layoutContainsLeafId
+} from '../../../shared/workspace-layout/terminal-pane-tree'
 import { findTerminal } from '../../../shared/workspace-layout/workspace-layout-command-steps'
 import type {
   CommandOf,
@@ -24,13 +27,12 @@ export type WindowPaneDetachCommand = CommandOf<'movePaneToNewTab'> & {
 
 export type ResolvedWindowPaneDetach =
   | {
-      /** The command every holder applies: one new tab id and one terminal for the pane. */
+      /** Share one new tab ID and terminal across all holders. */
       command: WindowPaneDetachCommand & { windowDetach: { tabId: string } }
-      /** The source tab's terminal id (the tab half of the moved pane's old key). */
+      /** Source terminal entity ID before detach changes the tab key. */
       sourceEntityId: string
     }
   | { code: LayoutRefusalCode }
-  /** No partition holds the pane; the routed apply refuses it. */
   | null
 
 export function resolveWindowPaneDetach(
@@ -47,7 +49,14 @@ export function resolveWindowPaneDetach(
       .workspaces[command.workspace]
     const tab = workspace && findTerminal(workspace, command.tabId)
     return tab && layoutContainsLeafId(tab.panes.root, leafId)
-      ? [{ entityId: tab.entityId, ptyId: workspace.leaves?.[leafId]?.ptyId }]
+      ? [
+          {
+            hostId,
+            entityId: tab.entityId,
+            ptyId: workspace.leaves?.[leafId]?.ptyId,
+            panes: collectLayoutLeafIdsInOrder(tab.panes.root).length
+          }
+        ]
       : []
   })
   if (holders.length === 0) {
@@ -62,16 +71,29 @@ export function resolveWindowPaneDetach(
   ) {
     return { code: 'pane_in_other_tab' }
   }
+  const home = holders.find((holder) => holder.hostId === holderIds[0])
+  // Main owns all shown panes; home determines last-pane status while stray copies move too.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && home && home.panes < 2) {
+    return { code: 'last_pane' }
+  }
   const bound = new Set(holders.flatMap(({ ptyId }) => (ptyId ? [ptyId] : [])))
-  // The window's live terminal wins: after an SSH respawn one copy can still name the old one.
-  const ptyId = command.windowDetach.ptyId ?? (bound.size === 1 ? [...bound][0]! : null)
+  // Main's home binding wins when SSH respawn leaves different IDs in duplicate holders.
+  const ptyId = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? bound.size === 1
+      ? [...bound][0]!
+      : (home?.ptyId ?? null)
+    : (command.windowDetach.ptyId ?? (bound.size === 1 ? [...bound][0]! : null))
   if (bound.size > 0 && !(ptyId && bound.has(ptyId))) {
     return { code: 'pty_mismatch' }
   }
   return {
     command: {
       ...command,
-      windowDetach: { ptyId, tabId: command.windowDetach.tabId ?? randomUUID() }
+      windowDetach: {
+        ...command.windowDetach,
+        ptyId,
+        tabId: command.windowDetach.tabId ?? randomUUID()
+      }
     },
     sourceEntityId
   }

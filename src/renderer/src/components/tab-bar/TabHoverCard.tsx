@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode, type SyntheticEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function TabHoverCard({
@@ -6,16 +7,23 @@ export function TabHoverCard({
   title,
   icon,
   programName,
-  description
+  description,
+  alert
 }: {
   children: ReactNode
   title: string
   icon: ReactNode
   programName: string
   description?: string
+  /** Controls below the program row; the card then stays open under the pointer. */
+  alert?: ReactNode | ((dismiss: () => void) => ReactNode)
 }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  // Remove the portal before navigation can start rendering a slower destination.
+  const dismiss = () => flushSync(() => setOpen(false))
+  const interactive = alert !== undefined && alert !== null
   return (
-    <Tooltip>
+    <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent={!interactive}>
       <TooltipTrigger
         asChild
         onFocus={(event) => {
@@ -28,12 +36,18 @@ export function TabHoverCard({
         {children}
       </TooltipTrigger>
       <TooltipContent
-        variant="tab-preview"
+        variant={interactive ? 'tab-preview-interactive' : 'tab-preview'}
         showArrow={false}
         side="bottom"
         align="start"
         sideOffset={0}
         data-tab-hover-card="true"
+        // Why: React bubbles portal events to the tab strip, whose handlers would act on the tab.
+        onContextMenu={stopTabStripEvent}
+        onPointerDown={stopTabStripEvent}
+        onMouseDown={stopTabStripEvent}
+        onClick={stopTabStripEvent}
+        onDoubleClick={stopTabStripEvent}
       >
         <div className="space-y-2 text-left">
           <div className="space-y-1">
@@ -51,8 +65,13 @@ export function TabHoverCard({
             </span>
             <span className="min-w-0 break-all">{programName}</span>
           </div>
+          {typeof alert === 'function' ? alert(dismiss) : alert}
         </div>
       </TooltipContent>
     </Tooltip>
   )
+}
+
+function stopTabStripEvent(event: SyntheticEvent): void {
+  event.stopPropagation()
 }

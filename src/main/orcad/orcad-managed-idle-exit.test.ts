@@ -26,6 +26,7 @@ function idlePorts(): OrcadManagedIdleExitPorts {
     hasChatProviders: () => false,
     hasStagedMigration: () => false,
     automationsBusy: () => false,
+    emulatorsBusy: async () => false,
     activationFenceExists: async () => false
   }
 }
@@ -77,6 +78,7 @@ describe('createOrcadIdleProbes', () => {
       'chat-providers': 'idle',
       migration: 'idle',
       automations: 'idle',
+      emulators: 'idle',
       activation: 'idle'
     })
   })
@@ -102,6 +104,7 @@ describe('createOrcadIdleProbes', () => {
     ['a loaded chat provider', { hasChatProviders: () => true }, 'chat-providers'],
     ['a staged migration', { hasStagedMigration: () => true }, 'migration'],
     ['an enabled or running automation', { automationsBusy: () => true }, 'automations'],
+    ['an Orca-started emulator', { emulatorsBusy: async () => true }, 'emulators'],
     ['a held activation fence', { activationFenceExists: async () => true }, 'activation']
   ])('reads %s as busy', async (_label, override, probe) => {
     expect((await verdicts({ ...idlePorts(), ...override }))[probe]).toBe('busy')

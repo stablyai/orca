@@ -71,7 +71,7 @@ describe('PTY registry keyed by execution host', () => {
     expect(registeredPtyProviders()).toEqual([{ provider: local, hostId: 'local' }])
     expect(getProvider('local')).toBe(local)
     expect(() => getProvider('ssh:box%201')).toThrow(PtyHostNotDispatchableError)
-    // Why: the renderer matches this prefix to show the reconnect affordance.
+    // Preserve the renderer-matched reconnect error prefix.
     expect(() => getProvider('ssh:box-2')).toThrow('No PTY provider for connection "box-2"')
     expect(() => getProvider('runtime:env-1')).toThrow(
       'PTY host "runtime:env-1" is not dispatchable from this process'
@@ -90,7 +90,6 @@ describe('PTY registry keyed by execution host', () => {
     expect(getPtySshConnectionId('ssh:box%201@@pty-1')).toBe('box 1')
   })
 
-  // Why: an undispatchable SSH PTY is unverifiable, so no predicate may read it as gone or exited.
   it('never treats the not-dispatchable error as evidence the PTY is gone', () => {
     let error: unknown
     try {
@@ -100,7 +99,6 @@ describe('PTY registry keyed by execution host', () => {
     }
     expect(error).toBeInstanceOf(PtyHostNotDispatchableError)
     expect(isPtyAlreadyGoneError(error)).toBe(false)
-    // Stable-pane adoption certifies an exit only from this class.
     expect(error).not.toBeInstanceOf(SessionNotFoundError)
   })
 })

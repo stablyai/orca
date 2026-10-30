@@ -1,16 +1,20 @@
 import { BrowserWindow } from 'electron'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
+import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
+import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
+  runtimeHostStatusError,
+  runtimeHostStatusFailure,
   type RuntimeHostStatusResponse
 } from '../../../shared/runtime-host-status'
 import {
@@ -25,10 +29,30 @@ import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-
 
 const statusListeners = new Set<() => void>()
 
-/** Main's own readers of server status, alongside the windows it is sent to. */
 export function onRuntimeEnvironmentStatusPublished(listener: () => void): () => void {
   statusListeners.add(listener)
   return () => statusListeners.delete(listener)
+}
+
+/** SSH-managed servers recover pairing automatically; failed repair keeps authentication blocked. */
+async function answerRefusedPairing(
+  environment: KnownRuntimeEnvironment,
+  refused: RuntimeHostStatusResponse
+): Promise<RuntimeHostStatusResponse> {
+  const recovery = recoverRefusedPairing(environment.id)
+  if (!recovery) {
+    return refused
+  }
+  let outcome: 'built' | 'repaired'
+  try {
+    outcome = await recovery
+  } catch (error) {
+    return error instanceof OrcadManagedPairingRepairFailedError
+      ? runtimeHostStatusFailure('unauthorized', error.message)
+      : runtimeHostStatusError(error)
+  }
+  // Rebuild re-proved the server, making refusal stale; only re-pairing retires this status owner.
+  return runtimeEnvironmentChangedFailure(environment, 'status.get', outcome === 'repaired')
 }
 
 export function createRuntimeEnvironmentStatusOwner(
@@ -51,27 +75,47 @@ export function createRuntimeEnvironmentStatusOwner(
       const isCurrent = (): boolean =>
         getRuntimeEnvironmentCapabilityIncarnation(environment.id) === incarnation
       if (environment.connectionDependency === 'ssh-tunnel') {
-        await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
+        try {
+          await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
+        } catch (error) {
+          if (error instanceof OrcadManagedPairingRepairFailedError) {
+            return runtimeHostStatusFailure('unauthorized', error.message)
+          }
+          throw error
+        }
         if (!isCurrent()) {
           return runtimeEnvironmentChangedFailure(environment, 'status.get')
         }
         signal.throwIfAborted()
       }
       evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, connection)
-      const response = await (transport.isReady() &&
-      getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
-        'supported'
-        ? transport.request(signal)
-        : sendRemoteRuntimeRequest<RuntimeStatus>(
-            connection,
-            'status.get',
-            undefined,
-            15_000,
-            undefined,
-            signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-          ))
-      return isCurrent() ? response : runtimeEnvironmentChangedFailure(environment, 'status.get')
+      let response: RuntimeHostStatusResponse
+      try {
+        response = await (transport.isReady() &&
+        getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
+          'supported'
+          ? transport.request(signal)
+          : sendRemoteRuntimeRequest<RuntimeStatus>(
+              connection,
+              'status.get',
+              undefined,
+              15_000,
+              undefined,
+              signal,
+              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ))
+      } catch (error) {
+        response = runtimeHostStatusError(error)
+        if (response.ok || response.error.code !== 'unauthorized') {
+          throw error
+        }
+      }
+      if (!isCurrent()) {
+        return runtimeEnvironmentChangedFailure(environment, 'status.get')
+      }
+      return !response.ok && response.error.code === 'unauthorized'
+        ? answerRefusedPairing(environment, response)
+        : response
     },
     verified: (response, active) => {
       const capable =

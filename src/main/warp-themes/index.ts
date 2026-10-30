@@ -162,8 +162,7 @@ export async function previewWarpThemeImport(
     themes.push(parsed.theme)
   }
 
-  // Why: an empty result carries no error — the renderer owns the localized
-  // empty-state copy; `error` is reserved for genuine failures.
+  // Renderer localizes empty results; reserve errors for actual discovery failures.
   return {
     found: themes.length > 0,
     sourceLabel: selection.sourceLabel,

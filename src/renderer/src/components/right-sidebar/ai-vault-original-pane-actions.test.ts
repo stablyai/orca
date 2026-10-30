@@ -15,7 +15,7 @@ vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: v
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
+vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   findStructuredAgentSessionTab: vi.fn(() => null)
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))

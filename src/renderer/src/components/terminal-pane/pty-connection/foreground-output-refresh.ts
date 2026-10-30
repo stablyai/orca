@@ -1,5 +1,5 @@
 import * as unhideCoverage from './hidden-unhide-snapshot-coverage'
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import {
@@ -60,9 +60,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     }
     const episode = typeof event.hiddenDropEpisode === 'number' ? event.hiddenDropEpisode : null
     const previousDropEpisode = session.hiddenOutputRestoreLatestDropEpisode
-    // Why: main's latch stays armed until a restore paints, so a gap it can never serve re-marks
-    // on every unhide. A repeat of the disclosed episode is that same gap; any other marker may
-    // be new loss and proceeds, failing toward recovery.
+    // Ignore only repeats of the disclosed gap episode; unknown markers may prove new loss and must recover.
     const disclosed = session.hiddenOutputRestoreDisclosedGap
     if (
       episode !== null &&
@@ -85,18 +83,9 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       unhideCoverage.handleUnhideRestoreBackpressure(session, event, previousDropEpisode)
       return
     }
-    // Why the emulator too: it carries state across chunks exactly like the
-    // parser does. If the gap swallowed the `ESC[22m` closing a bold run,
-    // every cell written afterwards inherits it. This marker is the one point
-    // where "bytes were dropped" is known, so ground the pen here rather than
-    // relying on each recovery path to remember (STA-4042).
-    // Why after the backpressure return and not before: under flood these
-    // markers arrive continuously, and writing per marker would add work in
-    // exactly the case that guard exists to damp. The flood path repaints via
-    // session.buildMainModelSnapshotReplayWrites, which grounds the pen itself, so
-    // nothing is lost by skipping it here.
+    // Ground the pen at the proven gap: lost resets can leak bold into later cells (STA-4042). Skip flood markers because snapshot replay already grounds them.
     session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
-    // Why: a marker during an in-flight restore means that snapshot may predate the drop, so a fresh one must follow; capture BEFORE the mark, which starts a restore synchronously on a visible pane.
+    // Capture restore state before marking synchronously starts one; a mid-restore drop needs a newer snapshot.
     const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null
     session.markHiddenOutputRestoreNeeded()
     if (restoreWasInFlight) {
@@ -114,8 +103,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     session.hiddenOutputRestoreLatestDropEpisode = null
     session.hiddenOutputRestoreDisclosedGap = null
     session.modelRestoreSubscribedPtyId = ptyId
-    // Why: markers exist only for PTYs whose bytes transit local main;
-    // remote-runtime transports are structurally unaffected.
+    // Only streams through local main have markers; remote-runtime transports are unaffected.
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       return
     }

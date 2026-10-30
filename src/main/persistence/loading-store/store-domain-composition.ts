@@ -5,7 +5,8 @@ import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 import { LoadedStateParsingOperations } from './loaded-state-parsing'
 import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 import { PrimaryStateWriteOperations } from './primary-state-writes'
-import { WriteSchedulingOperations } from './write-scheduling'
+import { scheduleSave, WriteSchedulingOperations } from './write-scheduling'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { WriteFlushBarrierOperations } from './write-flush-barriers'
 import { ProfilePreferences } from './profile-preferences'
 import { RepoLifecycleOperations } from './repo-lifecycle-operations'
@@ -103,7 +104,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
 ] as const
 
 export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
-  // Each domain keeps its context under a module-private Symbol; the Store mixes in the domain methods, so it needs those symbols too.
+  // Mixed-in methods need each domain's private context symbols installed on Store too.
   for (const domain of Object.values(domains)) {
     for (const key of Object.getOwnPropertySymbols(domain)) {
       const { value } = Object.getOwnPropertyDescriptor(domain, key) ?? {}
@@ -166,11 +167,15 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     remoteLayoutSnapshots,
     sparsePresets,
     ptyBindings,
-    layoutCommands: new LayoutCommandPersistence(runtime, sessions),
+    layoutCommands: new LayoutCommandPersistence(
+      runtime,
+      sessions,
+      // Retry persistence for terminal closes retained after failed writes.
+      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
+    ),
     sshProfiles,
     retiredWorktreeNames,
     sshLeases,
-    // Read-only: holds the runtime state and nothing that writes.
     orcadSourceExport: new OrcadSourceExportPersistence(runtime),
     orcadCatalogImports,
     orcadMigrationBlobInstalls: new OrcadMigrationBlobInstallPersistence(runtime)

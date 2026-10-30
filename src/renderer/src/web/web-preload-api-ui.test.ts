@@ -351,8 +351,7 @@ describe('web UI preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    // The web client keys its order to its own runtime:web-* host, so a host that predates the
-    // RPC-side strip would persist it over the desktop's local/ssh-keyed order.
+    // Old hosts would persist browser runtime:web-* order over the desktop’s local/SSH order.
     const manualRepoOrder: ManualRepoOrderEntry[] = [
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-b' },
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-a' }
@@ -366,10 +365,7 @@ describe('web UI preload API', () => {
     })
   })
 
-  // Why cover a host that still sends the field: clients and hosts update independently, so a new
-  // web client meets hosts predating the response omission. On a profile an old web client
-  // poisoned, those echoed runtime:web-* entries match this browser's own repos and would beat
-  // every drag it has made since.
+  // Hosts/clients update independently; old hosts may echo previously poisoned browser order, overriding later drags.
   it.each([
     [
       'this browser own stale runtime:web-* entries',
@@ -499,8 +495,7 @@ describe('web UI preload API', () => {
           return Promise.resolve({
             id: method,
             ok: true,
-            // Why false: the host store always projects this key, so a plain spread
-            // would overwrite the arm the web client's own settings migration raised.
+            // Host always projects this key; spreading false would erase the browser migration’s notice arm.
             result: { ui: { osc52ClipboardDefaultOnNoticePending: false } },
             _meta: { runtimeId: 'runtime-1' }
           })
@@ -766,12 +761,11 @@ describe('web UI preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    // Plain set swallows the failure so fire-and-forget callers stay quiet...
+    // Fire-and-forget set tolerates failure; setWithAck must reject for retry.
     await expect(
       globals.window.api.ui.set({ hideDefaultBranchWorkspace: true })
     ).resolves.toBeUndefined()
-    // ...but the diff writer's ack path must see it, or it folds a patch the
-    // host never received into its baseline and silently stops retrying it.
+    // Acknowledging an unreceived patch would advance the diff baseline and silently stop retries.
     await expect(
       globals.window.api.ui.setWithAck!({ hideSleepingWorkspaces: true })
     ).rejects.toThrow('runtime disconnected')
@@ -833,5 +827,39 @@ describe('web UI preload API', () => {
     await expect(globals.window.api.computerUsePermissions.getStatus()).rejects.toThrow(
       'runtime disconnected'
     )
+  })
+
+  it('surfaces a cancelled paired web setup instead of reporting it as complete', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'computer.permissions') {
+            return Promise.resolve({
+              id: method,
+              ok: false,
+              error: { code: 'accessibility_error', message: 'Computer Use setup was cancelled' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.computerUsePermissions.openSetup({ id: 'accessibility' })
+    ).rejects.toThrow('Computer Use setup was cancelled')
   })
 })

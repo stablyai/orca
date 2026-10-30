@@ -37,6 +37,10 @@ vi.mock('../agent-awake-service', () => ({
 vi.mock('../system-resume-broadcast', () => ({
   registerSystemResumeBroadcast: () => () => {}
 }))
+vi.mock('../notifications/desktop-presence-reporter', () => ({
+  listCapableSharedControlSockets: () => [],
+  startDesktopPresenceReporter: () => () => {}
+}))
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
     subscribeStatusChanges: () => () => {},

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -55,6 +54,8 @@ vi.mock('@/store', () => ({
 
 import {
   readHostStructuredAgents,
+  hostStructuredAgentsReadFailed,
+  loadHostStructuredAgents,
   resetHostStructuredAgentsForTests
 } from './host-structured-agents'
 import { installHostStructuredAgentsSync } from './host-structured-agents-sync'
@@ -120,13 +121,6 @@ afterEach(() => {
 })
 
 describe('host structured agents', () => {
-  // The capability promises a renderer that reads the list; it ships only with that reader.
-  it('is advertised to paired hosts, whose lists this reader serves', () => {
-    expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
-      STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-    )
-  })
-
   it("reads the local host's agents once it advertises them", async () => {
     uninstall = installHostStructuredAgentsSync()
     await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
@@ -211,5 +205,20 @@ describe('host structured agents', () => {
     await Promise.resolve()
 
     expect(agentIds('local')).toBeUndefined()
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+  })
+
+  it('keeps a completed failure while explicitly rechecking and clears it only on a valid result', async () => {
+    mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('host unreachable'))
+    await loadHostStructuredAgents('local', REGISTERED, null)
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+    const result = Promise.withResolvers<unknown>()
+    mocks.callRuntimeRpc.mockReturnValueOnce(result.promise)
+    const retry = loadHostStructuredAgents('local', REGISTERED, null)
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+    result.resolve(GROK_LIST)
+    await retry
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(false)
+    expect(agentIds('local')).toEqual(['claude', 'grok'])
   })
 })

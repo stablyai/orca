@@ -1,10 +1,33 @@
-// The models a session's options answer lists, the same whether a child answers live or the host
-// answers for a chat at rest: the catalog's rows, plus the current model when the catalog does not
-// list it. Nothing says which efforts an unlisted model takes, so its row offers none.
+// Include unlisted current models without inferred capabilities, for both live and resting reads.
 
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionModelCatalogResult,
+  AgentSessionModelOption,
+  AgentSessionOptionsResult
+} from '../../../shared/agent-session-wire'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 
-/** `row` builds a provider's own row type from the shared one. */
+export type StructuredAgentSessionOptionProjection = {
+  models: readonly AgentSessionModelOption[]
+  options: Readonly<Record<string, string>>
+}
+
+export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
+  /** Child/request-scoped actual or raw future intent; never serialized as a callback. */
+  projectCurrent?: (saved: Readonly<Record<string, string>>) => AgentSessionOptionsResult['current']
+  catalogListing?: AgentModelCatalogLiveListing
+  /** The running CLI cannot change effort mid-chat, whatever its catalog lists. */
+  effortFixed?: true
+}
+
+export type StructuredAgentSessionRestingOptions = Pick<
+  AgentSessionOptionsResult,
+  'models' | 'listedModelIds' | 'fastModeSupport' | 'current'
+> & {
+  inventory: AgentSessionModelCatalogResult
+  fallback: AgentSessionOptionsResult['models']
+}
+
 export function structuredAgentSessionOptionModels<TModel extends AgentSessionModelOption>(
   catalog: readonly TModel[],
   current: string | undefined,
@@ -12,7 +35,49 @@ export function structuredAgentSessionOptionModels<TModel extends AgentSessionMo
 ): TModel[] {
   const models = [...catalog]
   if (current && !models.some((entry) => entry.id === current)) {
-    models.push(row({ id: current, label: current, isDefault: false, efforts: [] }))
+    models.push(
+      row({ id: current, label: current, isDefault: false, efforts: [], effortsKnown: false })
+    )
   }
   return models
+}
+
+/** Use seeds only for unknown listings; installed rows are authoritative. */
+export function structuredAgentSessionCapabilityView(
+  installed:
+    | {
+        models: readonly AgentSessionModelOption[]
+        fastModeSupport?: AgentSessionOptionsResult['fastModeSupport']
+      }
+    | { origin: 'unknown' },
+  current: string | undefined,
+  fallback: readonly AgentSessionModelOption[] = [],
+  restriction?: AgentSessionOptionsResult['fastModeSupport']
+) {
+  const inventory = 'models' in installed ? installed : { models: fallback }
+  const models = structuredAgentSessionOptionModels(inventory.models, current, (row) => row)
+  const support = models.find((row) => row.id === current)?.supportsFastMode
+  return {
+    models,
+    fastModeSupport:
+      restriction ??
+      (support !== undefined
+        ? { supported: support, ...(support ? {} : { reason: 'model-not-supported' as const }) }
+        : inventory.fastModeSupport),
+    listedServiceTiers: inventory.models.flatMap(
+      (row) => row.serviceTiers?.map((tier) => tier.value) ?? []
+    )
+  }
+}
+
+export function confirmedCurrentOptions(
+  current: AgentSessionOptionsResult['current'],
+  reported: AgentSessionOptionsResult['current'],
+  confirmed = reported.confirmed
+): AgentSessionOptionsResult['current']['confirmed'] {
+  return confirmed?.filter((key) =>
+    key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
+      ? current[key] === reported[key]
+      : false
+  )
 }

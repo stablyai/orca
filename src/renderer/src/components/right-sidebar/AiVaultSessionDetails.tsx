@@ -69,8 +69,7 @@ export function SessionInlineDetails({
   /** Hides the action bar; the details stay. */
   actionsHidden?: boolean
 }): React.JSX.Element {
-  // A zero-turn transcript would resume into an empty conversation, so the plain
-  // resume affordances are withheld and a distinct "not saved" state is shown.
+  // Zero-turn sessions cannot resume meaningful content; show not-saved status instead.
   const referenceSession = isAntigravityReferenceSession(session)
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   const showResumeInWorktree = hasResumableContent && Boolean(resumeActions.worktree.worktreeId)
@@ -156,7 +155,7 @@ export function SessionInlineDetails({
               <MessagesSquare className="size-3.5" />
               {translate(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-                'Resume in New Native Chat'
+                'Resume in New Chat'
               )}
             </Button>
           ) : null}
@@ -177,7 +176,7 @@ export function SessionInlineDetails({
                   <SquareTerminal className="size-3.5" />
                   {translate(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                    'Resume in New CLI'
+                    'Resume in New Terminal'
                   )}
                 </Button>
               </TooltipTrigger>
@@ -261,8 +260,7 @@ export function SessionInlineDetails({
             </SessionReceiptSection>
           </>
         ) : (
-          // An unsaved session has no turns to show; the notice replaces the
-          // preview section instead of stacking a second empty state under it.
+          // Replace unsaved previews with one notice instead of a second empty state.
           <SessionUnsavedConversationNotice session={session} logAvailable={Boolean(onOpenLog)} />
         )}
 

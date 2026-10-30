@@ -35,7 +35,6 @@ it.each([
     const publish = (messages: NativeChatMessage[], replacement: boolean): void => {
       const ids = messages.map((message) => message.id)
       if (replacement) {
-        // Full snapshots replace the client's view and may replay an existing message.
         seen.splice(0, seen.length, ...ids)
       } else {
         seen.push(...ids)

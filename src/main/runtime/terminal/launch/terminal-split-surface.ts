@@ -10,6 +10,7 @@ import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from '../../orca-r
 import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from '../../runtime-pane-admission'
 import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
+import { resolveLaunchCommandPaneAgent } from '../../runtime-agent-launch-resolution'
 
 export type TerminalSplitOptions = {
   direction?: 'horizontal' | 'vertical'
@@ -21,6 +22,8 @@ export type TerminalSplitOptions = {
   // workspace, for splits the user never asked to see.
   surfaceOwner?: false
   telemetrySource?: TerminalPaneSplitSource
+  /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
 }
 
 export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
@@ -35,15 +38,17 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     if (!pty.connected) {
       throw new Error('terminal_exited')
     }
-    const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
-    const parentTabId = pty.tabId?.trim()
+    const recorded = this.paneOfPty(pty)
+    const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
+    const parentTabId = recorded.tabId?.trim()
     if (!parentTabId || !parsedPaneKey) {
       throw new Error('terminal_handle_stale')
     }
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${pty.worktreeId}`,
-      createdWorktree
+      createdWorktree,
+      { wslUserAct: opts.wslUserAct === true }
     )
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
       workspace.id,
@@ -76,11 +81,14 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       preAllocatedHandle,
       tabId: parentTabId,
       leafId,
       persistHostSessionBinding: true,
       placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
+      // Layout-owner build: views mounting the pane from main's frame attach, never spawn.
+      ...this.paneStartStatusArgs({}),
       ...(sourceAuthority.persisted
         ? {
             expectedSourceBinding: {
@@ -90,9 +98,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
               tabId: parentTabId,
               leafId: parsedPaneKey.leafId,
               ptyId: pty.ptyId,
-              // Why: the store can only match its own persisted map, so a live-only id it never
-              // recorded would reject every split from a session restored without incarnations.
-              // The live id is fenced by revalidateSourceAuthority below instead.
+              // Persisted maps cannot match live-only incarnations; revalidateSourceAuthority fences those separately.
               ...(sourceAuthority.persistedIncarnationId
                 ? { incarnationId: sourceAuthority.persistedIncarnationId }
                 : {})
@@ -115,6 +121,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         spawnSurfaceClaimSequence(this.graphSequence)
       )
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
+      createdPty.launchCommandAgent = resolveLaunchCommandPaneAgent(opts.command)
       this.setPairedRendererSessionOwnership(
         createdPty.ptyId,
         this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)
@@ -155,9 +162,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       revalidateSourceAuthority()
       if (!sourceAuthority.persisted) {
         await revealSplit()
-        // Why: rejecting here unmounts the pane the reveal just added only because the retire
-        // below always emits its exit and the tab still holds the source sibling — the renderer's
-        // exit handler closes non-final panes. Never close it by tabId: that drops the whole tab.
+        // Retirement emits a non-final pane exit and unmounts only the new pane; closing by tabId would also drop the source sibling.
         revalidateSourceAuthority()
       }
       if (createdPty) {
@@ -188,7 +193,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         }
       }
       try {
-        this.ptyController.retireRejectedPty?.(result.id, stopped)
+        this.ptyController.retireRejectedPty?.(result.id, stopped, result.incarnationId)
       } catch {
         // Best-effort cleanup; preserve the original split authority error.
       }
@@ -204,8 +209,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         )
       : null
     if (committedSourceAuthority?.persisted && !committedSourceAuthority.rendererRunsOtherPty) {
-      // Why: renderer adoption is a projection after the durable main commit; rejection cannot undo it.
-      // Not gated on the window's graph: it lags tabs the window already holds (STA-9417).
+      // Reveal only projects an already durable main commit; failure cannot undo it, and lagging window graphs cannot gate it (STA-9417).
       void revealSplit().catch(() => undefined)
     }
 

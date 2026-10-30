@@ -1,20 +1,10 @@
-/**
- * Phase 5 slice 2 (View-attribute bridge): renderer→main
- * `pty:terminalViewAttributes` publication. Composes
- * the reply-relevant slots of the active terminal theme exactly the way
- * xterm's browser ThemeService resolves an ITheme (defaults, cursor blend,
- * 256-entry palette), so main's hidden-PTY responder replies byte-identically
- * to a visible pane's xterm. Deduped module-globally: applyTerminalAppearance
- * runs per pane manager and on every font/opacity tweak, but the attributes
- * are app-global, so identical snapshots publish once.
- */
+/** Publish xterm-equivalent theme reply attributes to main’s hidden-PTY responder; module-global dedup avoids repeated sends from per-pane/attribute-neutral appearance updates. */
 import type { ITheme } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
-import {
-  terminalViewColorQueryReplyColors,
-  type TerminalViewAttributes,
-  type TerminalViewRgb
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
 } from '../../../../shared/terminal-view-attributes'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 
@@ -24,8 +14,7 @@ type ParsedCssColor = {
   alpha: number
 }
 
-// ThemeService defaults for the reply-relevant slots (browser/services/
-// ThemeService.ts): fg #ffffff, bg #000000, cursor #ffffff.
+// Mirror ThemeService fg/bg/cursor defaults.
 const DEFAULT_FOREGROUND: ParsedCssColor = { rgb: [0xff, 0xff, 0xff], alpha: 0xff }
 const DEFAULT_BACKGROUND: ParsedCssColor = { rgb: [0x00, 0x00, 0x00], alpha: 0xff }
 const DEFAULT_CURSOR: ParsedCssColor = { rgb: [0xff, 0xff, 0xff], alpha: 0xff }
@@ -71,8 +60,7 @@ const THEME_ANSI_KEYS: readonly (keyof ITheme)[] = [
 
 function buildDefaultAnsiPalette(): TerminalViewRgb[] {
   const palette = DEFAULT_ANSI_16.map((hex) => parseThemeColor(hex, DEFAULT_BACKGROUND).rgb)
-  // 16-231: the 6x6x6 color cube, 232-255: greys — same generator as xterm's
-  // DEFAULT_ANSI_COLORS IIFE so untouched extended slots reply identically.
+  // Match xterm’s generated 6×6×6 cube and grey tail for untouched palette entries.
   const v = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff]
   for (let i = 0; i < 216; i++) {
     palette.push([v[((i / 36) % 6) | 0], v[((i / 6) % 6) | 0], v[i % 6]])
@@ -86,13 +74,7 @@ function buildDefaultAnsiPalette(): TerminalViewRgb[] {
 
 const DEFAULT_ANSI_PALETTE: readonly TerminalViewRgb[] = buildDefaultAnsiPalette()
 
-/** Mirror of xterm's css.toColor fast paths (#rgb[a], #rrggbb[aa], rgb(),
- *  rgba()) — every format first-party inputs produce (builtin themes and the
- *  ghostty import are hex-validated; composeActiveTerminalTheme only adds the
- *  rgba() form this regex accepts). Known divergence boundary: the renderer's
- *  css.toColor also resolves named/modern CSS via a canvas litmus, so a
- *  hand-edited settings value like `background: 'darkslategray'` renders on
- *  a visible pane but falls back to the slot default in the hidden reply. */
+/** Mirror xterm’s hex/rgb[a] fast paths used by first-party themes. Named/modern CSS needs canvas and falls back here, unlike visible xterm. */
 export function parseCssColor(css: string): ParsedCssColor | null {
   if (/^#[\da-f]{3,8}$/i.test(css)) {
     switch (css.length) {
@@ -162,9 +144,7 @@ function parseThemeColor(css: string | undefined, fallback: ParsedCssColor): Par
   return fallback
 }
 
-// Mirror of xterm's color.blend: ThemeService blends the cursor color's
-// alpha over the background at theme-set time (terminalCursorOpacity), and
-// the OSC 12 reply reports the blended value.
+// ThemeService blends cursor alpha over background before OSC 12 replies; match its byte-rounded blend.
 function blendOverBackground(background: TerminalViewRgb, color: ParsedCssColor): TerminalViewRgb {
   if (color.alpha === 0xff) {
     return color.rgb
@@ -214,26 +194,40 @@ export function composeTerminalViewAttributes(
 }
 
 let lastPublishedSnapshot: string | null = null
-let lastPublishedColors: TerminalOscColorQueryReplyColors | null = null
-type PublishedColorsListener = (colors: TerminalOscColorQueryReplyColors) => void
-const publishedColorsListeners = new Set<PublishedColorsListener>()
+let lastPublishedAttributes: TerminalViewAttributes | null = null
+type PublishedAttributesListener = (attributes: TerminalViewAttributes) => void
+const publishedAttributesListeners = new Set<PublishedAttributesListener>()
 
-/** Hears the fg/bg of every published change, starting with the current one if any. */
-export function subscribeToPublishedTerminalViewColors(
-  listener: PublishedColorsListener
+/** Hears every published change, starting with the current one if any. */
+export function subscribeToPublishedTerminalViewAttributes(
+  listener: PublishedAttributesListener
 ): () => void {
-  publishedColorsListeners.add(listener)
-  if (lastPublishedColors) {
-    listener(lastPublishedColors)
+  publishedAttributesListeners.add(listener)
+  if (lastPublishedAttributes) {
+    listener(lastPublishedAttributes)
   }
   return () => {
-    publishedColorsListeners.delete(listener)
+    publishedAttributesListeners.delete(listener)
+  }
+}
+
+/** terminal.create's theme params: the pane's colours, plus this window's palette and cursor for a host that pins
+ *  them to the new terminal. Older hosts drop the attributes. */
+export function terminalCreateThemeParams(colors: TerminalOscColorQueryReplyColors | undefined): {
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  terminalViewAttributes?: TerminalViewAttributes
+} {
+  if (!colors) {
+    return {}
+  }
+  return {
+    terminalColorQueryReplies: colors,
+    ...(lastPublishedAttributes ? { terminalViewAttributes: lastPublishedAttributes } : {})
   }
 }
 
 function sendViaPreload(attributes: TerminalViewAttributes): boolean {
-  // Guarded: unit tests and the web client run without the preload bridge
-  // (remote-runtime PTYs are never hidden-gate markable anyway).
+  // Preload is absent in web/tests; remote-runtime PTYs never use main’s hidden gate.
   if (typeof window === 'undefined' || !window.api?.pty?.publishTerminalViewAttributes) {
     return false
   }
@@ -241,9 +235,7 @@ function sendViaPreload(attributes: TerminalViewAttributes): boolean {
   return true
 }
 
-/** Publishes the composed app-global attributes, once per actual change:
- *  repeat calls from per-pane appearance applies (and attribute-neutral
- *  tweaks like font size) are deduped against the last published snapshot. */
+/** Deduplicate app-global snapshots across pane applies and attribute-neutral settings changes. */
 export function publishTerminalViewAttributes(
   theme: ITheme | null,
   mode: TerminalColorSchemeMode,
@@ -260,17 +252,15 @@ export function publishTerminalViewAttributes(
     return false
   }
   lastPublishedSnapshot = serialized
-  const colors = terminalViewColorQueryReplyColors(attributes)
-  lastPublishedColors = colors
-  for (const listener of publishedColorsListeners) {
-    listener(colors)
+  lastPublishedAttributes = attributes
+  for (const listener of publishedAttributesListeners) {
+    listener(attributes)
   }
   return true
 }
 
-/** Test seam: reset the dedupe state between tests. */
 export function _resetTerminalViewAttributesPublisherForTest(): void {
   lastPublishedSnapshot = null
-  lastPublishedColors = null
-  publishedColorsListeners.clear()
+  lastPublishedAttributes = null
+  publishedAttributesListeners.clear()
 }

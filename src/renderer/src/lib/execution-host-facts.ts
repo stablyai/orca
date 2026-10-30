@@ -6,7 +6,7 @@ import {
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from './connection-owner-resolution'
@@ -14,15 +14,18 @@ import { getLocalProjectExecutionRuntimeContext } from './local-preflight-contex
 import { CLIENT_PLATFORM } from './new-workspace'
 import {
   getExecutionHostIdForWorktree,
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from './worktree-runtime-owner'
 
-/**
- * The OS of the machine an agent runs on. `withheld` means no host has reported it; a launch must
- * stop there, because the client's or the endpoint's OS would quote the command for the wrong shell.
- */
+/** Withhold unreported execution OS; quoting with client/endpoint guesses would target the wrong shell and must stop launch. */
 export type ExecutionHostPlatformFact =
-  | { kind: 'known'; platform: NodeJS.Platform; hostKind: ParsedExecutionHost['kind'] }
+  | {
+      kind: 'known'
+      platform: NodeJS.Platform
+      hostKind: ParsedExecutionHost['kind']
+      /** A paired server's own Windows terminal shell, when it reported one. */
+      terminalWindowsShell?: string | null
+    }
   | { kind: 'withheld'; reason: string }
 
 type HostFactsState = Pick<
@@ -112,13 +115,15 @@ function resolveHostPlatform(
     hostPlatform === 'win32' && args.workspacePath && isWslUncPath(args.workspacePath)
       ? 'linux'
       : hostPlatform
-  return { kind: 'known', platform, hostKind: 'runtime' }
+  return {
+    kind: 'known',
+    platform,
+    hostKind: 'runtime',
+    ...(status?.terminalWindowsShell ? { terminalWindowsShell: status.terminalWindowsShell } : {})
+  }
 }
 
-/**
- * Platform of the host that runs agents for a repo's workspaces, read from the repo row's owner.
- * `workspacePath` names a workspace on that host (e.g. a WSL worktree); it defaults to the repo.
- */
+/** Read the repo owner’s execution platform; workspacePath refines it for host-local namespaces such as WSL, defaulting to repo path. */
 export function resolveRepoExecutionHostPlatform(
   state: HostFactsState,
   repo: { connectionId?: string | null; executionHostId?: string | null; path: string },
@@ -135,7 +140,6 @@ export function resolveRepoExecutionHostPlatform(
   })
 }
 
-/** Platform of the host that runs agents for a worktree or folder workspace. */
 export function resolveWorktreeExecutionHostPlatform(
   state: WorktreeHostFactsState,
   worktreeId: string,
@@ -148,9 +152,7 @@ export function resolveWorktreeExecutionHostPlatform(
     nestedSshTargetId:
       host?.kind === 'runtime' ? (getConnectionIdFromState(state, worktreeId) ?? null) : null,
     sshOwnerEnvironmentId:
-      host?.kind === 'ssh'
-        ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
-        : null,
+      host?.kind === 'ssh' ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId) : null,
     workspacePath,
     projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktreeId)
   })
@@ -166,11 +168,7 @@ export function refineLocalLaunchPlatform(
   return fact.hostKind === 'local' && callerPlatform ? { ...fact, platform: callerPlatform } : fact
 }
 
-/**
- * Preflight platform for a worktree's agent launch: the worktree's own host when its row names
- * one, else its repo's owner. `undefined` when withheld: the launch itself resolves the host and
- * tells the user why it stopped.
- */
+/** Preflight worktree-owner platform, then repo owner; undefined defers withheld-host errors to launch resolution. */
 export function resolveRepoWorktreeLaunchPlatform(
   state: WorktreeHostFactsState,
   repo: { connectionId?: string | null; executionHostId?: string | null; path: string },
@@ -207,16 +205,17 @@ export function requireExecutionHostPlatform(fact: ExecutionHostPlatformFact): N
   return fact.platform
 }
 
-/** `terminalWindowsShell` describes this client's shell, so it only shapes local launches. */
+/** `terminalWindowsShell` is this client's setting, so a remote host uses only the shell it reported. */
 export function resolveExecutionHostAgentStartupShell(
   fact: ExecutionHostPlatformFact,
   terminalWindowsShell: string | null | undefined
 ): AgentStartupShell | undefined {
   return fact.kind === 'known'
-    ? resolveLocalWindowsAgentStartupShell({
+    ? resolveHostAgentStartupShell({
         platform: fact.platform,
         isRemote: fact.hostKind !== 'local',
-        terminalWindowsShell
+        hostTerminalWindowsShell:
+          fact.hostKind === 'local' ? terminalWindowsShell : fact.terminalWindowsShell
       })
     : undefined
 }

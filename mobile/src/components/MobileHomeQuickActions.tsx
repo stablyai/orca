@@ -1,23 +1,27 @@
 import { Plus, QrCode } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { PickerModal } from './PickerModal'
-import { useConnectedHostPicker } from './use-connected-host-picker'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   connectedHosts: HostProfile[]
   onPairDesktop: () => void
-  onCreateWorkspace: (hostId: string) => void
+  onCreateWorkspace: () => void
 }
 
 export function MobileHomeQuickActions(props: Props) {
-  const hostPicker = useConnectedHostPicker(props.connectedHosts)
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const canCreateWorkspace = props.connectedHosts.length > 0
 
   return (
     <>
-      <Text style={styles.sectionHeading}>Quick Actions</Text>
+      <Text style={styles.sectionHeading}>
+        {t('components.homeQuickActions.title', 'Quick Actions')}
+      </Text>
       <View style={styles.quickActions}>
         <Pressable
           accessibilityRole="button"
@@ -27,7 +31,9 @@ export function MobileHomeQuickActions(props: Props) {
           <View style={styles.quickActionIcon}>
             <QrCode size={16} color={colors.textSecondary} />
           </View>
-          <Text style={styles.quickActionLabel}>Pair Desktop</Text>
+          <Text style={styles.quickActionLabel}>
+            {t('components.homeQuickActions.pairDesktop', 'Pair Desktop')}
+          </Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -38,20 +44,21 @@ export function MobileHomeQuickActions(props: Props) {
             !canCreateWorkspace && styles.quickActionDisabled,
             pressed && styles.quickActionPressed
           ]}
-          onPress={() => hostPicker.pickHost(props.onCreateWorkspace)}
+          onPress={props.onCreateWorkspace}
         >
           <View style={styles.quickActionIcon}>
             <Plus size={16} color={colors.textSecondary} />
           </View>
-          <Text style={styles.quickActionLabel}>New Workspace</Text>
+          <Text style={styles.quickActionLabel}>
+            {t('components.homeQuickActions.newWorkspace', 'New Workspace')}
+          </Text>
         </Pressable>
       </View>
-      <PickerModal title="Create Workspace On" {...hostPicker.pickerProps} />
     </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   sectionHeading: {
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
@@ -97,4 +104,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600'
   }
-})
+}))

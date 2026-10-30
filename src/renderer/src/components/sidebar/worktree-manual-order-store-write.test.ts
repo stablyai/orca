@@ -11,12 +11,7 @@ import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-muta
 const toastInfo = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { info: toastInfo, dismiss: vi.fn() } }))
 
-/**
- * The sidebar drop only reorders if the payload `reorderWorktrees` builds is the
- * one `updateWorktreesMeta` consumes. The e2e that covered this replaced the store
- * action with a fake, so a payload-shape change (#16691, Map -> batch array) showed
- * up as a red drag spec instead of a red contract. This runs the real action.
- */
+/** Run the real metadata action so a drag payload-shape mismatch cannot hide behind an E2E fake. */
 
 const initialState = useAppStore.getInitialState()
 const REPO_ID = 'repo-manual-order'
@@ -42,7 +37,6 @@ function seedManualOrderedRows(count: number): Worktree[] {
 function renderReorder(worktrees: readonly Worktree[]) {
   return renderHook(() =>
     useWorktreeStatusMutations({
-      worktreeMap: new Map(worktrees.map((worktree) => [worktree.id, worktree])),
       manualOrderCatalog: buildWorktreeManualOrderCatalog({
         worktrees,
         folderWorkspaces: []

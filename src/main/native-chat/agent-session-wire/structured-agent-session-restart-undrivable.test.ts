@@ -1,17 +1,17 @@
-// A chat whose agent this build no longer drives (its definition now names another transport) is
-// still readable, but nothing offers to start it: no restart offer, and a recorded failure is not
-// retryable. The offer itself is kept, so a build that drives the agent again offers it again.
-
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
-import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  hostTestAttachParams
+} from './structured-agent-session-host-test-data'
+import { CALLER } from './structured-agent-session-host-test-harness'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
 
 afterEach(() => vi.restoreAllMocks())
 
-/** This build's agents, with Codex now speaking a protocol its existing chats were not made in. */
 function codexOnAnotherTransport(): StructuredAgentRegistry {
   return new StructuredAgentRegistry(
     NO_STRUCTURED_AGENTS.registrations().map((registration) =>
@@ -29,7 +29,6 @@ it('does not offer to resume a chat whose agent this build no longer drives, and
   const { host, root, acquire } = await interruptedRestart(
     undefined,
     undefined,
-    undefined,
     codexOnAnotherTransport()
   )
 
@@ -44,7 +43,6 @@ it('does not offer to resume a chat whose agent this build no longer drives, and
 
 it('lists a recorded failure of such a chat as not retryable', async () => {
   const { host, root, marker } = await interruptedRestart(
-    undefined,
     undefined,
     undefined,
     codexOnAnotherTransport()
@@ -69,4 +67,21 @@ it('lists a recorded failure of such a chat as not retryable', async () => {
   expect(await host.restartResume.listFailures()).toMatchObject([
     { sessionId: marker!.sessionId, retryable: false }
   ])
+})
+
+it('keeps such a chat readable and refuses to start its agent', async () => {
+  const { host, store, acquire } = await interruptedRestart(
+    undefined,
+    undefined,
+    codexOnAnotherTransport()
+  )
+  const fence = store.getRecord(SESSION)!.lease.runtimeFence
+
+  expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+    ok: false,
+    refusal: { code: 'structured_agent_session_unsupported' }
+  })
+  expect(acquire).not.toHaveBeenCalled()
+  expect(store.getRecord(SESSION)!.lease.runtimeFence).toBe(fence)
+  expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({ ok: true })
 })

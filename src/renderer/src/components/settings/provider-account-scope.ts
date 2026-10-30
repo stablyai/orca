@@ -28,9 +28,7 @@ function providerHostScopeLabel(target: RuntimeClientTarget): string {
 export function getRemoteAccountsPaneScope(serverName: string | null): ProviderHostScope {
   const name = serverName?.trim()
   return {
-    // Why: the saved-server list is still empty on first paint, and the generic
-    // fallback is already a noun phrase — interpolating it would render
-    // "Remote server: the remote server".
+    // Unloaded server names need bare fallback labels; interpolation would repeat Remote server.
     label: name
       ? remoteServerScopeLabel(name)
       : translate(
@@ -53,12 +51,12 @@ export function getProviderAccountScope(
     description:
       target.kind === 'environment'
         ? translate(
-            'auto.components.settings.providerAccountScope.remoteServerCredentials',
-            'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
+            'auto.components.settings.providerAccountScope.remoteServerCredentialsNewProjects',
+            'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > New projects open on.'
           )
         : translate(
-            'auto.components.settings.providerAccountScope.localCredentials',
-            'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
+            'auto.components.settings.providerAccountScope.localCredentialsNewProjects',
+            'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > New projects open on.'
           )
   }
 }

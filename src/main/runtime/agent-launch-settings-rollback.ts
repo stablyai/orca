@@ -34,6 +34,18 @@ export function agentLaunchSettingsRollbackUpdates(
     ...(Object.hasOwn(updates, 'agentDefaultEnv') &&
     Object.is(current.agentDefaultEnv, applied.agentDefaultEnv)
       ? { agentDefaultEnv: before.agentDefaultEnv ?? {} }
+      : {}),
+    ...(Object.hasOwn(updates, 'agentPermissionDefault') &&
+    Object.is(current.agentPermissionDefault, applied.agentPermissionDefault)
+      ? { agentPermissionDefault: before.agentPermissionDefault }
+      : {}),
+    ...(Object.hasOwn(updates, 'agentPermissionOverrides') &&
+    Object.is(current.agentPermissionOverrides, applied.agentPermissionOverrides)
+      ? { agentPermissionOverrides: before.agentPermissionOverrides ?? {} }
+      : {}),
+    ...(Object.hasOwn(updates, 'nativeChatPermissionMode') &&
+    Object.is(current.nativeChatPermissionMode, applied.nativeChatPermissionMode)
+      ? { nativeChatPermissionMode: before.nativeChatPermissionMode ?? 'ask' }
       : {})
   }
 }

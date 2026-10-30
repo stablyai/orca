@@ -23,28 +23,11 @@ import {
   type SentinelWeightProbe
 } from './terminal-render-desync-weight-probe'
 
-/**
- * Flag-gated render-desync sentinel for WebGL terminal panes.
- *
- * Detects the "buffer is correct but the canvas renders stale/garbled glyphs"
- * class of bug (shared glyph-atlas desync) by comparing, per visible pane, the
- * cells the xterm buffer says hold glyphs against the ink actually present on
- * the WebGL canvas. Modifier-clicks start a short burst that reads the
- * compositor-presented canvas before any forced redraw can heal or destroy the
- * failure. A confirmed trip writes the pixels, buffer, and atlas/model versions
- * to local app data before running the shared-atlas recovery.
- *
- * Cmd/Ctrl+Shift+click (see terminal-render-desync-trigger.ts) captures the
- * clicked pane immediately and unconditionally — no divergence gate and no
- * recovery afterwards — for states the ink detector cannot see, e.g. the
- * bold-collapse bug (STA-4042 family) where every cell has ink but regular
- * text rasterized at the bold weight.
- */
+/** Opt-in visible WebGL cell/ink comparison detects persistent missing glyphs; capture presented pixels/model/atlas before recovery can erase evidence. Cmd/Ctrl+Shift+click captures unconditionally without recovery, covering ink-present failures such as bold collapse (STA-4042). */
 
 const SAMPLE_INTERVAL_MS = 250
 const SAMPLE_BURST_MS = 10_000
-// A real desync is pinned to fixed screen cells; scroll/frame lag moves around.
-// Require the same cells missing across this many consecutive samples.
+// Require persistent missing cells at the same coordinates; frame/scroll lag moves them.
 const PERSISTENT_SAMPLES = 2
 const MIN_TEXT_CELLS = 200
 const MISSING_PCT_THRESHOLD = 8
@@ -82,7 +65,6 @@ export function getRenderDesyncEvidence(): SentinelEvidence[] {
 }
 
 export function sampleRenderDesyncOnce(
-  // Test seam: happy-dom has no 2D canvas, so tests inject crafted divergences.
   measure: typeof measureDivergence = measureDivergence
 ): void {
   forEachLivePaneForDesyncSentinel((paneKey, pane) => {
@@ -99,16 +81,14 @@ export function sampleRenderDesyncOnce(
     if (!buffer) {
       return
     }
-    // Why: the field failure can heal on any refresh. Read the canvas exactly
-    // as Chromium presented it; recovery happens only after durable evidence.
+    // Read compositor-presented pixels before any refresh can heal the failure; recover only after durable capture.
     const divergence = measure(internals, buffer)
     if (!divergence || divergence.textCells < MIN_TEXT_CELLS) {
       missingHistoryByPane.delete(paneKey)
       return
     }
     if (divergence.missPct < MISSING_PCT_THRESHOLD) {
-      // Why: only consecutive threshold breaches prove persistence; retaining a
-      // subthreshold frame lets one later spike create a false field capture.
+      // Reset on subthreshold frames so isolated later spikes cannot masquerade as persistent divergence.
       missingHistoryByPane.delete(paneKey)
       return
     }
@@ -136,8 +116,7 @@ export function sampleRenderDesyncOnce(
       missPct: Math.round(divergence.missPct * 10) / 10
     })
     if (evidence.length >= MAX_EVIDENCE_ENTRIES) {
-      // Why: captures can contain full terminal canvases and buffer contents.
-      // Keep recovery available after the per-session evidence budget is spent.
+      // Cap large evidence captures per session while keeping recovery available after the budget is spent.
       console.warn(`[terminal] render desync detected on pane ${paneKey}; capture budget exhausted`)
       resetAndRefreshAllTerminalWebglAtlases('render-desync')
       stopRenderDesyncSampleBurst()
@@ -152,11 +131,7 @@ export function sampleRenderDesyncOnce(
   })
 }
 
-/**
- * Unconditional capture of one pane, bypassing the divergence detector. No
- * recovery afterwards: the caller wants the broken state left on screen to
- * poke at, and recovery would also destroy any not-yet-understood layer state.
- */
+/** Capture one pane unconditionally and leave its broken state intact for further inspection. */
 export function captureRenderDesyncNow(paneKey: string, pane: unknown): void {
   const terminal = (pane as SentinelPane).terminal
   if (pendingPaneKeys.has(paneKey) || evidence.length >= MAX_EVIDENCE_ENTRIES) {
@@ -168,8 +143,7 @@ export function captureRenderDesyncNow(paneKey: string, pane: unknown): void {
     console.warn(`[terminal] manual desync capture failed for ${paneKey}: no renderer internals`)
     return
   }
-  // Why tolerant: the manual gesture must produce a capture even when the
-  // canvas readback path fails — the PNG and probe fields are the payload.
+  // Manual capture must survive failed readback; PNG/probe data still provide evidence.
   let measured: ReturnType<typeof measureDivergence> = null
   try {
     const buffer = activeBuffer(terminal)
@@ -231,8 +205,7 @@ async function persistEntry(
 ): Promise<void> {
   const directory = await persistCorruptEvidence(entry)
   if (directory == null) {
-    // Why: a failed write must leave the bad pixels intact; recovering here
-    // would destroy the only evidence without producing a durable capture.
+    // Failed persistence leaves the only evidence on screen; recovery would destroy it.
     const entryIndex = evidence.indexOf(entry)
     if (entryIndex !== -1) {
       evidence.splice(entryIndex, 1)

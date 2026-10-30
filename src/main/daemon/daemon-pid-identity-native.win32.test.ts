@@ -20,7 +20,7 @@ describe.runIf(process.platform === 'win32')(
     })
 
     it('matches a live daemon and rejects the same PID under a different start time', async () => {
-      // Native, so this proves the check no longer forks powershell.exe.
+      // Require the native process table used by this path.
       expect(isWindowsProcessTableAvailable()).toBe(true)
       const child = spawnProcess({
         program: process.execPath,
@@ -44,7 +44,7 @@ describe.runIf(process.platform === 'win32')(
       await expect(
         inspectDaemonProcessIdentity(pid, socketPath, tokenPath, createdAtMs)
       ).resolves.toBe('match')
-      // A reused PID is the same number with a creation time far from the pid file's.
+      // Simulate PID reuse by moving creation time outside the allowed bootstrap gap.
       await expect(
         inspectDaemonProcessIdentity(pid, socketPath, tokenPath, createdAtMs - 60 * 60_000)
       ).resolves.toBe('mismatch')

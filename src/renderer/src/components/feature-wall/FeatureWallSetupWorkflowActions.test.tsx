@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  SETUP_GUIDE_PROJECT_PROMPT,
+  setupGuideProjectPrompt,
   WorkspacesAction,
   cancelPendingSetupGuideTourRequest,
   getSetupGuideGitRepo,
@@ -71,7 +71,7 @@ describe('setup guide workflow actions', () => {
     promptForSetupGuideProject(openModal)
 
     expect(openModal).toHaveBeenCalledWith('add-repo')
-    expect(toast.message).toHaveBeenCalledWith(SETUP_GUIDE_PROJECT_PROMPT)
+    expect(toast.message).toHaveBeenCalledWith(setupGuideProjectPrompt())
   })
 
   it('chooses the active git repo for setup-guide workspace creation', () => {

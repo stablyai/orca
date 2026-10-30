@@ -13,9 +13,7 @@ import {
 } from './managed-runtime-install-card'
 import type { ManagedRuntimeInstallAction } from './managed-runtime-install-view'
 
-/** The install card and its Install / Cancel clicks. A click holds its button (`pending`) until
- *  the host answers, so a double click starts nothing twice; `refusal` is why the host turned the
- *  last click down. */
+/** Hold pending actions until the host answers to prevent duplicate clicks; refusal explains a rejected request. */
 export function useManagedRuntimeInstallCard(
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>,
   state: ManagedRuntimeInstallState,

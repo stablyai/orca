@@ -142,8 +142,6 @@ describe('minimax-api-key-store', () => {
       expect(store.getMiniMaxApiKeyProtection()).toBe('sealed')
     })
 
-    // Why it must not decrypt: Settings calls this on open, and a decrypt would put a
-    // macOS keychain prompt in front of a user who only opened a settings pane.
     it('does not decrypt, so opening Settings cannot trigger a keychain prompt', async () => {
       existsSyncMock.mockReturnValue(true)
       readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'sk-test-1234567890')))

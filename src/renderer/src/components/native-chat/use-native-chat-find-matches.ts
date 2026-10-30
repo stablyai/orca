@@ -22,7 +22,6 @@ const WORD_GROUP_SELECTOR = '[data-word-group]'
 /** Streamed text with no match in it grows every frame; re-searching it this often is plenty. */
 const TEXT_GROWTH_SEARCH_DELAY_MS = 120
 
-/** Text growing in place: a text node rewritten, or words drawn into or settled in a word group. */
 function isTextGrowth(record: MutationRecord): boolean {
   return (
     record.type === 'characterData' ||
@@ -65,7 +64,6 @@ function anchorOf(range: Range | undefined): MatchAnchor | null {
   return range ? { node: range.startContainer, offset: range.startOffset } : null
 }
 
-/** The first match the reader can see; else the first below the view; else the last. */
 function firstVisibleMatch(
   matches: readonly Range[],
   scroller: Element | null,
@@ -95,7 +93,6 @@ function firstVisibleMatch(
   return { index: below === -1 ? matches.length - 1 : below, inView: false }
 }
 
-/** After the transcript changed: the same match if it survived, else the next one after it. */
 function survivingMatchIndex(matches: readonly Range[], anchor: MatchAnchor): number {
   const exact = matches.findIndex(
     (match) => match.startContainer === anchor.node && match.startOffset === anchor.offset
@@ -118,7 +115,6 @@ export type NativeChatFindMatches = {
   step: (direction: 1 | -1) => void
 }
 
-/** Searches the chat transcript's DOM and keeps the matches current while it streams and scrolls. */
 export function useNativeChatFindMatches({
   rootRef,
   barRef,
@@ -214,8 +210,7 @@ export function useNativeChatFindMatches({
       if (!replaced && changed.length === 0) {
         return
       }
-      // Rows mounting or opening, and text that held a match (its ranges just collapsed), are
-      // re-searched before the next paint; other text growing in place can wait.
+      // Refresh mounted/opened rows and collapsed match ranges before paint; unrelated streaming growth may wait.
       const now =
         replaced ||
         changed.some(

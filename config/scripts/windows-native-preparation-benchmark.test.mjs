@@ -133,6 +133,8 @@ test('uses case-insensitive environment comparisons and never publishes values',
     }),
     ['vcinstalldir']
   )
+  assert.equal(parent.hash, 'b68036d62c67af93146be4c25bdb3987424b02fae8738cc4cb4ecf960813d97b')
+  assert.notEqual(parent.hash, environmentReceipt({ ...original, TOKEN: 'changed' }).hash)
   assert(!JSON.stringify(parent).includes('private'))
   assert.throws(() => environmentReceipt({ PATH: 'first', Path: 'second' }), /Duplicate/)
 })
@@ -205,7 +207,7 @@ test('manual workflow freezes source and limits Windows occupancy without changi
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
   assert.equal(install.with['native-runtime'], 'none')
-  assert.equal(install.with['node-version'], '24.21.0')
+  assert.equal(install.with['node-version'], '24.22.1')
   assert.equal(install.with['cache-pnpm-store'], 'false')
   assert.equal(workflow.jobs.compare.steps.at(-1).if, 'always()')
   assert(!Object.hasOwn(workflow.jobs, 'verify'))

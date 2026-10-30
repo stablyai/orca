@@ -106,7 +106,7 @@ async function createForkRepo(): Promise<{
 }
 
 beforeEach(() => {
-  // Why: a developer's global config (e.g. merge.verifySignatures) must not change what these repos do.
+  // Isolate fixtures from developer Git settings such as merge.verifySignatures.
   vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
   vi.stubEnv('GIT_CONFIG_GLOBAL', join(tmpdir(), `orca-no-global-gitconfig-${process.pid}`))
 })
@@ -164,7 +164,6 @@ describe('concurrent local base refreshes of one repo with real Git', () => {
     const results = await Promise.all([refresh(repoPath), refresh(repoPath), refresh(repoPath)])
 
     expect(results[0]).toMatchObject({ status: 'updated', ownerWorktreePath: expect.any(String) })
-    // The joiners share one follow-up run, which finds local already current.
     expect(results.slice(1)).toEqual([undefined, undefined])
     expect(spy.merges()).toBe(1)
     expect(warn).not.toHaveBeenCalled()
@@ -185,7 +184,6 @@ describe('concurrent local base refreshes toward different remotes with real Git
 
     expect(results[0]).toMatchObject({ baseRef: 'origin/main', status: 'updated' })
     expect(results[1]).toMatchObject({ baseRef: 'upstream/main', status: 'updated' })
-    // Local is now ahead of origin/main: the existing ahead-of-requested-remote rule, not a sharing artifact.
     expect(results[2]).toMatchObject({ baseRef: 'origin/main', status: 'skipped_not_fast_forward' })
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(upstreamOid)
     expect(spy.maxConcurrent()).toBe(1)
@@ -202,9 +200,7 @@ describe('concurrent local base refreshes toward different remotes with real Git
     ])
 
     expect(results[0]).toMatchObject({ baseRef: 'upstream/main', status: 'updated' })
-    // Local already equals upstream/main, so the second upstream create has nothing to report.
     expect(results[1]).toBeUndefined()
-    // Local is now ahead of origin/main: the existing ahead-of-requested-remote rule, not a sharing artifact.
     expect(results[2]).toMatchObject({ baseRef: 'origin/main', status: 'skipped_not_fast_forward' })
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(upstreamOid)
     expect(spy.maxConcurrent()).toBe(1)

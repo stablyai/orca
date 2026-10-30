@@ -48,11 +48,7 @@ export type ReceivedSessionTabsSnapshot = SnapshotFreshness & {
   runtimeId?: string
 }
 
-/**
- * Runtime ids identify a host process, unlike publication epochs which may be
- * minted by several publishers. Retain a bounded predecessor set so a frame
- * queued by a restarted host cannot be mistaken for a fresh publication.
- */
+/** Runtime IDs name host processes; retain bounded retired predecessors so queued old-process frames cannot look like fresh publishers. */
 export type RetiredValueHistory = {
   current: string | null
   retired: string[]
@@ -60,12 +56,7 @@ export type RetiredValueHistory = {
 
 export type SessionTabsRuntimeHistory = RetiredValueHistory
 
-/**
- * A host restart changes the publication epoch, but frames from the previous
- * epoch can still be queued on a sibling subscription. Keep a small history
- * of epochs that have already been superseded so those delayed frames cannot
- * roll the mirror back after the replacement epoch is accepted.
- */
+/** Bounded retired-epoch history prevents sibling streams’ delayed frames rolling back accepted replacements after restart. */
 export type SessionTabsPublicationEpochHistory = RetiredValueHistory
 
 export type WebSessionTabsSnapshotApplyOptions = {
@@ -89,6 +80,22 @@ export type VisibilityResumeOmission = {
 
 export const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 export const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+
+export function sessionTabsFreshnessKey(environmentId: string, worktreeId: string): string {
+  return `${environmentId}:${worktreeId}`
+}
+
+// Allow replay of current epoch/version exactly once; older concurrent frames must retain ordering checks.
+export function acceptReplayedWebSessionTabsSnapshot(
+  environmentId: string,
+  worktreeId: string
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const current = latestSessionTabsSnapshotByWorktree.get(key)
+  if (current) {
+    replayableSessionTabsSnapshotByWorktree.set(key, current)
+  }
+}
 export const latestReceivedSessionTabsSnapshotByWorktree = new Map<
   string,
   ReceivedSessionTabsSnapshot
@@ -96,12 +103,7 @@ export const latestReceivedSessionTabsSnapshotByWorktree = new Map<
 /** Receipt ledgers outlive the worktrees they order, so their keys need a bound of their own. */
 export const MAX_TRACKED_SESSION_TABS_RECEIPTS = 512
 
-/**
- * Bounds a receipt ledger by frame age, never by entry count. One inventory records a receipt per
- * worktree under a single reserved frame, and evicting by insertion order would drop that batch's
- * own earlier entries — which the recovery gate reads as "no evidence for this worktree" and uses
- * to reject it. Only a receipt no in-flight frame can still be ranked against is droppable.
- */
+/** Bound receipts by frame age, not insertion count: one inventory shares a frame across worktrees and must not evict its own evidence. Drop only entries no in-flight frame can rank against. */
 export function setBoundedSessionTabsReceipt<T>(
   map: Map<string, T>,
   key: string,
@@ -127,16 +129,7 @@ export const sessionTabsPublicationEpochHistoryByWorktree = new Map<
 >()
 export const latestReceivedSessionTabsFrameByEnvironment = new Map<string, number>()
 export const latestReceivedSessionTabsInventoryFrameByEnvironment = new Map<string, number>()
-/**
- * Highest `receivedFrame` at which this worktree was retracted. Raise-only: a frame reserved before
- * the retraction is stale evidence no matter what arrived since, so the boundary cannot be a slot a
- * later frame overwrites, nor conditional on a recovery happening to be in flight when it landed.
- *
- * Deliberately not size-bounded, unlike the receipt ledger beside it. Evicting a boundary readmits
- * every pre-close frame it was fencing, which is the defect this map exists to prevent; one number
- * per worktree ever retracted on an environment is a cheaper price, and the environment teardown
- * below drains it.
- */
+/** Raise-only retraction watermark fences all pre-close reserved frames even after later publications overwrite receipts. Never size-evict boundaries or stale lists reenter; one number per retracted worktree persists until environment teardown. */
 export const sessionTabsRemovalWatermarkByWorktree = new Map<string, number>()
 export const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
 export const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
@@ -194,6 +187,7 @@ export type MirroredBrowserTab = {
   page: BrowserPage
   certificateFailure: BrowserCertificateFailure | null
   remotePageId: string
+  browserProfileId?: string
   placement?: RuntimeBrowserPlacement
   unifiedTab: Tab
   hostTabId: string
@@ -218,6 +212,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'browserPagesByWorkspace'
   | 'browserCertificateFailuresByPageId'
   | 'browserTabsByWorktree'
+  | 'editorBuffers'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'openFiles'
@@ -237,9 +232,10 @@ export type WebSessionTabsSyncState = Pick<
       | 'activityClearedAtByPaneKey'
       | 'agentLaunchConfigByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
-      // Why: a client draft is the evidence that a mirrored file's dirty flag is the client's
-      // own and must survive a host republish (#21392); absent here, the host flag wins.
+      // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'
+      // Why: the live index carries sticky detachments; absent here, views resolve by identity.
+      | 'editorBufferIdOf'
       | 'localOnlyScrollbackByTabId'
       | 'migrationUnsupportedByPtyId'
       | 'manuallyUnreadTurnsByPaneKey'
@@ -249,6 +245,7 @@ export type WebSessionTabsSyncState = Pick<
       | 'recentlyRetiredAgentStatusPaneKeys'
       | 'retainedAgentsByPaneKey'
       | 'retentionSuppressedPaneKeys'
+      | 'runtimePaneTitlesByTabId'
     >
   >
 
@@ -269,6 +266,7 @@ export type WebSessionTabsBatchRecordKey =
   | 'pendingStartupByTabId'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
+  | 'runtimePaneTitlesByTabId'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
@@ -280,6 +278,7 @@ export type WebSessionOpenFilesIndex = {
   byWorktree: Map<string, OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
+  changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
   agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>

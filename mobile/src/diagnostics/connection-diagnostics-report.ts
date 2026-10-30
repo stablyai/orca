@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 import type {
   ConnectionLogEntry,
@@ -13,9 +13,7 @@ import { redactConnectionLogEntry, redactConnectionLogText } from './connection-
 const MAX_EVENT_LINE_BYTES = 2 * 1024
 const EVENT_TRUNCATION_MARKER = ' … [truncated]'
 
-// Why: one shareable text blob answering everything we historically had to
-// ask reporters one message at a time (endpoint type, state, attempt count,
-// last-connected, versions, and the reconnect lifecycle log).
+// Include endpoints, connection state, attempts, versions and lifecycle history in one shareable report.
 export function buildConnectionDiagnosticsReport(args: {
   hostName: string
   endpoint: string
@@ -28,7 +26,6 @@ export function buildConnectionDiagnosticsReport(args: {
   entries: readonly ConnectionLogEntry[]
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
-  /** The page bridge version this shell speaks. */
   bridgeProtocolVersion: number
   nowMs?: number
 }): string {
@@ -46,8 +43,11 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(`Generated: ${new Date(now).toISOString()}`)
   lines.push(`App: Orca Mobile ${args.appVersion} · ${args.platform}`)
   lines.push(`Bridge protocol: ${args.bridgeProtocolVersion}`)
-  const desktopAppVersion = normalizeHostAppVersion(args.desktopAppVersion)
-  lines.push(`Host Orca version: ${desktopAppVersion ?? 'unknown'}`)
+  const desktopAppVersion =
+    args.state === 'connected' ? normalizeHostAppVersion(args.desktopAppVersion) : null
+  lines.push(
+    `Host Orca version: ${desktopAppVersion ?? (args.state === 'connected' ? 'unknown' : 'unknown (not currently connected)')}`
+  )
   lines.push(`Host: ${redactConnectionLogText(args.hostName)}`)
   lines.push(
     `Endpoint: ${formatEndpoint(args.endpoint)}${isTailscaleEndpoint(args.endpoint) ? ' (Tailscale)' : ''}`
@@ -67,11 +67,18 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(`Likely cause: ${diagnosis.likelyCause}`)
   lines.push(`Next step: ${diagnosis.nextStep}`)
   lines.push('')
+  lines.push(formatConnectionLogHistory(entries))
+  return lines.join('\n')
+}
+
+export function formatConnectionLogHistory(entries: readonly ConnectionLogEntry[]): string {
+  const lines: string[] = []
   if (entries.length === 0) {
     lines.push('No connection events recorded.')
   } else {
     lines.push(`Recent connection history (${entries.length} events, oldest first):`)
-    for (const entry of entries) {
+    for (const rawEntry of entries) {
+      const entry = redactConnectionLogEntry(rawEntry)
       const detail = entry.detail ? ` — ${entry.detail}` : ''
       const evidence = [entry.code, entry.path].filter(Boolean).join(' · ')
       lines.push(

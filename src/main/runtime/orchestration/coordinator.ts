@@ -14,6 +14,7 @@ import {
   warnStaleDispatches
 } from './coordinator-task-dispatch'
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../../../shared/nested-worker-depth'
+import { ORCHESTRATION_HEARTBEAT_INTERVAL_MINUTES } from '../../../shared/orchestration-heartbeat'
 
 export type CoordinatorOptions = {
   spec: string
@@ -80,7 +81,7 @@ export class Coordinator {
     return this.executeLoop(run.id)
   }
 
-  // Why: the RPC handler pre-creates the run record to return the ID immediately, so this method skips the DB insert.
+  // RPC already created the run to return its id immediately.
   async runFromExistingRun(runId: string): Promise<{
     runId: string
     status: CoordinatorStatus
@@ -112,7 +113,7 @@ export class Coordinator {
         await this.sleep(this.opts.pollIntervalMs)
       }
 
-      // Why: an early stop leaves tasks incomplete, so the run counts as failed.
+      // Stopping with incomplete tasks makes the run fail.
       const tasks = this.db.listTasks()
       const allDone = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
       const failedTasks = [
@@ -143,7 +144,7 @@ export class Coordinator {
     this.stopped = true
   }
 
-  // Why: decomposition isn't implemented yet — tasks must be pre-created before run(); AI-driven decomposition is a future phase.
+  // Tasks must be pre-created until decomposition is implemented.
   private async decompose(): Promise<void> {
     this.state.phase = 'decomposing'
     const existing = this.db.listTasks()
@@ -156,11 +157,18 @@ export class Coordinator {
     this.state.phase = 'dispatching'
   }
 
+  // Null means heartbeats are off, so `??` cannot supply the fake runtime's default.
+  private heartbeatIntervalMinutes(): number | null {
+    return this.runtime.getOrchestrationHeartbeatMinutes
+      ? this.runtime.getOrchestrationHeartbeatMinutes()
+      : ORCHESTRATION_HEARTBEAT_INTERVAL_MINUTES
+  }
+
   private async tick(): Promise<boolean> {
     this.processMessages()
     this.processEscalations()
     reblockTasksWithPendingGates(this.db)
-    warnStaleDispatches(this.db, this.opts.onLog)
+    warnStaleDispatches(this.db, this.opts.onLog, this.heartbeatIntervalMinutes())
     await this.dispatchReadyTasks()
     return this.checkConvergence()
   }
@@ -222,9 +230,7 @@ export class Coordinator {
     }
   }
 
-  private processEscalations(): void {
-    // Why: escalations are handled inline via handleEscalation; this stays a hook for future policies (auto-reassign, external notify).
-  }
+  private processEscalations(): void {}
 
   private async dispatchReadyTasks(): Promise<void> {
     this.state.phase = 'dispatching'
@@ -249,7 +255,7 @@ export class Coordinator {
       return
     }
     if (terminals.length === 0 && slotsAvailable > 0) {
-      // Why: create at most one terminal per tick to avoid spawning many at once.
+      // Create at most one terminal per tick to avoid a spawn burst.
       try {
         const created = await this.runtime.createTerminal(this.opts.worktree, {
           title: `Worker: ${readyTasks[0].spec.slice(0, 40)}`
@@ -262,7 +268,7 @@ export class Coordinator {
       }
     }
 
-    // Why: every task in one tick dispatches from the same fetched base snapshot.
+    // Use one fetched base snapshot for every dispatch in the tick.
     const baseDrift: WorktreeDrift = this.opts.worktree
       ? await this.runtime.probeWorktreeDrift(this.opts.worktree).catch((err) => {
           this.opts.onLog(`probeWorktreeDrift failed for ${this.opts.worktree}: ${err}`)
@@ -289,6 +295,7 @@ export class Coordinator {
           worktree: this.opts.worktree,
           nestedWorkerMaxDepth:
             this.runtime.getNestedWorkerMaxDepth?.() ?? NESTED_WORKER_MAX_DEPTH_DEFAULT,
+          heartbeatIntervalMinutes: this.heartbeatIntervalMinutes(),
           onLog: this.opts.onLog,
           onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
         })

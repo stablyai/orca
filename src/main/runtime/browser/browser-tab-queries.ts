@@ -136,7 +136,7 @@ export class RuntimeBrowserTabQueries {
     if (worktreeId) {
       this.host.getRuntimeBrowserPageRegistry().deactivateWorkspace(worktreeId)
     }
-    // Why: scope focus to the tab's owning worktree; the renderer never yanks the user across worktrees on this signal (see focusBrowserTabInWorktree).
+    // Scope focus to the owning worktree; never switch the user's workspace.
     const focusWorktreeId =
       worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
     publishSwitchedBrowserSessionTab(this.host, {

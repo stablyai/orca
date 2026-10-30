@@ -13,6 +13,8 @@ import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../prelo
 import type { PreloadApi } from '../api-types'
 
 export const appApi = {
+  getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
+    ipcRenderer.invoke('app:getSystemLanguageDetection', browserPreferences),
   isProfileStateSaveDelayed: (): Promise<boolean> =>
     ipcRenderer.invoke('app:isProfileStateSaveDelayed'),
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void): (() => void) => {
@@ -51,9 +53,13 @@ export const appApi = {
       awaitBeforeUnloadCheckpoint
     ),
   stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
-    const result = ipcRenderer.sendSync('app:stage-before-unload-sync', args) as { ok?: unknown }
+    const result: { ok?: unknown; error?: unknown } | null | undefined = ipcRenderer.sendSync(
+      'app:stage-before-unload-sync',
+      args
+    )
     if (result?.ok !== true) {
-      throw new Error('Failed to stage renderer state before unload.')
+      const reason = typeof result?.error === 'string' ? `: ${result.error}` : '.'
+      throw new Error(`Failed to stage renderer state before unload${reason}`)
     }
   },
   awaitBeforeUnloadCheckpoint: () => awaitBeforeUnloadCheckpoint(),

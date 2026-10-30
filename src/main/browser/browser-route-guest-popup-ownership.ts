@@ -1,9 +1,4 @@
-/**
- * Route-guest popups are hosted in an Orca-built BaseWindow, so Electron never fires
- * `did-create-window` for them and nothing else in main can tell whose client-hosted page a popup
- * belongs to. Download routing and renderer-bound events resolve that ownership here; without it a
- * popup's bytes fall through to the desktop Downloads folder instead of the remote workspace.
- */
+// Track root-page ownership for popup download and renderer-event routing.
 const openerByPopupWebContentsId = new Map<number, number>()
 
 function isWebContentsId(value: number): boolean {
@@ -29,7 +24,6 @@ export function releaseBrowserRouteGuestPopup(popupWebContentsId: number): void 
   openerByPopupWebContentsId.delete(popupWebContentsId)
 }
 
-/** Opener route guest of a popup, or null when the WebContents is not a live route popup. */
 export function resolveBrowserRouteGuestPopupOpener(popupWebContentsId: number): number | null {
   return openerByPopupWebContentsId.get(popupWebContentsId) ?? null
 }

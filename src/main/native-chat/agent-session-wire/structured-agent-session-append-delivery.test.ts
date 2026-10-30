@@ -1,6 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// What an open chat receives, asserted at its subscriber rather than in the journal: a fresh
-// subscribe re-reads the journal and hides a write that never reached the readers already open.
+// Observe existing subscribers: fresh subscribe could hide missed live delivery by rereading the journal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -39,7 +38,6 @@ let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let generation = 0
 
-/** Everything a live subscriber was sent after its opening snapshot. */
 async function liveReader() {
   const events: AgentSessionSubscribeEvent[] = []
   await host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => events.push(event) })
@@ -64,7 +62,6 @@ async function liveReader() {
     }
     return {
       statuses: items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : [])),
-      /** Each status row as the chat renders it: its latest revision, once. */
       statusRows: [...rows.values()],
       submissions,
       batches: events.slice(opened).filter((event) => event.type === 'batch').length
@@ -100,8 +97,7 @@ function exitBeforeProof(): Promise<void> {
     acquisitionGeneration: `generation-${generation}`,
     reason: EXIT_REASON,
     failure: { kind: 'providerExited', detail: { text: EXIT_REASON, audience: 'log' } },
-    cause: 'unexpected-exit',
-    startupUnproven: true
+    cause: 'unexpected-exit'
   })
 }
 
@@ -118,7 +114,6 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   generation = 0
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
-    providerChildPhase: 'starting' as const,
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
@@ -135,6 +130,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: () => new Promise(() => {}),
       acquire,
       releaseAcquisition: vi.fn(async () => true),
       closeSession: vi.fn(async () => true),
@@ -162,18 +158,16 @@ describe('an open chat receives every row its journal commits', () => {
   it('shows a failed start whose lease could not be handed back', async () => {
     const held = await send('hello')
     const pane = await liveReader()
-    // The exit settles the journal, then fails to release the lease: nothing moves the fence.
+    // Inject lease-release failure after journal exit settlement without advancing the fence.
     vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('record store busy'))
 
     await exitBeforeProof()
 
-    // The exit ends the child; the delivery loop, which reads why, rejects what it had queued.
     await vi.waitFor(() =>
       expect(pane.received().submissions).toContainEqual(
         expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
       )
     )
-    // One row, however many of its writers reported the start.
     expect(pane.received().statusRows).toEqual([
       'Codex stopped before it finished starting. Send your message to try again.'
     ])
@@ -235,7 +229,7 @@ describe('an open chat receives each row once', () => {
     await host.flushStreamedEvents(SESSION)
 
     expect(pane.received().statuses).toEqual(['streamed row'])
-    // The frame's publish finds the reader caught up and reads no rows: streaming stays one read.
+    // Caught-up publication must not reread streamed rows.
     expect(readSince).toHaveBeenCalledOnce()
   })
 
@@ -257,7 +251,6 @@ describe('an open chat receives each row once', () => {
     expect(pane.received().statuses).toEqual(['host row'])
     const delivered = pane.received().batches
     host['subscribers'].publish(SESSION, journal)
-    // The second publish found nothing past the reader's cursor, so it sent nothing at all.
     expect(pane.received().batches).toBe(delivered)
   })
 })

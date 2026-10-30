@@ -30,7 +30,6 @@ function openDraftAt(hook: ReturnType<typeof renderDraftZone>, lineNumber: numbe
   })
 }
 
-// The single open draft card, attached to the editor node the way Monaco would mount its zone.
 function draftCard(fake: FakeDiffCommentEditor): {
   dom: HTMLElement
   textarea: HTMLTextAreaElement
@@ -182,7 +181,7 @@ describe('useDiffCommentDraftZone in-flight submit', () => {
 
     hook.rerender({ monacoModelIdentity: 'model-v2' })
     pumpFrames()
-    // The in-flight save owns the text: no replacement card that could submit it a second time.
+    // An in-flight save owns its text; a replacement card could submit it twice.
     expect(fake.zones.size).toBe(0)
 
     await settle(true)
@@ -251,7 +250,7 @@ describe('useDiffCommentDraftZone focus handoff', () => {
     const submit = within(draftCard(fake).dom).getByRole('button', { name: 'Add note' })
     submit.focus()
     fireEvent.click(submit)
-    // The card must still hold focus while the save is pending, on a control that stays enabled.
+    // Pending saves must retain focus on an enabled control.
     expect(document.activeElement).toBe(draftCard(fake).textarea)
 
     await settle(true)

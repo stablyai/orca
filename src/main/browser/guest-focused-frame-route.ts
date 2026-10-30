@@ -9,27 +9,21 @@ import {
   type GuestSessionCdpSender
 } from './guest-frame-input-sessions'
 
-// Why: widget input (sendInputEvent) reaches only the guest's own renderer, so keys meant for a
-// focused cross-site iframe would go to the main frame instead. CDP input on that iframe's own
-// target session reaches it without moving the user's focus (measured; #20595 follow-up).
-// See docs/reference/agent-browser-focus-isolation.md.
+// Cross-site frames need their own CDP session; widget input only reaches the guest renderer.
 
 export { isOrcaFrameSessionTraffic, settleWithin } from './guest-frame-input-sessions'
 export type { GuestSessionCdpSender } from './guest-frame-input-sessions'
 
-/** Where keys for the page's focused element should go. */
 export type FocusedFrameRoute =
   | { kind: 'widget' }
   | { kind: 'session'; sessionId: string }
   | { kind: 'unknown' }
 
-// Why: bounds the walk through nested frames; deeper focus takes the fallback.
+// Deeper nesting uses the focus-borrowing fallback.
 const MAX_FRAME_DEPTH = 6
 const PROBE_OBJECT_GROUP = 'orca-focused-frame-probe'
 const PROBE_WORLD_NAME = 'orca-focused-frame-probe'
 
-// Why: returns the focused frame owner itself (through open shadow roots), or null when focus is
-// not on one, so its frame id can be read without a second evaluation.
 const FOCUSED_FRAME_ELEMENT_EXPRESSION = `(() => {
   let element = document.activeElement
   while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement
@@ -41,7 +35,6 @@ const FOCUSED_FRAME_ELEMENT_EXPRESSION = `(() => {
 type ProbeSite = { sessionId?: string; contextId?: number; targetId?: string }
 type FocusProbe = { outcome: 'ok'; frameId: string | null } | { outcome: 'failed' | 'timeout' }
 
-/** Frame id of the focused frame owner in one document (a session, or a frame's context in it). */
 async function probeFocusedFrame(send: GuestSessionCdpSender, at: ProbeSite): Promise<FocusProbe> {
   const evaluated = await settle(
     send(
@@ -79,7 +72,6 @@ async function probeFocusedFrame(send: GuestSessionCdpSender, at: ProbeSite): Pr
   }
 }
 
-/** An execution context in a same-site frame, so focus inside it can be read. */
 async function frameContext(
   send: GuestSessionCdpSender,
   sessionId: string | undefined,
@@ -102,11 +94,7 @@ function routeFor(at: ProbeSite): FocusedFrameRoute {
   return at.sessionId ? { kind: 'session', sessionId: at.sessionId } : { kind: 'widget' }
 }
 
-/**
- * Follows the page's focus through frames. A same-site frame shares its parent's renderer, so
- * the parent's route reaches it unless focus continues into a cross-site frame, which gets its
- * own session. Anything this cannot follow is `unknown` and takes the focus-borrowing fallback.
- */
+/** Follow focus through same-site contexts and cross-site sessions; unknown routes borrow focus. */
 export async function resolveFocusedFrameRoute(
   webContents: WebContents,
   send: GuestSessionCdpSender
@@ -118,7 +106,7 @@ export async function resolveFocusedFrameRoute(
     if (probe.outcome !== 'ok') {
       const deadSession = probe.outcome === 'failed' && at.contextId === undefined
       if (deadSession && at.sessionId && at.targetId && !reattached) {
-        // Why: a cached session dies when the debugger re-attaches; attach once more and retry.
+        // Debugger reattachment invalidates cached sessions; retry once with a fresh attach.
         forgetFrameSession(webContents, at.sessionId)
         reattached = true
         const fresh = await frameSessionFor(webContents, send, at.targetId)
@@ -128,7 +116,7 @@ export async function resolveFocusedFrameRoute(
         at = { sessionId: fresh, targetId: at.targetId }
         continue
       }
-      // Why: an unreadable main frame (navigation tore down the context) means main-frame focus.
+      // Main-frame navigation can invalidate the probe context; fall back to widget input.
       return at.sessionId || at.contextId !== undefined ? { kind: 'unknown' } : { kind: 'widget' }
     }
     if (!probe.frameId) {
@@ -136,7 +124,7 @@ export async function resolveFocusedFrameRoute(
     }
     let crossSite = await crossSiteFrameTargets(webContents, send, { refresh: false })
     if (!crossSite.has(probe.frameId)) {
-      // Why: a frame that just navigated cross-site is missing from a cached list.
+      // Navigation can add a cross-site frame after the target list was cached.
       crossSite = await crossSiteFrameTargets(webContents, send, { refresh: true })
     }
     if (crossSite.has(probe.frameId)) {

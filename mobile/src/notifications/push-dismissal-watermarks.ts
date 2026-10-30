@@ -56,26 +56,29 @@ async function readEntries(): Promise<Entry[]> {
 }
 
 export async function rememberPushDismissal(payload: OrcaPushPayload): Promise<void> {
-  const key = eventKey(payload)
-  if (!key) {
+  return rememberPushDismissals([payload])
+}
+
+export async function rememberPushDismissals(payloads: readonly OrcaPushPayload[]): Promise<void> {
+  const valid = payloads.flatMap((payload) => {
+    const key = eventKey(payload)
+    return key === null ? [] : [{ key, payload }]
+  })
+  if (valid.length === 0) {
     return
   }
   return queueDismissalOperation(async () => {
     if (nativePushDismissal) {
-      await nativePushDismissal.remember(payload)
-      return
+      return nativePushDismissal.rememberAll(valid.map(({ payload }) => payload))
     }
-    const entries = await readEntries()
-    const previous = entries.find((entry) => entry.key === key)
-    const entry = {
-      key,
-      seq: Math.max(previous?.seq ?? 0, payload.notificationSeq!),
-      expiresAt: Date.now() + RETENTION_MS
+    const entries = new Map((await readEntries()).map((entry) => [entry.key, entry]))
+    const expiresAt = Date.now() + RETENTION_MS
+    for (const { key, payload } of valid) {
+      const seq = Math.max(entries.get(key)?.seq ?? 0, payload.notificationSeq!)
+      entries.delete(key)
+      entries.set(key, { key, seq, expiresAt })
     }
-    await AsyncStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify([...entries.filter((item) => item.key !== key), entry])
-    )
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...entries.values()]))
   })
 }
 

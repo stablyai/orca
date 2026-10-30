@@ -6,8 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveFilesystemRouteForHost } from './providers/execution-host-provider-dispatch'
 import { detectRepoFileIcon } from './repo-icon-file-detection'
 
-// Why: the boundary assertion is "no local read happened", which needs the real
-// fs entrypoints spied rather than stubbed.
+// Spy on real fs entrypoints so accidental local reads cannot hide behind stubs.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromisesModule>()
   return { ...actual, stat: vi.fn(actual.stat), readFile: vi.fn(actual.readFile) }
@@ -30,7 +29,6 @@ describe('detectRepoFileIcon connection boundary', () => {
   })
 
   it('never reads the client filesystem for a runtime host', async () => {
-    // Why: a runtime host's files live on that server. It is not "local with no provider".
     vi.mocked(stat).mockClear()
     vi.mocked(readFile).mockClear()
 

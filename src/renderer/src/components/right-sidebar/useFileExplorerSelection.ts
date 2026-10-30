@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type React from 'react'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import {
   createEmptyFileExplorerSelection,
   createSingleFileExplorerSelection,
@@ -30,19 +31,23 @@ type UseFileExplorerSelectionResult = {
 
 export function useFileExplorerSelection(
   rowProjection: FileExplorerRowProjection,
-  isMac: boolean
+  isMac: boolean,
+  pathOwner: LocalPathOpenOwner
 ): UseFileExplorerSelectionResult {
   const [selectionState, setSelectionState] = useState(createEmptyFileExplorerSelection)
   const selectionStateRef = useRef(selectionState)
   const rowProjectionRef = useRef(rowProjection)
+  const pathOwnerRef = useRef(pathOwner)
   selectionStateRef.current = selectionState
   rowProjectionRef.current = rowProjection
+  useLayoutEffect(() => {
+    pathOwnerRef.current = pathOwner
+  }, [pathOwner])
 
   const setSingleSelectedPath = useCallback((value: React.SetStateAction<string | null>) => {
     setSelectionState((prev) => {
       if (typeof value === 'function') {
-        // Why: legacy watcher cleanup still speaks in single-path updater terms;
-        // apply it across the whole selected set so stale multi-selections converge.
+        // Apply legacy single-path cleanup across the full selection to prune stale multi-selections.
         return updateFileExplorerSelectionPaths(prev, value)
       }
       const nextPath = value
@@ -90,8 +95,7 @@ export function useFileExplorerSelection(
         return
       }
 
-      // Why: tree refreshes are much more common than range/toggle selections
-      // in large repos. Build order only for the modifier path that needs it.
+      // Build order only for modifier selection; frequent large-repo refreshes do not need it.
       const orderedPaths = rowProjectionRef.current.getOrderedPaths()
       setSelectionState((prev) =>
         updateFileExplorerSelection(prev, orderedPaths, node.path, selectionMode)
@@ -101,8 +105,7 @@ export function useFileExplorerSelection(
   )
 
   const preserveSelectionForContextMenu = useCallback((node: TreeNode) => {
-    // Why: right-clicking an existing multi-selection should keep the copy
-    // target set; right-clicking outside it should behave like a single item.
+    // Preserve right-clicked multi-selections; outside targets become a single-item selection.
     setSelectionState((prev) =>
       prev.selectedPaths.has(node.path) ? prev : createSingleFileExplorerSelection(node.path)
     )
@@ -115,7 +118,7 @@ export function useFileExplorerSelection(
       : []
     const actionNodes = selectedNodes.length > 0 ? selectedNodes : [node]
     void window.api.ui.writeClipboardText(
-      formatFileExplorerPathsForClipboard(actionNodes, pathKind)
+      formatFileExplorerPathsForClipboard(actionNodes, pathKind, pathOwnerRef.current)
     )
   }, [])
 

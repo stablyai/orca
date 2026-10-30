@@ -5,11 +5,10 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 export type StructuredAgentSessionProviderOpenInput = {
   sessionId: string
   fence: number
-  acquisitionGeneration: string | null
+  acquisitionGeneration: string
   signal: AbortSignal
 }
 
-/** Protocol facts returned to the host that awaits this child's open. */
 export type StructuredAgentSessionProviderOpenResult = {
   link?: AgentSessionProviderHandleLink
   reportedOptions: AgentSessionOptionsResult['current']

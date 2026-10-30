@@ -8,21 +8,25 @@ import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { resolveAiVaultSessionRowChatActions } from '../right-sidebar/ai-vault-session-chat-action'
 import { useAiVaultPanelSessionResume } from '../right-sidebar/use-ai-vault-panel-session-resume'
+import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault-panel-session-list-request'
 import {
   resolveTabSessionSwitch,
+  lookupTabSessionHistoryRow,
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
 
-// Only the host's answers are staged (its capabilities arrive over IPC at boot, and the chat
-// route's own feasibility is pinned elsewhere); the composition both surfaces share runs for real.
+const { readLocalCapabilities } = vi.hoisted(() => ({ readLocalCapabilities: vi.fn() }))
+
+// Stage host IPC capabilities only; run the shared panel/tab composition for real.
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readLocalRuntimeCapabilitiesOrUnknown: () => [
-    STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
-  ]
+  readLocalRuntimeCapabilitiesOrUnknown: readLocalCapabilities
 }))
 vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -87,24 +91,30 @@ function panelTargets(state: AppState, session: AiVaultSession) {
       settings: state.settings
     })
   )
-  return resolveAiVaultSessionRowChatActions({
-    session,
-    originalPaneTarget: null,
-    structuredSessionOpen: false,
-    resumeState: result.current.getSessionResumeState(session),
-    resumeInChat: result.current.getSessionResumeInChat(session),
-    searchHit: undefined
-  })
+  return {
+    worktreeInfo: result.current.getSessionWorktreeInfo(session),
+    ...resolveAiVaultSessionRowChatActions({
+      session,
+      originalPaneTarget: null,
+      structuredSessionOpen: false,
+      resumeState: result.current.getSessionResumeState(session),
+      resumeInChat: result.current.getSessionResumeInChat(session),
+      searchHit: undefined
+    })
+  }
 }
 
 const request = { scopePaths: [], executionHostScope: 'local', sessionLimit: 250 } as const
 
 beforeEach(() => {
+  readLocalCapabilities.mockReturnValue([
+    STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
+  ])
   makeState()
 })
 
 describe('the tab menu offers exactly what the Session History row offers', () => {
-  it('Resume in New Native Chat for a CLI conversation', () => {
+  it('Switch to Chat for a CLI conversation', () => {
     const state = useAppStore.getState()
     const session = row()
     const subject: TabSessionHistorySubject = {
@@ -140,7 +150,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     ).toBeNull()
   })
 
-  it("Resume in New Native Chat in the conversation's own worktree when that differs", () => {
+  it("Switch to Chat in the conversation's own worktree when that differs", () => {
     const state = useAppStore.getState()
     const session = row({ cwd: '/repo/sibling' })
     const panel = panelTargets(state, session)
@@ -157,7 +167,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     ).toEqual({ action: 'resume-in-new-chat', worktreeId: SIBLING_ID })
   })
 
-  it('Resume in New CLI for a native chat, and nothing once it has no saved turns', () => {
+  it('Switch to Terminal for a native chat, and nothing once it has no saved turns', () => {
     const state = useAppStore.getState()
     const subject: TabSessionHistorySubject = {
       kind: 'chat',
@@ -181,40 +191,61 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     expect(resolveTabSessionSwitch(state, emptyChat, subject)).toBeNull()
   })
 
-  it("Resume in New Native Chat in the conversation's own folder workspace", () => {
-    useAppStore.setState({
-      folderWorkspaces: [
-        {
-          id: 'folder-1',
-          projectGroupId: 'group-1',
-          name: 'Notes',
-          folderPath: '/work/notes',
-          executionHostId: 'local',
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 0,
-          lastActivityAt: 1,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
-    })
-    const state = useAppStore.getState()
-    const session = row({ cwd: '/work/notes' })
-    const panel = panelTargets(state, session)
-
-    expect(panel.resumeInNewChatWorkspaceId).toBe(folderWorkspaceKey('folder-1'))
-    expect(
-      resolveTabSessionSwitch(state, session, {
+  it.each([true, false])(
+    'symlinked folder panel/tab parity with linked-cwd support=%s and another workspace active',
+    async (linkedCwd) => {
+      readLocalCapabilities.mockReturnValue([
+        STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+        ...(linkedCwd ? [STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY] : [])
+      ])
+      useAppStore.setState({
+        folderWorkspaces: [
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            name: 'Notes',
+            folderPath: '/var/notes',
+            executionHostId: 'local',
+            linkedTask: null,
+            comment: '',
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 1,
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      })
+      const state = useAppStore.getState()
+      const session = row({ cwd: '/private/var/notes', cwdAliases: ['/var/notes'] })
+      const panel = panelTargets(state, session)
+      const subject: TabSessionHistorySubject = {
         kind: 'cli',
         agent: 'claude',
         providerSessionId: session.sessionId,
-        workspaceId: WORKTREE_ID,
-        request
+        workspaceId: folderWorkspaceKey('folder-1'),
+        request: resolveAiVaultPanelSessionListRequest(state, folderWorkspaceKey('folder-1'))
+      }
+      const list = vi.fn(async () => ({ sessions: [session], issues: [], scannedAt: '' }))
+      const found = await lookupTabSessionHistoryRow(subject, list, {
+        requestToken: 'symlink',
+        isCancelled: () => false
       })
-    ).toEqual({ action: 'resume-in-new-chat', worktreeId: folderWorkspaceKey('folder-1') })
-  })
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ scopePaths: ['/var/notes'] }))
+      expect(found).toBe(session)
+
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(panel.worktreeInfo?.worktreeId).toBe(folderWorkspaceKey('folder-1'))
+      expect(panel.resumeInNewChatWorkspaceId).toBe(
+        linkedCwd ? folderWorkspaceKey('folder-1') : null
+      )
+      expect(found && resolveTabSessionSwitch(state, found, subject)).toEqual(
+        linkedCwd
+          ? { action: 'resume-in-new-chat', worktreeId: folderWorkspaceKey('folder-1') }
+          : null
+      )
+    }
+  )
 })

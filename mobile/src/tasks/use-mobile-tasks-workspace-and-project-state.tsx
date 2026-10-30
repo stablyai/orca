@@ -1,3 +1,4 @@
+import { useBottomDrawerFollowUp } from '../components/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from './workspace-ssh-gate'
 import {
@@ -31,8 +32,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateModel) {
-  // Both repo-unscoped providers land here: neither Linear nor Jira carries a repo, so the
-  // target has to be picked rather than defaulted to the first one.
+  // Jira/Linear issues have no repo; ask for a target instead of choosing the first.
   const [workspaceRepoPickerItem, setWorkspaceRepoPickerItem] = useState<Extract<
     TaskItem,
     { provider: 'linear' | 'jira' }
@@ -147,7 +147,14 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [projectMutating, setProjectMutating] = useState(false)
   const [projectRepoNotInOrca, setProjectRepoNotInOrca] =
     useState<ProjectRepoNotInOrcaPrompt | null>(null)
+  const taskDetailHandoff = useBottomDrawerFollowUp(() => model.setActionItem(null))
+  const projectRowHandoff = useBottomDrawerFollowUp(() => setProjectRowItem(null))
+  const repoPickerHandoff = useBottomDrawerFollowUp(() => setWorkspaceRepoPickerItem(null))
+
   return Object.assign(model, {
+    taskDetailHandoff,
+    projectRowHandoff,
+    repoPickerHandoff,
     workspaceRepoPickerItem,
     setWorkspaceRepoPickerItem,
     workspaceCreateDraft,

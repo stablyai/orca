@@ -2,9 +2,7 @@ import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clip
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
-// Why: a retention budget, not the 16MB single-write ceiling. The deferral lasts
-// under a second and this is held twice (transport buffer + handoff record) across
-// up to 64 deferred splits, so size it at a few clipboard-sized pastes.
+// Budget retained paste across transport/handoff copies and up to 64 deferred splits, independently of the single-write ceiling.
 export const PTY_PRECONNECT_INPUT_MAX_CODE_UNITS = 4 * CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS
 
 export type PtyPreconnectInputKind = 'ordinary' | 'immediate' | 'accepted'
@@ -60,11 +58,7 @@ export type PtyPreconnectInputBuffer = {
 }
 
 export type PtyPreconnectInputBufferOptions = {
-  /**
-   * Holds input across a remote outage: consecutive keystrokes merge (minutes of typing must not
-   * hit the entry cap), and a release interrupted by another outage pauses with the rest kept
-   * for the next release instead of dropping it.
-   */
+  /** Retain outage input by coalescing keystrokes; renewed outage pauses release with remaining entries preserved. */
   recoveryHold?: boolean
 }
 
@@ -143,8 +137,7 @@ export function createPtyPreconnectInputBuffer(
     }
   }
 
-  // Seeded entries came from a predecessor transport and must not be reported
-  // back to that predecessor's handoff owner as newly typed input.
+  // Seeded entries already belong to predecessor handoff; do not report them back as newly typed.
   for (const entry of initialEntries) {
     retain(createInput(entry.data, entry.kind, entry.inputKind))
   }
@@ -273,12 +266,18 @@ export function createPtyPreconnectInputBuffer(
           resolve(false)
           return
         }
-        const input = createInput(data, 'accepted', inputKind, resolve, signal)
+        const onAbort = (): void => withdraw(input)
+        // Why: a long-lived caller signal would otherwise pin every settled input through its listener.
+        const settle = (accepted: boolean): void => {
+          signal?.removeEventListener('abort', onAbort)
+          resolve(accepted)
+        }
+        const input = createInput(data, 'accepted', inputKind, settle, signal)
         if (!retain(input)) {
           resolve(false)
           return
         }
-        signal?.addEventListener('abort', () => withdraw(input), { once: true })
+        signal?.addEventListener('abort', onAbort, { once: true })
         notifyRetained(onRetained, input)
       })
     },

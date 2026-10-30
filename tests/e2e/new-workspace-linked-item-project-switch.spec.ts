@@ -1,16 +1,5 @@
-/**
- * E2E: linked work item behavior when switching the composer project.
- *
- * Why: Jira/Linear issues are workspace-scoped context — switching the
- * implementation project must keep them attached. They used to be dropped,
- * leaving only the derived name in the smart field. GitHub/GitLab sources
- * are repo-scoped and must still clear on a project switch.
- *
- * Why E2E: the preservation logic lives in useComposerState behind the real
- * ProjectCombobox interaction and main-process repo resolution — a store
- * slice unit test cannot reach the combobox → handleProjectChange → smart
- * field pill re-render path.
- */
+// Project switches must retain workspace-scoped Jira/Linear issues and clear repo-scoped GitHub/GitLab sources.
+// Drive the real ProjectCombobox → handleProjectChange → pill render path, including main’s repo resolution.
 
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

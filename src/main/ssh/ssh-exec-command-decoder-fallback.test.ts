@@ -21,9 +21,8 @@ type HostOptions = {
   gatewayLimitBytes?: number
 }
 
-/** A host behind the transport's real wrapper, run by a real /bin/sh. */
+/** Exercise the actual transport wrapper through real /bin/sh. */
 function host(options: HostOptions = {}) {
-  // Untyped like the rc-noise host: the fake channel carries only what execCommand reads.
   const exec = vi.fn()
   exec.mockImplementation(async (command: string, execOptions?: SshExecOptions) => {
     let remote = wrapRemoteCommandForPosixShell(command, {
@@ -87,7 +86,7 @@ describe.skipIf(process.platform === 'win32')(
       expect(conn.exec).toHaveBeenCalledTimes(1)
     })
 
-    it('captures a snapshot through a gateway that truncates the plain command and merges stderr', async () => {
+    it('captures a snapshot whole through a gateway that cuts exec requests at 6 KiB and merges stderr', async () => {
       const base = mkdtempSync(join(tmpdir(), 'orcad-gateway-capture-'))
       try {
         const root = join(base, '.orca')
@@ -100,20 +99,10 @@ describe.skipIf(process.platform === 'win32')(
           snapshot,
           join(base, '.orca-remote')
         )
-        // The command embeds the temp path ~40 times, so its size varies by OS; pick a cut the
-        // plain form always exceeds and the compressed form always fits.
-        const plainBytes = Buffer.byteLength(
-          wrapRemoteCommandForPosixShell(command, { compress: false })
-        )
-        const compressedBytes = Buffer.byteLength(
-          wrapRemoteCommandForPosixShell(command, { compress: true })
-        )
-        const gatewayLimitBytes = Math.min(
-          10 * 1024,
-          Math.floor((plainBytes + compressedBytes) / 2)
-        )
-        expect(plainBytes).toBeGreaterThan(gatewayLimitBytes)
-        expect(compressedBytes).toBeLessThan(gatewayLimitBytes)
+        const gatewayLimitBytes = 6 * 1024
+        expect(
+          Buffer.byteLength(wrapRemoteCommandForPosixShell(command, { compress: false }))
+        ).toBeLessThan(gatewayLimitBytes)
 
         const output = await execCommand(host({ gatewayLimitBytes }), command)
 

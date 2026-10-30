@@ -1,13 +1,4 @@
-/**
- * Regression for #10142: the tab X button / middle-click used to bypass the
- * running-process close confirmation that Cmd+W enforces. Assertions unchanged
- * from the adjudicated repro.
- *
- * Mouse close path: SortableTab (X onClick / onAuxClick button===1) -> onClose
- *   -> Terminal.tsx handleCloseTab -> closeTerminalTab() -> running-process guard.
- * Keyboard path: Cmd+W -> TerminalPane.handleRequestClosePane -> probePtyRunningWork
- *   (split panes) or closeTerminalTab's guard (last pane) -> CloseTerminalDialog.
- */
+/** Mouse close once bypassed the running-process confirmation used by Cmd+W (#10142); both paths must enforce the same guard. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -55,11 +46,12 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 import { closeTerminalTab } from './terminal-tab-actions'
+import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
-// A non-pinned terminal tab whose PTY has a live child process (e.g. `sleep 300`).
 function stateWithBusyTerminalTab(closeTab: () => void): Record<string, unknown> {
   return {
     settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
+    ...terminalOwnerRows(null),
     tabsByWorktree: { 'wt-1': [{ id: 'tab-busy' }, { id: 'tab-other' }] },
     unifiedTabsByWorktree: {
       'wt-1': [
@@ -98,7 +90,6 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
     })
   })
 
-  // Control: the harness does observe a guard when one exists — pinning blocks the same mouse close.
   it('mouse close routes a pinned tab through its confirmation guard', () => {
     const state = stateWithBusyTerminalTab(closeTab)
     ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[

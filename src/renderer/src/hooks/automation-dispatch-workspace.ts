@@ -18,6 +18,7 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
+import { buildClientAutomationWorkspaceProvenance } from '../../../shared/automation-workspace-provenance'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -195,8 +196,7 @@ export async function prepareAutomationDispatchWorkspace(args: {
           undefined,
           undefined,
           undefined,
-          // Why: the automation session below owns the prompt-bearing
-          // agent tab; createdWithAgent would reopen an empty fallback.
+          // The automation owns its prompt-bearing tab; createdWithAgent would reopen an empty fallback.
           undefined,
           undefined,
           undefined,
@@ -213,12 +213,15 @@ export async function prepareAutomationDispatchWorkspace(args: {
           undefined,
           undefined,
           {
+            // Why: only a captured host; with none, a project two hosts publish refuses, never guesses.
+            executionHostId: parseExecutionHostId(automation.runContext?.hostId)?.id,
             automationProvenanceRequest: {
               automationId: automation.id,
               automationRunId: run.id,
               dispatchToken,
               createRequestId: automationWorkspaceCreateRequestId
-            }
+            },
+            clientAutomationProvenance: buildClientAutomationWorkspaceProvenance(automation, run)
           }
         )
       : null

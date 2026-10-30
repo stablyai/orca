@@ -1,18 +1,7 @@
 // @vitest-environment happy-dom
 
-/**
- * One store goes in; the window's own row pipeline (switch on), the desktop window reading main's
- * feed (useMainSidebarListModel) and a phone reading it (feed pages, the shared installer,
- * buildSidebarFeedRows) must draw the same list. The goldens check that list is right; this
- * checks only that the adapters agree.
- *
- * Never compared, as no feed input carries them: the window's drag previews, search, hover hold
- * and agent-send reveal; its imported-worktrees and new-external-worktrees cards; its create
- * preflight; host-header health and detail.
- * Known gaps the phone shows differently, so the fixture leaves them out: a creation a paired
- * server runs; a paired server's activity under "Hide sleeping" (the window reads its own tabs);
- * a PR unlinked on a server workspace; an SSH workspace reached through a paired server.
- */
+/** Require adapters to agree on shared inputs; goldens independently verify the resulting list.
+ * Excludes desktop-only UI, server-side creation/unlink, SSH via paired hosts and other-client terminals. */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
@@ -42,6 +31,8 @@ import {
 import {
   feedDomainsFromWindowState,
   parityActiveState,
+  parityServerBrowserTabState,
+  parityServerTerminalState,
   parityWorldOverrides,
   phoneInputsFromWindowState,
   projectParityRows
@@ -50,7 +41,6 @@ import {
 const SWITCH = '../../../../shared/sidebar-inputs-switch'
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 vi.mock('@/lib/sidebar-list-session', () => ({ useSidebarListSession: () => {} }))
-// The feed the window would install from main; set per list.
 let windowFeed: DesktopSidebarFeed | null = null
 vi.mock('@/lib/desktop-sidebar-feed', () => ({
   useDesktopSidebarFeed: () => windowFeed,
@@ -58,7 +48,7 @@ vi.mock('@/lib/desktop-sidebar-feed', () => ({
   refreshDesktopSidebarFeed: () => 0
 }))
 
-// The phone page is built without the switch, so its adapter loads in a module graph with it off.
+// Load the phone adapter with the feature switch off, as its production bundle does.
 let phoneAdapter: {
   readSidebarFeedDomains: typeof readSidebarFeedDomains
   buildSidebarFeedRows: typeof buildSidebarFeedRows
@@ -132,12 +122,10 @@ async function installFeed(state: Partial<AppState>) {
 
 async function phoneList(state: Partial<AppState>): Promise<string[]> {
   const { installed, full } = await installFeed(state)
-  const { catalog, view } = phoneInputsFromWindowState(full)
-  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(
-    phoneAdapter.readSidebarFeedDomains(installed),
-    catalog,
-    view
-  )
+  const domains = phoneAdapter.readSidebarFeedDomains(installed)
+  expect(domains.projectCatalog?.repos.length).toBeGreaterThan(0)
+  const { catalog, view } = phoneInputsFromWindowState(full, domains)
+  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(domains, catalog, view)
   return projectParityRows(sectionRows, activeRowKeys)
 }
 
@@ -146,7 +134,6 @@ function worldState(view: GoldenView, extra: Partial<AppState> = {}): Partial<Ap
   return { ...base, ...parityWorldOverrides(base), ...extra }
 }
 
-/** The window's list built from main's feed, as an ORCA_SIDEBAR_INPUTS=main window draws it. */
 async function windowFeedList(state: Partial<AppState>): Promise<string[]> {
   const { installed } = await installFeed(state)
   windowFeed = { domains: readFeedDomainsSwitchedOn(installed), readId: 1 }
@@ -157,7 +144,6 @@ async function windowFeedList(state: Partial<AppState>): Promise<string[]> {
   }
 }
 
-/** Every adapter over one store; the window's own list is the expected side. */
 async function expectAdaptersAgree(state: Partial<AppState>): Promise<string[]> {
   const desktop = desktopList(state)
   useAppStore.setState(initialState, true)
@@ -170,7 +156,6 @@ async function expectAdaptersAgree(state: Partial<AppState>): Promise<string[]> 
   return desktop
 }
 
-/** Every other header collapsed, and the first lineage parent. */
 function collapsedKeysOf(lines: readonly string[]): Set<string> {
   const keys = lines.flatMap((line) => {
     const header = /^HEADER (\S+) collapseKey=(\S+)/.exec(line)
@@ -215,7 +200,6 @@ describe('sidebar list parity: desktop window and feed reader', () => {
               pinnedInGroups,
               collapsedGroups: new Set()
             }
-            // Bare id: every occurrence highlights, a pinned duplicate included.
             const active = parityActiveState(GOLDEN_WORKTREE_IDS.orcaFeatA, null)
             const expanded = await expectAdaptersAgree(worldState(view, active))
             expect(expanded.filter((line) => line.endsWith(' ACTIVE')).length).toBe(
@@ -243,19 +227,26 @@ describe('sidebar list parity: desktop window and feed reader', () => {
       { showSleepingWorkspaces: false, ...goldenLiveTerminalState() },
       /^ITEM .*\|orca::\/w\/feat-a /
     ],
+    'hide sleeping with a paired server terminal': [
+      { showSleepingWorkspaces: false, ...parityServerTerminalState() },
+      /^ITEM .*runtime:env-1\|api::\/w\/api-y /
+    ],
+    'hide sleeping with a browser tab in a paired server workspace': [
+      { showSleepingWorkspaces: false, ...parityServerBrowserTabState() },
+      /^ITEM .*runtime:env-1\|api::\/w\/api-y /
+    ],
     'hide default branch': [{ hideDefaultBranchWorkspace: true }, /^ITEM .*api-y /],
-    // The same id on two hosts: only the SSH copy is open.
     'open on one of two hosts': [
       parityActiveState('shared::/w/same', 'ssh:gpu-vm'),
       /^ITEM \S*ssh:gpu-vm\|shared::\/w\/same .* ACTIVE$/
     ],
     'open folder workspace': [
       parityActiveState('folder:fw-remote', 'ssh:gpu-vm'),
-      /^FOLDER folder-workspace:fw-remote .* ACTIVE$/
+      /^FOLDER folder-workspace:ssh:gpu-vm\|folder:fw-remote .* ACTIVE$/
     ],
     'open server folder workspace': [
       parityActiveState('folder:fw-server', 'runtime:env-1'),
-      /^FOLDER folder-workspace:fw-server group=pg-server-folders .* ACTIVE$/
+      /^FOLDER folder-workspace:runtime:env-1\|folder:fw-server group=pg-server-folders .* ACTIVE$/
     ],
     'hide CLI-created': [
       { hideCliCreatedWorkspaces: true },

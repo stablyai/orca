@@ -13,23 +13,26 @@ import {
 
 type PlaceholderOwner = Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
 
-/**
- * The SSH host, and the server proxying it, that a listing would stamp. A repo id with rows on
- * several hosts names neither, so its placeholder stays unstamped rather than guessing a twin.
- */
-function placeholderOwner(repos: readonly Repo[], repoId: string): PlaceholderOwner {
-  const rows = repos.filter((repo) => repo.id === repoId)
-  const connectionId = rows.length === 1 ? rows[0].connectionId?.trim() : undefined
-  if (!connectionId) {
-    return {}
-  }
-  const sshHostId = toSshExecutionHostId(connectionId)
-  const host = parseExecutionHostId(getRepoExecutionHostId(rows[0]))
+/** Match listing stamps: server-proxied nested SSH repos need ssh:<target>, not runtime:, to remain visible under SSH selection. */
+export function repoRowOwnerStamp(row: Repo): PlaceholderOwner {
+  const host = parseExecutionHostId(getRepoExecutionHostId(row))
+  const connectionId = row.connectionId?.trim()
   if (host?.kind === 'runtime') {
-    return { hostId: sshHostId, runtimeOwnerEnvironmentId: host.environmentId }
+    return connectionId
+      ? {
+          hostId: toSshExecutionHostId(connectionId),
+          runtimeOwnerEnvironmentId: host.environmentId
+        }
+      : { hostId: host.id }
   }
   // Why: a row whose explicit host disagrees with its connection is not evidence of either.
-  return host?.id === sshHostId ? { hostId: sshHostId } : {}
+  return connectionId && host?.id === toSshExecutionHostId(connectionId) ? { hostId: host.id } : {}
+}
+
+/** Match listing host/proxy stamps; multi-host repo IDs stay unstamped rather than guessing a twin. */
+function placeholderOwner(repos: readonly Repo[], repoId: string): PlaceholderOwner {
+  const rows = repos.filter((repo) => repo.id === repoId)
+  return rows.length === 1 && rows[0].connectionId?.trim() ? repoRowOwnerStamp(rows[0]) : {}
 }
 
 export function addHydratedSshWorktreePlaceholders(
@@ -38,8 +41,7 @@ export function addHydratedSshWorktreePlaceholders(
   tabsByWorktree: Record<string, TerminalTab[]>
 ): Record<string, Worktree[]> {
   const sshRepoIds = new Set(repos.filter((repo) => repo.connectionId).map((repo) => repo.id))
-  // Why copy-on-write: hydration writes this map straight to the store; an unconditional copy
-  // rerendered every whole-map selector on every hydration with no data change.
+  // Copy only on change; hydration writes this map directly and unchanged copies rerender every whole-map selector.
   let worktreesByRepo = sourceWorktreesByRepo
   for (const worktreeId of Object.keys(tabsByWorktree)) {
     const repoId = getRepoIdFromWorktreeId(worktreeId)

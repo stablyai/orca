@@ -20,6 +20,7 @@ export {
   getWorktreeIdsWithStructuredChat
 } from './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
@@ -28,20 +29,7 @@ import {
   computeRenderedSidebarWorktrees
 } from './rendered-sidebar-worktree-order'
 
-/**
- * Module-level cache of the visible worktree IDs as last computed by
- * WorktreeList's render pipeline.
- *
- * Why: WorktreeList freezes its sort order via sortedIds / sortEpoch useMemo
- * and only re-sorts when sortEpoch bumps. If getVisibleWorktreeIds()
- * recomputes sort order from a live Zustand snapshot, the Cmd+1–9 shortcut
- * could target a different worktree than what's rendered at that sidebar
- * position. By caching the IDs that WorktreeList actually rendered, the
- * shortcut numbering always matches the sidebar card order.
- *
- * Why null vs []: [] is a real rendered order (everything collapsed/filtered);
- * null means WorktreeList is unmounted.
- */
+/** Publish rendered order for shortcut parity; [] means no visible rows, null means the list is unmounted. */
 let _publishedVisibleIds: string[] | null = null
 export type VisibleWorktreeShortcutTarget = {
   id: string
@@ -67,7 +55,6 @@ export function getPublishedVisibleWorktreeShortcutTargets():
 }
 
 export function getVisibleWorktreeIds(): string[] {
-  // Prefer the published IDs that mirror the rendered sidebar order.
   if (_publishedVisibleIds) {
     return _publishedVisibleIds
   }
@@ -75,7 +62,6 @@ export function getVisibleWorktreeIds(): string[] {
   const state = useAppStore.getState()
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
-  // Hoist repoMap so it's built once and reused across all branches below.
   const repoMap = getRepoMapFromState(state)
 
   let sortedIds: string[]
@@ -92,8 +78,7 @@ export function getVisibleWorktreeIds(): string[] {
       state.terminalLayoutsByTabId
     ).map((w) => w.id)
   } else {
-    // Why empty map: non-smart branches don't read attentionByWorktree, but
-    // the param is required to keep smart-mode callers honest at the type level.
+    // Non-smart comparators ignore attention; the required argument protects smart-mode callers.
     const sorted = [...allWorktrees].sort(
       buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map())
     )
@@ -101,7 +86,7 @@ export function getVisibleWorktreeIds(): string[] {
   }
 
   const visibleIds = computeVisibleWorktreeIds(
-    state.worktreesByRepo,
+    selectWorktreesByRepo(state),
     sortedIds,
     buildVisibleWorktreeOptionsFromState(state, repoMap)
   )
@@ -116,7 +101,7 @@ export function getVisibleWorktreeIds(): string[] {
         worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
     )
     .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
-  // Why the row pipeline: grouping, pinning and main-worktree hoisting reorder cards, so a flat sort numbers the wrong workspace.
+  // Grouping, pinning and main-worktree hoisting must also govern shortcut numbering.
   return computeRenderedSidebarWorktreeOrder(state, visibleWorktrees)
 }
 

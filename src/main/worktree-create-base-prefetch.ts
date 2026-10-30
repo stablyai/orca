@@ -46,7 +46,7 @@ async function prefetchLocalWorktreeCreateBase(
   options: WorktreeCreateBaseGitOptions,
   prepareLocalCheckout: (base: string, beforeMaterialization?: Promise<void>) => void
 ): Promise<string | undefined> {
-  // Keep host-routed calls at their original arity so they stay on the runtime's default options.
+  // Omit options for host-routed calls so the runtime retains its own defaults.
   const optionArgs: [] | [WorktreeCreateBaseGitOptions] = options.wslDistro ? [options] : []
   const resolvedBaseBranch = await resolveWorktreeCreateBase({
     requestedBaseBranch: baseBranch,
@@ -109,13 +109,11 @@ async function prefetchLocalWorktreeCreateBase(
     }
   }
   if (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch, options)) {
-    // Why: hosted-review start points and local branch bases are already local; a broad remote fetch cannot make them fresher.
+    // Local branch and hosted-review refs cannot be refreshed by a broad remote fetch.
     return resolvedBaseBranch
   }
 
-  // Why: same best-effort fallback create takes, on create's own fetch key, so a
-  // create that lands here reuses this fetch instead of repeating it. A create
-  // that instead resolves an exact remote base still queues behind it.
+  // Share create's fallback fetch key so it can reuse this work.
   await runtime.fetchRemoteWithCache(repo.path, 'origin', ...optionArgs)
   return resolvedBaseBranch
 }
@@ -124,8 +122,7 @@ export async function prefetchWorktreeCreateBase(args: {
   repo: Repo
   baseBranch?: string
   runtime: WorktreeCreateBasePrefetchRuntime
-  /** Routing for the project's Git host; required so a caller cannot silently
-   *  warm up the wrong ref store — pass `{}` for host Git. */
+  /** Git-host routing; pass {} for host Git. */
   gitOptions: WorktreeCreateBaseGitOptions
   prepareCheckout?: (base: string, beforeMaterialization?: Promise<void>) => Promise<void>
 }): Promise<string | undefined> {

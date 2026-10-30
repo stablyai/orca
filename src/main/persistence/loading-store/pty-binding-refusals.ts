@@ -4,6 +4,8 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import type { TerminalSessionPartition } from '../../../shared/workspace-layout/terminal-owner-invariants'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
 import type { PtyBindingSourceExpectation } from './store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { isClosedPaneFenced } from '../terminal-topology/closed-pane-binding-fence'
 
 export type PtyBindingRefusalRequest = {
   tabId: string
@@ -14,18 +16,13 @@ export type PtyBindingRefusalRequest = {
   mayReviveRetiredSurface?: boolean
 }
 
-/**
- * The five fences a binding must clear before anything is mutated, so a refusal leaves nothing
- * half-written. Order matters: every `false` here is returned before the write path or the
- * fast lane can run, which is what the relay's lease expiry and the stable-owner throw rely on.
- */
+/** Refuse before fast-lane checks or mutation so relay expiry/stable-owner failures leave no partial edit. */
 export function ptyBindingIsRefused(
   args: PtyBindingRefusalRequest,
   session: WorkspaceSessionState,
   bindingWorktreeId: string,
   paneKey: string,
-  /** Every host partition: a close is recorded where the tab lived, which need not be where this
-   *  binding lands (older relay reattaches left SSH panes in `local`). */
+  /** Inspect all partitions: older relay reattaches may have left SSH panes in local. */
   partitions: readonly TerminalSessionPartition[]
 ): boolean {
   if (args.expectedSourceBinding) {
@@ -64,8 +61,7 @@ export function ptyBindingIsRefused(
   const existingTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
     (candidate) => candidate.id === args.tabId
   )
-  // Why: a closed tab's spawn can commit after the close, even after a crash and relaunch; tab
-  // ids are uuids, so a recorded id is never a new tab.
+  // Closed-tab spawns can commit after restart; UUID tombstones prevent resurrection.
   if (
     !existingTab &&
     partitions.some((partition) =>
@@ -74,8 +70,18 @@ export function ptyBindingIsRefused(
   ) {
     return true
   }
-  // Mirrors the four creating branches of the write path — mint a tab, mint a root leaf, split
-  // the root and graft a leaf, mint a layout — each of which sets `terminalMembershipChanged`.
+  // An in-flight start must not recreate a pane main already closed or withdrew.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    !layoutContainsLeafId(
+      session.terminalLayoutsByTabId?.[args.tabId]?.root ?? null,
+      args.leafId
+    ) &&
+    isClosedPaneFenced(paneKey)
+  ) {
+    return true
+  }
+  // Fence all membership-creating branches, including split-leaf grafts.
   if (
     args.mayReviveRetiredSurface === false &&
     session.terminalSurfaceTombstonesByPaneKey?.[paneKey]

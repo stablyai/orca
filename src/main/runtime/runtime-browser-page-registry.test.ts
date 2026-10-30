@@ -170,9 +170,7 @@ describe('runtime browser page registry', () => {
     expect(() => pages.publishClientPage(clientPage('page-b', 'worktree-a'))).not.toThrow()
   })
 
-  // Why the revision cannot survive the placement: revisions are minted by the client's page
-  // object, and the page a recovered placement lands on is a freshly minted one counting from
-  // zero. Carrying the old high-water mark over would reject that client's first N publishes.
+  // Replacement page revisions restart at zero; carrying old high-water rejects its first N publishes.
   it('restarts the metadata revision when a placement is replaced', () => {
     const pages = new RuntimeBrowserPageRegistry()
     const page = pages.publishClientPage(clientPage('page-a', 'worktree-a'))

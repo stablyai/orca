@@ -376,8 +376,7 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     expect(prunedBytes).toBeLessThan(originalBytes / 5)
   })
 
-  // Why enumerated: a cap that silently skips one home is the failure this guards against, so
-  // each persisted home is driven through the same oversized input and read back independently.
+  // Exercise every persisted home independently; silently omitting one defeats the cap.
   describe.each(TERMINAL_SCROLLBACK_SESSION_HOMES)('scrollback home %s', (home) => {
     const hugeScrollback = `start-${'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 10)}`
     const sessionWithHome = (tabId: string, buffer: string): WorkspaceSessionState =>

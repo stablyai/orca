@@ -1,12 +1,14 @@
 import type { WebContents } from 'electron'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+import { assertRemoteCliPageAccess, readRemoteCliAdmittedPage } from './remote-cli-page-admission'
 
-/** Draws a hidden guest for the duration of a capture; returns its release. */
+/** Draws a hidden guest while a capture or agent input needs its frames; returns its release. */
 export type CapturePaintHold = () => () => void
 
 const SCREENSHOT_TIMEOUT_MS = 8000
-// Why: offsets from the capture start; the last leaves a full-page capture (~0.5 s on a tall page) time before the deadline.
+// Probe offsets leave time for the original capture to finish before the deadline.
 const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
-// Why: a 1x1 request is cheap; the frame it makes the page produce also answers the pending capture.
+// A cheap 1×1 probe can produce the frame needed by the pending capture.
 const FRAME_PROBE_PARAMS = {
   format: 'jpeg',
   quality: 1,
@@ -20,9 +22,7 @@ function applyFallbackClip(
   params: Record<string, unknown> | undefined
 ): Electron.NativeImage | null {
   if (params?.captureBeyondViewport) {
-    // Why: capturePage() can only see the currently painted viewport. If the
-    // caller asked for beyond-viewport pixels, returning a viewport-sized image
-    // would silently lie about what was captured.
+    // capturePage() only captures the painted viewport.
     return null
   }
 
@@ -88,17 +88,17 @@ function encodeNativeImageScreenshot(
   return { data: buffer.toString('base64') }
 }
 
-function getLayoutClip(metrics: {
-  cssContentSize?: { width?: number; height?: number }
-  contentSize?: { width?: number; height?: number }
-}): { x: number; y: number; width: number; height: number; scale: number } | null {
-  // Why: Page.captureScreenshot clip coordinates are in CSS pixels. On HiDPI
-  // Electron guests, `contentSize` can reflect device pixels, which makes
-  // Chromium tile the page into a duplicated 2x2 grid. Prefer cssContentSize
-  // and only fall back to contentSize when older Chromium builds omit it.
-  const size = metrics.cssContentSize ?? metrics.contentSize
-  const width = size?.width
-  const height = size?.height
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getLayoutClip(
+  metrics: unknown
+): { x: number; y: number; width: number; height: number; scale: number } | null {
+  // Clips use CSS pixels; HiDPI contentSize can cause duplicated tiles.
+  const size = isRecord(metrics) ? (metrics.cssContentSize ?? metrics.contentSize) : undefined
+  const width = isRecord(size) ? size.width : undefined
+  const height = isRecord(size) ? size.height : undefined
   if (
     typeof width !== 'number' ||
     !Number.isFinite(width) ||
@@ -133,11 +133,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   })
 }
 
-// Why: a request made before the held page is drawn never resolves, and an offscreen drawn page can
-// skip one; a later request makes the page produce a frame, which answers every pending request.
-// So the capture is sent once and cheap probes follow until it answers. Resolves null when no frame
-// arrives by the deadline; a CDP error is an answer. Unanswered probes settle on the next frame or
-// reject on detach.
+// Undrawn pages can leave captures pending; cheap probes trigger a frame for the original request.
 function captureUntilDrawn(
   webContents: WebContents,
   params: Record<string, unknown>
@@ -165,11 +161,23 @@ function captureUntilDrawn(
         return null
       }
       try {
+        // Recheck access because navigation can leave the SSH host’s admitted pages between probes.
+        assertRemoteCliPageAccess(webContents.id)
+      } catch (error) {
+        finish(() => reject(error))
+        return null
+      }
+      try {
         webContents.invalidate()
       } catch {
-        // Some guest teardown paths reject repaint requests. Fall through to CDP.
+        // Guest teardown can reject repaint requests; still try CDP.
       }
-      return webContents.debugger.sendCommand('Page.captureScreenshot', requestParams)
+      return sendGuestCdpCommand(webContents, 'Page.captureScreenshot', requestParams).then(
+        (result) => {
+          const data = isRecord(result) ? result.data : undefined
+          return typeof data === 'string' ? { data } : undefined
+        }
+      )
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
     const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
@@ -197,11 +205,9 @@ export async function captureFullPageScreenshot(
 
   const release = holdPaint()
   try {
-    // Why: layout works on an undrawn page, so only the pixel capture waits for a frame.
-    const layoutMetrics: Promise<Parameters<typeof getLayoutClip>[0]> =
-      webContents.debugger.sendCommand('Page.getLayoutMetrics', {})
+    // Layout works before drawing; only pixel capture needs a frame.
     const metrics = await withTimeout(
-      layoutMetrics,
+      sendGuestCdpCommand(webContents, 'Page.getLayoutMetrics', {}),
       SCREENSHOT_TIMEOUT_MS,
       'Screenshot timed out — the browser page did not respond.'
     )
@@ -223,8 +229,7 @@ export async function captureFullPageScreenshot(
   }
 }
 
-// Why: Page.captureScreenshot honours clip and beyond-viewport params that capturePage() can't.
-// Bounded so agent-browser doesn't hang on its 30s CDP timeout if the debugger stalls.
+// Prefer CDP for beyond-viewport capture; bound stalls below agent-browser’s 30-second timeout.
 export async function captureScreenshot(
   webContents: WebContents,
   params: Record<string, unknown> | undefined,
@@ -260,14 +265,15 @@ export async function captureScreenshot(
     if (frame) {
       return frame
     }
-    // Why: capturePage is only a best-effort fallback for a page that never answered.
-    const fallback = await withTimeout(
-      Promise.resolve().then(() => webContents.capturePage()),
-      FALLBACK_CAPTURE_TIMEOUT_MS,
-      SCREENSHOT_TIMEOUT_MESSAGE
+    const fallback = await readRemoteCliAdmittedPage(webContents.id, () =>
+      withTimeout(
+        Promise.resolve().then(() => webContents.capturePage()),
+        FALLBACK_CAPTURE_TIMEOUT_MS,
+        SCREENSHOT_TIMEOUT_MESSAGE
+      )
+        .then((image) => encodeNativeImageScreenshot(image, params))
+        .catch(() => null)
     )
-      .then((image) => encodeNativeImageScreenshot(image, params))
-      .catch(() => null)
     if (fallback) {
       return fallback
     }

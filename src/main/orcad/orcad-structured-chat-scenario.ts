@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 
-/** A credential-free reply in the real CLI's partial-message cadence. */
 export function packagedClaudeChatScenario(providerSessionId: string, partialReplyAckPath: string) {
   const frame = (fields: Record<string, unknown>) => ({
     uuid: randomUUID(),
@@ -62,7 +61,6 @@ export function packagedClaudeChatScenario(providerSessionId: string, partialRep
           usage: { input_tokens: 1, output_tokens: 4 }
         })
       },
-      // Context usage is a control request issued after the result.
       { delayMs: 250 }
     ]
   }

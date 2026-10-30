@@ -1,8 +1,4 @@
-/**
- * The window's layout stream from main ends mid-session and reopens (layout-owner build only).
- * The window keeps working through it: no tab or pane is lost or shown twice, main's own changes
- * show again once the stream is back, the window's later changes apply, and a relaunch keeps them.
- */
+// Layout-owner stream loss/reopen must retain every tab/pane exactly once, catch up main/window changes and persist them across relaunch.
 
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -12,14 +8,11 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { ensureTerminalVisible, switchToWorktree, waitForSessionReady } from './helpers/store'
 import { splitActiveTerminalPane, waitForActiveTerminalManager } from './helpers/terminal'
 import { leafIdsInOrder } from './helpers/workspace-layout-oracle-model'
-import { readWorkspaceLayoutStreamFrame } from '../../src/shared/workspace-layout/workspace-layout-stream-frames'
+import { readMainLayout, type TerminalLayout } from './helpers/main-terminal-layout'
 
 const LAYOUT_OWNER_BUILD = existsSync(
   path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
 )
-
-/** Terminal tab id → its pane ids in tree order, in tab-bar order. */
-type TerminalLayout = [tabId: string, paneIds: string[]][]
 
 type Launched = Awaited<ReturnType<ReturnType<typeof createRestartSession>['launch']>>
 
@@ -46,47 +39,6 @@ async function readWindowLayout(page: Page, worktreeId: string): Promise<Termina
     ]
   }
   return drawn.tabBar.map((tabId) => [tabId, leafIdsInOrder(drawn.roots[tabId])])
-}
-
-/** What main holds for the workspace, read from a stream of the test's own. */
-async function readMainLayout(page: Page, worktreeId: string): Promise<TerminalLayout> {
-  const raw = await page.evaluate(
-    (id) =>
-      new Promise<unknown>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('main sent no layout snapshot')), 10_000)
-        let handle: { unsubscribe: () => void } | null = null
-        let snapshot: unknown
-        const finish = (): void => {
-          if (handle && snapshot !== undefined) {
-            clearTimeout(timer)
-            handle.unsubscribe()
-            resolve(snapshot)
-          }
-        }
-        void window.api.runtime
-          .subscribe({ method: 'layout.subscribe', params: { workspaces: [id] } }, (response) => {
-            if (snapshot === undefined && response.ok) {
-              snapshot = response.result
-              finish()
-            }
-          })
-          .then((opened) => {
-            handle = opened
-            finish()
-          }, reject)
-      }),
-    worktreeId
-  )
-  const frame = readWorkspaceLayoutStreamFrame(raw)
-  if (frame?.type !== 'snapshot') {
-    throw new Error(
-      `layout.subscribe opened with no snapshot: ${JSON.stringify(raw).slice(0, 300)}`
-    )
-  }
-  const layout = frame.workspaces.find((entry) => entry.key === worktreeId)?.layout
-  return (layout?.tabs ?? [])
-    .filter((tab) => tab.kind === 'terminal')
-    .map((tab) => [tab.entityId, leafIdsInOrder(tab.terminal?.root)])
 }
 
 /** Tab ids in tab-bar order and each tab's pane count: what a lost or doubled tab or pane changes. */
@@ -180,10 +132,7 @@ async function openWorkspace(first: Launched, repoPath: string): Promise<string>
   return worktreeId
 }
 
-/**
- * Ends the stream; while it is down the window opens a tab and main starts a terminal of its own,
- * which shows only once the stream is back. After the reopen, main splits its terminal.
- */
+// While the stream is down, create window and main terminals; after reopen, split main’s terminal.
 async function loseStreamAndChange(
   page: Page,
   worktreeId: string,
@@ -252,7 +201,6 @@ test.describe('the window layout stream ends mid-session', () => {
         stops
       )
 
-      // The window's own changes after the reopen: a close, a new tab and a split.
       await first.page.evaluate((tabId) => window.__store!.getState().closeTab(tabId), duringLoss)
       const afterReopen = await first.page.evaluate((id) => {
         const state = window.__store!.getState()
@@ -291,7 +239,6 @@ test.describe('the window layout stream ends mid-session', () => {
         stops
       )
 
-      // After the reopen: the first tab closes and the tab opened during the loss splits.
       await first.page.evaluate((tabId) => window.__store!.getState().closeTab(tabId), firstTab)
       await first.page.evaluate(
         (tabId) => window.__store!.getState().setActiveTab(tabId),

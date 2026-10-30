@@ -1,7 +1,4 @@
-// Why: the Phase-4 hidden-delivery gate only drops bytes while NO renderer
-// party needs them. These tests pin the dispatcher-side interest signal: every
-// subscribeToPtyData sidecar must surface a ref-counted delivery-interest hold
-// to main. Eager buffers are model-recoverable and must not defeat hidden gating.
+// Sidecars must hold ref-counted raw-byte interest; model-recoverable eager buffers must not defeat hidden gating.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('pty dispatcher delivery interest', () => {

@@ -7,7 +7,13 @@ import type * as LaunchIntentModule from '@/lib/launch-structured-agent-session'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params?: unknown) => Promise<unknown>>(),
-  launch: vi.fn<(intent: { sessionId: string }) => Promise<{ sessionId: string; fence: number }>>(),
+  launch:
+    vi.fn<
+      (
+        intent: { sessionId: string },
+        onSeed?: LaunchIntentModule.StructuredLaunchHostSeedListener
+      ) => Promise<{ sessionId: string; fence: number }>
+    >(),
   toastError: vi.fn()
 }))
 
@@ -17,7 +23,12 @@ let publishedTabs: unknown[] = []
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
 }))
 
 vi.mock('@/lib/launch-structured-agent-session', async () => {
@@ -29,6 +40,9 @@ vi.mock('@/lib/launch-structured-agent-session', async () => {
 
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: () => Promise.resolve(publishedTabs)
+}))
+vi.mock('@/runtime/structured-session-tab-inventory', () => ({
+  readStructuredSessionTabInventory: () => Promise.resolve(publishedTabs)
 }))
 
 vi.mock('./use-structured-agent-session-hold', () => ({
@@ -49,9 +63,14 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
 
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/structured-agent-session-launch-registry'
+import {
+  startStructuredAgentLaunch,
+  retryStructuredAgentSessionLaunch
+} from '@/lib/structured-agent-session-launch'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
@@ -62,7 +81,6 @@ import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 
 const LOCAL_TARGET = { kind: 'local' } as const
-// The account's saved list: the picker names a saved pick only from a list the host gave.
 const SAVED_LIST = {
   origin: 'probe',
   models: [
@@ -114,17 +132,17 @@ function publishedSnapshot(worktreeId: string, sessionId: string) {
   }
 }
 
-/** The pane's wiring: the launch's view feeds the chat controller. */
 function renderLaunchedChat(
   worktreeId: string,
   sessionId: string,
-  agent: 'codex' | 'claude' = 'codex'
+  agent: 'codex' | 'claude' = 'codex',
+  target: RuntimeClientTarget = LOCAL_TARGET
 ) {
   return renderHook((selectedSessionId: string = sessionId) => {
     const provisional = useNativeChatProvisionalLaunch(worktreeId, selectedSessionId)
     const chat = useStructuredAgentSession({
       sessionId: selectedSessionId,
-      target: LOCAL_TARGET,
+      target,
       agent,
       providerStarting: true,
       isVisible: true,
@@ -156,6 +174,70 @@ describe('a chat pane over its own launch', () => {
   })
 
   afterEach(() => resetStructuredAgentSessionSendsForTests())
+
+  it.each([undefined, { model: 'gpt-5.5' }])(
+    'holds paired picks through reload and Retry until the host answers (%s)',
+    async (seed) => {
+      mocks.call.mockImplementation((_target, method) =>
+        method === 'agentSession.modelCatalog'
+          ? Promise.resolve({
+              ...SAVED_LIST,
+              listingNamesConfiguredModel: true,
+              models: SAVED_LIST.models.map((model) => ({
+                ...model,
+                isDefault: model.id === 'gpt-5.5',
+                efforts: [
+                  { value: 'low', label: 'Low' },
+                  { value: 'high', label: 'High' }
+                ]
+              }))
+            })
+          : new Promise(() => {})
+      )
+      const worktreeId = 'paired-pending'
+      const target = { kind: 'environment', environmentId: 'server-1' } as const
+      const launch = startStructuredAgentLaunch(worktreeId, 'codex', {
+        requestId: 'paired-reload',
+        executionHostId: 'runtime:server-1'
+      })
+      const fresh = renderLaunchedChat(worktreeId, launch.sessionId, 'codex', target)
+      expect(fresh.result.current.launchView?.seedPending).toBe(true)
+      fresh.unmount()
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+      const restored = renderLaunchedChat(worktreeId, launch.sessionId, 'codex', target)
+      const command = (text: string) =>
+        dispatchStructuredAgentSessionComposerCommand(text, {
+          snapshot: restored.result.current.optionSnapshot,
+          invokeAction: async () => false,
+          setOption: restored.result.current.setStructuredOption
+        })
+      await waitFor(() =>
+        expect(
+          restored.result.current.optionSnapshot.find((entry) => entry.id === 'model')
+        ).toMatchObject({
+          settable: false,
+          kind: { choices: expect.arrayContaining([expect.objectContaining({ value: 'gpt-5.5' })]) }
+        })
+      )
+      await expect(command('/model gpt-5.5')).resolves.toMatchObject({ accepted: false })
+      act(() => {
+        retryStructuredAgentSessionLaunch(worktreeId, launch.sessionId)
+      })
+      await waitFor(() => expect(mocks.launch).toHaveBeenCalledTimes(2))
+      await expect(command('/effort high')).resolves.toMatchObject({ accepted: false })
+      act(() => {
+        mocks.launch.mock.lastCall?.[1]?.(seed)
+      })
+      expect(
+        restored.result.current.optionSnapshot.find((entry) => entry.id === 'model')?.settable
+      ).toBe(true)
+      await act(async () => {
+        await expect(command('/model gpt-5.5')).resolves.toMatchObject({ accepted: true })
+        await expect(command('/effort high')).resolves.toMatchObject({ accepted: true })
+      })
+    }
+  )
 
   it.each([false, true])(
     'keeps launch intent after retirement and on first send (accepted picks: %s)',
@@ -242,11 +324,10 @@ describe('a chat pane over its own launch', () => {
     const { result, rerender } = renderLaunchedChat('wt-second', second.sessionId)
     await waitFor(() => expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5'))
 
-    // The first chat's pick lands in settings while the second is still launching.
     act(() => saveSelection('gpt-5.6-luna'))
     rerender()
     expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5')
-    // The catalog read names where this chat runs, so the host can check that workspace's config.
+    // Catalog reads must include this workspace so the host can apply its config.
     expect(mocks.call).toHaveBeenCalledWith(
       LOCAL_TARGET,
       'agentSession.modelCatalog',
@@ -295,7 +376,6 @@ describe('a chat pane over its own launch', () => {
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith("The setting wasn't changed.")
     )
-    // Reverted to what the chat runs; the refusal never kept the launch from publishing.
     await waitFor(() => expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5'))
   })
 })

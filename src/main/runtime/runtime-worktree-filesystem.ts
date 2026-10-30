@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath
@@ -19,6 +19,7 @@ import {
 } from './runtime-folder-workspace'
 import type { RuntimeStore } from './runtime-store-contract'
 import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 /** Callers hold a local removal route; an `ssh:` or `runtime:` host is refused before this. */
 export async function isLocalRuntimeWorktreePathMissing(
@@ -37,16 +38,17 @@ function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: strin
   return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
 }
 
-export function listRuntimeFolderWorkspaces(
+function runtimeFolderWorkspaceRows(
   store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getRepos' | 'setWorktreeMeta'>,
   repo: Repo,
-  repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+  repoOwnerCount: number,
+  stamp: boolean
 ): Worktree[] {
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
   const expectedHostId = getRepoExecutionHostId(repo)
   // A project a WSL move is taking still lists, without stamping identities it lacks.
-  const canWrite = !isWslMoveRepoBlocked(repo)
+  const canWrite = stamp && !isWslMoveRepoBlocked(repo)
   const ids = Object.keys(allMeta).filter(
     (worktreeId) =>
       isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) &&
@@ -62,7 +64,7 @@ export function listRuntimeFolderWorkspaces(
     const meta: Partial<WorktreeMeta> = existing?.instanceId
       ? existing
       : canWrite && (existing || repoOwnerCount === 1)
-        ? store.setWorktreeMeta(worktreeId, {
+        ? store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
             instanceId: getRuntimeFolderWorkspaceInstanceIdentity(repo, worktreeId),
             ...(existing ? {} : { displayName: repo.displayName, lastActivityAt: Date.now() })
           })
@@ -72,6 +74,22 @@ export function listRuntimeFolderWorkspaces(
       hostId: repoOwnerCount === 1 ? (meta.hostId ?? expectedHostId) : expectedHostId
     }
   })
+}
+
+export function listRuntimeFolderWorkspaces(
+  store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getRepos' | 'setWorktreeMeta'>,
+  repo: Repo,
+  repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+): Worktree[] {
+  return runtimeFolderWorkspaceRows(store, repo, repoOwnerCount, true)
+}
+
+export function projectRuntimeFolderWorkspaces(
+  store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getRepos' | 'setWorktreeMeta'>,
+  repo: Repo,
+  repoOwnerCount: number
+): Worktree[] {
+  return runtimeFolderWorkspaceRows(store, repo, repoOwnerCount, false)
 }
 
 export async function runtimePathExists(pathValue: string): Promise<boolean> {
