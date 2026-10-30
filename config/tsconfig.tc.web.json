@@ -24,7 +24,6 @@
     "../src/preload/runtime-environment-subscriptions.ts",
     "../src/preload/usage-provider-api.ts",
     "../src/shared/**/*",
-    "../mobile/src/worktree/worktree-agent-child-rows.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/gitlab/mappers.ts",
     "../src/main/persistence/profile-state-cutover-fixture.ts",

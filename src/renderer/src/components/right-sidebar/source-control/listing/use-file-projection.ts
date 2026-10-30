@@ -16,7 +16,7 @@ import {
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
-} from '../../../../../../shared/source-control-tree'
+} from '../../source-control-tree'
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,

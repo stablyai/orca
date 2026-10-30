@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ChevronLeft,
@@ -14,8 +14,7 @@ import {
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
-import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
-import type { SessionTitleCard } from './use-session-title-card'
+import { StatusDot } from '../components/StatusDot'
 import { styles } from './mobile-session-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -25,13 +24,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
 
-export function MobileSessionHeader({
-  controller,
-  details
-}: {
-  controller: MobileSessionController
-  details: SessionTitleCard
-}) {
+export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
@@ -93,10 +86,8 @@ export function MobileSessionHeader({
         edges={topChrome.space ? [] : ['top']}
       >
         <View
-          ref={details.barRef}
           style={styles.sessionTopBar}
           onLayout={(event) => {
-            details.onAnchorLayout()
             const width = event.nativeEvent.layout.width
             setHeaderWidth((previous) => (previous === width ? previous : width))
           }}
@@ -111,27 +102,37 @@ export function MobileSessionHeader({
           <MobileSessionHeaderIconButton
             accessibilityLabel={t('session.header.backToWorktrees', 'Back to worktrees')}
             icon={ChevronLeft}
-            ref={details.backRef}
-            onPress={() => {
-              if (!details.closeFirst()) {
-                requestLeaveSession()
-              }
-            }}
+            onPress={requestLeaveSession}
           />
 
           {!sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
-            <MobileSessionTitleBlock
-              title={worktreeName || t('session.header.terminalTitle', 'Terminal')}
-              connState={presentedConnState}
-              details={details}
-              meta={terminalSummary}
-              showConnectionRetry={showConnectionRetry}
-              onRetry={() => {
-                if (hostId && forceReconnectHost) {
-                  void forceReconnectHost(hostId)
+            <View
+              style={[styles.sessionTitleBlock, tabsInTopBar && styles.sessionTitleBlockBesideTabs]}
+            >
+              <Text style={styles.sessionTitle} numberOfLines={1}>
+                {worktreeName || t('session.header.terminalTitle', 'Terminal')}
+              </Text>
+              <Pressable
+                style={styles.sessionMetaRow}
+                disabled={!showConnectionRetry}
+                onPress={() => {
+                  if (hostId && forceReconnectHost) {
+                    void forceReconnectHost(hostId)
+                  }
+                }}
+                accessibilityRole={showConnectionRetry ? 'button' : undefined}
+                accessibilityLabel={
+                  showConnectionRetry
+                    ? t('session.header.reconnectToDesktop', 'Reconnect to desktop')
+                    : undefined
                 }
-              }}
-            />
+              >
+                <StatusDot state={presentedConnState} />
+                <Text style={styles.sessionMetaText} numberOfLines={1}>
+                  {terminalSummary}
+                </Text>
+              </Pressable>
+            </View>
           ) : null}
           {tabsInTopBar ? tabStrip : null}
           {!actionsCollapsed && !isFloatingWorkspaceRoute && (

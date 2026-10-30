@@ -24,9 +24,6 @@ type Params = {
 
 export type LiveWorktreeName = {
   name: string
-  /** Where the worktree lives on its host; null until the host's record arrives. */
-  path: string | null
-  hostId: string | null
   resolution: WorktreeShowResolution
 }
 
@@ -40,12 +37,10 @@ export function useLiveWorktreeName({
   // Floating workspaces have no worktree record; probing would keep fallback polling forever.
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const routeNameHint = routeName?.trim() ?? ''
-  const [worktreeName, setWorktreeName] = useState<{
-    worktreeId: string
-    name: string
-    path?: string | null
-    hostId?: string | null
-  }>(() => ({ worktreeId, name: routeNameHint }))
+  const [worktreeName, setWorktreeName] = useState(() => ({
+    worktreeId,
+    name: routeNameHint
+  }))
   // Key verdicts by route so a previous workspace’s deletion cannot escape into the new one.
   const [resolved, setResolved] = useState<{
     worktreeId: string
@@ -120,15 +115,10 @@ export function useLiveWorktreeName({
           const worktree = accepted.value
           const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
-            const path = worktree?.path || null
-            const hostId = worktree?.hostId ?? null
             setWorktreeName((current) =>
-              current.worktreeId === worktreeId &&
-              current.name === liveName &&
-              current.path === path &&
-              current.hostId === hostId
+              current.worktreeId === worktreeId && current.name === liveName
                 ? current
-                : { worktreeId, name: liveName, path, hostId }
+                : { worktreeId, name: liveName }
             )
           }
           hasSuccessfulRefresh = true
@@ -200,12 +190,10 @@ export function useLiveWorktreeName({
   )
 
   if (isFloatingWorkspace) {
-    return { name: getFloatingWorkspaceTitle(), path: null, hostId: 'local', resolution: 'unknown' }
+    return { name: getFloatingWorkspaceTitle(), resolution: 'unknown' }
   }
   return {
     name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
-    path: worktreeName.worktreeId === worktreeId ? (worktreeName.path ?? null) : null,
-    hostId: worktreeName.worktreeId === worktreeId ? (worktreeName.hostId ?? null) : null,
     resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
   }
 }

@@ -1,11 +1,10 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printOrchestrationResult, sameTextView } from './agent-view'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../flags'
-import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
 import type { RunRemovedWork } from '../../../shared/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
@@ -15,6 +14,8 @@ import {
   findRunOlderRuntimeWillUnbind,
   olderRuntimeUnboundRunNext
 } from './older-runtime-run-binding'
+
+const RUN_LIST_DEFAULT_LIMIT = 10
 
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
@@ -30,8 +31,13 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     if (unboundRunId && unboundRunId !== result.result.run.id) {
       result.result.next = olderRuntimeUnboundRunNext(unboundRunId)
     }
-    printResult(result, json, (r) =>
-      withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
+    printOrchestrationResult(
+      result,
+      { flags, json },
+      sameTextView(
+        (r) => ({ ...runFields(r.run), next: r.next }),
+        (r) => withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
+      )
     )
   },
 
@@ -44,7 +50,14 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       from,
       ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
-    printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
+    printOrchestrationResult(
+      result,
+      { flags, json },
+      sameTextView(
+        (r) => runFields(r.run),
+        (r) => `Using Run ${r.run.id}: ${r.run.objective}`
+      )
+    )
   },
 
   'orchestration run-current': async ({ flags, client, cwd, json }) => {
@@ -52,10 +65,16 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       run: { id: string; objective: string } | null
     }>('orchestration.runCurrent', { from })
-    printResult(result, json, (r) =>
-      r.run
-        ? `${r.run.id} ${r.run.objective}`
-        : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
+    printOrchestrationResult(
+      result,
+      { flags, json },
+      sameTextView(
+        (r) => (r.run ? runFields(r.run) : { runId: null }),
+        (r) =>
+          r.run
+            ? `${r.run.id} ${r.run.objective}`
+            : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
+      )
     )
   },
 
@@ -64,20 +83,24 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       runs: { id: string; objective: string; legacy: number }[]
       nextCursor: string | null
     }>('orchestration.runList', {
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? ORCHESTRATION_RUN_PAGE_LIMIT,
+      // An unbounded first page costs an agent thousands of tokens; recent Runs are the useful ones.
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? RUN_LIST_DEFAULT_LIMIT,
       cursor: getOptionalStringFlag(flags, 'cursor')
     })
-    printResult(result, json, (r) => {
-      const rows =
-        r.runs.length === 0
-          ? 'No Runs found.'
-          : r.runs
-              .map(
-                (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
-              )
-              .join('\n')
-      return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
-    })
+    printOrchestrationResult(
+      result,
+      { flags, json },
+      sameTextView(
+        (r) => ({
+          runs: r.runs.map((run) => {
+            const { runId, ...rest } = runFields(run)
+            return { id: runId, ...rest }
+          }),
+          nextCursor: r.nextCursor ?? undefined
+        }),
+        formatRunList
+      )
+    )
   },
 
   'orchestration run-show': async ({ flags, client, json }) => {
@@ -97,12 +120,41 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       ...(removed ? { removed: true } : {}),
       ...(cursor ? { cursor } : {})
     })
-    printResult(result, json, (r) =>
-      removed
-        ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
-        : `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
-          `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}` +
-          `${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
+    const runLine = (run: { id: string; objective: string; legacy: number }): string =>
+      `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
+    printOrchestrationResult(
+      result,
+      { flags, json },
+      {
+        fields: (r) => ({ ...runFields(r.run), removedWork: r.removedWork }),
+        text: (_, r) =>
+          removed
+            ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
+            : runLine(r.run) + formatRunRemovedWorkLine(r.run.id, r.removedWork),
+        fullText: (r) =>
+          removed
+            ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
+            : `${runLine(r.run)}\n` +
+              `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}` +
+              `${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
+      }
     )
   }
+}
+
+function runFields(run: { id: string; objective: string; legacy?: number }) {
+  return { runId: run.id, objective: run.objective, legacy: run.legacy ? true : undefined }
+}
+
+function formatRunList(r: {
+  runs: { id: string; objective: string; legacy: number }[]
+  nextCursor: string | null
+}): string {
+  const rows =
+    r.runs.length === 0
+      ? 'No Runs found.'
+      : r.runs
+          .map((run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`)
+          .join('\n')
+  return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
 }

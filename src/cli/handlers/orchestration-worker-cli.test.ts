@@ -243,6 +243,7 @@ describe('orchestration worker-start CLI contract', () => {
 
       await invokeWorkerStart(
         new Map<string, string | boolean>([
+          ['full', true],
           ['task', 'task_1'],
           ['agent', 'codex'],
           ['from', 'term_coord']
@@ -450,7 +451,7 @@ describe('orchestration worker-start CLI contract', () => {
     })
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map(),
+      flags: new Map([['full', true]]),
       client,
       cwd: '/tmp/repo',
       json: false
@@ -471,7 +472,7 @@ describe('orchestration worker-start CLI contract', () => {
     mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map<string, string | boolean>(),
+      flags: new Map<string, string | boolean>([['full', true]]),
       client,
       cwd: '/tmp/repo',
       json: false
@@ -561,7 +562,7 @@ describe('orchestration worker-start CLI contract', () => {
     mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map<string, string | boolean>(),
+      flags: new Map<string, string | boolean>([['full', true]]),
       client,
       cwd: '/tmp/repo',
       json: false
@@ -606,7 +607,10 @@ describe('orchestration worker-start CLI contract', () => {
     mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map<string, string | boolean>([['include-remote', true]]),
+      flags: new Map<string, string | boolean>([
+        ['include-remote', true],
+        ['full', true]
+      ]),
       client,
       cwd: '/tmp/repo',
       json: false
@@ -669,7 +673,10 @@ describe('orchestration worker-start CLI contract', () => {
     mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map<string, string | boolean>([['include-remote', true]]),
+      flags: new Map<string, string | boolean>([
+        ['include-remote', true],
+        ['full', true]
+      ]),
       client,
       cwd: '/tmp/repo',
       json: true

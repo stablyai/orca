@@ -149,35 +149,35 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutKeyDetails: () => ({ keys: ['⌘', 'W'], doubleTap: false })
 }))
 
-vi.mock('@/components/ui/context-menu', () => ({
-  ContextMenu: function ContextMenu(props: { children?: unknown }) {
-    return { type: 'ContextMenu', props }
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
+    return { type: 'DropdownMenu', props }
   },
-  ContextMenuContent: function ContextMenuContent(props: { children?: unknown }) {
-    return { type: 'ContextMenuContent', props }
+  DropdownMenuContent: function DropdownMenuContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuContent', props }
   },
-  ContextMenuItem: function ContextMenuItem(props: { children?: unknown }) {
-    return { type: 'ContextMenuItem', props }
+  DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
+    return { type: 'DropdownMenuItem', props }
   },
-  ContextMenuShortcut: function ContextMenuShortcut(props: { children?: unknown }) {
-    return { type: 'ContextMenuShortcut', props }
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
   },
-  ContextMenuSeparator: function ContextMenuSeparator() {
-    return { type: 'ContextMenuSeparator', props: {} }
+  DropdownMenuSeparator: function DropdownMenuSeparator() {
+    return { type: 'DropdownMenuSeparator', props: {} }
   },
-  ContextMenuLabel: function ContextMenuLabel(props: { children?: unknown }) {
-    return { type: 'ContextMenuLabel', props }
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
   },
-  ContextMenuSub: function ContextMenuSub(props: { children?: unknown }) {
-    return { type: 'ContextMenuSub', props }
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
   },
-  ContextMenuSubContent: function ContextMenuSubContent(props: { children?: unknown }) {
-    return { type: 'ContextMenuSubContent', props }
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
   },
-  ContextMenuSubTrigger: function ContextMenuSubTrigger(props: { children?: unknown }) {
-    return { type: 'ContextMenuSubTrigger', props }
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
-  ContextMenuTrigger: function ContextMenuTrigger(props: { children?: unknown }) {
+  DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return props.children
   }
 }))

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store'
-import { ContextMenuSeparator } from '@/components/ui/context-menu'
+import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
@@ -23,10 +23,10 @@ export function CliChatResumeMenuItems({
   }
   return (
     <>
-      {leadingSeparator ? <ContextMenuSeparator /> : null}
+      {leadingSeparator ? <DropdownMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
         action="switch"
-        menuKind="context"
+        menuKind="dropdown"
         tooltipSide="right"
         chatPending={pending}
         onResumeInNewChat={(event) => {

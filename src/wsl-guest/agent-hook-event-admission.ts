@@ -26,19 +26,13 @@ type RelayHookAdmissionHost = {
   checkAgentPresence: (paneKey: string) => Promise<void>
 }
 
-export type RelayHookAdmissionOptions = {
-  isReplay?: boolean
-  checkPresence?: boolean
-  onAccepted?: (event: AgentHookEventPayload) => void
-}
-
 export function applyRelayHookEvent(
   host: RelayHookAdmissionHost,
   incoming: AgentHookEventPayload,
   source: AgentHookSource,
   env?: string,
   version?: string,
-  options: RelayHookAdmissionOptions = {}
+  options: { isReplay?: boolean; checkPresence?: boolean } = {}
 ): AgentHookEventPayload | undefined {
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
@@ -115,7 +109,6 @@ export function applyRelayHookEvent(
     version,
     ...(claudeSettledRequests ? { claudeSettledRequests } : {})
   })
-  options.onAccepted?.(event)
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   const sender = incoming.agentPresence?.process
   const owner = event.agentPresence

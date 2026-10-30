@@ -1,6 +1,6 @@
 import type { GitFileStatus, GitStatusEntry } from '../../../../shared/git-status-types'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
-import { splitPathSegments } from '../../../../shared/cross-platform-path'
+import { splitPathSegments } from './path-tree'
 
 export { STATUS_LABELS } from '../../../../shared/git-status-labels'
 

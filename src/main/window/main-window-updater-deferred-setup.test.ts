@@ -4,8 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { UpdaterSetupOptions } from '../updater'
 
-const { setupMock, milestoneMock, getMainWindowMock } = vi.hoisted(() => ({
-  getMainWindowMock: vi.fn<() => BrowserWindow | null>(() => null),
+const { setupMock, milestoneMock } = vi.hoisted(() => ({
   setupMock: vi.fn<(window: BrowserWindow, options?: UpdaterSetupOptions) => void>(),
   milestoneMock: vi.fn<(name: string) => void>()
 }))
@@ -15,10 +14,7 @@ vi.mock('../updater', () => ({ setupAutoUpdater: setupMock }))
 vi.mock('../updater/electron-updater-proxy-session', () => ({
   applyProxyToElectronUpdaterSession: vi.fn()
 }))
-vi.mock('../ipc/ui', () => ({
-  isTrustedUIRenderer: () => true,
-  getTrustedUIRendererWindow: getMainWindowMock
-}))
+vi.mock('../ipc/ui', () => ({ isTrustedUIRenderer: () => true }))
 vi.mock('../startup/startup-diagnostics', () => ({ logStartupMilestone: milestoneMock }))
 
 function createWindowOwner() {
@@ -397,9 +393,7 @@ describe('completed deferred updater setup ownership', () => {
     })
     updater.ensureAutoUpdaterConfigured()
     const options = capturedSetupOptions()
-    expect(options.getMainWindow).toBe(getMainWindowMock)
     expect(Object.keys(options)).toEqual([
-      'getMainWindow',
       'getLastUpdateCheckAt',
       'onBeforeQuit',
       'setLastUpdateCheckAt',

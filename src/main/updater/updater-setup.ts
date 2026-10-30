@@ -24,7 +24,6 @@ import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-sessio
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 
 export type UpdaterSetupOptions = {
-  getMainWindow?: () => BrowserWindow | null
   getLastUpdateCheckAt?: () => number | null
   onBeforeQuit?: () => void | Promise<void>
   setLastUpdateCheckAt?: (timestamp: number) => void
@@ -113,8 +112,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
   }
 
   setupAutoUpdater(mainWindow: BrowserWindow | null, opts?: UpdaterSetupOptions): void {
-    // Keep direct-window callers compatible; desktop composition supplies the lifecycle getter.
-    this.getMainWindow = opts?.getMainWindow ?? (mainWindow ? () => mainWindow : this.getMainWindow)
+    // Headless setup must not erase a later attached window.
+    this.mainWindowRef = mainWindow ?? this.mainWindowRef
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
     this.onBeforeQuitFailure = opts?.onBeforeQuitFailure ?? 'continue'
     this.persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null

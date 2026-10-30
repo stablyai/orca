@@ -70,7 +70,6 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
         }
       }
       this.ownerStateInitialized = true
-      this.activateClaudeHelperObservations()
     }
   }
 }

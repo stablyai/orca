@@ -1,15 +1,16 @@
 import {
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuItem,
-  ContextMenuShortcut
-} from '@/components/ui/context-menu'
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuItem,
+  DropdownMenuShortcut
+} from '@/components/ui/dropdown-menu'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { translate } from '@/i18n/i18n'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const PANE_COLUMN_DIRECTIONS: TabSplitDirection[] = ['right', 'left', 'down', 'up']
 
@@ -58,21 +59,18 @@ export function TabWorkspaceLayoutMenuSection({
 
   return (
     <>
-      {leadingSeparator ? <ContextMenuSeparator /> : null}
-      <ContextMenuSub>
-        <ContextMenuSubTrigger className="[&>svg:last-child]:size-3.5">
+      {leadingSeparator ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="[&>svg:last-child]:size-3.5">
           <Columns2 className="size-3.5 shrink-0" />
           {translate(
             'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.moveToPaneColumn',
             'Move Tab to Split'
           )}
-        </ContextMenuSubTrigger>
-        <ContextMenuSubContent
-          animation="none"
-          className="max-w-[calc(100vw-1rem)] whitespace-nowrap"
-        >
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className={TAB_CONTEXT_SUBMENU_CONTENT_CLASS}>
           {PANE_COLUMN_DIRECTIONS.map((direction) => (
-            <ContextMenuItem
+            <DropdownMenuItem
               key={direction}
               onSelect={() => {
                 moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
@@ -81,13 +79,13 @@ export function TabWorkspaceLayoutMenuSection({
               {paneColumnDirectionIcon(direction)}
               {paneColumnDirectionLabel(direction)}
               {shortcutLabels?.[direction] ? (
-                <ContextMenuShortcut>{shortcutLabels[direction]}</ContextMenuShortcut>
+                <DropdownMenuShortcut>{shortcutLabels[direction]}</DropdownMenuShortcut>
               ) : null}
-            </ContextMenuItem>
+            </DropdownMenuItem>
           ))}
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      {trailingSeparator ? <ContextMenuSeparator /> : null}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      {trailingSeparator ? <DropdownMenuSeparator /> : null}
     </>
   )
 }

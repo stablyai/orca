@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printOrchestrationReceipt } from './agent-view'
 import { getOptionalJsonFlag, getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveCoordinatorTerminalHandle, runScopedSessionCaller } from './terminal-identity'
@@ -14,9 +14,9 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       options: getOptionalJsonFlag(flags, 'options'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
-    printResult(
+    printOrchestrationReceipt(
       result,
-      json,
+      { flags, json },
       (value) =>
         `Gate ${value.gate.id} created for task ${value.gate.task_id} [${value.gate.status}]`
     )
@@ -30,7 +30,11 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       resolution: getRequiredStringFlag(flags, 'resolution'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
-    printResult(result, json, (value) => `Gate ${value.gate.id} resolved: ${value.gate.resolution}`)
+    printOrchestrationReceipt(
+      result,
+      { flags, json },
+      (value) => `Gate ${value.gate.id} resolved: ${value.gate.resolution}`
+    )
   },
 
   'orchestration gate-list': async ({ flags, client, cwd, json }) => {
@@ -49,7 +53,7 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       run,
       from
     })
-    printResult(result, json, (value) => {
+    printOrchestrationReceipt(result, { flags, json }, (value) => {
       if (value.gates.length === 0) {
         return 'No gates found.'
       }

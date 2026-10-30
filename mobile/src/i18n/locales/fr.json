@@ -2191,7 +2191,6 @@
       "requestFailed": "Échec de la requête : {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
       "openFileExplorer": "Ouvrir l'explorateur de fichiers",

@@ -1,11 +1,10 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
-import { withReceiptNext } from './receipt-next-text'
+import { printOrchestrationResult } from './agent-view'
+import { checkView, type CheckAgentResult } from './message-agent-views'
 import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
 import {
-  formatOrchestrationCheckText,
   prepareOrchestrationCheckOutput,
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
@@ -16,17 +15,10 @@ import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { flushOrchestrationStdout, resolveCompatibilityCliCommand } from './runtime-compatibility'
 import { orchestrationCallerLabel, resolveOrchestrationTerminalHandle } from './terminal-identity'
 
-type CheckResult = {
+type CheckResult = CheckAgentResult & {
   messages: MessageSummary[]
-  count: number
-  formatted?: string
-  deliveryId?: string | null
   runId?: string
-  timedOut?: boolean
-  cancelled?: boolean
-  connectionLost?: boolean
   legacyCompatibility?: LegacyCompatibilityResult
-  next?: string
 }
 
 export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
@@ -76,9 +68,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
       ...result,
       result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'))
     }
-    printResult(result, json, (value) =>
-      withReceiptNext(formatOrchestrationCheckText(value, callerLabel), value)
-    )
+    printOrchestrationResult(result, { flags, json }, checkView(callerLabel))
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
     if (compatibilityAck && compatibilityAck.length > 0) {
       await flushOrchestrationStdout()

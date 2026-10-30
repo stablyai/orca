@@ -3,15 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import type { SessionTitleCard } from './use-session-title-card'
 
 const layout = vi.hoisted(() => ({ sideRail: true, width: 927 }))
-vi.mock('react-native', () => ({
-  View: 'View',
-  Text: 'Text',
-  Pressable: 'Pressable',
-  Platform: { OS: 'web' }
-}))
+vi.mock('react-native', () => ({ View: 'View', Text: 'Text', Pressable: 'Pressable' }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'Icon',
@@ -68,21 +62,8 @@ function renderHeader(
     terminalSummary: showConnectionRetry ? 'Connection lost — tap to retry' : '1 tab',
     ...overrides
   })
-  const details = mountFixture<SessionTitleCard>({
-    besideTabs: layout.sideRail,
-    barRef: { current: null },
-    backRef: { current: null },
-    openerRef: { current: null },
-    titleRef: { current: null },
-    boundaryRefs: { current: [] },
-    active: false,
-    requestedOpen: false,
-    closeFirst: () => false,
-    onAnchorLayout: () => {},
-    toggle: () => {}
-  })
   act(() => {
-    tree = create(createElement(MobileSessionHeader, { controller, details }))
+    tree = create(createElement(MobileSessionHeader, { controller }))
   })
   return forceReconnectHost
 }
@@ -115,8 +96,7 @@ it('keeps an escalated page connection visible without offering a native retry',
     terminalSummary: "Can't reach desktop"
   })
   expect(tree!.root.findAllByProps({ accessibilityLabel: 'Reconnect to desktop' })).toHaveLength(0)
-  const status = tree!.root.find((node) => String(node.type) === 'StatusDot')
-  expect(status.parent?.props.disabled).toBe(true)
+  expect(tree!.root.find((node) => String(node.type) === 'Pressable').props.disabled).toBe(true)
   expect(tree!.root.find((node) => String(node.type) === 'StatusDot').props.state).toBe(
     'disconnected'
   )

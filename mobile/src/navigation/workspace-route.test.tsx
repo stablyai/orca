@@ -1,6 +1,6 @@
 import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { createElement, useContext, type ReactElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -76,7 +76,7 @@ import type { ConnectionState } from '../transport/types'
 import { createBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
-import { useWorkspaceClient, WorkspaceServerContext } from '../transport/use-workspace-client'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useWorkspaceExecutionHost } from './workspace-execution-host'
 import { WorkspaceRoute } from './workspace-route'
 
@@ -87,12 +87,10 @@ const below: {
   client: RpcClient | null
   state: ConnectionState | null
   capabilities: readonly string[] | null
-  serverName: string | null
 } = {
   client: null,
   state: null,
-  capabilities: null,
-  serverName: null
+  capabilities: null
 }
 
 function Probe(): null {
@@ -101,7 +99,6 @@ function Probe(): null {
   below.client = workspace.client
   below.state = workspace.state
   below.capabilities = useOptionalHostProtocolGates()?.hostCapabilities ?? null
-  below.serverName = useContext(WorkspaceServerContext)?.name ?? null
   return null
 }
 
@@ -174,7 +171,6 @@ async function render(element: ReactElement, gates: HostStatusGates): Promise<Re
   below.client = null
   below.state = null
   below.capabilities = null
-  below.serverName = null
   serverReport.current = RUNNING
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
@@ -229,7 +225,6 @@ describe('a server workspace', () => {
     route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
     const session = desktop()
     await render(screen, desktopGates(RELAYS))
-    expect(below.serverName).toBe('vm')
     await below.client?.sendRequest('files.readDir', { worktree: 'id:wt' })
     expect(session.sendRequest).toHaveBeenCalledWith(
       'files.readDir',

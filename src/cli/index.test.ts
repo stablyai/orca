@@ -393,7 +393,7 @@ describe('unknown command surfaces a suggestion', () => {
       expect(process.exitCode).toBe(1)
       const output = logSpy.mock.calls.flat().join('\n')
       expect(output).toContain('invalid_argument')
-      expect(output).toContain('"runtimeId": null')
+      expect(JSON.parse(output)).toHaveProperty('ok', false)
       expect(output).not.toContain(`orca ${forbidden}`)
       expect(output).not.toContain(`"${forbidden}"`)
       expect(runtimeClientConstructorMock).not.toHaveBeenCalled()

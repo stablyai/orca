@@ -43,7 +43,7 @@ export class ReleaseFeedPreflightError extends Error {
 }
 
 export abstract class UpdaterState {
-  protected getMainWindow: () => BrowserWindow | null = () => null
+  protected mainWindowRef: BrowserWindow | null = null
   protected currentStatus: UpdateStatus = { state: 'idle' }
   protected userInitiatedCheck = false
   protected onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
@@ -124,16 +124,12 @@ export abstract class UpdaterState {
 
   constructor() {}
 
-  // Resolve the lifecycle owner each time; setup can lag behind a replacement window.
+  // The ref outlives a closed window, whose webContents getter throws once destroyed.
   protected sendToMainWindow(channel: string, ...args: unknown[]): void {
-    const win = this.getMainWindow()
+    const win = this.mainWindowRef
     if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
       return
     }
-    try {
-      win.webContents.send(channel, ...args)
-    } catch {
-      // Native teardown can race the guards; delivery must not interrupt updater progress.
-    }
+    win.webContents.send(channel, ...args)
   }
 }

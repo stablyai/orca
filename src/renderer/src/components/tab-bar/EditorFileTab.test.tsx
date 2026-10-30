@@ -124,36 +124,36 @@ vi.mock('lucide-react', () => ({
   }
 }))
 
-vi.mock('@/components/ui/context-menu', () => ({
-  ContextMenu: function ContextMenu(props: { children?: unknown }) {
-    return { type: 'ContextMenu', props }
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
+    return { type: 'DropdownMenu', props }
   },
-  ContextMenuContent: function ContextMenuContent(props: { children?: unknown }) {
-    return { type: 'ContextMenuContent', props }
+  DropdownMenuContent: function DropdownMenuContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuContent', props }
   },
-  ContextMenuItem: function ContextMenuItem(props: { children?: unknown }) {
-    return { type: 'ContextMenuItem', props }
+  DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
+    return { type: 'DropdownMenuItem', props }
   },
-  ContextMenuSeparator: function ContextMenuSeparator() {
-    return { type: 'ContextMenuSeparator', props: {} }
+  DropdownMenuSeparator: function DropdownMenuSeparator() {
+    return { type: 'DropdownMenuSeparator', props: {} }
   },
-  ContextMenuShortcut: function ContextMenuShortcut(props: { children?: unknown }) {
-    return { type: 'ContextMenuShortcut', props }
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
   },
-  ContextMenuLabel: function ContextMenuLabel(props: { children?: unknown }) {
-    return { type: 'ContextMenuLabel', props }
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
   },
-  ContextMenuSub: function ContextMenuSub(props: { children?: unknown }) {
-    return { type: 'ContextMenuSub', props }
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
   },
-  ContextMenuSubContent: function ContextMenuSubContent(props: { children?: unknown }) {
-    return { type: 'ContextMenuSubContent', props }
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
   },
-  ContextMenuSubTrigger: function ContextMenuSubTrigger(props: { children?: unknown }) {
-    return { type: 'ContextMenuSubTrigger', props }
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
-  ContextMenuTrigger: function ContextMenuTrigger(props: { children?: unknown }) {
-    return { type: 'ContextMenuTrigger', props }
+  DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuTrigger', props }
   }
 }))
 
@@ -343,7 +343,7 @@ function findElementsByType(node: unknown, typeName: string): ReactElementLike[]
 }
 
 function findMenuItemByText(node: unknown, label: string): ReactElementLike {
-  const item = findElementsByType(node, 'ContextMenuItem').find((candidate) =>
+  const item = findElementsByType(node, 'DropdownMenuItem').find((candidate) =>
     getText(candidate).includes(label)
   )
   if (!item) {
@@ -355,7 +355,7 @@ function findMenuItemByText(node: unknown, label: string): ReactElementLike {
 /** Picks Rename, then fires the close-autofocus that actually opens the input. */
 function selectRenameFromMenu(node: unknown): void {
   ;(findMenuItemByText(node, 'Rename').props.onSelect as () => void)()
-  const content = findElementsByType(node, 'ContextMenuContent')[0]!
+  const content = findElementsByType(node, 'DropdownMenuContent')[0]!
   ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
     preventDefault: vi.fn()
   })
