@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
 import {
   applyJournalRow,
@@ -7,24 +6,29 @@ import {
 } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { insertJournalRow } from './journal-row-table'
-import { journalOutcomeSource, publishJournalOutcomeSource } from './journal-outcome-format'
+import {
+  journalOutcomeSource,
+  publishJournalOutcomeSource,
+  startJournalOutcomeGeneration
+} from './journal-outcome-format'
 import { persistJournalOutcomeRows } from './journal-outcome-table'
 import { journalCacheMatches, writeJournalOutcomeCache } from './journal-outcome-cache'
 import { isolateJournalTransition } from './journal-reducer-transition'
 import { writeJournalProjectionSavepoint } from './journal-saved-state'
 
+/** `current` reports whether the saved state is complete after this write: false for an input epoch
+ * awaiting conversion, or a cache that lags or whose savepoint failed. */
 export function prepareJournalOutcomeWrite(
   db: Database.Database,
   live: JournalReducerState,
   rows: readonly JournalRow[],
-  savedAt: number,
-  allowCache = true
-): { adopt: () => JournalReducerState; cached: boolean } {
+  savedAt: number
+): { adopt: () => JournalReducerState; current: boolean } {
   const source = journalOutcomeSource(db, live.sessionId, live.epoch)
   // Inputs remain the authority until an invisible conversion generation is published.
   if (!source) {
     const transition = persistLegacyRows(db, live, rows, savedAt)
-    return { adopt: transition, cached: false }
+    return { adopt: transition, current: false }
   }
   if (source.through !== live.lastSequence) {
     throw new Error('journal outcome writer has stale coverage')
@@ -37,16 +41,14 @@ export function prepareJournalOutcomeWrite(
     live.epoch
   )
   let cached = false
-  if (allowCache) {
-    const recovered = writeJournalProjectionSavepoint(db, live.sessionId, () => {
-      if (journalCacheMatches(db, live.sessionId, live.epoch, source)) {
-        writeJournalOutcomeCache(db, transition.state, source.generation, transition.values)
-        cached = true
-      }
-    })
-    cached &&= recovered
-  }
-  return { adopt: transition.adopt, cached }
+  const recovered = writeJournalProjectionSavepoint(db, live.sessionId, () => {
+    // The stamp decides: a cache being rebuilt or left behind is never written past its gap.
+    if (journalCacheMatches(db, live.sessionId, live.epoch, source)) {
+      writeJournalOutcomeCache(db, transition.state, source.generation, transition.values)
+      cached = true
+    }
+  })
+  return { adopt: transition.adopt, current: cached && recovered }
 }
 
 function persistLegacyRows(
@@ -72,7 +74,7 @@ export function publishJournalOutcomeEpoch(
   epoch: string,
   rows: readonly JournalRow[]
 ): { adopt: () => JournalReducerState; through: number } {
-  const generation = randomUUID()
+  const generation = startJournalOutcomeGeneration(db, sessionId, epoch)
   const initial = createJournalReducerState(sessionId, epoch)
   const transition = persistJournalOutcomeRows(db, initial, generation, rows)
   const first = rows[0]

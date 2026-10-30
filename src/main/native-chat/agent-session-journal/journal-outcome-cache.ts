@@ -1,8 +1,9 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalOutcome } from './journal-outcome-codec'
-import { JOURNAL_OUTCOME_FORMAT, type JournalOutcomeSource } from './journal-outcome-format'
+import type { JournalOutcomeSource } from './journal-outcome-format'
 import { JOURNAL_STATE_CODEC_VERSION } from './journal-state-codec'
+import { journalStateScalars } from './journal-state-layout'
 import { writeJournalProjectionScalars } from './journal-projection-table'
 
 export function journalCacheMatches(
@@ -12,26 +13,40 @@ export function journalCacheMatches(
   source: JournalOutcomeSource
 ): boolean {
   const stamp = db
-    .prepare(`SELECT k.epoch, k.generation, k.format, k.through_seq, c.version, c.through_seq AS cached_through
-    FROM journal_cache_stamp k JOIN journal_state c ON c.session_id = k.session_id
-    AND c.epoch = k.epoch WHERE k.session_id = ?`)
+    .prepare(
+      'SELECT epoch, generation, through_seq, version FROM journal_state WHERE session_id = ?'
+    )
     .get(sessionId)
   return (
     stamp?.epoch === epoch &&
     stamp.generation === source.generation &&
-    stamp.format === source.format &&
     stamp.through_seq === source.through &&
-    stamp.version === JOURNAL_STATE_CODEC_VERSION &&
-    stamp.cached_through === source.through
+    stamp.version === JOURNAL_STATE_CODEC_VERSION
   )
 }
 
 export function writeJournalOutcomeCache(
   db: Database.Database,
   state: JournalReducerState,
-  generation: string,
-  values: readonly JournalOutcome[],
-  stamp = true
+  generation: number,
+  values: readonly JournalOutcome[]
+): void {
+  writeJournalOutcomeCacheRows(db, state.sessionId, state.epoch, values)
+  writeJournalProjectionScalars(db, {
+    sessionId: state.sessionId,
+    epoch: state.epoch,
+    generation,
+    through: state.lastSequence,
+    stateJson: journalStateScalars(state)
+  })
+}
+
+/** Upserts whole keyed values in log order, so a later value or deletion wins. */
+export function writeJournalOutcomeCacheRows(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  values: readonly JournalOutcome[]
 ): void {
   for (const value of values) {
     if (value.field === '$') {
@@ -42,9 +57,7 @@ export function writeJournalOutcomeCache(
     const column = item ? 'item_id' : 'entry_key'
     const jsonColumn = item ? 'item_json' : 'entry_json'
     const field = item ? '' : ' AND field = ?'
-    const prefix = item
-      ? [state.sessionId, state.epoch]
-      : [state.sessionId, state.epoch, value.field]
+    const prefix = item ? [sessionId, epoch] : [sessionId, epoch, value.field]
     const key = item ? String(JSON.parse(value.key)) : value.key
     if (value.deleted) {
       db.prepare(`DELETE FROM ${table} WHERE session_id = ? AND epoch = ?${field}
@@ -62,17 +75,4 @@ export function writeJournalOutcomeCache(
       )
     }
   }
-  if (!stamp) {
-    return
-  }
-  writeJournalProjectionScalars(db, state)
-  db.prepare(`INSERT INTO journal_cache_stamp VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch, generation = excluded.generation,
-    format = excluded.format, through_seq = excluded.through_seq`).run(
-    state.sessionId,
-    state.epoch,
-    generation,
-    JOURNAL_OUTCOME_FORMAT,
-    state.lastSequence
-  )
 }

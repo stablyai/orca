@@ -9,49 +9,40 @@ export function sweepJournalOutcomePage(database: JournalHostDatabase): boolean 
   return database.transaction((db) => {
     const after = sweepPositions.get(db) ?? 0
     const candidates = db
-      .prepare(`SELECT a.rowid AS position, a.session_id, a.epoch, a.generation
+      .prepare(`SELECT a.generation, a.session_id, a.epoch
       FROM journal_outcome_attempts a LEFT JOIN journal_outcome_epochs e
       ON e.session_id = a.session_id AND e.epoch = a.epoch AND e.generation = a.generation
-      WHERE e.session_id IS NULL AND a.rowid > ? ORDER BY a.rowid LIMIT 32`)
+      WHERE e.session_id IS NULL AND a.generation > ? ORDER BY a.generation LIMIT 32`)
       .all(after)
-    let more = false
     for (const row of candidates) {
-      if (typeof row.position === 'number') {
-        sweepPositions.set(db, row.position)
+      const { generation, session_id: sessionId, epoch } = row
+      if (typeof generation !== 'number') {
+        continue
       }
+      sweepPositions.set(db, generation)
       if (
-        typeof row.session_id !== 'string' ||
-        typeof row.epoch !== 'string' ||
-        typeof row.generation !== 'string' ||
-        activeJournalGenerations.has(row.generation)
+        typeof sessionId !== 'string' ||
+        typeof epoch !== 'string' ||
+        activeJournalGenerations.has(generation)
       ) {
         continue
       }
-      const owner = ownJournalMaintenance(db, row.session_id, row.epoch, 0)
+      const owner = ownJournalMaintenance(db, sessionId, epoch)
       if (!owner) {
         continue
       }
       try {
         const removed = db
           .prepare(`DELETE FROM journal_outcomes WHERE rowid IN (
-          SELECT rowid FROM journal_outcomes WHERE session_id = ? AND epoch = ?
-          AND generation = ? LIMIT 32)`)
-          .run(row.session_id, row.epoch, row.generation)
-        if (removed.changes > 0) {
-          more = true
-        } else {
-          db.prepare(`DELETE FROM journal_outcome_attempts
-            WHERE session_id = ? AND epoch = ? AND generation = ?`).run(
-            row.session_id,
-            row.epoch,
-            row.generation
-          )
+          SELECT rowid FROM journal_outcomes WHERE generation = ? LIMIT 32)`)
+          .run(generation)
+        if (removed.changes === 0) {
+          db.prepare('DELETE FROM journal_outcome_attempts WHERE generation = ?').run(generation)
+          continue
         }
         // One bounded data page per transaction, even with many retired generations.
-        if (more) {
-          sweepPositions.set(db, after)
-          return true
-        }
+        sweepPositions.set(db, after)
+        return true
       } finally {
         owner.release()
       }

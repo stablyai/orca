@@ -1,44 +1,21 @@
 import type Database from '../../sqlite/sync-database'
-import type { SqliteBindings, SqliteRow, SqliteStatement } from '../../sqlite/sqlite-statement'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import { startJournalStateDecode } from './journal-state-codec'
 
 export { ensureJournalSavedStateTables, clearJournalSavedState } from './journal-projection-table'
 
-export function readJournalSavedState(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string
-): JournalReducerState | null {
-  try {
-    const pages = readJournalSavedStatePages(() => db, sessionId, epoch)
-    let step = pages.next()
-    while (!step.done) {
-      step = pages.next()
-    }
-    return typeof step.value === 'string' ? null : step.value
-  } catch (error) {
-    logJournalProjectionFailure(sessionId, error)
-    return null
-  }
-}
-
 /** A decoded view, none for this epoch, or a present view this build cannot read. */
 export type JournalSavedView = JournalReducerState | 'absent' | 'unreadable'
 
-/** Rows per page and the stored UTF-8 bytes after which a page stops; at least one row. */
-export type JournalSavedPage = { rows: number; bytes: number }
-
-/** Decodes the view in storage-order pages, yielding between them; the default reads each table at
- * once. Content this codec rejects is unreadable; storage errors throw, so they are never absent. */
-export function* readJournalSavedStatePages(
-  database: () => Database.Database,
+/** Decodes the whole view in storage order in one synchronous read, like main's replay, so no
+ * rebuild interleaves with it. Content this codec rejects is unreadable; storage errors throw. */
+export function readJournalSavedView(
+  db: Database.Database,
   sessionId: string,
-  epoch: string,
-  page: JournalSavedPage = { rows: -1, bytes: Number.POSITIVE_INFINITY }
-): Generator<void, JournalSavedView> {
-  const row = database()
+  epoch: string
+): JournalSavedView {
+  const row = db
     .prepare(`SELECT through_seq, version, state_json FROM journal_state
     WHERE session_id = ? AND epoch = ?`)
     .get(sessionId, epoch)
@@ -54,68 +31,27 @@ export function* readJournalSavedStatePages(
   if (decode === 'unreadable') {
     return 'unreadable'
   }
-  let ordinal: number | string = -1
-  for (let more = true; more;) {
-    const items = readTextPage(
-      database().prepare(`SELECT ordinal, item_json FROM journal_items
-      WHERE session_id = ? AND epoch = ? AND ordinal > ? ORDER BY ordinal LIMIT ?`),
-      [sessionId, epoch, ordinal],
-      'item_json',
-      page
-    )
-    for (const item of items.rows) {
-      const next = decoding(sessionId, () => {
-        if (
-          (typeof item.ordinal !== 'number' && typeof item.ordinal !== 'string') ||
-          typeof item.item_json !== 'string'
-        ) {
-          throw new Error('invalid saved journal item')
-        }
-        decode.item(item.item_json)
-        return item.ordinal
-      })
-      if (next === 'unreadable') {
-        return 'unreadable'
-      }
-      ordinal = next
-    }
-    more = items.more
-    if (more) {
-      yield
+  for (const item of db
+    .prepare(`SELECT item_json FROM journal_items
+    WHERE session_id = ? AND epoch = ? ORDER BY ordinal`)
+    .iterate(sessionId, epoch)) {
+    const json = item.item_json
+    if (
+      decoding(sessionId, () => decode.item(typeof json === 'string' ? json : '')) === 'unreadable'
+    ) {
+      return 'unreadable'
     }
   }
-  let field = ''
-  ordinal = -1
-  for (let more = true; more;) {
-    const entries = readTextPage(
-      database().prepare(`SELECT field, ordinal, entry_json FROM journal_entries
-      WHERE session_id = ? AND epoch = ? AND (field, ordinal) > (?, ?)
-      ORDER BY field, ordinal LIMIT ?`),
-      [sessionId, epoch, field, ordinal],
-      'entry_json',
-      page
+  for (const entry of db
+    .prepare(`SELECT field, entry_json FROM journal_entries
+    WHERE session_id = ? AND epoch = ? ORDER BY field, ordinal`)
+    .iterate(sessionId, epoch)) {
+    const { field, entry_json: json } = entry
+    const decoded = decoding(sessionId, () =>
+      decode.entry(String(field), typeof json === 'string' ? json : '')
     )
-    for (const entry of entries.rows) {
-      const next = decoding(sessionId, () => {
-        if (
-          typeof entry.field !== 'string' ||
-          (typeof entry.ordinal !== 'number' && typeof entry.ordinal !== 'string') ||
-          typeof entry.entry_json !== 'string'
-        ) {
-          throw new Error('invalid saved journal entry')
-        }
-        decode.entry(entry.field, entry.entry_json)
-        return { field: entry.field, ordinal: entry.ordinal }
-      })
-      if (next === 'unreadable') {
-        return 'unreadable'
-      }
-      field = next.field
-      ordinal = next.ordinal
-    }
-    more = entries.more
-    if (more) {
-      yield
+    if (decoded === 'unreadable') {
+      return 'unreadable'
     }
   }
   return decoding(sessionId, () => {
@@ -141,46 +77,33 @@ function decoding<T>(sessionId: string, decode: () => T): T | 'unreadable' {
   }
 }
 
-/** The cursor stops after the row whose `column` text reaches the page's budget. */
-function readTextPage(
-  statement: SqliteStatement,
-  parameters: SqliteBindings,
-  column: string,
-  page: JournalSavedPage
-): { rows: SqliteRow[]; more: boolean } {
-  const rows: SqliteRow[] = []
-  let bytes = 0
-  for (const row of statement.iterate(...parameters, page.rows)) {
-    rows.push(row)
-    const text = row[column]
-    bytes += typeof text === 'string' ? Buffer.byteLength(text) : 0
-    if (bytes >= page.bytes) {
-      return { rows, more: true }
-    }
-  }
-  return { rows, more: page.rows >= 0 && rows.length === page.rows }
-}
-
-/** Old epochs leave only disposable rows; retire one bounded page between maintenance rests. */
+/** Old epochs leave only disposable rows. Driven by the one journal_state row each cached chat
+ * keeps, then that chat's rows by indexed prefix: one bounded page per transaction, and a pass with
+ * nothing to retire reads only journal_state. */
 export function sweepJournalSavedState(database: JournalHostDatabase): boolean {
   return database.transaction((db) => {
-    for (const table of [
-      'journal_items',
-      'journal_entries',
-      'journal_cache_stamp',
-      'journal_state'
-    ]) {
+    const orphan = db
+      .prepare(`SELECT c.session_id, c.epoch FROM journal_state c
+      LEFT JOIN journal_sessions s ON s.session_id = c.session_id AND s.epoch = c.epoch
+      WHERE s.session_id IS NULL LIMIT 1`)
+      .get()
+    if (typeof orphan?.session_id !== 'string' || typeof orphan.epoch !== 'string') {
+      return false
+    }
+    for (const table of ['journal_items', 'journal_entries']) {
       const removed = db
-        .prepare(`DELETE FROM ${table} WHERE rowid IN (
-        SELECT c.rowid FROM ${table} c LEFT JOIN journal_sessions s
-        ON s.session_id = c.session_id AND s.epoch = c.epoch
-        WHERE s.session_id IS NULL LIMIT 32)`)
-        .run()
+        .prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table}
+        WHERE session_id = ? AND epoch = ? LIMIT 32)`)
+        .run(orphan.session_id, orphan.epoch)
       if (removed.changes > 0) {
         return true
       }
     }
-    return false
+    db.prepare('DELETE FROM journal_state WHERE session_id = ? AND epoch = ?').run(
+      orphan.session_id,
+      orphan.epoch
+    )
+    return true
   })
 }
 
