@@ -18,6 +18,7 @@ type Props<T extends PickerListItem> = {
   onSelect: (item: T) => void
   onClose: () => void
   renderIcon?: (item: T) => ReactNode
+  footer?: ReactNode
 }
 
 export function PickerListDrawer<T extends PickerListItem>({
@@ -27,7 +28,8 @@ export function PickerListDrawer<T extends PickerListItem>({
   selectedId,
   onSelect,
   onClose,
-  renderIcon
+  renderIcon,
+  footer
 }: Props<T>) {
   const colorScheme = useMobileColorScheme()
   const [closing, setClosing] = useState(false)
@@ -111,6 +113,7 @@ export function PickerListDrawer<T extends PickerListItem>({
           )
         }}
       />
+      {footer}
     </BottomDrawer>
   )
 }

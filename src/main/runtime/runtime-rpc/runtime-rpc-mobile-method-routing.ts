@@ -151,6 +151,7 @@ export const EXECUTION_HOST_METHODS = [
   // Mobile reports takeover out of band, matching desktop renderer signaling.
   'orchestration.workerTerminalUserInput',
   'projectGroup.list',
+  'repo.add',
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',

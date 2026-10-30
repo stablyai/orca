@@ -48,6 +48,7 @@ export function NewWorktreeFormSheet(props: {
   onClose: () => void
   onOpenExternalUrl: (url: string) => void
   onOpenProject: () => void
+  onOpenAddProject?: () => void
   onOpenRunTarget: () => void
   onOpenSource: () => void
   onClearError: () => void
@@ -78,6 +79,18 @@ export function NewWorktreeFormSheet(props: {
           <Text style={styles.emptyText}>
             {t('components.newWorktreeFormSheet.noProjectsFound', 'No projects found')}
           </Text>
+          {props.onOpenAddProject ? (
+            <Pressable
+              style={styles.addProjectButton}
+              onPress={props.onOpenAddProject}
+              accessibilityRole="button"
+              accessibilityLabel={t('components.newWorktreeFormSheet.addProject', 'Add project')}
+            >
+              <Text style={styles.addProjectButtonText}>
+                {t('components.newWorktreeFormSheet.addProject', 'Add project')}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <>
