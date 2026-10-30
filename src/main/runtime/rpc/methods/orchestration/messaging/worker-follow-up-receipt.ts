@@ -28,6 +28,7 @@ const StartedWorker = z.looseObject({
   taskId: z.string().optional(),
   dispatchId: z.string().optional(),
   state: z.string().optional(),
+  turnStart: z.string().optional(),
   failedStage: z.string().optional(),
   lastError: z.string().optional(),
   recovery: z.string().optional(),
@@ -103,6 +104,8 @@ export function followUpReceipt(
     dispatchId: receipt.dispatchId,
     worker: worker?.id,
     state: receipt.state,
+    // Behind the worker's own finishing turn: it runs when that turn ends.
+    queued: receipt.turnStart === 'queued' ? true : undefined,
     failedStage: receipt.failedStage,
     lastError: receipt.lastError,
     recovery: receipt.recovery,

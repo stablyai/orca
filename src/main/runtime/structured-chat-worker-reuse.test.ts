@@ -17,6 +17,7 @@ import {
   openChat,
   request,
   runtime,
+  sendUserMessage,
   settleTurn,
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
@@ -302,6 +303,31 @@ describe('a send to a finished structured worker', () => {
       follow_up_of_dispatch_id: firstDispatchId,
       assignee_orca_session_id: identity.sessionId
     })
+  })
+
+  it('queued behind the turn the worker reported from is accepted, not unknown', async () => {
+    await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const { identity, firstDispatchId } = await finishedStructuredWorker(taskId, 'none')
+    const worker = connectionFor(identity.sessionId)
+    expect(await sendUserMessage(identity.sessionId, 'go')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+    // The worker reports from inside that turn, which is still running.
+    worker.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+    await host.flushStreamedEvents(identity.sessionId)
+    expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
+      ok: true
+    })
+
+    expect(await sendTo(firstDispatchId, 'and the docs')).toMatchObject({
+      delivery: 'follow_up',
+      state: 'ready',
+      queued: true
+    })
+    worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
+    await host.flushStreamedEvents(identity.sessionId)
+    await vi.waitFor(() => expect(worker.turns.length).toBeGreaterThan(1), WAIT)
+    expect(worker.turns.map(turnText).join('\n')).toContain('and the docs')
   })
 
   it('after it was closed, reopens its chat in the same conversation', async () => {

@@ -35,7 +35,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { sendWorkerFollowUp } from './worker-follow-up'
 import { followUpUnreadCoordinatorMail } from './settled-worker-follow-through'
-import { captureWorkerResumeSession } from '../worker/worker-resume-session-capture'
+import { captureReportedWorkerResumeSession } from '../worker/worker-resume-session-capture'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -266,7 +266,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         })
         const settled = params.type === 'worker_done' ? settledDispatchId(sent) : undefined
         if (settled) {
-          captureWorkerResumeSession(runtime, db, settled)
+          captureReportedWorkerResumeSession(runtime, db, settled)
           followUpUnreadCoordinatorMail(runtime, db, settled)
         }
         return sent

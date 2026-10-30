@@ -47,6 +47,7 @@ type OrchestrationSendResult = { next?: string } & (
       followUpOf: string
       dispatchId: string
       state: string
+      queued?: boolean
       lastError?: string
       warnings?: SendRecipientWarning[]
     }
@@ -180,11 +181,12 @@ function formatFollowUp(value: {
   delivery: keyof typeof FOLLOW_UP_LEADS
   dispatchId: string
   state: string
+  queued?: boolean
   lastError?: string
 }): string {
   const line = `${FOLLOW_UP_LEADS[value.delivery]}; follow-up dispatch:${value.dispatchId}.`
   if (value.state === 'ready') {
-    return line
+    return value.queued ? `${line} It runs when the worker's current turn ends.` : line
   }
   const reason = value.lastError ?? 'unknown error'
   return value.state === 'outcome_unknown'
