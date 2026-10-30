@@ -180,7 +180,8 @@ function resultErrorCodeFields(
 
 export function updateAutomationRun(
   operations: AutomationRunOperations,
-  result: AutomationDispatchResult
+  result: AutomationDispatchResult,
+  capturePrevious?: (status: AutomationRun['status']) => void
 ): AutomationRun {
   const index = (operations.state.automationRuns ?? []).findIndex(
     (entry) => entry.id === result.runId
@@ -190,6 +191,7 @@ export function updateAutomationRun(
   }
   const now = Date.now()
   const previous = operations.state.automationRuns[index]
+  capturePrevious?.(previous.status)
   const { errorCode: _code, errorParams: _params, ...current } = previous
   const workspaceId = result.workspaceId ?? current.workspaceId
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')

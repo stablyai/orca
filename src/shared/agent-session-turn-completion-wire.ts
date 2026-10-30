@@ -17,6 +17,8 @@ export type AgentSessionTurnCompletion = {
   completedAt: number
   /** The request settled while a prompt waits on the user. Absent otherwise, and from older hosts. */
   awaitingUser?: true
+  /** The settled automation writer owns the outcome alert; older clients keep their generic alert. */
+  automationOwned?: true
 }
 
 /** Emit one host-commit edge per newly pending prompt, usually mid-turn; pending revisions retain identity and emit nothing. */

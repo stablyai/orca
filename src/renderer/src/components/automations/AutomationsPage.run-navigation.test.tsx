@@ -273,3 +273,65 @@ describe('AutomationsPage run navigation', () => {
     }
   )
 })
+
+it('acknowledges only a failed run actually opened in the visible Automations view', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  try {
+    mocks.state.activeView = 'automations'
+    const { rerender, automation } = await loadCachedHistory()
+    visibility.mockReturnValue('hidden')
+    const failed = makeRun({ id: 'failed', status: 'dispatch_failed', failureSeenAt: undefined })
+    api.automations.listRuns.mockResolvedValue([failed])
+    const originalRpc = mocks.callRuntimeRpc.getMockImplementation()
+    mocks.callRuntimeRpc.mockImplementation(
+      (target: unknown, method: unknown, ...args: unknown[]) => {
+        if (method === 'automation.runSeen') {
+          api.automations.listRuns.mockResolvedValue([{ ...failed, failureSeenAt: 100 }])
+          return Promise.resolve({ seen: true })
+        }
+        return originalRpc?.(target, method, ...args)
+      }
+    )
+    await rerender()
+    expect(
+      mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+    ).toHaveLength(0)
+    mocks.state.pendingAutomationRunNavigation = { automationId: automation.id, runId: failed.id }
+    await rerender()
+    await rerender()
+    expect(
+      mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+    ).toHaveLength(0)
+    visibility.mockReturnValue('visible')
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(
+      mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+    ).toEqual([
+      [
+        { kind: 'local' },
+        'automation.runSeen',
+        { id: automation.id, runId: failed.id, expectedOwner: { selector: { kind: 'self' } } },
+        expect.anything()
+      ]
+    ])
+  } finally {
+    visibility.mockRestore()
+  }
+})
+
+it('does not open a retained notification on a replacement pairing with colliding run ids', async () => {
+  runtimeHost([makeAutomation({ name: 'Replacement host' })], [makeRun()])
+  const { rerender, automation } = await loadCachedHistory()
+  mocks.state.pendingAutomationRunNavigation = {
+    automationId: automation.id,
+    runId: 'run-26',
+    hostId: 'runtime:gpu',
+    pairingRevision: 3
+  }
+  await rerender()
+  expect(mocks.state.pendingAutomationRunNavigation).toBeNull()
+  expect(mocks.toastMessage).toHaveBeenCalledWith('Automation no longer available.')
+  expect(
+    mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+  ).toHaveLength(0)
+})

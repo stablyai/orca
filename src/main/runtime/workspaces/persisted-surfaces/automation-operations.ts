@@ -55,6 +55,23 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     })
   }
 
+  async markAutomationRunSeen(
+    automationId: string,
+    runId: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): Promise<boolean> {
+    this.automation.assertOwner(automationId, expectedOwner, 'read')
+    const seen = this.store?.markAutomationRunSeen?.(automationId, runId) ?? false
+    if (seen) {
+      await this.store?.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+      this.notifyAutomationsChanged({
+        reason: 'run',
+        selector: this.automationChangeSelector(automationId) ?? undefined
+      })
+    }
+    return seen
+  }
+
   listAutomationRuns(
     automationId?: string,
     expectedOwner?: AutomationOwnerPrecondition

@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { agentHookServer } from '../../agent-hooks/server'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
-import type { Store } from '../loading-store/store'
+import { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
 import {
@@ -212,4 +212,30 @@ describe('live profile authority admission', () => {
     const reopened = await open(input)
     expect(reopened.store.getSettings().theme).toBe('light')
   })
+})
+
+it('does not expose schedulers or capabilities before activation is durable, and closes after a refused activation', async () => {
+  const input = options()
+  const gate = Promise.withResolvers<void>()
+  const original = Store.prototype.flushPendingOrThrowAsync
+  const flush = vi
+    .spyOn(Store.prototype, 'flushPendingOrThrowAsync')
+    .mockImplementationOnce(async function (this: Store, ...args) {
+      await gate.promise
+      return original.apply(this, args)
+    })
+  let published = false
+  const opening = open(input).then((value) => {
+    published = true
+    return value
+  })
+  await vi.waitFor(() => expect(flush).toHaveBeenCalled())
+  expect(published).toBe(false)
+  gate.resolve()
+  await opening
+  expect(readState(input).automationFailureSeenVersion).toBe(1)
+  flush.mockRejectedValueOnce(new Error('activation refused'))
+  const freeze = vi.spyOn(Store.prototype, 'freezeWritesAsync')
+  await expect(open(options())).rejects.toThrow('activation refused')
+  expect(freeze).toHaveBeenCalledOnce()
 })

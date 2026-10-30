@@ -1,3 +1,4 @@
+import type { AutomationRunOpenTarget } from '../../shared/automation-run-outcome'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   AutomationDispatchRequest,
@@ -22,6 +23,8 @@ export type ExternalAutomationManagerResult = {
 
 // Automation CRUD uses runtime RPC; this IPC API handles desktop probes and dispatch.
 export type AutomationsApi = {
+  consumePendingOpenRun: () => Promise<AutomationRunOpenTarget | null>
+  onOpenRun: (callback: () => void) => () => void
   listExternalManagerForOwner: (
     request: ScopedExternalManagerListRequest
   ) => Promise<ExternalAutomationManagerResult>

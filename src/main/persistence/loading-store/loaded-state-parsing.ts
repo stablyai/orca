@@ -1,3 +1,4 @@
+import { activateAutomationRunAttention } from '../../../shared/automation-run-attention'
 import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../shared/network-proxy'
 import { normalizeKagiSessionLink } from '../../../shared/browser-url'
@@ -188,6 +189,12 @@ export class LoadedStateParsingOperations {
     if (result === null) {
       result = getDefaultPersistedState(homedir())
     }
+
+    const activated = activateAutomationRunAttention(result, Date.now())
+    if (activated !== result) {
+      this.runtime.loadNeedsSave = true
+    }
+    result = activated
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)

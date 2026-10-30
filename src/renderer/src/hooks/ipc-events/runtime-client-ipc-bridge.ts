@@ -242,6 +242,7 @@ export function registerRuntimeClientIpcBridge(
           if (!isCurrent()) {
             return
           }
+          emitAutomationsChangedWindowEvent({ environmentId })
           invalidateRuntimeClientEventReplay({
             getSshStateReference: () => useAppStore.getState().sshStateByEnvironment,
             refreshRuntimeStatus: () => {

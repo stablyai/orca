@@ -1,3 +1,4 @@
+import type { AutomationRunOpenTarget } from './automation-run-outcome'
 import type { StructuredAttentionRead, StructuredAttentionOrigin } from './agent-session-attention'
 import type { AgentStatusState, AgentType } from './agent-status-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
@@ -36,6 +37,7 @@ export type StructuredNotificationRead = StructuredAttentionRead & {
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  automationRun?: AutomationRunOpenTarget
   notificationId?: string
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
@@ -73,6 +75,7 @@ export type NotificationDispatchResult = {
   delivered: boolean
   /** Why delivery was skipped (set when delivered is false); 'blocked-by-system' = macOS would silently swallow it. */
   reason?:
+    | 'unavailable'
     | 'disabled'
     | 'source-disabled'
     | 'host-muted'

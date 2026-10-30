@@ -1,3 +1,4 @@
+import type { AgentSessionTurnCompletion } from '../../shared/agent-session-wire'
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
@@ -61,6 +62,10 @@ export class AutomationService {
   private readonly automationLanes = new Map<string, Promise<void>>()
   /** Close unused completed terminals on headless hosts; return the count. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
+  ownsChatCompletion: ((completion: AgentSessionTurnCompletion) => Promise<boolean>) | null = null
+  async settleDispatches(): Promise<void> {
+    await Promise.allSettled(this.automationLanes.values())
+  }
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
@@ -137,6 +142,7 @@ export class AutomationService {
     this.stopped = true
     this.dispatchGeneration += 1
     this.completionWatcher?.dispose()
+    this.runs.dispose()
     if (!this.timer) {
       return
     }

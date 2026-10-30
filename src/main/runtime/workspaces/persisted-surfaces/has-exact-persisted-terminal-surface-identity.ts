@@ -1,3 +1,4 @@
+import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import { OrcaRuntimeWithRestoredTerminalPlacement } from './restored-terminal-placement'
@@ -219,6 +220,10 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
       identity.leafId === candidate.leafId &&
       identity.ptyId === candidate.ptyId
     )
+  }
+
+  ownsAutomationChatCompletion(completion: AgentSessionTurnCompletion): Promise<boolean> {
+    return this.automation.ownsChatCompletion(completion)
   }
 
   setAutomationService(service: AutomationService): void {

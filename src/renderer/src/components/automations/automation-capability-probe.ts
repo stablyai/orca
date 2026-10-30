@@ -67,6 +67,18 @@ export function resetAutomationCapabilityProbes(): void {
   inFlightCapabilityProbes.clear()
 }
 
+export function authorityCapabilityConfirmed(
+  authority: AutomationAuthorityRef,
+  capability: RuntimeCapability
+): boolean {
+  return (
+    authority.kind === 'desktop' ||
+    confirmedAuthorityCapabilities
+      .get(capabilityProbeKey(authority))
+      ?.capabilities.has(capability) === true
+  )
+}
+
 export async function assertAuthorityCapability(
   authority: AutomationAuthorityRef,
   capability: RuntimeCapability,

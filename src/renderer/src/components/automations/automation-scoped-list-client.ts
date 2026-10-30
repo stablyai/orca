@@ -1,5 +1,7 @@
 /** Pin runtime pairing revisions and SSH registration generations to captured owners. Validate responses: an old host may ignore selectors and return other hosts’ rows. */
 
+import { AUTOMATION_RUN_SEEN_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
@@ -30,6 +32,7 @@ import {
 } from './automation-host-client'
 import {
   assertAuthorityCapability,
+  authorityCapabilityConfirmed,
   prepareAutomationLaunchSetup,
   assertOwnerFencingSupported,
   assertAutomationCreateIdempotencySupported,
@@ -45,6 +48,24 @@ export {
   AUTHORITY_CAPABILITY_CONFIRMATION_MAX,
   resetAutomationCapabilityProbes
 } from './automation-capability-probe'
+
+export async function markAutomationRunSeen(
+  authority: AutomationAuthorityRef,
+  id: string,
+  runId: string,
+  expectedOwner: AutomationOwnerPrecondition
+): Promise<void> {
+  await assertAuthorityCapability(
+    authority,
+    AUTOMATION_RUN_SEEN_CAPABILITY,
+    'Automation read state unavailable'
+  )
+  await callAuthority(authority, 'automation.runSeen', { id, runId, expectedOwner })
+  emitAutomationsChangedWindowEvent({
+    ...(authority.kind === 'runtime' ? { environmentId: authority.environmentId } : {}),
+    reason: 'run'
+  })
+}
 
 export class AutomationListResponseError extends Error {
   readonly code = 'invalid_response'
@@ -128,7 +149,14 @@ export async function listScopedAutomations(
     AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
     AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE
   )
-  return validated(await callAuthority(authority, 'automation.list', { selector }), selector)
+  const result = validated(
+    await callAuthority(authority, 'automation.list', { selector }),
+    selector
+  )
+  if (authorityCapabilityConfirmed(authority, AUTOMATION_RUN_SEEN_CAPABILITY)) {
+    return result
+  }
+  return { ...result, items: result.items.map(({ unseenFailureCount: _count, ...item }) => item) }
 }
 
 /** Share one old-runtime call per refresh; client partitioning supplies view-only rows without invented owners or usage. */

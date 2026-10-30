@@ -1,3 +1,4 @@
+import type { AgentSessionTurnCompletion } from '../../shared/agent-session-wire'
 import type { AutomationService } from '../automations/service'
 import type {
   Automation,
@@ -17,7 +18,10 @@ import type {
 } from '../../shared/automation-owner-precondition'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import { paginateAutomationRuns } from '../../shared/automation-run-cursor'
-import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import {
+  hasRuntimeAutomationUpdateValue,
+  copyRuntimeAutomationPatchValues
+} from './runtime-automation-update-value'
 import { assertAutomationRunContextMatchesTarget } from './runtime-automation-run-context'
 
 export type RuntimeAutomationCreateInput = Omit<
@@ -49,6 +53,10 @@ export class RuntimeAutomationController {
     private readonly store: RuntimeStore | null,
     private readonly resolvers: RuntimeAutomationTargetResolvers
   ) {}
+
+  ownsChatCompletion(completion: AgentSessionTurnCompletion): Promise<boolean> {
+    return this.service?.ownsChatCompletion?.(completion) ?? Promise.resolve(false)
+  }
 
   setService(service: AutomationService): void {
     this.service = service
@@ -158,7 +166,7 @@ export class RuntimeAutomationController {
     }
     const current = this.show(id)
     const patch: AutomationUpdateInput = {}
-    this.copyPatchValues(updates, patch)
+    copyRuntimeAutomationPatchValues(updates, patch)
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
@@ -228,35 +236,6 @@ export class RuntimeAutomationController {
       return
     }
     this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
-  }
-
-  private copyPatchValues(
-    updates: RuntimeAutomationUpdateInput,
-    patch: AutomationUpdateInput
-  ): void {
-    const keys = [
-      'name',
-      'prompt',
-      'precheck',
-      'agentId',
-      'extraAgentArgs',
-      'launchSetupPatch',
-      'runContext',
-      'sourceContext',
-      'baseBranch',
-      'setupDecision',
-      'reuseSession',
-      'timezone',
-      'rrule',
-      'dtstart',
-      'enabled',
-      'missedRunGraceMinutes'
-    ] as const
-    for (const key of keys) {
-      if (hasRuntimeAutomationUpdateValue(updates, key)) {
-        Object.assign(patch, { [key]: updates[key] })
-      }
-    }
   }
 
   private async resolveTarget(

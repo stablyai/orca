@@ -139,6 +139,7 @@ export type Automation = {
 }
 
 export type AutomationRun = {
+  failureSeenAt?: number
   id: string
   automationId: string
   runContext?: WorkspaceRunContext | null

@@ -1,3 +1,4 @@
+import type { AgentSessionTurnCompletion } from '../../shared/agent-session-wire'
 // Push phone attention from the execution host so headless sessions need no desktop relay. Desktop retains presentation and marks local delivery to avoid duplicate pushes.
 // Read labels synchronously at the raising commit so alerts cannot outlive prompts; edge ids dedupe delivery and address retirement.
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
@@ -35,6 +36,7 @@ export type StructuredAttentionMobileDeliveryDeps = {
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
+  ownsCompletion?: (completion: AgentSessionTurnCompletion) => Promise<boolean>
   now: () => number
 }
 
@@ -78,54 +80,71 @@ function readLabels(
 export function createStructuredAttentionMobileDelivery(
   deps: StructuredAttentionMobileDeliveryDeps
 ): StructuredAttentionMobileDelivery {
+  const deliver: StructuredAttentionMobileDelivery['deliver'] = (edge, summary) => {
+    const news = agentSessionAttentionNews(edge)
+    if (!news) {
+      return
+    }
+    const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
+    if (deps.isWorkspaceMuted(scope)) {
+      return
+    }
+    const settings = deps.readNotificationSettings()!
+    const attentionKey = agentSessionAttentionKey(edge)
+    const request: NotificationDispatchRequest = {
+      source: 'agent-task-complete',
+      surface: 'agent-session',
+      worktreeId: scope.workspaceId,
+      ...readLabels(deps, scope),
+      agentState: news.agentState,
+      ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
+      ...(summary ? { agentType: summary.agent } : {}),
+      ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
+      ...(summary?.lastAssistantMessage
+        ? { agentLastAssistantMessage: summary.lastAssistantMessage }
+        : {})
+    }
+    const { title, body } = buildNotificationOptions(
+      request,
+      getRuntimeDesktopSurface().translateNotification
+    )
+    // Apply the desktop fan-out preferences to phone delivery too.
+    const desktopAllowed = settings.enabled && settings.agentTaskComplete
+    deps.dispatch({
+      type: 'notification',
+      emittedAt: deps.now(),
+      source: 'agent-task-complete',
+      ...(!desktopAllowed ? { desktopAllowed: false } : {}),
+      title,
+      body,
+      worktreeId: scope.workspaceId,
+      // The host has no window tab id; the phone matches this session-derived key to the chat.
+      paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
+      notificationId: attentionKey,
+      attentionKey,
+      ...(structuredAttentionOrigin(edge)
+        ? { structuredOrigin: structuredAttentionOrigin(edge) }
+        : {}),
+      agentState: news.agentState
+    })
+  }
   return {
     deliver: (edge, summary) => {
-      const news = agentSessionAttentionNews(edge)
-      if (!news) {
+      if (edge.type !== 'completion' || !deps.ownsCompletion) {
+        deliver(edge, summary)
         return
       }
-      const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
-      if (deps.isWorkspaceMuted(scope)) {
-        return
-      }
-      const settings = deps.readNotificationSettings()!
-      const attentionKey = agentSessionAttentionKey(edge)
-      const request: NotificationDispatchRequest = {
-        source: 'agent-task-complete',
-        surface: 'agent-session',
-        worktreeId: scope.workspaceId,
-        ...readLabels(deps, scope),
-        agentState: news.agentState,
-        ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
-        ...(summary ? { agentType: summary.agent } : {}),
-        ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
-        ...(summary?.lastAssistantMessage
-          ? { agentLastAssistantMessage: summary.lastAssistantMessage }
-          : {})
-      }
-      const { title, body } = buildNotificationOptions(
-        request,
-        getRuntimeDesktopSurface().translateNotification
-      )
-      // Apply the desktop fan-out preferences to phone delivery too.
-      const desktopAllowed = settings.enabled && settings.agentTaskComplete
-      deps.dispatch({
-        type: 'notification',
-        emittedAt: deps.now(),
-        source: 'agent-task-complete',
-        ...(!desktopAllowed ? { desktopAllowed: false } : {}),
-        title,
-        body,
-        worktreeId: scope.workspaceId,
-        // The host has no window tab id; the phone matches this session-derived key to the chat.
-        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
-        notificationId: attentionKey,
-        attentionKey,
-        ...(structuredAttentionOrigin(edge)
-          ? { structuredOrigin: structuredAttentionOrigin(edge) }
-          : {}),
-        agentState: news.agentState
-      })
+      void deps
+        .ownsCompletion(edge.completion)
+        .then((owned) => {
+          if (!owned) {
+            deliver(edge, summary)
+          }
+        })
+        .catch((error) => {
+          console.warn('[automations] Could not resolve Chat notification owner:', error)
+          deliver(edge, summary)
+        })
     },
     reconcile: deps.reconcile
   }

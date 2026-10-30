@@ -1,3 +1,4 @@
+import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
@@ -55,10 +56,37 @@ function remountTerminalTabsAwaitingHostHydration(): void {
 
 export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = []
+  let alive = true
+  const openPendingRun = (): void => {
+    void window.api.automations
+      .consumePendingOpenRun?.()
+      .then((target) => {
+        if (!alive || !target) {
+          return
+        }
+        const store = useAppStore.getState()
+        store.setPendingAutomationRunNavigation(target)
+        store.openAutomationsPage()
+      })
+      .catch((error) => console.warn('[automations] Could not open notified run:', error))
+  }
+  const stopOpenRun = window.api.automations.onOpenRun?.(openPendingRun)
+  if (stopOpenRun) {
+    unsubs.push(stopOpenRun)
+  }
+  unsubs.push(() => {
+    alive = false
+  })
+  openPendingRun()
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
   unsubs.push(
-    window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
+    window.api.automations.onChanged((payload) => {
+      emitAutomationsChangedWindowEvent(payload)
+      if (payload?.notificationResult?.reason === 'blocked-by-system') {
+        showBlockedNotificationFallbackToast()
+      }
+    })
   )
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)

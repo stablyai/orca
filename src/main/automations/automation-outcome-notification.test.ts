@@ -1,0 +1,141 @@
+import type { Store } from '../persistence'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { describe, expect, it, vi } from 'vitest'
+import type { AutomationRunOutcome } from '../../shared/automation-run-outcome'
+import {
+  automationOutcomeNotification,
+  publishAutomationOutcome
+} from './automation-outcome-notification'
+import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import type { NotificationSettings } from '../../shared/notification-settings-types'
+
+function outcome(overrides: Partial<AutomationRunOutcome['run']> = {}): AutomationRunOutcome {
+  return {
+    name: 'Daily check',
+    agentId: 'claude',
+    run: {
+      id: 'run',
+      automationId: 'automation',
+      status: 'completed',
+      sessionKind: 'chat',
+      workspaceId: 'workspace',
+      chatSessionId: 'chat',
+      terminalPaneKey: null,
+      terminalPtyId: null,
+      dispatchedAt: 2,
+      createdAt: 1,
+      ...overrides
+    }
+  }
+}
+
+describe('automation outcome requests', () => {
+  it.each(['completed', 'dispatch_failed'] as const)(
+    'routes %s to the common completion gates and run click target',
+    (status) => {
+      expect(
+        automationOutcomeNotification(outcome({ status }), { hostId: 'runtime:server' })
+      ).toMatchObject({
+        source: 'agent-task-complete',
+        agentState: 'done',
+        agentTurnOutcome: status === 'completed' ? 'success' : 'failure',
+        automationRun: { automationId: 'automation', runId: 'run', hostId: 'runtime:server' },
+        executionHost: 'runtime:server'
+      })
+      expect(automationOutcomeNotification(outcome())?.attentionKey).not.toBe(
+        automationOutcomeNotification(outcome(), { hostId: 'runtime:server' })?.attentionKey
+      )
+    }
+  )
+  it('leaves Terminal alerts to their existing producer but includes failures before any agent starts', () => {
+    expect(automationOutcomeNotification(outcome({ sessionKind: 'terminal' }))).toBeNull()
+    expect(
+      automationOutcomeNotification(outcome({ sessionKind: 'terminal', status: 'dispatch_failed' }))
+    ).toBeNull()
+    expect(
+      automationOutcomeNotification(
+        outcome({
+          sessionKind: 'terminal',
+          status: 'dispatch_failed',
+          dispatchedAt: null,
+          chatSessionId: null
+        })
+      )
+    ).toMatchObject({ agentTurnOutcome: 'failure' })
+  })
+})
+
+it('honors the existing switches while hidden-workspace list settings do not mute outcomes', async () => {
+  const settings: NotificationSettings = {
+    enabled: true,
+    agentTaskComplete: true,
+    terminalBell: true,
+    suppressWhenFocused: false,
+    customSoundId: 'system',
+    customSoundPath: null,
+    customSoundVolume: 100,
+    mutedNotificationSourceIds: [],
+    notifyHiddenWorkspaces: false
+  }
+  const native = vi.fn(() => ({ delivered: true }))
+  const service = createNotificationDeliveryService({
+    readNotificationSettings: () => settings,
+    findActiveWindow: () => null,
+    isWindowVisible: () => false,
+    setTrayAttention: vi.fn(),
+    isNotificationSupported: () => true,
+    dispatchMobileNotification: null,
+    readAuthorizationStatus: async () => 'authorized',
+    recordDeliveryOutcome: vi.fn(),
+    deliverNative: native,
+    platform: 'linux',
+    now: () => 100_000
+  })
+  const request = automationOutcomeNotification(outcome())
+  if (!request) {
+    throw new Error('missing outcome request')
+  }
+  expect(await service.dispatch(request)).toEqual({ delivered: true })
+  settings.enabled = false
+  expect(await service.dispatch({ ...request, attentionKey: 'disabled' })).toMatchObject({
+    delivered: false,
+    reason: 'disabled'
+  })
+  settings.enabled = true
+  settings.agentTaskComplete = false
+  expect(await service.dispatch({ ...request, attentionKey: 'type-disabled' })).toMatchObject({
+    delivered: false,
+    reason: 'source-disabled'
+  })
+  expect(native).toHaveBeenCalledOnce()
+})
+
+it.each(['completed', 'dispatch_failed'] as const)(
+  'publishes one host-owned mobile %s result and retains the desktop outcome descriptor',
+  (status) => {
+    const dispatchMobileNotification = vi.fn()
+    const notifyAutomationsChanged = vi.fn()
+    // SAFETY: the publisher uses only these two runtime delivery entry points.
+    const runtime = {
+      dispatchMobileNotification,
+      notifyAutomationsChanged
+    } as unknown as OrcaRuntimeService
+    const settings = { enabled: false, agentTaskComplete: true }
+    // SAFETY: the host producer reads notification switches only, never workspace-list filters.
+    const store = { getSettings: () => ({ notifications: settings }) } as Store
+    const settledRun = outcome({ status })
+    publishAutomationOutcome(runtime, store, { reason: 'run', settledRun })
+    expect(dispatchMobileNotification).toHaveBeenCalledOnce()
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        desktopAllowed: false,
+        agentState: 'done',
+        worktreeId: 'workspace'
+      })
+    )
+    expect(notifyAutomationsChanged).toHaveBeenCalledWith({
+      reason: 'run',
+      settledRun: { ...settledRun, mobileDeliveredByHost: true }
+    })
+  }
+)

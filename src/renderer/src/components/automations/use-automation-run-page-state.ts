@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from 'react'
+import { useAutomationRunAcknowledgement } from './use-automation-run-acknowledgement'
+import { capturedAutomationOwner } from './automation-captured-owner'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -6,10 +8,12 @@ import {
   getAutomationHostTargetKey,
   getAutomationListedTargetFromHostId
 } from './automation-host-client'
+import { automationRunNavigationAvailability } from './automation-run-navigation-availability'
 import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-filter'
 import { useAppStore } from '@/store'
 import {
   getAutomationRunOwnerEnvironmentId,
+  collectAutomationRunTerminalTabIds,
   resolveAutomationRunTerminalTarget
 } from './automation-run-open-target'
 import { canRerunAutomationRun, getAutomationRunViewState } from './automation-run-view-state'
@@ -69,6 +73,16 @@ export function useAutomationRunPageState({
   } = list
   const { selectedRuns, selectedRunsReady, selectedRunsNotice, selectedAutomationRunPage } = setup
 
+  useAutomationRunAcknowledgement(
+    selectedAutomationRunPage,
+    capturedAutomationOwner(list.capturedAutomationOwners, selectedRow?.key ?? null),
+    pageView === 'run' &&
+      selectedRunsReady &&
+      !selectedRunsNotice &&
+      selectedRow !== null &&
+      !pendingAutomationRunNavigation
+  )
+
   useEffect(() => {
     if (!isDetailOpen || pendingAutomationRunNavigation) {
       return
@@ -102,6 +116,14 @@ export function useAutomationRunPageState({
       return
     }
     const pending = pendingAutomationRunNavigation
+    const availability = automationRunNavigationAvailability(
+      pending,
+      runtimeEnvironments,
+      hostCatalog.catalog.hydration.runtimeCatalogSettled
+    )
+    if (availability === 'loading') {
+      return
+    }
     if (pending.runId && pageView !== 'run') {
       setRunPageOrigin(pageView === 'automations' && isDetailOpen ? 'automation' : 'runs')
       setPageView('run')
@@ -115,9 +137,10 @@ export function useAutomationRunPageState({
     if (automationHostTargetKey !== pendingTargetKey) {
       return
     }
-    const pendingAutomation = automations.find(
-      (automation) => automation.id === pending.automationId
-    )
+    const pendingAutomation =
+      availability === 'ready'
+        ? automations.find((automation) => automation.id === pending.automationId)
+        : undefined
     if (selectedExternalKey !== null) {
       selectExternalKey(null)
     }
@@ -220,17 +243,10 @@ export function useAutomationRunPageState({
     setSelectedId
   ])
 
-  const activeTerminalTabIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const tabs of Object.values(unifiedTabsByWorktree)) {
-      for (const tab of tabs) {
-        if (tab.contentType === 'terminal') {
-          ids.add(tab.entityId)
-        }
-      }
-    }
-    return ids
-  }, [unifiedTabsByWorktree])
+  const activeTerminalTabIds = useMemo(
+    () => collectAutomationRunTerminalTabIds(unifiedTabsByWorktree),
+    [unifiedTabsByWorktree]
+  )
   const selectedAutomationRunPageWorktree = selectedAutomationRunPage?.workspaceId
     ? selectedRow
       ? (worktreeForRow(

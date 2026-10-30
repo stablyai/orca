@@ -1,4 +1,5 @@
 import React from 'react'
+import { AutomationFailureBadge } from './AutomationFailureBadge'
 import { BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
@@ -200,6 +201,7 @@ const SidebarNav = React.memo(function SidebarNav() {
               <span className="flex-1">
                 {translate('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')}
               </span>
+              <AutomationFailureBadge />
             </button>
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideAutomationsButton} />

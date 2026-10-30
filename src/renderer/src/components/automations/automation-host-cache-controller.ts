@@ -131,17 +131,28 @@ export function createAutomationHostQueryController(
       .filter((entry) => isFetchable(entry, selected) && (include?.(entry) ?? true))
       .map((entry) => toFetchTarget(entry, selected))
 
+  const pendingRefreshKeys = new Set<string>()
+  let refreshing = false
   const refreshKeys = async (stableKeys: readonly string[]): Promise<void> => {
-    const catalog = latest
-    if (!catalog) {
+    for (const key of stableKeys) {
+      pendingRefreshKeys.add(key)
+    }
+    if (refreshing) {
       return
     }
-    const wanted = new Set(stableKeys)
-    const targets = targetsFor(catalog, (entry) => wanted.has(entry.stableKey))
-    if (targets.length > 0) {
-      // Forced: the event already proved these entries stale, so TTL must not swallow them.
-      await scheduler.refresh(targets, { force: true })
-      options.onSettled?.()
+    refreshing = true
+    try {
+      while (!disposed && latest && pendingRefreshKeys.size > 0) {
+        const wanted = new Set(pendingRefreshKeys)
+        pendingRefreshKeys.clear()
+        const targets = targetsFor(latest, (entry) => wanted.has(entry.stableKey))
+        if (targets.length > 0) {
+          await scheduler.refresh(targets, { force: true })
+        }
+        options.onSettled?.()
+      }
+    } finally {
+      refreshing = false
     }
   }
 
@@ -203,6 +214,7 @@ export function createAutomationHostQueryController(
     isDisposed: () => disposed,
     dispose: () => {
       disposed = true
+      pendingRefreshKeys.clear()
       unsubscribe?.()
       invalidation.dispose()
       scheduler.dispose()

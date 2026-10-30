@@ -1,3 +1,4 @@
+import { unseenAutomationFailures } from '../../../shared/automation-run-attention'
 import type { Automation, AutomationRun } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -106,6 +107,10 @@ export function automationProjectionContext(
   withUsage: boolean
 ): AutomationProjectionContext {
   const usage = withUsage ? automationUsageSummaries(state) : null
+  const failures =
+    state.automationFailureSeenVersion === 1
+      ? unseenAutomationFailures(state.automationRuns ?? [])
+      : null
   const reposById = new Map(state.repos.map((repo) => [repo.id, repo]))
   const targetIdByGeneration = new Map(
     (state.sshTargets ?? []).flatMap((target) =>
@@ -114,6 +119,7 @@ export function automationProjectionContext(
   )
   return {
     storageAuthority,
+    ...(failures ? { unseenFailureCount: (id: string) => failures.get(id) ?? 0 } : {}),
     sshTargetGeneration: (targetId) => sshTargetGenerationForConnection(state, targetId),
     sshTargetIdForGeneration: (generation) => targetIdByGeneration.get(generation),
     repoConnectionId: (repoId) => {

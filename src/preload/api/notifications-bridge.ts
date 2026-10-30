@@ -52,6 +52,7 @@ export const notificationsApi = {
   playSound: async (options?: {
     force?: boolean
     volume?: number
+    waitUntilEnded?: boolean
   }): Promise<NotificationSoundResult> => {
     try {
       const resolved = (await ipcRenderer.invoke(
@@ -94,10 +95,28 @@ export const notificationsApi = {
       if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
         audio.volume = Math.min(1, Math.max(0, options.volume / 100))
       }
+      let finishPlayback: (() => void) | undefined
       try {
+        const ended = options?.waitUntilEnded
+          ? new Promise<void>((resolve) => {
+              const finish = (): void => {
+                clearTimeout(timeout)
+                audio.removeEventListener('ended', finish)
+                audio.removeEventListener('error', finish)
+                resolve()
+              }
+              finishPlayback = finish
+              const timeout = setTimeout(finish, 30_000)
+              audio.addEventListener('ended', finish, { once: true })
+              audio.addEventListener('error', finish, { once: true })
+            })
+          : undefined
         await audio.play()
+        await ended
       } catch {
         return { played: false, reason: 'playback-failed' }
+      } finally {
+        finishPlayback?.()
       }
       return { played: true }
     } catch {

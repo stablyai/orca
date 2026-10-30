@@ -15,6 +15,11 @@ import type {
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 
 export const automationsApi = {
+  consumePendingOpenRun: () => ipcRenderer.invoke('automations:consumePendingOpenRun'),
+  onOpenRun: (callback: () => void): (() => void) => {
+    ipcRenderer.on('automations:openRun', callback)
+    return () => ipcRenderer.removeListener('automations:openRun', callback)
+  },
   listExternalManagerForOwner: (
     request: ScopedExternalManagerListRequest
   ): Promise<ExternalAutomationManagerResult> =>

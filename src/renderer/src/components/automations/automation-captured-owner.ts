@@ -1,3 +1,4 @@
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 /** Carry the listed owner into actions so a host move fences against the incarnation the user saw. Owned rows act normally, orphans allow pause/delete/history but cannot execute, and unfenced legacy rows stay view-only. */
 
 import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
@@ -21,6 +22,7 @@ export type AutomationActionBlock = {
 }
 
 export type AutomationCapturedOwner = {
+  authority?: AutomationAuthorityRef
   owner: AutomationOwnerRef | null
   /** How the authority qualified the row; null when no list metadata was captured at all. */
   selector: AutomationHostRowSelector | null
@@ -104,7 +106,11 @@ export function captureAutomationOwners(
 ): Map<string, AutomationCapturedOwner> {
   const captured = new Map<string, AutomationCapturedOwner>()
   for (const { rowKey, row } of rows) {
-    captured.set(rowKey, { owner: row.owner, selector: row.selector })
+    captured.set(rowKey, {
+      owner: row.owner,
+      selector: row.selector,
+      ...(row.authority ? { authority: row.authority } : {})
+    })
   }
   return captured
 }

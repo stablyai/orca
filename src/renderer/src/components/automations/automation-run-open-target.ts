@@ -152,3 +152,17 @@ export function getAutomationRunOwnerEnvironmentId(
     ? owner.owner.endpoint.environmentId
     : null
 }
+
+export function collectAutomationRunTerminalTabIds(
+  tabsByWorkspace: Readonly<Record<string, readonly { contentType: string; entityId: string }[]>>
+): Set<string> {
+  const ids = new Set<string>()
+  for (const tabs of Object.values(tabsByWorkspace)) {
+    for (const tab of tabs) {
+      if (tab.contentType === 'terminal') {
+        ids.add(tab.entityId)
+      }
+    }
+  }
+  return ids
+}

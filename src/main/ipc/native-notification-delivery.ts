@@ -1,3 +1,4 @@
+import { openAutomationRun } from '../startup/automation-run-navigation'
 import { app, Notification } from 'electron'
 import type {
   NotificationDispatchRequest,
@@ -79,7 +80,14 @@ export function deliverNativeNotification(
   const chatTarget = args.surface === 'agent-session' ? paneTarget : null
   // Repo-less folder/floating workspaces still bind clicks through their pane target.
   const repoId = worktreeId?.includes('::') ? getRepoIdFromWorktreeId(worktreeId) : null
-  if (worktreeId && (repoId !== null || paneTarget)) {
+  if (args.automationRun) {
+    const target = args.automationRun
+    clickHandler = () => {
+      release()
+      openAutomationRun(target)
+    }
+    notification.on('click', clickHandler)
+  } else if (worktreeId && (repoId !== null || paneTarget)) {
     clickHandler = () => {
       release()
       const win = getTrustedUIRendererWindow()

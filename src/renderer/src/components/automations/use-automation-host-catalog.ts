@@ -50,6 +50,7 @@ import { useAutomationHostCatalogSourceState } from './use-automation-host-catal
 /** Keep query and display catalogs separate: apply mirrored membership to the controller, then fold query health into display without cancelling work on every cache commit. */
 
 export type AutomationHostCatalogView = {
+  unseenFailureCount: number
   catalog: AutomationHostCatalog
   entries: readonly AutomationHostCatalogEntry[]
   resolution: AutomationHostFilterResolution
@@ -249,7 +250,23 @@ export function useAutomationHostCatalog(
     void controller.applyCatalog(queryCatalog, { selectedStableKey, force: true })
   }, [controller, queryCatalog, selectedStableKey])
 
+  const seen = new Set<string>()
+  let unseenFailureCount = 0
+  for (const entry of catalog.entries) {
+    if (entry.catalogState === 'removed') {
+      continue
+    }
+    for (const row of controller.cache.getByKey(entry.stableKey)?.data ?? []) {
+      const key = JSON.stringify([entry.stableRef.authority, row.automation.id])
+      if (!seen.has(key)) {
+        unseenFailureCount += row.unseenFailureCount ?? 0
+      }
+      seen.add(key)
+    }
+  }
+
   return {
+    unseenFailureCount,
     catalog,
     entries: catalog.entries,
     resolution,

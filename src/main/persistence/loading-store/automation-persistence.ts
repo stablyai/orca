@@ -200,6 +200,34 @@ export class AutomationPersistence {
     return updateAutomationRunOperation(getAutomationRunOperations(this), result)
   }
 
+  updateAutomationRunWithTransition(result: AutomationDispatchResult) {
+    let previousStatus: AutomationRun['status'] = result.status
+    const run = updateAutomationRunOperation(getAutomationRunOperations(this), result, (status) => {
+      previousStatus = status
+    })
+    return { run, previousStatus }
+  }
+
+  markAutomationRunSeen(automationId: string, runId: string): boolean {
+    const { runtime, flushBarriers } = this[automationPersistenceContext]
+    const run = runtime.state.automationRuns.find(
+      (row) => row.automationId === automationId && row.id === runId
+    )
+    if (!run || run.status !== 'dispatch_failed') {
+      return false
+    }
+    if (run.failureSeenAt !== undefined) {
+      return true
+    }
+    runtime.state.automationRuns = runtime.state.automationRuns.map((row) =>
+      row === run ? { ...run, failureSeenAt: Date.now() } : row
+    )
+    runtime.pendingAutomationRunsAfter = runtime.state.automationRuns
+    runtime.dirtyProfileStateDomains?.add('automationRuns')
+    flushBarriers.flush()
+    return true
+  }
+
   snapshotAutomationRunWorkspaceDisplayName(
     target: HostWorktreeTarget,
     displayName: string

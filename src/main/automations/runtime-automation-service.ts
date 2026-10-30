@@ -1,3 +1,6 @@
+import { ownsAutomationChatCompletion } from './automation-chat-notification-owner'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { publishAutomationOutcome } from './automation-outcome-notification'
 import { observeAutomationChatRun } from './runtime-chat-run-observer'
 import { readAutomationRunReceipt } from './automation-run-receipt'
 import { publishedLaunchTarget } from './automation-agent-run-result'
@@ -146,7 +149,7 @@ export function createRuntimeAutomationService(input: {
         return observation
       }
     },
-    onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
+    onAutomationsChanged: (payload) => publishAutomationOutcome(runtime, store, payload),
     allowRemoteHostScheduling: input.headless,
     chatDispatcher: async (request) => {
       const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
@@ -178,6 +181,21 @@ export function createRuntimeAutomationService(input: {
         }
       : undefined
   })
+  service.ownsChatCompletion = async (completion) => {
+    const records = await runtime.openAgentSessionRecordStore()
+    return ownsAutomationChatCompletion(completion, {
+      settleDispatches: () => service.settleDispatches(),
+      runs: () => store.listAutomationRuns(),
+      receipt: (run) => readAutomationRunReceipt(records, run),
+      snapshot: async (sessionId) => {
+        const host = getStructuredAgentSessionHost()
+        if (!host) {
+          throw new Error('Chat unavailable')
+        }
+        return host.journalSnapshot(sessionId)
+      }
+    })
+  }
   runtime.setAutomationService(service)
   if (input.headless) {
     bindHeadlessRunTerminalRetention(service, store, runtime)

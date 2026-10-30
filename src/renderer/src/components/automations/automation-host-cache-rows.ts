@@ -47,7 +47,11 @@ export function toScopedAutomationHostRows(
     }
     const usageSummary = item.usageSummary ?? null
     rows.push({
+      authority,
       automation,
+      ...(item.unseenFailureCount !== undefined
+        ? { unseenFailureCount: item.unseenFailureCount }
+        : {}),
       owner: ownerForItem(authority, item),
       selector: item.selector,
       usageSummary,

@@ -475,3 +475,30 @@ it("lists a profile created on the host once the host announces it, without touc
     await h.finish()
   }
 })
+
+it('invalidates authority-wide automation summaries on stream replay without a historical outcome banner', async () => {
+  const h = createHarness()
+  const changed = vi.fn()
+  Object.assign(window, { dispatchEvent: changed })
+  vi.stubGlobal(
+    'CustomEvent',
+    class {
+      constructor(
+        public type: string,
+        public init: unknown
+      ) {}
+    }
+  )
+  try {
+    h.start()
+    h.emit(0, true, { type: 'automationsChanged', selector: { kind: 'self' }, reason: 'run' })
+    expect(changed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca:automations-changed',
+        init: { detail: { environmentId: 'host-a' } }
+      })
+    )
+  } finally {
+    await h.finish()
+  }
+})

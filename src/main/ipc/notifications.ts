@@ -16,7 +16,10 @@ import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
-import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import {
+  createNotificationDeliveryService,
+  type NotificationDeliveryService
+} from '../notifications/notification-delivery-service'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
@@ -29,6 +32,17 @@ import {
   recordNotificationDeliveryOutcome,
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
+
+let registeredDelivery: NotificationDeliveryService | null = null
+export function clearRegisteredNotificationDelivery(): void {
+  registeredDelivery = null
+}
+
+export function dispatchRegisteredNotification(
+  request: NotificationDispatchRequest
+): ReturnType<NotificationDeliveryService['dispatch']> {
+  return registeredDelivery?.dispatch(request) ?? { delivered: false, reason: 'unavailable' }
+}
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
@@ -167,6 +181,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       }
     }
   })
+
+  registeredDelivery = deliveryService
 
   // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')

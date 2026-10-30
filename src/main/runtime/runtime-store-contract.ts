@@ -93,6 +93,7 @@ export type RuntimeStore = {
   assertAutomationOwnerFence?: Store['assertAutomationOwnerFence']
   automationOwnerPrecondition?: Store['automationOwnerPrecondition']
   automationChangeSelector?: Store['automationChangeSelector']
+  markAutomationRunSeen?: Store['markAutomationRunSeen']
   listAutomationRuns?: Store['listAutomationRuns']
   listAutomationRunsPage?: Store['listAutomationRunsPage']
   createAutomation?: Store['createAutomation']

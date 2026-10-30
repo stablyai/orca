@@ -1,3 +1,4 @@
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 /** Rows retain captured owners, null when unqualified; requests retain all three generations required by their commit fence. */
 
 import type { Automation } from '../../../../shared/automations-types'
@@ -10,6 +11,8 @@ import type { AutomationUsageSummary } from '../../../../shared/automation-usage
 export type AutomationHostRowSelector = AutomationListItemSelector | LegacyAutomationSelector
 
 export type AutomationHostRow = {
+  authority?: AutomationAuthorityRef
+  unseenFailureCount?: number
   automation: Automation
   /** Null when nothing may be mutated through it: legacy unscoped rows and orphans. */
   owner: AutomationOwnerRef | null

@@ -54,7 +54,27 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
             sessionId === undefined ||
             clientReadsStructuredSessionAgent(ctx, host.sessionAgent(sessionId) ?? '')
           ) {
-            emit(event)
+            if (event.type === 'completion') {
+              void ctx.runtime
+                .ownsAutomationChatCompletion(event.completion)
+                .then((owned) => {
+                  if (!stream.isClosed()) {
+                    emit(
+                      owned
+                        ? { ...event, completion: { ...event.completion, automationOwned: true } }
+                        : event
+                    )
+                  }
+                })
+                .catch((error) => {
+                  console.warn('[automations] Could not resolve Chat notification owner:', error)
+                  if (!stream.isClosed()) {
+                    emit(event)
+                  }
+                })
+            } else {
+              emit(event)
+            }
           }
         },
         includePrompts: params.includePrompts === true

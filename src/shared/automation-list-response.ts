@@ -105,6 +105,12 @@ function parseItems(raw: readonly unknown[]): ParsedItems {
     byId.set(automationId, {
       automationId,
       selector,
+      ...(isRecord(entry) &&
+      typeof entry.unseenFailureCount === 'number' &&
+      Number.isSafeInteger(entry.unseenFailureCount) &&
+      entry.unseenFailureCount >= 0
+        ? { unseenFailureCount: entry.unseenFailureCount }
+        : {}),
       usageSummary: parseUsageSummary((entry as { usageSummary?: unknown }).usageSummary)
     })
   }

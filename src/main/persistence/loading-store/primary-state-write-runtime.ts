@@ -11,6 +11,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'runDurableMutation'
   | 'firstPendingSaveAt'
   | 'lastDurableWriteGeneration'
+  | 'durableWriteListeners'
   | 'lastWrittenStateHash'
   | 'pendingSnapshotFileWork'
   | 'pendingAutomationRunsAfter'
@@ -29,10 +30,17 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
 >
 
 export function markPrimaryStateWriteDurable(
-  runtime: Pick<StoreRuntimeState, 'lastDurableWriteGeneration'>,
+  runtime: Pick<StoreRuntimeState, 'lastDurableWriteGeneration' | 'durableWriteListeners'>,
   generation: number
 ): void {
   runtime.lastDurableWriteGeneration = Math.max(runtime.lastDurableWriteGeneration, generation)
+  for (const listener of runtime.durableWriteListeners) {
+    try {
+      listener(runtime.lastDurableWriteGeneration)
+    } catch (error) {
+      console.error('[persistence] Durable write listener failed:', error)
+    }
+  }
 }
 
 export function canReuseDurableProfileState(

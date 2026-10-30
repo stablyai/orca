@@ -24,6 +24,7 @@ import {
   clearStructuredHostStub,
   envelope,
   hostCalls,
+  dispatcher,
   installStructuredHostStub,
   openStream,
   SESSION,
@@ -609,3 +610,38 @@ it.each([false, true])(
     ).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
   }
 )
+
+it('keeps automation completion edges readable by old clients and adds only an optional notification ownership hint', async () => {
+  const stream: unknown[] = []
+  await dispatcher({ ownsAutomationChatCompletion: async () => true }).dispatchStreaming(
+    {
+      id: 'automation-notify',
+      authToken: 'token',
+      method: 'agentSession.subscribeTurnCompletions',
+      params: {}
+    },
+    (raw) => stream.push(JSON.parse(raw)),
+    STRUCTURED_CLIENT
+  )
+  const input = hostCalls.subscribeTurnCompletions.mock.calls[0][0]
+  const completion = {
+    sessionId: SESSION,
+    turnId: 'root',
+    outcome: 'success',
+    completedAt: 3,
+    scope: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace',
+      workspaceKind: 'git-worktree'
+    }
+  }
+  input.emit({ type: 'completion', completion })
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(stream).toContainEqual(
+    expect.objectContaining({
+      result: { type: 'completion', completion: { ...completion, automationOwned: true } }
+    })
+  )
+})
