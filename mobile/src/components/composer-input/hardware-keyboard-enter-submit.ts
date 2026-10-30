@@ -1,5 +1,5 @@
 import type { TextInputProps } from 'react-native'
-import { useSoftKeyboard } from '../../platform/keyboard-occlusion'
+import { currentSoftKeyboardHeight, useSoftKeyboard } from '../../platform/keyboard-occlusion'
 import { hostOs } from '../../platform/host-os'
 import { showsSoftKeyboard } from '../../platform/soft-keyboard-shown'
 
@@ -13,7 +13,11 @@ export function useHardwareKeyboardEnterSubmit(
   if (!onSubmit || hostOs() !== 'ios') {
     return {}
   }
-  return showsSoftKeyboard(keyboard)
+  // A composer mounted under an open keyboard gets no show event until the next change, so seed from metrics.
+  const seeded = keyboard.visible
+    ? keyboard
+    : { height: currentSoftKeyboardHeight(), visible: true }
+  return showsSoftKeyboard(seeded)
     ? { submitBehavior: 'newline' }
     : { submitBehavior: 'submit', onSubmitEditing: onSubmit }
 }

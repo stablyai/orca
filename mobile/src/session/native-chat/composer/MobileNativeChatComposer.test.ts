@@ -32,7 +32,7 @@ vi.mock('react-native', async () => {
     AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
-    Keyboard: { dismiss: vi.fn(), addListener: () => ({ remove: () => {} }) },
+    Keyboard: { dismiss: vi.fn(), addListener: () => ({ remove: vi.fn() }), metrics: vi.fn() },
     Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
