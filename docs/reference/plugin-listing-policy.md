@@ -18,7 +18,7 @@ UI. Don't put URLs in the description at all: Orca shows descriptions as plain t
 
 ## Publisher is the repository owner
 
-`publisher` must be the GitHub user or organization that owns the plugin's repository, the same
+`publisher` must be the GitHub or GitLab user or organization that owns the plugin's repository, the same
 way Go module paths name their owner: `acme` for `github.com/acme/gleam-syntax`. See
 [Publisher names and trust](plugin-catalog.md#publisher-names-and-trust).
 
