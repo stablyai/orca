@@ -241,11 +241,16 @@ export function ChatUiHereFeatureTipVisual(): JSX.Element {
 
   return (
     <div
-      className="relative flex h-full min-h-[23rem] flex-col items-center justify-center overflow-hidden px-6 py-7"
+      className={cn(
+        'relative flex h-full min-h-[23rem] flex-col items-center justify-center overflow-hidden px-6 py-7',
+        // Side by side, the card keeps the centered 22rem card's bottom edge, where the buttons line
+        // up, and grows 1rem upward so less empty panel shows above it.
+        'md:justify-end md:py-0 md:pb-[calc((min(27rem,100vh-2rem)-2px-22rem)/2)]'
+      )}
       aria-hidden="true"
     >
       {/* Turning reduced motion on mid-loop jumps straight to the finished still. */}
-      <div className="flex h-[22rem] w-full max-w-[22rem] flex-col overflow-hidden rounded-xl border border-border/80 bg-chat-canvas text-left tracking-[0.01em] shadow-xs motion-reduce:**:transition-none">
+      <div className="flex h-[22rem] w-full max-w-[22rem] flex-col md:h-[23rem] overflow-hidden rounded-xl border border-border/80 bg-chat-canvas text-left tracking-[0.01em] shadow-xs motion-reduce:**:transition-none">
         <div className="flex h-10 shrink-0 items-stretch border-b border-border bg-card">
           <span className="-mb-px flex max-w-[75%] items-center gap-1.5 border-r border-border bg-chat-canvas px-3 text-[11px] whitespace-nowrap text-foreground">
             <span className="shrink-0">
