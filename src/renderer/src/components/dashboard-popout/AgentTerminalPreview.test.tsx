@@ -49,6 +49,7 @@ vi.mock('@xterm/xterm', () => ({
     cols = 80
     rows = 24
     buffer = { active: { cursorY: 0 } }
+    options = {}
     writeCallbacks: (() => void)[] = []
     onDataListener: ((data: string) => void) | null = null
     customKeyHandler: ((event: KeyboardEvent) => boolean) | null = null

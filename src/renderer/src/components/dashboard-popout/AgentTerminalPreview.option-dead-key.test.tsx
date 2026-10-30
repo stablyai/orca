@@ -19,6 +19,7 @@ vi.mock('@xterm/xterm', () => ({
     cols = 80
     rows = 24
     buffer = { active: { cursorY: 0 } }
+    options = {}
     customKeyHandler: ((event: KeyboardEvent) => boolean) | null = null
     element = document.createElement('div')
     modes = { bracketedPasteMode: false }

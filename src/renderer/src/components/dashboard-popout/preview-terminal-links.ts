@@ -6,19 +6,17 @@ import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-ex
 
 /** Use pane-style Mod+click but open externally because pop-outs have no workspace-scoped browser pane. */
 export function installPreviewTerminalLinks(terminal: Terminal): void {
+  const activate = (event: MouseEvent, uri: string): void => {
+    if (!isTerminalHttpLinkActivation(event)) {
+      return
+    }
+    event.preventDefault()
+    void window.api.shell.openUrl(uri).catch(() => undefined)
+    terminal.clearSelection()
+  }
   // Guard providers before registration; xterm can throw on pathological wrapped lines and escape to window.onerror.
   installGuardedLinkProviderRegistration(terminal)
-  terminal.loadAddon(
-    new WebLinksAddon(
-      (event, uri) => {
-        if (!isTerminalHttpLinkActivation(event)) {
-          return
-        }
-        event.preventDefault()
-        void window.api.shell.openUrl(uri).catch(() => undefined)
-        terminal.clearSelection()
-      },
-      { urlRegex: TERMINAL_HTTP_URL_REGEX }
-    )
-  )
+  terminal.loadAddon(new WebLinksAddon(activate, { urlRegex: TERMINAL_HTTP_URL_REGEX }))
+  // Without a handler, xterm opens OSC 8 links through confirm() and window.open(), which Electron blocks.
+  terminal.options.linkHandler = { activate }
 }
