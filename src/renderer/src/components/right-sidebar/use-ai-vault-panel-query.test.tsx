@@ -1,14 +1,9 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import { useAiVaultPanelQuery } from './use-ai-vault-panel-query'
 
-type Target = {
-  preferredScope: AiVaultScope
-  activeWorktreeId: string | null
-  activeProjectKey: string | null
-}
+type Target = Parameters<typeof useAiVaultPanelQuery>[1]
 
 const APP_IN_ORCA: Target = {
   preferredScope: 'workspace',

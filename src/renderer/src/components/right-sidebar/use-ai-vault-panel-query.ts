@@ -14,12 +14,9 @@ export function useAiVaultPanelQuery(
     activeProjectKey: string | null
   }
 ) {
-  const subject =
-    preferredScope === 'workspace'
-      ? activeWorktreeId
-      : preferredScope === 'project'
-        ? activeProjectKey
-        : null
+  const subject = { workspace: activeWorktreeId, project: activeProjectKey, all: null }[
+    preferredScope
+  ]
   const [query, setQuery] = useState(initialQuery)
   const [typedFor, setTypedFor] = useState({ scope: preferredScope, subject })
   // Adjusted during render so the new workspace never paints, or searches, the old query.
