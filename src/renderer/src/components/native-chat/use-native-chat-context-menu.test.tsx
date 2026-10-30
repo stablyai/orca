@@ -328,29 +328,29 @@ describe('useNativeChatContextMenu', () => {
   )
 
   it.each([
-    ['a reply selection right-clicked on', 'text', () => screen.getByText('text'), 'text', true],
+    ['on a reply selection offers it', 'text', () => screen.getByText('text'), 'text', true],
     [
-      'a reply selection right-clicked away from',
+      'away from a reply selection drops it',
       'text',
       () => screen.getByRole('button'),
       undefined,
       false
     ],
     [
-      'a reply selection right-clicked on a disabled field',
+      'a disabled field still offers the reply selection',
       'text',
       () => screen.getByRole('textbox', { name: 'answer' }),
       'text',
       true
     ],
     [
-      'a composer selection right-clicked away from',
+      'away from a composer selection keeps it unoffered',
       'typo',
       () => screen.getByText('text'),
       undefined,
       true
     ]
-  ])('offers %s only when the press lands on it', (_case, selected, pressed, copied, kept) => {
+  ])('right-clicking %s', (_case, selected, pressed, copied, kept) => {
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('api', { ui: { writeClipboardText } })
     render(<ImageHarness />)
