@@ -47,9 +47,8 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     discoveryTarget: undefined,
     agentRuntime: { runtime: 'native' },
-    terminalShellOverride: undefined,
     installDisabledReason: null,
-    canUseLocalSkillFreshness: true
+    canUseSkillFreshness: true
   })
 }))
 

@@ -67,26 +67,12 @@ export function PlaneAgentSkillPane(): React.JSX.Element {
       hideHeader
       title={translate('auto.components.settings.PlaneAgentSkillPane.skillTitle', 'Plane skill')}
       description={null}
-      command={skillSetup.installCommand}
-      installedCommand={skillSetup.updateCommand}
-      terminalTitle={translate(
-        'auto.components.settings.PlaneAgentSkillPane.terminalTitle',
-        'Plane skill setup'
-      )}
-      terminalAriaLabel={translate(
-        'auto.components.settings.PlaneAgentSkillPane.terminalAriaLabel',
-        'Plane skill install terminal'
-      )}
-      terminalWorktreeId="settings-plane-skill-terminal"
-      terminalShellOverride={skillSetup.terminalShellOverride}
-      terminalRuntime={skillSetup.terminalRuntime}
+      skillNames={[ORCA_PLANE_SKILL_NAME]}
+      installedSkillNames={[skillSetup.updateSkillName]}
       installed={skillSetup.skillInstalled}
       loading={skillSetup.skillLoading}
       error={skillSetup.error}
       installDisabled={skillSetup.installDisabled}
-      preInstallNotice={skillSetup.preInstallNotice}
-      getPrerequisiteStatus={skillSetup.getPrerequisiteStatus}
-      onBeforeOpenTerminal={skillSetup.onBeforeOpenTerminal}
       onRecheck={skillSetup.refreshSkill}
       freshnessSkillName={skillSetup.freshnessSkillName}
     />

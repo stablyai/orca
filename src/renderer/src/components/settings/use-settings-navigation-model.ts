@@ -85,7 +85,7 @@ export function useSettingsNavigationModel(
           skills: planeSkills,
           installed: planeSkillInstalled,
           loading: planeSkillLoading,
-          inventory: applicableFreshnessInventory
+          plan: applicableSkillPlan
         })
       )
     }

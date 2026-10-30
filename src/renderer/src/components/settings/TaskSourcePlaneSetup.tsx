@@ -6,6 +6,7 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
 import { usePlaneAgentSkillSetup } from './use-plane-agent-skill-setup'
+import { ORCA_PLANE_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { translate } from '@/i18n/i18n'
 
 type TaskSourcePlaneSetupProps = {
@@ -123,26 +124,12 @@ export function TaskSourcePlaneSetup({
                 'Plane skill'
               )}
               description={null}
-              command={skillSetup.installCommand}
-              installedCommand={skillSetup.updateCommand}
-              terminalTitle={translate(
-                'auto.components.settings.TaskSourcePlaneSetup.terminalTitle',
-                'Plane skill setup'
-              )}
-              terminalAriaLabel={translate(
-                'auto.components.settings.TaskSourcePlaneSetup.terminalAriaLabel',
-                'Plane skill install terminal'
-              )}
-              terminalWorktreeId="settings-tasks-plane-skill-terminal"
-              terminalShellOverride={skillSetup.terminalShellOverride}
-              terminalRuntime={skillSetup.terminalRuntime}
+              skillNames={[ORCA_PLANE_SKILL_NAME]}
+              installedSkillNames={[skillSetup.updateSkillName]}
               installed={skillSetup.skillInstalled}
               loading={skillSetup.skillLoading}
               error={skillSetup.error}
               installDisabled={skillSetup.installDisabled}
-              preInstallNotice={skillSetup.preInstallNotice}
-              getPrerequisiteStatus={skillSetup.getPrerequisiteStatus}
-              onBeforeOpenTerminal={skillSetup.onBeforeOpenTerminal}
               onRecheck={skillSetup.refreshSkill}
               freshnessSkillName={skillSetup.freshnessSkillName}
             />
