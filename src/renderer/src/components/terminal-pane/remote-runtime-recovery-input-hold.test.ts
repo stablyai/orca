@@ -466,3 +466,58 @@ it('terminates when the last retained active scoped waiter aborts', async () => 
   expect(hold.hasPendingInput()).toBe(false)
   expect(hold.isHolding()).toBe(false)
 })
+
+it.each([null, undefined])(
+  'preserves first discard throw %s through all waiter cleanup and notification reentry',
+  async (firstFailure) => {
+    const next = { handle: 'terminal-2', incarnationId: 'inc-2' }
+    const notified = vi.fn(() => {
+      expect(hold.isHolding()).toBe(false)
+      hold.expect(next)
+      expect(hold.enqueue(next, 'fresh', 'driving')).toBe(true)
+      throw new Error('later notification')
+    })
+    const hold = createRemoteRuntimeRecoveryInputHold({
+      holdBeforeFirstConnect: true,
+      onTypingDiscardedBeforeBind: notified
+    })
+    const firstSignal = new AbortController()
+    const secondSignal = new AbortController()
+    const first = hold.enqueueAccepted(null, 'old-one', 'driving', { signal: firstSignal.signal })
+    const second = hold.enqueueAccepted(null, 'old-two', 'driving', { signal: secondSignal.signal })
+    const removeFirst = firstSignal.signal.removeEventListener.bind(firstSignal.signal)
+    const removeSecond = secondSignal.signal.removeEventListener.bind(secondSignal.signal)
+    const firstCleanup = vi
+      .spyOn(firstSignal.signal, 'removeEventListener')
+      .mockImplementationOnce((...args) => {
+        removeFirst(...args)
+        expect(hold.hasPendingInput()).toBe(false)
+        throw firstFailure
+      })
+    const secondCleanup = vi
+      .spyOn(secondSignal.signal, 'removeEventListener')
+      .mockImplementationOnce((...args) => {
+        removeSecond(...args)
+        throw new Error('later abort cleanup')
+      })
+    let failed = false
+    let failure: unknown
+    try {
+      hold.discard()
+    } catch (error) {
+      failed = true
+      failure = error
+    }
+    expect(failed).toBe(true)
+    expect(failure).toBe(firstFailure)
+    expect(firstCleanup).toHaveBeenCalledOnce()
+    expect(secondCleanup).toHaveBeenCalledOnce()
+    expect(notified).toHaveBeenCalledOnce()
+    await expect(first).resolves.toBe(false)
+    await expect(second).resolves.toBe(false)
+    const { sent, writer } = createWriter()
+    await hold.release(next, writer)?.done
+    expect(sent).toEqual(['fresh'])
+    expect(hold.isHolding()).toBe(false)
+  }
+)

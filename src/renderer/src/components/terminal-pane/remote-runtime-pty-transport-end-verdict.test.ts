@@ -96,57 +96,139 @@ describe('remote runtime PTY stream end verdict', () => {
     expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1')
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
   })
-  it('finishes independent reliable-end callbacks and captured close after the first effect throws', async () => {
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const { getRemoteRuntimeTerminalMultiplexer } =
-      await import('../../runtime/remote-runtime-terminal-multiplexer')
-    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    const subscribe = multiplexer.subscribeTerminal.bind(multiplexer)
-    const closed = vi.fn()
-    const interception = vi
-      .spyOn(multiplexer, 'subscribeTerminal')
-      .mockImplementation(async (args) => {
-        const stream = await subscribe(args)
-        const close = stream.close
-        stream.close = () => {
-          close()
-          closed()
-          throw new Error('captured close failed')
-        }
-        return stream
-      })
-    const onExit = vi.fn(() => {
-      throw new Error('first exit effect failed')
-    })
-    const onDisconnect = vi.fn()
-    const onPtyExit = vi.fn()
-    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1', onPtyExit })
-    try {
-      await transport.connect({ url: '', callbacks: { onExit, onDisconnect } })
-      emitSnapshot(latestSubscribePayload().streamId, 'live A')
-      const original = transport.getInputSource?.()
-      expect(() =>
-        subscriptionCallbacks?.onResponse({
-          ok: true,
-          result: {
-            type: 'end',
-            streamId: latestSubscribePayload().streamId,
-            verdict: 'exited'
+  it.each([new Error('first exit effect failed'), null, undefined])(
+    'preserves the literal first reliable-end throw %s through independent captured cleanup',
+    async (firstFailure) => {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('../../runtime/remote-runtime-terminal-multiplexer')
+      const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+      const subscribe = multiplexer.subscribeTerminal.bind(multiplexer)
+      const closed = vi.fn()
+      const interception = vi
+        .spyOn(multiplexer, 'subscribeTerminal')
+        .mockImplementation(async (args) => {
+          const stream = await subscribe(args)
+          const close = stream.close
+          stream.close = () => {
+            close()
+            closed()
+            throw new Error('captured close failed')
           }
+          return stream
         })
-      ).toThrow('first exit effect failed')
-      expect(onExit).toHaveBeenCalledOnce()
-      expect(onDisconnect).toHaveBeenCalledOnce()
-      expect(onPtyExit.mock.calls).toEqual([['remote:env-1@@terminal-1']])
-      expect(closed).toHaveBeenCalledOnce()
-      expect(original?.isCurrent()).toBe(false)
-      expect(transport.getPtyId()).toBeNull()
-      expect(transport.sendInput('refused-after-end', 'driving')).toBe(false)
-      expect(inputFrameTexts()).toEqual([])
-      expect(transport.getRecoveryState?.().phase).toBe('ended')
-    } finally {
-      interception.mockRestore()
-      transport.destroy?.()
+      const onExit = vi.fn(() => {
+        throw firstFailure
+      })
+      const onDisconnect = vi.fn()
+      const onPtyExit = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1', onPtyExit })
+      try {
+        await transport.connect({ url: '', callbacks: { onExit, onDisconnect } })
+        emitSnapshot(latestSubscribePayload().streamId, 'live A')
+        const original = transport.getInputSource?.()
+        let failed = false
+        let failure: unknown
+        try {
+          subscriptionCallbacks?.onResponse({
+            ok: true,
+            result: {
+              type: 'end',
+              streamId: latestSubscribePayload().streamId,
+              verdict: 'exited'
+            }
+          })
+        } catch (error) {
+          failed = true
+          failure = error
+        }
+        expect(failed).toBe(true)
+        expect(failure).toBe(firstFailure)
+        expect(onExit).toHaveBeenCalledOnce()
+        expect(onDisconnect).toHaveBeenCalledOnce()
+        expect(onPtyExit.mock.calls).toEqual([['remote:env-1@@terminal-1']])
+        expect(closed).toHaveBeenCalledOnce()
+        expect(original?.isCurrent()).toBe(false)
+        expect(transport.getPtyId()).toBeNull()
+        expect(transport.sendInput('refused-after-end', 'driving')).toBe(false)
+        expect(inputFrameTexts()).toEqual([])
+        expect(transport.getRecoveryState?.().phase).toBe('ended')
+      } finally {
+        interception.mockRestore()
+        transport.destroy?.()
+      }
     }
-  })
+  )
+
+  it.each(['body-undefined', 'exit-overrides', 'close-overrides', 'close-undefined'] as const)(
+    'preserves viewer completion precedence for %s after captured source departure',
+    async (site) => {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('../../runtime/remote-runtime-terminal-multiplexer')
+      const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+      const subscribe = multiplexer.subscribeTerminal.bind(multiplexer)
+      const order: string[] = []
+      const disconnectFailure = site === 'body-undefined' ? undefined : new Error('disconnect')
+      const exitFailure = new Error('exit')
+      const closeFailure = site === 'close-undefined' ? undefined : new Error('close')
+      const interception = vi
+        .spyOn(multiplexer, 'subscribeTerminal')
+        .mockImplementation(async (args) => {
+          const stream = await subscribe(args)
+          const close = stream.close
+          stream.close = () => {
+            close()
+            order.push('close')
+            if (site === 'close-overrides' || site === 'close-undefined') {
+              throw closeFailure
+            }
+          }
+          return stream
+        })
+      const onDisconnect = vi.fn(() => {
+        order.push('disconnect')
+        throw disconnectFailure
+      })
+      const onPtyExit = vi.fn(() => {
+        order.push('exit')
+        if (site === 'exit-overrides') {
+          throw exitFailure
+        }
+      })
+      const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1', onPtyExit })
+      try {
+        await transport.connect({ url: '', callbacks: { onDisconnect } })
+        emitSnapshot(latestSubscribePayload().streamId, 'live A')
+        const original = transport.getInputSource?.()
+        expect(original?.isCurrent()).toBe(true)
+        let failed = false
+        let failure: unknown
+        try {
+          transport.disconnect()
+        } catch (error) {
+          failed = true
+          failure = error
+        }
+        expect(failed).toBe(true)
+        expect(failure).toBe(
+          site === 'exit-overrides'
+            ? exitFailure
+            : site === 'body-undefined'
+              ? disconnectFailure
+              : closeFailure
+        )
+        expect(order).toEqual(['disconnect', 'exit', 'close'])
+        expect(onDisconnect).toHaveBeenCalledOnce()
+        expect(onPtyExit.mock.calls).toEqual([['remote:env-1@@terminal-1', -1]])
+        expect(original?.isCurrent()).toBe(false)
+        expect(transport.getPtyId()).toBeNull()
+        expect(transport.sendInput('refused-after-departure', 'driving')).toBe(false)
+        expect(inputFrameTexts()).toEqual([])
+      } finally {
+        interception.mockRestore()
+        transport.destroy?.()
+      }
+    }
+  )
 })

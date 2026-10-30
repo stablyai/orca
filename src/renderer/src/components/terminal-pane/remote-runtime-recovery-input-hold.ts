@@ -112,10 +112,12 @@ export function createRemoteRuntimeRecoveryInputHold(
     latestExpectation = null
     const droppedTyping =
       current?.beforeBind === true && current.typed && current.buffer.hasPendingInput()
+    let failed = false
     let failure: unknown
     try {
       current?.buffer.clear()
     } catch (error) {
+      failed = true
       failure = error
     }
     try {
@@ -123,9 +125,12 @@ export function createRemoteRuntimeRecoveryInputHold(
         options.onTypingDiscardedBeforeBind?.()
       }
     } catch (error) {
-      failure ??= error
+      if (!failed) {
+        failed = true
+        failure = error
+      }
     }
-    if (failure !== undefined) {
+    if (failed) {
       throw failure
     }
   }

@@ -133,20 +133,25 @@ export function withdrawBufferedInputs(
   inputs: BufferedInput[],
   beforeSettlement?: () => void
 ): void {
+  let failed = false
   let failure: unknown
   try {
     beforeSettlement?.()
   } catch (error) {
+    failed = true
     failure = error
   }
   for (const input of inputs) {
     try {
       settleBufferedInput(input, false)
     } catch (error) {
-      failure ??= error
+      if (!failed) {
+        failed = true
+        failure = error
+      }
     }
   }
-  if (failure !== undefined) {
+  if (failed) {
     throw failure
   }
 }

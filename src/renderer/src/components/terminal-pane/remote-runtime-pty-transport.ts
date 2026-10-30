@@ -2656,6 +2656,7 @@ export function createRemoteRuntimePtyTransport(
     let attached = false
     let epoch = lifecycleEpoch
     let adoptedVersion: number | undefined
+    let failed = false
     let failure: unknown
     try {
       changeInputEndpoint(null, null, () => {
@@ -2688,6 +2689,7 @@ export function createRemoteRuntimePtyTransport(
         resetSameHandleEndReuse()
       })
     } catch (error) {
+      failed = true
       failure = error
     }
     const owns = (): boolean =>
@@ -2696,8 +2698,6 @@ export function createRemoteRuntimePtyTransport(
       adoptedVersion === inputSource.version() &&
       inputSource.current() === null
     for (const complete of [
-      () => retired.stopWaiting?.(),
-      () => retired.stopWatching?.(),
       () => {
         if (owns() && detaching) {
           outputProcessor.disposePendingSideEffectGauge()
@@ -2739,13 +2739,14 @@ export function createRemoteRuntimePtyTransport(
         }
       },
       () => {
-        if (owns()) {
-          discardPendingInput()
-        }
-      },
-      () => {
-        if (owns()) {
-          recovery.cancel()
+        try {
+          if (owns()) {
+            discardPendingInput()
+          }
+        } finally {
+          if (owns()) {
+            recovery.cancel()
+          }
         }
       },
       () => {
@@ -2755,26 +2756,41 @@ export function createRemoteRuntimePtyTransport(
       },
       () => {
         if (owns() && !detaching && attached) {
-          previousCallbacks.onDisconnect?.()
+          try {
+            previousCallbacks.onDisconnect?.()
+          } finally {
+            if (owns() && retired.id) {
+              onPtyExit?.(retired.id, -1)
+            }
+          }
         }
-      },
-      () => {
-        if (owns() && !detaching && attached && retired.id) {
-          onPtyExit?.(retired.id, -1)
-        }
-      },
-      () => retired.stream?.close()
+      }
     ]) {
       try {
         complete()
       } catch (error) {
-        failure ??= error
+        if (!failed) {
+          failure = error
+          failed = true
+        }
+      }
+    }
+    for (const cleanup of [
+      () => retired.stopWaiting?.(),
+      () => retired.stopWatching?.(),
+      () => retired.stream?.close()
+    ]) {
+      try {
+        cleanup()
+      } catch (error) {
+        failed = true
+        failure = error
       }
     }
     if (viewportFailure !== undefined) {
       throw viewportFailure
     }
-    if (failure !== undefined) {
+    if (failed) {
       throw failure
     }
   }
@@ -2800,6 +2816,7 @@ export function createRemoteRuntimePtyTransport(
       adoptedVersion === inputSource.version() &&
       handle === null &&
       terminalEnded
+    let failed = false
     let failure: unknown
     try {
       changeInputEndpoint(
@@ -2830,6 +2847,7 @@ export function createRemoteRuntimePtyTransport(
         true
       )
     } catch (error) {
+      failed = true
       failure = error
     }
     for (const complete of [
@@ -2889,10 +2907,13 @@ export function createRemoteRuntimePtyTransport(
       try {
         complete()
       } catch (error) {
-        failure ??= error
+        if (!failed) {
+          failure = error
+          failed = true
+        }
       }
     }
-    if (failure !== undefined) {
+    if (failed) {
       throw failure
     }
   }
