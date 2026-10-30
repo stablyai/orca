@@ -30,13 +30,16 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
-  resetText
+  resetText,
+  labelWidth = 22
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
   resetText?: string | null
+  // Why: "30d" is wider than the Claude/Codex "5h" / "7d" labels.
+  labelWidth?: number
 }) {
   useMobileColorScheme()
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
@@ -53,7 +56,7 @@ export function UsageBar({
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
+        <Text style={[styles.usageLabel, { width: labelWidth }]}>{label}</Text>
         <View style={styles.usageTrack}>
           <View
             style={[
@@ -76,7 +79,10 @@ export function UsageBar({
         )}
       </View>
       {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={1}>
+        <Text
+          style={[styles.usageResetText, { marginLeft: labelWidth + spacing.xs }]}
+          numberOfLines={1}
+        >
           {resetText}
         </Text>
       ) : null}
@@ -96,8 +102,7 @@ const styles = themedStyleSheet(() => ({
   },
   usageLabel: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    width: 22
+    color: colors.textMuted
   },
   usageTrack: {
     flex: 1,
@@ -122,7 +127,6 @@ const styles = themedStyleSheet(() => ({
   // Indent countdown past window label to align with track.
   usageResetText: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginLeft: 22 + spacing.xs
+    color: colors.textMuted
   }
 }))
