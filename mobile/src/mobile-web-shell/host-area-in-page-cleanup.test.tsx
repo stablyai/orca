@@ -28,6 +28,7 @@ vi.mock('../transport/use-workspace-client', () => ({
   WorkspaceServerContext: createContext(undefined)
 }))
 vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
+vi.mock('../session/MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
@@ -188,6 +189,7 @@ describe('leaving a workspace inside the host-area page', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual surface reads the root ref and sheet visibility; its presentation children are stubbed.
       const controller = {
         ...accessory,
+        visibleTabs: [],
         bulkCloseConfirm: { visible: false }
       } as unknown as SurfaceController
       return <MobileSessionSurface controller={controller} />

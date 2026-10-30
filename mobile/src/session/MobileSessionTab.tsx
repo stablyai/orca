@@ -31,7 +31,7 @@ export function MobileSessionTab({
   title: string
   tabState?: AgentDotState
   agentId: string | null
-  details: SessionTitleCard
+  details: SessionTitleCard['tabDetails']
   barRef: RefObject<View | null>
   onLayout: (event: LayoutChangeEvent) => void
   onPress: (source: DetailCardSource) => void
@@ -44,7 +44,7 @@ export function MobileSessionTab({
     [tab.id, barRef]
   )
   useDetailCardSource(details, source)
-  const ownsCard = details.active && details.visual?.source.key === source.key
+  const ownsCard = details.activeKey === source.key
   return (
     <>
       <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={ownsCard} />
@@ -53,7 +53,7 @@ export function MobileSessionTab({
         style={[styles.tab, first && styles.tabFirst, active && styles.tabActive]}
         onLayout={(event) => {
           onLayout(event)
-          details.refreshSource(source)
+          details.refreshSource()
         }}
         onPress={() => onPress(source)}
         accessibilityRole="tab"

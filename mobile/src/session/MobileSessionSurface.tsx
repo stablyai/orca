@@ -1,4 +1,4 @@
-import { useContext } from 'react'
+import { useContext, useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { styles } from './mobile-session-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -47,22 +47,37 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   )
   const details = useSessionTitleCard(besideTabs, obscured, controller.visibleTabs)
   const { missingTab } = details
-  const tab = controller.visibleTabs.find((candidate) => candidate.id === details.tabId)
-  const now = useNow(60_000)
-  const tabContent = tab
-    ? mobileSessionTabCardContent(
-        tab,
-        getMobileTerminalTabHostAgentIdentity(tab, controller.terminals),
-        now
-      )
-    : null
+  const tab = useMemo(
+    () =>
+      details.tabId
+        ? controller.visibleTabs.find((candidate) => candidate.id === details.tabId)
+        : undefined,
+    [controller.visibleTabs, details.tabId]
+  )
+  const hostAgentIdentity = useMemo(
+    () => (tab ? getMobileTerminalTabHostAgentIdentity(tab, controller.terminals) : undefined),
+    [tab, controller.terminals]
+  )
+  const now = useNow(60_000, details.active && tab != null)
+  const tabContent = useMemo(
+    () => (tab ? mobileSessionTabCardContent(tab, hostAgentIdentity, now) : null),
+    [tab, hostAgentIdentity, now, t]
+  )
+  const footer = useMemo(
+    () => (tabContent ? <MobileSessionTabCardFooter content={tabContent} /> : null),
+    [tabContent]
+  )
+  const rail = useSessionSideRail(controller, details)
+  const contentRow = useMemo(
+    () => <MobileSessionContentRow controller={controller} keysInRail={rail.keysInRail} />,
+    [controller, rail.keysInRail]
+  )
   useDetailCardScope({
     ...details,
     openerRef: details.scopeOpenerRef,
     active: details.active && !missingTab,
     obscured: obscured || missingTab
   })
-  const rail = useSessionSideRail(controller, details)
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
     controller.worktreeHostId === 'local' ? (server ? server.name : controller.hostName) : null
@@ -74,7 +89,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
           details={details}
           backInRail={rail.backInRail}
         />
-        <MobileSessionContentRow controller={controller} keysInRail={rail.keysInRail} />
+        {contentRow}
       </View>
       <DetailCardLayer>
         <View
@@ -100,7 +115,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
               detail={tabContent ? tabContent.detail : controller.worktreePath}
               footer={
                 tabContent ? (
-                  <MobileSessionTabCardFooter content={tabContent} />
+                  footer
                 ) : hostName ? (
                   <>
                     <StatusDot state={controller.connState} />

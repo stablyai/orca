@@ -25,16 +25,34 @@ export function useSessionTitleCard(
   const tabKey = card.visual?.source.key
   const tabId = tabKey?.startsWith('tab:') ? tabKey.slice(4) : null
   const requestedTabId = card.requestedKey?.startsWith('tab:') ? card.requestedKey.slice(4) : null
-  const missingTab = Boolean(tabId && !tabs.some((tab) => tab.id === tabId))
-  const missingRequest = Boolean(requestedTabId && !tabs.some((tab) => tab.id === requestedTabId))
-  const { dismiss } = card
+  const tabIds = useMemo(() => new Set(tabs.map((tab) => tab.id)), [tabs])
+  const missingTab = Boolean(tabId && !tabIds.has(tabId))
+  const missingRequest = Boolean(requestedTabId && !tabIds.has(requestedTabId))
+  const missingKey = missingRequest ? card.requestedKey : missingTab ? tabKey : null
+  const { removeSource, dismiss, refreshSource, registerSource, boundaryRefs } = card
   useLayoutEffect(() => {
-    if (missingTab || missingRequest) {
-      dismiss()
+    if (missingKey) {
+      removeSource(missingKey)
     }
-  }, [missingTab, missingRequest, dismiss])
+  }, [missingKey, removeSource])
+  const activeKey = card.active ? card.visual?.source.key : null
+  const { requestedKey } = card
+  const tabDetails = useMemo(
+    () => ({
+      barRef,
+      boundaryRefs,
+      dismiss,
+      refreshSource,
+      registerSource,
+      toggleSource,
+      activeKey,
+      requestedKey
+    }),
+    [boundaryRefs, dismiss, refreshSource, registerSource, toggleSource, activeKey, requestedKey]
+  )
   return {
     tabId,
+    tabDetails,
     missingTab,
     ...card,
     barRef,

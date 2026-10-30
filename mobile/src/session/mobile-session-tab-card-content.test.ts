@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { mobileSessionTabCardContent } from './mobile-session-tab-card-content'
@@ -31,7 +32,9 @@ it('matches per-kind tab details using the existing phone fields', () => {
   expect(
     content({ ...terminal, agentStatus: { ...agentStatus, restoredUnconfirmed: true } }).state
   ).toBeNull()
-  expect(content({ ...terminal, agentStatus: { ...agentStatus, state: 'idle' } }).state).toBeNull()
+  expect(
+    mobileSessionTabCardContent(terminal, undefined, 1001 + AGENT_STATUS_STALE_AFTER_MS).state
+  ).toBeNull()
   expect(content({ ...terminal, title: 'Shell', agentStatus: null })).toMatchObject({
     title: 'Shell',
     programName: 'Terminal',

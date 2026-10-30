@@ -58,6 +58,7 @@ vi.mock('../transport/use-workspace-client', () => ({
   WorkspaceServerContext: createContext(undefined)
 }))
 vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
+vi.mock('./MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
@@ -149,6 +150,7 @@ function mounted(strict = false) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads the root ref and sheet visibility; its presentation children are stubbed.
     const controller = {
       ...result,
+      visibleTabs: [],
       bulkCloseConfirm: { visible: false }
     } as unknown as SurfaceController
     return visible ? createElement(MobileSessionSurface, { key: surfaceKey, controller }) : null

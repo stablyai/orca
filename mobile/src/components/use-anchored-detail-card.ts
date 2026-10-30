@@ -17,6 +17,7 @@ type State = { serial: number; request: Request | null; visual: Visual | null }
 type Action =
   | { type: 'toggle'; eligible: boolean; source: DetailCardSource }
   | { type: 'close'; request?: number }
+  | { type: 'remove'; key: string }
   | { type: 'refresh'; source?: DetailCardSource }
   | { type: 'geometry' }
   | { type: 'measured'; request: number; anchor: DetailCardAnchor }
@@ -50,6 +51,12 @@ function reduce(state: State, action: Action): State {
         serial: serial + 1,
         request: { id: serial + 1, source: action.source ?? source }
       }
+    case 'remove':
+      return source?.key === action.key
+        ? reduce(state, { type: 'close' })
+        : visual?.source.key === action.key
+          ? { ...state, visual: null }
+          : state
     case 'close':
       if (action.request !== undefined && action.request !== request?.id) {
         return state
@@ -106,6 +113,7 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
     size.width
   ].join(':')
   const dismiss = useCallback(() => dispatch({ type: 'close' }), [])
+  const removeSource = useCallback((key: string) => dispatch({ type: 'remove', key }), [])
   const onSettled = useCallback((motion: number) => dispatch({ type: 'settled', motion }), [])
   const toggleSource = useCallback(
     (source: DetailCardSource) => dispatch({ type: 'toggle', source, eligible: !obscured }),
@@ -201,6 +209,7 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
     requestedKey: request?.source.key ?? (visual?.target === 1 ? visual.source.key : null),
     present: visual !== null,
     dismiss,
+    removeSource,
     onSettled,
     onLayout,
     onAnchorLayout,
@@ -219,7 +228,7 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
 export type AnchoredDetailCardController = ReturnType<typeof useAnchoredDetailCard>
 
 export function useDetailCardSource(
-  controller: AnchoredDetailCardController,
+  controller: Pick<AnchoredDetailCardController, 'registerSource'>,
   source: DetailCardSource
 ) {
   const { registerSource } = controller

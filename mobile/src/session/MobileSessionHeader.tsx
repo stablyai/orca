@@ -42,7 +42,11 @@ export function MobileSessionHeader({
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = details.besideTabs
   const tabStrip = hasTabs ? (
-    <MobileSessionTabStrip controller={controller} inTopBar={tabsInTopBar} details={details} />
+    <MobileSessionTabStrip
+      controller={controller}
+      inTopBar={tabsInTopBar}
+      details={details.tabDetails}
+    />
   ) : null
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>

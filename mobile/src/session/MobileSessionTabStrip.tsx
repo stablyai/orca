@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { View, ScrollView } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
@@ -29,14 +29,14 @@ import type { SessionTitleCard } from './use-session-title-card'
 
 const DOUBLE_TAP_RENAME_MS = 300
 
-export function MobileSessionTabStrip({
+export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   controller,
   inTopBar,
   details
 }: {
   controller: MobileSessionController
   inTopBar: boolean
-  details: SessionTitleCard
+  details: SessionTitleCard['tabDetails']
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -92,6 +92,22 @@ export function MobileSessionTabStrip({
     }
     return states
   }, [visibleTabs, now])
+  const tabLabels = useMemo(
+    () =>
+      visibleTabs.map((tab) => {
+        const identity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
+        return {
+          title: getMobileSessionTabTitle(tab, identity),
+          agentId:
+            tab.type === 'agent-session'
+              ? tab.agent
+              : tab.type === 'terminal'
+                ? resolveMobileTerminalTabAgentId(tab, identity)
+                : null
+        }
+      }),
+    [visibleTabs, terminals, t]
+  )
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
   const refreshHiddenTabs = () => {
     const next = resolveTabStripHiddenTabs({
@@ -220,8 +236,7 @@ export function MobileSessionTabStrip({
         >
           {visibleTabs.map((tab, index) => {
             const tabState = tabStates.get(tab.id)
-            const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
-            const title = getMobileSessionTabTitle(tab, hostAgentIdentity)
+            const { title, agentId } = tabLabels[index]
             return (
               <MobileSessionTab
                 key={tab.id}
@@ -230,13 +245,7 @@ export function MobileSessionTabStrip({
                 active={tab.id === activeSessionTabId}
                 title={title}
                 tabState={tabState}
-                agentId={
-                  tab.type === 'agent-session'
-                    ? tab.agent
-                    : tab.type === 'terminal'
-                      ? resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
-                      : null
-                }
+                agentId={agentId}
                 details={details}
                 barRef={tabBarRef}
                 onLayout={(e) => {
@@ -302,4 +311,4 @@ export function MobileSessionTabStrip({
       />
     </View>
   )
-}
+})

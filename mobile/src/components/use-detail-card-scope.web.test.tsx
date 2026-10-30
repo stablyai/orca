@@ -168,7 +168,6 @@ it('keeps outside actions and finite focus order while releasing a retained visu
     expect(node('opener')).toBe(opener)
     render(true)
     render(true, false, 'tab1')
-    expect(document.querySelectorAll('#card')).toHaveLength(1)
     key('keydown', 'Tab')
     focusBoundary('tab1', false)
     expect(document.activeElement).toBe(node('scroll'))

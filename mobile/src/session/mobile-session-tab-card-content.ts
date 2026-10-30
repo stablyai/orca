@@ -52,10 +52,10 @@ export function mobileSessionTabCardContent(
         tab.title && tab.title !== tab.url && !isBlankBrowserUrl(tab.title)
           ? tab.title
           : blank
-            ? translate('session.tabCard.newBrowser', 'New Browser')
+            ? translate('session.terminalTabAgent.newBrowser', 'New Browser')
             : label,
       detail: null,
-      programName: blank ? translate('session.tabCard.browser', 'Browser') : label,
+      programName: blank ? translate('session.terminalTabAgent.browser', 'Browser') : label,
       agentId: null,
       state: null,
       kind: tab.type
@@ -68,7 +68,7 @@ export function mobileSessionTabCardContent(
       ? isTuiAgent(agentId)
         ? TUI_AGENT_DISPLAY_NAMES[agentId]
         : agentId
-      : translate('session.tabCard.terminal', 'Terminal'),
+      : translate('session.terminalTabAgent.terminal', 'Terminal'),
     agentId,
     state,
     kind: tab.type
