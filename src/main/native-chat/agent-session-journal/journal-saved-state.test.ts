@@ -26,9 +26,12 @@ import {
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { rebuildJournalOutcomes } from './journal-outcome-table'
-import { clearJournalSavedState } from './journal-saved-state'
 import { restoreJournal } from './journal-open'
-import { readJournalSavedState, readJournalSavedStatePages } from './journal-saved-state'
+import {
+  clearJournalSavedState,
+  readJournalSavedState,
+  readJournalSavedStatePages
+} from './journal-saved-state'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalHostDatabase } from './journal-host-database'
 

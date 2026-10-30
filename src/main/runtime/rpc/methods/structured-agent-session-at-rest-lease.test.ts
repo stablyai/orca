@@ -1,8 +1,7 @@
 import '../unused-default-rpc-methods.test-fixture'
-import { vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 vi.mock('node:fs/promises', { spy: true })
 import { readFile } from 'node:fs/promises'
-import { expect, it } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { REST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import {
