@@ -1,0 +1,22 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcalivealerts'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcalivealerts'
+}
+
+dependencies {
+  // HeadlessJsTaskContext keeps React Native timers running while the foreground service is up.
+  // expo-modules-core links react-android as `implementation`, so it is not on this classpath by
+  // itself; the React Native Gradle plugin pins the version to the app's react-native.
+  implementation 'com.facebook.react:react-android'
+}

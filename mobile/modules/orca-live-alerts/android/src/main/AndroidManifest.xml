@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Android 16 Live Updates: normal (appops) permission, granted at install. -->
+  <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+  <!-- Runtime prerequisite of the connectedDevice type (a normal permission). -->
+  <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+
+  <application>
+    <!-- Keeps the link to the paired desktop open while agents run; see LiveAgentService. -->
+    <service
+      android:name="expo.modules.orcalivealerts.LiveAgentService"
+      android:exported="false"
+      android:foregroundServiceType="connectedDevice" />
+  </application>
+</manifest>

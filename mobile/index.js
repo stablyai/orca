@@ -2,6 +2,8 @@
 import './src/i18n/plural-rules-polyfill'
 // Headless notification launches do not mount the router layout.
 import './src/notifications/push-background-dismissal'
+// The live agent notification's keep-alive task, which the native module starts with its service.
+import './src/live-alerts/live-alerts-keepalive-registration'
 import { loadPairedE2EENativeBindings } from './src/transport/paired-e2ee-native-bindings'
 import { providePairedE2EENativeBindings } from './src/transport/paired-e2ee-native-codec'
 import 'expo-router/entry'

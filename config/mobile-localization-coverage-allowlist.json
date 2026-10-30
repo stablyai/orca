@@ -189,6 +189,13 @@
     "count": 1
   },
   {
+    "filePath": "mobile/src/live-alerts/live-alert-payload.ts",
+    "kind": "object-property:title",
+    "text": "Disconnected",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "mobile/src/mobile-web-shell/shell-bridge-log-lines.ts",
     "kind": "object-property:message",
     "text": "Web shell bridge:",
