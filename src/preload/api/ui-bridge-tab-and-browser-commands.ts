@@ -149,6 +149,16 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:switchRecentTab', listener)
     return () => ipcRenderer.removeListener('ui:switchRecentTab', listener)
   },
+  onMoveActiveTab: (
+    callback: (payload: { direction: 1 | -1; sourceId?: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: { direction: 1 | -1; sourceId?: string }
+    ) => callback(payload)
+    ipcRenderer.on('ui:moveActiveTab', listener)
+    return () => ipcRenderer.removeListener('ui:moveActiveTab', listener)
+  },
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { shiftKey: boolean }) =>
       callback(data)

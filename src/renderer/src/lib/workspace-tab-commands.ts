@@ -16,9 +16,15 @@ import {
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
+import { moveFloatingWorkspaceTab } from './floating-workspace-tab-reorder'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { closeWorkspaceBrowserTab } from './workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
+import {
+  getActiveTabNavOrder,
+  moveTabIdWithinGroupOrder
+} from '@/components/tab-bar/group-tab-order'
+import { mirrorWebRuntimeTabMove } from '@/components/tab-bar/web-runtime-tab-move-mirror'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -34,6 +40,7 @@ export type WorkspaceTabCommand =
       floatingPanelGuestOwned?: boolean
     }
   | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
+  | { type: 'move-active'; direction: -1 | 1; target?: WorkspaceTabTarget }
   | { type: 'previous-recent' }
 
 type TabState = ReturnType<typeof useAppStore.getState>
@@ -101,6 +108,77 @@ function resolveCloseTarget(
     return resolveCloseTarget(state, { kind: 'browser-source', sourceId: state.activeBrowserTabId })
   }
   return null
+}
+
+function resolveMoveTarget(
+  state: TabState,
+  target?: WorkspaceTabTarget
+): { worktreeId: string; tab: Tab } | null {
+  if (target?.kind === 'tab') {
+    const tab = (state.unifiedTabsByWorktree[target.worktreeId] ?? []).find(
+      (candidate) => candidate.id === target.tabId
+    )
+    return tab ? { worktreeId: target.worktreeId, tab } : null
+  }
+  if (target?.kind === 'browser-source') {
+    const owner = resolveBrowserWorkspaceOwner(state, target.sourceId)
+    if (!owner) {
+      return null
+    }
+    const tab = (state.unifiedTabsByWorktree[owner.worktreeId] ?? []).find(
+      (candidate) => candidate.contentType === 'browser' && candidate.entityId === owner.workspaceId
+    )
+    return tab ? { worktreeId: owner.worktreeId, tab } : null
+  }
+  const worktreeId = state.activeWorktreeId
+  if (!worktreeId) {
+    return null
+  }
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  const group = groupId
+    ? (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
+    : undefined
+  if (!group?.activeTabId) {
+    return null
+  }
+  const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === group.activeTabId
+  )
+  return tab ? { worktreeId, tab } : null
+}
+
+function moveActiveWorkspaceTab(
+  state: TabState,
+  direction: -1 | 1,
+  target?: WorkspaceTabTarget
+): boolean {
+  const resolved = resolveMoveTarget(state, target)
+  if (!resolved) {
+    return false
+  }
+  const { worktreeId, tab } = resolved
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === tab.groupId
+  )
+  if (!group) {
+    return false
+  }
+  const visibleTabIds = getActiveTabNavOrder(state, worktreeId, {}, group.id).flatMap((tab) =>
+    tab.tabId ? [tab.tabId] : []
+  )
+  const nextOrder = moveTabIdWithinGroupOrder(group.tabOrder, visibleTabIds, tab.id, direction)
+  if (!nextOrder) {
+    return false
+  }
+  state.reorderUnifiedTabs(group.id, nextOrder)
+  mirrorWebRuntimeTabMove({
+    kind: 'reorder',
+    worktreeId,
+    tabId: tab.id,
+    targetGroupId: group.id,
+    tabOrder: nextOrder
+  })
+  return true
 }
 
 /** Input adapters describe intent; targeting and tab operations live here. */
@@ -172,6 +250,12 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
+  }
+  if (command.type === 'move-active') {
+    if (isFloatingWorkspacePanelFocused() && !command.target) {
+      return moveFloatingWorkspaceTab(state, command.direction)
+    }
+    return moveActiveWorkspaceTab(state, command.direction, command.target)
   }
   if (isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)

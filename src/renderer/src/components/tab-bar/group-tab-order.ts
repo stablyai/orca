@@ -16,6 +16,34 @@ export type ActiveTabNavOrderIds = {
   agentSessionIds?: string[]
 }
 
+// Visible order may omit stale tabs, so swap the active tab with its visible neighbor and keep every stored group entry.
+export function moveTabIdWithinGroupOrder(
+  tabOrder: readonly string[],
+  visibleTabIds: readonly string[],
+  activeTabId: string,
+  direction: -1 | 1
+): string[] | null {
+  const visibleIndex = visibleTabIds.indexOf(activeTabId)
+  const neighborId = visibleTabIds[visibleIndex + direction]
+  if (visibleIndex === -1 || !neighborId) {
+    return null
+  }
+  const activeIndex = tabOrder.indexOf(activeTabId)
+  const neighborIndex = tabOrder.indexOf(neighborId)
+  if (activeIndex === -1 || neighborIndex === -1) {
+    return null
+  }
+  const nextOrder = [...tabOrder]
+  const activeEntry = nextOrder[activeIndex]
+  const neighborEntry = nextOrder[neighborIndex]
+  if (!activeEntry || !neighborEntry) {
+    return null
+  }
+  nextOrder[activeIndex] = neighborEntry
+  nextOrder[neighborIndex] = activeEntry
+  return nextOrder
+}
+
 /** Match reconciled visible strip order; id activates backing entities, tabId selects split copies, and missing entities are skipped. */
 export function getGroupVisibleTabOrder(
   group: TabGroup,
@@ -151,7 +179,8 @@ export function getActiveTabNavOrder(
     | 'browserTabsByWorktree'
   >,
   worktreeId: string,
-  ids: ActiveTabNavOrderIds = {}
+  ids: ActiveTabNavOrderIds = {},
+  groupIdOverride?: string
 ): VisibleTabRef[] {
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
   const editorIds =
@@ -169,7 +198,7 @@ export function getActiveTabNavOrder(
       .filter((tab) => tab.contentType === 'agent-session')
       .map((tab) => tab.id)
 
-  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const activeGroupId = groupIdOverride ?? state.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
     ? (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === activeGroupId)
     : undefined
