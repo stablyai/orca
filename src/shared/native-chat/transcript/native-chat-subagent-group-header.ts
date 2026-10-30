@@ -1,7 +1,8 @@
 // Share spawn-group headline/verdict/alert/clock/token derivation; callers supply platform translations.
 
-import { normalizeSubagentState, summarizeSubagentGroup } from '../../native-chat-subagent-summary'
+import { normalizeSubagentState, summarizeSubagentGroup } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry, NativeChatSubagentState } from '../../native-chat-types'
+import { englishCopyText, type CopyValues, type CountedCopy } from '../../counted-copy-english'
 
 export const NATIVE_CHAT_SUBAGENT_GROUP_COPY = {
   stateCompleted: 'completed',
@@ -10,30 +11,30 @@ export const NATIVE_CHAT_SUBAGENT_GROUP_COPY = {
   stateFailed: 'failed',
   stateStopped: 'stopped',
   stateUnverifiable: 'status unavailable',
-  stateWorkingCount: '{{value0}} working',
-  stateIdleCount: '{{value0}} idle',
-  stateFailedCount: '{{value0}} failed',
-  stateStoppedCount: '{{value0}} stopped',
-  stateUnverifiableCount: '{{value0}} with status unavailable',
-  startedOne: 'Kicked off 1 subagent',
-  startedN: 'Kicked off {{value0}} subagents',
-  ranOne: 'Ran 1 subagent',
-  ranN: 'Ran {{value0}} subagents',
+  stateWorkingCount: { one: '{{count}} working', other: '{{count}} working' },
+  stateIdleCount: { one: '{{count}} idle', other: '{{count}} idle' },
+  stateFailedCount: { one: '{{count}} failed', other: '{{count}} failed' },
+  stateStoppedCount: { one: '{{count}} stopped', other: '{{count}} stopped' },
+  stateUnverifiableCount: {
+    one: '{{count}} with status unavailable',
+    other: '{{count}} with status unavailable'
+  },
+  started: { one: 'Kicked off {{count}} subagent', other: 'Kicked off {{count}} subagents' },
+  ran: { one: 'Ran {{count}} subagent', other: 'Ran {{count}} subagents' },
   tokens: '{{value0}} tokens'
-} as const
+} as const satisfies Record<string, string | CountedCopy>
 
 export type NativeChatSubagentGroupCopyId = keyof typeof NATIVE_CHAT_SUBAGENT_GROUP_COPY
 
+/** Counted pieces need `count`; `tokens` takes its formatted amount as `value0`. */
 export type NativeChatSubagentGroupSay = (
   id: NativeChatSubagentGroupCopyId,
-  values?: { value0: string | number }
+  values?: CopyValues
 ) => string
 
 /** Any surface without translations. */
 export const sayNativeChatSubagentGroupEnglish: NativeChatSubagentGroupSay = (id, values) =>
-  values === undefined
-    ? NATIVE_CHAT_SUBAGENT_GROUP_COPY[id]
-    : NATIVE_CHAT_SUBAGENT_GROUP_COPY[id].replaceAll('{{value0}}', () => String(values.value0))
+  englishCopyText(NATIVE_CHAT_SUBAGENT_GROUP_COPY[id], values)
 
 /** Compact token counts: the row shows scale, not an exact ledger. */
 export function formatSubagentTokens(tokens: number): string {
@@ -69,7 +70,7 @@ export function subagentStateLabel(
         return say('stateUnverifiable')
     }
   }
-  const value = { value0: count }
+  const value = { count }
   switch (state) {
     case 'working':
       return say('stateWorkingCount', value)
@@ -107,13 +108,7 @@ export function nativeChatSubagentGroupHeader(
 ): NativeChatSubagentGroupHeader {
   const summary = summarizeSubagentGroup(agents)
   const working = summary.working > 0
-  const headline = working
-    ? summary.total === 1
-      ? say('startedOne')
-      : say('startedN', { value0: summary.total })
-    : summary.total === 1
-      ? say('ranOne')
-      : say('ranN', { value0: summary.total })
+  const headline = say(working ? 'started' : 'ran', { count: summary.total })
   const verdictState: NativeChatSubagentState = working
     ? 'working'
     : (summary.settledState ?? 'idle')

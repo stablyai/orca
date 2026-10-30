@@ -39,6 +39,7 @@ export function handleTerminalWorkspaceKeyDown(
     activeWorktreeId,
     handleCloseAllFiles,
     handleNewBrowserTab,
+    handleNewBrowserTabSplitRight,
     handleNewFile,
     handleNewSimulatorTab,
     handleNewTab,
@@ -132,6 +133,17 @@ export function handleTerminalWorkspaceKeyDown(
       return
     }
     handleNewBrowserTab()
+    return
+  }
+  if (!event.repeat && matchShortcut('tab.newBrowserSplitRight')) {
+    event.preventDefault()
+    notifyTerminalCapture('tab.newBrowserSplitRight')
+    if (
+      !floatingWorkspaceFocused &&
+      ensureClientCreationActionAllowed(activeWorktreeId, 'managed-browser')
+    ) {
+      handleNewBrowserTabSplitRight()
+    }
     return
   }
   if (!event.repeat && mobileEmulatorEnabled && matchShortcut('tab.newSimulator')) {

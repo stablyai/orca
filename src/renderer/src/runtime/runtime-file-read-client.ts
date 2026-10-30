@@ -61,7 +61,9 @@ export async function readRuntimeFileContent({
       connectionId,
       includeLocalLogMetadata,
       ...localAccess(connectionId, access),
-      ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {})
+      ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {}),
+      // A viewer reads images and PDFs by URL; baseline checks keep base64.
+      ...(pageOversizedBinary && !connectionId ? { rangePreview: true } : {})
     })
   }
   // Why: decided synchronously so ordinary reads pin their pairing without an extra await.

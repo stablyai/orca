@@ -9,7 +9,7 @@ import {
   type AgentDefaultEnvDraftInvalidReason
 } from './agent-default-env-draft'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
-import { AgentPermissionArgsChip } from './AgentPermissionChoiceControls'
+import { AgentArgsChoiceChips, type AgentArgsChoice } from './AgentPermissionChoiceControls'
 
 export function AgentCommandOverrideInput({
   defaultCmd,
@@ -87,23 +87,25 @@ export function AgentDefaultArgsInput({
   defaultArgs,
   argsOverride,
   onSaveArgs,
-  permissionChip,
+  choiceChips,
   note,
   disabled = false,
-  onDraftChange
+  onDraftChange,
+  placeholder,
+  onResetArgs,
+  hideLabel = false
 }: {
   defaultArgs: string
+  placeholder?: string
+  onResetArgs?: () => void | Promise<void>
   argsOverride: string
   onSaveArgs: (value: string) => void | Promise<void>
-  permissionChip?: {
-    label: string
-    flag: string
-    removeRecipe: (text: string) => string | null
-    onRemove: () => void
-  }
+  choiceChips?: readonly AgentArgsChoice[]
   note?: string
   disabled?: boolean
   onDraftChange?: (value: string) => void
+  /** The caller already labels the field, e.g. with a disclosure row. */
+  hideLabel?: boolean
 }): React.JSX.Element {
   const [draft, setDraft] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -111,6 +113,7 @@ export function AgentDefaultArgsInput({
   const chipButtonRef = useRef<HTMLButtonElement>(null)
   const argsDraft = onDraftChange ? argsOverride : (draft ?? argsOverride)
   const { pending, write } = useAgentLaunchFieldWrite()
+  const chipFlags = choiceChips?.map((chip) => chip.flag).join(' ')
   useLayoutEffect(() => {
     const input = inputRef.current
     const chip = chipRef.current
@@ -122,13 +125,14 @@ export function AgentDefaultArgsInput({
       return
     }
     const measure = (): void => {
-      input.style.textIndent = `calc(${chip.getBoundingClientRect().width}px + var(--spacing) * 2)`
+      // Popover transforms change viewport geometry, but text-indent needs layout pixels.
+      input.style.textIndent = `calc(${chip.offsetWidth}px + var(--spacing) * 2)`
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(chip)
     return () => observer.disconnect()
-  }, [permissionChip?.flag])
+  }, [chipFlags])
   const commitArgs = (): void => {
     if (disabled || pending || (!onDraftChange && draft === null)) {
       return
@@ -147,9 +151,11 @@ export function AgentDefaultArgsInput({
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs font-medium leading-none text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
-      </span>
+      {hideLabel ? null : (
+        <span className="text-xs font-medium leading-none text-muted-foreground">
+          {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+        </span>
+      )}
       <div className="flex min-w-0 items-center gap-2">
         <div
           className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
@@ -164,26 +170,24 @@ export function AgentDefaultArgsInput({
             }
           }}
         >
-          {permissionChip && (
-            <AgentPermissionArgsChip
-              {...permissionChip}
+          {choiceChips?.length ? (
+            <AgentArgsChoiceChips
+              chips={choiceChips}
               chipRef={chipRef}
               buttonRef={chipButtonRef}
               disabled={disabled || pending}
-              onRemove={() => {
+              onRemove={(chip) => {
                 if (disabled || pending) {
                   return
                 }
-                if (onDraftChange) {
-                  onDraftChange(permissionChip.removeRecipe(argsDraft) ?? argsDraft)
-                } else if (draft !== null) {
-                  setDraft(permissionChip.removeRecipe(draft) ?? draft)
+                const next = chip.onRemove(argsDraft)
+                if (!onDraftChange && draft !== null) {
+                  setDraft(next)
                 }
                 inputRef.current?.focus()
-                permissionChip.onRemove()
               }}
             />
-          )}
+          ) : null}
           <Textarea
             variant="composite"
             ref={inputRef}
@@ -200,7 +204,7 @@ export function AgentDefaultArgsInput({
                 return
               }
               if (
-                permissionChip &&
+                choiceChips?.length &&
                 event.key === 'Backspace' &&
                 !event.repeat &&
                 !event.altKey &&
@@ -222,19 +226,22 @@ export function AgentDefaultArgsInput({
               }
             }}
             placeholder={
-              permissionChip
+              choiceChips?.length
                 ? undefined
-                : defaultArgs ||
+                : placeholder ||
+                  defaultArgs ||
                   translate(
                     'auto.components.settings.AgentsPane.6f99bf5dd0',
                     'No default arguments'
                   )
             }
             spellCheck={false}
-            className="block min-h-5 [field-sizing:content]"
+            className="block min-h-5 max-w-full [field-sizing:content] [overflow-wrap:anywhere]"
           />
         </div>
-        {(argsOverride !== defaultArgs || argsDraft !== defaultArgs) && (
+        {(argsOverride !== defaultArgs ||
+          argsDraft !== defaultArgs ||
+          Boolean(onResetArgs && choiceChips?.length)) && (
           <Button
             type="button"
             variant="ghost"
@@ -246,7 +253,7 @@ export function AgentDefaultArgsInput({
               }
               write(
                 defaultArgs,
-                () => onSaveArgs(defaultArgs),
+                () => (onResetArgs ? onResetArgs() : onSaveArgs(defaultArgs)),
                 () => setDraft((current) => (current === argsDraft ? null : current))
               )
             }}

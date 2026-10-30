@@ -5,6 +5,7 @@ import {
 } from '../managed-server/lifecycle/orcad-managed-version-gc'
 
 // Only activating another version or a daemon change makes a dir stale; until then a clean GC stays clean.
+// A distro shared with another Orca, or a rolled-back activation, can leave a stale dir until the next launch.
 const cleanHosts = new Set<string>()
 
 /** Skips version GC on reconnects (distro restarts) after one left nothing behind under the same pins. */

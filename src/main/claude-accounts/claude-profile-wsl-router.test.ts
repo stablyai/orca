@@ -1,3 +1,4 @@
+import type { BlockedWslDistro } from '../wsl/wsl-unc-access-gate'
 import { spawnSync } from 'node:child_process'
 import {
   existsSync,
@@ -32,6 +33,12 @@ vi.mock('../wsl', () => ({
   getWslHomeAsync: async (distro: string) => `\\\\wsl.localhost\\${distro}${guest.home}`,
   listRunningWslDistrosAsync: async () => ['Ubuntu']
 }))
+const gate = vi.hoisted(() => ({
+  blocked: vi.fn(
+    async (_path: string, _distro?: string | null): Promise<BlockedWslDistro | null> => null
+  )
+}))
+vi.mock('../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: gate.blocked }))
 vi.mock('../wsl/wsl-runner', () => ({
   runWslProcess: async (spec: WslSpec) => {
     if (guest.failure) {
@@ -114,6 +121,13 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     )
     guest.failure = { code: 3, stdout: '' }
     await expect(f.router.publish('Ubuntu')).rejects.toThrow('WSL Ubuntu: exited with code 3')
+  })
+
+  it('never publishes at startup to a distro a list still names while it stops (E9)', async () => {
+    const f = fixture()
+    gate.blocked.mockResolvedValueOnce({ distro: 'Ubuntu', state: 'stopped' })
+    expect(await f.router.runningDistros()).toEqual([])
+    expect(gate.blocked).toHaveBeenCalledWith('', 'Ubuntu')
   })
 
   it('publishes and launches the saved account across distro casing without changing guest spelling', async () => {

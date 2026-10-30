@@ -55,13 +55,14 @@ export function structuredAgentSessionOwnValue(
 export function replaceStructuredAgentSessionAnsweredValues(
   record: StructuredAgentSessionOptionRecord,
   answered: Readonly<Partial<Record<(typeof ANSWERED_VALUE_IDS)[number], SessionOptionValue>>>,
-  sourceFor: (id: string) => TrackedNativeChatSessionOption['source']
+  sourceFor: (id: string) => TrackedNativeChatSessionOption['source'],
+  replaceUnknownModel = false
 ): void {
   for (const id of ANSWERED_VALUE_IDS) {
     const value = answered[id]
     if (value !== undefined) {
       record.values[id] = { value, source: sourceFor(id) }
-    } else if (id !== 'model') {
+    } else if (id !== 'model' || replaceUnknownModel) {
       delete record.values[id]
     }
   }
@@ -69,7 +70,20 @@ export function replaceStructuredAgentSessionAnsweredValues(
 
 /** The host status's option values as one stamp: another device's pick moves it, so options re-read. */
 export function structuredAgentSessionOptionStamp(
-  summary: Pick<AgentSessionStatusSummary, 'model' | 'permissionMode'> | undefined
+  summary:
+    | Pick<
+        AgentSessionStatusSummary,
+        'model' | 'permissionMode' | 'effort' | 'fastMode' | 'serviceTier'
+      >
+    | undefined
 ): string {
-  return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
+  return [
+    summary?.model,
+    summary?.permissionMode,
+    summary?.effort,
+    summary?.fastMode,
+    summary?.serviceTier
+  ]
+    .map((value) => value ?? '')
+    .join('|')
 }

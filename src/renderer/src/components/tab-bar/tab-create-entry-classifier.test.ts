@@ -3,7 +3,7 @@ import { QUICK_OPEN_QUERY_MAX_BYTES } from '../quick-open-search'
 import {
   classifyTabEntryQuery,
   getTabEntryOptions,
-  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  getTabEntryAbsolutePathRemoteBlockedMessage,
   validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath
 } from './tab-create-entry-classifier'
@@ -564,7 +564,7 @@ describe('tab create entry classification', () => {
     ]) {
       expect(classifyTabEntryQuery(query, readyFiles([]))).toMatchObject({
         kind: 'blocked',
-        message: TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
+        message: getTabEntryAbsolutePathRemoteBlockedMessage()
       })
     }
   })

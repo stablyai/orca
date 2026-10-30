@@ -7,7 +7,7 @@ import { useHostClient } from '../transport/host-client-hooks'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
-import type { BridgeColorScheme, BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeColorScheme, BridgeInitRoute, BridgeUiLocale } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
@@ -58,6 +58,7 @@ export type MobileWebShellBridgeArgs = {
   safeAreaInsets: BridgeSafeAreaInsets
   keyboardInset: number
   colorScheme: BridgeColorScheme
+  uiLocale: BridgeUiLocale
   pageRoutes: readonly string[]
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   // Effective session grants include the served-route union when this page owns the host area.
@@ -122,6 +123,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       safeAreaInsets: latest.safeAreaInsets,
       keyboardInset: latest.keyboardInset,
       colorScheme: latest.colorScheme,
+      uiLocale: latest.uiLocale,
       pageRoutes: latest.pageRoutes,
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
@@ -179,6 +181,14 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       mounted.host.publishColorScheme(colorScheme)
     }
   }, [colorScheme, sessionId])
+
+  const uiLocale = args.uiLocale
+  useEffect(() => {
+    const mounted = hostRef.current
+    if (mounted !== null && mounted.sessionId === sessionId) {
+      mounted.host.publishUiLocale(uiLocale)
+    }
+  }, [uiLocale, sessionId])
 
   return {
     bridgeEnabled: ready !== null,

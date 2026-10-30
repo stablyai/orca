@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type TestContents = {
   id: number
@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
       contents.destroyed = true
     }),
     clearPolicies: vi.fn<(partition: string) => void>(),
+    removeTarget: vi.fn(),
+    clearStorage: vi.fn<(targetId: string) => Promise<void>>(),
     policy: vi.fn<() => Promise<void>>(),
     sessionForPartition: (_partition: string): object => ({}),
     emitCreated: (_contents: TestContents): void => {},
@@ -85,11 +87,44 @@ vi.mock('./local-ssh-browser-route', () => ({
   probeLocalSshBrowserRouteForwarding: mocks.probe,
   closeLocalSshBrowserRouteForTarget: vi.fn(async () => {})
 }))
+vi.mock('../ssh/targets/ssh-target-registry', () => ({
+  getSshTargetRegistryStore: () => ({ removeTarget: mocks.removeTarget })
+}))
+vi.mock('../ssh/ssh-host-server-status', () => ({ clearSshHostServerStatus: vi.fn() }))
+vi.mock('../ssh/connection/ssh-connection-attribution', () => ({
+  isSshConnectionSolelyOwnedBy: () => true
+}))
+vi.mock('../ipc/ssh/ssh-connect-attempt-registry', () => ({
+  connectInFlight: new Map(),
+  invalidateConnectAttempt: vi.fn(),
+  isCurrentConnectAttempt: () => false
+}))
+vi.mock('../ipc/ssh/ssh-ipc-context', () => ({
+  connectionManager: { disconnect: vi.fn(async () => {}) },
+  persistedStore: { removeSshRemotePtyLeases: vi.fn() },
+  portForwardManager: { removeAllForwards: vi.fn(async () => {}) }
+}))
+vi.mock('../ipc/ssh/ssh-managed-port-forward-restore', () => ({
+  forgetPortForwardRestoreState: vi.fn()
+}))
+vi.mock('../ssh/legacy-relay/legacy-relay-bridge-registry', () => ({
+  forgetLegacyRelayTarget: vi.fn(),
+  stopLegacyRelayBridge: vi.fn()
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  closeOrcadManagedTunnelsForTarget: vi.fn(async () => {})
+}))
+vi.mock('./browser-route-partition-storage-runtime', () => ({
+  clearBrowserRoutePartitionStorageForLocalSshTarget: mocks.clearStorage
+}))
 
 import {
+  isLocalSshBrowserPartition,
   prepareLocalSshBrowserPartition,
   releaseLocalSshBrowserPartitionsForTarget
 } from './local-ssh-browser-partitions'
+import { removeRegisteredSshTarget } from '../ipc/ssh/ssh-session-teardown'
+import { runTargetLifecycle, targetLifecycleInFlight } from '../ipc/ssh/ssh-target-lifecycle-queue'
 
 beforeEach(() => {
   mocks.probe.mockReset().mockResolvedValue('ok')
@@ -97,10 +132,13 @@ beforeEach(() => {
   mocks.contents.length = 0
   mocks.census.mockClear()
   mocks.clearPolicies.mockReset()
+  mocks.removeTarget.mockReset()
+  mocks.clearStorage.mockReset().mockResolvedValue(undefined)
   mocks.closeGuest.mockReset().mockImplementation((contents) => {
     contents.destroyed = true
   })
 })
+afterEach(() => vi.useRealTimers())
 
 function createContents(partition: string): TestContents {
   const contents = {
@@ -205,34 +243,177 @@ describe('releaseLocalSshBrowserPartitionsForTarget', () => {
     }
   )
 
-  it('refreshes the census for a guest created while another prepare is pending', async () => {
-    const first = await prepareLocalSshBrowserPartition({
-      targetId: 'late-guest',
-      browserProfileId: 'first'
-    })
-    const firstContents = createContents(first.partition)
+  it.each([false, true])(
+    'waits for its own pending prepare (skipProbe=%s) and refreshes late guests',
+    async (skipProbe) => {
+      vi.useFakeTimers()
+      const first = await prepareLocalSshBrowserPartition({
+        targetId: `late-guest-${skipProbe}`,
+        browserProfileId: 'first'
+      })
+      const firstContents = createContents(first.partition)
+      const gate = Promise.withResolvers<void>()
+      mocks.policy.mockImplementationOnce(() => gate.promise)
+      const second = prepareLocalSshBrowserPartition({
+        targetId: `late-guest-${skipProbe}`,
+        browserProfileId: 'second',
+        skipProbe
+      })
+      const firstClosed = Promise.withResolvers<void>()
+      mocks.closeGuest.mockImplementationOnce((contents) => {
+        contents.destroyed = true
+        firstClosed.resolve()
+      })
+      const listeners = mocks.listenerCount()
+      let released = false
+      const releasing = releaseLocalSshBrowserPartitionsForTarget(`late-guest-${skipProbe}`).then(
+        () => {
+          released = true
+        }
+      )
+      await firstClosed.promise
+      await vi.advanceTimersByTimeAsync(0)
+      expect(released).toBe(false)
+      gate.resolve()
+      const late = createContents((await second).partition)
+      await releasing
+
+      expect(firstContents.destroyed).toBe(true)
+      expect(late.destroyed).toBe(true)
+      expect(mocks.census).toHaveBeenCalledTimes(2)
+      expect(mocks.listenerCount()).toBe(listeners)
+    }
+  )
+
+  it.each([false, true])(
+    'skips unrelated pending prepares (skipProbe=%s) across profiles and repeated release',
+    async (skipProbe) => {
+      vi.useFakeTimers()
+      const gate = Promise.withResolvers<void>()
+      mocks.policy.mockImplementationOnce(() => gate.promise)
+      const siblingInput = {
+        targetId: `held-sibling-${skipProbe}`,
+        browserProfileId: 'default',
+        skipProbe
+      }
+      const sibling = prepareLocalSshBrowserPartition(siblingInput)
+      const targetId = `ready-owner-${skipProbe}`
+      const first = await prepareLocalSshBrowserPartition({ targetId, browserProfileId: 'first' })
+      expect(
+        await prepareLocalSshBrowserPartition({
+          targetId,
+          browserProfileId: 'first',
+          skipProbe: true
+        })
+      ).toEqual(first)
+      const second = await prepareLocalSshBrowserPartition({
+        targetId,
+        browserProfileId: 'second',
+        skipProbe
+      })
+      const removed = [createContents(first.partition), createContents(second.partition)]
+      const listeners = mocks.listenerCount()
+      let released = false
+      const releasing = releaseLocalSshBrowserPartitionsForTarget(targetId).then(() => {
+        released = true
+      })
+      try {
+        await vi.advanceTimersByTimeAsync(0)
+        expect(released).toBe(true)
+        expect(removed.every((contents) => contents.destroyed)).toBe(true)
+        expect(mocks.census).toHaveBeenCalledTimes(1)
+        expect(mocks.clearPolicies).toHaveBeenCalledTimes(3)
+        expect(mocks.listenerCount()).toBe(listeners)
+      } finally {
+        gate.resolve()
+        await releasing
+        await sibling
+      }
+      const survivor = createContents((await sibling).partition)
+      const policyCalls = mocks.policy.mock.calls.length
+      expect(await prepareLocalSshBrowserPartition(siblingInput)).toEqual(await sibling)
+      expect(mocks.policy).toHaveBeenCalledTimes(policyCalls)
+      await releaseLocalSshBrowserPartitionsForTarget(targetId)
+      expect(mocks.census).toHaveBeenCalledTimes(1)
+      expect(mocks.clearPolicies).toHaveBeenCalledTimes(3)
+      expect(survivor.destroyed).toBe(false)
+      expect(isLocalSshBrowserPartition((await sibling).partition)).toBe(true)
+    }
+  )
+
+  it('deduplicates pending prepares and evicts a rejected own-target entry before retry', async () => {
+    vi.useFakeTimers()
     const gate = Promise.withResolvers<void>()
     mocks.policy.mockImplementationOnce(() => gate.promise)
-    const second = prepareLocalSshBrowserPartition({
-      targetId: 'late-guest',
-      browserProfileId: 'second'
+    const input = { targetId: 'rejected-owner', browserProfileId: 'default' }
+    const attempts = Promise.allSettled([
+      prepareLocalSshBrowserPartition(input),
+      prepareLocalSshBrowserPartition(input)
+    ])
+    let released = false
+    const releasing = releaseLocalSshBrowserPartitionsForTarget(input.targetId).then(() => {
+      released = true
     })
-    const firstClosed = Promise.withResolvers<void>()
-    mocks.closeGuest.mockImplementationOnce((contents) => {
-      contents.destroyed = true
-      firstClosed.resolve()
-    })
-    const listeners = mocks.listenerCount()
-    const releasing = releaseLocalSshBrowserPartitionsForTarget('late-guest')
-    await firstClosed.promise
-    gate.resolve()
-    const late = createContents((await second).partition)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.policy).toHaveBeenCalledTimes(1)
+    expect(released).toBe(false)
+    const error = new Error('proxy setup failed')
+    gate.reject(error)
+    expect(await attempts).toEqual([
+      { status: 'rejected', reason: error },
+      { status: 'rejected', reason: error }
+    ])
     await releasing
+    expect(mocks.census).not.toHaveBeenCalled()
+    const retried = await prepareLocalSshBrowserPartition(input)
+    expect(mocks.policy).toHaveBeenCalledTimes(2)
+    const contents = createContents(retried.partition)
+    await releaseLocalSshBrowserPartitionsForTarget(input.targetId)
+    expect(contents.destroyed).toBe(true)
+    expect(isLocalSshBrowserPartition(retried.partition)).toBe(false)
+  })
 
-    expect(firstContents.destroyed).toBe(true)
-    expect(late.destroyed).toBe(true)
-    expect(mocks.census).toHaveBeenCalledTimes(2)
-    expect(mocks.listenerCount()).toBe(listeners)
+  it('finishes actual target removal and its lifecycle successor while another target prepares', async () => {
+    vi.useFakeTimers()
+    const gate = Promise.withResolvers<void>()
+    mocks.policy.mockImplementationOnce(() => gate.promise)
+    const sibling = prepareLocalSshBrowserPartition({
+      targetId: 'removal-sibling',
+      browserProfileId: 'default'
+    })
+    const targetId = 'removed-owner'
+    const target = await prepareLocalSshBrowserPartition({ targetId, browserProfileId: 'default' })
+    const guest = createContents(target.partition)
+    let removed = false
+    let successorStarted = false
+    const removing = removeRegisteredSshTarget(targetId).then(() => {
+      removed = true
+    })
+    const successor = runTargetLifecycle(targetId, async () => {
+      successorStarted = true
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mocks.removeTarget).toHaveBeenCalledWith(targetId)
+      expect(guest.destroyed).toBe(true)
+      expect(isLocalSshBrowserPartition(target.partition)).toBe(false)
+      expect(mocks.clearStorage.mock.calls).toEqual([[targetId]])
+      expect(successorStarted).toBe(false)
+      await vi.advanceTimersByTimeAsync(500)
+      await removing
+      await successor
+      expect(removed).toBe(true)
+      expect(successorStarted).toBe(true)
+      expect(targetLifecycleInFlight.has(targetId)).toBe(false)
+      expect(mocks.clearStorage.mock.calls).toEqual([[targetId], [targetId]])
+    } finally {
+      gate.resolve()
+      await sibling
+      await vi.advanceTimersByTimeAsync(500)
+      await removing
+      await successor
+    }
+    expect(isLocalSshBrowserPartition((await sibling).partition)).toBe(true)
   })
 
   it('skips destroyed guests and does no native census for an absent target', async () => {

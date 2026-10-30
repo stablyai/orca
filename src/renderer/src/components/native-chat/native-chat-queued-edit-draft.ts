@@ -1,10 +1,10 @@
 import type { JSONContent } from '@tiptap/react'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
-import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences
-} from '../../../../shared/native-chat-image-transcript-markers'
+} from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import {
   queuedEditKeptImages,
   queuedMessageEditableText,

@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat-turn-membership'
 import type { NativeChatTaskListPredecessors } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
@@ -35,9 +36,10 @@ export function useMobileNativeChatRowRenderer({
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   actionablePromptIds: readonly string[] | undefined
 }): ({ item, index }: { item: NativeChatMessage; index: number }) => React.JSX.Element {
+  const t = useMobileTranslation()
   const unsentNotices = useMemo(
     () => mobileNativeChatUnsentNotices(turnJournal, agent),
-    [turnJournal, agent]
+    [turnJournal, agent, t]
   )
   const { resolveRow: resolveTurnRow, onToggleTurn } = turns
   const lookups = useMemo(

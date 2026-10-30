@@ -43,32 +43,41 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
-          number: 202,
-          title: 'Stack API',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/202',
-          statusCheckRollup: [],
-          updatedAt: '2026-08-10T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'stack/models',
-          headRefName: 'stack/api',
-          headRefOid: 'api-sha'
+          data: {
+            repository: {
+              pullRequest: {
+                number: 202,
+                title: 'Stack API',
+                state: 'OPEN',
+                url: 'https://github.com/stablyai/orca/pull/202',
+                updatedAt: '2026-08-10T00:00:00Z',
+                isDraft: false,
+                mergeable: 'MERGEABLE',
+                reviewDecision: null,
+                mergeStateStatus: 'CLEAN',
+                autoMergeRequest: null,
+                baseRefName: 'stack/models',
+                headRefName: 'stack/api',
+                baseRefOid: 'b'.repeat(40),
+                headRefOid: 'a'.repeat(40),
+                headRepositoryOwner: { login: 'stablyai' },
+                headRepository: { name: 'orca' },
+                commits: { nodes: [{ commit: { oid: 'a'.repeat(40), statusCheckRollup: null } }] },
+                stack: { number: 51, size: 2, baseRefName: 'main' },
+                stackEntry: { position: 2 }
+              }
+            }
+          }
         })
       })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
-          number: 202,
-          title: 'Stack API',
-          state: 'open',
-          html_url: 'https://github.com/stablyai/orca/pull/202',
-          head: { ref: 'stack/api', sha: 'api-sha' },
-          base: { ref: 'stack/models', sha: 'models-sha' },
-          stack: {
-            number: 51,
-            position: 2,
-            size: 2,
-            base: { ref: 'main', sha: 'main-sha' }
+          data: {
+            repository: {
+              autoMergeAllowed: true,
+              mergeQueue: null,
+              ref: { rules: { nodes: [] } }
+            }
           }
         })
       })
@@ -139,6 +148,9 @@ describe('GitHub GraphQL rate-limit guard', () => {
       ]
     })
     expect(pr?.mergeQueueRequired).toBe(true)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(ghExecFileAsyncMock.mock.calls[0][0]).toContain('number=202')
+    expect(ghExecFileAsyncMock.mock.calls[1][0]).toContain('branch=stack/models')
     const mergeQueueMetadataCall = ghExecFileAsyncMock.mock.calls.find(
       ([args]) => args.includes('graphql') && args.includes('branch=main')
     )

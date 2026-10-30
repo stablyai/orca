@@ -4,6 +4,21 @@ import type { CombinedDiffFileTreeMode } from './combined-diff-section-identity'
 import { getCombinedDiffFileTreeSectionKey } from './combined-diff-section-identity'
 import type { DiffSection } from '../../diff-section-types'
 
+export function combinedDiffSectionMatchesEntryMetadata(
+  section: DiffSection,
+  entry: GitStatusEntry | GitBranchChangeEntry,
+  treeMode: CombinedDiffFileTreeMode
+): boolean {
+  return (
+    section.key === getCombinedDiffFileTreeSectionKey(treeMode, entry) &&
+    section.status === entry.status &&
+    section.area === ('area' in entry ? entry.area : undefined) &&
+    section.oldPath === entry.oldPath &&
+    section.added === entry.added &&
+    section.removed === entry.removed
+  )
+}
+
 export function combinedDiffSectionsMatchEntryMetadata({
   entries,
   sections,
@@ -21,17 +36,7 @@ export function combinedDiffSectionsMatchEntryMetadata({
       if (!entry) {
         return false
       }
-      const entryArea = 'area' in entry ? entry.area : undefined
-      const entryAdded = 'added' in entry ? entry.added : undefined
-      const entryRemoved = 'removed' in entry ? entry.removed : undefined
-      return (
-        section.key === getCombinedDiffFileTreeSectionKey(treeMode, entry) &&
-        section.status === entry.status &&
-        section.area === entryArea &&
-        section.oldPath === entry.oldPath &&
-        section.added === entryAdded &&
-        section.removed === entryRemoved
-      )
+      return combinedDiffSectionMatchesEntryMetadata(section, entry, treeMode)
     })
   )
 }

@@ -69,7 +69,38 @@ describe('fetchWorktrees', () => {
       }
     } as Partial<AppState>)
 
+    const paneKey = 'removed-tab:leaf'
+    const previous = {
+      paneKey,
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: [],
+      terminalResumeEligible: false as const
+    }
+    store.setState({
+      tabsByWorktree: {
+        [removed.id]: [
+          {
+            id: 'removed-tab',
+            worktreeId: removed.id,
+            ptyId: null,
+            title: '',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      agentStatusByPaneKey: { [paneKey]: previous }
+    })
+    const accepted = vi.fn()
+    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
     await store.getState().fetchWorktrees('repo1')
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([{ paneKey, previous, current: undefined }])
+    dispose()
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'checks' })

@@ -53,7 +53,9 @@ export function cliMissingSentence(
   say: AgentSessionFailureSay
 ): string {
   return joinSentences([
-    say('cliMissing', agent(say, context)),
+    context.wslDistro
+      ? say('cliMissingInWslDistro', { ...agent(say, context), distro: context.wslDistro })
+      : say('cliMissing', agent(say, context)),
     ...(context.command && !context.retryControl
       ? [say('runCommandAgain', { command: context.command })]
       : [])

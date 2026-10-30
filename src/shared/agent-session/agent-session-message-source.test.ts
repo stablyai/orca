@@ -44,6 +44,11 @@ describe("a message's sender, read through its one reader", () => {
       orchestration: { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'ctx_1' }
     }
     expect(readAgentMessageSource(structuredClone(task))).toEqual(task)
+    const parsed = readAgentMessageSource({
+      ...task,
+      senders: FROM.senders.map((sender) => ({ ...sender, relation: 'future' }))
+    })
+    expect(parsed).toEqual(task)
   })
 
   it('keeps an agent an agent when its orchestration kind is newer than this build', () => {

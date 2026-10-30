@@ -5,7 +5,7 @@ import type {
 import {
   normalizeSubagentState,
   subagentGroupBlocks
-} from '../../../../shared/native-chat-subagent-summary'
+} from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
 import {
   type NativeChatRowTypography,

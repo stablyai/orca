@@ -1,15 +1,16 @@
-import { View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
 import { Check, Plus, Search } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { TextField } from '../components/composer-input/TextField'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { supportsTerminalAgentQuickCommand } from '../terminal/quick-commands'
 import { QuickCommandRow } from './QuickCommandRow'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export const QUICK_COMMAND_SUPPORTED_AGENTS = MOBILE_AGENT_CATALOG.filter((entry) =>
   supportsTerminalAgentQuickCommand(entry.id)
@@ -47,6 +48,7 @@ export function QuickCommandsList({
   onAdd
 }: ListProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const hasVisible = repoCommands.length + globalCommands.length > 0
   // Why: keep an active filter clearable if a delete or paired desktop edit
   // leaves only one command while the sheet is open.
@@ -54,21 +56,17 @@ export function QuickCommandsList({
   return (
     <View style={styles.listBody}>
       {showSearch ? (
-        <View style={styles.search}>
-          <Search size={16} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            value={query}
-            onChangeText={onQueryChange}
-            placeholder="Search quick commands..."
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            // Why: bound pasted text before it reaches the per-keystroke JS
-            // search path; useful queries are far smaller than this budget.
-            maxLength={QUICK_COMMAND_SEARCH_QUERY_MAX_LENGTH}
-          />
-        </View>
+        <TextField
+          leading={<Search size={16} color={colors.textMuted} />}
+          value={query}
+          onChangeText={onQueryChange}
+          placeholder={t('session.quickCommandsList.searchPlaceholder', 'Search quick commands...')}
+          autoCapitalize="none"
+          autoCorrect={false}
+          // Why: bound pasted text before it reaches the per-keystroke JS
+          // search path; useful queries are far smaller than this budget.
+          maxLength={QUICK_COMMAND_SEARCH_QUERY_MAX_LENGTH}
+        />
       ) : null}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -78,16 +76,20 @@ export function QuickCommandsList({
       ) : null}
 
       {!loading && totalCount === 0 ? (
-        <Text style={styles.empty}>No quick commands yet.</Text>
+        <Text style={styles.empty}>
+          {t('session.quickCommandsList.emptyState', 'No quick commands yet.')}
+        </Text>
       ) : null}
 
       {!loading && totalCount > 0 && !hasVisible ? (
-        <Text style={styles.empty}>No matching quick commands.</Text>
+        <Text style={styles.empty}>
+          {t('session.quickCommandsList.noMatches', 'No matching quick commands.')}
+        </Text>
       ) : null}
 
       {repoCommands.length > 0 ? (
         <QuickCommandGroup
-          label="This project"
+          label={t('session.quickCommandsList.projectGroup', 'This project')}
           commands={repoCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
@@ -98,7 +100,7 @@ export function QuickCommandsList({
 
       {globalCommands.length > 0 ? (
         <QuickCommandGroup
-          label="Global"
+          label={t('session.quickCommandsList.globalGroup', 'Global')}
           commands={globalCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
@@ -118,7 +120,9 @@ export function QuickCommandsList({
         accessibilityRole="button"
       >
         <Plus size={18} color={colors.textSecondary} />
-        <Text style={styles.addText}>New quick command</Text>
+        <Text style={styles.addText}>
+          {t('session.quickCommandsList.newCommand', 'New quick command')}
+        </Text>
       </Pressable>
     </View>
   )
@@ -197,18 +201,6 @@ const styles = themedStyleSheet(() => ({
   pressed: { backgroundColor: colors.bgRaised },
   disabled: { opacity: 0.45 },
   listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  searchInput: { flex: 1, color: colors.textPrimary, fontSize: TEXT_INPUT_FONT_SIZE, padding: 0 },
   error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.xs },
   loading: { paddingVertical: spacing.lg },
   empty: {

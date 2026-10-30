@@ -144,12 +144,13 @@ describe('registerGitHubHandlers', () => {
   it('rejects unknown repository paths', async () => {
     registerGitHubHandlers(store as never, stats as never)
 
-    expect(() =>
+    // Background issue reads are async (they check the repo's WSL distro first), so access errors reject.
+    await expect(async () =>
       handlers['gh:issue'](null, {
         repoPath: '/workspace/other',
         number: 7
       })
-    ).toThrow('Access denied: unknown repository path')
+    ).rejects.toThrow('Access denied: unknown repository path')
 
     expect(getIssueMock).not.toHaveBeenCalled()
   })
@@ -157,7 +158,7 @@ describe('registerGitHubHandlers', () => {
   it('rejects GitHub source context from a different host', async () => {
     registerGitHubHandlers(store as never, stats as never)
 
-    expect(() =>
+    await expect(async () =>
       handlers['gh:listWorkItems'](null, {
         repoPath: '/workspace/repo',
         sourceContext: {
@@ -168,7 +169,7 @@ describe('registerGitHubHandlers', () => {
           repoId: 'repo-1'
         }
       })
-    ).toThrow('Access denied: GitHub source host does not match repository host')
+    ).rejects.toThrow('Access denied: GitHub source host does not match repository host')
 
     expect(listWorkItemsMock).not.toHaveBeenCalled()
   })

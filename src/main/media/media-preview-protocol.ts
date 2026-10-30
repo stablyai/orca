@@ -1,116 +1,101 @@
-import { randomUUID } from 'node:crypto'
-import { protocol, type WebContents } from 'electron'
+import { protocol } from 'electron'
 import type { Store } from '../persistence'
-import type { LocalFileAccess } from '../../shared/local-file-access'
 import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
-import { filePreviewForPath, streamsPreviewByRange } from '../../shared/file-preview-kind'
+import {
+  filePreviewForPath,
+  isDocumentPreview,
+  streamsPreviewByRange,
+  type FilePreview
+} from '../../shared/file-preview-kind'
+import {
+  assertLocalPreviewRasterHeader,
+  assertPreviewableRasterHeader,
+  assertRemotePreviewRasterHeader,
+  incrementalPrefixReader
+} from './preview-raster-header-check'
+import {
+  DOCUMENT_SIGNATURE_PROBE_BYTES,
+  prefixFitsDocumentPreview
+} from './preview-document-signature'
+import { openLocalPreviewGrantFile } from './local-preview-grant-file'
 import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
 import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
 import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { createMediaRangeResponse } from './media-range-response'
 import {
+  REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE,
   RemotePreviewPairingChangedError,
   assertRemoteChunkReadsSupported,
   readRemotePreviewChunk,
+  readRemotePreviewRange,
   statRemotePreviewFile,
   type RemotePreviewFileSnapshot
 } from './remote-file-preview-reader'
 import { readRegisteredPairingRevision } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import {
+  grants,
+  mintPreviewUrl,
+  remoteSnapshot,
+  revokeGrant,
+  type LocalPreviewTarget,
+  type PreviewGrant,
+  type PreviewSender,
+  type PreviewUrl
+} from './preview-grant-registry'
 
-type LocalPreviewTarget = { filePath: string; connectionId?: string; access?: LocalFileAccess }
-type RemotePreviewTarget = { remote: RemoteFilePreviewAddress }
-type PreviewTarget = LocalPreviewTarget | RemotePreviewTarget
-type PreviewGrant = {
-  target: PreviewTarget
-  store: Store
-  mimeType: string
-  senderId: number
-  key: string
-  // Why: a seek or prefetch burst opens several ranges at once; one stat answers all of them.
-  stat?: { at: number; snapshot: Promise<RemotePreviewFileSnapshot> }
-}
-type PreviewUrl = { content: string; isBinary: true; mimeType: string; mediaUrl: string }
-
-const REMOTE_STAT_REUSE_MS = 1_000
-const grants = new Map<string, PreviewGrant>()
-const senders = new Map<number, Map<string, string>>()
+export { revokeRemoteFilePreviewGrants } from './preview-grant-registry'
 
 export const MEDIA_PREVIEW_CUSTOM_SCHEME: Electron.CustomScheme = {
   scheme: MEDIA_PREVIEW_SCHEME,
+  // No fetch or CORS: only <img>/<video>/<audio> elements load these URLs; PDF ranges go over IPC.
   privileges: { standard: true, secure: true, stream: true }
 }
 
-type PreviewSender = Pick<WebContents, 'id' | 'on' | 'removeListener'>
-
-function mintPreviewUrl(
-  sender: PreviewSender,
-  target: PreviewTarget,
-  store: Store,
-  mimeType: string,
-  snapshot?: RemotePreviewFileSnapshot
-): PreviewUrl {
-  let owned = senders.get(sender.id)
-  if (!owned) {
-    owned = new Map()
-    senders.set(sender.id, owned)
-    const lifetime = abortWhenRendererGone(sender)
-    const entries = owned
-    lifetime.signal.addEventListener(
-      'abort',
-      () => {
-        for (const token of entries.values()) {
-          grants.delete(token)
-        }
-        senders.delete(sender.id)
-        lifetime.dispose()
-      },
-      { once: true }
-    )
-  }
-  const key = JSON.stringify(target)
-  let token = owned.get(key)
-  if (!token || !grants.has(token)) {
-    token = randomUUID()
-    owned.set(key, token)
-    grants.set(token, { target, store, mimeType, senderId: sender.id, key })
-  }
-  const grant = grants.get(token)
-  if (grant && snapshot) {
-    // A reload re-mints the same token; its fresh stat must replace a cached older size.
-    grant.stat = { at: Date.now(), snapshot: Promise.resolve(snapshot) }
-  }
-  return {
-    content: '',
-    isBinary: true,
-    mimeType,
-    mediaUrl: `${MEDIA_PREVIEW_SCHEME}://file/${token}?revision=${randomUUID()}`
-  }
-}
-
-function revokeGrant(token: string): void {
-  const grant = grants.get(token)
-  if (!grant) {
-    return
-  }
-  grants.delete(token)
-  const owned = senders.get(grant.senderId)
-  if (owned?.get(grant.key) === token) {
-    owned.delete(grant.key)
-  }
-}
-
-/** A local audio/video file as an `orca-media://` URL its viewer streams by range. */
-export function readMediaPreview(
+/**
+ * A local file as an `orca-media://` URL its viewer reads by range: audio and video always,
+ * images and PDFs only for a viewer that asks (`documents`); other callers keep base64.
+ */
+export async function readLocalFilePreview(
   event: { sender: PreviewSender },
   target: LocalPreviewTarget,
-  store: Store
-): PreviewUrl | null {
-  const preview = filePreviewForPath(target.filePath)
-  if (!preview || !streamsPreviewByRange(preview)) {
+  store: Store,
+  options: { documents: boolean }
+): Promise<PreviewUrl | null> {
+  const named = filePreviewForPath(target.filePath)
+  if (!named) {
     return null
   }
-  return mintPreviewUrl(event.sender, target, store, preview.mimeType)
+  if (streamsPreviewByRange(named)) {
+    return mintPreviewUrl(event.sender, target, store, named)
+  }
+  if (!options.documents || target.connectionId) {
+    return null
+  }
+  const lifetime = abortWhenRendererGone(event.sender)
+  let preview: FilePreview
+  let size: number
+  try {
+    const filePath = await resolveLocalFileRequestPath(target.filePath, target.access, store)
+    // Classify the target, not the link: `shot.png -> drawing.svg` is an SVG, and base64 says so.
+    const resolved = filePreviewForPath(filePath)
+    if (!resolved || !isDocumentPreview(resolved)) {
+      return null
+    }
+    preview = resolved
+    const { handle, stats } = await openLocalRegularFile(filePath)
+    try {
+      await assertLocalPreviewRasterHeader(preview, handle, stats.size)
+    } finally {
+      await handle.close()
+    }
+    size = stats.size
+    // A renderer gone mid-mint would leave a grant no teardown ever drops.
+    lifetime.signal.throwIfAborted()
+  } finally {
+    lifetime.dispose()
+  }
+  return mintPreviewUrl(event.sender, target, store, preview, undefined, size)
 }
 
 /** A paired runtime's file as an `orca-media://` URL, streamed by range over files.stat/readChunk. */
@@ -120,7 +105,7 @@ export async function grantRemoteFilePreview(
   store: Store
 ): Promise<PreviewUrl | null> {
   const preview = filePreviewForPath(address.relativePath)
-  if (!preview || !streamsPreviewByRange(preview)) {
+  if (!preview) {
     return null
   }
   // Why: proving the file and range reads here makes a missing file or an old host fail in the tab, not as a silent player error.
@@ -138,37 +123,36 @@ export async function grantRemoteFilePreview(
     if (snapshot.size > 0) {
       await assertRemoteChunkReadsSupported(pinned, lifetime.signal)
     }
+  } catch (error) {
+    lifetime.dispose()
+    // An older host still previews images and PDFs whole through files.readPreview.
+    if (
+      isDocumentPreview(preview) &&
+      error instanceof Error &&
+      error.message === REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE
+    ) {
+      return null
+    }
+    throw error
+  }
+  try {
+    const readPrefix = incrementalPrefixReader((offset, length) =>
+      readRemotePreviewRange(pinned, offset, length, snapshot.size, lifetime.signal)
+    )
+    // files.stat names no link target, but the host's readPreview classifies it; defer on a mislabel.
+    if (
+      isDocumentPreview(preview) &&
+      !prefixFitsDocumentPreview(preview, await readPrefix(DOCUMENT_SIGNATURE_PROBE_BYTES))
+    ) {
+      return null
+    }
+    await assertPreviewableRasterHeader(preview, readPrefix, snapshot.size)
     // A renderer gone mid-mint would leave a grant no teardown ever drops.
     lifetime.signal.throwIfAborted()
   } finally {
     lifetime.dispose()
   }
-  return mintPreviewUrl(event.sender, { remote: pinned }, store, preview.mimeType, snapshot)
-}
-
-/** Removing a paired runtime ends every preview it backs. */
-export function revokeRemoteFilePreviewGrants(environmentId: string): void {
-  for (const [token, grant] of grants) {
-    if ('remote' in grant.target && grant.target.remote.environmentId === environmentId) {
-      revokeGrant(token)
-    }
-  }
-}
-
-function remoteSnapshot(grant: PreviewGrant, remote: RemoteFilePreviewAddress) {
-  const now = Date.now()
-  if (!grant.stat || now - grant.stat.at > REMOTE_STAT_REUSE_MS) {
-    // Not tied to one request's abort: other ranges in the burst may be waiting on it.
-    const snapshot = statRemotePreviewFile(remote, new AbortController().signal)
-    const stat = { at: now, snapshot }
-    grant.stat = stat
-    snapshot.catch(() => {
-      if (grant.stat === stat) {
-        grant.stat = undefined
-      }
-    })
-  }
-  return grant.stat.snapshot
+  return mintPreviewUrl(event.sender, { remote: pinned }, store, preview, snapshot)
 }
 
 async function handleRemotePreviewRequest(
@@ -188,6 +172,8 @@ async function handleRemotePreviewRequest(
   try {
     // Re-stat (at most once a second) like a local file re-opens per request, so a growing recording keeps playing.
     const { size } = await remoteSnapshot(grant, remote)
+    // The file can change after mint; check the bytes this response serves.
+    await assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
     return await createMediaRangeResponse(request, grant.mimeType, {
       size,
       read: (offset, length) => readRemotePreviewChunk(remote, offset, length, controller.signal),
@@ -226,8 +212,14 @@ export async function handleMediaPreviewRequest(request: Request): Promise<Respo
     if (target.connectionId) {
       return new Response(null, { status: 404 })
     }
-    const filePath = await resolveLocalFileRequestPath(target.filePath, target.access, store)
-    const { handle, stats } = await openLocalRegularFile(filePath)
+    const { handle, stats } = await openLocalPreviewGrantFile(grant, target, store)
+    try {
+      // The file can change after mint; check the handle this response serves.
+      await assertLocalPreviewRasterHeader(grant.preview, handle, stats.size)
+    } catch (error) {
+      await handle.close()
+      throw error
+    }
     return await createMediaRangeResponse(request, mimeType, {
       size: stats.size,
       read: async (offset, length) => {

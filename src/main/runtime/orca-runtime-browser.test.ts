@@ -11,6 +11,7 @@ const {
   startBrowserScreencastMock,
   waitForTabRegistrationMock,
   waitForWorktreeTabRegistrationMock,
+  whenBrowserMainWindowReadyMock,
   browserSessionRegistryMock
 } = vi.hoisted(() => ({
   ipcMainOnMock: vi.fn(),
@@ -19,6 +20,7 @@ const {
   startBrowserScreencastMock: vi.fn(),
   waitForTabRegistrationMock: vi.fn(),
   waitForWorktreeTabRegistrationMock: vi.fn(),
+  whenBrowserMainWindowReadyMock: vi.fn(),
   browserSessionRegistryMock: {
     profiles: new Map([
       [
@@ -63,6 +65,10 @@ vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForWorktreeTabRegistration: waitForWorktreeTabRegistrationMock
 }))
 
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: whenBrowserMainWindowReadyMock
+}))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
@@ -96,8 +102,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
           ]
         }))
       } as unknown as AgentBrowserBridge)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),
@@ -118,6 +125,8 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     waitForTabRegistrationMock.mockResolvedValue(undefined)
     waitForWorktreeTabRegistrationMock.mockReset()
     waitForWorktreeTabRegistrationMock.mockResolvedValue(undefined)
+    whenBrowserMainWindowReadyMock.mockReset()
+    whenBrowserMainWindowReadyMock.mockResolvedValue(null)
     browserSessionRegistryMock.getDefaultProfile.mockReset()
     browserSessionRegistryMock.getDefaultProfile.mockImplementation(() =>
       browserSessionRegistryMock.profiles.get('default')
@@ -218,6 +227,28 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(send).toHaveBeenCalledWith('browser:activateView', {})
     expect(waitForWorktreeTabRegistrationMock).toHaveBeenCalledWith(undefined)
     expect(bridge.tabList).toHaveBeenCalledWith(undefined)
+  })
+
+  it('lists no tabs without waking the window when no saved tab could mount', async () => {
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map()),
+      tabList: vi.fn(() => ({ tabs: [] }))
+    } as unknown as AgentBrowserBridge
+    const host = createHost({
+      getAgentBrowserBridge: () => bridge,
+      serveBrowserTabs: {
+        opened: vi.fn(),
+        start: vi.fn(async () => false),
+        hasStartable: () => false
+      }
+    })
+    const commands = new RuntimeBrowserCommands(host)
+
+    await expect(commands.browserTabList({ worktree: 'id:wt-1' })).resolves.toEqual({ tabs: [] })
+
+    expect(host.getAuthoritativeWindow).not.toHaveBeenCalled()
+    expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
   })
 
   it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
@@ -474,6 +505,36 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-target')
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
     expect(snapshot).toHaveBeenCalledWith('wt-1', 'page-target')
+  })
+
+  it('wakes a hidden page only once a reloaded renderer can mount it', async () => {
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
+    const rendererReady = deferred<null>()
+    whenBrowserMainWindowReadyMock.mockReturnValue(rendererReady.promise)
+    const send = vi.fn()
+    const snapshot = vi.fn(async () => ({ browserPageId: 'page-target' }))
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map()),
+      snapshot
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send } }) as never)
+      })
+    )
+
+    const result = commands.browserSnapshot({ worktree: 'id:wt-1', page: 'page-target' })
+    await vi.waitFor(() => expect(whenBrowserMainWindowReadyMock).toHaveBeenCalled())
+    expect(send).not.toHaveBeenCalled()
+
+    rendererReady.resolve(null)
+    await result
+
+    expect(send).toHaveBeenCalledWith('browser:activateView', {
+      worktreeId: 'wt-1',
+      browserPageId: 'page-target'
+    })
   })
 
   it('wakes the requested page before showing page-scoped tab metadata', async () => {
@@ -733,7 +794,11 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
       createHost({
         getAgentBrowserBridge: () => bridge,
         getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab, closeTab: vi.fn() }))
+        getOffscreenBrowserBackend: vi.fn(() => ({
+          createTab,
+          closeTab: vi.fn(),
+          ownsTab: () => true
+        }))
       })
     )
 

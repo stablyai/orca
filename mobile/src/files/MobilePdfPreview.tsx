@@ -8,6 +8,8 @@ import { PdfOpenRefusedError } from '../platform/pdf-opener-contract'
 import type { MobileFileMedia } from './mobile-file-media'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { MobileLoadErrorState, MobileStateButton } from '../components/MobileLoadErrorState'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type State =
   | { status: 'opening' }
@@ -17,6 +19,7 @@ type State =
 // The shell downloads the PDF and shows it in Quick Look (iOS) or the system viewer (Android).
 export function MobilePdfPreview({ media }: { media: MobileFileMedia }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const opener = usePdfOpener()
   const [state, setState] = useState<State>({ status: 'idle' })
   const stopPending = useRef<(() => void) | null>(null)
@@ -45,7 +48,10 @@ export function MobilePdfPreview({ media }: { media: MobileFileMedia }) {
       (error: unknown) =>
         settle({
           status: 'failed',
-          message: error instanceof Error ? error.message : 'Unable to open this PDF',
+          message:
+            error instanceof Error
+              ? error.message
+              : translate('files.pdfPreview.openFailed', 'Unable to open this PDF'),
           retryable: !(error instanceof PdfOpenRefusedError)
         })
     )
@@ -55,7 +61,9 @@ export function MobilePdfPreview({ media }: { media: MobileFileMedia }) {
   if (!opener) {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>Update Orca Mobile to open PDFs</Text>
+        <Text style={styles.stateText}>
+          {t('files.pdfPreview.updateRequired', 'Update Orca Mobile to open PDFs')}
+        </Text>
       </View>
     )
   }
@@ -66,13 +74,13 @@ export function MobilePdfPreview({ media }: { media: MobileFileMedia }) {
     return (
       <View style={styles.state}>
         <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>Opening PDF...</Text>
+        <Text style={styles.stateText}>{t('files.pdfPreview.opening', 'Opening PDF...')}</Text>
       </View>
     )
   }
   return (
     <View style={styles.state}>
-      <MobileStateButton label="Open PDF" onPress={open} />
+      <MobileStateButton label={t('files.pdfPreview.open', 'Open PDF')} onPress={open} />
     </View>
   )
 }

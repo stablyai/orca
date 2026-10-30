@@ -3,7 +3,6 @@ import { Pressable, Text, View, type TextStyle } from 'react-native'
 import { truncateToolDetail } from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import {
   isNativeChatToolOutputClipped,
-  NATIVE_CHAT_TOOL_OUTPUT_COPY,
   nativeChatToolFullPayload,
   nativeChatToolOutputPartialSizes
 } from '../../../src/shared/native-chat/tools/native-chat-tool-output'
@@ -16,6 +15,7 @@ import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { styles } from './native-chat/transcript/mobile-native-chat-message-styles'
 import { toolStyles } from './native-chat/transcript/mobile-native-chat-tool-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import {
   MobileNativeChatItemSourceContext,
@@ -28,10 +28,12 @@ type Load = 'idle' | 'loading' | 'failed'
 
 function ShowFull({
   label,
+  failedLabel,
   load,
   onPress
 }: {
   label: string
+  failedLabel: string
   load: Load
   onPress: () => void
 }): React.JSX.Element {
@@ -44,9 +46,7 @@ function ShowFull({
       hitSlop={8}
       accessibilityRole="button"
     >
-      <Text style={styles.showFullText}>
-        {load === 'failed' ? `${label} — couldn't load, tap to retry` : label}
-      </Text>
+      <Text style={styles.showFullText}>{load === 'failed' ? failedLabel : label}</Text>
     </Pressable>
   )
 }
@@ -63,6 +63,7 @@ export function MobileNativeChatToolOutput({
   positionKey: string
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const source = useContext(MobileNativeChatItemSourceContext)
   const { output, isError, fullOutputItemId } = body
   const client = source?.client,
@@ -130,13 +131,22 @@ export function MobileNativeChatToolOutput({
       </MobileNativeChatOwnedScrollView>
       {partial ? (
         <Text style={styles.showFullText}>
-          {NATIVE_CHAT_TOOL_OUTPUT_COPY.partial
-            .replace('{{shown}}', partial.shown)
-            .replace('{{total}}', partial.total)}
+          {t('session.nativeChatFullContent.partialOutput', 'Showing {{shown}} of {{total}}.', {
+            shown: partial.shown,
+            total: partial.total
+          })}
         </Text>
       ) : null}
       {clipped ? (
-        <ShowFull label="Show full output" load={current?.load ?? 'idle'} onPress={showFull} />
+        <ShowFull
+          label={t('session.nativeChatFullContent.showFullOutput', 'Show full output')}
+          failedLabel={t(
+            'session.nativeChatFullContent.loadOutputFailed',
+            "Show full output — couldn't load, tap to retry"
+          )}
+          load={current?.load ?? 'idle'}
+          onPress={showFull}
+        />
       ) : null}
     </View>
   )
@@ -148,6 +158,7 @@ export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
   recovery: { load: Load; onPress: () => void } | null
 } {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const source = useContext(MobileNativeChatItemSourceContext)
   const detail = source?.messageDetail
   const client = source?.client,
@@ -182,9 +193,19 @@ export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
     recovery: state === 'available' ? { load, onPress: showFull } : null,
     showFull:
       state === 'partial' ? (
-        <Text style={styles.showFullText}>Showing part of this message.</Text>
+        <Text style={styles.showFullText}>
+          {t('session.nativeChatFullContent.partialMessage', 'Showing part of this message.')}
+        </Text>
       ) : state === 'available' ? (
-        <ShowFull label="Show full message" load={load} onPress={showFull} />
+        <ShowFull
+          label={t('session.nativeChatFullContent.showFullMessage', 'Show full message')}
+          failedLabel={t(
+            'session.nativeChatFullContent.loadMessageFailed',
+            "Show full message — couldn't load, tap to retry"
+          )}
+          load={load}
+          onPress={showFull}
+        />
       ) : null
   }
 }

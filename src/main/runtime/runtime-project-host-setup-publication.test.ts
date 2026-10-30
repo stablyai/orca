@@ -13,7 +13,24 @@ const repo: Repo = {
   displayName: 'app',
   badgeColor: 'blue',
   addedAt: 1,
-  kind: 'git'
+  kind: 'git',
+  sourceControlAi: {
+    actionOverrides: {
+      fixChecks: {
+        agentId: 'claude',
+        agentArgs: '',
+        launchPreferences: {
+          agentId: 'codex',
+          permissionMode: 'ask',
+          modelSelection: {
+            base: 'inherit',
+            model: { agentId: 'claude', value: null }
+          }
+        },
+        argumentChoices: { syntaxAgent: 'claude', nodes: [{ at: 0, text: '--effort high' }] }
+      }
+    }
+  }
 }
 const projection = projectHostSetupProjectionFromRepos([repo])
 const project = projection.projects[0]
@@ -55,14 +72,25 @@ function makeController(): {
 describe('RuntimeProjectHostSetupController publication', () => {
   it('publishes a created setup to open clients', () => {
     const { controller, notifyReposChanged } = makeController()
-    controller.createSetup({ projectId: project.id, hostId: 'local', path: '/srv/app' })
+    const result = controller.createSetup({
+      projectId: project.id,
+      hostId: 'local',
+      path: '/srv/app'
+    })
+    expect(result.setup.sourceControlAi).toEqual(repo.sourceControlAi)
+    expect(controller.listSetups()).toEqual([setup])
     expect(notifyReposChanged).toHaveBeenCalledTimes(1)
   })
 
   it('publishes a rename without retiring cached worktree scans', async () => {
     const { controller, notifyReposChanged, invalidateResolvedWorktrees, retired } =
       makeController()
-    await controller.updateSetup({ setupId: setup.id, updates: { displayName: 'renamed' } })
+    const result = await controller.updateSetup({
+      setupId: setup.id,
+      updates: { displayName: 'renamed' }
+    })
+    expect(result.setup.sourceControlAi).toEqual(repo.sourceControlAi)
+    expect(result.repo?.sourceControlAi).toEqual(repo.sourceControlAi)
     expect(notifyReposChanged).toHaveBeenCalledTimes(1)
     expect(invalidateResolvedWorktrees).toHaveBeenCalled()
     expect(retired).toEqual([])

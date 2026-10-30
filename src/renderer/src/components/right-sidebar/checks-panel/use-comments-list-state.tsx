@@ -270,7 +270,10 @@ export function useCommentsListState({
                 'Add a PR comment'
               )
         }
-        submitLabel="Send"
+        submitLabel={translate(
+          'auto.components.right.sidebar.checks.panel.content.sendComment',
+          'Send'
+        )}
         autoFocus
         disabled={commentsDisabled}
         disabledReason={commentsDisabledReason}

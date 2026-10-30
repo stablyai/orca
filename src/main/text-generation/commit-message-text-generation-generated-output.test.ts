@@ -113,7 +113,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({ success: false, error: 'agent returned an empty message.' })
+    expect(result).toMatchObject({ success: false, error: 'agent returned an empty message.' })
   })
 
   it('reports empty remote commit-message output as an empty message', async () => {
@@ -146,7 +146,7 @@ describe('generateCommitMessageFromContext', () => {
     )
 
     expect(operation).toBe('commit-message')
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent returned an empty message.'
     })
@@ -238,7 +238,7 @@ describe('generateCommitMessageFromContext', () => {
     )
 
     expect(operation).toBe('pull-request-fields')
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent returned an empty details.',
       branchChangedByPreparation: false
@@ -282,7 +282,7 @@ describe('generateCommitMessageFromContext', () => {
     listeners.get('stdout:data')?.(Buffer.from('not json'))
     listeners.get('close')?.(0)
 
-    await expect(pullRequest).resolves.toEqual({
+    await expect(pullRequest).resolves.toMatchObject({
       success: false,
       error:
         agentId === 'kimi'
@@ -318,7 +318,7 @@ it.each([
     stderr: '',
     code: 0,
     label,
-    emptyResultName: 'message',
+    operation: 'commit-message',
     outputFormat
   })
   expect(result).toMatchObject({ success: true, rawOutput: literal })

@@ -5,6 +5,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { onWslMoveJournalChange } from './wsl-move-cutover-journal'
+import { onWslDriveUncConversionJournalChange } from '../../wsl/wsl-drive-unc-conversion-journal'
 import { resolveWslMoveFence, type WslMoveFenceState } from './wsl-move-fence'
 import { comparableWslPath, isAtOrUnder } from './wsl-move-comparable-path'
 import {
@@ -50,11 +51,15 @@ let stopFollowing: (() => void) | null = null
 /** Load before registering handlers or allowing moves. */
 export function loadWslMoveFence(userDataPath: string): void {
   loaded = { userDataKey: userDataKey(userDataPath), view: readFence(userDataPath) }
-  stopFollowing ??= onWslMoveJournalChange((changedPath) => {
-    if (loaded?.userDataKey === userDataKey(changedPath)) {
-      loaded.view = readFence(changedPath)
+  if (!stopFollowing) {
+    const follow = (changedPath: string): void => {
+      if (loaded?.userDataKey === userDataKey(changedPath)) {
+        loaded.view = readFence(changedPath)
+      }
     }
-  })
+    const stops = [onWslMoveJournalChange(follow), onWslDriveUncConversionJournalChange(follow)]
+    stopFollowing = () => stops.forEach((stop) => stop())
+  }
 }
 
 export function isWslMoveFenceLoaded(): boolean {

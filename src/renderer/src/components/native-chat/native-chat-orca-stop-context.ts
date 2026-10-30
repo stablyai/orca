@@ -4,6 +4,8 @@ import { createContext, useContext } from 'react'
 export type NativeChatOrcaStopView = {
   hostLabel: string | null
   remoteHost: boolean
+  /** The WSL distro a WSL host runs in, so failure rows can name where an agent is missing. */
+  wslDistro?: string | null
   continueAvailable: boolean
   offeredTurnItemId: string | null
   continueNow: () => void

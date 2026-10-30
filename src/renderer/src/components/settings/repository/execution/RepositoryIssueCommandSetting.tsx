@@ -8,12 +8,16 @@ export function RepositoryIssueCommandSetting({
   setIssueCommandDraft,
   hasSharedIssueCommand,
   issueCommandSaveError,
+  issueCommandReadOnly,
+  issueCommandStoppedDistro,
   commitIssueCommand
 }: {
   issueCommandDraft: string
   setIssueCommandDraft: (value: string) => void
   hasSharedIssueCommand: boolean
   issueCommandSaveError: string | null
+  issueCommandReadOnly: boolean
+  issueCommandStoppedDistro: string | null
   commitIssueCommand: () => Promise<void>
 }): React.JSX.Element {
   return (
@@ -44,6 +48,7 @@ export function RepositoryIssueCommandSetting({
           'auto.components.settings.RepositoryHooksSection.13394103bd',
           'Custom GitHub Issue Command'
         )}
+        readOnly={issueCommandReadOnly}
         onChange={(event) => setIssueCommandDraft(event.target.value)}
         onBlur={() => void commitIssueCommand()}
         placeholder={translate(
@@ -72,6 +77,15 @@ export function RepositoryIssueCommandSetting({
           components={{ yaml: <code className="rounded bg-muted px-1 py-0.5" /> }}
         />
       </p>
+      {issueCommandStoppedDistro ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.RepositoryHooksSection.issueCommandWslStopped',
+            'WSL distro {{distro}} is stopped. Open a terminal in it to see or edit this command.',
+            { distro: issueCommandStoppedDistro }
+          )}
+        </p>
+      ) : null}
       {issueCommandSaveError ? (
         <p className="text-xs text-destructive">{issueCommandSaveError}</p>
       ) : null}

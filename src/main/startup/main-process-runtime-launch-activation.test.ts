@@ -23,8 +23,12 @@ vi.mock('../persistence', () => ({
   migrateMobilePairingDataToCanonicalUserDataPath: vi.fn()
 }))
 const launchOrder = vi.hoisted((): string[] => [])
+const rpcOptions = vi.hoisted((): Record<string, unknown>[] => [])
 vi.mock('../runtime/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
+    constructor(options: Record<string, unknown>) {
+      rpcOptions.push(options)
+    }
     start = vi.fn(async () => {
       launchOrder.push('rpc-start')
     })
@@ -100,8 +104,10 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
   getBrowserIdentityModeStatus: vi.fn()
 }))
 const showWindowWithoutStealingFocus = vi.hoisted(() => vi.fn())
+const isOrcadSidecarLaunch = vi.hoisted(() => vi.fn(() => false))
 vi.mock('../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => true,
+  isOrcadSidecarLaunch,
   isWindowlessLaunch: () => false,
   showWindowWithoutStealingFocus
 }))
@@ -190,6 +196,7 @@ describe('desktop startup activation', () => {
   beforeEach(() => {
     windows = []
     showWindowWithoutStealingFocus.mockClear()
+    isOrcadSidecarLaunch.mockReturnValue(false)
     ipcHandles = new Set()
     trustedRendererId = null
     firstLoadListeners = []
@@ -321,6 +328,39 @@ describe('desktop startup activation', () => {
       })
     )
   })
+  it.each([
+    { sidecar: false, pinnedBindHost: undefined },
+    { sidecar: true, pinnedBindHost: '127.0.0.1' }
+  ])(
+    'pins the serve listener to loopback only for orcad browser sidecars (sidecar=$sidecar, #31895)',
+    async ({ sidecar, pinnedBindHost }) => {
+      state.isServeMode = true
+      isOrcadSidecarLaunch.mockReturnValue(sidecar)
+      vi.mocked(getServeOptions).mockReturnValueOnce({
+        json: false,
+        pairingAddress: null,
+        noPairing: true,
+        mobilePairing: false,
+        grantDesktopControl: false,
+        recipeJson: false,
+        projectRoot: null
+      })
+      Object.assign(state.runtime!, {
+        refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
+        reconcileLegacyWorkerTerminals: vi.fn(async () => {})
+      })
+
+      await initializeMainProcessReady({
+        openMainWindow: () => {
+          throw new Error('serve must not open a window')
+        },
+        handleMacAppActivation: vi.fn()
+      })
+
+      expect(rpcOptions.at(-1)).toMatchObject({ exposeNetworkByDefault: true })
+      expect(rpcOptions.at(-1)?.pinnedBindHost).toBe(pinnedBindHost)
+    }
+  )
   it('saves Codex auth before a headless serve update restart, like the desktop does', async () => {
     setupHeadlessServeAutoUpdater.mockClear()
     state.isServeMode = true

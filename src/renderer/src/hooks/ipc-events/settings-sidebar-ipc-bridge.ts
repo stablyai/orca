@@ -5,6 +5,7 @@ import { subscribeToUnpairedDeviceAuthNotification } from '../unpaired-device-au
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
+import { openPluginInstallLink } from '../../store/plugin-preview-request'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -46,6 +47,18 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       .then((shareId) => {
         if (shareId) {
           useAppStore.getState().openSkillShare(shareId)
+        }
+      })
+      .catch(() => {})
+  }
+
+  unsubs.push(window.api.ui.onOpenPluginInstallLink?.(openPluginInstallLink) ?? (() => {}))
+  const pendingPluginLink = window.api.ui.consumePendingPluginInstallLink?.()
+  if (pendingPluginLink && typeof pendingPluginLink.then === 'function') {
+    void pendingPluginLink
+      .then((link) => {
+        if (link) {
+          openPluginInstallLink(link)
         }
       })
       .catch(() => {})

@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -23,6 +24,7 @@ export function MobileBrowserPointerModifiers({
   selectedModifiers,
   onToggle
 }: Props): React.JSX.Element {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <View style={styles.modifierRow}>
@@ -41,7 +43,13 @@ export function MobileBrowserPointerModifiers({
             onPress={() => onToggle(modifier.id)}
             accessibilityRole="button"
             accessibilityState={{ selected, disabled }}
-            accessibilityLabel={`${modifier.label} click modifier`}
+            accessibilityLabel={t(
+              'browser.pointerModifiers.clickModifier',
+              '{{key}} click modifier',
+              {
+                key: modifier.label
+              }
+            )}
           >
             <Text
               style={[

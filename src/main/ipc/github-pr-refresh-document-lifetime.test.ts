@@ -5,14 +5,14 @@ import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-
 const { handlers, lookup, contents } = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   lookup: vi.fn(),
-  contents: vi.fn()
+  contents: new Map<number, EventEmitter & { id: number; isDestroyed: () => boolean }>()
 }))
 vi.mock('electron', () => ({
   ipcMain: {
     handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
       handlers.set(channel, handler)
   },
-  webContents: { getAllWebContents: contents }
+  webContents: { fromId: (id: number) => contents.get(id) }
 }))
 vi.mock('../github/client', () => ({ getPRForBranch: vi.fn(), getPRForBranchOutcome: lookup }))
 vi.mock('../github/pr-refresh-rate-limit-gate', () => ({
@@ -44,7 +44,8 @@ async function setup() {
   const coordinator = await import('../github/pr-refresh-coordinator')
   const owner = sender(17)
   const other = sender(18)
-  contents.mockReturnValue([owner, other])
+  contents.set(owner.id, owner)
+  contents.set(other.id, other)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Visible refresh registration reads only this store fixture's repo list.
   const store = { getRepos: () => [] } as never
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Every PR is already counted, so the observer reads only this stats method.
@@ -64,6 +65,7 @@ describe('automatic PR refresh document ownership', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_700_000_000_000)
     handlers.clear()
+    contents.clear()
     lookup.mockReset().mockImplementation(async () => found())
   })
   afterEach(() => {

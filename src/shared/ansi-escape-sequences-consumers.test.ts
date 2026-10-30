@@ -3,7 +3,7 @@ import { loadAnsiConsumers } from '../../config/scripts/check-job-log-consumer-o
 import { gitLabJobTraceToLogExcerpt } from './gitlab-job-log-excerpt'
 import { surfaceNativeChatCommandOutputs } from './native-chat/tools/native-chat-command-output'
 import type { NativeChatMessage } from './native-chat-types'
-import { normalizeNativeChatUserText } from './native-chat-image-transcript-markers'
+import { normalizeNativeChatUserText } from './native-chat/transcript/native-chat-image-transcript-markers'
 
 let consumers: Awaited<ReturnType<typeof loadAnsiConsumers>>
 beforeAll(async () => {

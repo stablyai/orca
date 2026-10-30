@@ -1,4 +1,5 @@
 import type React from 'react'
+import { sourceControlVariableDescription } from './source-control-variable-description'
 import { Braces } from 'lucide-react'
 import {
   SOURCE_CONTROL_ACTION_VARIABLE_INFO,
@@ -77,7 +78,7 @@ function SourceControlVariableDetails({
     <div className="max-w-80 space-y-2 text-left leading-relaxed">
       <div className="space-y-0.5">
         <div className="font-mono text-[11px]">{`{${variable}}`}</div>
-        <div className="text-muted-foreground">{info.description}</div>
+        <div className="text-muted-foreground">{sourceControlVariableDescription(variable)}</div>
       </div>
       <SourceControlVariableSample
         label={translate(

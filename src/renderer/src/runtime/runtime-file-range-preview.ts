@@ -1,4 +1,4 @@
-import { filePreviewForPath, streamsPreviewByRange } from '../../../shared/file-preview-kind'
+import { filePreviewForPath } from '../../../shared/file-preview-kind'
 import type { RuntimeRemoteFileAddress } from './runtime-file-range-client'
 import type { RuntimeReadableFileContent } from './runtime-file-client-types'
 
@@ -6,7 +6,7 @@ import type { RuntimeReadableFileContent } from './runtime-file-client-types'
 export async function readRemoteRangePreview(
   remote: RuntimeRemoteFileAddress
 ): Promise<RuntimeReadableFileContent | null> {
-  if (!streamsPreviewByRange(filePreviewForPath(remote.relativePath))) {
+  if (!filePreviewForPath(remote.relativePath)) {
     return null
   }
   // Null when this client cannot serve orca-media URLs (the paired web client).

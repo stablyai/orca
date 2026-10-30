@@ -93,6 +93,7 @@ export type TerminalWebViewProps = {
   textScale?: number
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
+  interactionActive?: boolean
   onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
@@ -117,6 +118,7 @@ export type TerminalWebViewHandle = {
   // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.
   reflow: (cols: number, rows: number, frame: TerminalFrame | null) => void
   clear: () => void
+  scrollToBottom: () => void
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
   resetZoom: () => void
   cancelSelect: () => void

@@ -32,6 +32,10 @@ vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForWorktreeTabRegistration: vi.fn()
 }))
 
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: async () => null
+}))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: {
     getDefaultProfile: () => ({ id: 'default', partition: 'persist:orca-browser' }),
@@ -44,8 +48,9 @@ function createCommandHost(
   overrides: Partial<RuntimeBrowserCommandHost>
 ): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAgentBrowserBridge: () =>

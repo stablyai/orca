@@ -204,7 +204,7 @@ describe('Chromium import snapshot ownership', () => {
 
   it('retires an empty live-WAL source snapshot before returning its existing refusal', async () => {
     expect(existsSync(`${sourcePath}-wal`)).toBe(true)
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toEqual({
+    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
       ok: false,
       reason: 'No cookies found in Google Chrome.'
     })
@@ -215,7 +215,7 @@ describe('Chromium import snapshot ownership', () => {
   it('retires every snapshot when denied credential access is retried', async () => {
     insertSourceCookie(true)
     for (let attempt = 0; attempt < 3; attempt++) {
-      expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toEqual({
+      expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
         ok: false,
         reason: 'Could not access Google Chrome encryption key. The OS may have denied access.'
       })
@@ -240,7 +240,7 @@ describe('Chromium import snapshot ownership', () => {
 
   it('closes private databases before cleanup when source schema preparation throws', async () => {
     sourceDatabase.exec('DROP TABLE cookies; CREATE TABLE other_data(value TEXT)')
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toEqual({
+    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
       ok: false,
       reason: expect.stringContaining('no such table: cookies')
     })

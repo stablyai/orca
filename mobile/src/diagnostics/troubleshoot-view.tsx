@@ -15,6 +15,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
 export type CheckResult = {
@@ -39,6 +40,7 @@ export function TroubleshootView({
   rootRef,
   diagnosticStatus,
   checks,
+  hostEndpoints,
   runDiagnostics,
   onBack,
   onConnectionLog,
@@ -47,6 +49,7 @@ export function TroubleshootView({
   rootRef?: (node: View | null) => void
   diagnosticStatus: DiagnosticStatus
   checks: CheckResult[]
+  hostEndpoints: readonly string[]
   runDiagnostics: () => void
   onBack: () => void
   onConnectionLog: () => void
@@ -54,6 +57,7 @@ export function TroubleshootView({
   developerRow?: ReactNode
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const toggleSection = useCallback(
@@ -65,13 +69,15 @@ export function TroubleshootView({
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back', 'Back')}
           style={styles.backButton}
           onPress={onBack}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Troubleshooting</Text>
+        <Text style={styles.heading}>
+          {t('diagnostics.troubleshootView.title', 'Troubleshooting')}
+        </Text>
       </View>
 
       <ScrollView
@@ -96,10 +102,10 @@ export function TroubleshootView({
           )}
           <Text style={styles.diagnosticButtonLabel}>
             {diagnosticStatus === 'running'
-              ? 'Running…'
+              ? t('diagnostics.troubleshootView.running', 'Running…')
               : diagnosticStatus === 'done'
-                ? 'Run again'
-                : 'Run diagnostics'}
+                ? t('diagnostics.troubleshootView.runAgain', 'Run again')
+                : t('diagnostics.troubleshootView.runDiagnostics', 'Run diagnostics')}
           </Text>
         </Pressable>
 
@@ -111,7 +117,9 @@ export function TroubleshootView({
           onPress={onConnectionLog}
         >
           <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
+          <Text style={styles.diagnosticButtonLabel}>
+            {t('diagnostics.troubleshootView.viewNetworkDiagnostics', 'View network diagnostics')}
+          </Text>
         </Pressable>
 
         {developerRow}
@@ -135,10 +143,12 @@ export function TroubleshootView({
           </View>
         )}
 
-        <Text style={styles.sectionHeading}>Common issues</Text>
+        <Text style={styles.sectionHeading}>
+          {t('diagnostics.troubleshootView.commonIssues', 'Common issues')}
+        </Text>
 
         <View style={styles.section}>
-          {troubleshootCommonIssues.map((section, i) => (
+          {troubleshootCommonIssues(t, hostEndpoints).map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable

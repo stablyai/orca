@@ -15,7 +15,7 @@ import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
-import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
+import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 
 import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
 
@@ -27,7 +27,7 @@ type BuildArgs = {
   virtualization: WorktreeListVirtualizer
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   settings: AppState['settings']
-  worktreeVisibilityDefaultsByHost: AppState['worktreeVisibilityDefaultsByHost']
+  projectActions: RepoHeaderProjectActions
   newCardStyle: boolean
   folderBackedProjectGroupIds: ReadonlySet<string>
   session: WorktreeDragSession
@@ -85,21 +85,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       projectHeaderHostContexts: args.projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
-      projectActions: {
-        getWorktreeVisibilityDefaults: (repo) =>
-          getRepoOwnerWorktreeVisibilityDefaults(
-            repo,
-            args.settings,
-            args.worktreeVisibilityDefaultsByHost
-          ),
-        onOpenRepoSettings: props.handleOpenRepoSettings,
-        onOpenWorktreeVisibility: props.handleOpenWorktreeVisibility,
-        onCreateGroupFromRepo: props.handleCreateGroupFromRepo,
-        onMoveProjectToGroup: props.handleMoveProjectToGroup,
-        onRemoveProjectFromGroup: props.handleRemoveProjectFromGroup,
-        onRemoveProject: props.handleRemoveProject,
-        onCreateForRepo: props.handleCreateForRepo
-      },
+      projectActions: args.projectActions,
       onRenameProjectGroup: props.handleRenameProjectGroup,
       onDeleteProjectGroup: props.handleDeleteProjectGroup,
       onCreateFolderWorkspace: props.handleCreateFolderWorkspace,

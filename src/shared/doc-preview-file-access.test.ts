@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import {
   DOC_PREVIEW_PATH_AUTHORIZATION_ERROR,
-  readAuthorizedDocPreviewFile
+  readAuthorizedDocPreviewFile,
+  readAuthorizedDocPreviewFileChunk
 } from './doc-preview-file-access'
 
 const fixtureRoots: string[] = []
@@ -198,4 +199,29 @@ describe('readAuthorizedDocPreviewFile', () => {
       ).rejects.toThrow('file_too_large')
     }
   )
+})
+
+describe('readAuthorizedDocPreviewFileChunk', () => {
+  it('reads a range of an authorized file and refuses one outside the grant', async () => {
+    const fixture = await createFixture()
+    const asset = join(fixture.assets, 'data.js')
+    await writeFile(asset, 'abcdefgh')
+    const target = {
+      boundaryPath: fixture.workspace,
+      entryPath: fixture.entry,
+      implicitRootPath: null,
+      authorizedRootPaths: [fixture.assets],
+      targetPath: asset
+    }
+
+    await expect(readAuthorizedDocPreviewFileChunk(target, 6, 4)).resolves.toMatchObject({
+      contentBase64: Buffer.from('gh').toString('base64'),
+      bytesRead: 2,
+      eof: true,
+      size: 8
+    })
+    await expect(
+      readAuthorizedDocPreviewFileChunk({ ...target, authorizedRootPaths: [] }, 0, 4)
+    ).rejects.toThrow(DOC_PREVIEW_PATH_AUTHORIZATION_ERROR)
+  })
 })

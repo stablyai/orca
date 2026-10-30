@@ -72,14 +72,6 @@ export const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm
   },
-  searchInput: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
-  },
   list: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,

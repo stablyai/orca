@@ -2,13 +2,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import {
+  terminalViewColorQueryReplyColors,
+  type TerminalViewAttributes
+} from '../../../../shared/terminal-view-attributes'
 import { applyTerminalAppearance } from './terminal-appearance'
 import {
   _resetTerminalViewAttributesPublisherForTest,
   composeTerminalViewAttributes,
   publishTerminalViewAttributes,
-  subscribeToPublishedTerminalViewColors
+  subscribeToPublishedTerminalViewAttributes,
+  terminalCreateThemeParams
 } from './terminal-view-attributes-publisher'
 
 const cursorSettings = {
@@ -125,12 +129,14 @@ describe('publishTerminalViewAttributes dedupe', () => {
     expect(publishTerminalViewAttributes(null, 'dark', cursorSettings)).toBe(false)
   })
 
-  it('hands each published fg/bg to subscribers, starting with the current one', () => {
+  it('hands each published appearance to subscribers, starting with the current one', () => {
     const send = vi.fn(() => true)
     publishTerminalViewAttributes({ foreground: '#111111' }, 'dark', cursorSettings, send)
     const heard: unknown[] = []
 
-    const unsubscribe = subscribeToPublishedTerminalViewColors((colors) => heard.push(colors))
+    const unsubscribe = subscribeToPublishedTerminalViewAttributes((attributes) =>
+      heard.push(terminalViewColorQueryReplyColors(attributes))
+    )
     publishTerminalViewAttributes({ foreground: '#222222' }, 'dark', cursorSettings, send)
     unsubscribe()
     publishTerminalViewAttributes({ foreground: '#333333' }, 'dark', cursorSettings, send)
@@ -140,6 +146,19 @@ describe('publishTerminalViewAttributes dedupe', () => {
       { foreground: '#222222', background: '#000000' }
     ])
   })
+})
+
+it("sends this window's palette with a terminal's create colours, once one is published", () => {
+  const colors = { foreground: '#ffffff', background: '#000000' }
+  expect(terminalCreateThemeParams(colors)).toEqual({ terminalColorQueryReplies: colors })
+
+  publishTerminalViewAttributes(null, 'dark', cursorSettings, () => true)
+
+  expect(terminalCreateThemeParams(colors)).toEqual({
+    terminalColorQueryReplies: colors,
+    terminalViewAttributes: composeTerminalViewAttributes(null, 'dark', cursorSettings)
+  })
+  expect(terminalCreateThemeParams(undefined)).toEqual({})
 })
 
 describe('applyTerminalAppearance publication', () => {

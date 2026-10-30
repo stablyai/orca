@@ -109,7 +109,10 @@ export class CodexAppliedSettings {
     threadId: string,
     choices: Settings,
     timeoutMs = 30_000,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onApplied?: () => void,
+    onRefused?: () => void,
+    onWriting?: () => void
   ): Promise<{ ok: true } | { ok: false; rejected: string }> {
     throwIfSignalAborted(signal)
     if (this.unsupported || this.equivalent(choices)) {
@@ -137,6 +140,7 @@ export class CodexAppliedSettings {
     try {
       const work = (async () => {
         try {
+          onWriting?.()
           await connection.request(
             'thread/settings/update',
             { threadId, ...choices },
@@ -150,6 +154,7 @@ export class CodexAppliedSettings {
             codexMethodUnavailable(error, 'thread/settings/update')
           ) {
             discard()
+            onRefused?.()
             if (codexMethodUnavailable(error, 'thread/settings/update')) {
               this.unsupported = true
               return
@@ -158,6 +163,7 @@ export class CodexAppliedSettings {
           }
           throw error
         }
+        onApplied?.()
         replied = true
         check()
         await changed.promise

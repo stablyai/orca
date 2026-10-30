@@ -21,6 +21,7 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
+import { EditorRevealFlash } from './EditorRevealFlash'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -357,6 +358,7 @@ export default function TabGroupPanel({
                   markdownAnnotationsEnabled={markdownAnnotationsEnabled}
                 />
               </Suspense>
+              <EditorRevealFlash viewStateId={activeTab.id} />
             </div>
           )}
 

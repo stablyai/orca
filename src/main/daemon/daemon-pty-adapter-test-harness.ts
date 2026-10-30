@@ -82,7 +82,11 @@ export async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promi
 /** Boots a real daemon server over a temp socket plus a lazily-connecting adapter. */
 export async function startDaemonAdapterHarness(
   spawnSubprocess: SpawnSubprocess,
-  adapterOptions: Pick<DaemonPtyAdapterOptions, 'readRunningWslDistros' | 'historyPath'> = {}
+  adapterOptions: Pick<
+    DaemonPtyAdapterOptions,
+    'readRunningWslDistros' | 'historyPath' | 'wslBridgeBootIdentity'
+  > = {},
+  serverOptions: { onPtySessionExit?: (sessionId: string) => void } = {}
 ): Promise<DaemonAdapterHarness> {
   const dir = createTestDir()
   const socketPath = getDaemonSocketPath(dir)
@@ -92,7 +96,13 @@ export async function startDaemonAdapterHarness(
     log: (event) => daemonLogEvents.push(event),
     close() {}
   }
-  const server = new DaemonServer({ socketPath, tokenPath, log: daemonLog, spawnSubprocess })
+  const server = new DaemonServer({
+    socketPath,
+    tokenPath,
+    log: daemonLog,
+    spawnSubprocess,
+    ...serverOptions
+  })
   await server.start()
   const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, ...adapterOptions })
   return { dir, socketPath, tokenPath, server, adapter, daemonLog, daemonLogEvents }

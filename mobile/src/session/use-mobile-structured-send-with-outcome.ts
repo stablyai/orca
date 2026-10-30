@@ -9,7 +9,8 @@ import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-ses
 import {
   SkillRefLimitError,
   structuredAgentSessionSendBody,
-  type StructuredAgentSessionAttachment
+  type StructuredAgentSessionAttachment,
+  type StructuredAgentSessionSendControl
 } from '../../../src/shared/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
 import { MAX_SKILL_REFS } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
@@ -75,6 +76,8 @@ export function useMobileStructuredSendWithOutcome(args: {
   sessionCommands?: readonly AgentSessionSlashCommand[]
   onSendError: MobileNativeChatSendErrorReporter
   // Older hosts accept neither per-chat model nor effort.
+  /** The chat's own model and effort each send carries; absent for an older host, which takes neither. */
+  sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'>
   sendOptions?: () => Readonly<Record<string, string>> | undefined
   // An older host refuses a send body carrying `skills`; there the `$name` text stands alone.
   takesSkills?: boolean
@@ -101,6 +104,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     sendOptions,
     sendsOut,
     sessionCommands,
+    sendSelection,
     sessionId,
     stateRef,
     stopping,
@@ -128,6 +132,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         onSendError('Message not sent')
         return 'rejected'
       }
+      const captured = sendSelection?.() ?? { options: sendOptions?.() }
       const sendAttachments = attachments ?? []
       const commandOutcome = await dispatchMobileStructuredCommand({
         text,
@@ -195,8 +200,6 @@ export function useMobileStructuredSendWithOutcome(args: {
         queuedAt: Date.now(),
         ...(stopping ? { sentWhileStopping: true as const } : {})
       }
-      // Wait for pending picks so the send carries this chat’s settled options.
-      const options = sendOptions?.()
       const outcome = await sendsOut.trackSend(sendMobileStructuredAgentSessionMessage)({
         client,
         sessionId,
@@ -207,7 +210,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         ...(mobileStructuredSendQueues(queueCapable, queueFollowUps, stateRef.current)
           ? { delivery: 'queue-if-active' as const }
           : {}),
-        ...(options ? { options } : {}),
+        ...captured,
         deadline,
         clientMessageId: send.clientMessageId,
         onAccepted: (cursor) =>
@@ -235,6 +238,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       sendOptions,
       sendsOut,
       sessionCommands,
+      sendSelection,
       sessionId,
       stateRef,
       stopping,

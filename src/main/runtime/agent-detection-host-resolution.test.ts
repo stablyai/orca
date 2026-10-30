@@ -34,9 +34,7 @@ function makeRuntime(repos: Repo[], projects: Project[] = []) {
     })
   )
   const selector = vi.fn<(selector: string) => Promise<ResolvedWorktree>>()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replaces the protected worktree lookup this method awaits; its signature is restated above.
-  ;(runtime as unknown as { resolveWorktreeSelector: typeof selector }).resolveWorktreeSelector =
-    selector
+  runtime['resolveGitWorktreeSelector'] = selector
   return { runtime, selector }
 }
 

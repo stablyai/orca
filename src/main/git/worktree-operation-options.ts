@@ -11,6 +11,7 @@ import type { WorktreeCheckoutProgressListener } from './worktree-checkout-progr
 export type AddWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
+  upstreamWarning?: string
 }
 
 export type SparseWorktreeCreateError = Error & {
@@ -32,6 +33,8 @@ export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
   checkoutExistingBranch?: boolean
+  /** Require a remote-tracking start point; set its upstream after creation when Git permits it. */
+  trackRemoteBranch?: boolean
   /** Progress of the checkout `git worktree add` performs; never called for `--no-checkout`. */
   onCheckoutProgress?: WorktreeCheckoutProgressListener
   suggestLocalBaseRefUpdate?: boolean
@@ -77,6 +80,14 @@ export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env
     )
   }
   return resolved
+}
+
+export function worktreeAddTimeoutMessage(timeoutMs: number): string {
+  const stopped = `Creating the worktree took longer than ${Math.round(timeoutMs / 1000)} seconds, so Orca stopped Git.`
+  if (timeoutMs >= WORKTREE_ADD_TIMEOUT_MAX_MS) {
+    return stopped
+  }
+  return `${stopped} To allow more time, set ORCA_WORKTREE_ADD_TIMEOUT_MS (milliseconds, up to ${WORKTREE_ADD_TIMEOUT_MAX_MS}) in the environment that starts Orca on the machine running Git (the remote host for SSH or \`orca serve\` workspaces), then restart Orca there.`
 }
 
 export type GitExecOptionsForWorktree = {

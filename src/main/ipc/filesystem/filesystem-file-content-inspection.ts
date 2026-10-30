@@ -17,6 +17,8 @@ export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
 
 export type LocalFileContent = {
   mediaUrl?: string
+  /** Bytes behind `mediaUrl`, for viewers that no longer see the content. */
+  size?: number
   content: string
   isBinary: boolean
   isImage?: boolean

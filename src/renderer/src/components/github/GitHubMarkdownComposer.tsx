@@ -34,6 +34,7 @@ import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown-spellcheck'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type GitHubMarkdownComposerProps = {
   value: string
@@ -280,7 +281,7 @@ export function GitHubMarkdownComposer({
 
   const handleLinkOpen = useCallback(() => {
     if (linkBubble?.href) {
-      window.api.shell.openUrl(linkBubble.href)
+      openAppHttpLink(linkBubble.href)
     }
   }, [linkBubble?.href])
 

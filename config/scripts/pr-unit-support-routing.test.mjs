@@ -7,7 +7,7 @@ import {
   unitConsumers
 } from './ci-unit-dependency-graph.mjs'
 import { CROSS_VERSION_WIRE_DIR, discoverUnitFiles } from './ci-unit-files.mjs'
-import { planUnitSelection } from './ci-unit-selection.mjs'
+import { FULL_SHARD_COUNT, planUnitSelection } from './ci-unit-selection.mjs'
 
 const harness = 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts'
 const structuredSessionHarness =
@@ -123,7 +123,7 @@ describe('unit support import ownership', () => {
     })
     expect(plan.mode).toBe('shadow')
     expect(plan.executionFiles).toEqual(files)
-    expect(plan.shards).toHaveLength(5)
+    expect(plan.shards).toHaveLength(FULL_SHARD_COUNT)
   })
 
   it.each([

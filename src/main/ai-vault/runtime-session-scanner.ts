@@ -1,3 +1,4 @@
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { AiVaultChatForkSourceSchema } from '../../shared/ai-vault-chat-fork-contract'
 import { z } from 'zod'
 import {
@@ -110,7 +111,9 @@ export async function scanRuntimeAiVaultSessions(
             agent: 'codex',
             kind: 'scope',
             path: environmentId,
-            message: `Only the first ${AI_VAULT_SCOPE_PATHS_MAX_COUNT} project paths were scanned.`
+            ...aiVaultScanIssueText('scopePathsTruncated', {
+              params: { limit: AI_VAULT_SCOPE_PATHS_MAX_COUNT }
+            })
           }
         ]
       }

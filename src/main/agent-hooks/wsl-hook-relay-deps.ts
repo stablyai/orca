@@ -22,6 +22,12 @@ import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
 import { listWslDistrosAsync } from '../wsl'
 import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
 import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
+import { wslBridgePtyPresence, type WslBridgePtyPresence } from './wsl-bridge-pty-presence'
+import {
+  readDaemonBridgeSessions,
+  type DaemonBridgeSessionVerdict
+} from './wsl-bridge-daemon-sessions'
+import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
 
 // Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
 export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
@@ -50,6 +56,8 @@ export type WslHookRelayManagerDeps = {
   /** Recovery must not boot a distro the user shut down. */
   isDistroRunning: typeof isWslDistroRunning
   deferUntilRunning: typeof deferUntilWslDistroRunning
+  /** Starting a relay runs wsl.exe; only a running distro, or a user act's, may get one (E9). */
+  blockedForExec: typeof blockedWslDistroForExec
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
@@ -68,6 +76,11 @@ export type WslHookRelayManagerDeps = {
   pluginSources: () => PluginSources
   warn: (message: string) => void
   transientRetryDelayMs: number
+  /** Live bridge terminals per distro; a relay idles out only when its distro has none. */
+  bridgePtyPresence: Pick<WslBridgePtyPresence, 'count' | 'onChange'>
+  /** Whether the terminal daemon still runs a bridge session there, mounted or not. */
+  daemonBridgeSessions: (distro: string) => Promise<DaemonBridgeSessionVerdict>
+  idleStopMs?: number
 }
 
 /** Read the hooks setting live for spawn, reattach, and crash recovery. */
@@ -89,11 +102,14 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     const source = agentHookServer.endpointFilePath
     return source ? createHash('sha256').update(source).digest('hex').slice(0, 12) : null
   },
+  bridgePtyPresence: wslBridgePtyPresence,
+  daemonBridgeSessions: readDaemonBridgeSessions,
   resolveBundle: resolveWslHookRelayBundle,
   readBundle: (jsPath) => readFileSync(jsPath),
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
   deferUntilRunning: deferUntilWslDistroRunning,
+  blockedForExec: blockedWslDistroForExec,
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,

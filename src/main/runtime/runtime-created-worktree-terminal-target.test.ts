@@ -39,7 +39,7 @@ class StartupRuntime extends OrcaRuntimeService {
     return this.repoLookup(selector)
   }
 
-  protected override resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+  protected override resolveGitWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     return this.lookup(selector)
   }
 }
@@ -285,7 +285,7 @@ describe('workspace activation and metadata reentry', () => {
       super(store)
     }
 
-    override async resolveWorktreeSelector(): Promise<ResolvedWorktree> {
+    override async resolveGitWorktreeSelector(): Promise<ResolvedWorktree> {
       return this.selectedWorktree
     }
 

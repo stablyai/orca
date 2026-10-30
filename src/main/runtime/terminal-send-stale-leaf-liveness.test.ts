@@ -418,6 +418,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      listSessionDispatchesForPresentation: () => [],
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>
         rows.filter((row) => row.to_handle === handle && row.read === 0 && !row.delivered_at),

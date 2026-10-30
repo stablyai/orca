@@ -22,7 +22,7 @@ export class RuntimeBrowserTabClose {
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'getAgentBrowserBridge'
-      | 'resolveWorktreeSelector'
+      | 'resolveWorkspaceSelector'
       | 'getAvailableAuthoritativeWindow'
       | 'getOffscreenBrowserBackend'
       | 'getAuthoritativeWindow'
@@ -52,7 +52,7 @@ export class RuntimeBrowserTabClose {
         namedPageId &&
         params.worktree &&
         this.targets.retireGhostBrowserSessionRow(
-          (await this.host.resolveWorktreeSelector(params.worktree)).id,
+          (await this.host.resolveWorkspaceSelector(params.worktree)).id,
           namedPageId
         )
       ) {
@@ -62,7 +62,7 @@ export class RuntimeBrowserTabClose {
     }
     const worktreeId = explicitPage
       ? params.worktree
-        ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+        ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
         : undefined
       : await this.targets.resolveBrowserWorktreeId(params.worktree)
 

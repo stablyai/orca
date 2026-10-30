@@ -1,4 +1,5 @@
 type TerminalLiveMirrorSender = (handle: string, payload: string) => Promise<boolean>
+export type TerminalLiveInputFailure = 'input-too-large' | 'delivery-unconfirmed'
 
 type TerminalLivePendingRequest = {
   readonly resolve: (sent: boolean) => void
@@ -14,6 +15,7 @@ type TerminalLivePendingBatch = {
 }
 
 export type TerminalLivePendingFlushState = {
+  onFailure: ((handle: string, failure: TerminalLiveInputFailure) => void) | null
   current: Promise<boolean> | null
   cancelCurrent: (() => void) | null
   activeRequests: TerminalLivePendingRequest[]
@@ -23,6 +25,7 @@ export type TerminalLivePendingFlushState = {
 
 export function createTerminalLivePendingFlushState(): TerminalLivePendingFlushState {
   return {
+    onFailure: null,
     current: null,
     cancelCurrent: null,
     activeRequests: [],
@@ -55,33 +58,41 @@ async function drainTerminalLiveMirrorSends(
   state: TerminalLivePendingFlushState,
   generation: number
 ): Promise<boolean> {
-  let allSent = true
   while (state.generation === generation) {
     const batch = state.pendingBatches.shift()
     if (!batch) {
       state.current = null
-      return allSent
+      return true
     }
 
     state.activeRequests = batch.requests
-    let sent = false
-    // A control after undelivered text could act on the wrong line, e.g. Return running a partial command.
-    if (allSent || !batch.control) {
-      let delivery: Promise<boolean>
-      try {
-        delivery = batch.sender(batch.handle, batch.payload)
-      } catch {
-        delivery = Promise.resolve(false)
-      }
-      sent = await delivery.catch(() => false)
-      if (state.generation !== generation) {
-        return false
-      }
+    let delivery: Promise<boolean>
+    try {
+      delivery =
+        batch.byteLength > TERMINAL_LIVE_INPUT_MAX_BYTES
+          ? Promise.resolve(false)
+          : batch.sender(batch.handle, batch.payload)
+    } catch {
+      delivery = Promise.resolve(false)
+    }
+    const sent = await delivery.catch(() => false)
+    if (state.generation !== generation) {
+      return false
+    }
+    if (!sent) {
+      // Later deltas and controls depend on bytes whose delivery is now unknown.
+      cancelTerminalLivePendingFlush(state)
+      state.onFailure?.(
+        batch.handle,
+        batch.byteLength > TERMINAL_LIVE_INPUT_MAX_BYTES
+          ? 'input-too-large'
+          : 'delivery-unconfirmed'
+      )
+      return false
     }
 
     state.activeRequests = []
     batch.requests.forEach(({ resolve }) => resolve(sent))
-    allSent &&= sent
   }
   return false
 }

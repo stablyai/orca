@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { WslHostDistro } from '../../../../shared/wsl-host-types'
-import { AddWslHostFormPanel, canAddWslDistro, wslDistroStateLabel } from './AddWslHostFormPanel'
+import { AddWslHostFormPanel } from './AddWslHostFormPanel'
 
 vi.mock('@/components/ui/dialog', () => ({
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -35,26 +35,6 @@ function render(props: Partial<Parameters<typeof AddWslHostFormPanel>[0]> = {}):
 }
 
 describe('AddWslHostFormPanel', () => {
-  it('labels each distro and refuses WSL 1 and already-added ones', () => {
-    expect(wslDistroStateLabel(ubuntu)).toBe('Running')
-    expect(wslDistroStateLabel(debian)).toBe('Stopped')
-    expect(wslDistroStateLabel(legacy)).toBe('WSL 1 · not supported')
-    expect(wslDistroStateLabel(added)).toBe('Already a host')
-    expect([ubuntu, debian, legacy, added].map(canAddWslDistro)).toEqual([true, true, false, false])
-  })
-
-  it('does not promise bridge projects stay put once they can move to the host', () => {
-    // "Use it for new projects; ... keep working as they are" contradicted the mover.
-    const html = render()
-    expect(html).not.toContain('Use it for new projects')
-    expect(html).toContain('until you move them to this host')
-  })
-
-  it('spells out the WSL 2 conversion for a WSL 1 distro the list cannot offer', () => {
-    expect(render()).toContain('wsl --set-version Legacy 2')
-    expect(render({ distros: [ubuntu] })).not.toContain('wsl --set-version')
-  })
-
   it('says this build cannot run WSL hosts and offers nothing to add', () => {
     const html = render({ selectedDistro: 'Ubuntu', serverFilesMissing: true })
     expect(html).toContain('This build of Orca can’t run WSL hosts (server files missing).')

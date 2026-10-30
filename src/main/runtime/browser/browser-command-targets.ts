@@ -5,6 +5,7 @@ import {
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../ipc/browser-tab-registration-wait'
+import { whenBrowserMainWindowReady } from '../../browser/browser-main-window-readiness'
 import type { BrowserSnapshotResult } from '../../../shared/runtime-types'
 import type {
   BrowserCommandTargetParams,
@@ -13,12 +14,14 @@ import type {
   ResolvedBrowserPageWebContents
 } from './browser-command-contracts'
 
+const MAIN_WINDOW_READY_WAIT_MS = 8_000
+
 export class RuntimeBrowserCommandTargets {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
       | 'getAgentBrowserBridge'
-      | 'resolveWorktreeSelector'
+      | 'resolveWorkspaceSelector'
       | 'getAuthoritativeWindow'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'serveBrowserTabs'
@@ -81,7 +84,7 @@ export class RuntimeBrowserCommandTargets {
       return undefined
     }
 
-    const worktreeId = (await this.host.resolveWorktreeSelector(selector)).id
+    const worktreeId = (await this.host.resolveWorkspaceSelector(selector)).id
     // Explicit selector failures must surface instead of widening scope; activation alone is best-effort.
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
@@ -104,7 +107,7 @@ export class RuntimeBrowserCommandTargets {
     }
 
     const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+      ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
@@ -151,8 +154,11 @@ export class RuntimeBrowserCommandTargets {
     if (await this.host.serveBrowserTabs?.start(worktreeId, undefined)) {
       return
     }
-    const win = this.host.getAuthoritativeWindow()
-    win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
+    // With no saved tab the window mounts nothing, so the wait could only time out (#20434).
+    if (this.host.serveBrowserTabs?.hasStartable(worktreeId) === false) {
+      return
+    }
+    await this.sendActivateView(worktreeId ? { worktreeId } : {})
     // Await registerGuest rather than guessing a fixed mount delay.
     await waitForWorktreeTabRegistration(worktreeId)
   }
@@ -164,12 +170,18 @@ export class RuntimeBrowserCommandTargets {
     if (await this.host.serveBrowserTabs?.start(worktreeId, browserPageId)) {
       return
     }
-    const win = this.host.getAuthoritativeWindow()
-    win.webContents.send(
-      'browser:activateView',
-      worktreeId ? { worktreeId, browserPageId } : { browserPageId }
-    )
+    await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
     await waitForTabRegistration(browserPageId)
+  }
+
+  // A reloaded renderer drops activateView until it has restored the tab to mount.
+  private async sendActivateView(payload: {
+    worktreeId?: string
+    browserPageId?: string
+  }): Promise<void> {
+    const win = this.host.getAuthoritativeWindow()
+    await whenBrowserMainWindowReady(MAIN_WINDOW_READY_WAIT_MS)
+    win.webContents.send('browser:activateView', payload)
   }
 
   // Automation may bypass Electron navigation events; publish authoritative URL/title updates.

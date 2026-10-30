@@ -22,6 +22,7 @@ export type ClaudeJournalTranslatorDeps = {
   fallbackIdPrefix?: string
   onBackgroundTaskJournalFailure?: (error: Error) => void
   account?: () => AgentSessionAccountKind | undefined
+  model?: () => string | undefined
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
 }
 

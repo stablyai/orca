@@ -255,6 +255,18 @@ export function isAgentForegroundWrapperProcess(processName: string | null | und
   )
 }
 
+/** True when `processName` is the Node interpreter of an npm-installed agent (npm Codex's `node codex.js` wrapper). */
+export function isNodeInterpreterOfAgent(
+  processName: string | null | undefined,
+  agent: TerminalAgent
+): boolean {
+  return (
+    normalizeProcessName(processName) === 'node' &&
+    (agent in NODE_PACKAGE_SCRIPT_ENTRYPOINTS ||
+      EXACT_NODE_ENTRYPOINT_IDENTITIES.some((identity) => identity.agent === agent))
+  )
+}
+
 export function isRecognizedAgentType(agentType: AgentType | null | undefined): boolean {
   if (typeof agentType !== 'string') {
     return false

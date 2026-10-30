@@ -40,9 +40,13 @@ function formatAnnouncement(matchCount: number, totalCount: number): string {
         'No workspaces match'
       )
     : translate(
-        'auto.components.sidebar.WorkspaceKanbanSearchField.4d96c209d6',
-        '{{value0}} of {{value1}} workspaces match',
-        { value0: matchCount, value1: totalCount }
+        'auto.components.sidebar.WorkspaceKanbanSearchField.workspacesMatch',
+        '{{matchCount}} of {{count}} workspaces match',
+        {
+          matchCount,
+          count: totalCount,
+          defaultValue_one: '{{matchCount}} of {{count}} workspace matches'
+        }
       )
 }
 

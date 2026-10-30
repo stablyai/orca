@@ -14,6 +14,7 @@ import {
 } from './appimage-extracted-root'
 import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
 import { CliPathRegistration } from './cli-path-registration'
+import { removeLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
 
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {
@@ -164,6 +165,7 @@ export class CliInstaller extends CliPathRegistration {
   }
 
   private async removeUnlocked(): Promise<CliInstallStatus> {
+    await this.removeLinuxBareOrcaDispatcher()
     const status = await this.getStatus()
     if (!status.supported || !status.commandPath || !status.launcherPath || !status.installMethod) {
       await this.removeLinuxAppImagePayloads()
@@ -202,6 +204,21 @@ export class CliInstaller extends CliPathRegistration {
 
     await this.removeLinuxAppImagePayloads()
     return this.getStatus()
+  }
+
+  // Removing the `orca` command also retires the bare-name dispatcher headless serve installed.
+  private async removeLinuxBareOrcaDispatcher(): Promise<void> {
+    if (this.platform !== 'linux' || this.commandPathOverride) {
+      return
+    }
+    try {
+      await removeLinuxBareOrcaDispatcher(this.homePath)
+    } catch (error) {
+      console.warn(
+        '[cli] Could not remove the bare orca dispatcher:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
   }
 
   private async removeLinuxAppImagePayloads(): Promise<void> {

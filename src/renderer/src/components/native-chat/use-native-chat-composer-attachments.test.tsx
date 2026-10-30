@@ -11,7 +11,7 @@ import * as draftCache from './native-chat-draft-cache'
 import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
-import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 import { useAppStore } from '@/store'

@@ -6,6 +6,14 @@ import { errorResponse } from '../rpc/errors'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
 import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../rpc/rpc-caller-scope'
+import { LOCAL_CLI_RPC_CALLER } from '../rpc/rpc-caller-identity'
+
+// Short calls that stop on disconnect without long-poll keepalives or admission slots.
+const DISCONNECT_FORWARDED_METHODS = new Set([
+  'browser.eval',
+  'linear.commentEdit',
+  'linear.commentDelete'
+])
 
 export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
   // One-shot Unix requests use shared tokens from mode-0600 metadata (design §3.1).
@@ -39,10 +47,12 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return await this.dispatcher.dispatch(request, {
         signal:
           longPoll ||
-          request.method === 'linear.commentEdit' ||
-          request.method === 'linear.commentDelete'
+          request.method.startsWith('linear.') ||
+          DISCONNECT_FORWARDED_METHODS.has(request.method)
             ? context?.signal
             : undefined,
+        connectionSignal: context?.signal,
+        caller: LOCAL_CLI_RPC_CALLER,
         callerScope
       })
     } finally {

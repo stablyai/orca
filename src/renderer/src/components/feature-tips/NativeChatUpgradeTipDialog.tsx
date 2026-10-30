@@ -129,13 +129,9 @@ export function NativeChatUpgradeTipDialog({
                 />
               </span>
               <FeatureTipSettingsLine
-                lead={translate(
-                  'featureTips.nativeChatUpgrade.settingsInstruction',
-                  'Manage Chat UI in'
-                )}
-                link={translate(
-                  'featureTips.nativeChatUpgrade.settingsLink',
-                  'Settings → Experimental'
+                text={translate(
+                  'featureTips.nativeChatUpgrade.manageInSettings',
+                  'Manage Chat UI in <link>Settings → Experimental</link>.'
                 )}
                 onClick={onSettingsClick}
               />

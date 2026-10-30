@@ -133,6 +133,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     body: entry.body,
     ...(entry.delivery ? { delivery: entry.delivery } : {}),
     ...(entry.options ? { options: entry.options } : {}),
+    ...(entry.selection !== undefined ? { selection: entry.selection } : {}),
     ...(entry.usageLimitContinuationOfTurnItemId
       ? { usageLimitContinuationOfTurnItemId: entry.usageLimitContinuationOfTurnItemId }
       : {})
