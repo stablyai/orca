@@ -133,6 +133,10 @@ function hasSource(store: TestStore, filePath: string): boolean {
   return store.getState().openFiles.some((file) => file.filePath === filePath)
 }
 
+function hasEditTab(store: TestStore, filePath: string): boolean {
+  return store.getState().openFiles.some((f) => f.filePath === filePath && f.mode === 'edit')
+}
+
 function screenState(store: TestStore): unknown {
   const s = store.getState()
   return {
@@ -159,23 +163,27 @@ describe('runtime file opens with preview', () => {
     expect(hasSource(store, PAGE.filePath)).toBe(false)
   })
 
-  it('adds a caller HTML preview without changing what the user sees', async () => {
+  it.each([
+    ['HTML', PAGE],
+    ['Markdown', README]
+  ])('adds a caller %s preview without changing what the user sees', async (_kind, file) => {
     const { openFile, store } = await setup()
     const before = screenState(store)
 
-    await openFile({ worktreeId: VIEWED, ...PAGE, navigation: 'caller', preview: true })
+    await openFile({ worktreeId: VIEWED, ...file, navigation: 'caller', preview: true })
 
-    expect(browserTabs(store, VIEWED)).toHaveLength(1)
+    expect(store.getState().unifiedTabsByWorktree[VIEWED]).toHaveLength(2)
     expect(screenState(store)).toEqual(before)
   })
 
-  it('opens Markdown in preview mode', async () => {
+  it('opens Markdown in its read-only preview tab', async () => {
     const { openFile, store } = await setup()
 
     await openFile({ worktreeId: VIEWED, ...README, navigation: 'all', preview: true })
 
-    expect(store.getState().activeFileId).toBe(README.filePath)
-    expect(store.getState().markdownViewMode[README.filePath]).toBe('preview')
+    const active = store.getState().openFiles.find((f) => f.id === store.getState().activeFileId)
+    expect(active).toMatchObject({ filePath: README.filePath, mode: 'markdown-preview' })
+    expect(hasEditTab(store, README.filePath)).toBe(false)
   })
 
   it('falls back to HTML source when the workspace cannot show a preview', async () => {
@@ -198,6 +206,6 @@ describe('runtime file opens with preview', () => {
 
     expect(browserTabs(store, VIEWED)).toHaveLength(0)
     expect(hasSource(store, PAGE.filePath)).toBe(true)
-    expect(store.getState().markdownViewMode[README.filePath]).toBeUndefined()
+    expect(hasEditTab(store, README.filePath)).toBe(true)
   })
 })
