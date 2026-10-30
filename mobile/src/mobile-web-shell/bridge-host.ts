@@ -134,6 +134,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           granted,
           host,
           ownsHostArea: options.ownsHostArea === true,
+          hostSwitcher: options.hostSwitcher === true,
           ...options.readStorage()
         })
       )

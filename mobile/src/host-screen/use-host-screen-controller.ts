@@ -29,6 +29,7 @@ import { useHostViewSettings } from './use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
+import { useHostSwitcher } from './use-host-switcher'
 import { useHostDisplay } from '../transport/use-host-display'
 import { classifyConnection } from '../transport/connection-health'
 
@@ -131,6 +132,7 @@ export function useHostScreenController({
     state
   })
 
+  const hostSwitcher = useHostSwitcher(hostId, router)
   const hostPlatform = useResolvedHostPlatform(state, hostId)
   const displayWorktrees = useHostDisplayWorktrees(connState, state, hostPlatform)
   const feed = sidebarFeed?.feed ?? null
@@ -175,6 +177,7 @@ export function useHostScreenController({
     hostCapabilities,
     hostDisplay,
     hostId,
+    hostSwitcher,
     insets,
     isReadOnly: connState === 'auth-failed',
     isWideLayout,

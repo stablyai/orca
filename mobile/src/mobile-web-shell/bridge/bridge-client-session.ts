@@ -27,6 +27,8 @@ export type BridgeShellSession = {
   // Oversize keys are withheld from storage and reject writes locally; older shells omit this additive field (ruling 33.6).
   storageOversize: readonly string[]
   ownsHostArea: boolean
+  // Older shells omit this, which hides the page's desktop switcher.
+  hostSwitcher: boolean
 }
 
 // Normalize the wire’s absent route to one client-side shape; undefined and missing serialize identically.
@@ -47,6 +49,7 @@ export function readShellSession(
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],
-    ownsHostArea: message.ownsHostArea === true
+    ownsHostArea: message.ownsHostArea === true,
+    hostSwitcher: message.hostSwitcher === true
   }
 }

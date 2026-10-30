@@ -1406,6 +1406,7 @@
       "hideSidebar": "隐藏侧边栏",
       "reconnect": "重新连接",
       "searchWorkspaces": "搜索工作区",
+      "switchDesktop": "切换桌面，当前：{{title}}",
       "tasks": "任务",
       "workspaceOptions": "工作区选项"
     },
@@ -1418,6 +1419,9 @@
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "sleep": "休眠",
       "unpin": "取消固定"
+    },
+    "hostSwitcherSheet": {
+      "title": "切换桌面"
     },
     "hostWorkspaceList": {
       "searchPlaceholder": "搜索工作区…",

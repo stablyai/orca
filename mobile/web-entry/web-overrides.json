@@ -18,6 +18,10 @@
       "reason": "The page is one document standing in for one screen, so a route it does not render has to be handed to the app that does. The native file is the router; this one posts a navigate notify for a target outside the page's routes and pushes locally for one inside them."
     },
     {
+      "file": "src/host-screen/use-host-switcher.web.ts",
+      "reason": "The page's host store holds only the desktop the shell opened, so the native hook would never see a second one and the header's desktop switcher could not appear on a phone. This one reads the hostSwitcher fact the shell puts in init when another paired desktop exists, and opens the shell's /switch-desktop sheet through the navigate grant the route already holds, so no new grant is spent against the route-grant ceiling. An older shell omits the fact, which hides the switcher."
+    },
+    {
       "file": "src/transport/host-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
     },

@@ -42,6 +42,7 @@ export function createBridgeInitFrame(args: {
   // Withheld oversized storage keys reject page writes; absent/empty both mean no app value was excluded (ruling 33.6).
   storageOversize?: readonly string[]
   ownsHostArea?: boolean
+  hostSwitcher?: boolean
 }): Extract<BridgeHostMessage, { type: 'init' }> {
   return {
     v: BRIDGE_PROTOCOL_VERSION,
@@ -86,6 +87,7 @@ export function createBridgeInitFrame(args: {
     ...(args.storageOversize === undefined || args.storageOversize.length === 0
       ? {}
       : { storageOversize: [...args.storageOversize] }),
-    ...(args.ownsHostArea === true ? { ownsHostArea: true } : {})
+    ...(args.ownsHostArea === true ? { ownsHostArea: true } : {}),
+    ...(args.hostSwitcher === true ? { hostSwitcher: true } : {})
   }
 }

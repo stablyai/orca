@@ -133,6 +133,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
         ? { sessionBack: establishedBackRef.current.back }
         : {}),
       host: snapshot.host,
+      hostSwitcher: snapshot.hostSwitcher === true,
       readClientIdentity: () => clientIdRef.current,
       post: (json) => {
         const mounted = viewRef.current

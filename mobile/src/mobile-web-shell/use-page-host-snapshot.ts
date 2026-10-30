@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { hasOtherSwitchableHost } from '../host-screen/host-switcher-options'
 import { loadHosts } from '../transport/host-store'
 import type { BridgeInitHost } from './bridge/bridge-envelope'
 import {
@@ -18,6 +19,8 @@ import {
 
 export type PageHostSnapshot = {
   host: BridgeInitHost
+  // Another desktop the shell's switcher could open, read with the profile when the host page mounts.
+  hostSwitcher?: boolean
 }
 
 export type PageHostSnapshotView = {
@@ -83,7 +86,8 @@ export function usePageHostSnapshot(
                     : {}),
                   endpoint: found.endpoint,
                   lastConnected: found.lastConnected
-                }
+                },
+                hostSwitcher: hasOtherSwitchableHost(hosts, hostId)
               }
             : null
         )

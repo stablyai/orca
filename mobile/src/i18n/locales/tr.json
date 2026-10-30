@@ -1410,6 +1410,7 @@
       "hideSidebar": "Kenar çubuğunu gizle",
       "reconnect": "Yeniden bağlan",
       "searchWorkspaces": "Çalışma alanlarını ara",
+      "switchDesktop": "Bilgisayarı değiştir, geçerli: {{title}}",
       "tasks": "Görevler",
       "workspaceOptions": "Çalışma alanı seçenekleri"
     },
@@ -1422,6 +1423,9 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "sleep": "Uyut",
       "unpin": "Sabitlemeyi Kaldır"
+    },
+    "hostSwitcherSheet": {
+      "title": "Bilgisayarı değiştir"
     },
     "hostWorkspaceList": {
       "searchPlaceholder": "Çalışma alanlarını ara…",

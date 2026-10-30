@@ -220,6 +220,16 @@ export default function RootLayout() {
             <Stack.Screen name="about" options={{ headerShown: false }} />
             <Stack.Screen name="h" options={{ headerShown: false }} />
             <Stack.Screen
+              name="switch-desktop"
+              options={{
+                headerShown: false,
+                // Draws nothing of its own: the desktop switcher sheet, over the host page.
+                presentation: 'transparentModal',
+                animation: 'none',
+                contentStyle: { backgroundColor: 'transparent' }
+              }}
+            />
+            <Stack.Screen
               name="new-workspace"
               options={{
                 headerShown: false,

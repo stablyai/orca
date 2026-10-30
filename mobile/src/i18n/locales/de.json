@@ -1410,6 +1410,7 @@
       "hideSidebar": "Seitenleiste ausblenden",
       "reconnect": "Erneut verbinden",
       "searchWorkspaces": "Arbeitsbereiche durchsuchen",
+      "switchDesktop": "Desktop wechseln, aktuell: {{title}}",
       "tasks": "Aufgaben",
       "workspaceOptions": "Arbeitsbereichsoptionen"
     },
@@ -1422,6 +1423,9 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
       "unpin": "Anheftung aufheben"
+    },
+    "hostSwitcherSheet": {
+      "title": "Desktop wechseln"
     },
     "hostWorkspaceList": {
       "searchPlaceholder": "Arbeitsbereiche durchsuchen…",

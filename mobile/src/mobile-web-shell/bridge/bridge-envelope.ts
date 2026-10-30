@@ -267,7 +267,9 @@ const BridgeHostMessageSchema = z.union([
       .optional(),
     // Send manifest grant pairs so local hops cannot run targets under insufficient opener grants. Older shells omit/older pages ignore this field; absent pairs retain the older handoff rule.
     pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
-    ownsHostArea: salvagedOptional('ownsHostArea', z.boolean()).optional()
+    ownsHostArea: salvagedOptional('ownsHostArea', z.boolean()).optional(),
+    // Another paired desktop exists and this shell can switch to it; older pages strip it, older shells omit it.
+    hostSwitcher: salvagedOptional('hostSwitcher', z.boolean()).optional()
   })
 ])
 

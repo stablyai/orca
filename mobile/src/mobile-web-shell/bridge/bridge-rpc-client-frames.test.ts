@@ -127,8 +127,15 @@ describe('bridge client handshake', () => {
       host: null,
       storage: {},
       storageOversize: [],
-      ownsHostArea: false
+      ownsHostArea: false,
+      hostSwitcher: false
     })
+  })
+
+  it("reads the shell's desktop-switcher fact, which an older shell omits", () => {
+    const page = createPageClient()
+    page.deliver({ ...INIT, hostSwitcher: true })
+    expect(page.client.getShellSession()?.hostSwitcher).toBe(true)
   })
 
   it('posts nothing, and says so, when the shell granted no navigate', () => {

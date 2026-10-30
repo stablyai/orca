@@ -65,6 +65,8 @@ export type BridgeHostOptions = {
   // Grant only this route’s implemented capabilities plus protocol fault; another route’s clipboard grant must not widen this session.
   routeGrants: readonly string[]
   ownsHostArea?: boolean
+  // Tells the page another paired desktop exists, so its header can offer the shell's switcher.
+  hostSwitcher?: boolean
   // Inherit handshake state on client-driven rebuild: the session id/page do not change, so no new ready or BridgeShellReplaced arrives.
   sessionEstablished: boolean
   // Inherit the live Back claim alongside handshake state; the page is never told to re-claim after client replacement.
