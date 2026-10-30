@@ -30,6 +30,8 @@ export type ClientOwnedPlacementInput = {
   currentActiveGroupId: string | null
   currentLayout: TabGroupLayoutNode | null
   isGroupReserved(groupId: string): boolean
+  /** Groups another surface draws (Agents tab cards); leaf repair must not split them in. */
+  isGroupOffLayout(groupId: string): boolean
 }
 
 export type ClientOwnedPlacementResult = {
@@ -260,7 +262,7 @@ export function reconcileClientOwnedTabPlacement(
   const renderedGroupIds = collectClientLayoutGroupIds(layout)
   // Why: a surviving group must stay reachable — repair hydration races by appending a leaf.
   for (const group of groups) {
-    if (!renderedGroupIds.has(group.id)) {
+    if (!renderedGroupIds.has(group.id) && !input.isGroupOffLayout(group.id)) {
       const leaf: TabGroupLayoutNode = { type: 'leaf', groupId: group.id }
       layout = layout
         ? { type: 'split', direction: 'horizontal', first: layout, second: leaf }
