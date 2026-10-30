@@ -92,7 +92,7 @@ export function TopActivityOverflowMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+      <DropdownMenuContent data-right-sidebar-menu align="end" side="bottom" sideOffset={6}>
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab

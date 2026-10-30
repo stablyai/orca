@@ -14,7 +14,7 @@ export function useRightSidebarReturnFocus(
         target !== document.body &&
         target !== document.documentElement &&
         !sidebarRef.current?.contains(target) &&
-        !target.closest('[data-right-sidebar-toggle]')
+        !target.closest('[data-right-sidebar-toggle], [data-right-sidebar-menu]')
       ) {
         returnTargetRef.current = target
       }
@@ -30,11 +30,13 @@ export function useRightSidebarReturnFocus(
   }, [rememberOutsideFocus])
 
   useLayoutEffect(() => {
-    rememberOutsideFocus(document.activeElement)
+    const activeElement = document.activeElement
+    rememberOutsideFocus(activeElement)
     const target = returnTargetRef.current
+    const focusIsInClosedSidebar = !open && sidebarRef.current?.contains(activeElement)
     if (
       !target?.isConnected ||
-      (document.activeElement !== null && document.activeElement !== document.body) ||
+      (activeElement !== null && activeElement !== document.body && !focusIsInClosedSidebar) ||
       target.getClientRects().length === 0 ||
       getComputedStyle(target).visibility !== 'visible' ||
       target.closest('[aria-hidden="true"], [inert]') ||
@@ -43,5 +45,5 @@ export function useRightSidebarReturnFocus(
       return
     }
     target.focus({ preventScroll: true })
-  }, [open, rememberOutsideFocus])
+  }, [open, rememberOutsideFocus, sidebarRef])
 }

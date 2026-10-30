@@ -2,7 +2,8 @@ import { test, expect } from './helpers/orca-app'
 import { pressShortcut } from './helpers/shortcuts'
 import { ensureTerminalVisible } from './helpers/store'
 import {
-  getTerminalContent,
+  expectTerminalAccessibilityText,
+  resolveActiveTabId,
   splitActiveTerminalPane,
   waitForActiveTerminalManager,
   waitForPaneCount
@@ -44,9 +45,42 @@ for (const position of ['top', 'side'] as const) {
     await expect(input).toBeFocused()
     const marker = `sidebar-input-${position}`
     await orcaPage.keyboard.type(marker)
-    await expect.poll(() => getTerminalContent(orcaPage)).toContain(marker)
+    const tabId = await resolveActiveTabId(orcaPage)
+    if (!tabId) {
+      throw new Error('No active terminal tab')
+    }
+    await expectTerminalAccessibilityText(orcaPage, tabId, marker)
   })
 }
+
+test('closing sidebar after dismissing its overflow menu restores pane input', async ({
+  orcaPage
+}) => {
+  await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    state.setActivityBarPosition('top')
+    state.setRightSidebarWidth(220)
+  })
+  const input = orcaPage.getByRole('textbox', { name: 'Terminal input', exact: true })
+  const toggle = orcaPage.getByRole('button', { name: 'Toggle right sidebar', exact: true })
+  await input.click()
+  await expect(input).toBeFocused()
+  await toggle.click()
+  // Force overflow without installing plugins just to add more tabs.
+  await orcaPage.locator('.right-sidebar-activity-strip').evaluate((strip) => {
+    strip.style.maxWidth = '100px'
+  })
+  const moreTabs = orcaPage.getByRole('button', { name: 'More sidebar tabs', exact: true })
+  await moreTabs.click()
+  const menu = orcaPage.getByRole('menu')
+  await orcaPage.keyboard.press('ArrowDown')
+  await expect(menu.getByRole('menuitem').first()).toBeFocused()
+  await orcaPage.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await expect(moreTabs).toBeFocused()
+  await toggle.click()
+  await expect(input).toBeFocused()
+})
 
 test('closing sidebar search returns to the most recently used pane, not the opener', async ({
   orcaPage
@@ -64,7 +98,11 @@ test('closing sidebar search returns to the most recently used pane, not the ope
   await toggle.click()
   await expect(inputs.nth(1)).toBeFocused()
   await orcaPage.keyboard.type('returned-to-second-pane')
-  await expect.poll(() => getTerminalContent(orcaPage)).toContain('returned-to-second-pane')
+  const tabId = await resolveActiveTabId(orcaPage)
+  if (!tabId) {
+    throw new Error('No active terminal tab')
+  }
+  await expectTerminalAccessibilityText(orcaPage, tabId, 'returned-to-second-pane')
 
   await toggle.click()
   await search.click()
