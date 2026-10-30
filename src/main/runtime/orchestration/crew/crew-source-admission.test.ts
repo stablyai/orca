@@ -10,7 +10,11 @@ import {
   releaseAgentSessionRecordStore
 } from '../../agent-session-record-store-slot'
 import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
-import { emptyCrew, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
+import {
+  CrewFrame,
+  emptyCrew,
+  type OrchestrationCrewFrame
+} from '../../../../shared/orchestration-crew'
 import {
   StructuredWorkerIdentityRegistry,
   type StructuredWorkerIdentity
@@ -49,7 +53,8 @@ it('opens the production admission slot before watch and first completed frame, 
   const stream = subscribe(
     { party: 'term_viewer' },
     { runtime, signal: controller.signal },
-    (frame) => {
+    (value) => {
+      const frame = CrewFrame.parse(value)
       frames.push(frame)
       if (frame.type === 'complete') {
         completed.resolve()

@@ -18,7 +18,7 @@ import {
 } from '../../agent-session-record-store-slot'
 import { createSessionCallerHarness } from '../../rpc/orchestration-session-caller-test-fixture'
 import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
-import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
+import { CrewFrame, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
@@ -100,7 +100,18 @@ export function remembered(f: ReturnType<typeof deltaFixture>, id = TARGET, coun
 }
 
 export async function runColdCrewCostProfiles(clearHost: () => void) {
-  const samples = []
+  const samples: {
+    axis: 'S' | 'J' | 'G'
+    n: number
+    s: number
+    j: number
+    g: number
+    runtimeFiles: string[]
+    runtimeFileChars: number
+    totals: ReturnType<typeof sqlTotals>
+    cold: ReturnType<typeof meterCrewSql>['executions']
+    frames: OrchestrationCrewFrame[][]
+  }[] = []
   for (const axis of ['S', 'J', 'G'] as const) {
     for (const n of [3, 30]) {
       const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-cold-cost-'))
@@ -214,7 +225,8 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
             ORCHESTRATION_CREW_METHODS[0].handler(
               { party: `orca_session_id:${ids[0]}` },
               { runtime: h.runtime, signal: controller.signal },
-              (frame) => {
+              (value) => {
+                const frame = CrewFrame.parse(value)
                 received.push(frame)
                 if (frame.type === 'complete') {
                   completed.resolve()

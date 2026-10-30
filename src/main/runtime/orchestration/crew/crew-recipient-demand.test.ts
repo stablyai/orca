@@ -1,6 +1,7 @@
 import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { emptyCrew, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
+import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { CrewReadModel } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
 import { resolveBareOrchestrationRecipient } from '../../rpc/methods/orchestration/messaging/recipient-routing'
@@ -168,7 +169,13 @@ it('retries a consumed legacy error with already complete raw history, preservin
 })
 
 it('shares successful terminal/peer legacy consumers, retries by real writer, and keeps duplicate owner inserts silent', async () => {
-  const samples = []
+  const samples: {
+    population: number
+    nativeSelf: boolean
+    output: ReturnType<CrewReadModel['read']>
+    totals: ReturnType<typeof sqlTotals>
+    legacyWork: ReturnType<typeof meterCrewSql>['executions'][]
+  }[] = []
   for (const population of [3, 30]) {
     for (const nativeSelf of [false, true]) {
       const f = deltaFixture()
@@ -401,7 +408,7 @@ it('keeps global legacy unconsumed for early owners, active ambiguity and refuse
 
 it('does not demand legacy during late caller-only preparation of the actual retained adapter', () => {
   const f = deltaFixture(1)
-  const peer = 'chat-delta-0'
+  const peer = testOrcaSessionId('chat-delta-0')
   f.db.createRun({
     objective: 'earlier peer owner',
     coordinatorHandle: null,
