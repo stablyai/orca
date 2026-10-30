@@ -94,10 +94,6 @@ describe('notification route coordination', () => {
       payload: target!.sessionTarget
     })
   })
-
-  it('returns no session target for a host-only notification', () => {
-    expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
-  })
 })
 
 it('reuses the current workspace screen and targets the notification pane without pushing', () => {

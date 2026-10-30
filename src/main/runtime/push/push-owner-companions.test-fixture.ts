@@ -6,8 +6,7 @@ export function launchOwnerCompanions(
   root: string,
   base: string,
   abort: AbortController,
-  closed: Set<string>,
-  experiment = false
+  closed: Set<string>
 ) {
   return ['cloud', 'mobile'].map(async (role) => {
     const cwd = role === 'cloud' ? join(root, 'cloud/apps/push') : join(root, 'mobile')
@@ -20,8 +19,7 @@ export function launchOwnerCompanions(
       env: {
         ...process.env,
         ORCA_BACKGROUND_LAUNCH: '1',
-        ORCA_PUSH_OWNER_BRIDGE: base,
-        ORCA_PUSH_OWNER_EXPERIMENT: experiment ? '1' : '0'
+        ORCA_PUSH_OWNER_BRIDGE: base
       },
       signal: abort.signal,
       timeoutMs: 150_000,

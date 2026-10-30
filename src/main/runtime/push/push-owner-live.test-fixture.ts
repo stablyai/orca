@@ -1,5 +1,4 @@
 import { launchOwnerCompanions } from './push-owner-companions.test-fixture'
-import { runRfp1Observation } from './push-rfp1-observation.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -293,9 +292,3 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
   })
   cleanup.finish()
 }, 180_000)
-
-it(
-  'captures raw old-peer view/source currentness through the live signed provider graph',
-  runRfp1Observation,
-  180_000
-)

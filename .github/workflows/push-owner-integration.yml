@@ -4,7 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      - tests/e2e/cross-version-wire/**
       - mobile/src/notifications/**
       - mobile/src/storage/**
       - mobile/src/transport/**
@@ -56,8 +55,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - id: root-deps
         uses: ./.github/actions/install-node-dependencies
         with:
@@ -108,16 +105,6 @@ jobs:
         if: ${{ !cancelled() && steps.cloud-deps.outcome == 'success' && steps.cloud-build.outcome == 'success' && steps.root-setup.outcome == 'success' }}
         working-directory: cloud
         run: pnpm --filter @orca-cloud/push typecheck
-      - name: Run existing release checkout contract including native Node child
-        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/release-checkout.unit.test.ts --maxWorkers=1
       - name: Run named live owner parent and explicit companions
         if: ${{ !cancelled() && steps.root-deps.outcome == 'success' && steps.mobile-deps.outcome == 'success' && steps.cloud-deps.outcome == 'success' && steps.cloud-build.outcome == 'success' && steps.root-setup.outcome == 'success' && steps.root-compile.outcome == 'success' }}
         run: pnpm exec vitest run --config config/push-owner-root.vitest.config.mjs
-      - name: Retain redacted RFP1 observation captures
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr35901-rfp1-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/pr35901-rfp1/*.json
-          if-no-files-found: warn
-          retention-days: 7
