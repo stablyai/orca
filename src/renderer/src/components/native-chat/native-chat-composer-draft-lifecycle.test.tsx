@@ -797,12 +797,10 @@ describe('native-chat composer draft lifecycle', () => {
       useNativeChatLaunchDraftAdoption({
         terminalTabId: 'tab-1',
         agent: 'claude',
-        launchDraft,
-        launchDraftResolved: false,
+        launchSeed: { launchDraft, launchDraftResolved: false, ownsTabWideLaunchDraft: true },
         draft,
         setDraft,
-        setCaret: () => {},
-        ownsTabWideLaunchDraft: true
+        setCaret: () => {}
       })
       shown = draft
       return null
