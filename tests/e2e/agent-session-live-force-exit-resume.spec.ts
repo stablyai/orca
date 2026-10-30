@@ -5,6 +5,7 @@ import {
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { clearTimeout as clearNodeTimeout, setTimeout as setNodeTimeout } from 'node:timers'
 import type { ChildProcess } from 'node:child_process'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -72,10 +73,10 @@ function waitForExit(proc: ChildProcess, timeoutMs = 5000): Promise<void> {
     return Promise.resolve()
   }
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, timeoutMs)
+    const timeout = setNodeTimeout<[]>(resolve, timeoutMs)
     timeout.unref?.()
     proc.once('exit', () => {
-      clearTimeout(timeout)
+      clearNodeTimeout(timeout)
       resolve()
     })
   })
