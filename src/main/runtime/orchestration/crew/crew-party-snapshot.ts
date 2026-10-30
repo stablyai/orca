@@ -137,7 +137,7 @@ export function buildCrewSnapshot(
           remoteAttachment.process === deps.processForHandle?.(self.terminalHandle)
         )
       }))
-  const ownedRunAddresses = readCrewOwnedRunAddresses(db, self, host.sourceInputs.legacyOwner())
+  const ownedRunAddresses = readCrewOwnedRunAddresses(db, self, host.sourceInputs.legacyOwner)
   for (const current of host.sourceInputs.runInputs(ownedRunAddresses)) {
     const coordinator = party(current.session, current.handle, current.pane, `run:${current.id}`)
     if (coordinator) {

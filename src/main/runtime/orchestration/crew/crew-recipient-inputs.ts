@@ -126,7 +126,6 @@ export function createCrewRecipientInputs(
     for (const key of unique) {
       dispatches.set(sourceKey(key), [])
       owners.set(sourceKey(key), [])
-      covered.add(sourceKey(key))
     }
     for (const row of rows) {
       dispatches.get(row.key)!.push(row)
@@ -139,9 +138,8 @@ export function createCrewRecipientInputs(
     for (const row of history) {
       owners.get(row.key)!.push(row.run_id)
     }
-    const adopted = legacyOwner()
-    if (adopted && unique.some((key) => key !== caller && key.address === adopted.terminalHandle)) {
-      owners.get(adopted.terminalHandle)!.push(adopted.runId)
+    for (const key of unique) {
+      covered.add(sourceKey(key))
     }
     return caller
   }
@@ -203,7 +201,14 @@ export function createCrewRecipientInputs(
       senderRunId,
       boundRun: () => currentRun(key),
       dispatches: () => candidates(key),
-      ownerRunIds: () => [...new Set(owners.get(sourceKey(key))!)].sort(),
+      ownerRunIds: () => {
+        const ids = new Set(owners.get(sourceKey(key))!)
+        const adopted = legacyOwner()
+        if (adopted?.terminalHandle === key.address) {
+          ids.add(adopted.runId)
+        }
+        return [...ids].sort()
+      },
       fallback: () =>
         fallback(id) === true
           ? { ok: true, to: key.address, runId: senderRunId }

@@ -1,5 +1,6 @@
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
+import { runColdCrewCostProfiles } from './crew-recipient-delta-cost.test-fixture'
 import { tmpdir } from 'node:os'
 import * as profileStorage from '../../../orca-profiles/profile-storage-paths'
 import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
@@ -658,4 +659,10 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     worker.close()
     hostRef.current = null
   }
+})
+
+it('charges independent saved S/J/G through the real process slot and first completed Crew frame', async () => {
+  await runColdCrewCostProfiles(() => {
+    hostRef.current = null
+  })
 })

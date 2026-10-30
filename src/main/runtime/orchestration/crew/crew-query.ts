@@ -153,10 +153,12 @@ export function readCrewRuns(db: OrchestrationDb, addresses: string[]) {
 export function readCrewOwnedRunAddresses(
   db: OrchestrationDb,
   party: OrchestrationCoordinatorKey,
-  legacyOwner?: ReturnType<OrchestrationDb['getLegacyAdoptedRunMailboxOwner']>
+  legacyOwner?: () => ReturnType<OrchestrationDb['getLegacyAdoptedRunMailboxOwner']>
 ): string[] {
   const ids = new Set(
-    party.terminalHandle ? db.getRunMailboxOwnerIdsForHandle(party.terminalHandle, legacyOwner) : []
+    party.terminalHandle
+      ? db.getRunMailboxOwnerIdsForHandle(party.terminalHandle, legacyOwner?.())
+      : []
   )
   for (const run of db.runsBoundToCoordinator(party)) {
     ids.add(run.id)
