@@ -75,4 +75,55 @@ describe('coordinator census of a finished worker it still holds', () => {
       }
     }
   })
+
+  it('skips a reminted handle of a pane that already works an active Dispatch', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const working = db.createTask({ runId: 'run_legacy_local', spec: 'earlier work' })
+    db.createDispatchContext({
+      taskId: working.id,
+      assigneeHandle: 'term_old',
+      assigneePaneKey: HELD.paneKey,
+      creator: { kind: 'system' },
+      maxDepth: 9
+    })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'implement the feature' })
+
+    const createTerminal = vi.fn<CoordinatorRuntime['createTerminal']>(async () => ({
+      handle: 'term_new',
+      worktreeId: 'wt1'
+    }))
+    const runtime: CoordinatorRuntime = {
+      // The same pane, listed under the handle it was reminted to.
+      listTerminals: async () => ({
+        terminals: [{ handle: 'term_reminted', worktreeId: 'wt1', connected: true, writable: true }]
+      }),
+      createTerminal,
+      sendTerminalAgentPrompt: async () => ({ accepted: true }),
+      waitForTerminal: async (handle) => ({ handle, condition: 'exit' }),
+      probeWorktreeDrift: async () => null,
+      getTerminalPaneKey: (handle) => (handle === 'term_reminted' ? HELD.paneKey : null)
+    }
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 1000,
+      worktree: 'wt1',
+      maxConcurrent: 2
+    })
+    const run = coordinator.run()
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(createTerminal).toHaveBeenCalledTimes(1)
+      expect(db.getDispatchContext(task.id)?.assignee_handle).toBe('term_new')
+    } finally {
+      coordinator.stop()
+      try {
+        await vi.runOnlyPendingTimersAsync()
+        await run
+      } finally {
+        db.close()
+      }
+    }
+  })
 })

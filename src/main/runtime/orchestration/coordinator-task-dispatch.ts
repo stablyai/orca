@@ -38,22 +38,11 @@ export async function listAvailableWorkerTerminals(
     const result = await runtime.listTerminals(worktree, undefined, {
       includeVisualLayouts: false
     })
-    const dispatched = db.listTasks({ status: 'dispatched' })
-    const busyHandles = new Set<string>()
-
-    for (const task of dispatched) {
-      const ctx = db.getDispatchContext(task.id)
-      if (ctx?.assignee_handle) {
-        busyHandles.add(ctx.assignee_handle)
-      }
-    }
-
     // The dispatch lock enforces correctness; filtering skips busy, disconnected or still-held terminals.
     return result.terminals
       .filter(
         (t) =>
           t.handle !== coordinatorHandle &&
-          !busyHandles.has(t.handle) &&
           t.connected &&
           t.writable &&
           takesNewWork(db, { assigneeHandle: t.handle, ...assigneeAuthority(runtime, t.handle) })

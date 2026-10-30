@@ -42,15 +42,6 @@ export function createDispatchContext(
     )
   }
 
-  // Lock the pane too so handle remint cannot admit a second dispatch.
-  const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
-
-  if (existing) {
-    throw new Error(
-      `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
-    )
-  }
-
   assertTakesNewWork(this, params, taskId)
 
   // Accumulate failure_count across task retries.
