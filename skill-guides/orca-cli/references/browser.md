@@ -52,7 +52,7 @@ Browser rules:
 
 - Re-snapshot after navigation, tab switches, clicks that change the page, and any `browser_stale_ref`.
 - Refs like `@e1` are assigned by `snapshot`, scoped to one tab, and invalidated by navigation or tab switch.
-- Pass `--page <browserPageId>` on every page command (all but `tab list`, `tab current` and `tab create`). Take it from `result.tab.browserPageId` in `ORCA tab current --json` or `result.browserPageId` in `ORCA tab create --json`, then reuse it. When the user means a specific tab, find it by URL or title in `ORCA tab list --json`.
+- Pass `--page <browserPageId>` on every page command. The `tab` commands are the exception: `tab list`, `tab current` and `tab create` take no `--page`, and `tab switch`/`tab close` pick a tab by `--index` or `--page`, never both, since `--page` wins. Take the ID from `result.tab.browserPageId` in `ORCA tab current --json` or `result.browserPageId` in `ORCA tab create --json` and keep it for the task; `tab current` shows the routed tab, not the one you pin. When the user means a specific tab, find it by URL or title in `ORCA tab list --json`.
 - Without `--page`, a command goes to the worktree's current tab. That stays the agent's tab while it has had a command in the last 20 seconds or so, even after the user picks another (`tab current` reports it too), then moves to the user's pick.
 - After `ORCA tab switch`, pass the new page's `browserPageId`.
 - Browser commands default to the current worktree. `--page` reaches the page in any worktree unless you also pass `--worktree <selector>`. Use `--worktree all` only intentionally.
