@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
+import { createRuntimeTransportMetadata } from '../runtime-rpc/runtime-rpc-socket-metadata'
 import { deriveRelayHostId } from '../mobile-cloud-relay/relay-http-client'
 import { expect, vi } from 'vitest'
 import {
@@ -84,8 +86,26 @@ export async function runRfp1Observation() {
   )
   mkdirSync(captureRoot, { recursive: true })
   const cacheRoot = resolve(import.meta.dirname, '../../../../tests/e2e/.cross-version-checkouts')
-  mkdirSync(cacheRoot, { recursive: true })
-  const scratch = mkdtempSync(join(cacheRoot, 'pr35901-rfp1-'))
+  const longestProfile = join(tmpdir(), 'rfp1-XXXXXX', 'capable-C', 'B', 'profile')
+  const socket = createRuntimeTransportMetadata(
+    longestProfile,
+    process.pid,
+    process.platform,
+    'xxxx'
+  )
+  const runtimeBase =
+    process.platform !== 'win32' && Buffer.byteLength(socket.endpoint) > 103 ? '/tmp' : tmpdir()
+  const scratch = mkdtempSync(join(runtimeBase, 'rfp1-'))
+  let archiveRoot: string
+  try {
+    mkdirSync(cacheRoot, { recursive: true })
+    archiveRoot = mkdtempSync(join(cacheRoot, 'pr35901-rfp1-'))
+  } catch (error) {
+    const cleanup = ownerCleanup({ failed: true, error })
+    await cleanup.run(() => rmSync(scratch, { recursive: true, force: true }))
+    cleanup.finish()
+    throw error
+  }
   const native = observationNativePorts(scratch)
   const bridge = createOwnerBridge()
   let base = ''
@@ -201,7 +221,15 @@ export async function runRfp1Observation() {
   const start = async (id: string, pin: string, path: string, port?: number) => {
     const profile = join(path, id, 'profile')
     const actor = await native.run(profile, () =>
-      observationRuntime({ scratch: path, id, pin, port, fetch: actorFetch(id), capture })
+      observationRuntime({
+        scratch: path,
+        archiveRoot: join(archiveRoot, leg),
+        id,
+        pin,
+        port,
+        fetch: actorFetch(id),
+        capture
+      })
     )
     actors.push(actor)
     capture({
@@ -541,11 +569,13 @@ export async function runRfp1Observation() {
   console.log(
     `RFP1 finite capture ${digest}: ${primary ? 'execution FAIL, observation UNRUN' : 'execution complete, observation HOLD; production HELD'}; ${captureRoot}`
   )
-  await cleanup.run(() => {
-    if (closed.size !== 2) {
-      throw new Error(`Companion closure unverified; retained ${scratch}`)
-    }
-    rmSync(scratch, { recursive: true, force: true })
-  })
+  for (const root of [scratch, archiveRoot]) {
+    await cleanup.run(() => {
+      if (closed.size !== 2) {
+        throw new Error(`Companion closure unverified; retained ${root}`)
+      }
+      rmSync(root, { recursive: true, force: true })
+    })
+  }
   cleanup.finish()
 }

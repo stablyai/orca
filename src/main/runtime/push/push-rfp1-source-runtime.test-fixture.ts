@@ -31,6 +31,7 @@ export const RFP1_VIEW_SESSION = 'view-session'
 
 export async function observationRuntime(options: {
   scratch: string
+  archiveRoot: string
   id: string
   pin: string
   port?: number
@@ -54,7 +55,7 @@ export async function observationRuntime(options: {
     throw new Error('Observation requires the actual release checkout materializer and importer')
   }
   const materialized: unknown = await materializeReleaseCheckout(options.pin, {
-    cacheRoot: join(options.scratch, options.id, 'sources', options.pin)
+    cacheRoot: join(options.archiveRoot, options.id, 'sources', options.pin)
   })
   const fields = record(materialized)
   const checkout = {
