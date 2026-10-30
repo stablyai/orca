@@ -8,13 +8,13 @@ env:
   ORCA_COMPUTER_BENCH_ISOLATED: '1'
 jobs:
   linux:
-    if: false
+    if: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        target: [fixture, electron]
+        target: [electron]
     env:
       ACCESSIBILITY_ENABLED: '1'
     steps:
@@ -29,7 +29,7 @@ jobs:
           export PROBE_SOURCE="$(git rev-parse HEAD)"
           xvfb-run -a --server-args='-screen 0 1280x1024x24' dbus-run-session -- bash -euc '
             openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
-            /usr/bin/python3 config/benchmarks/computer-use/input_probe.py --source "$PROBE_SOURCE" --target "${{ matrix.target }}" --electron "$RUNNER_TEMP/electron/node_modules/electron/dist/electron" --out out/probe
+            /usr/bin/python3 config/benchmarks/computer-use/focused_text_probe.py --source "$PROBE_SOURCE" --target "${{ matrix.target }}" --electron "$RUNNER_TEMP/electron/node_modules/electron/dist/electron" --out out/probe
           '
       - if: always()
         uses: actions/upload-artifact@v4
@@ -37,6 +37,7 @@ jobs:
           name: input-linux-${{ matrix.target }}
           path: out/probe
   windows:
+    if: false
     runs-on: windows-latest
     timeout-minutes: 20
     strategy:
