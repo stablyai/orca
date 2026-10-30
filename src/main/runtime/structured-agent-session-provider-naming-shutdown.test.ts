@@ -58,7 +58,7 @@ it('stops naming admission and joins native helper finalization before runtime c
     argumentsReady.resolve([])
     helperExit.resolve()
     await stopStructuredAgentSessionRuntime()
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     vi.restoreAllMocks()
     await rm(root, { recursive: true, force: true })
   })
@@ -82,7 +82,7 @@ it('stops naming admission and joins native helper finalization before runtime c
       })
     ]
   })
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   const resolveLaunchArgs = vi.fn(() => argumentsReady.promise)
   const host = await ensureStructuredAgentSessionHost({
     stateDirectory: root,
@@ -113,7 +113,7 @@ it('stops naming admission and joins native helper finalization before runtime c
   const close = host.deps.journalDatabase.close.bind(host.deps.journalDatabase)
   const closeDatabase = vi.spyOn(host.deps.journalDatabase, 'close').mockImplementation(() => {
     order.push('database-close')
-    close()
+    return close()
   })
   const stopDelivery = vi.spyOn(host, 'stopDelivery')
   host.deps.nameProviderConversation?.(host.deps.store.requireWritableRecord(sessionId))
