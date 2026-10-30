@@ -24,7 +24,7 @@ renderedKeys: 23
 placeholders: -
 selectionOrder: |orca::/w/feat-a |lab::/w/gitlab-mr |orca::/w/feat-b |orca::/w/feat-c ssh:gpu-vm|orca-ssh::/w/remote-x ssh:gpu-vm|shared::/w/same |orca::/w/Zeta runtime:env-1|api::/w/api-y |orca::/orca runtime:env-1|api::/api |ext::/ext |lab::/lab |orca-ssh::/orca-ssh local|shared::/w/same local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote
 cmd1-9 mounted: 1=orca::/w/feat-a#lineage:orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b#lineage:orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=orca::/w/Zeta 8=api::/w/api-y@runtime:env-1 9=orca::/orca
-cmd1-9 unmounted: 1=orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=shared::/w/same@local 8=orca::/w/Zeta 9=api::/w/api-y@runtime:env-1
+cmd1-9 unmounted: 1=orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=orca::/w/Zeta 8=api::/w/api-y@runtime:env-1 9=orca::/orca
 cmd ids unmounted: orca::/w/feat-a lab::/w/gitlab-mr orca::/w/feat-b orca::/w/feat-c orca-ssh::/w/remote-x shared::/w/same orca::/w/Zeta api::/w/api-y orca::/orca api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh folder:fw-review folder:fw-notes folder:fw-remote
 -- collapsed: pinned lineage:orca::/w/feat-a --
 visible: orca::/w/Zeta orca::/w/feat-a orca-ssh::/w/remote-x lab::/w/gitlab-mr api::/w/api-y orca::/w/feat-b orca::/orca orca::/w/feat-c api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh shared::/w/same shared::/w/same
@@ -318,7 +318,7 @@ renderedKeys: 25
 placeholders: -
 selectionOrder: |orca::/w/feat-a |lab::/w/gitlab-mr |orca::/w/feat-b |orca::/w/feat-c ssh:gpu-vm|orca-ssh::/w/remote-x ssh:gpu-vm|shared::/w/same |orca::/orca runtime:env-1|api::/api |ext::/ext |lab::/lab |orca-ssh::/orca-ssh local|shared::/w/same local|folder:fw-notes ssh:gpu-vm|folder:fw-remote local|folder:fw-review |orca::/w/Zeta runtime:env-1|api::/w/api-y
 cmd1-9 mounted: 1=orca::/w/feat-a#lineage:orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b#lineage:orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=orca::/orca 8=api::/api@runtime:env-1 9=ext::/ext
-cmd1-9 unmounted: 1=orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=shared::/w/same@local 8=orca::/orca 9=api::/api@runtime:env-1
+cmd1-9 unmounted: 1=orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=orca::/orca 8=api::/api@runtime:env-1 9=ext::/ext
 cmd ids unmounted: orca::/w/feat-a lab::/w/gitlab-mr orca::/w/feat-b orca::/w/feat-c orca-ssh::/w/remote-x shared::/w/same orca::/orca api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh folder:fw-notes folder:fw-remote folder:fw-review orca::/w/Zeta api::/w/api-y
 -- collapsed: pinned workspace-status:in-review lineage:orca::/w/feat-a --
 visible: orca::/w/Zeta orca::/w/feat-a orca-ssh::/w/remote-x lab::/w/gitlab-mr api::/w/api-y orca::/w/feat-b orca::/orca orca::/w/feat-c api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh shared::/w/same shared::/w/same
@@ -451,7 +451,7 @@ renderedKeys: 25
 placeholders: -
 selectionOrder: |orca::/w/feat-a |lab::/w/gitlab-mr |orca::/w/feat-b |orca::/w/feat-c ssh:gpu-vm|orca-ssh::/w/remote-x ssh:gpu-vm|shared::/w/same runtime:env-1|api::/w/api-y |orca::/orca runtime:env-1|api::/api |ext::/ext |lab::/lab |orca-ssh::/orca-ssh local|shared::/w/same local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote |orca::/w/Zeta
 cmd1-9 mounted: 1=orca::/w/feat-a#lineage:orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b#lineage:orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=orca::/orca 9=api::/api@runtime:env-1
-cmd1-9 unmounted: 1=orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=shared::/w/same@local 9=orca::/orca
+cmd1-9 unmounted: 1=orca::/w/feat-a 2=lab::/w/gitlab-mr 3=orca::/w/feat-b 4=orca::/w/feat-c 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=orca::/orca 9=api::/api@runtime:env-1
 cmd ids unmounted: orca::/w/feat-a lab::/w/gitlab-mr orca::/w/feat-b orca::/w/feat-c orca-ssh::/w/remote-x shared::/w/same api::/w/api-y orca::/orca api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh folder:fw-review folder:fw-notes folder:fw-remote orca::/w/Zeta
 -- collapsed: pinned pr:in-progress lineage:orca::/w/feat-a --
 visible: orca::/w/Zeta orca::/w/feat-a orca-ssh::/w/remote-x lab::/w/gitlab-mr api::/w/api-y orca::/w/feat-b orca::/orca orca::/w/feat-c api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh shared::/w/same shared::/w/same
@@ -576,7 +576,7 @@ renderedKeys: 23
 placeholders: -
 selectionOrder: |orca::/w/feat-a |orca::/w/feat-b |orca::/w/feat-c |lab::/w/gitlab-mr ssh:gpu-vm|orca-ssh::/w/remote-x ssh:gpu-vm|shared::/w/same runtime:env-1|api::/w/api-y |orca::/orca runtime:env-1|api::/api |ext::/ext |lab::/lab |orca-ssh::/orca-ssh local|shared::/w/same |orca::/w/Zeta local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote
 cmd1-9 mounted: 1=orca::/w/feat-a#lineage:orca::/w/feat-a 2=orca::/w/feat-b#lineage:orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=orca::/orca 9=api::/api@runtime:env-1
-cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=shared::/w/same@local 8=api::/w/api-y@runtime:env-1 9=orca::/orca
+cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=orca::/orca 9=api::/api@runtime:env-1
 cmd ids unmounted: orca::/w/feat-a orca::/w/feat-b orca::/w/feat-c lab::/w/gitlab-mr orca-ssh::/w/remote-x shared::/w/same api::/w/api-y orca::/orca api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh orca::/w/Zeta folder:fw-review folder:fw-notes folder:fw-remote
 -- collapsed: pinned lineage:orca::/w/feat-a --
 visible: orca::/w/feat-a api::/w/api-y orca::/w/feat-b orca::/orca orca::/w/feat-c lab::/w/gitlab-mr api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh orca-ssh::/w/remote-x shared::/w/same shared::/w/same orca::/w/Zeta
@@ -870,7 +870,7 @@ renderedKeys: 25
 placeholders: -
 selectionOrder: |orca::/w/feat-a |orca::/w/feat-b |orca::/w/feat-c |lab::/w/gitlab-mr ssh:gpu-vm|orca-ssh::/w/remote-x ssh:gpu-vm|shared::/w/same |orca::/orca runtime:env-1|api::/api |ext::/ext |lab::/lab |orca-ssh::/orca-ssh local|shared::/w/same local|folder:fw-notes ssh:gpu-vm|folder:fw-remote local|folder:fw-review runtime:env-1|api::/w/api-y |orca::/w/Zeta
 cmd1-9 mounted: 1=orca::/w/feat-a#lineage:orca::/w/feat-a 2=orca::/w/feat-b#lineage:orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=orca::/orca 8=api::/api@runtime:env-1 9=ext::/ext
-cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=shared::/w/same@local 8=orca::/orca 9=api::/api@runtime:env-1
+cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=orca::/orca 8=api::/api@runtime:env-1 9=ext::/ext
 cmd ids unmounted: orca::/w/feat-a orca::/w/feat-b orca::/w/feat-c lab::/w/gitlab-mr orca-ssh::/w/remote-x shared::/w/same orca::/orca api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh folder:fw-notes folder:fw-remote folder:fw-review api::/w/api-y orca::/w/Zeta
 -- collapsed: pinned workspace-status:in-review lineage:orca::/w/feat-a --
 visible: orca::/w/feat-a api::/w/api-y orca::/w/feat-b orca::/orca orca::/w/feat-c lab::/w/gitlab-mr api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh orca-ssh::/w/remote-x shared::/w/same shared::/w/same orca::/w/Zeta
@@ -1003,7 +1003,7 @@ renderedKeys: 25
 placeholders: -
 selectionOrder: |orca::/w/feat-a |orca::/w/feat-b |orca::/w/feat-c |lab::/w/gitlab-mr ssh:gpu-vm|orca-ssh::/w/remote-x ssh:gpu-vm|shared::/w/same runtime:env-1|api::/w/api-y |orca::/orca runtime:env-1|api::/api |ext::/ext |lab::/lab |orca-ssh::/orca-ssh local|shared::/w/same local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote |orca::/w/Zeta
 cmd1-9 mounted: 1=orca::/w/feat-a#lineage:orca::/w/feat-a 2=orca::/w/feat-b#lineage:orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=orca::/orca 9=api::/api@runtime:env-1
-cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=shared::/w/same@local 9=orca::/orca
+cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca-ssh::/w/remote-x@ssh:gpu-vm 6=shared::/w/same@ssh:gpu-vm 7=api::/w/api-y@runtime:env-1 8=orca::/orca 9=api::/api@runtime:env-1
 cmd ids unmounted: orca::/w/feat-a orca::/w/feat-b orca::/w/feat-c lab::/w/gitlab-mr orca-ssh::/w/remote-x shared::/w/same api::/w/api-y orca::/orca api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh folder:fw-review folder:fw-notes folder:fw-remote orca::/w/Zeta
 -- collapsed: pinned pr:in-progress lineage:orca::/w/feat-a --
 visible: orca::/w/feat-a api::/w/api-y orca::/w/feat-b orca::/orca orca::/w/feat-c lab::/w/gitlab-mr api::/api ext::/ext lab::/lab orca-ssh::/orca-ssh orca-ssh::/w/remote-x shared::/w/same shared::/w/same orca::/w/Zeta

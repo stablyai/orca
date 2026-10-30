@@ -6,7 +6,10 @@ import {
 import { prepareCodexAdoption } from '../native-chat/codex-adoption-preparation'
 import type { NativeCodexResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../shared/structured-agent-session-create'
-import type { StructuredAgentCliSourceEvidence } from '../native-chat/structured-agent-cli-source'
+import type {
+  StructuredAgentCliSourceEvidence,
+  StructuredAgentCliSourceLocator
+} from '../native-chat/structured-agent-cli-source'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type {
@@ -107,11 +110,12 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   selectedAccountHome: AgentSessionAccountHome
   launchEnv: NodeJS.ProcessEnv
   workspaceCwd: string
-  resolveTranscriptPath?: () => string | undefined
+  resolveTranscriptSource?: () => StructuredAgentCliSourceLocator
   prepareCodexResume?: NativeCodexResumePreparation
 }) {
   try {
-    const transcriptPath = input.resolveTranscriptPath?.()
+    const source = input.resolveTranscriptSource?.()
+    const transcriptPath = source?.kind === 'matched' ? source.transcriptPath : undefined
     const candidates = input.transcriptImport.accountHomeCandidates(input)
     // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
     const stores = new Map<AgentSessionAccountHome, string | null>()
@@ -145,6 +149,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     }
     const adoption = await resolveStructuredAgentSessionAdoption({
       providerSessionId: input.providerSessionId,
+      ...(source?.kind === 'absent' ? { exhaustionReason: 'transcriptUnreadable' as const } : {}),
       candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
       resolveTranscript: async (args) => {
         const exact = admitted?.path
@@ -218,6 +223,7 @@ export function structuredAgentSessionAdoptAttach(input: {
     agent: AgentSessionProviderHandle['agent']
   }
   handleNamesTranscript: boolean | undefined
+  conversationStore?: string
   transcriptPath: string
   providerSessionId: string
   workspaceCwd: string
@@ -229,6 +235,12 @@ export function structuredAgentSessionAdoptAttach(input: {
       nativeId: input.handleNamesTranscript ? input.transcriptPath : input.providerSessionId
     },
     transcriptPath: input.transcriptPath,
-    source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
+    source: {
+      providerSessionId: input.providerSessionId,
+      workspaceCwd: input.workspaceCwd,
+      ...(input.conversationStore !== undefined
+        ? { conversationStore: input.conversationStore }
+        : {})
+    }
   }
 }

@@ -23,7 +23,6 @@ import {
   isAllowedPluginGitUrl,
   type PluginLockfile
 } from '../../shared/plugins/installation/plugin-install-lockfile'
-import { trackPluginUninstalled } from '../telemetry/plugin-install-telemetry'
 import {
   registerPluginMarketplaceHandlers,
   type PluginMarketplaceHandlerServices
@@ -259,7 +258,6 @@ export function registerPluginHandlers(
         pluginKey: parsed.pluginKey
       })
     )
-    trackPluginUninstalled(parsed.pluginKey, lock.plugins[parsed.pluginKey]?.source)
     const settings = store.getSettings()
     const consents = { ...settings.pluginConsents }
     delete consents[parsed.pluginKey]

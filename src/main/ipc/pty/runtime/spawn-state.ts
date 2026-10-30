@@ -244,3 +244,8 @@ export function createRuntimePtySpawnState(
     preSpawnHiddenMarkId: null
   }
 }
+
+/** Default-deny (E9): a main-side start is background unless its caller names the user's act; an adopted pane starts nothing. */
+export function isRuntimeWslBackgroundStart(ctx: RuntimePtySpawnState): boolean {
+  return !ctx.preAdoptedStablePane && ctx.args.wslUserAct !== true
+}

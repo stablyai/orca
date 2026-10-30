@@ -3,7 +3,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
-import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
+import { MobileSessionTerminalLayoutSheet } from './MobileSessionTerminalLayoutSheet'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { ActionSheetModal } from '../components/ActionSheetModal'
@@ -15,12 +15,17 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
-import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileAllowAutoCloseActions } from './mobile-worker-auto-close'
+import { MobileAgentSessionTabActionSheet } from './MobileAgentSessionTabActionSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
+  const terminalWorkerActions = useMobileAllowAutoCloseActions(
+    controller.client,
+    controller.actionTarget && { terminal: controller.actionTarget.handle }
+  )
   const {
     worktreeId,
     isFolderWorkspaceRoute,
@@ -36,8 +41,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setShowQuickCommands,
     setShowCreateBrowserModal,
     showCreateBrowserModal,
-    showHeaderMoreActions,
-    setShowHeaderMoreActions,
+    showTerminalLayout,
+    setShowTerminalLayout,
     actionTarget,
     setActionTarget,
     markdownActionTarget,
@@ -46,8 +51,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setFileActionTarget,
     browserActionTarget,
     setBrowserActionTarget,
-    agentSessionActionTarget,
-    setAgentSessionActionTarget,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
     leaveDrafts,
@@ -86,23 +89,16 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     bulkCloseConfirm,
     closeWithBulkActions,
     createTabAgentActions,
-    sendDiffNotesAgentActions,
-    handlePanelTap,
-    openAgentSessionHistory,
-    showAgentSessionHistoryAction,
-    showChecksAction
+    sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
   return (
     <>
-      <MobileSessionHeaderMoreActionsSheet
-        visible={showHeaderMoreActions}
-        showAgentSessionHistory={showAgentSessionHistoryAction}
-        showChecks={showChecksAction}
-        onOpenAgentSessionHistory={openAgentSessionHistory}
-        onOpenChecks={() => handlePanelTap('pr')}
-        onClose={() => setShowHeaderMoreActions(false)}
+      <MobileSessionTerminalLayoutSheet
+        controller={controller}
+        visible={showTerminalLayout}
+        onClose={() => setShowTerminalLayout(false)}
       />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
@@ -220,7 +216,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           onClear: (target) => void handleClearTerminal(target),
           onClose: (target) => void handleCloseTerminal(target),
           onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
-          bulkCloseActions
+          bulkCloseActions,
+          workerActions: terminalWorkerActions
         })}
         onClose={() => setActionTarget(null)}
       />
@@ -285,19 +282,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onCloseTab={handleCloseSessionTab}
         bulkCloseActions={bulkCloseActions}
       />
-      <ActionSheetModal
-        visible={agentSessionActionTarget != null}
-        title={agentSessionActionTarget?.title || t('session.sheets.chat', 'Chat')}
-        actions={[
-          ...getMobileNativeChatCliForkActions({
-            controller,
-            tab: agentSessionActionTarget,
-            workspaceOnPairedHost: onPairedHost,
-            onDismiss: () => setAgentSessionActionTarget(null)
-          }),
-          ...closeWithBulkActions(agentSessionActionTarget, () => setAgentSessionActionTarget(null))
-        ]}
-        onClose={() => setAgentSessionActionTarget(null)}
+      <MobileAgentSessionTabActionSheet
+        controller={controller}
+        workspaceOnPairedHost={onPairedHost}
       />
       <ActionSheetModal
         visible={leaveDrafts != null}

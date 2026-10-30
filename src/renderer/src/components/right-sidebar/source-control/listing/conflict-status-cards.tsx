@@ -115,6 +115,8 @@ export function OperationBanner({
   isRecoveryBusy = false,
   isAbortingOperation = false,
   onAbortOperation,
+  isCompletingMerge = false,
+  onCompleteMerge,
   sourceControlAiActionsVisible = false,
   onResolveWithAI
 }: {
@@ -122,6 +124,8 @@ export function OperationBanner({
   isRecoveryBusy?: boolean
   isAbortingOperation?: boolean
   onAbortOperation?: (operation: GitConflictOperation) => void
+  isCompletingMerge?: boolean
+  onCompleteMerge?: () => void
   sourceControlAiActionsVisible?: boolean
   onResolveWithAI?: () => void
 }): React.JSX.Element {
@@ -147,6 +151,7 @@ export function OperationBanner({
             )
 
   const Icon = conflictOperation === 'rebase' ? GitPullRequestArrow : GitMerge
+  const canCompleteMerge = conflictOperation === 'merge' && !!onCompleteMerge
 
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
@@ -155,13 +160,33 @@ export function OperationBanner({
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
       <div className="mt-2 space-y-1.5">
-        {sourceControlAiActionsVisible && onResolveWithAI ? (
+        {canCompleteMerge ? (
           <Button
             type="button"
             variant="default"
             size="sm"
             className="h-7 w-full text-xs"
-            disabled={isAbortingOperation || isRecoveryBusy}
+            disabled={isCompletingMerge || isAbortingOperation || isRecoveryBusy}
+            onClick={onCompleteMerge}
+          >
+            {isCompletingMerge ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <GitMerge className="size-3.5" />
+            )}
+            {translate(
+              'auto.components.right.sidebar.source.control.conflict.status.cards.completeMerge',
+              'Complete merge'
+            )}
+          </Button>
+        ) : null}
+        {sourceControlAiActionsVisible && onResolveWithAI ? (
+          <Button
+            type="button"
+            variant={canCompleteMerge ? 'outline' : 'default'}
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isAbortingOperation || isRecoveryBusy || isCompletingMerge}
             onClick={onResolveWithAI}
           >
             <Sparkles className="size-3.5" />
@@ -174,7 +199,7 @@ export function OperationBanner({
             variant="outline"
             size="sm"
             className="h-7 w-full text-xs"
-            disabled={isAbortingOperation}
+            disabled={isAbortingOperation || isCompletingMerge}
             onClick={() => onAbortOperation(conflictOperation)}
           >
             {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}

@@ -38,15 +38,12 @@ export type HostScreenProps = {
   // Layout-mounted sidebars lack route params; receive them explicitly.
   hostId?: string
   onHideSidebar?: () => void
-  // The detail pane is empty, so a side rail beside it may carry the sidebar's actions.
-  actionsInRail?: boolean
 }
 
 export function useHostScreenController({
   embedded = false,
   hostId: hostIdProp,
-  onHideSidebar,
-  actionsInRail = false
+  onHideSidebar
 }: HostScreenProps = {}) {
   useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
@@ -185,7 +182,6 @@ export function useHostScreenController({
     noticeParam,
     now,
     onHideSidebar,
-    actionsInRail,
     reconnectAttempts,
     relayRecovery,
     routeNotice,

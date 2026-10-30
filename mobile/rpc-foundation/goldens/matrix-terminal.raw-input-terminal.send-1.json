@@ -310,11 +310,6 @@
       "settledAt": 0,
       "value": true
     },
-    "85a38010bc83": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
     "864d3fb81a3f": {
       "name": "terminal.send#1",
       "ordinal": 1,
@@ -430,42 +425,6 @@
         }
       }
     },
-    "b4bb58c36536": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "changed": 1
-          }
-        }
-      }
-    },
     "df5624c0a923": {
       "name": "terminal.send#1",
       "ordinal": 1,
@@ -517,8 +476,8 @@
       {
         "id": "terminal-raw-input-reported.normal:reported",
         "observation": {
-          "sender": ["49c62bc1232e", "b4bb58c36536"],
-          "payloads": ["727ebf3d264d", "85a38010bc83"],
+          "sender": ["49c62bc1232e"],
+          "payloads": ["727ebf3d264d"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },

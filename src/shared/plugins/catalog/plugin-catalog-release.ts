@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import {
   pluginExecutionAllows,
   pluginExecutionProfileSchema
@@ -90,10 +91,7 @@ export const pluginCatalogReleaseSchema = z
         ),
         uniqueItems: true
       }),
-    name: z
-      .string()
-      .min(1)
-      .max(128)
+    name: safePluginDisplayText(z.string().min(1).max(128))
       .optional()
       .meta(
         pluginFieldDoc(
@@ -116,11 +114,9 @@ export const pluginCatalogReleaseSchema = z
       .array(
         z
           .strictObject({
-            label: z
-              .string()
-              .min(1)
-              .max(128)
-              .meta(pluginFieldDoc('Theme name.', NEXT, ['Dusk'])),
+            label: safePluginDisplayText(z.string().min(1).max(128)).meta(
+              pluginFieldDoc('Theme name.', NEXT, ['Dusk'])
+            ),
             base: z.enum(['light', 'dark']).meta(pluginFieldDoc('Light or dark theme.', NEXT)),
             background: hexColor('Window background.'),
             foreground: hexColor('Main text.'),

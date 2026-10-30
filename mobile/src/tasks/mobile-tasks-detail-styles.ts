@@ -2,10 +2,13 @@ import {
   StyleSheet,
   themedStyleSheet,
   colors,
-  radii,
   spacing,
   typography
 } from './mobile-tasks-dependencies'
+import {
+  composerInputStyles,
+  COMPOSER_TEXT_SIZE
+} from '../components/composer-input/composer-input-styles'
 
 export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   groupSeparator: {
@@ -151,16 +154,10 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     fontSize: 11,
     color: colors.textMuted
   },
+  // Pickers sit beside text fields in these forms, so they wear the same field shell.
   fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+    ...composerInputStyles.field,
+    paddingVertical: spacing.sm
   },
   fieldButtonDisabled: {
     opacity: 0.55
@@ -170,7 +167,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   },
   fieldButtonText: {
     flex: 1,
-    fontSize: typography.bodySize,
+    fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
   }
 }))

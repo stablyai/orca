@@ -465,15 +465,9 @@
       },
       "providers": {
         "title": "提供者",
-        "description": "選擇要以聊天方式開啟的代理程式。關閉後，已安裝的代理程式會在終端機中開啟。",
         "searchAgents": "代理程式",
         "searchCli": "CLI",
         "searchTerminal": "終端機",
-        "agentDisabled": "已在「代理程式」設定中關閉",
-        "installed": "已安裝",
-        "notInstalled": "未安裝",
-        "install": "安裝",
-        "toggleLabel": "以聊天方式開啟 {{value0}}",
         "antigravityDescription": "Antigravity 聊天會執行由 Orca 下載至此主機的伺服器，與 agy CLI 各自獨立。",
         "antigravityNotSignedIn": "尚未登入。聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。",
         "antigravityAccount": "帳戶",
@@ -722,7 +716,6 @@
       "defaultOpensAs": "{{value0}} 的開啟方式",
       "defaultOpensAsChat": "聊天",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "適用於從這台電腦啟動的新 {{value0}} 工作階段，包括在已配對主機上啟動的工作階段。與「提供者」中對應的開關一致。",
       "save": "儲存",
       "clearDefault": "清除預設代理程式",
       "autoUnsupported": "此主機上的 Orca 需更新至較新版本才能使用自動模式。",
@@ -772,7 +765,11 @@
         "description": "讓每個 Codex 帳戶以及你自己的 ~/.codex 都能繼續在其他帳戶中開始的對話。關閉後，每個帳戶的歷史記錄將保持獨立。關閉不會移除任何已共用的內容。",
         "unsupported": "請更新 {{host}} 上的 Orca 以在那裡變更此設定。",
         "updateFailed": "無法更新 {{host}} 上的設定。"
-      }
+      },
+      "installCliForTerminal": "安裝 {{value0}} CLI 即可在終端機中開啟。",
+      "chatRuntime": "聊天執行環境",
+      "chatChoiceTitle": "以聊天或 CLI 開啟",
+      "chatChoiceDescription": "選擇每個代理程式以聊天或其 CLI 開啟。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -1231,9 +1228,7 @@
         "jira": {
           "856083302c": "Jira 連線已被新的請求取代。"
         },
-        "linear": {
-          "37d36984d0": "Linear 連線已被新的請求取代。"
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "建立設定檔失敗",
@@ -1270,6 +1265,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} 已無法使用。請重新開啟其外掛。",
+        "failed": "無法建立檔案。"
       }
     },
     "lib": {
@@ -8196,19 +8195,6 @@
           "191ac34567": "代理程式編排",
           "nestedWorkerDepthTitle": "巢狀工作者層數",
           "nestedWorkerDepthDescription": "允許派出的工作者再派出工作者的最大層數。設為 1 時，代理程式樹維持單層：協調者可派出工作者，但工作者不能再派出其他工作者。",
-          "chatErrorEscalationTitle": "將聊天錯誤回報給協調代理程式",
-          "chatErrorEscalationDescription": "當分派的代理程式遇到導致回合結束的錯誤時，將原始錯誤傳送給分派它的協調代理程式。任務仍由該代理程式負責。僅適用於在聊天介面中執行的代理程式。",
-          "chatErrorEscalationNeedsChat": "請先在實驗性設定中開啟「聊天介面」才能使用。",
-          "chatErrorEscalationKeywordError": "錯誤",
-          "chatErrorEscalationKeywordChat": "聊天",
-          "heartbeatTitle": "工作代理程式心跳",
-          "heartbeatDescription": "分派的工作代理程式每隔幾分鐘會回報一次，讓協調代理程式判斷代理程式是在工作還是已無回應。關閉後，傳送給協調代理程式的訊息會減少，但也會失去這個回報訊號。此設定適用於變更後分派的工作代理程式。",
-          "heartbeatKeywordHeartbeat": "心跳",
-          "heartbeatKeywordStalled": "停滯",
-          "heartbeatKeywordInterval": "間隔",
-          "heartbeatIntervalTitle": "心跳間隔",
-          "heartbeatIntervalDescription": "間隔越短，協調代理程式收到的回報越頻繁，但訊息也越多。間隔越長，訊息越少，但兩次回報之間的空檔也越長。此設定適用於變更後分派的工作代理程式。",
-          "heartbeatIntervalSuffix": "分鐘",
           "7bc082f4de": "複製安裝命令"
         },
         "OrchestrationSetupCard": {
@@ -11697,7 +11683,9 @@
             "secrets": "在外掛自己的加密保險庫中儲存和讀取機密資料",
             "settingsOwn": "讀取和變更外掛自己的設定"
           },
-          "decisionFailed": "無法儲存權限決定。請重試。"
+          "decisionFailed": "無法儲存權限決定。請重試。",
+          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路並執行其他程式。",
+          "uiWarning": "在 Orca 內執行發布者的程式碼來繪製其畫面。Orca 會顯示它能存取的內容，並在啟用前先詢問你。"
         },
         "PluginConsentProvenance": {
           "official": "官方",
@@ -12789,6 +12777,178 @@
               "windowsFailureDescription": "在 Windows 的「設定」中開啟 Orca 的通知。"
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "檢視"
+        },
+        "PluginUpdateReview": {
+          "title": "檢視 {{value0}} 的更新",
+          "back": "返回",
+          "approve": "核准並更新",
+          "explain": "此更新要求的權限超出你已核准的版本。只有在這裡核准後才會安裝。",
+          "before": "之前",
+          "after": "之後"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "其發布者",
+          "install": "安裝前請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
+          "update": "更新前請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
+          "installed": "請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
+          "label": "非官方外掛：",
+          "translations": "翻譯可以變更 Orca 中的任何文字。請確認你信任 {{value0}}。"
+        },
+        "PluginCardAction": {
+          "installed": "已安裝",
+          "installing": "正在安裝…",
+          "reviewLabel": "審查並安裝 {{value0}}",
+          "review": "審查並安裝",
+          "retry": "再試一次"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "切換語言",
+          "switchTo": "將語言切換為 {{value0}}",
+          "switchBack": "切換回來",
+          "switchBackFrom": "從 {{value0}} 切換回來",
+          "failed": "無法切換語言"
+        },
+        "PluginContributionActionPanel": {
+          "open": "開啟面板",
+          "openName": "開啟面板：{{value0}}"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "開啟任一 {{value0}} 檔案",
+          "openFilename": "開啟 {{value0}}"
+        },
+        "PluginDetailInfo": {
+          "previous": "上一版",
+          "updated": "更新時間",
+          "license": "授權",
+          "whatsNew": "新功能"
+        },
+        "PluginDetailPage": {
+          "back": "外掛",
+          "info": "資訊",
+          "version": "版本",
+          "latest": "最新版",
+          "requires": "需求",
+          "requiresValue": "Orca {{value0}} 或更新版本",
+          "categories": "類別",
+          "pluginId": "外掛 ID",
+          "repository": "存放庫"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "介面語言",
+          "typeAppTheme": "App 主題",
+          "typeTerminalTheme": "終端機主題",
+          "typeIconTheme": "檔案圖示主題",
+          "typeSyntax": "語法醒目提示",
+          "typeInstructions": "代理程式指示",
+          "typePanel": "側邊欄面板",
+          "typeWorker": "背景程式碼",
+          "adds": "為 Orca 新增",
+          "replaces": "取代你的「{{value0}}」快捷鍵",
+          "changeShortcuts": "在快捷鍵中變更",
+          "command": "命令",
+          "access": "可存取",
+          "accessLoading": "正在讀取外掛…",
+          "accessFailed": "無法讀取其存取權限",
+          "retry": "重試",
+          "customEditor": "編輯器"
+        },
+        "PluginFilterPopover": {
+          "kind": "類別",
+          "catalog": "目錄",
+          "clear": "清除篩選",
+          "themes": "主題",
+          "languages": "語言",
+          "icons": "圖示",
+          "commands": "命令和面板",
+          "catalogLabel": "依目錄篩選",
+          "editors": "編輯器",
+          "remoteVms": "遠端/虛擬機器",
+          "games": "遊戲",
+          "agents": "代理程式",
+          "integrations": "整合"
+        },
+        "PluginInUseAction": {
+          "inUseDark": "使用中 · 深色",
+          "inUseLight": "使用中 · 淺色",
+          "inUse": "使用中",
+          "useName": "使用 {{value0}}",
+          "use": "使用"
+        },
+        "PluginInstallConsent": {
+          "noOtherAccess": "沒有其他存取權限",
+          "replacesShortcut": "{{value0}}（{{value1}}）會取代你的「{{value2}}」快捷鍵。",
+          "updatesKeepApproval": "更新只會針對新的存取權限再次詢問",
+          "fullAccessUpdates": "更新可能會在未詢問的情況下變更其程式碼",
+          "editsFileTypes": "在 Orca 中開啟並編輯 {{value0}} 檔案。它可以讀取自己開啟的檔案。"
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "沒有符合這些篩選條件的外掛",
+          "clearBoth": "清除搜尋和篩選",
+          "pageGone": "此外掛已不再安裝或列出。"
+        },
+        "PluginManager": {
+          "retry": "重試",
+          "installed": "已安裝",
+          "installedFailedTitle": "無法讀取你已安裝的外掛。",
+          "updatesTitle": "更新",
+          "refreshLabel": "重新整理目錄",
+          "noResultsTitle": "沒有符合「{{value0}}」的外掛",
+          "noneInstalledTitle": "沒有已安裝的外掛",
+          "browseAll": "瀏覽所有外掛",
+          "resultCount": "{{value0}} 個外掛符合",
+          "resultCountOne": "1 個外掛符合",
+          "updateAll": "全部更新…",
+          "notFromCatalog": "非目錄來源",
+          "allInstalledTitle": "目錄中的外掛已全部安裝",
+          "showInstalled": "顯示已安裝的外掛"
+        },
+        "PluginManagerRows": {
+          "reinstall": "重新安裝",
+          "crashedCount": "連續當機 {{value0}} 次",
+          "crashed": "啟動時當機",
+          "remove": "移除…",
+          "review": "審查",
+          "restart": "重新啟動",
+          "viewError": "檢視錯誤",
+          "copyId": "複製外掛 ID",
+          "checkUpdate": "檢查更新",
+          "bundledWithOrca": "隨 Orca 一併提供",
+          "installName": "安裝 {{value0}}",
+          "crashedOnce": "當機一次",
+          "updateLabel": "將 {{value0}} 更新為 {{value1}}",
+          "update": "更新至 {{value0}}",
+          "needsOrca": "需要 Orca {{value0}}",
+          "rollbackTo": "回復到 {{value0}}…",
+          "copyContentHash": "複製內容雜湊",
+          "reviewUpdate": "審查更新",
+          "dataLoadFailed": "無法載入其檔案"
+        },
+        "pluginInstallAction": {
+          "installed": "已安裝 {{value0}}",
+          "tryIt": "試用",
+          "mismatch": "下載的內容與目錄不符。未安裝任何項目。",
+          "catalogChanged": "目錄已變更。請重新整理後再試一次。",
+          "blocked": "Orca 的安全清單封鎖了此外掛。",
+          "downloadFailed": "無法下載。請檢查你的網路連線。"
+        },
+        "pluginThemeApply": {
+          "nowUsing": "目前使用 {{value0}}",
+          "switchBack": "切換回來"
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "新增命令",
+          "addsPanel": "新增面板",
+          "contentOnly": "僅內容",
+          "fullAccess": "完整存取",
+          "addsVmRecipes": "新增虛擬機器配方",
+          "opensAndEditsFiles": "開啟並編輯檔案",
+          "runsPluginCode": "執行外掛程式碼"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "此語言套件過於不完整，無法切換。"
         }
       },
       "right": {
@@ -13915,8 +14075,7 @@
             "trashFailed": "無法將「{{name}}」移至垃圾桶。"
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "無法開啟符號連結目標",
-            "folderLinksOutsideProject": "此資料夾連結到專案之外，無法在此開啟。"
+            "32cd9fd991": "無法開啟符號連結目標"
           },
           "useFileExplorerImport": {
             "importFailedCount_other": "無法匯入 {{count}} 個檔案。",
@@ -17765,7 +17924,13 @@
           "all": "全部",
           "installed": "已安裝",
           "searchLabel": "搜尋外掛",
-          "searchPlaceholder": "搜尋外掛、分類或發布者"
+          "searchPlaceholder": "搜尋外掛、分類或發布者",
+          "updates": "更新",
+          "clearSearch": "清除搜尋",
+          "notInstalled": "未安裝"
+        },
+        "PluginListRow": {
+          "official": "官方"
         }
       },
       "terminalPane": {
@@ -17963,6 +18128,13 @@
           "password": "密碼",
           "confirm": "登入",
           "cancel": "取消"
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} 顯示",
+          "anonymousTitle": "此網頁顯示",
+          "confirm": "確定",
+          "cancel": "取消",
+          "answer": "回答"
         },
         "sitePermission": {
           "label": {
@@ -19719,7 +19891,7 @@
       "heroBody": "只需下載一次，共 {{size}} MB。執行此聊天的電腦上，所有 {{agent}} 聊天皆可共用。",
       "heroBodyNoSize": "只需下載一次。執行此聊天的電腦上，所有 {{agent}} 聊天皆可共用。",
       "stripSize": "在執行此聊天的電腦上下載 {{size}} MB",
-      "settingsHint": "也可在「設定 › 聊天 › 供應商」中找到",
+      "settingsHint": "也可在「設定 › 代理程式」中找到",
       "installShort": "安裝",
       "tryAgain": "再試一次",
       "cancelShort": "取消",
@@ -21683,10 +21855,7 @@
       "issuesLoadFailed": "無法載入 Linear 議題。",
       "listLabel": "Linear 清單",
       "localKeyStorage": "本機執行環境的金鑰會儲存在此裝置上，並在可用時使用 Electron 的加密儲存功能。",
-      "projectIssuesLoadFailed": "無法載入專案議題。",
-      "projectLoadFailed": "無法載入專案。",
       "projectNotFound": "找不到專案。",
-      "projectsLoadFailed": "無法載入專案。",
       "remoteKeyStorage": "此金鑰由目前使用中的遠端執行環境儲存。",
       "titleUpdateFailed": "無法更新標題",
       "truncated": {
@@ -21703,8 +21872,6 @@
       },
       "updateAccess": "更新存取權限",
       "updateWorkspaceAccess": "更新 {{workspace}} 的 Linear 存取權限",
-      "viewContentsLoadFailed": "無法載入檢視內容。",
-      "viewsLoadFailed": "無法載入檢視。",
       "workspaceApiKeyHint": "請貼上 {{workspace}} 的個人 API 金鑰。若此工作區已連線，Orca 會取代已儲存的金鑰。"
     }
   },
@@ -22247,5 +22414,9 @@
       "needsPermission": "代理程式需要權限",
       "statusStale": "代理程式狀態資訊已過期"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "WSL 發行版 {{distro}} 已停止，因此 Orca 沒有啟動此終端機。請啟動該發行版後重試。",
+    "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   }
 }

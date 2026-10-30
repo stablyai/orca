@@ -10,7 +10,6 @@ function sample(startedAt: number, paintedAt: number): ExactEchoSample {
   return {
     attribution: 'single-input',
     source: 'direct',
-    text: 'a',
     inputToDispatchMs: 0,
     dispatchToParseMs: 0,
     parseToPaintMs: 0,

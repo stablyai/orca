@@ -241,3 +241,23 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
     )
   })
 })
+
+describe('startRuntimeLocalWorktreeTerminals held startup terminal (E9)', () => {
+  it('names the stopped WSL distro in the warning, not the raw hold code', async () => {
+    const { createTerminal, ports } = createPorts()
+    createTerminal.mockRejectedValueOnce(new Error('terminal_held_wsl_distro_stopped:Ubuntu'))
+
+    const result = await startRuntimeLocalWorktreeTerminals({
+      request: { repoSelector: `id:${repo.id}`, name: worktree.displayName },
+      repo,
+      worktree,
+      startup: { command: 'codex' },
+      ports
+    })
+
+    expect(result.warning).toBe(
+      "Failed to create the startup terminal for /worktree: The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+    )
+    expect(result.warning).not.toContain('terminal_held_wsl_distro')
+  })
+})

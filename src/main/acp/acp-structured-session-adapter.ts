@@ -21,6 +21,7 @@ import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured
 import type { ProviderStartAttempt } from '../provider-process/provider-acquisition-starts'
 import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-connection'
 import { AcpConnectionClosedError } from './acp-errors'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { awaitAcpTurnEnd, interruptAcpTurn } from './acp-structured-stop'
@@ -134,6 +135,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
           { cause: error }
         )
         throw connection ? closed : new AgentSessionPreSpawnError(closed)
+      }
+      // Once the exit is proven, the start's error names a CLI or folder the spawn found missing.
+      if (error instanceof Error && connection?.exited) {
+        withProviderSpawnAbsence(error, connection.spawnAbsence)
       }
       if (connection && exitedOnItsOwn && !isAgentSessionPreSpawnError(error)) {
         throw new AgentSessionAcquisitionExitProvenError(

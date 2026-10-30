@@ -67,6 +67,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-swit
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
 import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
+import { withAgentConversationRetention } from './agent-conversation-retention'
 import { attachEditorBufferIdentityEvents } from './editor-buffer-identity-events'
 import {
   registerRendererMemoryProfileContributor,
@@ -81,11 +82,14 @@ const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>)
     ? withStoreIdentityChurnProbe(createState)
     : createState
 
+const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) =>
+  withAgentConversationRetention(withDevelopmentStoreProbes(createState))
+
 // Why buffer records outermost: the probes must see each caller's own partial and frame.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
   withEditorBufferRecords(
-    withDevelopmentStoreProbes(
+    withAppStoreWritePolicies(
       withReactCommitCascadeWriteProbe((...a) => {
         // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
         // Switch point: the stamp-sorted list reads no settled epoch.

@@ -259,10 +259,19 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       this.attachGuestPolicies(contents, owner)
       return true
     })
+    const opened = Boolean(options.webContents || options.nativeWindow)
     this.forwardOrQueuePopupEvent(openerGuest.id, {
       origin: safeOrigin(targetUrl),
-      action: options.webContents || options.nativeWindow ? 'opened-in-orca' : 'blocked'
+      action: opened ? 'opened-in-orca' : 'blocked'
     })
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(openerGuest.id)
+    if (opened && ownerTabId) {
+      this.pageEvents.emit(ownerTabId, {
+        kind: 'popup',
+        action: 'window',
+        origin: safeOrigin(targetUrl)
+      })
+    }
     // Close session-bearing popups with their owning guest to avoid orphan windows.
     const closePopupWithOpener = (): void => popup.close()
     openerGuest.once('destroyed', closePopupWithOpener)

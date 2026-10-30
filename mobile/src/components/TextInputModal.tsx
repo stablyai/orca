@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { View, Text, TextInput, Pressable, Platform, type KeyboardTypeOptions } from 'react-native'
+import { View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { BottomDrawer } from './BottomDrawer'
+import { TextField } from './composer-input/TextField'
 
 type Props = {
   visible: boolean
@@ -69,12 +69,10 @@ export function TextInputModal({
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
 
-      <TextInput
-        style={styles.input}
+      <TextField
         value={value}
         onChangeText={setValue}
         placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
@@ -82,7 +80,6 @@ export function TextInputModal({
         keyboardType={keyboardType}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
-        selectionColor={colors.accentBlue}
       />
 
       <View style={styles.actions}>
@@ -122,17 +119,6 @@ const styles = themedStyleSheet(() => ({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 2
-  },
-  // Match workspace input: bgRaised on bgPanel reads tappable; bgBase looked recessed.
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
   },
   actions: {
     flexDirection: 'row',

@@ -54,7 +54,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
 async function streamThenServerKilled(): Promise<void> {
@@ -104,7 +104,7 @@ async function startServer(options: { newProcess: boolean }): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   if (options.newProcess) {
     beginAgentSessionRuntimeIncarnationForTest()
   }
