@@ -58,6 +58,28 @@ export function listAutomationRuns(state: PersistedState, automationId?: string)
   return sortedAutomationRuns(state, automationId)
 }
 
+export function markAutomationRunSeen(
+  state: PersistedState,
+  automationId: string,
+  runId: string,
+  recordMutation: (runs: AutomationRun[]) => void
+): boolean {
+  const run = state.automationRuns.find(
+    (row) => row.automationId === automationId && row.id === runId
+  )
+  if (!run || run.status !== 'dispatch_failed') {
+    return false
+  }
+  if (run.failureSeenAt !== undefined) {
+    return true
+  }
+  state.automationRuns = state.automationRuns.map((row) =>
+    row === run ? { ...run, failureSeenAt: Date.now() } : row
+  )
+  recordMutation(state.automationRuns)
+  return true
+}
+
 export function listAutomationRunsPage(
   state: PersistedState,
   automationId: string | undefined,

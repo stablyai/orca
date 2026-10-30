@@ -12,13 +12,22 @@ import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
+  listeners: new Set<() => void>(),
+  renders: 0,
   callRuntimeRpc: vi.fn(),
   getRuntimeEnvironmentStatus: vi.fn()
 }))
 
-vi.mock('@/store', () => {
+vi.mock('@/store', async () => {
+  const { useSyncExternalStore } = await import('react')
+  const subscribe = (listener: () => void) => {
+    mocks.listeners.add(listener)
+    return () => {
+      mocks.listeners.delete(listener)
+    }
+  }
   const useAppStore = (selector: (state: Partial<AppState>) => unknown): unknown =>
-    selector(mocks.state as Partial<AppState>)
+    useSyncExternalStore(subscribe, () => selector(mocks.state as Partial<AppState>))
   useAppStore.getState = (): Partial<AppState> => mocks.state as Partial<AppState>
   return { useAppStore }
 })
@@ -100,6 +109,7 @@ const roots: Root[] = []
 let view: AutomationHostCatalogView | null = null
 
 function Harness(): null {
+  mocks.renders++
   view = useAutomationHostCatalog()
   return null
 }
@@ -237,3 +247,67 @@ describe('useAutomationHostCatalog legacy partitioning', () => {
     expect(runtimeSelfAutomationIds()).toEqual(['a-legacy'])
   })
 })
+
+it.each([1_000, 10_000])(
+  'keeps settled catalog consumers quiet for unused settings among %i host overrides, but updates a used failure count',
+  async (size) => {
+    let upstreamReads = 0
+    const overrides = Object.fromEntries(
+      Array.from({ length: size }, (_, index) => [
+        `runtime:unused-${index}`,
+        {
+          get displayLabel() {
+            upstreamReads++
+            return `Other ${index}`
+          }
+        }
+      ])
+    )
+    let settings = { theme: 'light', hostSettingOverrides: overrides }
+    const automation = legacyAutomation()
+    let count = 0
+    desktopListScoped.mockImplementation(async () => ({
+      automations: [automation],
+      items: [
+        { automationId: automation.id, selector: { kind: 'self' }, unseenFailureCount: count }
+      ],
+      orphanCount: 0
+    }))
+    mocks.state = { ...storeState([]), runtimeEnvironments: [], settings }
+    await renderCatalogWithState()
+    expect(view?.unseenFailureCount).toBe(0)
+    const settledRenders = mocks.renders
+    upstreamReads = 0
+    await act(async () => {
+      settings = { ...settings, theme: 'dark' }
+      mocks.state = { ...mocks.state, settings }
+      mocks.listeners.forEach((notify) => notify())
+    })
+    expect(mocks.renders).toBe(settledRenders)
+    expect(upstreamReads).toBe(0)
+    await act(async () => {
+      settings = {
+        ...settings,
+        hostSettingOverrides: {
+          ...overrides,
+          'runtime:unrelated': { displayLabel: 'Changed elsewhere' }
+        }
+      }
+      mocks.state = { ...mocks.state, settings }
+      mocks.listeners.forEach((notify) => notify())
+    })
+    expect(mocks.renders).toBe(settledRenders)
+    expect(upstreamReads).toBe(0)
+    await act(async () => {
+      count = 1
+      view?.notifyAuthorityChange({
+        authority: { kind: 'desktop' },
+        selector: { kind: 'self' },
+        reason: 'run'
+      })
+    })
+    expect(view?.unseenFailureCount).toBe(1)
+    expect(mocks.renders).toBeGreaterThan(settledRenders)
+    expect(upstreamReads).toBe(0)
+  }
+)

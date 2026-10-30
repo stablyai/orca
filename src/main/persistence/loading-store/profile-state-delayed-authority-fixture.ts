@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
 import type { AutomationRun } from '../../../shared/automations-types'
-import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
+import {
+  buildProfileStateCutoverFixture,
+  type ProfileStateCutoverFixture
+} from '../profile-state-cutover-fixture'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
 import type {
@@ -109,11 +112,15 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-export async function fixture(legacyOpenCodeGoApiKey?: string) {
+export async function fixture(
+  legacyOpenCodeGoApiKey?: string,
+  prepareInitial?: (initial: ProfileStateCutoverFixture) => void
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-coordination-'))
   const path = join(directory, 'profile-state.db')
   const inner = new ProfileStateSqliteAuthority(path, 'coordination-test')
   const initial = buildProfileStateCutoverFixture(directory)
+  prepareInitial?.(initial)
   inner.writeSerializedState(
     Buffer.from(
       JSON.stringify({

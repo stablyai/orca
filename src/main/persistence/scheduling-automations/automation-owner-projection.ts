@@ -104,11 +104,11 @@ export function automationWorkspaceSshPin(
 export function automationProjectionContext(
   state: PersistedState,
   storageAuthority: AutomationStorageAuthority,
-  withUsage: boolean
+  withRunSummaries: boolean
 ): AutomationProjectionContext {
-  const usage = withUsage ? automationUsageSummaries(state) : null
+  const usage = withRunSummaries ? automationUsageSummaries(state) : null
   const failures =
-    state.automationFailureSeenVersion === 1
+    withRunSummaries && state.automationFailureSeenVersion === 1
       ? unseenAutomationFailures(state.automationRuns ?? [])
       : null
   const reposById = new Map(state.repos.map((repo) => [repo.id, repo]))

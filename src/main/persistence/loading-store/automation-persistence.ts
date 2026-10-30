@@ -33,6 +33,7 @@ import {
   createAutomationRun as createAutomationRunOperation,
   listAutomationRuns as listAutomationRunsOperation,
   listAutomationRunsPage as listAutomationRunsOperationPage,
+  markAutomationRunSeen as markAutomationRunSeenOperation,
   recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
   updateAutomationRun as updateAutomationRunOperation,
@@ -127,6 +128,12 @@ export class AutomationPersistence {
     })
   }
 
+  hasAutomationRun(id: string): boolean {
+    return this[automationPersistenceContext].runtime.state.automationRuns.some(
+      (run) => run.id === id
+    )
+  }
+
   listAutomationRuns(automationId?: string): AutomationRun[] {
     return listAutomationRunsOperation(
       this[automationPersistenceContext].runtime.state,
@@ -210,22 +217,11 @@ export class AutomationPersistence {
 
   markAutomationRunSeen(automationId: string, runId: string): boolean {
     const { runtime, flushBarriers } = this[automationPersistenceContext]
-    const run = runtime.state.automationRuns.find(
-      (row) => row.automationId === automationId && row.id === runId
-    )
-    if (!run || run.status !== 'dispatch_failed') {
-      return false
-    }
-    if (run.failureSeenAt !== undefined) {
-      return true
-    }
-    runtime.state.automationRuns = runtime.state.automationRuns.map((row) =>
-      row === run ? { ...run, failureSeenAt: Date.now() } : row
-    )
-    runtime.pendingAutomationRunsAfter = runtime.state.automationRuns
-    runtime.dirtyProfileStateDomains?.add('automationRuns')
-    flushBarriers.flush()
-    return true
+    return markAutomationRunSeenOperation(runtime.state, automationId, runId, (runs) => {
+      runtime.pendingAutomationRunsAfter = runs
+      runtime.dirtyProfileStateDomains?.add('automationRuns')
+      flushBarriers.flush()
+    })
   }
 
   snapshotAutomationRunWorkspaceDisplayName(

@@ -41,7 +41,7 @@ describe('automation failure seen activation', () => {
       ...fixture.automations[0],
       projectId: fixture.repos[0].id
     })
-    const run = store.createAutomationRun(automation, Date.now(), 'manual')
+    const run = store.createAutomationRun(automation, 1_800_000_000_000, 'manual')
     store.updateAutomationRun({ runId: run.id, status: 'dispatch_failed' })
     await store.flushPendingOrThrowAsync()
     await closeTestStores()
@@ -60,7 +60,7 @@ describe('automation failure seen activation', () => {
     const persisted = readPersistedState()
     expect(persisted.automationFailureSeenVersion).toBe(1)
     expect(persisted.automationRuns[0].failureSeenAt).toEqual(expect.any(Number))
-    const run = store.createAutomationRun(store.listAutomations()[0], Date.now(), 'manual')
+    const run = store.createAutomationRun(store.listAutomations()[0], 1_800_000_000_000, 'manual')
     store.updateAutomationRun({ runId: run.id, status: 'dispatch_failed' })
     await store.flushPendingOrThrowAsync()
     await closeTestStores()
@@ -107,14 +107,22 @@ it('acknowledges only one retained failed row, survives restart, and deletes the
   writeDataFile(source)
   const store = createStore()
   const automation = store.listAutomations()[0]
-  const first = store.createAutomationRun(automation, Date.now(), 'manual')
-  const second = store.createAutomationRun(automation, Date.now() + 1, 'manual')
-  const success = store.createAutomationRun(automation, Date.now() + 2, 'manual')
+  const first = store.createAutomationRun(automation, 1_800_000_000_000, 'manual')
+  const second = store.createAutomationRun(automation, 1_800_000_000_000 + 1, 'manual')
+  const success = store.createAutomationRun(automation, 1_800_000_000_000 + 2, 'manual')
   expect(store.markAutomationRunSeen(automation.id, first.id)).toBe(false)
   store.updateAutomationRun({ runId: first.id, status: 'dispatch_failed' })
   store.updateAutomationRun({ runId: second.id, status: 'dispatch_failed' })
   store.updateAutomationRun({ runId: success.id, status: 'completed' })
+  expect(
+    store.listAutomationsForScope().items.find((item) => item.automationId === automation.id)
+      ?.unseenFailureCount
+  ).toBe(2)
   expect(store.markAutomationRunSeen(automation.id, first.id)).toBe(true)
+  expect(
+    store.listAutomationsForScope().items.find((item) => item.automationId === automation.id)
+      ?.unseenFailureCount
+  ).toBe(1)
   const seenAt = store
     .listAutomationRuns(automation.id)
     .find((row) => row.id === first.id)?.failureSeenAt

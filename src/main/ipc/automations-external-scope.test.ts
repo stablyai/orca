@@ -16,6 +16,9 @@ const ipcHandlers = new Map<string, IpcHandler>()
 
 vi.mock('electron', () => ({
   ipcMain: {
+    removeHandler: (channel: string) => {
+      ipcHandlers.delete(channel)
+    },
     handle: (channel: string, handler: IpcHandler) => {
       ipcHandlers.set(channel, handler)
     }

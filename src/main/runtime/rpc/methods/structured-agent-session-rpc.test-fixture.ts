@@ -227,6 +227,7 @@ export function dispatcher(
 ): RpcDispatcher {
   reset(runtimeCalls)
   Object.assign(runtimeCalls, {
+    ownsAutomationChatCompletion: vi.fn(async () => false),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
     structuredAgentSessionLaunchSeedOptions: vi.fn(() => undefined),
     resolveStructuredAgentSessionCreateIntent: vi.fn(async (params) => ({

@@ -14,7 +14,7 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
 async function runningFixture() {
   const result = await fixture()
   const automation = result.store.listAutomations()[0]
-  const run = result.store.createAutomationRun(automation, Date.now(), 'manual')
+  const run = result.store.createAutomationRun(automation, 1_800_000_000_000, 'manual')
   result.store.updateAutomationRun({ runId: run.id, status: 'dispatched' })
   await result.store.flushPendingOrThrowAsync()
   const publish = vi.fn()
@@ -81,7 +81,7 @@ describe('durable automation outcome publication', () => {
     writer.dispose()
   })
 
-  it.each(['deleted', 'disposed'] as const)(
+  it.each(['deleted', 'pruned', 'disposed'] as const)(
     'releases a pending intent when %s',
     async (release) => {
       const { store, authority, run, publish, writer } = await runningFixture()
@@ -103,6 +103,15 @@ describe('durable automation outcome publication', () => {
       }
       if (release === 'deleted') {
         store.deleteAutomation(run.automationId)
+      } else if (release === 'pruned') {
+        let now = 1_800_000_000_001
+        vi.spyOn(Date, 'now').mockImplementation(() => now++)
+        const automation = store.listAutomations().find((row) => row.id === run.automationId)!
+        for (let index = 0; index < 101; index++) {
+          const newer = store.createAutomationRun(automation, 1_800_000_001_000 + index, 'manual')
+          store.updateAutomationRun({ runId: newer.id, status: 'completed' })
+        }
+        expect(store.hasAutomationRun(run.id)).toBe(false)
       } else {
         writer.dispose()
       }
@@ -112,3 +121,34 @@ describe('durable automation outcome publication', () => {
     }
   )
 })
+
+it.each([1_000, 10_000])(
+  'does no history work on idle durable commits with %i retained rows',
+  async (size) => {
+    const { store } = await fixture(undefined, (initial) => {
+      const automation = initial.automations[0]
+      const run = initial.automationRuns[0]
+      initial.automations = Array.from({ length: size / 100 }, (_, index) => ({
+        ...automation,
+        id: `automation-${index}`
+      }))
+      initial.automationRuns = Array.from({ length: size }, (_, index) => ({
+        ...run,
+        id: `run-${index}`,
+        automationId: `automation-${Math.floor(index / 100)}`,
+        status: 'completed'
+      }))
+    })
+    expect(store.listAutomationRuns()).toHaveLength(size)
+    const history = vi.spyOn(store, 'listAutomationRuns')
+    const membership = vi.spyOn(store, 'hasAutomationRun')
+    const writer = createAutomationRunWriter(store, vi.fn())
+    for (let index = 0; index < 3; index++) {
+      store.updateSettings({ theme: index % 2 ? 'dark' : 'light' })
+      await store.flushPendingOrThrowAsync()
+    }
+    expect(history).not.toHaveBeenCalled()
+    expect(membership).not.toHaveBeenCalled()
+    writer.dispose()
+  }
+)

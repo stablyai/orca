@@ -111,6 +111,7 @@ export async function exerciseBusyChatReuse(
       openedAgentSessionRecordStore: () => rig.store,
       setAutomationService: vi.fn(),
       notifyAutomationsChanged: vi.fn(),
+      dispatchMobileNotification: vi.fn(),
       showManagedWorktree: async () => {
         throw new Error('optional display unavailable')
       }

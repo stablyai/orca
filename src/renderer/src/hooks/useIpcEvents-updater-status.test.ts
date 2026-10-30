@@ -294,7 +294,7 @@ describe('useIpcEvents updater integration', () => {
     vi.stubGlobal('window', {
       api: {
         repos: makeEvents(),
-        automations: makeEvents(),
+        automations: makeEvents({ consumePendingOpenRun: () => Promise.resolve(null) }),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),

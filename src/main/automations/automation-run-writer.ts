@@ -34,7 +34,7 @@ export function createAutomationRunWriter(
         | 'automationWriteGeneration'
         | 'automationDurableWriteGeneration'
         | 'onDurableWrite'
-        | 'listAutomationRuns'
+        | 'hasAutomationRun'
         | 'listAutomations'
       >
     >,
@@ -43,12 +43,11 @@ export function createAutomationRunWriter(
   const pending = new Map<string, { outcome: AutomationRunOutcome; generation: number }>()
   let disposed = false
   const drain = (generation: number): void => {
-    if (disposed) {
+    if (disposed || pending.size === 0) {
       return
     }
-    const retained = new Set(store.listAutomationRuns?.().map((run) => run.id))
     for (const [id, intent] of pending) {
-      if (!retained.has(id)) {
+      if (!store.hasAutomationRun?.(id)) {
         pending.delete(id)
         continue
       }

@@ -142,6 +142,9 @@ export async function loadIpcEventsHarness(
     dispatchEvent: vi.fn(),
     api: new Proxy<Record<string, unknown>>(
       {
+        automations: createApiNamespaceStub({
+          consumePendingOpenRun: () => Promise.resolve(null)
+        }),
         runtimeEnvironments: createApiNamespaceStub({
           getStatusSnapshots: () => Promise.resolve([]),
           subscribe: async () => ({ unsubscribe: () => {} })
