@@ -1,6 +1,5 @@
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
 import { isAgentStatusFresh } from '../../shared/agent-status-freshness'
-import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import {
@@ -41,12 +40,9 @@ export function attachRuntimeWorktreeAgentRows(args: {
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
     const parentPaneKey = orchestration?.parentPaneKey ?? null
     // Like desktop lineage, a listed child running in its parent's tab does not own that tab's name.
+    const parent = parentPaneKey ? rowSources.get(parentPaneKey) : undefined
     const conversationName =
-      parentPaneKey &&
-      rowSources.has(parentPaneKey) &&
-      parsePaneKey(parentPaneKey)?.tabId === source.tabId
-        ? null
-        : args.conversationName?.(source)
+      parent && parent.tabId === source.tabId ? null : args.conversationName?.(source)
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
       parentPaneKey,

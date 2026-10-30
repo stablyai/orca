@@ -7,7 +7,7 @@ import {
 } from '../../shared/agent-row-conversation-name'
 import type { AgentStatusIpcPayload, AgentType } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionIdFromTabId } from '../../shared/structured-agent-session-tab-id'
 import type { Tab } from '../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
@@ -106,9 +106,9 @@ export class RuntimeOrchestrationSenderNames {
     if (!tabId || !worktreeId) {
       return null
     }
-    const chatPrefix = structuredAgentSessionTabId('')
-    if (tabId.startsWith(chatPrefix)) {
-      const chat = structuredChatNaming(tabId.slice(chatPrefix.length), this.chatSources())
+    const chatSessionId = structuredAgentSessionIdFromTabId(tabId)
+    if (chatSessionId !== null) {
+      const chat = structuredChatNaming(chatSessionId, this.chatSources())
       return chat ? chat.ownName || chat.fallback : null
     }
     const pane = this.paneNaming({ worktreeId, tabId, ptyId: source.ptyId ?? null }, source.paneKey)

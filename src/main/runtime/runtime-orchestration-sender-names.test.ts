@@ -369,7 +369,7 @@ describe("a sender's name, from what Orca shows for it", () => {
     expect(names().nameOf(terminalParty('term_unknown'))).toBeNull()
   })
 
-  it('names a worktree.ps terminal row by its conversation title, never by a status title', () => {
+  it('names a worktree.ps terminal row by its conversation title, and an unnamed one not by its agent', () => {
     const row = {
       paneKey: 'tab_term_plain:leaf',
       tabId: 'tab_term_plain',
