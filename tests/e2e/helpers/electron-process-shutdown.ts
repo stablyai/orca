@@ -2,7 +2,6 @@ import type { ChildProcess } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
-import { clearTimeout as clearNodeTimeout, setTimeout as setNodeTimeout } from 'node:timers'
 import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
 import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import type { ElectronApplication } from '@stablyai/playwright-test'
@@ -13,7 +12,7 @@ const FORCE_KILL_WAIT_MS = 2_000
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const timeout = setNodeTimeout<[]>(resolve, ms)
+    const timeout = setTimeout<[]>(resolve, ms)
     timeout.unref?.()
   })
 }
@@ -44,13 +43,13 @@ export function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<bool
         return
       }
       settled = true
-      clearNodeTimeout(timeout)
+      clearTimeout(timeout)
       proc.off('exit', onExit)
       proc.off('close', onExit)
       resolve(exited)
     }
     const onExit = (): void => finish(true)
-    const timeout = setNodeTimeout<[]>(() => finish(false), timeoutMs)
+    const timeout = setTimeout<[]>(() => finish(false), timeoutMs)
     timeout.unref?.()
     proc.once('exit', onExit)
     proc.once('close', onExit)
@@ -63,13 +62,13 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
     return await Promise.race([
       promise,
       new Promise<never>((_, reject) => {
-        timeout = setNodeTimeout<[]>(() => reject(new Error(message)), timeoutMs)
+        timeout = setTimeout<[]>(() => reject(new Error(message)), timeoutMs)
         timeout.unref?.()
       })
     ])
   } finally {
     if (timeout) {
-      clearNodeTimeout(timeout)
+      clearTimeout(timeout)
     }
   }
 }

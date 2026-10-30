@@ -12,7 +12,6 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { setTimeout as setNodeTimeout } from 'node:timers'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 export { launchOwnedBrowserForE2E } from './browser-sidecar-launch'
@@ -45,7 +44,7 @@ type RestartSession = {
 
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const timeout = setNodeTimeout<[]>(resolve, ms)
+    const timeout = setTimeout<[]>(resolve, ms)
     timeout.unref?.()
   })
 }

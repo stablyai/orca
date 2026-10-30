@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { setTimeout as setNodeTimeout } from 'node:timers'
 import {
   _electron as electron,
   type ElectronApplication,
@@ -174,7 +173,7 @@ async function launchPackagedOldProfile(args: {
             const hasSettingsApi = await Promise.race([
               candidate.evaluate(() => Boolean(window.api?.settings?.get)).catch(() => false),
               new Promise<boolean>((resolve) => {
-                const timeout = setNodeTimeout<[]>(() => resolve(false), 2_000)
+                const timeout = setTimeout<[]>(() => resolve(false), 2_000)
                 timeout.unref?.()
               })
             ])
