@@ -211,6 +211,7 @@ export async function acquireClaudeSession({
           },
           onExit: (error, exit) => {
             if (exit?.expected) {
+              naming?.failed()
               callbacks.finishClose(sessionId, attempt)
               return
             }

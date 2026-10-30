@@ -1,7 +1,10 @@
-import { appendFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { appendFile, readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import * as transcriptNaming from '../claude/claude-provider-session-rename'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { stopCreatedChat } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import {
@@ -296,6 +299,155 @@ it.each([true, false])(
     )
   }
 )
+
+it('retires a delivered-kill writer on its late expected exit, without replay, so fresh stopped renames work', async ({
+  onTestFinished
+}) => {
+  const warn = vi.fn()
+  const fixture = await createClaudeNamingRuntime({
+    deps: { logger: { warn, error: vi.fn() } },
+    beforeOpen: async (launch, connection) => {
+      const emit = (message: Record<string, unknown>) =>
+        connection.handlers.onMessage?.({
+          ...message,
+          session_id: launch.options.resume ?? launch.options.sessionId
+        })
+      connection.send = async (message, beforeDispatch) => {
+        await beforeDispatch?.()
+        connection.sent.push(message)
+        emit({ type: 'system', subtype: 'init', model: 'claude-sonnet-5' })
+        emit(message)
+        emit({
+          type: 'assistant',
+          uuid: randomUUID(),
+          message: {
+            id: randomUUID(),
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Working' }]
+          }
+        })
+      }
+      connection.interrupt = async () => {
+        connection.calls.push({ subtype: 'interrupt' })
+        emit({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Interrupted',
+          total_cost_usd: 0,
+          duration_ms: 1,
+          duration_api_ms: 1,
+          num_turns: 1,
+          usage: { input_tokens: 1, output_tokens: 1 }
+        })
+      }
+      connection.close = async () => {
+        connection.closed = true
+        connection.closeCount++
+        connection.exitVerdict = { root: 'live', tree: 'unverifiable', killDelivered: true }
+        return true
+      }
+    }
+  })
+  onTestFinished(async () => {
+    await fixture.dispose()
+    vi.restoreAllMocks()
+  })
+  const append = vi.spyOn(transcriptNaming, 'renameClaudeTranscript')
+  const otherId = randomUUID()
+  const otherFile = join(dirname(fixture.file), `${otherId}.jsonl`)
+  await writeNativeNamingConversation(fixture.file, fixture.nativeId, fixture.root)
+  await writeNativeNamingConversation(otherFile, otherId, fixture.root, 'Other')
+  const host = await fixture.install()
+  expect(await fixture.create()).toMatchObject({ ok: true })
+  expect(await fixture.create(null, 'other-chat')).toMatchObject({ ok: true })
+  const other = structuredClone(host.deps.store.requireWritableRecord('other-chat'))
+  const sent = await fixture.send('Work until Stop')
+  expect(sent).toMatchObject({ ok: true })
+  if (!sent.ok) {
+    throw new Error('expected the production send admission')
+  }
+  await vi.waitFor(async () => {
+    const journal = await host.journalSnapshot(HOST_TEST_SESSION)
+    expect(journal.submissions).toContainEqual(
+      expect.objectContaining({
+        clientMessageId: sent.value.clientMessageId,
+        dispatchState: 'accepted'
+      })
+    )
+    expect(journal.items).toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Working' }]
+        })
+      })
+    )
+  })
+  const connection = fixture.native.connections[0]
+  if (!connection) {
+    throw new Error('expected the acquired native connection')
+  }
+  expect(
+    await stopCreatedChat(
+      host,
+      HOST_TEST_SESSION,
+      host.deps.store.requireWritableRecord(HOST_TEST_SESSION).lease.runtimeFence
+    )
+  ).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(host.loadedSessionIds()).not.toContain(HOST_TEST_SESSION))
+  expect(
+    host.deps.agents?.registration('claude')?.adapter.hasOwnedAcquisition?.(HOST_TEST_SESSION)
+  ).toBe(false)
+  expect(connection.closeCount).toBe(1)
+  expect(connection.exitVerdict).toEqual({
+    root: 'live',
+    tree: 'unverifiable',
+    killDelivered: true
+  })
+  const callsAfterStop = structuredClone(connection.calls)
+  const original = await readFile(fixture.file, 'utf8')
+  await host.setUserConversationName(HOST_TEST_SESSION, 'Before observed exit', 'rename')
+  await vi.waitFor(() =>
+    expect(warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ scope: 'provider-session-rename' })
+    )
+  )
+  expect(append).not.toHaveBeenCalled()
+  connection.exitVerdict = { root: 'exited', tree: 'exited', killDelivered: true }
+  connection.handlers.onExit?.(new Error('late root exit after delivered Stop'), { expected: true })
+  await host.flushStreamedEvents(HOST_TEST_SESSION)
+  expect(await readFile(fixture.file, 'utf8')).toBe(original)
+  expect(connection.calls).toEqual(callsAfterStop)
+  expect(append).not.toHaveBeenCalled()
+  await host.setUserConversationName(HOST_TEST_SESSION, 'New', 'rename')
+  await vi.waitFor(() =>
+    expect(append.mock.settledResults.map((result) => result.type)).toEqual(['fulfilled'])
+  )
+  expect(await nativeNamingTitle(fixture.file)).toBe('New')
+  await host.setUserConversationName(HOST_TEST_SESSION, 'New', 'rename')
+  await vi.waitFor(() =>
+    expect(append.mock.settledResults.map((result) => result.type)).toEqual([
+      'fulfilled',
+      'fulfilled'
+    ])
+  )
+  expect(append.mock.calls).toEqual([
+    [fixture.home, fixture.nativeId, 'New'],
+    [fixture.home, fixture.nativeId, 'New']
+  ])
+  expect(await nativeNamingTitle(fixture.file)).toBe('New')
+  expect(await nativeNamingTitle(otherFile)).toBe('Other')
+  expect(host.deps.store.requireWritableRecord('other-chat')).toEqual(other)
+  expect(fixture.launches).toHaveLength(1)
+  expect(fixture.native.connections).toHaveLength(1)
+  expect(fixture.controls).toEqual([])
+  expect(connection.sent).toHaveLength(1)
+  expect(connection.calls.filter((call) => call.subtype === 'interrupt')).toHaveLength(1)
+  expect(connection.calls).toEqual(callsAfterStop)
+  expect(connection.closeCount).toBe(1)
+})
 
 it('detaches a quit-before-ready follow-up without waiting for post-join closeAll', async ({
   onTestFinished
