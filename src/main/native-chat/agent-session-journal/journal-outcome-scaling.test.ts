@@ -19,6 +19,8 @@ import { JournalOutcomeConversion } from './journal-outcome-conversion'
 import { sweepJournalOutcomePage } from './journal-outcome-cleanup'
 import { JOURNAL_OUTCOME_PAGE_BYTES, JOURNAL_OUTCOME_PAGE_ROWS } from './journal-outcome-table'
 import { readJournalOutcomeGroups } from './journal-read-row'
+import { applyJournalRow, type JournalReducerState } from './journal-reducer'
+import { isolateJournalTransition } from './journal-reducer-transition'
 import { sweepJournalSavedState } from './journal-saved-state'
 import { JournalMaintenanceRunner } from './journal-state-backfill'
 import {
@@ -102,7 +104,7 @@ const plan = (text: string) => ({
 })
 
 /** `size` accepted sends with their statuses and queue cards, then one handed-over send. */
-function historyOf(size: number): JournalRow[] {
+function historyOf(size: number, everyCard = false): JournalRow[] {
   const rows: JournalRow[] = [projectionEpochRow]
   for (let index = 0; index < size; index++) {
     rows.push(send(rows.length + 1, `earlier-${index}`))
@@ -132,6 +134,26 @@ function historyOf(size: number): JournalRow[] {
         queuedAt: { epoch, sequence: rows.length }
       }
     })
+    const outcomes = everyCard
+      ? ([
+          ['dispatched', { attempt: `attempt-${index}` }],
+          ['returned', { returned: { reason: 'refused' } }]
+        ] as const)
+      : []
+    for (const [state, outcome] of outcomes) {
+      rows.push({
+        ...base(rows.length + 1),
+        kind: 'queue',
+        messageId: `${state}-${index}`,
+        change: {
+          op: 'queued',
+          body: message(`${state}-${index}`),
+          position: rows.length + 1,
+          queuedAt: { epoch, sequence: rows.length },
+          ...outcome
+        }
+      })
+    }
   }
   rows.push(send(rows.length + 1, 'send', true))
   return rows
@@ -435,4 +457,40 @@ it('verifies a conversion again reading only the outcomes written since its last
   const small = await measure(N)
   expect(small.read.journal_rows ?? 0).toBe(0)
   expectSameWork(small, await measure(10 * N))
+})
+
+/** Reducer nodes the draft reaches to fold `row` onto `state`, without adopting it. */
+const trackedNodes = (state: JournalReducerState, row: JournalRow) =>
+  isolateJournalTransition(state, (draft) => applyJournalRow(draft, row, row.ts)).tracked()
+
+it("folds a streamed revision and an acceptance through the draft with only main's scans growing at N and 10N", () => {
+  const measure = (size: number) => {
+    const database = databaseFor(`draft-${size}`)
+    const state = seedOutcomeRows(database, historyOf(size, true))
+    const next = state.lastSequence + 1
+    const live = {
+      items: state.items.size,
+      submissions: state.submissions.size,
+      cards: state.queue.cards.size,
+      returned: [...state.queue.cards.values()].filter((card) => card.state === 'returned').length,
+      streamed: trackedNodes(
+        state,
+        revision('answer', message('y'.repeat(4_096), 'assistant'), 2)(next, 10_000)
+      ),
+      accepted: trackedNodes(state, revision(providerItemId, message('send'), 1)(next, 10_000))
+    }
+    return live
+  }
+  const small = measure(N)
+  const large = measure(10 * N)
+  const grown = (key: keyof typeof small) => large[key] - small[key]
+  // Main's reducer scans these on the same rows; the draft adds one node per value it reaches.
+  // A streamed revision's only growing term is the queue card scan: each card, and each returned
+  // card's body.
+  const cardScan = grown('cards') + grown('returned')
+  expect(cardScan).toBeGreaterThan(0)
+  expect(grown('streamed')).toBe(cardScan)
+  // An echo also reads every item with its body (context-clear and echo lookups) and every
+  // submission to find its send.
+  expect(grown('accepted')).toBe(2 * grown('items') + grown('submissions') + cardScan)
 })
