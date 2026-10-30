@@ -19,7 +19,7 @@ const NOOP = (): void => {}
 // A desktop older than picked-file names saves any bytes under this name, and an agent then reads a PDF as a broken image.
 const HOST_DROPPED_NAME_RE = /(^|[\\/])orca-paste-\d+-[^\\/]+\.png$/i
 
-// A terminal has no attachment store, so the file goes up like a terminal paste and its path joins the draft.
+/** A terminal has no attachment store, so the file goes up like a terminal paste and its path joins the draft. */
 export function useMobileNativeChatTerminalFileAttachments(args: {
   client: RpcClient | null
   scopeKey: string | null

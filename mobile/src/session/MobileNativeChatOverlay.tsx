@@ -48,7 +48,7 @@ type Props = {
   hostName: string | null
 }
 
-// Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
+/** Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary. */
 export function MobileNativeChatOverlay({
   controller,
   imageSource,

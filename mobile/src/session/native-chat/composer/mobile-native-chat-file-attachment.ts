@@ -24,7 +24,7 @@ export function nativeChatTextWithFileReferences(
   return text.trim().length === 0 ? joined : `${text.trimEnd()}\n${joined}`
 }
 
-// Plain words, not an @ mention: a mentioned PDF reaches Claude Code's model as its size alone, and it often stops there.
+/** Plain words, not an @ mention: a mentioned PDF reaches Claude Code's model as its size alone, and it often stops there. */
 export function nativeChatDraftWithFile(draft: string, path: string): string {
   const separator = draft.length === 0 || /\s$/.test(draft) ? '' : ' '
   // The trailing space keeps the next typed word off the reference.

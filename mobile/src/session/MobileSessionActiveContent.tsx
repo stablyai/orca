@@ -18,6 +18,7 @@ import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 
+/** The active tab's content on the session screen. */
 export function MobileSessionActiveContent({
   controller
 }: {

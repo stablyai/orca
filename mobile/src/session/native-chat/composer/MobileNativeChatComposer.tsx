@@ -94,6 +94,7 @@ type Props = MobileNativeChatMicProps & {
   stop?: { onStop?: () => void; held: boolean } | null
 }
 
+/** The chat's reply box: the draft, the + button, the mic, and Send. */
 export function MobileNativeChatComposer({
   inputRef,
   draftScopeKey,

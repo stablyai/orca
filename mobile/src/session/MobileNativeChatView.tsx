@@ -145,6 +145,7 @@ type ChatViewProps = {
   keyboardInset?: number
 }
 
+/** The chat transcript above its composer. */
 export function MobileNativeChatView({
   messages,
   folded,

@@ -2,7 +2,10 @@ import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { translate } from '../i18n/mobile-i18n'
 
-// Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
+/**
+ * The Photos and Files rows that both chat kinds show.
+ * Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
+ */
 export function mobileNativeChatTerminalAttachActions(args: {
   onPhotos: (() => void) | undefined
   onFiles: (() => void) | undefined
@@ -30,6 +33,7 @@ export function mobileNativeChatTerminalAttachActions(args: {
   return actions
 }
 
+/** A structured chat's full sheet: the shared rows, then workspace files, skills, and commands. */
 export function mobileNativeChatAttachActions(args: {
   onPhotos: (() => void) | undefined
   onFiles: (() => void) | undefined

@@ -14,6 +14,7 @@ import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
 
+/** Paste and attachment actions for the session screen. */
 export function useMobileSessionAttachments(scope: MobileSessionAccessorySelectionModel) {
   const {
     worktreeId,

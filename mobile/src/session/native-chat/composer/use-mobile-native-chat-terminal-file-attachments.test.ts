@@ -39,6 +39,7 @@ async function* picked(...files: PickedMobileFile[]) {
 
 type Request = { method: string; params: unknown }
 
+/** A fake host that accepts every chunk and ends each upload with `commit`'s result. */
 function hostClient(commit: (method: string, requests: Request[]) => Promise<string> | string) {
   const requests: Request[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the upload path calls only sendRequest, which this fake supplies.

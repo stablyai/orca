@@ -48,7 +48,7 @@ type Args = {
   readonly onError: () => void
 }
 
-// Share upload wiring across immediate terminal paste, deferred chat chips and host-owned structured files.
+/** Share upload wiring across immediate terminal paste, deferred chat chips and host-owned structured files. */
 export function useMobileSessionImageAttachments({
   client,
   agent,
