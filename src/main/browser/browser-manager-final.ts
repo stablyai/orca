@@ -18,6 +18,7 @@ export abstract class BrowserManagerFinal extends BrowserManagerEventForwarding 
       url: normalizedUrl,
       ...(activate === false ? { activate: false } : {})
     })
+    this.pageEvents.emit(browserTabId, { kind: 'tab', url: normalizedUrl })
     return true
   }
 }

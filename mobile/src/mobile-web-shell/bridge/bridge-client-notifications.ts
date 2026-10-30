@@ -1,3 +1,4 @@
+import type { BridgeTerminalToolbar } from './bridge-terminal-key'
 import type { ForegroundNudgeReason } from '../../transport/types'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
@@ -15,8 +16,11 @@ import {
 import { captureBridgeError } from './bridge-error-capture'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
-import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import {
+  BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+  BRIDGE_TERMINAL_KEY_RAIL_GRANT
+} from './bridge-terminal-key'
 
 // Ungated calls before init expose mount-order bugs; calls after close stay inert for teardown compatibility. Gated calls return false when no session/grant exists.
 // Fault reporting must never throw from its error-boundary caller; it reads the session without requiring one.
@@ -42,7 +46,11 @@ export type BridgeClientNotifications = {
   notifyPageFault: (error: unknown) => boolean
   notifyPagePainted: () => void
   notifyBackClaim: (claimed: boolean) => void
-  notifyPageLocation: (href: string) => void
+  notifyTerminalKeyRailClaim: (
+    claimed: boolean,
+    inputOwner?: string,
+    toolbar?: BridgeTerminalToolbar
+  ) => void
 }
 
 export function createBridgeClientNotifications(
@@ -131,8 +139,18 @@ export function createBridgeClientNotifications(
     notifyBackClaim: (claimed) => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed })
     },
-    notifyPageLocation: (href) => {
-      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_LOCATION, href })
+    // Only to a shell that granted the rail: any other refuses the name, and has no rail to draw.
+    notifyTerminalKeyRailClaim: (claimed, inputOwner, toolbar) => {
+      if (deps.hasGrant(BRIDGE_TERMINAL_KEY_RAIL_GRANT)) {
+        post({
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+          ...(inputOwner === undefined ? {} : { inputOwner }),
+          ...(toolbar === undefined ? {} : { toolbar }),
+          claimed
+        })
+      }
     }
   }
 }

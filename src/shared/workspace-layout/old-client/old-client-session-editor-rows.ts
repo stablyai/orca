@@ -136,6 +136,9 @@ export function diffTabRow(
     language: file.language,
     mode: 'diff',
     ...(diffSource === 'staged' || diffSource === 'unstaged' ? { diffSource } : {}),
+    ...(diffSource === 'staged' && editorView.view.branchOldPath
+      ? { oldPath: editorView.view.branchOldPath }
+      : {}),
     // The model holds no unsaved edit of a diff's modified side; the window's row it lists wins.
     isDirty: false,
     ...tabRowProps(tab, scope),

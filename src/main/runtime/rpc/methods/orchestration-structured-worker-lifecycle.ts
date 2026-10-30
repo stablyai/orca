@@ -73,7 +73,8 @@ export async function stopStructuredWorker(
   runtime?: Pick<
     OrcaRuntimeService,
     'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
-  >
+  >,
+  admitClose?: () => boolean
 ): Promise<StructuredWorkerStopOutcome> {
   const closed = new Set<string>()
   // Any close this stop issued, so a later session's failure cannot erase an earlier close.
@@ -93,6 +94,7 @@ export async function stopStructuredWorker(
     closed.add(sessionId)
     const outcome = await closeStructuredAgentSessionChild(sessionId, {
       ...(runtime ? { runtime } : {}),
+      ...(admitClose ? { admitClose } : {}),
       // Release redrive after close but before proof; an unsettled close returns early, leaving an unowned subscription otherwise.
       afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime, identity.sessionId)
     })

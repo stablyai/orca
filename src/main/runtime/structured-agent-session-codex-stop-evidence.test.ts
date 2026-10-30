@@ -230,7 +230,7 @@ async function pipedChat() {
         await journal.close()
         return { record: store.getRecord(SESSION), snapshot }
       } finally {
-        database.close()
+        await database.close()
       }
     },
     dispose: async () => {

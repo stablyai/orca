@@ -71,7 +71,7 @@ export function registerJournalUnknownContentTests(): void {
       seq += 1
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, JSON.stringify({ ...row, seq }), 5_000)
     }
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     return { written: stored() }
   }
 
