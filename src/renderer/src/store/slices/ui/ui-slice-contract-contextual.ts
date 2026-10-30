@@ -56,8 +56,12 @@ export type UISliceContextual = {
     | 'agent-session-history'
     | 'node-dist-mirror'
   modalData: Record<string, unknown>
+  /** The pane-hosted composer's data while another modal holds the slot; closing that modal restores it. */
+  parkedComposerModalData: Record<string, unknown> | null
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
+  /** Closes the composer whether it holds the slot or is parked behind another modal. */
+  closeWorkspaceComposer: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   /** Main's once-decided native chat upgrade tip variant; null until read. */

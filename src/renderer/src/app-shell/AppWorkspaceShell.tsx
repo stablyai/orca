@@ -28,6 +28,7 @@ const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage')
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
 const Terminal = lazy(() => import('../components/Terminal'))
+const NewWorkspaceComposerPane = lazy(() => import('../components/NewWorkspaceComposerPane'))
 
 type WorktreeSidebarScrollRefs = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -68,9 +69,16 @@ function WorktreeSidebar({
 }
 
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
-  const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
+  const {
+    activeView,
+    hasActiveWorktree,
+    activePendingCreationId,
+    composerPaneActive,
+    creationLayoutActive
+  } = layout
   return (
     <>
+      {composerPaneActive ? <NewWorkspaceComposerPane /> : null}
       {activeView === 'settings' ? <Settings /> : null}
       {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}
@@ -85,7 +93,10 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
           reserveCollapsedSidebarHeaderSpace={layout.leftTitlebarChromeLayout.isFloating}
         />
       ) : null}
-      {activeView === 'terminal' && !hasActiveWorktree && !creationLayoutActive ? (
+      {activeView === 'terminal' &&
+      !hasActiveWorktree &&
+      !creationLayoutActive &&
+      !composerPaneActive ? (
         <Landing />
       ) : null}
     </>

@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
+import { shouldShowWorkspaceComposerPane } from '@/lib/workspace-composer-pane-surface'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
@@ -26,6 +27,8 @@ export function useAppChromeLayout() {
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
+  const activeModal = useAppStore((s) => s.activeModal)
+  const composerParked = useAppStore((s) => s.parkedComposerModalData !== null)
   // Pending creation owns the tab strip immediately; a delayed loader gate swaps it mid-create.
   const activePendingCreationExists = useAppStore(
     (s) =>
@@ -76,8 +79,16 @@ export function useAppChromeLayout() {
     activePendingCreationId,
     hasActivePendingCreation: activePendingCreationExists
   })
+  // Why: the prompt-first composer replaces the center pane, so the workbench and its chrome step aside like during creation.
+  const composerPaneActive = shouldShowWorkspaceComposerPane({
+    activeView,
+    activeModal,
+    composerParked,
+    promptFirstComposer: settings?.promptFirstComposer === true,
+    creationSurfaceActive: creationLayoutActive
+  })
   const workspaceChromeActive =
-    activeView === 'terminal' && hasActiveWorktree && !creationLayoutActive
+    activeView === 'terminal' && hasActiveWorktree && !creationLayoutActive && !composerPaneActive
   // Activity/Space own full pages and hide the workspace sidebar.
   const showSidebar =
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
@@ -128,6 +139,7 @@ export function useAppChromeLayout() {
     activePendingCreationId,
     activeTabCanExpand,
     collapsedSidebarHeaderWidth,
+    composerPaneActive,
     creationLayoutActive,
     hasActiveWorktree,
     isFullScreen,

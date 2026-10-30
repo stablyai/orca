@@ -10,6 +10,7 @@ import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
+import { PromptFirstComposerExperimentalSetting } from './PromptFirstComposerExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import { BrowserExtensionsExperimentalSetting } from './BrowserExtensionsExperimentalSetting'
 import { WslHostsExperimentalSetting } from './WslHostsExperimentalSetting'
@@ -43,6 +44,9 @@ export function ExperimentalPane({
   ])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
+  ])
+  const showPromptFirstComposer = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().promptFirstComposer
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
@@ -102,6 +106,13 @@ export function ExperimentalPane({
 
       {showNativeChat ? (
         <NativeChatExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showPromptFirstComposer ? (
+        <PromptFirstComposerExperimentalSetting
+          settings={settings}
+          updateSettings={updateSettings}
+        />
       ) : null}
 
       {showTerminalAttention ? (

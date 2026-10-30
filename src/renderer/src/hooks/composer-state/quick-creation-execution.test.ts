@@ -12,43 +12,43 @@ afterEach(() => {
   background.mockClear()
 })
 
-it('carries the accepted route across preparation and retains CLI startup/prompt under chat defaults', async () => {
-  const prepared: PreparedQuickSubmit = {
-    submitLinkedWorkItem: {
-      type: 'issue',
-      provider: 'linear',
-      number: 0,
-      url: '',
-      title: 'Typed note'
-    },
-    agent: 'opencode',
-    submitLinkedIssueNumber: null,
-    submitLinkedPR: null,
-    submitTitleName: null,
-    nameIsAutoManaged: false,
-    smartGitHubCreateNames: { workspaceName: 'fix', displayName: undefined },
-    workspaceName: 'fix',
-    nameWasGenerated: false,
-    smartSubmitBaseBranch: undefined,
-    submitCompareBaseRef: undefined,
-    submitPushTarget: undefined,
-    submitBranchNameOverride: undefined,
-    effectiveSetupDecision: 'skip',
-    hookPreparation: undefined,
-    linkedLinearIssue: undefined,
-    linkedLinearIssueWorkspaceId: undefined,
-    linkedLinearIssueOrganizationUrlKey: undefined,
-    effectiveBranchNameOverride: 'feature/test',
-    branchIntent: 'open-existing-v2',
-    submitBaseBranch: undefined,
-    createDisplayName: undefined,
-    pendingFirstAgentMessageRename: false,
-    trimmedNote: 'Fix the checkout'
-  }
-  const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
-  const original = useAppStore.getState().settings
-  const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
-  const { result } = renderHook(() =>
+const prepared: PreparedQuickSubmit = {
+  submitLinkedWorkItem: {
+    type: 'issue',
+    provider: 'linear',
+    number: 0,
+    url: '',
+    title: 'Typed note'
+  },
+  agent: 'opencode',
+  submitLinkedIssueNumber: null,
+  submitLinkedPR: null,
+  submitTitleName: null,
+  nameIsAutoManaged: false,
+  smartGitHubCreateNames: { workspaceName: 'fix', displayName: undefined },
+  workspaceName: 'fix',
+  nameWasGenerated: false,
+  smartSubmitBaseBranch: undefined,
+  submitCompareBaseRef: undefined,
+  submitPushTarget: undefined,
+  submitBranchNameOverride: undefined,
+  effectiveSetupDecision: 'skip',
+  hookPreparation: undefined,
+  linkedLinearIssue: undefined,
+  linkedLinearIssueWorkspaceId: undefined,
+  linkedLinearIssueOrganizationUrlKey: undefined,
+  effectiveBranchNameOverride: 'feature/test',
+  branchIntent: 'open-existing-v2',
+  submitBaseBranch: undefined,
+  createDisplayName: undefined,
+  pendingFirstAgentMessageRename: false,
+  trimmedNote: 'Fix the checkout'
+}
+function renderExecution(
+  settings: ReturnType<typeof getDefaultSettings>,
+  prepare: () => Promise<PreparedQuickSubmit | null>
+) {
+  return renderHook(() =>
     useQuickCreationExecution({
       clearNewWorkspaceDraft: vi.fn(),
       createMultiple: false,
@@ -80,6 +80,13 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
       telemetrySource: undefined
     })
   )
+}
+
+it('carries the accepted route across preparation and retains CLI startup/prompt under chat defaults', async () => {
+  const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
+  const original = useAppStore.getState().settings
+  const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
+  const { result } = renderExecution(settings, prepare)
   try {
     for (const route of ['terminal-tui', 'structured-native-chat'] as const) {
       const deferred = Promise.withResolvers<PreparedQuickSubmit>()
@@ -120,6 +127,38 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
         expect(request.startup).toBeUndefined()
       }
     }
+  } finally {
+    useAppStore.setState({ settings: original })
+  }
+})
+
+it('auto-submits a typed prompt with the linked context as the chat first message', async () => {
+  const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
+  const original = useAppStore.getState().settings
+  useAppStore.setState({ settings })
+  const issueUrl = 'https://github.com/acme/app/issues/42'
+  const { result } = renderExecution(settings, async () => ({
+    ...prepared,
+    submitLinkedWorkItem: {
+      type: 'issue',
+      provider: 'github',
+      number: 42,
+      url: issueUrl,
+      title: 'Fix retry'
+    },
+    trimmedNote: ''
+  }))
+  try {
+    await act(() =>
+      result.current.executeQuickCreation({ kind: 'none' }, 'opencode', 'fix', null, 'repo-1', {
+        launchChoice: { agent: 'opencode', route: 'structured-native-chat' },
+        typedPrompt: 'Fix the flaky test'
+      })
+    )
+    expect(background.mock.calls.at(-1)?.[0]).toMatchObject({
+      quickPrompt: `Fix the flaky test\n\n${issueUrl}`,
+      promptDelivery: 'auto-submit'
+    })
   } finally {
     useAppStore.setState({ settings: original })
   }

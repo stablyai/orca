@@ -59,6 +59,8 @@ export type QuickCreationRequestInput = {
 export type QuickSubmitOptions = {
   setupOnly?: boolean
   launchChoice?: AgentLaunchChoice
+  /** Text typed in the composer's prompt box; auto-submits as the agent's first message. */
+  typedPrompt?: string
 }
 
 export function buildQuickCreationRequest(

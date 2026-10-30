@@ -171,15 +171,15 @@ function DialogTitle({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title> & {
   /** `display` is the large headline of the two-column feature tip dialogs; `compact` is a short
-   *  confirmation's title. */
-  size?: 'default' | 'display' | 'compact'
+   *  confirmation's title; `medium` titles form dialogs such as the workspace composer. */
+  size?: 'default' | 'display' | 'compact' | 'medium'
 }) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
       data-size={size}
       className={cn(
-        'text-lg leading-snug font-semibold break-words data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
+        'text-lg leading-snug font-semibold break-words data-[size=compact]:text-sm data-[size=medium]:text-base data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
         className
       )}
       {...props}

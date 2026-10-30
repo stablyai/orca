@@ -2569,7 +2569,10 @@
         "runCommandsNow": "Run commands now",
         "skipForNow": "Skip for now",
         "skipCommands": "Skip commands",
-        "connectProject": "Connect {{name}}"
+        "connectProject": "Connect {{name}}",
+        "promptLabel": "Prompt",
+        "promptPlaceholderNoAgent": "Pick an agent to send it a prompt",
+        "promptPlaceholder": "What should the agent do in this worktree?"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -7981,6 +7984,9 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
+          },
+          "promptFirstComposer": {
+            "toggleLabel": "Toggle starting new workspaces from a prompt"
           }
         },
         "FloatingWorkspacePane": {
@@ -10197,6 +10203,13 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "promptFirstComposer": {
+              "title": "Start new workspaces from a prompt",
+              "description": "New workspace opens on a prompt box. Creating the workspace sends the prompt to the selected agent as its first message.",
+              "prompt": "prompt",
+              "worktree": "worktree",
+              "composer": "composer"
             }
           }
         },

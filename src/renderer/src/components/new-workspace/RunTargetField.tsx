@@ -24,7 +24,8 @@ export default function RunTargetField({
   listId,
   hasArmedRow,
   inputRef,
-  onKeyDown
+  onKeyDown,
+  className
 }: {
   query: string
   onQueryChange: (value: string) => void
@@ -40,6 +41,7 @@ export default function RunTargetField({
   hasArmedRow: boolean
   inputRef: React.RefObject<HTMLInputElement | null>
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  className?: string
 }): React.JSX.Element {
   const [tooltipOpen, setTooltipOpen] = useState(false)
   return (
@@ -52,7 +54,7 @@ export default function RunTargetField({
               inputRef.current?.focus()
               onOpenRequest()
             }}
-            className={COMBOBOX_FIELD_SHELL}
+            className={cn(COMBOBOX_FIELD_SHELL, className)}
           >
             <span className="flex w-4 shrink-0 items-center justify-center">
               {committed ? (
