@@ -4,6 +4,8 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-menu-selection-actions'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useAppStore } from '@/store'
 
 const useAgentDashboardTelemetry = vi.hoisted(() => vi.fn())
 vi.mock('./use-agent-dashboard-telemetry', () => ({ useAgentDashboardTelemetry }))
@@ -42,8 +44,12 @@ describe('DashboardPopoutRoot', () => {
     })
   })
 
+  const initialKeybindings = useAppStore.getState().keybindings
+
   afterEach(() => {
     cleanup()
+    vi.restoreAllMocks()
+    useAppStore.setState({ keybindings: initialKeybindings })
   })
 
   // Without an App shell, these hooks alone translate menu IPC for preview ownership listeners.
@@ -67,5 +73,36 @@ describe('DashboardPopoutRoot', () => {
     // Unclaimed here (no preview mounted), so both still reach the native path.
     expect(performNativePaste).toHaveBeenCalledOnce()
     expect(performNativeSelectionAction).toHaveBeenCalledWith('select-all')
+  })
+
+  it('closes the window on the close-tab chord unless a preview dialog owns it', () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+    const mod = getShortcutPlatform() === 'darwin' ? { metaKey: true } : { ctrlKey: true }
+    const press = (target: EventTarget, init: KeyboardEventInit): void => {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...mod, ...init })
+      )
+    }
+    render(<DashboardPopoutRoot />)
+
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    document.body.append(dialog)
+    press(dialog, { key: 'w', code: 'KeyW' })
+    const consume = (event: Event): void => event.preventDefault()
+    window.addEventListener('keydown', consume, true)
+    press(document.body, { key: 'w', code: 'KeyW' })
+    window.removeEventListener('keydown', consume, true)
+    expect(close).not.toHaveBeenCalled()
+
+    press(document.body, { key: 'w', code: 'KeyW' })
+    expect(close).toHaveBeenCalledOnce()
+
+    useAppStore.setState({ keybindings: { 'tab.close': ['Mod+Shift+Y'] } })
+    press(document.body, { key: 'w', code: 'KeyW' })
+    expect(close).toHaveBeenCalledOnce()
+    press(document.body, { key: 'Y', code: 'KeyY', shiftKey: true })
+    expect(close).toHaveBeenCalledTimes(2)
+    dialog.remove()
   })
 })
