@@ -12,7 +12,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { OrchestrationSessionCaller } from '../../runtime/orchestration/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../runtime/orchestration/orchestration-party'
-import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { ReceivingRuntime } from './structured-agent-session-receiving-runtime.test-support'
 import { eraseRpcMethods, isStreamingMethod } from '../../runtime/rpc/core'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../runtime/rpc/methods/structured-agent-session'
 import { ORCHESTRATION_METHODS } from '../../runtime/rpc/methods/orchestration'
@@ -39,15 +39,6 @@ export const WORKER = testOrcaSessionId('4c1b8d7a-975c-4984-a2e4-8149fdd4177a')
 export const HELPER = testOrcaSessionId('8e2ab9f7-0ad7-43f0-9241-539b1e4c5bc7')
 export const HOME_A = { variable: 'CLAUDE_CONFIG_DIR', path: '/qa/claude/a' }
 export const HOME_B = { variable: 'CLAUDE_CONFIG_DIR', path: '/qa/claude/b' }
-
-class ReceivingRuntime extends OrcaRuntimeService {
-  override getOrchestrationDbIfAvailable() {
-    return super.getOrchestrationDbIfAvailable()
-  }
-  mailTarget(handle: string) {
-    return this.resolveStructuredMailboxTarget(handle)
-  }
-}
 
 /** Script only external adapter IO; reservation, proof, journals, RPC and native transactions are real. */
 export async function createReceivingCallerFixture(options: { reportsRecipe?: boolean } = {}) {
@@ -200,18 +191,22 @@ export async function createReceivingCallerFixture(options: { reportsRecipe?: bo
   }
   const createWorker = async (id: typeof WORKER | typeof HELPER, creator = PARENT) => {
     const from = caller(creator)
-    const { run, helperCreator } = resolveWorkerStartRun(service, {
+    const taskSpec = `work for ${id}`
+    const { bindRun, helperCreator } = resolveWorkerStartRun(service, {
       coordinator: from,
       from: from.address,
       callerSession: from,
-      runId: undefined
+      runId: undefined,
+      objective: taskSpec,
+      taskReferences: []
     })
+    const { run } = bindRun()
     const db = service.getOrchestrationDb()
     const started = db.createStartingWorkerDispatch({
       creator: resolveDispatchCreator(service, from.address, from),
       maxDepth: 9,
       requiredCreatorDispatchId: helperCreator?.id,
-      taskSpec: `work for ${id}`,
+      taskSpec,
       taskParentId: helperCreator?.task_id,
       taskRunId: run.id,
       taskCreatedByRunGeneration: run.consumer_generation,

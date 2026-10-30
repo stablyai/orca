@@ -107,8 +107,15 @@ describe('receiving account through native work and exact parent disposition', (
       expect(
         (await structuredAgentSessionReceivingAccount(f.deps, f.record, f.session)).home
       ).toEqual(RECEIVING_A)
-      f.db.createRun({
+      const next = f.db.createRun({
         objective: 'new coordinator consumer',
+        coordinatorHandle: null,
+        coordinatorPaneKey: null,
+        coordinatorOrcaSessionId: f.root
+      })
+      // Creation keeps the earlier consumer; run-use is the real rebind owner.
+      f.db.bindRun({
+        runId: next.id,
         coordinatorHandle: null,
         coordinatorPaneKey: null,
         coordinatorOrcaSessionId: f.root
