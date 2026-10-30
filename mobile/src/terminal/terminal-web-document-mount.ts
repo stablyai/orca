@@ -10,6 +10,8 @@ import terminalNerdFontUrl from '../../assets/fonts/SymbolsNerdFontMono-Regular.
 import { terminalNerdFontCss } from './terminal-nerd-font-css.mjs'
 import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import { createSmoothTerminal, createSmoothWebglAddon } from './smooth-viewport-renderer.mjs'
+import { createRemoteScrollTerminal } from './remote-scroll-compositor.mjs'
 
 // Mount the native document factory with page-owned seams and fresh scope so overlapping terminals cannot share state.
 
@@ -20,6 +22,16 @@ export type TerminalWebDocument = {
 }
 
 const STYLE_ELEMENT_ID = 'orca-terminal-document-style'
+
+/**
+ * The engine with the scroll seams the WebView's bundle gives it.
+ *
+ * The page imports xterm itself rather than loading that bundle, so it wraps the same two classes
+ * here; without them its scrollback moves only in whole rows and a program's redraw jumps a row a
+ * wheel report.
+ */
+const SmoothTerminal = createRemoteScrollTerminal(createSmoothTerminal(Terminal))
+const SmoothWebglAddon = createSmoothWebglAddon(WebglAddon)
 
 const HOST_CLASS = 'orca-terminal-document-host'
 
@@ -47,7 +59,7 @@ ${prefix} #selection-overlay, ${prefix} #scroll-indicator { position: absolute; 
 // Null WebGL addon selects the existing DOM fallback; log it because rendering is slower.
 function createPageWebglAddon(onFallback: (reason: string) => void) {
   try {
-    return new WebglAddon()
+    return new SmoothWebglAddon()
   } catch (error) {
     onFallback(error instanceof Error ? error.message : String(error))
     return null
@@ -176,7 +188,7 @@ function startPageDocument(
     observeViewport: viewport.observe,
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
-    createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,
+    createTerminal: (options) => new SmoothTerminal(options) as unknown as TerminalDocumentTerminal,
     createUnicode11Addon: () => new Unicode11Addon(),
     createWebglAddon: () =>
       createPageWebglAddon((reason) =>

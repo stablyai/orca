@@ -1,3 +1,4 @@
+import type { TuiWheelProfile } from './document/tui-wheel-pacing'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 
@@ -30,3 +31,4 @@ export type TerminalWebViewCommand =
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
   | { type: 'set-theme'; id?: number; terminalTheme?: RuntimeMobileTerminalTheme }
+  | { type: 'set-tui-wheel-profile'; id?: number; profile: TuiWheelProfile }
