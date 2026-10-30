@@ -30,6 +30,7 @@ vi.mock('react-native', async () => {
       }
     ),
     Platform: { OS: 'web', select: (values: { default: unknown }) => values.default },
+    Keyboard: { addListener: () => ({ remove: () => {} }) },
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })

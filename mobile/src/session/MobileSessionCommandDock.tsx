@@ -4,6 +4,7 @@ import { hostOs } from '../platform/host-os'
 import { ComposerSendButton } from '../components/composer-input/ComposerSendButton'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
+import { useHardwareKeyboardEnterSubmit } from '../components/composer-input/hardware-keyboard-enter-submit'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -76,6 +77,11 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     attachImage,
     keyboardLift
   } = controller
+  const draft = bufferedTerminalDraftState.input
+  const canSendDraft = canSend && draft.trim().length > 0
+  const enterSubmit = useHardwareKeyboardEnterSubmit(
+    canSendDraft ? () => void handleSend() : undefined
+  )
   if (!sessionCommandDockShown(controller)) {
     return null
   }
@@ -84,7 +90,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const agentId =
     terminalTab && runsAgent ? resolveMobileTerminalTabOwnedAgentId(terminalTab) : null
   const agentName = agentId ? tuiAgentDisplayName(agentId) : null
-  const draft = bufferedTerminalDraftState.input
   const showStop =
     runsAgent && terminalTab?.agentStatus?.state === 'working' && draft.trim().length === 0
   const attachProps = {
@@ -235,6 +240,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
             editable={canCompose}
             tabIndex={liveInputEnabled ? -1 : 0}
+            {...enterSubmit}
             leading={
               <MobileTerminalAttachButton
                 {...attachProps}
@@ -258,7 +264,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 ) : (
                   <ComposerSendButton
                     onPress={() => void handleSend()}
-                    canSend={canSend && draft.trim().length > 0}
+                    canSend={canSendDraft}
                     label={t('session.commandDock.sendCommand', 'Send command')}
                   />
                 )}

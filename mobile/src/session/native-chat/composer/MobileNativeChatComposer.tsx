@@ -34,6 +34,7 @@ import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
+import { useHardwareKeyboardEnterSubmit } from '../../../components/composer-input/hardware-keyboard-enter-submit'
 import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
@@ -249,6 +250,10 @@ export function MobileNativeChatComposer({
     }
   }
 
+  const enterSubmit = useHardwareKeyboardEnterSubmit(
+    canSend && !showsStop ? () => void handleSend() : undefined
+  )
+
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
   const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
   const attachLabel = structured
@@ -303,6 +308,7 @@ export function MobileNativeChatComposer({
             // field, so a transient lock would yank the keyboard mid-typing (#10681).
             // The lock gates sending; the draft survives and rides the next send.
             textAlignVertical="top"
+            {...enterSubmit}
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             {attachPress ? (
