@@ -267,7 +267,8 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     workItemsTruncatedAtQueryLimit: assigned.truncatedAtQueryLimit,
     workItemsErrorStatus: assigned.errorStatus,
     workItemsErrorMessage: assigned.errorMessage,
-    workItemsLoading: assigned.status === 'loading',
+    // Why: 'idle' is the render before the request goes out, like the board's null page.
+    workItemsLoading: assigned.status === 'idle' || assigned.status === 'loading',
     boardErrorStatus,
     boardErrorMessage,
     collapsedLaneIds,
