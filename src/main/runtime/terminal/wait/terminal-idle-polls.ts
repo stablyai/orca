@@ -39,6 +39,7 @@ function isQuietForQuiescence(
   return Date.now() - lastOutputAt >= quiescenceMs
 }
 import type { TerminalWaiter } from '../../runtime-terminal-contracts'
+import type { RuledScreen } from '../../screen-input-veto'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -51,6 +52,8 @@ type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   hasCommandPainted(ptyId: string): boolean
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
   readVisibleScreen(ptyId: string): Promise<string | null> | null
+  /** The provider's grid standing in for a trusted screen the model is withheld from; null when it is not. */
+  readWithheldRuledScreen?(ptyId: string): Promise<RuledScreen | null> | null
   /** Re-read the record the waiter registered against; see `sample` below. */
   getLiveLeaf(leaf: RuntimeLeafRecord): RuntimeLeafRecord
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
@@ -60,6 +63,7 @@ type IdlePollEntry = {
   waiter: TerminalWaiter
   foregroundPollInFlight: boolean
   screenReadInFlight: boolean
+  withheldScreenReadInFlight?: boolean
   recheckTimer?: ReturnType<typeof setTimeout>
 } & ({ kind: 'leaf'; leaf: RuntimeLeafRecord } | { kind: 'pty'; pty: RuntimePtyWorktreeRecord })
 
@@ -129,8 +133,11 @@ export class RuntimeTerminalIdlePolls {
     }
   }
 
-  private sample(entry: IdlePollEntry): IdlePollSample {
+  private sample(entry: IdlePollEntry, withheldScreen?: RuledScreen): IdlePollSample {
     const { handle } = entry.waiter
+    const source: TuiIdleEvidenceSource = withheldScreen
+      ? { ...this.deps, readRuledScreen: () => withheldScreen }
+      : this.deps
     if (entry.kind === 'pty') {
       // PTY records mutate in place, so this captured reference remains live.
       const { pty } = entry
@@ -138,7 +145,7 @@ export class RuntimeTerminalIdlePolls {
         buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
       return {
         verdict: evaluateTuiIdle({
-          ...ptyTuiIdleEvidence(this.deps, pty, readWaitText),
+          ...ptyTuiIdleEvidence(source, pty, readWaitText),
           launchReadiness: entry.waiter.launchReadiness
         }),
         ptyId: pty.ptyId,
@@ -157,7 +164,7 @@ export class RuntimeTerminalIdlePolls {
     const live = () => this.deps.getLiveLeaf(entry.leaf)
     return {
       verdict: evaluateTuiIdle({
-        ...leafTuiIdleEvidence(this.deps, leaf, readWaitText),
+        ...leafTuiIdleEvidence(source, leaf, readWaitText),
         launchReadiness: entry.waiter.launchReadiness
       }),
       ptyId: leaf.ptyId,
@@ -195,6 +202,9 @@ export class RuntimeTerminalIdlePolls {
       if (verdict.kind === 'working' || entry.screenReadInFlight) {
         return
       }
+      if (verdict.kind === 'pending' && ptyId) {
+        this.readWithheldScreen(entry, ptyId)
+      }
       const screenRead = ptyId ? this.readScreenBlockedReason(entry, ptyId) : null
       // Why await only a real read: a pane with no screen model keeps its tick synchronous.
       const screenBlockedReason = screenRead ? await screenRead : null
@@ -231,6 +241,38 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = false
       }
     }
+  }
+
+  /** Why: the rules read nothing while the model waits on a provider snapshot, so evaluate the provider's
+   *  grid instead, through the same ranking and against the pane's evidence as it stands when it arrives. */
+  private readWithheldScreen(entry: IdlePollEntry, ptyId: string): void {
+    if (entry.withheldScreenReadInFlight) {
+      return
+    }
+    const read = this.deps.readWithheldRuledScreen?.(ptyId)
+    if (!read) {
+      return
+    }
+    entry.withheldScreenReadInFlight = true
+    void read
+      .then((screen) => {
+        if (!screen || !this.entries.has(entry)) {
+          return
+        }
+        const sample = this.sample(entry, screen)
+        if (sample.ptyId !== ptyId) {
+          return
+        }
+        if (sample.verdict.kind === 'blocked') {
+          this.settle(entry, sample.blocked(sample.verdict.reason))
+        } else if (sample.verdict.kind === 'ready-strong') {
+          this.settle(entry, sample.ready())
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        entry.withheldScreenReadInFlight = false
+      })
   }
 
   /** Why the screen too: a dialog that parks the cursor above its own options (Claude's

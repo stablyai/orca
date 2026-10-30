@@ -11,6 +11,7 @@ import metadata022 from './__fixtures__/hermes-0-22-slash-setup.meta.json'
 import profileMetadata from './__fixtures__/hermes-0-22-profile-prompt.meta.json'
 import bottomMetadata from './__fixtures__/hermes-0-22-statusbar-bottom.meta.json'
 import type { TerminalHandleRecord } from './runtime-terminal-contracts'
+import { deferred } from './orca-runtime-test-fixtures.spec'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -268,6 +269,144 @@ describe('Hermes 0.22 readiness from captured raw PTY bytes', () => {
       await expect(waitForTranscriptIdle(pane, 8_000)).rejects.toThrow('timeout')
     }
   )
+})
+
+// A renderer reattach can find the provider ahead of the runtime's count; until a snapshot replaces
+// the model, the rules may not read it, so readiness must come from the provider's screen.
+describe('Hermes 0.22 readiness while its model waits on a provider snapshot', () => {
+  async function reattachedPaneAt(stage: keyof typeof metadata022.stages) {
+    const size = { cols: metadata022.cols, rows: metadata022.rows }
+    const screen = captured022.subarray(0, metadata022.stages[stage]).toString('utf8')
+    const pane = await createTranscriptPane({
+      paneTitle: 'Hermes Agent',
+      foregroundProcess: 'hermes',
+      launchAgent: 'hermes',
+      size,
+      data: screen
+    })
+    // As traced on a Windows WSL pane: the spawn syncs, then the reattach finds the provider ahead.
+    pane.runtime.synchronizePtyOutputSequenceFromProvider(TRANSCRIPT_PANE_PTY_ID, {
+      value: 0,
+      generation: 'reset'
+    })
+    const providerSeq = pane.runtime.getPtyOutputSequence(TRANSCRIPT_PANE_PTY_ID) + 23
+    pane.runtime.synchronizePtyOutputSequenceFromProvider(TRANSCRIPT_PANE_PTY_ID, {
+      value: providerSeq,
+      generation: 'continued'
+    })
+    const frame = { data: screen, ...size, seq: providerSeq, source: 'headless' as const }
+    const serializeProviderBuffer = vi.fn(async () => frame)
+    pane.runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getSize: () => size,
+      getForegroundProcess: async () => 'hermes',
+      serializeProviderBuffer
+    })
+    return { ...pane, frame, serializeProviderBuffer }
+  }
+
+  // The first provider read is held open so the test can act while it is in flight.
+  async function withHeldFirstRead(
+    pane: Awaited<ReturnType<typeof reattachedPaneAt>>,
+    duringRead: () => void,
+    options: { launchReadiness?: boolean } = {}
+  ) {
+    const held = deferred<typeof pane.frame>()
+    pane.serializeProviderBuffer.mockImplementationOnce(() => held.promise)
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
+    try {
+      let settled = false
+      const waiting = pane.runtime.waitForTerminal(pane.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 8_000,
+        ...options
+      })
+      void waiting.then(() => (settled = true)).catch(() => {})
+      await vi.advanceTimersByTimeAsync(2_500)
+      expect(pane.serializeProviderBuffer).toHaveBeenCalledOnce()
+      duringRead()
+      held.resolve(pane.frame)
+      await vi.advanceTimersByTimeAsync(0)
+      const settledOnHeldRead = settled
+      await vi.advanceTimersByTimeAsync(8_000)
+      return {
+        settledOnHeldRead,
+        outcome: await waiting.then(
+          () => 'ready',
+          () => 'timeout'
+        )
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  it.each(['initial', 'reasoning', 'completed'] as const)('settles at %s', async (stage) => {
+    const pane = await reattachedPaneAt(stage)
+    await expect(waitForTranscriptIdle(pane, 8_000)).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it.each(['starting', 'reasoningDraft', 'promptDraft', 'busy', 'streaming'] as const)(
+    'does not settle at %s',
+    async (stage) => {
+      const pane = await reattachedPaneAt(stage)
+      await expect(waitForTranscriptIdle(pane, 8_000)).rejects.toThrow('timeout')
+    }
+  )
+
+  it.each(['pty', 'leaf'] as const)('settles through the %s handle route', async (route) => {
+    const pane = await reattachedPaneAt('initial')
+    useHandleRoute(pane, route)
+    await expect(waitForTranscriptIdle(pane, 8_000)).resolves.toMatchObject({ satisfied: true })
+    // Readiness needs only the visible grid; history would cost the provider a checkpoint rebuild.
+    expect(pane.serializeProviderBuffer).toHaveBeenCalledWith(TRANSCRIPT_PANE_PTY_ID, {
+      scrollbackRows: 0
+    })
+  })
+
+  it('keeps one read in flight per wait and settles nothing once the wait has ended', async () => {
+    const pane = await reattachedPaneAt('initial')
+    const held = deferred<typeof pane.frame>()
+    pane.serializeProviderBuffer.mockImplementation(() => held.promise)
+    await expect(waitForTranscriptIdle(pane, 8_000)).rejects.toThrow('timeout')
+    expect(pane.serializeProviderBuffer).toHaveBeenCalledOnce()
+    held.resolve(pane.frame)
+    await held.promise
+    expect(pane.serializeProviderBuffer).toHaveBeenCalledOnce()
+  })
+
+  it('settles a launch-readiness wait', async () => {
+    const pane = await reattachedPaneAt('initial')
+    const result = await withHeldFirstRead(pane, () => {}, { launchReadiness: true })
+    expect(result).toEqual({ settledOnHeldRead: true, outcome: 'ready' })
+  })
+
+  it('discards a frame read across live output, then settles on a quiet read', async () => {
+    const pane = await reattachedPaneAt('initial')
+    const result = await withHeldFirstRead(pane, () => {
+      pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b7\x1b8', Date.now())
+    })
+    expect(result).toEqual({ settledOnHeldRead: false, outcome: 'ready' })
+    expect(pane.serializeProviderBuffer).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not settle when the agent reports work while its frame is read', async () => {
+    const pane = await reattachedPaneAt('initial')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Hermes reports turns through the hook server, not the PTY, so status can change with no output.
+    const internals = pane.runtime as unknown as {
+      ptysById: Map<string, { lastExplicitAgentStatus?: { state: string; updatedAt: number } }>
+    }
+    const result = await withHeldFirstRead(pane, () => {
+      const pty = internals.ptysById.get(TRANSCRIPT_PANE_PTY_ID)
+      if (pty) {
+        pty.lastExplicitAgentStatus = { state: 'working', updatedAt: Date.now() }
+      }
+    })
+    expect(result).toEqual({ settledOnHeldRead: false, outcome: 'timeout' })
+  })
 })
 
 describe.each([
