@@ -4,7 +4,8 @@ import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
 import {
   ATTACHMENT_INPUT_KINDS,
   buildWorkspaceAttachmentEdits,
-  canUseWorkspaceReviewForChecks
+  canUseWorkspaceReviewForChecks,
+  isWorkspaceRepositoryAttachment
 } from './worktree-attachment-editing'
 
 const language = vi.hoisted(() => ({ prefix: '' }))
@@ -68,5 +69,57 @@ describe('workspace attachment editing', () => {
   })
   it('omits untouched collections', () => {
     expect(buildWorkspaceAttachmentEdits({ initial: [review], draft: [{ ...review }] })).toEqual({})
+  })
+})
+
+describe('isWorkspaceRepositoryAttachment', () => {
+  const aliasRepo: Repo = {
+    id: 'repo',
+    path: '/repo',
+    displayName: 'Repo',
+    badgeColor: '',
+    addedAt: 0,
+    gitRemoteIdentity: {
+      canonicalKey: 'company-gitlab/acme/repo',
+      remoteName: 'origin',
+      remoteUrl: 'company-gitlab:acme/repo.git'
+    }
+  }
+  const selfHostedMr: WorkspaceAttachment = {
+    provider: 'gitlab',
+    type: 'mr',
+    number: 42,
+    title: 'Self-hosted MR',
+    url: 'https://gitlab.corp.example/acme/repo/-/merge_requests/42'
+  }
+
+  it('accepts a same-repository URL whose host differs from an unexpanded SSH alias remote (#31953)', () => {
+    expect(isWorkspaceRepositoryAttachment(selfHostedMr, aliasRepo)).toBe(true)
+  })
+
+  it('still rejects an attachment from another repository once the remote host resolves', () => {
+    // An aliased remote cannot rule a foreign host out (palette-accepted gap); a
+    // resolvable host keeps the strict cross-repository rejection.
+    const foreign: WorkspaceAttachment = {
+      provider: 'github',
+      type: 'pr',
+      number: 7,
+      title: 'Foreign PR',
+      url: 'https://github.com/acme/repo/pull/7'
+    }
+    expect(isWorkspaceRepositoryAttachment(foreign, repo('gitlab.corp.example'))).toBe(false)
+  })
+
+  it('still rejects another repository behind an SSH alias remote', () => {
+    const otherRepoMr: WorkspaceAttachment = {
+      ...selfHostedMr,
+      url: 'https://gitlab.corp.example/acme/other/-/merge_requests/42'
+    }
+    expect(isWorkspaceRepositoryAttachment(otherRepoMr, aliasRepo)).toBe(false)
+  })
+
+  it('keeps requiring a remote identity for URL-backed attachments', () => {
+    const noIdentity = { ...aliasRepo, gitRemoteIdentity: undefined }
+    expect(isWorkspaceRepositoryAttachment(selfHostedMr, noIdentity)).toBe(false)
   })
 })
