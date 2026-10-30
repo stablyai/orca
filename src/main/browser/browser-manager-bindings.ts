@@ -3,6 +3,7 @@ import { setupGuestContextMenu } from './browser-guest-context-menu'
 import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
 import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
+import { setupGuestHistoryGesture } from './browser-guest-history-gesture'
 import { setupGuestTargetUrlForwarding } from './browser-guest-target-url'
 import { BrowserManagerGrab } from './browser-manager-grab'
 
@@ -45,20 +46,28 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
     }
 
-    this.shortcutForwardingCleanupByTabId.set(
+    const cleanupShortcuts = setupGuestShortcutForwarding({
       browserTabId,
-      setupGuestShortcutForwarding({
-        browserTabId,
-        guest,
-        resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
-        isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
-        getKeybindings: () => this.settingsResolver?.().keybindings,
-        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
-        resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
-      })
-    )
+      guest,
+      resolveRenderer: (tabId) =>
+        resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+      shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
+      isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
+      getKeybindings: () => this.settingsResolver?.().keybindings,
+      resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
+      resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
+    })
+    const cleanupHistoryGesture = setupGuestHistoryGesture({
+      browserTabId,
+      guest,
+      resolveRenderer: (tabId) =>
+        resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+      isViewportPresetActive: () => this.viewportPresetByTabId.get(browserTabId)?.requested != null
+    })
+    this.shortcutForwardingCleanupByTabId.set(browserTabId, () => {
+      cleanupShortcuts()
+      cleanupHistoryGesture()
+    })
   }
 
   protected setupMouseWheelZoomForwarding(browserTabId: string, guest: Electron.WebContents): void {
