@@ -48,7 +48,13 @@ export type MobileRichMarkdownEditorHandle = {
 // Link/Image ask TextInputModal because both native shells’ window.prompt returns null (no dialog delegate).
 // Accept but never call onKeyboardInsetChange: page visualViewport and keyboard-occlusion already measure same cover, so callback would double-lift toolbar.
 function MobileRichMarkdownEditorWebInner(
-  { content, editable, onChange, onOpenLink }: MobileRichMarkdownEditorComponentProps,
+  {
+    content,
+    editable,
+    onChange,
+    onOpenLink,
+    onOpenWorkspaceFile
+  }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
   const t = useMobileTranslation()
@@ -107,6 +113,7 @@ function MobileRichMarkdownEditorWebInner(
     editable,
     onChange,
     onOpenLink: openLink,
+    onOpenWorkspaceFile,
     transport
   })
 

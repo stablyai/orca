@@ -75,6 +75,14 @@ describe('Markdown preview file links', () => {
     expect(mobileMarkdownFileLink(params, 'photo.png', '/different/notes.md')).toBeNull()
   })
 
+  it('folds case only for Windows document locations', () => {
+    expect(
+      mobileMarkdownFileLink(params, 'photo.png', 'C:\\Project\\Docs\\Notes.md')?.params
+        .relativePath
+    ).toBe('docs/photo.png')
+    expect(mobileMarkdownFileLink(params, 'photo.png', '/remote/project/Docs/Notes.md')).toBeNull()
+  })
+
   it('does not reuse terminal artifact grants for another file', () => {
     expect(mobileMarkdownFileLink({ ...params, source: 'terminalArtifact' }, 'other.md')).toBeNull()
   })

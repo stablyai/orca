@@ -1,4 +1,5 @@
 import {
+  isCaseInsensitiveRuntimeRoot,
   isWindowsAbsolutePathLike,
   relativePathInsideRoot,
   resolveRuntimePath
@@ -29,7 +30,11 @@ export function resolveMarkdownFilePath(
   let root = '/workspace'
   if (documentAbsolutePath) {
     const absolute = documentAbsolutePath.replaceAll('\\', '/')
-    if (!absolute.endsWith(`/${source}`)) {
+    const tail = `/${source}`
+    const matches = isCaseInsensitiveRuntimeRoot(documentAbsolutePath)
+      ? absolute.toLowerCase().endsWith(tail.toLowerCase())
+      : absolute.endsWith(tail)
+    if (!matches) {
       return null
     }
     root = absolute.slice(0, -source.length)

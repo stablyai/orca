@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
 import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import { mobileMarkdownFileLink } from '../files/mobile-markdown-file-link'
-import { routeMarkdownHref } from '../components/markdown-href-routing'
-import { openExternalLink } from '../platform/external-link'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { RefreshCw } from 'lucide-react-native'
@@ -71,14 +69,6 @@ export function MarkdownReader({
       )
     }
   }
-  const openLink = (href: string) => {
-    const route = routeMarkdownHref(href)
-    if (route.kind === 'file') {
-      openFile(route.pathText)
-    } else if (route.kind === 'web') {
-      openExternalLink(route.url)
-    }
-  }
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
@@ -107,7 +97,7 @@ export function MarkdownReader({
           content={doc.localContent}
           editable={doc.editable && !doc.saving}
           onChange={onChange}
-          onOpenLink={openLink}
+          onOpenWorkspaceFile={openFile}
           onKeyboardInsetChange={setWebviewKeyboardInset}
         />
       ) : (

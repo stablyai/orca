@@ -139,13 +139,7 @@ describe('live session markdown reader copy', () => {
   })
 
   it('opens a workspace file from the live document on the same remote host', () => {
-    render()
-    act(() =>
-      renderer!.root
-        .findByType('MobileFileMarkdownPreview')
-        .props.onOpenFile('/remote/project/assets/photo.png')
-    )
-    expect(pushFile).toHaveBeenCalledWith({
+    const photoRoute = {
       pathname: '/h/[hostId]/files/preview/[worktreeId]',
       params: {
         hostId: 'remote',
@@ -153,7 +147,26 @@ describe('live session markdown reader copy', () => {
         source: 'worktree',
         relativePath: 'assets/photo.png'
       }
-    })
+    }
+    render()
+    act(() =>
+      renderer!.root
+        .findByType('MobileFileMarkdownPreview')
+        .props.onOpenFile('/remote/project/assets/photo.png')
+    )
+    expect(pushFile).toHaveBeenLastCalledWith(photoRoute)
+    act(() =>
+      buttons()
+        .find((button) => button.props.accessibilityLabel === 'Edit Markdown')!
+        .props.onPress()
+    )
+    act(() =>
+      renderer!.root
+        .findByType('MobileRichMarkdownEditor')
+        .props.onOpenWorkspaceFile('../assets/photo.png')
+    )
+    expect(pushFile).toHaveBeenCalledTimes(2)
+    expect(pushFile).toHaveBeenLastCalledWith(photoRoute)
   })
 
   it('keeps loading and error states free of copy actions', () => {
