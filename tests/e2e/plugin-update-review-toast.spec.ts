@@ -14,12 +14,19 @@ import {
 // Why: install, catalog refresh and the update pass all fetch Git; a loaded runner outlasts 10s.
 const GIT_STEP = { timeout: 90_000 }
 
-/** Starts an automatic update pass now: turning the policy back on runs one. */
+/** Runs an automatic update pass now (turning the policy back on starts one) and waits for it. */
 async function runAutoUpdatePass(page: Page): Promise<void> {
   await page.evaluate(async () => {
+    const passed = new Promise<void>((resolve) => {
+      const stop = window.api.plugins.onAutoUpdateChanged(() => {
+        stop()
+        resolve()
+      })
+    })
     const state = window.__store?.getState()
     await state?.updateSettings({ pluginUpdatePolicy: 'manual' })
     await state?.updateSettings({ pluginUpdatePolicy: 'auto' })
+    await passed
   })
 }
 
@@ -33,6 +40,7 @@ function openPluginsSettings(page: Page): Promise<void> {
 
 // oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
 test('tells once per version when an automatic update waits for review, and Review never approves', async ({}, testInfo) => {
+  // Why: two launches, two Git-backed installs and four update passes against local git.
   test.setTimeout(300_000)
   const root = await mkdtemp(join(tmpdir(), 'orca-update-review-toast-'))
   const repositories = join(root, 'repositories')
@@ -91,8 +99,10 @@ test('tells once per version when an automatic update waits for review, and Revi
     })
     await expect(grouped).toBeVisible(GIT_STEP)
     await expect(grouped).toContainText('They won’t update until you review them.')
-    await page.waitForTimeout(800)
-    await page.screenshot({ path: testInfo.outputPath('grouped-toast.png') })
+    await page.screenshot({
+      path: testInfo.outputPath('grouped-toast.png'),
+      animations: 'disabled'
+    })
     await grouped.getByRole('button', { name: 'Review', exact: true }).dispatchEvent('click')
     await expect(page.getByRole('tab', { name: /^Updates/ })).toHaveAttribute(
       'aria-selected',
@@ -108,8 +118,8 @@ test('tells once per version when an automatic update waits for review, and Revi
     launched = await session.launch()
     page = launched.page
     await runAutoUpdatePass(page)
-    // Why a fixed wait: proving absence needs the pass to finish; it logs nothing to the page.
-    await page.waitForTimeout(15_000)
+    // The pass has finished, so main has nothing left to tell for these versions.
+    expect(await page.evaluate(() => window.api.plugins.takeUpdateReviewNotices())).toEqual([])
     await expect(page.locator('[data-sonner-toast]', { hasText: 'need your review' })).toHaveCount(
       0
     )
@@ -127,9 +137,7 @@ test('tells once per version when an automatic update waits for review, and Revi
     await expect(single).toContainText(
       'Published by stablyai. It won’t update until you review it.'
     )
-    // Why the pause: let the toast's entry animation settle so the proof frame is legible.
-    await page.waitForTimeout(800)
-    await page.screenshot({ path: testInfo.outputPath('single-toast.png') })
+    await page.screenshot({ path: testInfo.outputPath('single-toast.png'), animations: 'disabled' })
     await single.getByRole('button', { name: 'Review', exact: true }).dispatchEvent('click')
     const review = page.getByRole('dialog', { name: 'Review update to Review Notes' })
     await expect(review).toBeVisible(GIT_STEP)
