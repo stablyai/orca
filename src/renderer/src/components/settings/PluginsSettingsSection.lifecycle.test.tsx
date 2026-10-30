@@ -211,15 +211,20 @@ function installApi(overrides: Record<string, unknown> = {}): {
   return { unsubscribe }
 }
 
-/** A card's Enable or Disable menu item; cards carry no switch. */
+/** A card's enable switch. */
 function toggleItem(container: HTMLElement, pluginKey: string): HTMLButtonElement {
-  const item = Array.from(
-    container.querySelectorAll<HTMLButtonElement>(`[data-plugin-key="${pluginKey}"] button`)
-  ).find((button) => ['Disable', 'Enable'].includes(button.textContent?.trim() ?? ''))
+  const item = container.querySelector<HTMLButtonElement>(
+    `[data-plugin-key="${pluginKey}"] [role="switch"]`
+  )
   if (!item) {
     throw new Error('missing plugin toggle')
   }
   return item
+}
+
+/** What the switch does next: "Enable" or "Disable". */
+function toggleAction(item: HTMLButtonElement): string | undefined {
+  return item.getAttribute('aria-label')?.split(' ')[0]
 }
 
 beforeEach(() => installApi())
@@ -284,7 +289,7 @@ describe('PluginsSettingsSection lifecycle', () => {
 
   it('routes enablement and confirmed removal through plugin IPC', async () => {
     const { container } = await renderSection()
-    expect(toggleItem(container, plugin.pluginKey).textContent).toBe('Disable')
+    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Disable')
 
     vi.mocked(applyPluginThemesNow).mockClear()
     await act(async () => click(toggleItem(container, plugin.pluginKey)))
@@ -326,7 +331,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     })
     const { container } = await renderSection()
     const pluginSwitch = toggleItem(container, plugin.pluginKey)
-    expect(pluginSwitch.textContent).toBe('Enable')
+    expect(toggleAction(pluginSwitch)).toBe('Enable')
 
     await act(async () => click(pluginSwitch))
 
@@ -363,7 +368,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     await act(async () => click(restart))
 
     expect(list).toHaveBeenCalledTimes(2)
-    expect(toggleItem(container, plugin.pluginKey).textContent).toBe('Enable')
+    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Enable')
   })
 
   it('confirms marketplace rollback before invoking plugin IPC', async () => {
@@ -440,8 +445,8 @@ describe('PluginsSettingsSection lifecycle', () => {
       ])
     )
     expect(notes().disabled).toBe(false)
-    expect(notes().textContent).toBe('Enable')
-    expect(tasks().textContent).toBe('Enable')
+    expect(toggleAction(notes())).toBe('Enable')
+    expect(toggleAction(tasks())).toBe('Enable')
   })
 
   it('fetches bounded logs only when their disclosure opens', async () => {
@@ -469,7 +474,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     const { container } = await renderSection()
 
     expect(container.textContent).toContain('Restarting')
-    expect(toggleItem(container, plugin.pluginKey).textContent).toBe('Disable')
+    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Disable')
   })
 
   it('prunes dialogs and stale logs after external removal and same-key reinstall', async () => {

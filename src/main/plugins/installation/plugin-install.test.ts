@@ -127,7 +127,8 @@ describe('installPluginFromLocalPath', () => {
       stagingDir: sourcePath,
       hostVersion: '1.4.0',
       source: { kind: 'local-path', path: sourcePath },
-      resolvedCommit: null
+      resolvedCommit: null,
+      identity: { publisher: 'acme' }
     })
 
     expect(manifestRead).toHaveBeenCalledTimes(2)

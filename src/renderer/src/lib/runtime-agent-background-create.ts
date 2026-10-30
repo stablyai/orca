@@ -52,9 +52,9 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
                   ...(await keyboardOptions(args.environmentId)),
                   worktree: toRuntimeWorktreeSelector(args.worktreeId),
                   agent: args.agent,
-                  ...(args.prompt
-                    ? { prompt: args.prompt, promptDelivery: 'auto-submit' as const }
-                    : {}),
+                  ...(args.prompt ? { prompt: args.prompt } : {}),
+                  // Follow-up prompts arrive after startup but still need an unattended launch.
+                  promptDelivery: 'auto-submit',
                   ...(launchPreferences ? { launchPreferences } : {}),
                   placement: { tabId: args.tabId, leafId: args.leafId },
                   // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.

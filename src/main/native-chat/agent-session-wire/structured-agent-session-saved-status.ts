@@ -52,9 +52,14 @@ export function savedStructuredAgentSessionStatus(
   }
 }
 
-/** Only turn edges write; streamed prose and synthetic startup rows never reach this observer. */
+function savedTurnEdge(turn: AgentSessionLastTurn | undefined): string | null {
+  return turn ? JSON.stringify([turn.state, turn.outcome, turn.at]) : null
+}
+
+/** Only turn edges write; streamed prose and synthetic startup rows never reach this observer.
+ *  The saved record is the dedupe baseline, so nothing outlives a write in flight. */
 export class StructuredAgentSessionSavedStatus {
-  private readonly edges = new Map<string, string>()
+  private readonly queued = new Map<string, { edge: string | null }>()
   private readonly pending = new Set<Promise<void>>()
 
   constructor(
@@ -62,6 +67,7 @@ export class StructuredAgentSessionSavedStatus {
   ) {}
 
   observe = (summary: AgentSessionStatusSummary): void => {
+    const { sessionId } = summary
     const state =
       summary.status === 'working' || summary.status === 'attention' ? 'open' : 'settled'
     const outcome = state === 'settled' ? summary.turnOutcome : undefined
@@ -70,11 +76,6 @@ export class StructuredAgentSessionSavedStatus {
     if (at === undefined && state === 'open') {
       return
     }
-    const key = JSON.stringify([state, outcome, at])
-    if (this.edges.get(summary.sessionId) === key) {
-      return
-    }
-    this.edges.set(summary.sessionId, key)
     const lastTurn: AgentSessionLastTurn | undefined =
       at === undefined
         ? undefined
@@ -87,26 +88,39 @@ export class StructuredAgentSessionSavedStatus {
               ? { reply: summary.lastAssistantMessage.slice(0, AGENT_SESSION_TURN_PREVIEW_CHARS) }
               : {})
           }
+    const edge = savedTurnEdge(lastTurn)
+    const latest = this.queued.get(sessionId)
+    const baseline = latest
+      ? latest.edge
+      : savedTurnEdge(this.deps().store.getRecord(sessionId)?.lastTurn)
+    if (baseline === edge) {
+      return
+    }
+    const entry = { edge }
+    this.queued.set(sessionId, entry)
     const write = this.deps()
-      .store.transitionHandoff(summary.sessionId, (record) => {
+      .store.transitionHandoff(sessionId, (record) => {
         const { lastTurn: _previous, ...rest } = record
         return lastTurn ? { ...rest, lastTurn } : _previous ? rest : record
       })
       .then(
         () => {},
         (error: unknown) => {
-          if (this.edges.get(summary.sessionId) === key) {
-            this.edges.delete(summary.sessionId)
-          }
           this.deps().logger.warn('saving chat status failed', {
             scope: 'saved-status',
-            sessionId: summary.sessionId,
+            sessionId,
             error
           })
         }
       )
     this.pending.add(write)
-    void write.finally(() => this.pending.delete(write))
+    void write.finally(() => {
+      this.pending.delete(write)
+      // A later queued write still owns the baseline; a failure falls back to the saved row and retries.
+      if (this.queued.get(sessionId) === entry) {
+        this.queued.delete(sessionId)
+      }
+    })
   }
 
   async drain(): Promise<void> {

@@ -121,7 +121,8 @@ export function useMobileStructuredOptionState(args: {
             ...previous,
             record: cloneStructuredAgentSessionOptionRecord(previous.record),
             pendingId: null,
-            reportedPermissionMode: undefined
+            reportedPermissionMode: undefined,
+            reportedEffort: undefined
           }
         : seeded
     // Keep the chat’s mode visible through provider restarts.

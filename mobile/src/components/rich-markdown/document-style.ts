@@ -63,7 +63,7 @@ export function richMarkdownEditorStyle(): string {
     ul { list-style: disc; }
     ol { list-style: decimal; }
     li { margin: 0.15em 0; }
-    li > p { margin: 0; }
+    li > p, ul[data-type="taskList"] > li > div > p { margin: 0; }
     ul[data-type="taskList"] {
       padding-left: 0;
       list-style: none;

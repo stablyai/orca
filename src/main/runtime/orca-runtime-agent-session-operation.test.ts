@@ -256,6 +256,21 @@ describe('agent-session execution namespace', () => {
 })
 
 describe('agent-session create operation ledger', () => {
+  it.each(['auto-submit', 'draft', undefined] as const)(
+    'suppresses startup updates only for auto-submitted launches: %s',
+    async (promptDelivery) => {
+      const runtime = createRuntime()
+      const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+      await runtime.createAgentSession(
+        request(operationId(), { prompt: undefined, promptDelivery })
+      )
+      expect(createTerminal).toHaveBeenCalledWith(
+        'id:worktree-1',
+        expect.objectContaining({ suppressStartupUpdatePrompt: promptDelivery === 'auto-submit' })
+      )
+    }
+  )
+
   it.each([true, false, undefined])(
     'forwards renderer keyboard support on create and resume: %s',
     async (terminalKittyKeyboardProtocol) => {

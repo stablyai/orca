@@ -50,6 +50,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       helperAppPath: string | null
       openedSettings: boolean
       launchedHelper: boolean
+      launchQueued?: boolean
       permissions?: { id: string; status: string }[]
       nextStep?: string | null
     }>('computer.permissions', id ? { id } : {})
@@ -57,9 +58,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       if (value.platform !== 'darwin') {
         return 'Computer-use permission setup is only required on macOS.'
       }
-      const firstLine = value.launchedHelper
-        ? 'Opened Orca Computer Use permission setup.'
-        : 'Computer Use permissions checked.'
+      const firstLine = permissionSetupHeadline(value)
       return [
         firstLine,
         `Helper app: ${value.helperAppPath}`,
@@ -250,4 +249,16 @@ function formatComputerCapabilities(value: ComputerProviderCapabilities): string
       .join(', ')}`,
     ...(value.supports.input ? [`  Input: background=${value.supports.input.background}`] : [])
   ].join('\n')
+}
+
+function permissionSetupHeadline(result: {
+  launchedHelper: boolean
+  launchQueued?: boolean
+}): string {
+  if (result.launchQueued) {
+    return 'Queued Orca Computer Use permission setup; a newer request or a reset may replace it.'
+  }
+  return result.launchedHelper
+    ? 'Opened Orca Computer Use permission setup.'
+    : 'Computer Use permissions checked.'
 }

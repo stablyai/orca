@@ -87,7 +87,14 @@ const CLAUDE_FAST_MODE: CatalogOption = {
   label: 'Fast mode',
   category: 'mode',
   kind: { type: 'boolean', defaultValue: false },
-  apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
+  apply: {
+    ...agentChoiceCliApply(
+      'claude',
+      [{ kind: 'settings', names: ['--settings'], key: 'fastMode', lift: 'merged-json' }],
+      '--settings'
+    ),
+    midSession: { kind: 'toggle-command', command: '/fast' }
+  }
 }
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
@@ -140,7 +147,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
   },
-  unknownModelOptions: [claudeEffort(true)],
+  unknownModelOptions: [claudeEffort(true), CLAUDE_FAST_MODE],
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels
@@ -188,14 +195,38 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
   }
 }
 
+const CODEX_SERVICE_TIER: CatalogOption = {
+  id: 'serviceTier',
+  label: 'Speed',
+  category: 'mode',
+  kind: { type: 'select', choices: [], defaultValue: 'default' },
+  apply: agentChoiceCliApply(
+    'codex',
+    [{ kind: 'config', names: ['-c', '--config'], key: 'service_tier', lift: 'codex-bare-string' }],
+    '-c'
+  )
+}
+
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
   hostListingNamesConfiguredModel: true,
   // Auth scopes Codex access; keep a short seed and admit unknown persisted IDs.
   models: [
-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
-    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort('max')] },
+    {
+      id: 'gpt-5.6-sol',
+      label: 'GPT-5.6 Sol',
+      options: [codexEffort('ultra')]
+    },
+    {
+      id: 'gpt-5.6-terra',
+      label: 'GPT-5.6 Terra',
+      options: [codexEffort('ultra')]
+    },
+    {
+      id: 'gpt-5.6-luna',
+      label: 'GPT-5.6 Luna',
+      options: [codexEffort('max')]
+    },
     { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort('xhigh')] },
     {
       id: 'gpt-5.2-codex',
@@ -220,5 +251,5 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
   // New models may support max/ultra; unsupported efforts fall back to the model default instead of failing.
-  unknownModelOptions: [codexEffort('ultra')]
+  unknownModelOptions: [codexEffort('ultra'), CODEX_SERVICE_TIER]
 }

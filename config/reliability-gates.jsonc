@@ -4937,7 +4937,7 @@
       "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/watched-worktree-catalog-notification.test.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
         "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-external-worktree-discovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/connection/ssh-connection-generation.test.ts src/main/ssh/ssh-provider-authority.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts --reporter=dot"
@@ -4950,7 +4950,6 @@
         "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
         "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
         "src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
-        "src/main/ipc/watched-worktree-catalog-notification.test.ts",
         "src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts",
         "src/main/window/attach-main-window-services.test.ts",
         "tests/e2e/paired-external-worktree-discovery.spec.ts",
@@ -5032,13 +5031,6 @@
           ]
         },
         {
-          "file": "src/main/ipc/watched-worktree-catalog-notification.test.ts",
-          "assertions": [
-            "the watcher authority refreshes the host renderer and paired clients from one boundary",
-            "remote publication failure cannot suppress the host renderer refresh"
-          ]
-        },
-        {
           "file": "src/main/window/attach-main-window-services.test.ts",
           "assertions": [
             "main-window wiring installs the runtime as the watched-worktree remote-client notifier alongside the existing repo notifier"
@@ -5100,9 +5092,10 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/watched-worktree-catalog-notification.test.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
           "result": "passed",
           "durationSeconds": 6.19,
-          "summary": "Three watcher/runtime/wiring files passed with 38 tests, including two-client publication, reconnect, stale scan fencing, headless parity, owner-collision suppression, failure isolation, and main-window notifier wiring."
+          "summary": "Three watcher/runtime/wiring files passed with 38 tests, including two-client publication, reconnect, stale scan fencing, headless parity, owner-collision suppression, failure isolation, and main-window notifier wiring. Historical run: the watched-worktree-catalog-notification suite was later removed as mock forwarding coverage; it is not an active gate or replacement-equivalence claim."
         },
         {
           "date": "2026-08-26",
@@ -9700,7 +9693,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Real Bash and Zsh node-pty tests replace the active cwd inode and exercise the shared POSIX OMP wrapper; generated-file snapshots pin identical local, daemon/SSH, and relay wrappers. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the spawn probe and lack a live run; native PowerShell is unaffected; Linux/Windows and mobile/API strictness remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Real Bash and Zsh node-pty tests replace the active cwd inode and exercise the shared POSIX OMP wrapper; audit829 removes generated-file snapshots and their current byte-parity claim. No equivalent replacement for generated-script byte checks is claimed. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the spawn probe and lack a live run; native PowerShell is unaffected; Linux/Windows and mobile/API strictness remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7239",
         "https://github.com/stablyai/orca/pull/7750",
@@ -9715,7 +9708,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-spawn-cwd-fallback.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts src/main/shell-wrapper-generated-file-snapshot.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts"
       ],
       "testFiles": [
         "src/shared/terminal-startup-cwd.test.ts",
@@ -9723,8 +9716,7 @@
         "src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts",
         "src/main/pty/omp-shell-wrapper.node-pty.test.ts",
-        "src/main/pty/omp-shell-wrapper-alias-safety.test.ts",
-        "src/main/shell-wrapper-generated-file-snapshot.test.ts"
+        "src/main/pty/omp-shell-wrapper-alias-safety.test.ts"
       ],
       "assertionRefs": [
         {
@@ -9779,12 +9771,6 @@
             "extension argv and a nonzero OMP exit status survive the recovery subshell",
             "a subsequently missing logical cwd prints an actionable error and does not invoke OMP again"
           ]
-        },
-        {
-          "file": "src/main/shell-wrapper-generated-file-snapshot.test.ts",
-          "assertions": [
-            "local, daemon/SSH, and relay Bash/Zsh files contain the byte-identical shared OMP wrapper"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -9831,6 +9817,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts src/main/shell-wrapper-generated-file-snapshot.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts",
           "result": "passed",
           "durationSeconds": 3,
           "summary": "3 test files passed; real Bash and Zsh PTYs covered usable physical cwd authority, stale-inode recovery with set and unset PWD, extension-enabled and extension-skipping argv, parent-shell isolation, exit status, missing-path visibility, alias safety, and generated local/daemon/relay parity."
@@ -9838,7 +9825,7 @@
       ],
       "runtimeBudget": {
         "p95Seconds": 40,
-        "scope": "focused unit, IPC, generated-wrapper, and real Bash/Zsh PTY contracts"
+        "scope": "focused unit, IPC, and real Bash/Zsh PTY contracts"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -10847,7 +10834,7 @@
       "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project selected host must satisfy canSelectAddRepoHost; paired web has no local filesystem fallback, so no valid host means Browse, Clone, and Create remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
       "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
@@ -10863,7 +10850,6 @@
         "src/renderer/src/store/slices/browser.test.ts",
         "src/renderer/src/components/settings/browser-session-host-selection.test.ts",
         "src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts",
-        "src/renderer/src/components/status-bar/SshStatusSegment.test.ts",
         "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
         "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
         "src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts",
@@ -11065,6 +11051,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 6.55,
           "summary": "Ten files and 282 tests passed, including the composed Local -> Windows 2 navigation -> local reveal -> restart regression, dedicated-only preference persistence, removed transient-host fallback, multi-client browser routing, late host-operation suppression, and web pairing/preference separation."

@@ -97,10 +97,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       return true
     }
   )
-  const submitBufferedDraft = (): void => {
-    void handleSend()
-  }
-  const bindCommandField = useTerminalTextFieldSubmitBinding(commandInputRef, submitBufferedDraft)
 
   async function handleSend() {
     // Offline Return must preserve composed text instead of firing a doomed write.
@@ -312,7 +308,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     dismissSoftwareKeyboard,
     dismissKeyboardAfterAgentSend,
     bindLiveInputField,
-    bindCommandField,
     submitLiveInput
   }
 }

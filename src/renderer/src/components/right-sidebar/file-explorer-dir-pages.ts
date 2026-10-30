@@ -35,11 +35,13 @@ export function fileExplorerListingToDirCache(
       dirPath,
       depth,
       worktreePath,
-      listing.operationOwner
+      listing.operationOwner,
+      listing.outsideProject === true
     ),
     operationOwner: listing.operationOwner,
     ...(listing.more ? { more: listing.more } : {}),
-    ...(listing.paged ? { paged: true } : {})
+    ...(listing.paged ? { paged: true } : {}),
+    ...(listing.outsideProject ? { outsideProject: true } : {})
   }
 }
 

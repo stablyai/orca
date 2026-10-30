@@ -92,6 +92,29 @@ async function mount(initial: Props) {
 }
 
 describe('the phone picker’s first frame', () => {
+  it('projects a restored Pi off to the precise supported selection without offering off', async () => {
+    const row = {
+      id: 'openai/gpt-5',
+      label: 'GPT-5',
+      isDefault: false,
+      efforts: ['minimal', 'low', 'medium', 'high'].map((value) => ({ value, label: value }))
+    }
+    const rpc = client(
+      async () => ({ origin: 'probe', fetchedAt: 1, models: [row] }),
+      async () => ({
+        models: [row],
+        listedModelIds: [row.id],
+        current: { model: row.id, effort: 'off', defaulted: [] }
+      })
+    )
+    const harness = await mount({ rpc, fence: 1, agent: 'pi' })
+    expect(harness.snapshot().find((entry) => entry.id === 'effort')).toMatchObject({
+      settable: true,
+      kind: { currentValue: 'minimal', choices: row.efforts }
+    })
+    await harness.unmount()
+  })
+
   it('shows the quiet placeholder, never the built-in list, until the host answers', async () => {
     let answer!: (value: AgentSessionModelCatalogResult) => void
     const rpc = client(() => new Promise((resolve) => (answer = resolve)))

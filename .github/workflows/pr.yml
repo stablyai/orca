@@ -1345,6 +1345,10 @@ jobs:
       - name: Build the Windows CLI launcher
         run: node config/scripts/build-windows-cli-launcher.mjs
 
+      # Install Electron once: otherwise each Electron test's require('electron') extracts it into one dist concurrently (EBUSY, 0xC0000005).
+      - name: Install the Electron binary
+        run: node config/scripts/install-electron-package-binary.mjs
+
       # Files come from WINDOWS_BOUNDARY_TESTS, the same list that decides whether this job runs.
       - name: Test Windows-specific boundaries
         env:
