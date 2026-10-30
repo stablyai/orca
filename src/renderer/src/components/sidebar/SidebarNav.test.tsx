@@ -252,6 +252,34 @@ describe('SidebarNav', () => {
     expect(mocks.setActiveView).toHaveBeenCalledWith('plugin:samples.one/dashboard')
   })
 
+  it('keeps 64 plugin panels in a bounded scroll region without swallowing built-in navigation', async () => {
+    mocks.pluginPanels = Array.from({ length: 64 }, (_, index) => ({
+      tabKey: `plugin:samples.one/panel-${index}`,
+      title: `Panel ${index}`
+    }))
+    const container = await renderSidebarNav()
+    const pluginNavigation = container.querySelector('[data-plugin-navigation]')
+
+    expect(pluginNavigation).not.toBeNull()
+    expect(pluginNavigation?.className).toContain('max-h-[min(20vh,8rem)]')
+    expect(pluginNavigation?.className).toContain('overflow-y-auto')
+    expect(pluginNavigation?.className).toContain('worktree-sidebar-scrollbar')
+    expect(pluginNavigation?.querySelectorAll('button')).toHaveLength(64)
+    expect(
+      pluginNavigation?.contains(
+        container.querySelector('button[aria-label="Search worktrees and browser tabs"]')
+      )
+    ).toBe(false)
+    expect(pluginNavigation?.contains(getButtonByText(container, 'Automations'))).toBe(false)
+    expect(pluginNavigation?.contains(getButtonByText(container, 'Orca Mobile'))).toBe(false)
+
+    const lastPanel = getButtonByText(pluginNavigation!, 'Panel 63')
+    lastPanel.focus()
+    expect(document.activeElement).toBe(lastPanel)
+    await clickButton(lastPanel)
+    expect(mocks.setActiveView).toHaveBeenCalledWith('plugin:samples.one/panel-63')
+  })
+
   it('mounts the Agent Dashboard row only when its experiment is enabled', async () => {
     setSidebarState({
       settings: {

@@ -181,32 +181,44 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideSkillsButton} />
         </ContextMenu>
       ) : null}
-      {pluginPanels.map((panel) => {
-        const Icon = resolvePluginPanelIcon(panel.icon)
-        const active = activeView === panel.tabKey
-        return (
-          <button
-            key={panel.tabKey}
-            type="button"
-            onClick={() => {
-              recordViewVisit(panel.tabKey)
-              setActiveView(panel.tabKey)
-            }}
-            aria-current={active ? 'page' : undefined}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-              active
-                ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-                : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-            )}
-          >
-            <Icon
-              className={cn('size-4 shrink-0', !active && 'text-worktree-sidebar-foreground/30')}
-            />
-            <span className="flex-1 truncate">{panel.title}</span>
-          </button>
-        )
-      })}
+      {pluginPanels.length > 0 ? (
+        <div
+          data-plugin-navigation
+          className="worktree-sidebar-scrollbar max-h-[min(20vh,8rem)] min-h-0 overflow-y-auto"
+        >
+          <div className="flex flex-col gap-0.5">
+            {pluginPanels.map((panel) => {
+              const Icon = resolvePluginPanelIcon(panel.icon)
+              const active = activeView === panel.tabKey
+              return (
+                <button
+                  key={panel.tabKey}
+                  type="button"
+                  onClick={() => {
+                    recordViewVisit(panel.tabKey)
+                    setActiveView(panel.tabKey)
+                  }}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                    active
+                      ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                      : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      'size-4 shrink-0',
+                      !active && 'text-worktree-sidebar-foreground/30'
+                    )}
+                  />
+                  <span className="flex-1 truncate">{panel.title}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
       {showAutomationsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
