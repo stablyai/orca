@@ -44,7 +44,9 @@ export function buildMobileAgentHistoryCard(
     agent: session.agent,
     agentLabel: aiVaultAgentLabel(session.agent),
     title:
-      session.title || translate('agentHistory.sessionCard.untitledSession', 'Untitled session'),
+      session.customTitle ||
+      session.title ||
+      translate('agentHistory.sessionCard.untitledSession', 'Untitled session'),
     lastMessage: latestTurn?.text.trim() ?? '',
     messageCount: session.messageCount,
     timeAgo: Number.isFinite(updatedAtMs) ? formatTimeAgo(updatedAtMs, now) : '',

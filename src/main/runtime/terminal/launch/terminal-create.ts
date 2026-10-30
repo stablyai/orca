@@ -1,8 +1,4 @@
-import {
-  recordTerminalLaunchMetadata,
-  resolveTerminalLaunchResult,
-  terminalLaunchPublicFacts
-} from './terminal-launch-result'
+import { resolveTerminalLaunchResult, terminalLaunchPublicFacts } from './terminal-launch-result'
 import { revealCreatedTerminal } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
@@ -10,12 +6,10 @@ import * as dependencies from '../../orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from '../../orca-runtime-create-terminal-desktop'
 import { terminalCreateTeamAllocation } from './terminal-create-team-allocation'
 import { createIdempotentCallback } from '../../orca-runtime-report-pty-spawn-commit'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
-import { seedPtyLaunchTitle } from './pty-launch-title'
+import { finishCreatedTerminalPty, type CreatedTerminalPtyHost } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
-import { resolveLaunchCommandPaneAgent } from '../../runtime-agent-launch-resolution'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
@@ -235,29 +229,24 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
           })
         }
-        const pty = this.getOrCreatePtyWorktreeRecord(result.id)
-        if (pty) {
-          pty.runtimeSessionOwned = true
-          if (!launch.adoptedStablePane) {
-            seedPtyLaunchTitle(pty, launch.effectiveTitle, launchTitleAt, (title, at) =>
-              this.setPtyManagementTitleFromObservedTitle(pty, title, at)
-            )
-          }
-          recordTerminalLaunchMetadata(pty, result, launch)
-          if (!launch.adoptedStablePane) {
-            pty.launchCommandAgent = result.agentResumeRefused
-              ? null
-              : resolveLaunchCommandPaneAgent(launchOpts.command)
-            this.rememberSavedTerminalLaunchResult(result.id, result)
-          }
-          recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
-        }
+        const pty = finishCreatedTerminalPty(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: helper is this method body; protected pty and title members stay on the class.
+          this as unknown as CreatedTerminalPtyHost,
+          result,
+          presentation,
+          launch,
+          launchTitleAt,
+          tabId,
+          launchOpts,
+          paneKey,
+          this.graphSequence
+        )
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
             leafId,
-            title: launch.effectiveTitle ?? null,
+            title: pty.customTitle ?? launch.effectiveTitle ?? null,
             activate: presentation === 'focused',
             selectIfNoActiveTab: presentation !== 'background',
             ...(launch.effectiveViewMode ? { viewMode: launch.effectiveViewMode } : {}),
@@ -272,7 +261,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           cwd: savedStartupCwd,
           launchOpts: {
             ...launchOpts,
-            title: pty?.title ?? launch.effectiveTitle ?? undefined,
+            title: pty?.customTitle ?? pty?.title ?? launch.effectiveTitle ?? undefined,
             launchAgent: pty?.launchAgent ?? undefined,
             viewMode: launch.effectiveViewMode
           },

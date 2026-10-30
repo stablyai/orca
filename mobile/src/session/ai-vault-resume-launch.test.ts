@@ -65,6 +65,47 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     expect(launch.command).not.toContain('CODEX_HOME=')
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
+
+  it('names the conversation it resumes so the host can show it before the first turn', () => {
+    const codex = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      workspacePlatform: 'darwin'
+    })
+    expect(codex.resumeProviderSession).toEqual({ key: 'session_id', id: 'codex-1' })
+    const omp = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'omp', sessionId: 'omp-1', filePath: '/custom/omp/s.jsonl' }),
+      workspacePlatform: 'linux'
+    })
+    expect(omp.resumeProviderSession).toEqual({ key: 'session_id', id: 'omp-1' })
+  })
+
+  it('sends the custom title ahead of the scanned session title', () => {
+    expect(
+      buildMobileAiVaultResumeLaunch({
+        session: session({ customTitle: 'Pinned alias', title: 'Resume me' }),
+        workspacePlatform: 'darwin'
+      }).title
+    ).toBe('Pinned alias')
+    expect(
+      buildMobileAiVaultResumeLaunch({
+        session: session({ title: 'Resume me' }),
+        workspacePlatform: 'darwin'
+      }).title
+    ).toBe(null)
+  })
+
+  it('keeps managed-home Codex resumes free of env deletion', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'codex',
+        sessionId: 'codex-1',
+        codexHome: '/Users/ada/.orca/codex-runtime-home/home'
+      }),
+      workspacePlatform: 'darwin'
+    })
+    expect(launch.command).toContain("CODEX_HOME='/Users/ada/.orca/codex-runtime-home/home'")
+    expect(launch.envToDelete).toBeUndefined()
+  })
 })
 
 describe('resumeAiVaultSessionInTerminal', () => {
@@ -136,6 +177,23 @@ describe('resumeAiVaultSessionInTerminal', () => {
       ])
     }
   )
+
+  it('includes the custom title on terminal.create', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Pinned alias' } }
+      })
+      .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+
+    await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
+      command: 'claude --resume abc',
+      title: 'Pinned alias'
+    })
+
+    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ title: 'Pinned alias' })
+  })
 
   it('creates a fresh terminal and sends the command with Enter', async () => {
     const sendRequest = vi

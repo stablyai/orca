@@ -114,7 +114,11 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'
   },
-  // Owner removal prunes by worktreeId; closed panes do not transfer.
+  sessionCustomTitles: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
+  },
+  // Owner removal prunes closed panes by worktreeId; they do not transfer with a project.
   closedTerminalPanesByPaneKey: {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'

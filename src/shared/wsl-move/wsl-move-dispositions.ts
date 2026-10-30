@@ -152,6 +152,7 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
     rewriteDesktopCopy: true,
     note: 'Laid over the host partition by host-session-seed, with the host worktree id.'
   }),
+  sessionCustomTitles: notApplicableDisposition(32, 'Session titles are kept.'),
   // Names terminals of the host the project leaves, as the incarnation map does.
   closedTerminalPanesByPaneKey: { disposition: 'drop-pty-binding', item: 36 }
 } as const satisfies Record<keyof WorkspaceSessionState, WslMoveFieldDisposition>

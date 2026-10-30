@@ -2,7 +2,7 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as Browser
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
-import { RuntimeHeadlessTabGroups } from '../session-tabs/headless-tab-group-moves'
+import { RuntimeWorkspaceSessionCustomTitles } from './workspace-session-custom-titles'
 import type {
   BrowserTabInfo,
   RuntimeMarkdownReadTabResult,
@@ -21,15 +21,18 @@ import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-opt
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import {
+  writeHeadlessTerminalTitle,
+  type HeadlessTitleWriteHost
+} from './headless-terminal-title-write'
+import {
   readMarkdownTabFromDisk,
   saveMarkdownTabToDisk,
   type ListedMarkdownTab,
   type MarkdownTabDiskHost
 } from '../markdown-tab-disk-documents'
 import { createMarkdownTabDiskHost } from '../markdown-tab-disk-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
-export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeHeadlessTabGroups {
+export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeWorkspaceSessionCustomTitles {
   protected abstract isRendererOwnedMobileBrowserTab(
     ...args: Parameters<BrowserOwnership['isRendererOwnedMobileBrowserTab']>
   ): ReturnType<BrowserOwnership['isRendererOwnedMobileBrowserTab']>
@@ -61,41 +64,19 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     OrcaRuntimeWithTransitionGraphReloadToTerminalState['resolveFolderWorkspaceLaunchScope']
   >
 
-  // Persist a manual terminal rename so a headless rebuild keeps the title
-  // instead of reverting to the generated/default one.
+  // Persist a manual terminal rename so a headless rebuild keeps the title.
   protected persistHeadlessTerminalTitle(
     worktreeId: string,
     tabId: string,
     title: string | null
   ): void {
-    this.updateHeadlessWorkspaceContent(worktreeId, (session) => {
-      const tabs = session.tabsByWorktree[worktreeId]
-      if (!tabs?.some((tab) => tab.id === tabId)) {
-        return null
-      }
-      return {
-        ...session,
-        tabsByWorktree: {
-          ...session.tabsByWorktree,
-          [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
-        }
-      }
-    })
-  }
-
-  private updateHeadlessWorkspaceContent(
-    worktreeId: string,
-    update: (session: WorkspaceSessionState) => WorkspaceSessionState | null
-  ): void {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return
-    }
-    const write = this.setWorkspaceSessionForWorktree.bind(this)
-    const next = update(session)
-    if (next) {
-      write(worktreeId, next)
-    }
+    writeHeadlessTerminalTitle(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: helper is this method body; leaf and session stores stay protected on the class.
+      this as unknown as HeadlessTitleWriteHost,
+      worktreeId,
+      tabId,
+      title
+    )
   }
 
   protected normalizeMobileSessionTabOrder(

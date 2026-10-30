@@ -15,6 +15,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../../../shared/published-pane-agent-identity'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import { resolveManualTerminalTitle } from '../../manual-terminal-title'
 import { getLatestLeafTitle } from '../../runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
@@ -126,7 +127,9 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     const tab = this.tabs.get(leaf.tabId) ?? null
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-    const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
+    const manualTitle = resolveManualTerminalTitle(pty, tab)
+    const liveTitle = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
+    const title = manualTitle ?? liveTitle
     const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
     // Demote only controller-proven local absence; remote inventory gaps are unknown, and hasPty rescues spawn/list races.
     const provenAbsent =
@@ -164,7 +167,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ...this.resolvePaneAgentIdentityField(
         pty?.launchAgent ?? pty?.launchCommandAgent,
         pty?.foregroundAgent,
-        title,
+        liveTitle,
         isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null
       ),
       ...(ORCA_LAYOUT_OWNER_IS_MAIN && mainPane

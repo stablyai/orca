@@ -113,6 +113,7 @@ export type AiVaultSession = {
   agent: AiVaultAgent
   sessionId: string
   title: string
+  customTitle?: string | null
   cwd: string | null
   /** Host-proven spellings of `cwd` for matching scopes and resume targets; launch paths remain separate. */
   cwdAliases?: string[]

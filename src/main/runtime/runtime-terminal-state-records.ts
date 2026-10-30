@@ -68,6 +68,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   tabId?: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
   paneKey?: string | null
+  /** Provider conversation id for this PTY, so a rename can be stored under the session alias. */
+  providerSessionId?: string | null
   /** Window-owned L80 graphSequence when paneKey was recorded; newer surfaces have no graph statement that could contradict them (pty-recorded-surface-topology.ts). */
   surfaceRecordedAtGraphSequence?: number
   savedTerminalLaunchResult?: {
@@ -118,6 +120,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
+  /** Set only by a user rename. Absent or null leaves the live OSC title in charge. */
+  customTitle?: string | null
   title: string | null
   titleUpdatedAt: number | null
   /** Wall clock for the recorded title; absent on older or unobserved records. */
@@ -201,6 +205,18 @@ export type RuntimeTerminalBufferSnapshot = {
   scrollbackAnsi?: string
   pendingEscapeTailAnsi?: string
   kittyKeyboardFlags?: number
+}
+
+export type PendingMobileTerminalCreate = {
+  activate: boolean
+  paired: boolean
+  selectIfNoActiveTab: boolean
+  viewMode?: 'terminal' | 'chat'
+  customTitle?: string
+  providerSessionId?: string
+  launchAgent?: TuiAgent
+  /** Retain launch delivery over bare renderer PTYs; silent settlement would lose the command (STA-3214). */
+  startupCommand?: string
 }
 
 export type HeadlessSeedMetadata = {

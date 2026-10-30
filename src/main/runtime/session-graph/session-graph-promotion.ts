@@ -12,6 +12,8 @@ import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSes
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from '../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithSyncMobileSessionTabs as SyncMobileSessionTabsMethods } from '../session-tabs/mobile-session-reconciliation'
 import { OrcaRuntimeWithNotifySshStateChanged } from '../workspaces/workspace-host-notifications'
+import type { RuntimeSyncedTab } from '../../../shared/runtime-session-contracts'
+import { syncTabCustomTitles } from './session-window-graph-titles'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -139,6 +141,29 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
   protected abstract syncMobileSessionTabs(
     ...args: Parameters<SyncMobileSessionTabsMethods['syncMobileSessionTabs']>
   ): ReturnType<SyncMobileSessionTabsMethods['syncMobileSessionTabs']>
+
+  protected abstract rememberTerminalSessionTitle(
+    tabId: string | null | undefined,
+    handle: string | undefined,
+    title: string | null
+  ): void
+
+  protected scheduleStoredMobileSessionTabs(worktreeIds: Iterable<string>): void {
+    for (const worktreeId of worktreeIds) {
+      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
+        this.scheduleMobileSessionTabsChanged(worktreeId)
+      }
+    }
+  }
+
+  protected syncGraphTabCustomTitles(
+    tabs: readonly RuntimeSyncedTab[],
+    previousTabs: ReadonlyMap<string, RuntimeSyncedTab>
+  ): void {
+    syncTabCustomTitles(tabs, previousTabs, (tabId, title) =>
+      this.rememberTerminalSessionTitle(tabId, undefined, title)
+    )
+  }
 
   attachWindow(windowId: number): void {
     if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {

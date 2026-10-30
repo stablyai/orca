@@ -144,8 +144,8 @@ export function buildMirroredAgentTabs(
         agentSessionAgent: tab.agent,
         // Wire title can violate its string type; fall back instead of throwing inside store patches.
         label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),
-        // Manual rename is client-owned; host snapshots must not null it.
-        customLabel: existing?.customLabel ?? null,
+        // A client label wins so a host snapshot cannot clear it. A tab the client has not named adopts the host custom title.
+        customLabel: existing?.customLabel ?? tab.customTitle ?? null,
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,

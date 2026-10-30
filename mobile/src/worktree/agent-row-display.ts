@@ -76,6 +76,10 @@ export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): st
   if (row.state === 'working' && row.mainAgent?.stopping === true) {
     return translate('worktree.agentRowDisplay.stopping', 'Stopping…')
   }
+  const custom = row.displayName?.trim() || row.taskTitle?.trim()
+  if (custom) {
+    return custom
+  }
   const message = row.lastAssistantMessage?.trim()
   if (message) {
     return message

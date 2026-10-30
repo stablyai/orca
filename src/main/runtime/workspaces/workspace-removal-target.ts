@@ -1,6 +1,10 @@
 import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
+import {
+  renameHeadlessTerminal,
+  type HeadlessTerminalRenameHost
+} from './headless-terminal-title-write'
 import type {
   RemoveManagedWorktreeOptions,
   RuntimeWorktreeRemovalTarget
@@ -243,46 +247,26 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     if (mainRename) {
       return mainRename
     }
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      // Keep manual names out of process-title evidence or they read as the shell reclaiming the pane (#20626).
-      pty.pty.manualTitle = title?.trim() || null
-      const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
-      this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
-      // Persist headless custom titles so restart cannot lose a rename.
-      const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
-      if (tabIdForTitle) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabIdForTitle, title)
-        // Publish manual titles: paired desktops prefer saved-session names over live titles (#29975).
-        const customTitle = title?.trim() || null
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, tabIdForTitle, {
-          customTitle,
-          // Reset must also drop a name saved while sleeping.
-          ...(customTitle === null
-            ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, tabIdForTitle)
-              }
-            : {})
-        })
-      }
-      for (const leaf of this.leaves.values()) {
-        if (leaf.ptyId === pty.pty.ptyId) {
-          this.notifier?.renameTerminal(leaf.tabId, title)
-          return { handle, tabId: leaf.tabId, title }
-        }
-      }
-      const tabId = recordedTabId() ?? pty.record.tabId
-      // A notifier can exist before its pane graph; retain the rename on the known tab.
-      if (this.notifier?.renameTerminal && tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
-        this.notifier.renameTerminal(tabId, title)
-      }
-      return { handle, tabId, title }
+    return renameHeadlessTerminal(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: helper is this method body; leaf and session stores stay protected on the class.
+      this as unknown as HeadlessTerminalRenameHost,
+      handle,
+      title
+    )
+  }
+
+  protected rememberManualTerminalTitle(tabId: string | null, title: string | null): void {
+    if (!tabId) {
+      return
     }
-    this.assertGraphReady()
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.renameTerminal(leaf.tabId, title)
-    return { handle, tabId: leaf.tabId, title }
+    const inMemoryTab = this.tabs.get(tabId)
+    if (!inMemoryTab) {
+      return
+    }
+    inMemoryTab.customTitle = title
+    if (title !== null) {
+      inMemoryTab.title = title
+    }
   }
 
   /** Names one pane of a split; the tab's own name is untouched. */

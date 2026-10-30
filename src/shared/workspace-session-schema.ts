@@ -37,6 +37,12 @@ const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
 
+const aiVaultTitleSchema = z
+  .object({ agent: z.enum(['claude', 'codex']), sessionId: z.string(), title: z.string() })
+  .nullable()
+  .optional()
+  .catch(undefined)
+
 export const terminalTabSchema = z.object({
   id: terminalTabIdSchema,
   ptyId: z.string().nullable(),
@@ -44,15 +50,7 @@ export const terminalTabSchema = z.object({
   title: z.string(),
   defaultTitle: z.string().optional(),
   generatedTitle: z.string().nullable().optional(),
-  aiVaultTitle: z
-    .object({
-      agent: z.enum(['claude', 'codex']),
-      sessionId: z.string(),
-      title: z.string()
-    })
-    .nullable()
-    .optional()
-    .catch(undefined),
+  aiVaultTitle: aiVaultTitleSchema,
   quickCommandLabel: z.string().nullable().optional(),
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
@@ -89,15 +87,7 @@ const tabSchema = z.object({
     .catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
-  aiVaultTitle: z
-    .object({
-      agent: z.enum(['claude', 'codex']),
-      sessionId: z.string(),
-      title: z.string()
-    })
-    .nullable()
-    .optional()
-    .catch(undefined),
+  aiVaultTitle: aiVaultTitleSchema,
   quickCommandLabel: z.string().nullable().optional(),
   customLabel: z.string().nullable(),
   color: z.string().nullable(),
@@ -259,6 +249,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   closedTerminalTabTombstonesByTabId: salvagedOptional(
     'closedTerminalTabTombstonesByTabId',
     salvagingRecord(terminalTabIdSchema, closedTerminalTabTombstoneSchema)
+  ),
+  sessionCustomTitles: salvagedOptional(
+    'sessionCustomTitles',
+    salvagingRecord(z.string(), z.string().min(1).max(256))
   ),
   closedTerminalPanesByPaneKey: salvagedOptional(
     'closedTerminalPanesByPaneKey',

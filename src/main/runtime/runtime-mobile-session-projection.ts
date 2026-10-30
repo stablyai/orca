@@ -1,6 +1,5 @@
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
-  normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
@@ -11,16 +10,19 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
-import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
   demoteRuntimeMobileAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
-import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
+import {
+  buildProjectedMobileTerminalClientTab,
+  finalizeRuntimeMobileSessionTabsResult
+} from './runtime-mobile-session-result-finalization'
 import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
+import { resolveProjectedMobileTerminalTitle } from './manual-terminal-title'
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
@@ -183,9 +185,13 @@ export function projectRuntimeMobileSessionTabs(
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
     const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
-    const agentTitle = normalizeCompatibleAgentTitleForOwner(liveTitle, ownerAgent, ownerOptions)
-    // Preserve desktop ranking over fresher main titles; window emits generated names only while shown.
-    const title = resolveTerminalTabTitle({ ...tab, title: agentTitle }, true, agentTitle)
+    const { manualTitle, normalizedLiveTitle, title } = resolveProjectedMobileTerminalTitle(
+      [liveLeafPty ?? pty, syncedTab, tab],
+      liveTitle,
+      tab,
+      ownerAgent,
+      ownerOptions
+    )
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Renderer status may precede hook session identity; native chat still needs a transcript address.
     const rendererStatusAgent =
@@ -282,34 +288,27 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
-    tabs.push({
-      type: 'terminal',
-      id: tab.id,
-      parentTabId: tab.parentTabId,
-      leafId: tab.leafId,
-      title,
-      ...(tab.customTitle !== undefined ? { customTitle: tab.customTitle } : {}),
-      ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
-      // Bind identity to the handle's live owner, never a stale persisted surface.
-      ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
-      ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
-      ...(launchAgent ? { launchAgent } : {}),
-      ...clientAgentStatus,
-      ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
-      ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
-      ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-      ...(tab.color != null ? { color: tab.color } : {}),
-      ...(tab.isPinned ? { isPinned: true } : {}),
-      ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
-      ...(tab.launchDraft ? { launchDraft: tab.launchDraft } : {}),
-      ...(tab.launchDraftCreatedAt !== undefined
-        ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
-        : {}),
-      isActive: tab.isActive,
-      ...(terminalHandle
-        ? { status: 'ready' as const, terminal: terminalHandle }
-        : { status: 'pending-handle' as const, terminal: null })
-    })
+    tabs.push(
+      buildProjectedMobileTerminalClientTab({
+        tab,
+        title,
+        normalizedLiveTitle,
+        liveTitleEvidence,
+        manualTitle,
+        syncedTabCustomTitle: syncedTab?.customTitle,
+        providerSessionIds: [
+          (liveLeafPty ?? pty)?.providerSessionId,
+          projectedStatusEntry?.providerSession?.id ?? hookProviderSession?.id,
+          retainedAgentStatus?.providerSession?.id ?? syncedTab?.aiVaultTitle?.sessionId
+        ],
+        getSessionCustomTitle: host.getSessionCustomTitle,
+        incarnationId: terminalPty?.incarnationId,
+        launchAgent,
+        clientAgentStatus,
+        turnCompletedAt,
+        terminalHandle
+      })
+    )
   }
   return finalizeRuntimeMobileSessionTabsResult({ snapshot, tabs }, host)
 }

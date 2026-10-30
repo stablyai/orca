@@ -23,6 +23,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
   terminalTitleEvidenceByWorktreeId: ReadonlyMap<string, readonly RuntimeTerminalTitleEvidence[]>
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
   getSummary: RuntimeWorktreePsSummaryLookup
+  getSessionCustomTitle?: (sessionId: string) => string | null
+  getTabCustomTitle?: (tabId: string) => string | null
 }): void {
   const { rowSources } = args
   const now = Date.now()
@@ -37,6 +39,12 @@ export function attachRuntimeWorktreeAgentRows(args: {
       continue
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
+    const customTitle =
+      (source.tabId ? args.getTabCustomTitle?.(source.tabId)?.trim() : null) ||
+      (source.providerSession?.id
+        ? args.getSessionCustomTitle?.(source.providerSession.id)?.trim()
+        : null) ||
+      null
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
       parentPaneKey: orchestration?.parentPaneKey ?? null,
@@ -44,8 +52,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
       agentType: source.agentType,
       prompt: source.prompt,
-      taskTitle: orchestration?.taskTitle ?? null,
-      displayName: orchestration?.displayName ?? null,
+      taskTitle: customTitle ?? orchestration?.taskTitle ?? null,
+      displayName: customTitle ?? orchestration?.displayName ?? null,
       lastAssistantMessage: source.lastAssistantMessage,
       toolName: source.toolName,
       toolInput: source.toolInput,
