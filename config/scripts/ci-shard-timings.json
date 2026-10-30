@@ -8385,7 +8385,7 @@
       "src/renderer/src/components/right-sidebar/source-control-split-open.test.ts": 52,
       "src/renderer/src/components/right-sidebar/source-control-submodule-expansion.test.ts": 46,
       "src/renderer/src/components/right-sidebar/source-control-too-many-changes-banner.test.tsx": 632,
-      "src/renderer/src/components/right-sidebar/source-control-tree.test.ts": 57,
+      "src/shared/source-control-tree.test.ts": 57,
       "src/renderer/src/components/right-sidebar/source-control/ai/use-ai.operation-recovery.test.tsx": 1955,
       "src/renderer/src/components/right-sidebar/source-control/commit/discard-all-failure-description.test.tsx": 1736,
       "src/renderer/src/components/right-sidebar/source-control/commit/rename-mutation-paths.test.ts": 70,

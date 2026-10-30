@@ -7,7 +7,7 @@ import {
   readFileExplorerDirectory,
   type FileExplorerDirectoryListing
 } from './file-explorer-directory-listing'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { dirname } from '@/lib/path'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { describeFileExplorerReadError } from './file-explorer-read-error'
