@@ -43,9 +43,11 @@ def main():
                     return None
             field = bench.wait_for(ready, 15)
             evidence['click'] = engine.act('click', field, True)
+            evidence['fixture_after_click'] = trial.state()
+            bench.write_json(args.out / 'results.json', evidence)
             app = runtime.find_app(f'pid:{trial.pid}')
             _, window = runtime.choose_window(app, window_index=0)
-            node = runtime.first_descendant(window, lambda n: runtime.has_state(n, runtime.Atspi.StateType.FOCUSED))
+            node = bench.wait_for(lambda: runtime.first_descendant(window, lambda n: runtime.name_of(n) == 'field'), 10)
             text = runtime.text_iface(node)
             editable = runtime.attempt(node.get_editable_text_iface)
             record = {'name': runtime.name_of(node), 'role': runtime.role_of(node),
@@ -74,6 +76,7 @@ def main():
             bench.write_json(args.out / 'results.json', evidence)
             print(evidence, flush=True)
         finally:
+            bench.write_json(args.out / 'results.json', evidence)
             trial.close()
 
 
