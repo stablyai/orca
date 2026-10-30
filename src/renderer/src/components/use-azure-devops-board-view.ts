@@ -52,10 +52,15 @@ export function useAzureDevOpsBoardViewSelection(args: {
     viewKeyRef.current = viewKey
   }, [viewKey])
 
+  // Why: the default belongs to "no view yet", not to a level with no stored choice; changing
+  // level must not throw the reader out of the view they are in.
+  const shownRef = useRef<AzureDevOpsTaskView | null>(null)
   const chosen =
     picked !== null && picked.key === viewKey
       ? picked.view
-      : (readAzureDevOpsViewSelection(settings, viewKey) ?? DEFAULT_AZURE_DEVOPS_TASK_VIEW)
+      : (readAzureDevOpsViewSelection(settings, viewKey) ??
+        shownRef.current ??
+        DEFAULT_AZURE_DEVOPS_TASK_VIEW)
   // A level this session found board-less, or a Board choice made before the key is known, shows the backlog.
   const view: AzureDevOpsTaskView =
     chosen !== 'board'
@@ -63,6 +68,10 @@ export function useAzureDevOpsBoardViewSelection(args: {
       : viewKey !== null && !boardlessKeys.has(viewKey)
         ? 'board'
         : 'backlog'
+
+  useEffect(() => {
+    shownRef.current = view
+  }, [view])
 
   const selectView = useCallback(
     (next: AzureDevOpsTaskView) => {

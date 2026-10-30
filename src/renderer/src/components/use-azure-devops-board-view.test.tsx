@@ -167,6 +167,19 @@ describe('useAzureDevOpsBoardViewSelection', () => {
     expect(result.current.view).toBe('board')
   })
 
+  it('keeps the current view when the level has no stored choice of its own', () => {
+    const { result, rerender } = render({ stored: { [requirementKey]: 'backlog' } })
+    expect(result.current.view).toBe('backlog')
+    rerender({ viewKey: featuresKey, stored: { [requirementKey]: 'backlog' } })
+    expect(result.current.view).toBe('backlog')
+    // A stored choice for the new level still wins over what is on screen.
+    rerender({
+      viewKey: featuresKey,
+      stored: { [requirementKey]: 'backlog', [featuresKey]: 'board' }
+    })
+    expect(result.current.view).toBe('board')
+  })
+
   it('remembers a board-less level for the session, per level', () => {
     const { result, rerender } = render({ stored: { [requirementKey]: 'board' } })
     expect(result.current.view).toBe('board')
